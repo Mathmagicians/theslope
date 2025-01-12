@@ -1,4 +1,8 @@
 <template>
-  <h1>Velkommen til Skråningen</h1>
-  Ovevejer I at flytte ind i et bofælleskab i skønne Lejre?
+  <div class="flex-1 w-screen">
+    <Ticker></Ticker>
+    <Hero/>
+  </div>
 </template>
+<script setup lang="ts">
+</script>
