@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const MyButton = resolveComponent('MyButton')
+</script>
+
 <template>
   <p>
     <span class="flex m-1 md:m-2 md:p-1 center text-xs md:text-sm border-l-8 border-blue-curacao-500
@@ -9,6 +13,3 @@
   </span>
   </p>
 </template>
-
-<script setup lang="ts">
-</script>

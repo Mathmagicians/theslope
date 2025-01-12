@@ -1,6 +1,6 @@
 export default defineAppConfig({
     ui: {
-        primary: 'blue-curaçao-500',
-        gray: 'mocha-mousse-100',
+        primary: 'mocha-mousse', //mocha-mousse-500
+        gray: 'blue-curacao', //blue-curacao-400
     }
 })

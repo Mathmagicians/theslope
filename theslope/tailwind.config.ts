@@ -7,7 +7,7 @@ export default {
 
             animation: {
                 marquee: 'marquee 25s linear infinite',
-                marqueer: 'marquee-reverse 35s linear infinite',
+                marqueer: 'marqueer 35s linear infinite',
             },
             keyframes: {
                 marquee: {
@@ -15,8 +15,8 @@ export default {
                     '100%': { transform: 'translateX(-100%)' },
                 },
                 marqueer: {
-                    '0%': { transform: 'translateX(-50%)' },
-                    '100%': { transform: 'translateX(50%)' },
+                    '0%, 100%': { transform: 'translateX(0%)' },
+                    '50%': { transform: 'translateX(100%)' },
                 }
             },
 
