@@ -1,5 +1,6 @@
 <template>
-  <div class="container bg-white  size-full font-sans flex flex-col flex-grow bg-blue-400">
+  <div class="w-full min-w-screen h-full
+  font-sans flex flex-col bg-white">
     <Header/>
     <slot/>
     <Footer/>

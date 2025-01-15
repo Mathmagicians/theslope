@@ -10,10 +10,10 @@ const verticalLinks = [...horizontalLinks];
 </script>
 
 <template>
-  <UContainer class="w-2/3 flex items-center justify-between
+  <UContainer class="sticky w-2/3   flex items-center justify-between
   bg-opacity-40 bg-blue-curacao-100">
-    <!-- Logo with navigation to indec page, should always be visible -->
-    <div class="w-16 pt-2 mt-2 md:w-32 md:mt-4">
+    <!-- Logo with navigation to index page, should always be visible -->
+    <div class="w-24 p-1 m-1 md:w-32 md:m-4 min-w-1/12">
       <ULink to="/" ><Logo /></ULink>
     </div>
     <!-- hamburger button to show/hide menu on mobile -->
