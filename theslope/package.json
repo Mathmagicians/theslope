@@ -9,7 +9,9 @@
     "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
     "deploy": "npm run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "lint": "eslint .",
+    "lint-fix": "eslint . --fix"
   },
   "dependencies": {
     "@nuxt/ui": "^2.20.0",
@@ -22,8 +24,15 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
+    "@nuxt/eslint": "^0.7.5",
+    "@nuxt/test-utils": "^3.15.4",
+    "@vue/test-utils": "^2.4.6",
+    "eslint": "^9.18.0",
+    "happy-dom": "^16.6.0",
     "nitro-cloudflare-dev": "^0.2.1",
     "nitropack": "^2.10.4",
+    "playwright": "^1.49.1",
+    "typescript": "^5.7.3",
     "wrangler": "^3.99.0"
   }
 }

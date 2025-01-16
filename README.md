@@ -15,6 +15,9 @@ Run on development server (localhost:3000)
 
 - Frontend is available on `localhost:3000`.
 - Api is available on `localhost:3000/api`.
+- Tailwind styles are on `localhost:3000/_tailwind`.
+- Lint inspector: run `npx @eslint/config-inspector.` and browse on` ` http://localhost:7777 `
+- Nuxt DevTools is enabled by default in Nuxt v3.8.0. You can press Shift + Alt / ⇧ Shift + ⌥ Option + D in your app to open it up.
 
 ### 🚀 Deploy to cloudflare
 ```npm run deploy```
@@ -32,6 +35,12 @@ Run on development server (localhost:3000)
 - Cloudflare - serverless deployment  / cloud provider
 - CICD - Github actions
 - Andre cloud resourcer - Terraform
+
+### 3️⃣ 3rd party services
+#### Heynabo
+- Heynabo API - se  [dokumentation](https://heynabo.atlassian.net/wiki/external/N2QzNGVkM2ZiMzg1NDkwZDk2NTBiYWYyMzA0ZWJjNmQ)
+- There is a Makefile to test the heynabo api. you must have an .env file with username and password. Fx the following will return a list of neighbors:
+```make heynabo-get-nhbrs```
 
 ## Design ideas
  - understory.io - pantone colors, with contrasting type colors 

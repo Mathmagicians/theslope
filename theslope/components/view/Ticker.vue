@@ -32,13 +32,13 @@ const style = (index: number) => {
   <div class="max-w-full flex flex-col overflow-clip">
       <ul class="inline-flex flex-nowrap flex-row items-center justify-center md:justify-start text-center lowercase  text-sm md:text-base  animate-marquee whitespace-nowrap m-1">
         <li v-for="(word, index)  in words">
-        <span class="p-1 m-1 md:px-4 md:px-2 border-2 rounded-lg" :class="style(index+seed)" v-if="index%2 === 0">
+        <span v-if="index%2 === 0" class="p-1 m-1 md:px-4 md:px-2 border-2 rounded-lg" :class="style(index+seed)">
           {{ word }}</span>
         </li>
       </ul>
       <ul class="inline-flex flex-nowrap items-center justify-center md:justify-start text-center lowercase font-bold md:font-extrabold text-xl md:text-2xl m-1.5  animate-marqueer whitespace-nowrap">
         <li v-for="(word, index)  in words">
-        <span class="p-2 m-1.5 md:px-4 border-2"  :class="style(index)" v-if="index%2 !== 0">
+        <span v-if="index%2 !== 0"  class="p-2 m-1.5 md:px-4 border-2" :class="style(index)">
           {{ word }}</span>
         </li>
       </ul>

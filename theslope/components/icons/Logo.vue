@@ -3,8 +3,7 @@
   <svg viewBox="20 0 125 60" xmlns="http://www.w3.org/2000/svg" >
     <!-- to hide the path, it is usually wrapped in a <defs> element -->
     <!-- <defs> -->
-    <defs>
-    </defs>
+    <defs/>
     <path
         id="MyPath"
         stroke="#66a28f"

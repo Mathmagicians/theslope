@@ -13,7 +13,7 @@ definePageMeta({
 const data = ref(null)
 const error = ref(null)
 
-async function getCalendarFeedForUser(user: String) {
+async function getCalendarFeedForUser(user: string) {
   console.log('getCalendarFeedForUser')
   data.value = await $fetch('/api/calendar/feed')
 }
@@ -28,7 +28,7 @@ async function getCalendarFeedForUser(user: String) {
     <h2>Bestilte Spisebiletter</h2>
     <p>10-01-2025</p>
 
-    <UButton icon="i-pajamas-calendar" @click="getCalendarFeedForUser('Agata')" v-bind='download="Skråningen fællesspisninger.ical"'>Abonner på Kalender for Agata</UButton>
+    <UButton icon="i-pajamas-calendar" v-bind='download="Skråningen fællesspisninger.ical"' @click="getCalendarFeedForUser('Agata')">Abonner på Kalender for Agata</UButton>
 
     <div v-if="data">
      <a href="/api/calendar/feed">Calendar feed</a>

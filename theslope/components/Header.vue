@@ -10,14 +10,15 @@ const verticalLinks = [...horizontalLinks];
 </script>
 
 <template>
-  <UContainer class="sticky w-2/3   flex items-center justify-between
+  <UContainer
+class="sticky w-2/3   flex items-center justify-between
   bg-opacity-40 bg-blue-curacao-100">
     <!-- Logo with navigation to index page, should always be visible -->
     <div class="w-24 p-1 m-1 md:w-32 md:m-4 min-w-1/12">
       <ULink to="/" ><Logo /></ULink>
     </div>
     <!-- hamburger button to show/hide menu on mobile -->
-    <UButton @click="toggleMenu()" class="block md:hidden ">
+    <UButton class="block md:hidden " @click="toggleMenu()">
       <Icon :name="isMenuOpen ? 'pajamas:close' : 'pajamas:hamburger'" class="w-4 h-4 mt-1 text-blue-curacao-200"/>
     </UButton>
     <div class="hidden md:flex">

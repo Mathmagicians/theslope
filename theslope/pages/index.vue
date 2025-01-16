@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col">
     <Hero/>
-    <Ticker></Ticker>
+    <Ticker/>
     <div class="min-h-screen md:min-h-1/4  bg-pink-lemonade-500">
       <h2 class="text-pink-lemonade-50 uppercase text-2xl md:text-4xl">44 husstande</h2>
     </div>
