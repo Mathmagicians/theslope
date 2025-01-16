@@ -21,5 +21,4 @@ jobs:
           cache: 'npm'
       - run: npm run lint
       - run: npm run test
-      - name: Deploy to dev server
       - run: npm run deploy
