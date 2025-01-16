@@ -5,9 +5,12 @@
 - git installeret
 
 ###  🏗️Start applikationen lokalt 
-Clone the repo friom github.
+Clone the repo friom github:
+
 ```git clone```
+
 Run on development server (localhost:3000)
+
 ```npm run dev```
 
 - Frontend is available on `localhost:3000`.
@@ -18,10 +21,11 @@ Run on development server (localhost:3000)
 
 ## 🤖 How to test
 🚧 on the way
+-  Heynabo test space: - [ ] https://demo.spaces.heynabo.com/, bruger mail `agata@mathmagicians.dk`, kode spørg @themathmagician
 
 ## Tech stuff
 
-### Tech Stack
+### T⌨ech Stack
 - Tailwind CSS - frontend css framework
 - Nuxt.js 3  + typescript - frontend framework
 - Nuxt.js 3  + typescript - server backend
