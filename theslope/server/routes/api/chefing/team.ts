@@ -10,4 +10,6 @@
 
 // send reminder to chefkok
 
+//send reminder to team member
+
 // cancel dinner event
