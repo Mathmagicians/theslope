@@ -10,8 +10,9 @@
     "postinstall": "nuxt prepare",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types",
-    "lint": "eslint .",
-    "lint-fix": "eslint . --fix"
+    "lint": "npx eslint .",
+    "lint-fix": "npx eslint . --fix",
+    "test": "npx vitest --run"
   },
   "dependencies": {
     "@nuxt/ui": "^2.20.0",
@@ -33,6 +34,7 @@
     "nitropack": "^2.10.4",
     "playwright": "^1.49.1",
     "typescript": "^5.7.3",
+    "vitest": "^3.0.1",
     "wrangler": "^3.99.0"
   }
 }
