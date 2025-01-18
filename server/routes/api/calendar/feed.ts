@@ -1,19 +1,27 @@
 import {defineEventHandler} from 'h3';
 import ical from 'ical-generator';
 
-const events = [{
-    start: "10-01-2025",
-    end: "10-01-2025",
-    summary: "Fællesspisning - Lasagne",
-    location: "Skråningen",
-    url: "/api/dinner/20250110",
-    timezone: 'Europe/Copenhagen'
-}];
+class Event {
+    constructor(
+        public start: string,
+        public end: string,
+        public summary: string,
+        public location: string,
+        public url: string,
+        public timezone: string)
+    {}
+}
+const events = [
+    new Event(
+        "10-01-2025", "10-01-2025", "Fællesspisning - Lasagne",
+        "Skråningen", "/api/dinner/20250110",'Europe/Copenhagen'
+    )
+];
 
-async function generateICalFeed(from): Promise<string> {
+async function generateICalFeed(from:Event[]): Promise<string> {
     const calendar = ical({name: 'Skråningens fællesspisning', timezone: 'Europe/Copenhagen'});
 
-    events.forEach(event => {
+    from.forEach(event => {
         calendar.createEvent({
             start: event.start,
             end: event.end,

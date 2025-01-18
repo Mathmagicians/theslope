@@ -24,5 +24,15 @@ export default defineNuxtConfig({
     "@nuxt/eslint",
   ],
 
+  runtimeConfig: {
+    HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable
+    HEY_NABO_PASSWORD: process.env.NUXT_HEY_NABO_PASSWORD, //Set in NUXT_HEYNABO_PASSWORD env variable
+    // Public keys that are exposed to the client
+    public: {
+      apiBase: '/api',
+      HEY_NABO_API: process.env.NUXT_HEY_NABO_API || '' //Set in NUXT_HEYNABO_API env variable
+    }
+  }
+
 
 })
