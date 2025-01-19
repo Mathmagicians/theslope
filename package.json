@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev --dotenv .env",
+    "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
@@ -12,11 +12,16 @@
     "cf-typegen": "wrangler types",
     "lint": "npx eslint .",
     "lint-fix": "npx eslint . --fix",
-    "test": "npx vitest --run"
+    "test": "npx vitest --run",
+    "db:migrate:local": "npx wrangler d1 migrations apply theslope --local",
+    "db:migrate": "npx wrangler d1 migrations apply theslope --remote",
+    "db:generate-client": "npx prisma generate"
   },
   "dependencies": {
     "@nuxt/ui": "^2.20.0",
     "@nuxtjs/tailwindcss": "^6.12.2",
+    "@prisma/adapter-d1": "^6.2.1",
+    "@prisma/client": "^6.2.1",
     "@vueuse/core": "^12.4.0",
     "ical-generator": "^8.1.1",
     "nuxt": "^3.15.0",
@@ -33,15 +38,9 @@
     "nitro-cloudflare-dev": "^0.2.1",
     "nitropack": "^2.10.4",
     "playwright": "^1.49.1",
+    "prisma": "^6.2.1",
     "typescript": "^5.7.3",
     "vitest": "^3.0.1",
     "wrangler": "^3.99.0"
-  },
-  "overrides": {
-    "//": [
-      "COMMENT:Temporary solution for:error of packages(inflight@1.0.6, rimraf@3.0.2, glob@7.2.31) https://github.com/vercel/next.js/issues/66239"
-    ],
-    "glob": "9.0.0",
-    "rimraf": "^4.0.0"
   }
 }

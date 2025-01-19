@@ -9,3 +9,8 @@ assets = { directory = "./.output/public/", binding = "ASSETS" }
 # Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
 [observability]
 enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "theslope"
+database_id = "0032a02a-faba-402d-b8a6-def2b4b4feba"

@@ -68,3 +68,48 @@ Run on development server (localhost:3000)
 - <peach>peach cobbler</peach> #ffb482
 - <bonbon>bonbon</bonbon> #f1a9cf
 - <caramel>caramel</caramel> #ca815a
+
+
+## 📚 Documentation
+### NPM
+There is an error about preflight, that can be removed by adding to package.json: (but it conflicts with new installs!)
+```json
+ "overrides": {
+    "//": [
+      "COMMENT:Temporary solution for:error of packages(inflight@1.0.6, rimraf@3.0.2, glob@7.2.31) https://github.com/vercel/next.js/issues/66239"
+    ],
+    "glob": "9.0.0",
+    "rimraf": "^4.0.0"
+  }
+```
+
+### Database - schemas, ORM, migrations
+We use D1 - a cloudflare database. It is built on top of SQLITE. 
+We use prisma ORM to generate the repository client.
+Database is created with wrangler
+```
+npx wrangler d1 create theslope
+```
+
+1. Set the DATABASE_URL in the .env file to point to your existing database. If your database has no tables yet, read https://pris.ly/d/getting-started
+2. Set the provider of the datasource block in schema.prisma to match your database: postgresql, mysql, sqlite, sqlserver, mongodb or cockroachdb.
+3. Run prisma db pull to turn your database schema into a Prisma schema.
+4. Run prisma generate to generate the Prisma Client. You can then start querying your database.
+5. Tip: Explore how you can extend the ORM with scalable connection pooling, global caching, and real-time database events. Read: https://pris.ly/cli/beyond-orm
+
+#### Migration
+To validate the prisma model
+```prisma
+npx prisma format
+```
+To create sql migration script
+```
+# Generate SQL using Prisma Migrate
+npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0001_initial.sql
+```
+Generate prisma db client:
+```
+npx prisma generate
+```
+
+![Prisma workflow](https://www.prisma.io/docs/assets/images/prisma-client-generation-workflow-3b42c24d27aef3025f2eb4ffc4644642.png)
