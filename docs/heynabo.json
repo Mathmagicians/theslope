@@ -1,0 +1,24 @@
+{
+  "name": "Fællesspisning 2",
+  "type": null,
+  "description": "theslopebot 🤖>> jeg har synkroniseret denne begivenhed skraaningen.dk/mad. Burritos 🌮!Madhold 3 laver mad",
+  "start": "2025-01-31T18:00:00+03:00",
+  "end": "2025-01-31T19:00:00+03:00",
+  "status": "PUBLISHED",
+  "groupId": null,
+  "price": {
+    "adult": 0,
+    "child": 0,
+    "taxIncluded": true
+  },
+  "public": false,
+  "locationText": "Fælleshuset",
+  "locationId": null,
+  "minParticipants": null,
+  "maxParticipants": null,
+  "guestsAllowed": true,
+  "takeAwayAllowed": true,
+  "vegetarian": true,
+  "commentsAllowed": true,
+  "visibleToEveryone": true
+}

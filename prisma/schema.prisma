@@ -1,0 +1,87 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  ADMIN
+  USER
+  CHEF
+  COOK
+  JUNIORHELPER
+}
+
+model RoleAssignment {
+  id     Int  @id @default(autoincrement())
+  role   Role
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model AllergyType {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String
+  icon        String?
+  Allergy     Allergy[]
+}
+
+model Allergy {
+  id            Int         @id @default(autoincrement())
+  inhabitantId  Int
+  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id])
+  allergyTypeId Int
+  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id])
+}
+
+// Represents the login and contact credentials of a Heynabo standalone user
+model User {
+  id              Int              @id @default(autoincrement())
+  email           String           @unique
+  phone           String?
+  passwordHash    String
+  roleAssignments RoleAssignment[]
+  Inhabitant      Inhabitant?
+}
+
+// Represents a member of a household, that can participate in the dinners and cooking
+// Inhabitant 1-0..1 User
+// Inhabitant *-1 Household
+// Inhabitant - 0..* Allergy
+// Inhabitant - 0..* Role
+
+model Inhabitant {
+  id          Int       @id @default(autoincrement())
+  heynaboId   Int       @unique // reference to Heynabo user
+  user        User?     @relation(fields: [userId], references: [id])
+  userId      Int       @unique //foreign key to User
+  householdId Int       @unique
+  household   Household @relation(fields: [householdId], references: [id])
+  pictureUrl  String
+  name        String
+  lastName    String
+  birthDate   DateTime
+  allergies   Allergy[]
+}
+
+model Household {
+  id          Int          @id @default(autoincrement())
+  heynaboId   Int          @unique
+  pbsId       Int          @unique
+  movedInDate DateTime
+  moveOutDate DateTime
+  name        String
+  address     String
+  inhabitants Inhabitant[]
+}

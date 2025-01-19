@@ -1,0 +1,3 @@
+<template>
+  Fællesspisnings kalender
+</template>
