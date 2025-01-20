@@ -1,21 +1,33 @@
-import { PrismaClient } from '@prisma/client'
-import { PrismaD1 } from '@prisma/adapter-d1'
-import {Household, User} from "~/server/data/household";
-import {useDatabase} from "nitropack/runtime";
-import {D1Database} from "@cloudflare/workers-types";
+import {PrismaD1} from "@prisma/adapter-d1";
+import {PrismaClient} from "@prisma/client";
+import {Prisma} from "@prisma/client/extension";
 
 
-function getPrismaClient(d1Client:D1Database): PrismaClient {
-    const adapter = new PrismaD1(db1)
-    const prisma = new PrismaClient({ adapter })
+export async function getPrismaClientConnection(d1Client: D1Database): PrismaClient {
+    const adapter = new PrismaD1(d1Client)
+    const prisma = new PrismaClient({adapter})
+    await prisma.$connect()
     return prisma
 }
 
-export async function fetchUsers(d1Client:D1Database): User[] {
-        const prisma = getPrismaClient()
-        const users = await prisma.user.findMany()
-//        const result = JSON.stringify(users)
-        return users
+type UserCreate = Prisma.Args<typeof prisma.user, 'create'>['data']
+type User = Prisma.Args<typeof prisma.user, 'select-all'>['data']
+
+export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
+    const prisma = await getPrismaClientConnection(d1Client)
+    console.info(">>>👩 Saving user: ", user)
+    const newUser = await prisma.user.create({
+        data: user
+    })
+    return newUser
+}
+
+export async function fetchUsers(d1Client: D1Database): Promise<User[]> {
+    console.log(">>>👩‍ Fetching users, from d1 client: ", d1Client)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const users = await prisma.user.findMany()
+    console.log(`<<<👩‍ Got ${users.length} users from database`)
+    return users
 }
 
 export async function createHousehold(household: Household): any {
@@ -31,4 +43,12 @@ export async function createHousehold(household: Household): any {
         }
     })
     return newHousehold
+}
+
+export async function saveHouseholds(households: Household[]): any {
+    const prisma = getPrismaClient()
+    const newHouseholds = await prisma.household.createMany({
+        data: households
+    })
+    return newHouseholds
 }
