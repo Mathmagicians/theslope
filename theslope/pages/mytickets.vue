@@ -2,7 +2,21 @@
   <div>
     <!-- Calendar Header -->
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-bold">Kalender</h2>
+      <button
+        class="bg-blue-500 text-white px-4 py-2 rounded-md"
+        @click="goToPreviousMonth"
+      >
+        Forrige måned
+      </button>
+      <h2 class="text-xl font-bold">
+        {{ formattedMonth }}
+      </h2>
+      <button
+        class="bg-blue-500 text-white px-4 py-2 rounded-md"
+        @click="goToNextMonth"
+      >
+        Næste måned
+      </button>
     </div>
 
     <!-- Calendar Container -->
@@ -60,207 +74,55 @@
 </template>
 
 <script>
-import { startOfMonth, endOfMonth, eachDayOfInterval, format } from "date-fns";
+import {
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  format,
+  subMonths,
+  addMonths,
+} from "date-fns";
 
 export default {
   data() {
     return {
-      // Meal data
-      
-sampleItems: [
-{
-    id: 1,
-    name: "Vegetarisk Pasta",
-    type: "vegetarisk",
-    description: "En lækker vegetarisk pasta med tomatsauce og friske urter.",
-    datetime: "2024-08-30T18:30",
-    user_id: null,
-    price: 75,
-    meal_id: 1,
-    attendees: 2,
-    total_allergies: 2,
-    egg_allergies: 1,
-    gluten_allergies: 2,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 0,
-  },
-  {
-    id: 2,
-    name: "Vegansk Salat",
-    type: "vegansk",
-    description: "En sund vegansk salat med blandede grønne blade og nødder.",
-    datetime: "2024-08-30T18:30",
-    user_id: null,
-    price: 65,
-    meal_id: 2,
-    attendees: 2,
-    total_allergies: 2,
-    egg_allergies: 0,
-    gluten_allergies: 1,
-    lactose_allergies: 0,
-    selected: 1,
-    takeawaySelected: 0,
-  },
-  {
-    id: 3,
-    name: "Kylling i Karry",
-    type: "ikke-vegetarisk",
-    description: "En krydret kyllingeret med karry og ris.",
-    datetime: "2024-08-30T18:30",
-    user_id: null,
-    price: 85,
-    meal_id: 3,
-    attendees: 3,
-    total_allergies: 1,
-    egg_allergies: 0,
-    gluten_allergies: 0,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 1,
-  },
-  {
-    id: 4,
-    name: "Glutenfri Pizza",
-    type: "glutenfri",
-    description: "En glutenfri pizza med ost, tomat og friske grøntsager.",
-    datetime: "2024-08-30T18:30",
-    user_id: null,
-    price: 90,
-    meal_id: 4,
-    attendees: 1,
-    total_allergies: 1,
-    egg_allergies: 0,
-    gluten_allergies: 1,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 1,
-  },
-  {
-    id: 5,
-    name: "Risret med Taffel",
-    type: "vegetarisk",
-    description: "En smagfuld risret med grøntsager og krydret topping.",
-    datetime: "2024-08-30T18:30",
-    user_id: null,
-    price: 70,
-    meal_id: 5,
-    attendees: 2,
-    total_allergies: 2,
-    egg_allergies: 1,
-    gluten_allergies: 0,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 0,
-  },
-  {
-    id: 6,
-    name: "Stegt Ris med Grøntsager",
-    type: "vegansk",
-    description: "Stegte ris med sæsonens grøntsager og asiatisk inspiration.",
-    datetime: "2024-08-10T18:30",
-    user_id: 3,
-    price: 85,
-    meal_id: 6,
-    attendees: 3,
-    total_allergies: 2,
-    egg_allergies: 0,
-    gluten_allergies: 1,
-    lactose_allergies: 0,
-    selected: 1,
-    takeawaySelected: 1,
-  },
-  {
-    id: 7,
-    name: "Klassisk Pasta",
-    type: "ikke-vegetarisk",
-    description: "En klassisk pasta med kødsauce og parmesanost.",
-    datetime: "2025-01-03T18:30",
-    user_id: 3,
-    price: 95,
-    meal_id: 7,
-    attendees: 4,
-    total_allergies: 1,
-    egg_allergies: 1,
-    gluten_allergies: 1,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 0,
-  },
-  {
-    id: 8,
-    name: "Risengrød",
-    type: "vegetarisk",
-    description: "En traditionel dansk risengrød med kanel og smør.",
-    datetime: "2025-01-04T13:18",
-    user_id: 3,
-    price: 45,
-    meal_id: 8,
-    attendees: 2,
-    total_allergies: 0,
-    egg_allergies: 0,
-    gluten_allergies: 0,
-    lactose_allergies: 1,
-    selected: 1,
-    takeawaySelected: 0,
-  },
-  {
-    id: 9,
-    name: "Tofu i Kokoskarry",
-    type: "vegansk",
-    description: "Tofu tilberedt i en lækker kokoskarry med ris.",
-    datetime: "2025-01-06T13:18",
-    user_id: 3,
-    price: 80,
-    meal_id: 9,
-    attendees: 3,
-    total_allergies: 1,
-    egg_allergies: 0,
-    gluten_allergies: 1,
-    lactose_allergies: 0,
-    selected: 1,
-    takeawaySelected: 1,
-  },
-  {
-    id: 11,
-    name: "Æblekage",
-    type: "dessert",
-    description: "Traditionel dansk æblekage med flødeskum.",
-    datetime: "2024-01-02T14:00",
-    user_id: 3,
-    price: 40,
-    meal_id: 11,
-    attendees: 2,
-    total_allergies: 0,
-    egg_allergies: 1,
-    gluten_allergies: 0,
-    lactose_allergies: 1,
-    selected: 0,
-    takeawaySelected: 0,
-  },
-      ],
-      // Media query to check screen size
-      isSmallScreen: window.innerWidth < 768,
+      token: null, // To store the token after login
+      eventList: [], // Events fetched from the API
+      isSmallScreen: window.innerWidth < 768, // Responsive layout
+      currentMonth: new Date(), // Track the currently displayed month
     };
   },
   computed: {
+    formattedMonth() {
+      // Format the current month for display
+      return format(this.currentMonth, "MMMM yyyy");
+    },
     calendarDays() {
       // Determine the start and end of the current month
-      const start = startOfMonth(new Date());
-      const end = endOfMonth(new Date());
+      const start = startOfMonth(this.currentMonth);
+      const end = endOfMonth(this.currentMonth);
 
       // Create an array of all days in the current month
       const days = eachDayOfInterval({ start, end }).map((date) => ({
-        date: format(date, "yyyy-MM-dd"), // Format the date
-        meals: [],
+        date: format(date, "yyyy-MM-dd"),
+        meals: [], // Initialize with no events
       }));
 
-      // Map meals to their corresponding days
-      this.sampleItems.forEach((meal) => {
-        const mealDate = meal.datetime.split("T")[0];
-        const day = days.find((d) => d.date === mealDate);
-        if (day) {
-          day.meals.push(meal);
+      // Map events to their corresponding days
+      this.eventList.forEach((event) => {
+        if (event.start) {
+          const eventDate = event.start.split("T")[0]; // Extract the date part
+          const day = days.find((d) => d.date === eventDate);
+
+          if (day) {
+            day.meals.push({
+              id: event.id,
+              name: event.name,
+              description: event.description || "No description provided.",
+              startTime: event.start,
+              endTime: event.end,
+            });
+          }
         }
       });
 
@@ -268,221 +130,65 @@ sampleItems: [
     },
   },
   mounted() {
-    // Add a resize listener to update `isSmallScreen`
+    this.loginAndFetchEvents();
     window.addEventListener("resize", this.updateScreenSize);
   },
   beforeDestroy() {
-    // Remove the resize listener
     window.removeEventListener("resize", this.updateScreenSize);
   },
   methods: {
+    async loginAndFetchEvents() {
+      try {
+        // Login to fetch the token
+        const loginResponse = await fetch("https://demo.spaces.heynabo.com/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "moryde@gmail.com", // Replace with valid email
+            password: "dydmy1-mocmib-pycjEk", // Replace with valid password
+          }),
+        });
+
+        if (!loginResponse.ok) {
+          throw new Error("Failed to login");
+        }
+
+        const loginData = await loginResponse.json();
+        this.token = loginData.token;
+
+        // Fetch events using the token
+        const eventsResponse = await fetch(
+          "https://demo.spaces.heynabo.com/api/members/events",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${this.token}`,
+              Accept: "application/json",
+            },
+          }
+        );
+
+        if (!eventsResponse.ok) {
+          throw new Error("Failed to fetch events");
+        }
+
+        const eventsData = await eventsResponse.json();
+        this.eventList = eventsData.list; // Assuming `list` contains the events
+      } catch (error) {
+        console.error(error.message);
+      }
+    },
     updateScreenSize() {
       this.isSmallScreen = window.innerWidth < 768;
+    },
+    goToPreviousMonth() {
+      this.currentMonth = subMonths(this.currentMonth, 1);
+    },
+    goToNextMonth() {
+      this.currentMonth = addMonths(this.currentMonth, 1);
     },
   },
 };
 </script>
-
-<style scoped>
-/* Add additional styles as needed */
-.grid-cols-1 {
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-}
-
-.grid-cols-7 {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-</style>
-
-
-
-
-sampleItems: [
-      {
-      "id": 1,
-      "name": "Vegetarian Pasta",
-      "type": "vegetarian",
-      "description": "A delicious vegetarian pasta with tomato sauce.",
-      "datetime": "2024-08-30T00:23",
-      "user_id": null,
-      "price": null,
-      "meal_id": 1,
-      "attendees": 2,
-      "total_allergies": 2,
-      "egg_allergies": 1,
-      "gluten_allergies": 2,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 2,
-      "name": "Vegan Salad",
-      "type": "vegan",
-      "description": "A healthy vegan salad with mixed greens and nuts.",
-      "datetime": "2024-08-30T00:23",
-      "user_id": null,
-      "price": null,
-      "meal_id": 2,
-      "attendees": 2,
-      "total_allergies": 2,
-      "egg_allergies": 1,
-      "gluten_allergies": 2,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 3,
-      "name": "Chicken Curry",
-      "type": "non-vegetarian",
-      "description": "A spicy chicken curry with rice.",
-      "datetime": "2024-08-30T00:23",
-      "user_id": null,
-      "price": null,
-      "meal_id": 3,
-      "attendees": 2,
-      "total_allergies": 2,
-      "egg_allergies": 1,
-      "gluten_allergies": 2,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 1
-  },
-  {
-      "id": 4,
-      "name": "Gluten-Free Pizza",
-      "type": "gluten-free",
-      "description": "A gluten-free pizza with cheese and vegetables.",
-      "datetime": "2024-08-30T00:23",
-      "user_id": null,
-      "price": null,
-      "meal_id": 4,
-      "attendees": 1,
-      "total_allergies": 1,
-      "egg_allergies": 1,
-      "gluten_allergies": 1,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 1
-  },
-  {
-      "id": 5,
-      "name": "RisTaffell",
-      "type": null,
-      "description": "ggg",
-      "datetime": "2024-08-30T00:23",
-      "user_id": null,
-      "price": null,
-      "meal_id": 5,
-      "attendees": 1,
-      "total_allergies": 1,
-      "egg_allergies": 1,
-      "gluten_allergies": 1,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 6,
-      "name": "fdsfs",
-      "type": null,
-      "description": "dsffadfs",
-      "datetime": "2024-08-10T00:38",
-      "user_id": 3,
-      "price": 12333,
-      "meal_id": 6,
-      "attendees": 2,
-      "total_allergies": 2,
-      "egg_allergies": 1,
-      "gluten_allergies": 2,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 1
-  },
-  {
-      "id": 7,
-      "name": "Pasta",
-      "type": null,
-      "description": "Lækkert",
-      "datetime": "2025-01-03T18:30",
-      "user_id": 3,
-      "price": 0,
-      "meal_id": 7,
-      "attendees": 1,
-      "total_allergies": 1,
-      "egg_allergies": 1,
-      "gluten_allergies": 1,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 8,
-      "name": "Ris",
-      "type": null,
-      "description": "Rice??",
-      "datetime": "2025-01-04T13:18",
-      "user_id": 3,
-      "price": 0,
-      "meal_id": 8,
-      "attendees": 1,
-      "total_allergies": 1,
-      "egg_allergies": 1,
-      "gluten_allergies": 1,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 9,
-      "name": "Tofu",
-      "type": null,
-      "description": "Lækker tofu",
-      "datetime": "2025-01-06T13:18",
-      "user_id": 3,
-      "price": 0,
-      "meal_id": 9,
-      "attendees": 1,
-      "total_allergies": 1,
-      "egg_allergies": 1,
-      "gluten_allergies": 1,
-      "lactose_allergies": 1,
-      "selected": 1,
-      "takeawaySelected": 1
-  },
-  {
-      "id": 10,
-      "name": "fsdfs",
-      "type": null,
-      "description": "fsfds",
-      "datetime": "2025-01-04T22:13",
-      "user_id": 3,
-      "price": 3,
-      "meal_id": 10,
-      "attendees": 0,
-      "total_allergies": 0,
-      "egg_allergies": 0,
-      "gluten_allergies": 0,
-      "lactose_allergies": 0,
-      "selected": 0,
-      "takeawaySelected": 0
-  },
-  {
-      "id": 11,
-      "name": "Sample Meal",
-      "type": null,
-      "description": "Description here",
-      "datetime": "2024-01-02",
-      "user_id": 3,
-      "price": 10,
-      "meal_id": 11,
-      "attendees": 0,
-      "total_allergies": 0,
-      "egg_allergies": 0,
-      "gluten_allergies": 0,
-      "lactose_allergies": 0,
-      "selected": 0,
-      "takeawaySelected": 0
-  }
-      ]
