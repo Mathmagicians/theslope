@@ -98,6 +98,9 @@ npx wrangler d1 create theslope
 5. Tip: Explore how you can extend the ORM with scalable connection pooling, global caching, and real-time database events. Read: https://pris.ly/cli/beyond-orm
 
 #### Migration
+! Imporant - follow [cloudflares](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/), not prisma's migration model:
+
+##### Validate model
 To validate the prisma model
 ```prisma
 npx prisma format
@@ -107,9 +110,14 @@ To create sql migration script
 # Generate SQL using Prisma Migrate
 npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0001_initial.sql
 ```
-Generate prisma db client:
+Generate prisma db client - now you can use prisma types in the client to save and fetch data:
 ```
 npx prisma generate
 ```
 
 ![Prisma workflow](https://www.prisma.io/docs/assets/images/prisma-client-generation-workflow-3b42c24d27aef3025f2eb4ffc4644642.png)
+
+For at se data i lokal database: 
+```
+npx wrangler d1 execute prod-d1-tutorial --command="SELECT * FROM User"
+```

@@ -1,4 +1,4 @@
-import {defineEventHandler} from "h3";qqq
+import {defineEventHandler} from "h3";
 import {saveUser} from "~/server/data/prismaRepository";
 
 export default defineEventHandler(async (event) => {
