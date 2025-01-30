@@ -1,42 +1,65 @@
 <script setup lang="ts">
 
-import { useFileSystemAccess } from '@vueuse/core'
 
 definePageMeta({
   validate: async (route) => {
     // Check if the id is made up of S or T, followed by 1 or 2 digits, ie addresser af typen T1 and S31
     // needs to look up the address in the database, this is just a simple input validation
-    return /^[S,s,T,t]\d{1,2}$/.test(route.params.id)
+    return /^[S,s,T,t]\d{1,2}$/.test(<string>route.params.id)
   }
 })
 
-const data = ref(null)
-const error = ref(null)
+const route = useRoute()
+const householdId = route.params.id
+const url = `/api/household/${householdId}`
+
+const calendarFeed = ref(null)
+const calendarError = ref(null)
+
+const householdApiRef = apiRef({
+  route: '/api/household/[id]',
+  method: 'get',
+  defaultValue: null
+})
+
+const { data, error } = await useFetch(url)
 
 async function getCalendarFeedForUser(user: string) {
-  console.log('getCalendarFeedForUser')
-  data.value = await $fetch('/api/calendar/feed')
+  console.info('getCalendarFeedForUser')
+  calendarFeed.value = await $fetch('/api/calendar/feed')
 }
 </script>
 
 <template>
   <div class="text-base text-mocha-mousse-900">
-    <h1>Husstands overblik</h1>
-    <p>Adress: {{ $route.params.id }}</p>
-    <h2>Husstandsmedlemmer</h2>
-    Agata
-    <h2>Bestilte Spisebiletter</h2>
-    <p>10-01-2025</p>
+    <h1 class="text-lg uppercase text-blue-curacao-900">Husstands overblik for {{ householdId }}</h1>
 
-    <UButton icon="i-pajamas-calendar" v-bind='download="Skråningen fællesspisninger.ical"' @click="getCalendarFeedForUser('Agata')">Abonner på Kalender for Agata</UButton>
+    <HouseholdView v-if="data" :household="data">
+    </HouseholdView>
+    <Loader v-else>
+      Loading data for household {{ householdId }}
+    </Loader>
 
-    <div v-if="data">
-     <a href="/api/calendar/feed">Calendar feed</a>
+    <!-- Placeholder for kalender med overblik over familiens bestilte spisebiletter -->
+    <div>
+      <h2>Bestilte Spisebiletter</h2>
+      <p>10-01-2025</p>
 
-      Data: {{ data}}
-    </div>
-    <div v-else>
-      Loading...
+      <UButton icon="i-pajamas-calendar" v-bind='download="Skråningen fællesspisninger.ical"'
+               @click="getCalendarFeedForUser('Agata')">Abonner på Kalender for Agata
+      </UButton>
+
+      <!-- Placeholder til calendar komponent -->
+      <div>
+        <div v-if="calendarFeed">
+          <a href="/api/calendar/feed">Calendar feed</a>
+          <p>Data: {{ calendarFeed }}</p>
+        </div>
+        <Loader v-else>
+          Loading calendar feed...
+        </Loader>
+      </div>
     </div>
   </div>
+
 </template>

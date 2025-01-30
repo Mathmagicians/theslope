@@ -1,3 +1,4 @@
+
 <template>
   <h1>01.10.2025 </h1>
   <h2>Menu - tatziki</h2>
@@ -6,4 +7,7 @@
     <li> 😋Agata </li>
     <li> 👶🏻Gæst (barn)</li>
   </list-disc>
+  <DinnerTicket>
+
+  </DinnerTicket>
 </template>

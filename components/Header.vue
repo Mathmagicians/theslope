@@ -5,8 +5,14 @@ const horizontalLinks = [
   { label: "Husholdning",  icon: 'i-heroicons-home', to: "/household" },
   { label: "Chefkok", to: "/chef", icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food' },
   { label: "Admin", to: "/admin" },
+  { label: "User", to: "/admin" },
 ];
 const verticalLinks = [...horizontalLinks];
+
+const isMenuOpen = ref(false);
+const toggleMenu = () => {
+  isMenuOpen.value = !isMenuOpen.value;
+};
 </script>
 
 <template>
