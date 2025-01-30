@@ -16,6 +16,9 @@ async function getUsers() {
   <div class="text-blue-curacao-900">
     <h1>😎Admin view</h1>
 
+    Bytte vagt
+    Bytte chefkokke vagt
+
     <div v-if="getUsersMessage">
 
       <h2>Brugere</h2>
