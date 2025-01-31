@@ -13,4 +13,4 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "0032a02a-faba-402d-b8a6-def2b4b4feba"
+database_id = "05a6501a-9f4c-4708-8a13-780af6fa7200"
