@@ -1,7 +1,5 @@
 import {defineEventHandler} from "h3";
 import {fetchUsers} from "~/server/data/prismaRepository";
-import {PrismaClient} from "@prisma/client";
-import {PrismaD1} from "@prisma/adapter-d1";
 
 
 export default defineEventHandler(async (event) => {

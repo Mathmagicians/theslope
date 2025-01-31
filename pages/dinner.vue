@@ -1,3 +1,3 @@
 <template>
-  <DinnerEvent></DinnerEvent>
+  <DinnerEvent/>
 </template>

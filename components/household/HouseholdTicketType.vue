@@ -7,9 +7,9 @@
     >
       <UText class="w-16 md:w-24 font-medium">{{ day }}:</UText>
       <USelect
+          :key="`select-${day}`"
           :v-model="weeklyPreferences[day]"
           :options="mealOptions"
-          :key="`select-${day}`"
           class="w-24 md:w-32"
       />
     </div>
