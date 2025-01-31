@@ -19,6 +19,10 @@ const style = (index: number) => {
       return 'border-orange-mandarin-900 bg-orange-mandarin-100 text-orange-mandarin-800';
       break;
     }
+    case 4: {
+      return 'border-mocha-mousse-900 bg-mocha-mousse-100 text-mocha-mousse-800';
+      break;
+    }
     default: {
       return 'border-lavender-bonbon-900 bg-lavender-bonbon-200 text-lavender-bonbon-900';
       break;

@@ -1,3 +1,6 @@
 <template>
-  Allergier
+  <div>
+    <h1>Allergier</h1>
+    Allergier
+  </div>
 </template>
