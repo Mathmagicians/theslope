@@ -1,11 +1,10 @@
 <script setup lang="ts">
 const horizontalLinks = [
-  { label: "Skråningen", to: "/", icon: "i-mdi-hand-heart" },
-  { label: "Fællesspisning", to: "/dinner", icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" },
+ { label: "Fællesspisning", to: "/dinner", icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" },
   { label: "Husholdning",  icon: 'i-heroicons-home', to: "/household" },
   { label: "Chefkok", to: "/chef", icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food' },
-  { label: "Admin", to: "/admin" },
-  { label: "User", to: "/admin" },
+  { label: "Admin", to: "/admin", icon: 'pajamas-admin' },
+  { label: "User", to: "/login" },
 ];
 const verticalLinks = [...horizontalLinks];
 
