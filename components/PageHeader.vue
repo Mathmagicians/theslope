@@ -4,7 +4,7 @@ const horizontalLinks = [
   { label: "Husholdning",  icon: 'i-heroicons-home', to: "/household" },
   { label: "Chefkok", to: "/chef", icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food' },
   { label: "Admin", to: "/admin", icon: 'pajamas-admin' },
-  { label: "User", to: "/login" },
+  { label: "User", to: "/login", icon: 'pajamas-user' },
 ];
 const verticalLinks = [...horizontalLinks];
 

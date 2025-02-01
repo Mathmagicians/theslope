@@ -52,11 +52,11 @@ function getRotationClass(i: number) {
       </p>
 
       <!-- Error Message -->
-      <p class="text-sm md:text-base text-red-winery-700">
+      <p class="text-base md:text-lg text-red-winery-700">
         {{ message }}
       </p>
 
-      <p class="text-sm md:text-base text-red-winery-700">
+      <p class="text-base md:text-lg text-red-winery-700">
         <NuxtLink to="/">Fejl kan ske ... Lad os lige <span class="underline bold text-red-winery-800">starte forfra</span></NuxtLink>
       </p>
     </div>
