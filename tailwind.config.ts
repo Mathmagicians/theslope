@@ -7,7 +7,7 @@ export default {
 
             animation: {
                 marquee: 'marquee 25s linear infinite',
-                marqueer: 'marqueer 35s linear infinite',
+                marqueer: 'marqueer 50s linear infinite',
             },
             keyframes: {
                 marquee: {

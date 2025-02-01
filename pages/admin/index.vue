@@ -1,28 +1,48 @@
 <script setup lang="ts">
-const data = ref(null)
-const error = ref(null)
+const {users} = storeToRefs(useUsersStore())
+const {loadData} = useUsersStore()
+const {importHeynaboData} = useUsersStore()
+await loadData()
 
-async function getUsers() {
-  console.log('Loading Users')
-  data.value = await $fetch('/api/admin/users')
-}
+const userColumns = [
+  {key: 'id', label: 'ID', class: 'text-orange-mandarin-800'},
+  {key: 'email', label: 'Mail', class: 'text-orange-mandarin-800'},
+  {key: 'phone', label: 'Telefon', class: 'text-orange-mandarin-800'}]
 </script>
 
 <template>
   <div class="text-blue-curacao-900">
     <h1>😎Admin view</h1>
+    <UDivider/>
+    <ul>
+      <li>Se importerede brugere fra HeyNabo</li>
+      <li>See teams</li>
+      <li>Se chefkokke</li>
+      <li>Se kalendar, oprette sæson, oprette ferier</li>
+      <li>Oprette fællesspisninger (dinnerevents)</li>
+      <li>Se allergier</li>
+      <li>Bytte vagt</li>
+      <li>Bytte chefkokke vagt</li>
+    </ul>
+    <UDivider/>
 
-    <div v-if="data">
 
-      <h2>Brugere</h2>
-      <ul class="border-2 border-mandarin-orange-500 [& > *]:bg-mandarin-orange-100 text-mandarin-orange-900">
-        <li>
-          {{ data }}
-        </li>
-      </ul>
+    <!-- Show when users are loaded -->
+    <div v-if="users">
+
+      <h2 class="text-lg text-orange-mandarin-800 text-center uppercase">Brugere importeret fra Heynabo</h2>
+      <UButton @click="importHeynaboData" class="mt-4" icon="i-pajamas-admin">
+        Importer data fra Heynabo
+      </UButton>
+      <UTable
+          :rows="users"
+          :columns="userColumns"
+      />
     </div>
+    <!-- Show when users are not loaded -->
     <div v-else>
-      <p>Loading...</p>
+      <UIcon name="i-pajamas-user"/>
+      <p>Loading users...</p>
     </div>
   </div>
 </template>
