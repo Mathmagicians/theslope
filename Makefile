@@ -32,7 +32,7 @@ d1-prisma:
 
 d1-migrate: d1-prisma
 	@echo "🏗️ Generating db client from model, and migrating all d1 databases to new data model"
-	npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_initial.sql
+	@npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_initial.sql
 
 d1-migrate-local: d1-migrate
 	$(info "🏗️ Migrating schemas of local database")
@@ -44,6 +44,9 @@ d1-migrate-prod: d1-migrate
 
 d1-migrate-all: d1-migrate-local d1-migrate-prod
 	$(info '🤖Will build d1 databases - local and remote - using Prisma migrations')
+
+d1-list-users-local:
+	@npx wrangler d1 execute theslope --command  "SELECT * FROM user"
 
 .env.example:
 	@cat .env | sed 's/=.*$$/=/g' > .env.examples

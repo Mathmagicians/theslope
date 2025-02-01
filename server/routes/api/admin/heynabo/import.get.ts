@@ -81,7 +81,7 @@ type  HeynaboMember = typeof henaboMemberExample
 async function loadMembers(from: string, token: string): Promise<HeynaboMember[]> {
     const url = `${from}/admin/users/`
     console.log(`Loading members from ${url}, token ${token}`)
-    const { list } = await $fetch(url, {
+    const {list} = await $fetch(url, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -102,44 +102,46 @@ async function importFromHeyNabo(user, password, api) {
 }
 
 type HeyNaboRoles = 'admin' | 'full' | 'limited'
-function inhabitantFromMember(locationId:number, member: HeynaboMember): InhabitantCreate {
+
+function inhabitantFromMember(locationId: number, member: HeynaboMember): InhabitantCreate {
     console.log(`>>>> 👩‍ Found inhabitant ${member.firstName} ${member.lastName} with role ${member.role} for location ${locationId}`)
     const inhabitant = {
         heynaboId: member.id,
-        pictureUrl: member.avatar || '', //Fixme - should be nullable instead!
+        pictureUrl: member.avatar,
         name: member.firstName,
         lastName: member.lastName,
-        birthDate: member.dateOfBirth ? new Date(member.dateOfBirth).toISOString() : new Date('2000-01-01').toISOString(), //Fixme - should be nullable instead!
+        birthDate:  member.dateOfBirth ? new Date(member.dateOfBirth).toISOString(): null
     } satisfies InhabitantCreate
-    if( ['admin', 'full'].includes(member.role) ) {
-        const roleAssignment: RoleAssignmentCreate = {
-            role: member?.role === 'admin' ? 'ADMIN': 'USER'
-        }
+
+    if( member.email && 'member.role' !== 'limited') {
         const user: UserCreate = {
             email: member.email,
             phone: member.phone,
-            roleAssignments: [ roleAssignment ]
+            systemRole: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? 'ADMIN' : 'USER'
         }
         inhabitant.user = user
     }
-    return inhabitant
 
+
+    return inhabitant
 }
+
 function findInhabitantsByLocation(id: number, members: HeynaboMember[]): InhabitantCreate[] {
     return members
         .filter(member => member.locationId === id)
         .map(member => inhabitantFromMember(id, member))
 }
+
 function createHouseholdsFromImport(d1Client: D1Database, locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreate[] {
     console.log(">> 🤖 1. I will create households from heynabo imported locations")
-    const households = locations.map( location =>  {
+    const households = locations.map(location => {
         console.log(`>>> 🏗️ IMPORT > Processsing location id ${location.id} `)
-        const newHousehold:HouseholdCreate = {
+        const newHousehold: HouseholdCreate = {
             heynaboId: location.id,
             movedInDate: new Date('2019-06-25').toISOString(),
             moveOutDate: new Date('9999-06-25').toISOString(),
             pbsId: 0,
-            name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0,1)),
+            name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0, 1)),
             address: location.address,
             inhabitants: findInhabitantsByLocation(location.id, members)
         }
@@ -147,7 +149,7 @@ function createHouseholdsFromImport(d1Client: D1Database, locations: HeynaboLoca
     })
 
     console.log(">> 🏠 IMPORT > CREATE > Created households: ", households.length)
-   return households
+    return households
 }
 
 // Returns imported locations and members from HeyNabo
@@ -160,7 +162,7 @@ export default defineEventHandler(async (event) => {
     console.log(">>>🏠 Data in first household: ", households[0])
     try {
         const result = await saveHousehold(d1Client, households[0]) //try with just 1!
-        return {result: result, status: 200}
+        return result
     } catch (e) {
         console.error("Error saving households: ", e)
         return {error: e, status: 500}

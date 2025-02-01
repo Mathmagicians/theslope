@@ -4,7 +4,7 @@ We are using a D1 database on cloudflare. it is built on top of SQLITE.
 [[d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "0032a02a-faba-402d-b8a6-def2b4b4feba"
+database_id = "unique id"
 ```
 created in region wnam - we might want weur for the future.
 
