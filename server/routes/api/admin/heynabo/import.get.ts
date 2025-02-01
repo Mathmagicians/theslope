@@ -140,7 +140,7 @@ function createHouseholdsFromImport(d1Client: D1Database, locations: HeynaboLoca
             heynaboId: location.id,
             movedInDate: new Date('2019-06-25').toISOString(),
             moveOutDate: new Date('9999-06-25').toISOString(),
-            pbsId: 0,
+            pbsId: location.id, //FIXME - import pbs from csv file
             name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0, 1)),
             address: location.address,
             inhabitants: findInhabitantsByLocation(location.id, members)
@@ -158,10 +158,11 @@ export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     const households = await createHouseholdsFromImport(d1Client, imported.locations, imported.members)
-    console.log(">>>🏠 Saving households: ", households.length)
-    console.log(">>>🏠 Data in first household: ", households[0])
+
     try {
-        const result = await saveHousehold(d1Client, households[0]) //try with just 1!
+        console.log(">>>🏠 Saving households: ", households.length)
+        console.log(">>>🏠 Data in first household: ", households[0])
+        const result = await  Promise.all(  households.map(  household => saveHousehold(d1Client, household) ))
         return result
     } catch (e) {
         console.error("Error saving households: ", e)
