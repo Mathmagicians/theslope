@@ -8,8 +8,5 @@ export default defineEventHandler(async (event) => {
     console.log("Fetching users, db from event", d1Client)
     const users = await fetchUsers(d1Client)
     console.log("Got users from fetchUSers: ", users)
-    return {
-        ok: true,
-        users: users
-    }
+    return users
 })
