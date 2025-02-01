@@ -1,11 +1,12 @@
 <script setup lang="ts">
 const {users} = storeToRefs(useUsersStore())
 const {loadData} = useUsersStore()
+const {importHeynaboData} = useUsersStore()
 await loadData()
 
 const userColumns = [
   {key: 'id', label: 'ID', class: 'text-orange-mandarin-800'},
-  {key: 'email', label: 'Mail', class: 'text-orange-mandarin-800' },
+  {key: 'email', label: 'Mail', class: 'text-orange-mandarin-800'},
   {key: 'phone', label: 'Telefon', class: 'text-orange-mandarin-800'}]
 </script>
 
@@ -14,7 +15,7 @@ const userColumns = [
     <h1>😎Admin view</h1>
     <UDivider/>
     <ul>
-      <li>Se importerede brugere</li>
+      <li>Se importerede brugere fra HeyNabo</li>
       <li>See teams</li>
       <li>Se chefkokke</li>
       <li>Se kalendar, oprette sæson, oprette ferier</li>
@@ -27,9 +28,12 @@ const userColumns = [
 
 
     <!-- Show when users are loaded -->
-    <div v-if="users?.length">
+    <div v-if="users">
 
       <h2 class="text-lg text-orange-mandarin-800 text-center uppercase">Brugere importeret fra Heynabo</h2>
+      <UButton @click="importHeynaboData" class="mt-4" icon="i-pajamas-admin">
+        Importer data fra Heynabo
+      </UButton>
       <UTable
           :rows="users"
           :columns="userColumns"

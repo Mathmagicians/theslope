@@ -23,11 +23,27 @@ export const useUsersStore = defineStore("Users", () => {
                 duration: 5000,
             });
         }
+    }
+
+    const importHeynaboData = async () => {
+        try {
+            // Fetch data from the heynabo server
+            console.log("🍍 > PINA > USERS > Importing Heynabo data")
+            users.value = await $fetch("/api/admin/heynabo/import");
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.data.message,
+                variant: "destructive",
+                duration: 5000,
+            });
+        }
     };
 
     return {
         users,
         loadData,
+        importHeynaboData
     };
 });
 
