@@ -14,6 +14,12 @@ heynabo-api:
 heynabo-print-token:
 	@echo $(HEY_TOKEN)
 
+heynabo-login:
+	@curl -s -X POST https://demo.spaces.heynabo.com/api/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
+
+theslope-login:
+	@curl -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
+
 heynabo-get-locations:
 	@curl https://demo.spaces.heynabo.com/api/members/locations/ -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
 
@@ -50,3 +56,6 @@ d1-list-users-local:
 
 .env.example:
 	@cat .env | sed 's/=.*$$/=/g' > .env.examples
+
+generate-session-secret:
+	@openssl rand -base64 32

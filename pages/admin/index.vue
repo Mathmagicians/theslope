@@ -1,17 +1,16 @@
 <script setup lang="ts">
 const {users} = storeToRefs(useUsersStore())
-const {loadData} = useUsersStore()
-const {importHeynaboData} = useUsersStore()
+const {loadData, importHeynaboData} = useUsersStore()
 await loadData()
 
 const userColumns = [
-  {key: 'id', label: 'ID', class: 'text-orange-mandarin-800'},
-  {key: 'email', label: 'Mail', class: 'text-orange-mandarin-800'},
-  {key: 'phone', label: 'Telefon', class: 'text-orange-mandarin-800'}]
+  {key: 'id', label: 'ID', class: 'text-orange-800'},
+  {key: 'email', label: 'Mail', class: 'text-orange-800'},
+  {key: 'phone', label: 'Telefon', class: 'text-orange-800'}]
 </script>
 
 <template>
-  <div class="text-blue-curacao-900">
+  <div class="text-blue-900">
     <h1>😎Admin view</h1>
     <UDivider/>
     <ul>
@@ -25,15 +24,14 @@ const userColumns = [
       <li>Bytte chefkokke vagt</li>
     </ul>
     <UDivider/>
-
-
+    <UButton @click="importHeynaboData" square class="m-4 " color="red" size="lg" variant="soft" icon="i-pajamas-admin" >
+      Importer data fra Heynabo
+    </UButton>
+    <UDivider/>
     <!-- Show when users are loaded -->
     <div v-if="users">
 
-      <h2 class="text-lg text-orange-mandarin-800 text-center uppercase">Brugere importeret fra Heynabo</h2>
-      <UButton @click="importHeynaboData" class="mt-4" icon="i-pajamas-admin">
-        Importer data fra Heynabo
-      </UButton>
+      <h2 class="text-lg text-orange-800 text-center uppercase">Brugere - importeret fra Heynabo</h2>
       <UTable
           :rows="users"
           :columns="userColumns"

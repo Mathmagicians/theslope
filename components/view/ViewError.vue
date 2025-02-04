@@ -40,24 +40,24 @@ function getRotationClass(i: number) {
           v-for="(item,i) in icons"
           :key="i"
           name="fluent-emoji-high-contrast:confused-face"
-          class="size-12 md:size-24 text-red-winery-500"
+          class="size-12 md:size-24 text-red-500"
           :class="getRotationClass(i)"/>
     </div>
 
     <!-- Error Content -->
-    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 flex-grow items-start min-w-1/2 opacity-90 bg-red-winery-100 flex flex-col p-2 md:p-4">
+    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 flex-grow items-start min-w-1/2 opacity-90 bg-red-100 flex flex-col p-2 md:p-4">
       <!-- Error Code -->
-      <p class="text-2xl md:text-4xl font-mono font-bold bg-red-winery-100 text-red-winery-900 rounded inline-block mb-2">
+      <p class="text-2xl md:text-4xl font-mono font-bold bg-red-100 text-red-900 rounded inline-block mb-2">
         Error {{ error }}
       </p>
 
       <!-- Error Message -->
-      <p class="text-base md:text-lg text-red-winery-700">
+      <p class="text-base md:text-lg text-red-700">
         {{ message }}
       </p>
 
-      <p class="text-base md:text-lg text-red-winery-700">
-        <NuxtLink to="/">Fejl kan ske ... Lad os lige <span class="underline bold text-red-winery-800">starte forfra</span></NuxtLink>
+      <p class="text-base md:text-lg text-red-700">
+        <NuxtLink to="/">Fejl kan ske ... Lad os lige <span class="underline bold text-red-800">starte forfra</span></NuxtLink>
       </p>
     </div>
   </div>

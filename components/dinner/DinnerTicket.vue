@@ -1,5 +1,5 @@
 <template>
-  <div class="border-dashed border-mocha-mousse-300 bg-mocha-mousse-600 text-mocha-mouse-50 rounded-2xl">
+  <div class="border-dashed border-amber-300 bg-amber-600 text-mocha-mouse-50 rounded-2xl">
     Spisebillet
     Dato
     Menu + evt billede
