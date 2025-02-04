@@ -19,10 +19,10 @@ defineProps({
         <li
             v-for="inhabitant in household.inhabitants"
             :key="inhabitant.id"
-            class="flex flex-row items-center m-1 md:m-4 border-b-2 border-dotted border-mocha-mousse-400">
+            class="flex flex-row items-center m-1 md:m-4 border-b-2 border-dotted border-amber-400">
           <UAvatar
               :src="inhabitant.pictureUrl"
-              class="border-1 border-mocha-mousse-400"
+              class="border-1 border-amber-400"
               chip-color="orange"
               chip-text="BARN"
               chip-text-color="blue-curacao-100"
@@ -33,7 +33,7 @@ defineProps({
           />
           <p class="text-sm md:text-base mx-2 md:mx-4">{{ inhabitant.name }}</p>
           <UChip position="bottom-right" color="orange" size="lg" text="BARN">
-            <UIcon name="i-hugeicons-ticket-03" class="size-16 md:32 border-dotted b-2 border-mocha-mousse-400"/>
+            <UIcon name="i-hugeicons-ticket-03" class="size-16 md:32 border-dotted b-2 border-amber-400"/>
           </UChip>
           <UBadge variant="soft" color="orange">BARN</UBadge>
           <HouseholdTicketType/>

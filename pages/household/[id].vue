@@ -17,7 +17,7 @@ const calendarFeed = ref(null)
 const calendarError = ref(null)
 
 const householdApiRef = apiRef({
-  route: '/api/household/[id]',
+  route: '/api/household/:id',
   method: 'get',
   defaultValue: null
 })
@@ -31,7 +31,7 @@ async function getCalendarFeedForUser(user: string) {
 </script>
 
 <template>
-  <div class="text-base text-mocha-mousse-900">
+  <div class="text-base text-amber-900">
     <h1 class="text-lg uppercase text-blue-curacao-900">Husstands overblik for {{ householdId }}</h1>
 
     <HouseholdView v-if="data" :household="data">

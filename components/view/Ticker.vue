@@ -17,27 +17,27 @@ const seed = Math.floor(Math.random() * 10)
 const style = (index: number) => {
   switch (index % 5) {
     case 0 : {
-      return 'border-blue-curacao-600 bg-blue-curacao-100 text-blue-curacao-800';
+      return 'border-blue-600 bg-blue-100 text-blue-800';
       break;
     }
     case 1: {
-      return 'border-red-winery-900 bg-red-winery-100 text-red-winery-800';
+      return 'border-red-900 bg-red-100 text-red-800';
       break;
     }
     case 2: {
-      return 'border-pink-lemonade-900 bg-pink-lemonade-100 text-pink-lemonade-800';
+      return 'border-pink-900 bg-pink-100 text-pink-800';
       break;
     }
     case 3: {
-      return 'border-orange-mandarin-900 bg-orange-mandarin-100 text-orange-mandarin-800';
+      return 'border-orange-900 bg-orange-100 text-orange-800';
       break;
     }
     case 4: {
-      return 'border-mocha-mousse-900 bg-mocha-mousse-100 text-mocha-mousse-800';
+      return 'border-amber-900 bg-amber-100 text-amber-800';
       break;
     }
     default: {
-      return 'border-lavender-bonbon-900 bg-lavender-bonbon-200 text-lavender-bonbon-900';
+      return 'border-violet-900 bg-violet-200 text-violet-900';
       break;
     }
   }

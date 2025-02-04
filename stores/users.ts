@@ -1,13 +1,10 @@
 import type { InternalApi } from 'nitropack'
 
-
 type UsersApiResponse = InternalApi['/api/admin/users']['get']
-
 
 export const useUsersStore = defineStore("Users", () => {
     // Create state for holding users
     const users = ref<UsersApiResponse | null>(null)
-
 
     /** Function to load user data */
     const loadData = async () => {
