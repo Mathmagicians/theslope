@@ -12,6 +12,7 @@ export default defineEventHandler( async(event) => {
     } else {
         console.log("🔒 > GUARD > Protected route: ", pathname)
         // ensure user is logged in before getting a response
-        await requireUserSession(event)
+        const session = await requireUserSession(event)
+        console.log("🔒 > GUARD > User session: ", session)
     }
 })

@@ -1,7 +1,12 @@
-import {saveHousehold} from "~/server/data/prismaRepository";
-import type {InhabitantCreate, UserCreate, RoleAssignmentCreate} from "~/server/data/prismaRepository";
+import {Prisma, Prisma as PrismaFromClient} from "@prisma/client"
+import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
+
 // Load environment variables - for some undocumented reason, they are not passed to nitro from .env automatically
 import dotenv from 'dotenv';
+import { z } from 'zod'
+import InhabitantCreateInput = Prisma.InhabitantCreateInput;
+import UserCreateInput = Prisma.UserCreateInput;
+import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
 
 dotenv.config();
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
@@ -11,7 +16,8 @@ const heyNaboApi = process.env.HEY_NABO_API as string;
 // curl -X POST https://demo.spaces.heynabo.com/api/login "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)
 // grab bearer token from heynabo /login endpoint
 
-const heynaboUserExample = {
+/*
+{
     "id": 153,
     "type": "user",
     "email": "agata@m.dk",
@@ -33,18 +39,55 @@ const heynaboUserExample = {
     "created": "2025-01-14T10:49:53+00:00",
     "token": "300e1068fdd7e628cc7cf6d8b893b1c1"
 }
+*/
+const heynaboUserSchema = z.object({
+    id: z.number(),
+    type: z.string(),
+    email: z.string().email(),
+    firstName: z.string(),
+    lastName: z.string(),
+    phone: z.string().nullable(),
+    emergencyContact: z.string().nullable(),
+    dateOfBirth: z.string().nullable(),
+    description: z.string(),
+    uiStorage: z.string(),
+    role: z.string(),
+    roles: z.array(z.string()),
+    avatar: z.string().url(),
+    alias: z.string().nullable(),
+    locationId: z.number(),
+    isFirstLogin: z.boolean(),
+    lastLogin: z.string(),
+    inviteSent: z.string(),
+    created: z.string(),
+    token: z.string().nonempty()
+});
 
-type HeynaboUser = typeof heyNaboUserExample
+type HeynaboUser = z.infer<typeof heynaboUserSchema>
 
 async function getTokenFromHeynaboApi(username: string | undefined, password: string | undefined, api: string | undefined): Promise<HeynaboUser> {
     console.log("🔑 > HEYNABO > Getting token for username: ", username);
-    const heynaboUser = await $fetch(`${api}/login`, {
-        method: 'POST',
-        body: {email: username, password: password},
-        headers: {ContentType: 'application/json'}
-    }) satisfies  HeynaboUser
-    console.log("🔑 > HEYNABO > Got Heynabo security token: ", heynaboUser?.token)
-    return heynaboUser
+    try {
+
+        const heynaboUser = await $fetch(`${api}/login`, {
+            method: 'POST',
+            body: {email: username, password: password},
+            headers: {ContentType: 'application/json'}
+        }) satisfies  HeynaboUser
+        const validatedHeynaboUser = heynaboUserSchema.parse(heynaboUser)
+        console.log("🔑 > HEYNABO > Got Heynabo security token: ", heynaboUser?.token)
+        return heynaboUser
+    } catch (e:unknown) {
+        if (e instanceof z.ZodError && e.format()?.token ) {
+            throw createError({
+                statusCode: 404,
+                statusMessage: "Invalid Heynabo credentials - cant login"
+            })
+        } else {
+            throw(e) //rethrow error
+        }
+
+    }
 }
 
 export async function getApiToken(username: string, password: string, api: string): Promise<string> {
@@ -141,20 +184,22 @@ export async function importFromHeyNabo() {
 
 type HeyNaboRoles = 'admin' | 'full' | 'limited'
 
-function inhabitantFromMember(locationId: number, member: HeynaboMember): InhabitantCreate {
+function inhabitantFromMember(locationId: number, member: HeynaboMember): InhabitantCreateInput {
     console.log(`>>>> 👩‍ Found inhabitant ${member.firstName} ${member.lastName} with role ${member.role} for location ${locationId}`)
     const inhabitant = {
         heynaboId: member.id,
         pictureUrl: member.avatar,
         name: member.firstName,
         lastName: member.lastName,
-        birthDate: member.dateOfBirth ? new Date(member.dateOfBirth).toISOString() : null
-    } satisfies InhabitantCreate
+        birthDate: member.dateOfBirth ? new Date(member.dateOfBirth).toISOString() : null,
+        household: {} as HouseholdCreateNestedOneWithoutInhabitantsInput
+    } satisfies InhabitantCreateInput
 
     if (member.email && 'member.role' !== 'limited') {
-        const user: UserCreate = {
+        const user: UserCreateInput = {
             email: member.email,
             phone: member.phone,
+            passwordHash: 'removeme',
             systemRole: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? 'ADMIN' : 'USER'
         }
         inhabitant.user = user
@@ -164,17 +209,17 @@ function inhabitantFromMember(locationId: number, member: HeynaboMember): Inhabi
     return inhabitant
 }
 
-function findInhabitantsByLocation(id: number, members: HeynaboMember[]): InhabitantCreate[] {
+function findInhabitantsByLocation(id: number, members: HeynaboMember[]): InhabitantCreateInput[] {
     return members
         .filter(member => member.locationId === id)
         .map(member => inhabitantFromMember(id, member))
 }
 
-export function createHouseholdsFromImport(d1Client: D1Database, locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreate[] {
-    console.log(">> 🤖 1. I will create households from heynabo imported locations")
+export function createHouseholdsFromImport(d1Client: D1Database, locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreateInput[] {
+    console.log(">> 🤖 1. I will collect household data from heynabo imported locations")
     const households = locations.map(location => {
         console.log(`>>> 🏗️ IMPORT > Processsing location id ${location.id} `)
-        const newHousehold: HouseholdCreate = {
+        const newHousehold: HouseholdCreateInput = {
             heynaboId: location.id,
             movedInDate: new Date('2019-06-25').toISOString(),
             pbsId: location.id, //FIXME - import pbs from csv file

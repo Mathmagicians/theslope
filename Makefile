@@ -17,9 +17,6 @@ heynabo-print-token:
 heynabo-login:
 	@curl -s -X POST https://demo.spaces.heynabo.com/api/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
 
-theslope-login:
-	@curl -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
-
 heynabo-get-locations:
 	@curl https://demo.spaces.heynabo.com/api/members/locations/ -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
 
@@ -31,6 +28,16 @@ heynabo-get-admin:
 
 heynabo-post-event:
 	curl -v "$(HEYNABO_API)/members/events/" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d "@docs/heynabo.json"
+
+#logs into heynabo and saves the session cookie into .cookies.txt
+theslope-login:
+	@curl -c .cookies.txt -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
+
+theslope-admin-get-users:
+	@curl -b .cookies.txt http://localhost:3000/api/admin/users | jq
+
+theslope-admin-import:
+	@curl -b .cookies.txt http://localhost:3000/api/admin/heynabo/import | jq
 
 d1-prisma:
 	@npx prisma format
