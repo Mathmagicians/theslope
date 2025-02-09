@@ -1,20 +1,20 @@
 <script setup lang="ts">
 const {loggedIn} = storeToRefs(useAuthStore())
-const {greeting} = useAuthStore()
+const {greeting} = storeToRefs(useAuthStore())
 
 const horizontalLinks = [
  { label: "Fællesspisning", to: "/dinner", icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" },
   { label: "Husholdning",  icon: 'i-heroicons-home', to: "/household" },
   { label: "Chefkok", to: "/chef", icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food' },
   { label: "Admin", to: "/admin", icon: 'pajamas-admin' },
-  loggedIn.value ? { label: greeting, to: "/login", icon: 'pajamas-user' } : { label: greeting, to: "/login", icon: 'pajamas-user' }
-];
-const verticalLinks = [...horizontalLinks];
+  loggedIn ? { label: greeting, to: "/login", icon: 'pajamas-user' } : { label: 'LOGIN', to: "/login", icon: 'i-guidance-entry' }
+]
+const verticalLinks = [...horizontalLinks]
 
-const isMenuOpen = ref(false);
+const isMenuOpen = ref(false)
 const toggleMenu = () => {
-  isMenuOpen.value = !isMenuOpen.value;
-};
+  isMenuOpen.value = !isMenuOpen.value
+}
 </script>
 
 <template>
@@ -31,7 +31,6 @@ class="sticky w-full flex items-center justify-between bg-blue-100 dark:bg-blue-
     <div class="hidden md:flex">
       <UHorizontalNavigation :links="horizontalLinks"/>
     </div>
-    <Login/>
   </UContainer>
 
 </template>

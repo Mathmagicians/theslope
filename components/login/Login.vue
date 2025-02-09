@@ -1,9 +1,14 @@
 <script setup lang="ts">
 
-const {loggedIn, greeting, avatar} = storeToRefs(useAuthStore())
+const {loggedIn} = storeToRefs(useAuthStore())
+const {greeting} = storeToRefs(useAuthStore())
+const {avatar} = storeToRefs(useAuthStore())
+const {email} = storeToRefs(useAuthStore())
+const {phone} = storeToRefs(useAuthStore())
+const {address} = storeToRefs(useAuthStore())
 const {signIn, clear} = useAuthStore()
 
-const email = ref('')
+const formEmail = ref('')
 const password = ref('')
 const emailError = ref('')
 const passwordError = ref('')
@@ -11,11 +16,11 @@ const isLoading = ref(false)
 
 const validateEmail = () => {
   emailError.value = ''
-  if (!email.value) {
+  if (!formEmail.value) {
     emailError.value = 'Brug den email som du er registreret med i Heynabo'
     return false
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail.value)) {
     emailError.value = 'Indtast venligst en gyldig email'
     return false
   }
@@ -48,7 +53,7 @@ const handleSubmit = async () => {
 
   try {
     isLoading.value = true
-    const response = signIn(email.value, password.value)
+    const response = signIn(formEmail.value, password.value)
 
     console.log('🔑> Login >lykkedes', response)
 
@@ -62,7 +67,6 @@ const handleSubmit = async () => {
 
 <template>
   <div class="flex items-center justify-center bg-pink-50">
-    <AuthState v-slot="{ loggedIn, clear, greeting, avatar, signIn }">
     <!-- Show login component if user is not logged in -->
     <div v-if="!loggedIn" class="max-w-md w-full p-6 ">
       <form @submit.prevent="handleSubmit" class="space-y-6">
@@ -77,9 +81,9 @@ const handleSubmit = async () => {
           <div class="space-y-4 ">
             <UFormGroup label="Email">
               <UInput
-                  v-model="email"
+                  v-model="formEmail"
                   type="email"
-                  placeholder="Indtast din email"
+                  placeholder="Indtast den email, du er oprettet i Heynabo med"
                   :error="emailError"
                   @blur="validateEmail"
               />
@@ -100,10 +104,9 @@ const handleSubmit = async () => {
           <template #footer>
             <UButton
                 type="submit"
-                color="primary"
+                color="blue"
                 :loading="isLoading"
                 block
-                to="/household"
             >
               Log ind
             </UButton>
@@ -119,7 +122,7 @@ const handleSubmit = async () => {
           divide: 'divide-pink-50 dark:divide-pink-100'
         }">
         <template #header>
-          <h2 class="text-xl font-bold">Hej {{ greeting }}</h2>
+          <h2 class="text-xl font-bold text-pink-50">Hej {{ greeting }}!</h2>
         </template>
 
         <div class="space-y-4 ">
@@ -130,6 +133,10 @@ const handleSubmit = async () => {
               :alt="greeting"
               icon="i-material-symbols-person-celebrate-rounded"
           />
+          <p class="flex items-center"><UIcon name="i-guidance-mail" class="mr-2 text-pink-200"/> <span class="mx-2 text-pink-50">{{ email }}</span> </p>
+          <p class="flex items-center"><UIcon name="i-guidance-phone" class="mr-2"/> <span class="mx-2">{{ phone }}</span> </p>
+          <p class="flex items-center"><UIcon name="i-guidance-home-2" class="mr-2"/> <span class="mx-2">{{ address }}</span> </p>
+
         </div>
 
         <template #footer>
@@ -143,8 +150,6 @@ const handleSubmit = async () => {
           </UButton>
         </template>
       </UCard>
-
     </div>
-    </AuthState>
   </div>
 </template>
