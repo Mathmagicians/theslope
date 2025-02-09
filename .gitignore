@@ -30,3 +30,4 @@ env.d.ts
 theslope.iml
 nuxt.run.xml server_ nuxt.run.xml
 .cookies.txt
+test-results
