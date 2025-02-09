@@ -35,6 +35,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
+    "@iconify-json/material-symbols": "^1.2.14",
+    "@iconify-json/pajamas": "^1.2.5",
     "@nuxt/eslint": "^0.7.5",
     "@nuxt/test-utils": "^3.15.4",
     "@nuxt/vite-builder": ">=3.15.3",

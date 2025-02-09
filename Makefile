@@ -61,6 +61,12 @@ d1-migrate-all: d1-migrate-local d1-migrate-prod
 d1-list-users-local:
 	@npx wrangler d1 execute theslope --command  "SELECT * FROM user"
 
+d1-list-tables:
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
+
+d1-list-tables-local:
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
+
 .env.example:
 	@cat .env | sed 's/=.*$$/=/g' > .env.examples
 
