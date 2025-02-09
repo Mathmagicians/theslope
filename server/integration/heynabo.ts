@@ -3,10 +3,11 @@ import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 
 // Load environment variables - for some undocumented reason, they are not passed to nitro from .env automatically
 import dotenv from 'dotenv';
-import { z } from 'zod'
+import {z} from 'zod'
 import InhabitantCreateInput = Prisma.InhabitantCreateInput;
 import UserCreateInput = Prisma.UserCreateInput;
 import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
+import {maskPassword} from "~/composables/utils";
 
 dotenv.config();
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
@@ -75,31 +76,31 @@ async function getTokenFromHeynaboApi(username: string | undefined, password: st
             headers: {ContentType: 'application/json'}
         }) satisfies  HeynaboUser
         const validatedHeynaboUser = heynaboUserSchema.parse(heynaboUser)
-        console.log("🔑 > HEYNABO > Got Heynabo security token: ", heynaboUser?.token)
+        console.log("🔑 > HEYNABO > Got Heynabo security token: ", maskPassword(heynaboUser?.token))
         return heynaboUser
-    } catch (e:unknown) {
-        if (e instanceof z.ZodError && e.format()?.token ) {
+    } catch (e: unknown) {
+        if (e instanceof z.ZodError && e.format()?.token) {
             throw createError({
                 statusCode: 404,
                 statusMessage: "Invalid Heynabo credentials - cant login"
             })
         } else {
-            throw(e) //rethrow error
+            throw (e) //rethrow error
         }
 
     }
 }
 
 export async function getApiToken(username: string, password: string, api: string): Promise<string> {
-    console.log("🔑 > HEYNABO > Getting API token for username: ", username);
     const result = await getTokenFromHeynaboApi(username, password, api)
-    console.log("🔑 > HEYNABO > Got Heynabo security token: ", result?.token)
+    console.log("🔑 > HEYNABO > Got Heynabo security token: ", result?.token.length > 0 ? "🔑" : "❌")
     return result.token
 }
 
 export async function loginUserIntoHeynabo(username: string, password: string): Promise<HeynaboUser> {
-    console.log("🔑 > HEYNABO > Logging into Heynabo for username: ", username)
     const result = getTokenFromHeynaboApi(username, password, heyNaboApi)
+    console.log("🔑 > HEYNABO > Logged into Heynabo for username: ", username)
+
     return result
 }
 

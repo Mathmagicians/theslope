@@ -1,4 +1,4 @@
-import { describe, it, expect, test,  vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 describe('test /auth/login endpoint', () => {
     it.todo( 'should return a 400 error when no credentials are passed', () => {
