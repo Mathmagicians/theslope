@@ -5,8 +5,8 @@ import {fetchUsers} from "~/server/data/prismaRepository";
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    console.log("Fetching users, db from event", d1Client)
+    console.log("👨‍💻 > USER > Fetching users from db")
     const users = await fetchUsers(d1Client)
-    console.log("Got users from fetchUSers: ", users)
+    console.log("👨‍💻 > USER > Got users: ", users ? users.length : 0)
     return users
 })

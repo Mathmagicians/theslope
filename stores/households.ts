@@ -9,7 +9,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         try {
             // Fetch data from the server
             console.log("🍍 > PINA > HOUSEHOLDS > Fetching household data")
-            households.value = await useFetch("/api/household").data;
+            households.value = await useFetch("/api/household")
         } catch (error: any) {
             toast({
                 title: "Error",

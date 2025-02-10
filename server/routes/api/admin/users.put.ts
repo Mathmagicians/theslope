@@ -1,14 +1,42 @@
 import {defineEventHandler} from "h3";
-import {saveUser} from "~/server/data/prismaRepository";
+import {saveUser} from "~/server/data/prismaRepository"
+import {z} from 'zod'
+import {SystemRole} from "@prisma/client"
+
+
+export const userSchema = z.object({
+    email: z.string().email('Email-adressen er ikke gyldig'),
+    phone: z.string()
+        .regex(/^\+?\d+$/, 'Telefonnummer må kun indeholde tal og eventuelt et plus-tegn i starten')
+        .optional(),
+    passwordHash: z.string().default('caramba'),
+    systemRole: z.nativeEnum(SystemRole).default(SystemRole.USER)
+})
 
 export default defineEventHandler(async (event) => {
-    console.log("Adding user to db from event", event.context.cloudflare.env.DB.name)
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-    const user = {email: 'jane22@test.com', phone: '(408)-111-2222', passwordHash: 'karamba'} satisfies UserCreate
-    const result = await saveUser(d1Client, user)
-    return {
-        ok: true,
-        result: result,
+    try {
+        const {cloudflare} = event.context
+        const d1Client = cloudflare.env.DB
+        const userFromQuery = await getValidatedQuery(event, userSchema.parse)
+        console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
+        const newUser = await saveUser(d1Client, userFromQuery)
+        console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
+        return newUser
+    } catch (error) {
+        console.error("👨‍💻 > USER > Error saving user: ", error)
+        if (error instanceof z.ZodError) {
+            throw createError({
+                statusCode: 400,
+                message: 'Forkert brugerinput',
+                data: error.errors,
+                cause: error
+            })
+        } else {
+            throw createError({
+                statusCode: 500,
+                message: '👨‍💻> CREATE > Server Error',
+                cause: error
+            })
+        }
     }
 })

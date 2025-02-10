@@ -39,6 +39,13 @@ theslope-admin-get-users:
 theslope-admin-import:
 	@curl -b .cookies.txt http://localhost:3000/api/admin/heynabo/import | jq
 
+theslope-put-user:
+	@curl -b .cookies.txt -X PUT "http://localhost:3000/api/admin/users" \
+		--url-query "email=andemad@andeby.dk" \
+		--url-query "phone=+4512345678" \
+		--url-query "systemRole=ADMIN" \
+		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
+
 d1-prisma:
 	@npx prisma format
 	@npm run db:generate-client
