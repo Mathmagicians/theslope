@@ -11,11 +11,11 @@ export default defineEventHandler(async (event) => {
     const households = createHouseholdsFromImport(d1Client, locations, members)
 
     try {
-        console.log(">>>🏠> IMPORT > Saving households: ", households.length)
+        console.log("🏠> IMPORT > Saving households: ", households ? households.length: 0 )
         const result = await  Promise.all(  households.map(  household => saveHousehold(d1Client, household) ))
         return result
     } catch (e) {
-        console.error(">>>🏠 > IMPORT Error saving households: ", e)
-        return {error: e, status: 500}
+        console.error("🏠 > IMPORT > Error saving households: ", e)
+        createError({cause: e, statusMessage: "🏠 >IMPORT Error saving households", statusCode: 500})
     }
 })

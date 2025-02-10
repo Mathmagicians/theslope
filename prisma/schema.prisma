@@ -68,7 +68,7 @@ model User {
   email        String      @unique
   phone        String?
   passwordHash String
-  systemRole   SystemRole
+  systemRole   SystemRole @default(USER)
   Inhabitant   Inhabitant?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt

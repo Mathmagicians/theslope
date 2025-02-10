@@ -24,7 +24,7 @@ const userColumns = [
       <li>Bytte chefkokke vagt</li>
     </ul>
     <UDivider/>
-    <UButton @click="importHeynaboData" square class="m-4 " color="red" size="lg" variant="soft" icon="i-pajamas-admin" >
+    <UButton @click="importHeynaboData" :loading="importing" square class="m-4 " color="red" size="lg" variant="soft" icon="i-pajamas-admin" >
       Importer data fra Heynabo
     </UButton>
     <UDivider/>

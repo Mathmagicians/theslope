@@ -10,10 +10,10 @@ export default defineEventHandler(async (event) => {
 
     try {
         const households = await fetchHouseholds(d1Client)
-        console.info(`>>>  🏠GET > Found  ${ households.length}  households:.`)
+        console.info(`>>>  🏠GET > Found  ${ households ? households.length: 0}  households.`)
        return households
     } catch (e) {
-        console.error( "🏠 Error fetching households: ", e)
-        return {error: e, status: 500}
+        console.error( "🏠 > GET > Error fetching households: ", e)
+        createError({cause: e, statusCode: 500, statusMessage: "Error fetching households" })
     }
 })
