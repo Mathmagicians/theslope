@@ -1,23 +1,18 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from '@playwright/test'
+//import {adminFile} from './auth.setup'
+const adminFile = 'playwright/.auth/admin.json'
 
-const userName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
-const password = process.env.HEY_NABO_PASSWORD as string;
-const newLogin = await request.post('/api/auth/login', {
-    data:  {email: userName, password: password}
-})
 
 const publicPages = ['', 'login']
-const protectedPages = ['admin', 'hosehold', 'chef']
+const protectedPages = ['admin', 'household', 'chef']
 
 test('/ has title', async ({page}) => {
     await page.goto('/');
-
-    // Expect a title "to contain" a substring.
     await expect(page).toHaveTitle(/Theslope/);
 });
 
 publicPages.forEach(pageName => {
-    test(`All public pages can load - ${pageName}`, async ({page}) => {
+    test(`All public pages can load - /${pageName}`, async ({page}) => {
         for (const pageName of publicPages) {
             const response = await page.goto(`/${pageName}`);
             expect(response.status()).toBe(200)
@@ -26,10 +21,21 @@ publicPages.forEach(pageName => {
 })
 
 protectedPages.forEach(pageName => {
-    test(`All protected pages give 401 unauthorized error when not logged in - ${pageName}`, async ({page}) => {
+    test(`All protected pages give 401 unauthorized error when not logged in - /${pageName}`, async ({page}) => {
         for (const pageName of protectedPages) {
             const response = await page.goto(`/${pageName}`);
             expect(response.status()).toBe(401)
         }
+    })
+})
+
+
+test.describe('Pages with logged in user can load', () => {
+    test.use({ storageState: adminFile })
+
+    protectedPages.forEach(pageName => {
+        test(`Protected page can load when Logged in as admin - /${pageName}`, async ({page}) => {
+            // page is authenticated as a user
+        })
     })
 })

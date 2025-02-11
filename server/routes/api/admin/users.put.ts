@@ -17,10 +17,12 @@ export default defineEventHandler(async (event) => {
     try {
         const {cloudflare} = event.context
         const d1Client = cloudflare.env.DB
+        console.log("👨‍💻 > USER > data received", getQuery(event))
         const userFromQuery = await getValidatedQuery(event, userSchema.parse)
         console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
         const newUser = await saveUser(d1Client, userFromQuery)
         console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
+        setResponseStatus(event, 201)
         return newUser
     } catch (error) {
         console.error("👨‍💻 > USER > Error saving user: ", error)
