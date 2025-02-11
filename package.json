@@ -14,6 +14,7 @@
     "lint-fix": "npx eslint . --fix",
     "test": "npx vitest --run",
     "test:e2e": "npx playwright test --reporter=html,line",
+    "db:seed:local": "npx wrangler d1 execute theslope --file migrations/seed.sql --local",
     "db:migrate:local": "npx wrangler d1 migrations apply theslope --local",
     "db:migrate": "npx wrangler d1 migrations apply theslope --remote",
     "db:generate-client": "npx prisma generate"
