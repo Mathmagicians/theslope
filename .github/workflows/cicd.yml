@@ -33,7 +33,12 @@ jobs:
       - name: Run unit tests
         run: npm run test
       - name: Install Playwright and browser friends
-        run: npx playwright install --with-deps
+        run: npx playwright install chromium
+      - name: Prepare local D1 database for testing
+        run: |
+          npm run db:migrate:local
+          npm run db:seed:local
+          npx wrangler d1 execute theslope --command="SELECT * FROM User"
       - name: Run e2e tests
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
