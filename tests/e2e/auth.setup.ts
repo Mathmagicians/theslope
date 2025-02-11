@@ -1,4 +1,4 @@
-import {test as setup, expect, RequestOptions} from '@playwright/test'
+import {test as setup, expect} from '@playwright/test'
 
 const userName = process.env.HEY_NABO_USERNAME as string
 const password = process.env.HEY_NABO_PASSWORD as string
