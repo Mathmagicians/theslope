@@ -31,7 +31,7 @@ heynabo-post-event:
 
 #logs into heynabo and saves the session cookie into .cookies.txt
 theslope-login:
-	@curl -c .cookies.txt -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
+	@curl -i -v -c .cookies.txt -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
 
 theslope-admin-get-users:
 	@curl -b .cookies.txt http://localhost:3000/api/admin/users | jq
