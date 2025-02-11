@@ -9,6 +9,10 @@ generator client {
   previewFeatures = ["driverAdapters"]
 }
 
+generator zod {
+  provider       = "zod-prisma-types"
+}
+
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"

@@ -46,7 +46,10 @@ theslope-put-user:
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
-d1-prisma:
+prisma-to-zod:
+	@npx prisma generate zod
+
+d1-prisma: prisma-to-zod
 	@npx prisma format
 	@npm run db:generate-client
 
