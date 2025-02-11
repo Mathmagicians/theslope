@@ -1,5 +1,4 @@
 import {test, expect} from '@playwright/test'
-//import {adminFile} from "~/tests/e2e/auth.setup"
 const adminFile = 'playwright/.auth/admin.json'
 
 const testSalt = Date.now().toString()
@@ -23,9 +22,9 @@ test("PUT with query params should add a user to the database, and GET will retr
     expect(responseBody.email).toBe(userEmail)
 })
 
-test.skip('PUT without email query param should return a validation error', (page) => {
+test.skip('PUT without email query param should return a validation error', ({request}) => {
 })
 
-test.skip('GET should return a list of users from the database', (page) => {
+test.skip('GET should return a list of users from the database', ({request}) => {
 
 })
