@@ -87,7 +87,6 @@ async function getTokenFromHeynaboApi(username: string | undefined, password: st
         } else {
             throw (e) //rethrow error
         }
-
     }
 }
 

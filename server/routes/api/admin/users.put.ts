@@ -1,6 +1,6 @@
-import {defineEventHandler} from "h3";
+import {defineEventHandler, H3Error} from "h3";
 import {saveUser} from "~/server/data/prismaRepository"
-import {z} from 'zod'
+import * as z  from 'zod'
 import {SystemRole} from "@prisma/client"
 
 
@@ -24,11 +24,11 @@ export default defineEventHandler(async (event) => {
         return newUser
     } catch (error) {
         console.error("👨‍💻 > USER > Error saving user: ", error)
-        if (error instanceof z.ZodError) {
+        if (error instanceof H3Error) {
+            console.error("👨‍💻 > USER > ZodError: ", error.errors)
             throw createError({
                 statusCode: 400,
                 message: 'Forkert brugerinput',
-                data: error.errors,
                 cause: error
             })
         } else {
