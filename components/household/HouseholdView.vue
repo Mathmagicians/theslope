@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import HouseholdTicketType from "~/components/household/HouseholdTicketType.vue";
 
 //define props for the component
 defineProps({
