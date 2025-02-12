@@ -48,10 +48,10 @@ const style = (index: number) => {
 <template>
   <ul class="w-screen flex flex-nowrap flex-row
   items-center justify-center md:justify-start
-  text-center lowercase  text-sm md:text-base whitespace-nowrap m-1 overflow-clip"
+  text-center lowercase  text-xs md:text-base whitespace-nowrap m-1 overflow-clip"
       :class="animationClass()">
     <li v-for="(word, index)  in words" :key="index">
-        <span class="p-1 m-1 md:px-4 md:px-2 border-2 rounded-lg" :class="style(index)">
+        <span class="p-1 m-1 md:px-4 md:px-2 border-1 md:border-2 rounded-lg" :class="style(index)">
           {{ word }}
         </span>
     </li>
