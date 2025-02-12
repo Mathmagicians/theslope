@@ -14,7 +14,7 @@ export const useUsersStore = defineStore("Users", () => {
             users.value = await $fetch("/api/admin/users")
         } catch (error: any) {
             createError({
-                statusMessage: "Error Importing users from Heynabo",
+                statusMessage: "Error getting users from database",
                 statusCode: 500,
                 cause: error
             });
@@ -27,12 +27,11 @@ export const useUsersStore = defineStore("Users", () => {
             console.log("🍍 > PINA > USERS > Importing Heynabo data")
             users.value = await $fetch("/api/admin/heynabo/import");
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.data.message,
-                variant: "destructive",
-                duration: 5000,
-            });
+            createError({
+                statusMessage: "Error Importing users from Heynabo",
+                statusCode: 500,
+                cause: error
+            })
         }
     };
 

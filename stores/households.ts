@@ -9,13 +9,16 @@ export const useHouseholdsStore = defineStore("Households", () => {
         try {
             // Fetch data from the server
             console.log("🍍 > PINA > HOUSEHOLDS > Fetching household data")
-            households.value = await useFetch("/api/household")
+            const response = await useFetch("/api/household")
+            households.value = response.data.value
+            console.log('Type:', typeof households.value)
+            console.log('Is array?', Array.isArray(households.value))
+            console.log(households.value)
         } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.data.message,
-                variant: "destructive",
-                duration: 5000,
+            createError({
+                statusMessage: "Error retrieving households from database",
+                statusCode: 500,
+                cause: error
             })
         }
     }
