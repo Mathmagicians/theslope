@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>Allergier</h1>
-    Allergier
+    <h1>Allergi</h1>
+
   </div>
 </template>

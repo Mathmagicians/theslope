@@ -31,8 +31,8 @@ useHead({
     <!-- show when households are loaded -->
     <UCard  v-if="households ? households.length > 0: false"
             :ui="{
-          background: 'bg-white dark:bg-amber-500',
-          divide: 'divide-pink-50 dark:divide-amber-900'}"
+          background: 'bg-white dark:bg-amber-800',
+          divide: 'divide-amber-50 dark:divide-amber-900'}"
         >
       <UTable
               :columns="householdColumns"
