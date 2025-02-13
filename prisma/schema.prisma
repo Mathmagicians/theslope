@@ -207,7 +207,7 @@ model Season {
   isActive                          Boolean
   CookingTeams                      CookingTeam[]
   cookingDays                       String // json stringfied array of Weekday
-  holidays                          String // json stringfied array of DateTime
+  holidays                          String // json stringfied array of Date
   ticketPrices                      TicketPrice[]
   dinnerEvents                      DinnerEvent[]
   ticketIsCancellableDaysBefore     Int

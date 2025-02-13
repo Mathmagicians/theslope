@@ -31,6 +31,7 @@ export default defineNuxtConfig({
         '@nuxt/test-utils/module',
         "@nuxt/eslint",
         "nuxt-auth-utils",
+        '@samk-dev/nuxt-vcalendar'
     ],
 
     runtimeConfig: {
