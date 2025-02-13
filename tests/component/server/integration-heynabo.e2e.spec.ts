@@ -2,7 +2,6 @@
 //import {expect, test} from '@nuxt/test-utils/playwright'
 import {loginUserIntoHeynabo} from "~/server/integration/heynabo"
 import {describe, expect, test, it} from "vitest"
-import {setup} from "@nuxt/test-utils/e2e";
 
 describe('Heynabo-Integation-e2e-tests', async () => {
     const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional

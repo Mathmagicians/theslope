@@ -1,5 +1,5 @@
 import {PrismaD1} from "@prisma/adapter-d1"
-import {User, Inhabitant, Household, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
+import {Season, User, Inhabitant, Household, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
 import {Prisma} from "@prisma/client/extension"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 import InhabitantCreateInput = PrismaFromClient.InhabitantCreateInput
@@ -135,4 +135,41 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]
     const households = await prisma.household.findMany()
     console.log(`<<<🏠 Got ${households.length} households from database`)
     return households
+}
+
+export async function fetchSeason(d1Client: D1Database, start: string, end: string): Promise<Season|null> {
+    console.log(">>>🌞 Fetching specific season")
+    const prisma = await getPrismaClientConnection(d1Client)
+    const season = await prisma.season.findFirst({
+        where: {
+            startDate: new Date(start),
+            endDate: new Date(end)
+        }
+    })
+    console.log(`<<<🌞 Got season from database`)
+    return season
+}
+
+export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season|null> {
+    console.log(">>>🌞 Fetching specific season")
+    const prisma = await getPrismaClientConnection(d1Client)
+    const season = await prisma.season.findFirst({
+        where: {
+            isActive: true
+        }
+    })
+    console.log(`<<<🌞 Got season from database`)
+    return season
+}
+
+export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
+    console.log(">>>🌞 Fetching specific season")
+    const prisma = await getPrismaClientConnection(d1Client)
+    const seasons = await prisma.season.findMany({
+        orderBy: {
+            startDate: 'desc'
+        }
+    })
+    console.log(`<<<🌞 Got ${seasons?.length} seasons from database`)
+    return seasons
 }
