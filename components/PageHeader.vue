@@ -39,13 +39,13 @@ const closeMenu = () => {
 <template>
   <UContainer class="sticky top-0 z-50 w-full bg-blue-100 dark:bg-blue-900">
     <div class="flex items-center justify-between p-2">
-      <NuxtLink to="/" class="w-24 md:w-32 shrink-0 md:mr-8">
+      <NuxtLink to="/" class="shrink-0 w-24 md:w-32 shrink-0 md:mr-8">
         <Logo />
       </NuxtLink>
-
+      <div class="flex-grow bg-red"></div>
       <UHorizontalNavigation
           :links="navigationLinks"
-          class="hidden md:flex"
+          class="hidden md:flex "
       />
 
       <UButton

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 
-import type {DatePickerDate, DatePickerRangeObject} from "v-calendar/dist/types/src/use/datePicker";
+import type {DatePickerDate, DatePickerRangeObject} from "v-calendar/dist/types/src/use/datePicker"
 import type {PropType} from "vue";
 
 defineOptions({
@@ -43,6 +43,7 @@ function onDayClick(_: any, event: MouseEvent): void {
 </script>
 
 <template>
+  <client-only>
   <VDatePicker
       v-model.range="date"
       :columns="2"
@@ -50,5 +51,6 @@ function onDayClick(_: any, event: MouseEvent): void {
       @dayclick="onDayClick"
       color="purple"
   />
+  </client-only>
 
 </template>
