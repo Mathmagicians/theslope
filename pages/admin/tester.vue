@@ -1,7 +1,8 @@
 <script setup lang="ts">
 
 import {sub, format, isSameDay, eachDayOfInterval, type Duration, getISODay} from 'date-fns'
-import {capitalize} from "vue";
+import {capitalize} from "vue"
+import { type Ref, inject } from 'vue'
 
 const ranges = [
   {label: 'Sidste uge', duration: {days: 7}},
@@ -84,7 +85,7 @@ const attrs = ref([
   {
     key: 'holidays',
     dot: 'green',
-    dates: selectedDates
+    dates: []//selectedDates.value
   },
   {
     key: 'dinners',
@@ -92,17 +93,25 @@ const attrs = ref([
       color: 'purple',
       fillMode: 'solid'
     },
-    dates: resultDays
+    dates: []//resultDays.value
   }
 ])
 
+const isMd = inject<Ref<boolean>>('isMd')
+const getIsMd = computed(():boolean =>  isMd?.value ?? false)
+watch(isMd, (newValue) => {
+  console.log('TESTER > isMd changed:', newValue);
+})
 </script>
 
 <template>
   <div>
     <h2>Calendar fra nuxt module</h2>
     <client-only>
-      <VCalendar show-iso-weeknumbers :attributes="attrs" :min-date="startDate" :max-date="endDate"/>
+      {{ 'IS MD: ' + getIsMd }}
+      <!-- isMd is a ref, that should be provided by layout -->
+      <VCalendar show-iso-weeknumbers :expanded="!isMd"
+                 :attributes="attrs" :min-date="startDate" :max-date="endDate"/>
     </client-only>
 
     <UDivider/>
