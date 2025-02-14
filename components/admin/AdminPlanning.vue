@@ -3,7 +3,9 @@ const store = usePlanStore()
 const {loadSeason} = store
 loadSeason()
 
-const showCreateSeason = ref(true)
+const showCreateSeason = () => {
+  console.log('Show Not implemented yet')
+}
 
 const items = [{
   label: 'Fællesspisninger',

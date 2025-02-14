@@ -1,36 +1,88 @@
 <script setup lang="ts">
-const {loggedIn} = storeToRefs(useAuthStore())
-const {greeting} = storeToRefs(useAuthStore())
+const { loggedIn, greeting } = storeToRefs(useAuthStore())
 
-const horizontalLinks = [
- { label: "Fællesspisning", to: "/dinner", icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" },
-  { label: "Husholdning",  icon: 'i-heroicons-home', to: "/household" },
-  { label: "Chefkok", to: "/chef", icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food' },
-  { label: "Admin", to: "/admin", icon: 'pajamas-admin' },
-  loggedIn ? { label: greeting, to: "/login", icon: 'pajamas-user' } : { label: 'LOGIN', to: "/login", icon: 'i-guidance-entry' }
-]
-const verticalLinks = [...horizontalLinks]
+const navigationLinks = computed(() => [
+  {
+    label: "Fællesspisning",
+    to: "/dinner",
+    icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining"
+  },
+  {
+    label: "Husholdning",
+    to: "/household",
+    icon: 'i-heroicons-home'
+  },
+  {
+    label: "Chefkok",
+    to: "/chef",
+    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food'
+  },
+  {
+    label: "Admin",
+    to: "/admin",
+    icon: 'i-pajamas-admin'
+  },
+  {
+    label: loggedIn.value ? greeting.value : 'LOGIN',
+    to: "/login",
+    icon: loggedIn.value ? 'i-pajamas-user' : 'i-guidance-entry'
+  }
+])
 
 const isMenuOpen = ref(false)
-const toggleMenu = () => {
-  isMenuOpen.value = !isMenuOpen.value
+
+const closeMenu = () => {
+  isMenuOpen.value = false
 }
 </script>
 
 <template>
-  <UContainer
-class="sticky w-full flex items-center justify-between bg-blue-100 dark:bg-blue-900">
-    <!-- Logo with navigation to index page, should always be visible -->
-    <div class="w-24 p-1 m-1 md:w-32 md:m-4 min-w-1/12">
-      <ULink to="/" ><Logo /></ULink>
-    </div>
-    <!-- hamburger button to show/hide menu on mobile -->
-    <UButton class="block md:hidden " @click="toggleMenu()">
-      <Icon :name="isMenuOpen ? 'pajamas:close' : 'pajamas:hamburger'" class="w-4 h-4 mt-1 text-blue-200"/>
-    </UButton>
-    <div class="hidden md:flex">
-      <UHorizontalNavigation :links="horizontalLinks"/>
-    </div>
-  </UContainer>
+  <UContainer class="sticky top-0 z-50 w-full bg-blue-100 dark:bg-blue-900">
+    <div class="flex items-center justify-between p-2">
+      <NuxtLink to="/" class="w-24 md:w-32 shrink-0 md:mr-8">
+        <Logo />
+      </NuxtLink>
 
+      <UHorizontalNavigation
+          :links="navigationLinks"
+          class="hidden md:flex"
+      />
+
+      <UButton
+          variant="ghost"
+          @click="isMenuOpen = !isMenuOpen"
+          class="md:hidden"
+      >
+        <Icon
+            :name="isMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'"
+            class="w-6 h-6"
+        />
+      </UButton>
+    </div>
+
+    <Transition
+        enter-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-200"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+    >
+      <div v-if="isMenuOpen"
+           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-blue-900 z-50 md:hidden">
+        <div class="flex justify-end p-2">
+          <UButton variant="ghost" @click="closeMenu">
+            <Icon name="i-heroicons-x-mark" class="w-6 h-6"/>
+          </UButton>
+        </div>
+        <div class="flex flex-col items-center pt-10">
+          <UVerticalNavigation
+              :links="navigationLinks"
+              class="text-xl space-y-6"
+              @click="closeMenu"
+          />
+        </div>
+      </div>
+    </Transition>
+  </UContainer>
 </template>

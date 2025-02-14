@@ -2,6 +2,7 @@
 
 
 import type {DatePickerDate, DatePickerRangeObject} from "v-calendar/dist/types/src/use/datePicker";
+import type {PropType} from "vue";
 
 defineOptions({
   inheritAttrs: false
@@ -10,7 +11,10 @@ defineOptions({
 const props = defineProps({
   modelValue: {
     type: [Date, Object] as PropType<DatePickerDate | DatePickerRangeObject | null>,
-    default: null
+    required: true,
+    validator(value: DatePickerRangeObject): boolean {
+      return value?.start && value?.end ? true : false
+    }
   }
 })
 
@@ -25,31 +29,26 @@ const date = computed({
 })
 
 const attrs = {
-  'transparent': true,
-  'borderless': true,
-  'color': 'primary',
-  'is-dark': { selector: 'html', darkClass: 'dark' },
+  'transparent': false,
+  'borderless': false,
+  'color': 'pink',
+  'is-dark': {selector: 'html', darkClass: 'dark'},
   'first-day-of-week': 2
 }
 
 function onDayClick(_: any, event: MouseEvent): void {
   const target = event.target as HTMLElement
-  target.blur()
+  target.blur() //unfocus the clicked element
 }
 </script>
 
 <template>
   <VDatePicker
-      v-if="date && (date as DatePickerRangeObject)?.start && (date as DatePickerRangeObject)?.end"
       v-model.range="date"
       :columns="2"
       v-bind="{ ...attrs, ...$attrs }"
       @dayclick="onDayClick"
+      color="purple"
   />
-  <VDatePicker
-      v-else
-      v-model="date"
-      v-bind="{ ...attrs, ...$attrs }"
-      @dayclick="onDayClick"
-  />
+
 </template>
