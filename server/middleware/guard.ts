@@ -1,5 +1,5 @@
 import {defineEventHandler} from "h3"
-import {maskPassword} from "~/composables/utils";
+import {maskPassword} from "~/utils/utils";
 
 // list of endpoints that we want dont need to protect
 const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon"]

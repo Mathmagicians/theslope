@@ -1,8 +1,8 @@
 <script setup lang="ts">
 
-import {sub, format, isSameDay, eachDayOfInterval, type Duration, getISODay} from 'date-fns'
 import {capitalize} from "vue"
 import { type Ref, inject } from 'vue'
+import type {Duration} from "date-fns";
 
 const ranges = [
   {label: 'Sidste uge', duration: {days: 7}},
@@ -12,80 +12,44 @@ const ranges = [
 const startDate = new Date(2024, 7, 1)
 const endDate = new Date(2025, 5, 31)
 
-const selected = ref({start: new Date(), end: new Date()})
-
-const selectedDates = ref([])
-
-function isRangeSelected(duration: Duration) {
-  return isSameDay(selected.value.start, sub(new Date(), duration)) && isSameDay(selected.value.end, new Date())
+interface DateRange {
+  start: Date
+  end: Date
 }
 
-function selectRange(duration: Duration) {
-  selected.value = {start: sub(new Date(), duration), end: new Date()}
-}
+const selectedDates = ref<DateRange[]>([])
+const selected = ref<DateRange>({start: new Date(), end: new Date()})
 
-
-const WEEKDAYS = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'loerdag', 'soendag'] as const;
-type WeekDay = typeof WEEKDAYS[number];
-
-type WeekDayMap = Record<WeekDay, boolean>;
-
-const weekdays: WeekDayMap = ref({
-  mandag: false,
-  tirsdag: false,
-  onsdag: false,
-  torsdag: false,
-  fredag: false,
-  loerdag: false,
-  soendag: false
-})
-
-
-const eachDayOfIntervalWithSelectedWeekdays = (
-    start: Date,
-    end: Date,
-    selectedDays: WeekDayMap
-) => {
-  const selectedDayIndices = Object.entries(selectedDays)
-      .flatMap(([day, isSelected]) => isSelected ? WEEKDAYS.indexOf(day) + 1 : [])
-
-  return eachDayOfInterval({start, end})
-      .filter(date => selectedDayIndices.includes(getISODay(date)))
-}
-
-const dinnerDays = ref(eachDayOfIntervalWithSelectedWeekdays(startDate, endDate, weekdays))
-
-
+const weekdays = ref(createDefaultWeekdayMap(false))
 
 const handleClose = () => {
   selectedDates.value.push(selected.value)
 }
+function checkRangeSelected(duration: Duration) {
+  return isRangeSelected(selected.value.start, selected.value.end, duration)
+}
 
-const allHollidays = computed(() => {
-  const arr = selectedDates.value.flatMap(range => eachDayOfInterval({start: range.start, end: range.end}))
-  console.log("Arr:", arr)
-  return arr
-})
+function selectRange(duration: Duration) {
+  selected.value = createDateRange(duration)
+}
 
-const resultDays = computed(() => {
-  return dinnerDays.value.filter(date =>
-      !allHollidays.value.some(holiday =>
-          isSameDay(date, holiday)
-      )
-  )
-})
+const dinnerDays = ref(getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, weekdays.value))
+const allHolidays = computed(() => eachDayOfManyIntervals(selectedDates.value))
+const resultDays = computed(() => excludeDatesFromInterval(dinnerDays.value, selectedDates.value))
 
 watch(weekdays, (selectedDays: WeekDayMap) => {
-  dinnerDays.value = eachDayOfIntervalWithSelectedWeekdays(startDate, endDate, selectedDays)
+  dinnerDays.value = getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, selectedDays)
   console.log("DinnerDays:", dinnerDays.value.length)
-}, {deep: true})
+  console.log('selectedDates:', selectedDates.value)
+  console.log('resultDays:', resultDays?.value?.length) ?? 0
+}, {immediate: true, deep: true})
 
 
 const attrs = ref([
   {
     key: 'holidays',
     dot: 'green',
-    dates: []//selectedDates.value
+    dates: allHolidays
   },
   {
     key: 'dinners',
@@ -93,7 +57,7 @@ const attrs = ref([
       color: 'purple',
       fillMode: 'solid'
     },
-    dates: []//resultDays.value
+    dates: resultDays
   }
 ])
 
@@ -120,7 +84,7 @@ watch(isMd, (newValue) => {
       <UButton icon="i-heroicons-calendar-days-20-solid" color="pink">
         Vælg periode
       </UButton>
-      <UBadge> {{ format(selected.start, 'd MMM, yyy') }} - {{ format(selected.end, 'd MMM, yyy') }}</UBadge>
+      <UBadge> {{ formatDateRange(selected.start, selected.end)  }} </UBadge>
 
 
       <template #panel="{ close }">
@@ -134,7 +98,7 @@ watch(isMd, (newValue) => {
                 size="lg"
                 variant="ghost"
                 class="rounded-none px-6"
-                :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                :class="[checkRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
                 truncate
                 @click="selectRange(range.duration)"
             />
@@ -145,9 +109,9 @@ watch(isMd, (newValue) => {
       </template>
     </UPopover>
     <ul>
-      <li v-for="(date, index) in selectedDates" :key="date">
+      <li v-for="(dates, index) in selectedDates" :key="index">
         <div>
-          <UBadge> {{ format(date.start, 'd MMM, yyy') }} - {{ format(date.end, 'd MMM, yyy') }}</UBadge>
+          <UBadge> {{ formatDateRange(dates.start, dates.end)  }}</UBadge>
           <UButton @click="selectedDates.splice(index, 1)" color="red" icon="i-heroicons-trash" variant="ghost"/>
         </div>
       </li>
