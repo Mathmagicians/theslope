@@ -7,7 +7,7 @@ import {z} from 'zod'
 import InhabitantCreateInput = Prisma.InhabitantCreateInput;
 import UserCreateInput = Prisma.UserCreateInput;
 import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
-import {maskPassword} from "~/composables/utils";
+import {maskPassword} from "~/utils/utils";
 
 dotenv.config();
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional

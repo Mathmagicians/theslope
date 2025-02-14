@@ -6,8 +6,3 @@ export function maskPassword(password: string): string {
 }
 
 // Finds a date corresponding to a weekday in given week in a given year
-export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, year: number): Date {
-    const firstDay =  setISOWeek(startOfISOWeekYear(new Date(year, 0, 4)), weekNumber)
-    const nextDay = addDays(firstDay, weekday)
-    return nextDay
-}
