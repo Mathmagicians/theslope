@@ -1,36 +1,21 @@
 <script setup lang="ts">
-
+import {type DateRange, WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "vue"
 import { type Ref, inject } from 'vue'
-import type {Duration} from "date-fns";
-
-const ranges = [
-  {label: 'Sidste uge', duration: {days: 7}},
-  {label: 'Sidste 14 dage', duration: {days: 14}},
-]
+//import type {Duration} from "date-fns";
 
 const startDate = new Date(2024, 7, 1)
 const endDate = new Date(2025, 5, 31)
 
-interface DateRange {
-  start: Date
-  end: Date
-}
-
 const selectedDates = ref<DateRange[]>([])
+
+//v-model for the date picker
 const selected = ref<DateRange>({start: new Date(), end: new Date()})
 
 const weekdays = ref(createDefaultWeekdayMap(false))
 
 const handleClose = () => {
   selectedDates.value.push(selected.value)
-}
-function checkRangeSelected(duration: Duration) {
-  return isRangeSelected(selected.value.start, selected.value.end, duration)
-}
-
-function selectRange(duration: Duration) {
-  selected.value = createDateRange(duration)
 }
 
 const dinnerDays = ref(getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, weekdays.value))
@@ -41,7 +26,7 @@ watch(weekdays, (selectedDays: WeekDayMap) => {
   dinnerDays.value = getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, selectedDays)
   console.log("DinnerDays:", dinnerDays.value.length)
   console.log('selectedDates:', selectedDates.value)
-  console.log('resultDays:', resultDays?.value?.length) ?? 0
+  console.log('resultDays:', resultDays?.length ?? 0)
 }, {immediate: true, deep: true})
 
 
@@ -63,9 +48,6 @@ const attrs = ref([
 
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed(():boolean =>  isMd?.value ?? false)
-watch(isMd, (newValue) => {
-  console.log('TESTER > isMd changed:', newValue);
-})
 </script>
 
 <template>
@@ -84,34 +66,19 @@ watch(isMd, (newValue) => {
       <UButton icon="i-heroicons-calendar-days-20-solid" color="pink">
         Vælg periode
       </UButton>
-      <UBadge> {{ formatDateRange(selected.start, selected.end)  }} </UBadge>
+      <UBadge> {{ formatDateRange(selected)  }} </UBadge>
 
 
       <template #panel="{ close }">
         <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-          <div class="hidden sm:flex flex-col py-4">
-            <UButton
-                v-for="(range, index) in ranges"
-                :key="index"
-                :label="range.label"
-                color="purple"
-                size="lg"
-                variant="ghost"
-                class="rounded-none px-6"
-                :class="[checkRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
-                truncate
-                @click="selectRange(range.duration)"
-            />
-          </div>
-
-          <DateRangePicker v-model="selected" @close="handleClose()"/>
+          <CalendarDateRangePicker v-model="selected" @close="handleClose()"/>
         </div>
       </template>
     </UPopover>
     <ul>
       <li v-for="(dates, index) in selectedDates" :key="index">
         <div>
-          <UBadge> {{ formatDateRange(dates.start, dates.end)  }}</UBadge>
+          <UBadge> {{ formatDateRange(dates)  }}</UBadge>
           <UButton @click="selectedDates.splice(index, 1)" color="red" icon="i-heroicons-trash" variant="ghost"/>
         </div>
       </li>

@@ -5,7 +5,7 @@ import {
     eachDayOfManyIntervals,
     getEachDayOfIntervalWithSelectedWeekdays
 } from "~/utils/date"
-
+import {isValid} from "date-fns"
 describe('test calculateDayFromWeekNumber', async () => {
 
     const testData = [
@@ -140,5 +140,44 @@ describe('excludeDatesFromInterval', () => {
             new Date(2025, 0, 6),
             new Date(2025, 0, 20)
         ])
+    })
+})
+
+describe('parseDate works for dd-MM-yyyy format', () => {
+
+    it('should parse "26/01/2025" to January 26, 2025', () => {
+        const result = parseDate('26/01/2025')
+        expect(result).toBeInstanceOf(Date)
+        expect(isValid(result)).toBe(true)
+        expect(result.getDate()).toBe(26)
+        expect(result.getMonth()).toBe(0) // 0 = January
+        expect(result.getFullYear()).toBe(2025)
+    })
+
+    it('should parse "20/12/2025" to December 20, 2025', () => {
+        const result = parseDate('20/12/2025')
+        expect(result).toBeInstanceOf(Date)
+        expect(isValid(result)).toBe(true)
+        expect(result.getDate()).toBe(20)
+        expect(result.getMonth()).toBe(11) // 0 = January
+        expect(result.getFullYear()).toBe(2025)
+    })
+
+    it('should parse "12-20-2025" as invalid date', () => {
+        const invalidDate = parseDate('2-1-2025')
+        console.log("Parsed date", invalidDate)
+        expect(isValid(invalidDate)).toBe(false)
+        expect(invalidDate).toBeInstanceOf(Date)
+        expect(invalidDate.getTime()).toBeNaN()
+
+    })
+
+    it('should parse "2-1-2025" as invalid date', () => {
+        const invalidDate = parseDate('2-1-2025')
+        console.log("Parsed date", invalidDate)
+        expect(isValid(invalidDate)).toBe(false)
+        expect(invalidDate).toBeInstanceOf(Date)
+        expect(invalidDate.getTime()).toBeNaN()
+
     })
 })

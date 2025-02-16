@@ -1,36 +1,43 @@
-import {addDays, setISOWeek, startOfISOWeekYear} from "date-fns";
-
-export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, year: number): Date {
-    const firstDay =  setISOWeek(startOfISOWeekYear(new Date(year, 0, 4)), weekNumber)
-    const nextDay = addDays(firstDay, weekday)
-    return nextDay
-}
-
-// CLAUDE
-// utils/date.ts
 import {
-    sub,
-    format,
-    isSameDay,
-    eachDayOfInterval,
-    getISODay,
-    type Duration
-} from 'date-fns'
+    addDays,  setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
+    isValid, parse, format} from "date-fns"
+import {da} from "date-fns/locale"
+import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
+import {WEEKDAYS} from "~/types/dateTypes"
 
-export const WEEKDAYS = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'loerdag', 'soendag'] as const
-export type WeekDay = typeof WEEKDAYS[number]
-export type WeekDayMap = Record<WeekDay, boolean>
+export const DATE_SETTINGS =
+    {
+        DATE_MASK: 'dd/MM/yyyy',
+        locale: da,
+        USER_MASK: 'dd/mm/åååå'
+    }
 
-export function isRangeSelected(start: Date, end: Date, duration: Duration): boolean {
-    return isSameDay(start, sub(new Date(), duration)) &&
-        isSameDay(end, new Date())
+// Takes a iso week number, and a year in which the week is in, and a weekday number (0-6),
+// and returns the date of that weekday in that week in that year
+export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, year: number): Date {
+    const firstDay = setISOWeek(startOfISOWeekYear(new Date(year, 0, 4)), weekNumber)
+    return addDays(firstDay, weekday)
 }
 
-export function createDateRange(duration: Duration) {
+export function createDateRange(start: Date, end: Date): DateRange {
     return {
-        start: sub(new Date(), duration),
-        end: new Date()
+        start: start,
+        end: end
     }
+}
+
+export const formatDate = (date: Date | undefined) =>
+    date !== undefined && isValid(date) ? format(date, DATE_SETTINGS.DATE_MASK, {locale: DATE_SETTINGS.locale}) : ''
+
+export const parseDate = (dateStr: string) => {
+    console.log('parseDate > ', dateStr)
+    const parsedDate = parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
+    console.log('parseDate > parsed string into date', dateStr, parsedDate)
+    return parsedDate
+}
+
+export function formatDateRange(range: DateRange | undefined): string {
+    return range === undefined ? '?->?' : `${formatDate(range?.start)} -> ${formatDate(range?.end)}`
 }
 
 export function getEachDayOfIntervalWithSelectedWeekdays(
@@ -44,13 +51,10 @@ export function getEachDayOfIntervalWithSelectedWeekdays(
             isSelected ? WEEKDAYS.indexOf(day as WeekDay) + 1 : []
         )
 
-    return eachDayOfInterval({ start, end })
+    return eachDayOfInterval({start, end})
         .filter(date => selectedDayIndices.includes(getISODay(date)))
 }
 
-export function formatDateRange(start: Date, end: Date): string {
-    return `${format(start, 'd MMM, yyy')} - ${format(end, 'd MMM, yyy')}`
-}
 
 export function createDefaultWeekdayMap(value: boolean | boolean[] = false): WeekDayMap {
     if (Array.isArray(value)) {
@@ -59,20 +63,19 @@ export function createDefaultWeekdayMap(value: boolean | boolean[] = false): Wee
             [day]: value[index] ?? false
         }), {} as WeekDayMap)
     }
-
     return WEEKDAYS.reduce((acc, day) => ({
         ...acc,
         [day]: value
     }), {} as WeekDayMap)
 }
 
-export function eachDayOfManyIntervals(intervals: Array<{start: Date, end: Date}>): Date[] {
+export function eachDayOfManyIntervals(intervals: Array<{ start: Date, end: Date }>): Date[] {
     return intervals.flatMap(range => eachDayOfInterval({start: range.start, end: range.end}))
 }
 
 export function excludeDatesFromInterval(
     intervalDates: Date[],
-    excludeDates: Array<{start: Date, end: Date}>
+    excludeDates: Array<{ start: Date, end: Date }>
 ): Date[] {
     const allExcludedDates = excludeDates.flatMap(range =>
         eachDayOfInterval({start: range.start, end: range.end})
