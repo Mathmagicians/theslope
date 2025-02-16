@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes";
 import {DATE_SETTINGS, formatDateRange} from "~/utils/date";
+import {inject, Ref} from "vue";
 
 
 const model = defineModel<DateRange>({required: true})
@@ -11,6 +12,18 @@ const inputState = ref({
   end: formatDate(model.value.end)
 })
 
+const emit = defineEmits(['update:model-value', 'close'])
+
+const dates = computed({
+  get: () => model.value,
+  set: (value) => {
+    if(value) {
+      emit('update:model-value', value)
+      emit('close')
+    }
+  }
+})
+
 const handleInputChange = (value: string, key: keyof DateRange) => {
   const newRange = {
     ...model.value,
@@ -18,14 +31,6 @@ const handleInputChange = (value: string, key: keyof DateRange) => {
   }
   model.value = newRange
   errors.value = validateDateRange(inputState.value).errors
-
-  console.log('CalendarDateInput > updated model ', formatDateRange(model.value), key, model.value, parseDate(value))
-  console.warn('errors', errors.value)
-  console.log('Input change:', {
-    value,
-    parsedDate: parseDate(value),
-    validationErrors: errors.value
-  })
 }
 const formatLabel = (key: keyof DateRange): string => {
   switch (key) {
@@ -36,25 +41,71 @@ const formatLabel = (key: keyof DateRange): string => {
   }
 }
 
+const attrs = {
+  'transparent': false,
+  'borderless': false,
+  'color': 'pink',
+  'is-dark': {selector: 'html', darkClass: 'dark'},
+  'first-day-of-week': 2
+}
+
+function onDayClick(_: any, event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  target.blur() //unfocus the clicked element
+}
+
+watch(model, async (newModelValue:DateRange, oldModelValue:DateRange) => {
+  const newDateStringRange = { start:formatDate(newModelValue.start), end:formatDate(newModelValue.end)}
+  inputState.value = newDateStringRange
+  errors.value = validateDateRange(inputState.value).errors
+})
+
+const isMd = inject<Ref<boolean>>('isMd')
+const getIsMd = computed((): boolean => isMd?.value ?? false)
+
 </script>
 
 <template>
-  <div class="flex flex-col md:flex-row gap-4">
-    <UFormGroup v-for="key in ['start', 'end'] as const" :key="key"
-                class="p-2"
-                :label="formatLabel(key)"
-                :error="errors.get(key)?.[0] || errors.get('_')?.[0] || ''">
-      <!-- ui prop needed for trailing calendar icon to accept click events -->
-      <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
-              :ui="{ icon: { trailing: { pointer: '' } } }"
-              :name="key" v-model="inputState[key]"
-              @update:model-value="handleInputChange($event, key)">
-        <template #trailing>
-          <UButton @click="console.log('CalendarDateInput > clicked calendar icon')" icon="i-heroicons-calendar"/>
+  <div>
+    <client-only>
+      <VDatePicker
+          v-model.range="dates"
+          isrange
+          :columns="getIsMd ? 2: 1"
+          v-bind="{ ...attrs, ...$attrs }"
+          @dayclick="onDayClick"
+          color="purple"
+      >
+        <template #default="{ togglePopover, inputValue, inputEvents }">
+          <div class="flex flex-col md:flex-row gap-4">
+            <UFormGroup v-for="key in ['start', 'end'] as const" :key="key"
+                        class="p-2"
+                        :label="formatLabel(key)"
+                        :error="errors.get(key)?.[0] || errors.get('_')?.[0] || ''">
+              <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
+                      :ui="{ icon: { trailing: { pointer: '' } } }"
+                      :name="key"
+                      @update:model-value="handleInputChange($event, key)"
+                      v-model="inputState[key]"
+              >
+                <template #trailing>
+                  <UButton @click="togglePopover" icon="i-heroicons-calendar"
+                           color="pink"/>
+                </template>
+              </UInput>
+            </UFormGroup>
+            <p>CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is: {{ inputState }} </p>
+            <UButton
+                class="p-2 bg-blue-500 text-sm text-white font-semibold rounded-md"
+                @click="togglePopover"
+                icon="i-heroicons-calendar"
+                color="blue"
+            />
+          </div>
         </template>
-      </UInput>
-    </UFormGroup>
-    <p>CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is: {{ inputState }} </p>
+
+      </VDatePicker>
+    </client-only>
 
   </div>
 </template>
