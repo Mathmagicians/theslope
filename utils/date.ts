@@ -30,9 +30,7 @@ export const formatDate = (date: Date | undefined) =>
     date !== undefined && isValid(date) ? format(date, DATE_SETTINGS.DATE_MASK, {locale: DATE_SETTINGS.locale}) : ''
 
 export const parseDate = (dateStr: string) => {
-    console.log('parseDate > ', dateStr)
     const parsedDate = parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
-    console.log('parseDate > parsed string into date', dateStr, parsedDate)
     return parsedDate
 }
 

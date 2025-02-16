@@ -12,7 +12,7 @@ console.log("RANGE > selected date range is:", formatDateRange(selected))
 
 <template>
   <div>
-    <CalendarDateInput v-model="selected" />
+    <CalendarDateRangePicker v-model="selected" />
     <p>Value from CalendarDateInput component is: {{ formatDateRange(selected) }}</p>
     <UDivider />
  <!--   <CalendarDateRangePicker v-model="selected" @close="handleClose()"/> -->
