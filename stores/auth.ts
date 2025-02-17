@@ -18,10 +18,10 @@ export const useAuthStore = defineStore("Auth", () => {
     const email = computed(() => user?.value?.email)
     const phone = computed(() => user?.value?.phone)
     const birthDate = computed(() => user?.value?.Inhabitant?.birthDate)
-    const role = computed(() => user?.value?.systemRole)
+    const systemRole = computed(() => user?.value?.systemRole)
     const address = computed(() => user?.value?.Inhabitant?.household?.address)
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, role, address, loggedIn, user, session, clear, fetch}
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRole, address, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {
