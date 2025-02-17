@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
 
-const selected = ref<DateRange>(createDateRange())
+const selected = ref<DateRange>(createDateRange(new Date(), new Date()))
+
 
 const handleClose = () => {
   console.log(`RANGE > closing calendar, selected date range is: ${formatDateRange(selected.value)}`)
 }
 
-console.log("RANGE > selected date range is:", formatDateRange(selected))
+console.log("RANGE > selected date range is:", formatDateRange(selected.value))
 </script>
 
 <template>

@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import type { FormMode } from '@/types/form'
+import {FORM_MODES} from "@/types/form"
+
 const store = usePlanStore()
 const {loadSeason} = store
 loadSeason()
+
+const formMode = ref<FormMode>(FORM_MODES.VIEW)
 
 const showCreateSeason = () => {
   console.log('Show Not implemented yet')
@@ -20,6 +25,14 @@ const items = [{
 
 <template>
   <div>
+    <UCard>
+      <template #header>
+        <div class="flex flex-row items-center justify-between">
+          <FormModeSelector/>
+          <UHorizontalNavigation :items="items" />
+        </div>
+      </template>
+    </UCard>
     <h1>Planlægning</h1>
     Overblik over madlavningshold
     Chefkok / medlemmer
