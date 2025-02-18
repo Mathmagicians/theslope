@@ -1,9 +1,7 @@
 import {PrismaD1} from "@prisma/adapter-d1"
 import {Season, User, Inhabitant, Household, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
-import {Prisma} from "@prisma/client/extension"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 import InhabitantCreateInput = PrismaFromClient.InhabitantCreateInput
-import UserCreateNestedOneWithoutInhabitantInput = PrismaFromClient.UserCreateNestedOneWithoutInhabitantInput;
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
     const adapter = new PrismaD1(d1Client)
@@ -137,7 +135,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]
     return households
 }
 
-export async function fetchSeason(d1Client: D1Database, start: string, end: string): Promise<Season|null> {
+export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<Season|null> {
     console.log(">>>🌞 Fetching specific season")
     const prisma = await getPrismaClientConnection(d1Client)
     const season = await prisma.season.findFirst({
@@ -162,8 +160,20 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season|n
     return season
 }
 
-export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
+export async function fetchSeason(d1Client: D1Database, id:number): Promise<Season|null> {
     console.log(">>>🌞 Fetching specific season")
+    const prisma = await getPrismaClientConnection(d1Client)
+    const season = await prisma.season.findFirst({
+        where: {
+            id: id
+        }
+    })
+    console.log(`<<<🌞 Got season ${season?.shortName} from database`)
+    return season
+}
+
+export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
+    console.log(">>>🌞 Fetching seasons")
     const prisma = await getPrismaClientConnection(d1Client)
     const seasons = await prisma.season.findMany({
         orderBy: {
@@ -171,5 +181,5 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
         }
     })
     console.log(`<<<🌞 Got ${seasons?.length} seasons from database`)
-    return seasons
+    return seasons ? seasons : []
 }

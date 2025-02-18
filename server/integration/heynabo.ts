@@ -1,4 +1,4 @@
-import {Prisma, Prisma as PrismaFromClient} from "@prisma/client"
+import {Prisma as PrismaFromClient} from "@prisma/client"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 
 // Load environment variables - for some undocumented reason, they are not passed to nitro from .env automatically

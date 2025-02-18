@@ -1,6 +1,8 @@
 export default defineAppConfig({
     theslope: {
-        cookingDays: ['MANDAG', 'TIRSDAG', 'ONSDAG', 'TORSDAG'],
+        defaultCookingDays: ['mandag', 'tirsdag', 'onsdag', 'torsdag'] ,
+        ticketIsCancellableDaysBefore: 10,
+        diningModeIsEditableMinutesBefore: 90,
         defaultTicketTypes: [
             { type: 'BABY', price: '0', limit: 2 },
             { type: 'BARN', price: '17', limit: 12 },

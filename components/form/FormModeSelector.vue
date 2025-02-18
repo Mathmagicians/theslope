@@ -57,7 +57,7 @@ const isSelected = (mode: FormMode):boolean => model.value === mode
         :active="isSelected(item.mode)"
         :variant="isSelected(item.mode) ? 'solid': 'outline'"
         color="orange"
-        active-class="ring-2 border-2 ring-orang-700 shadow-md"
+        active-class="ring-2 border-2 ring-orange-200 shadow-md"
         @click="handleSelect(item.mode)"
     >
       <template #leading>
