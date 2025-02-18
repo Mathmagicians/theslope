@@ -1,6 +1,12 @@
 <script setup lang="ts">
     import {SeasonSchema} from "~/prisma/generated/zod"
     import type {FormSubmitEvent} from "#ui/types"
+    import {WEEKDAYS} from "~/types/dateTypes";
+
+    interface Props {
+      mode: FormMode
+      season?: SeasonSchema
+    }
 
     const store = usePlanStore()
     const {creatingSeason} = storeToRefs(store)
@@ -10,8 +16,8 @@
 
     const initialSeasonFormStateValues = {
       startDate: calculateDayFromWeekNumber(0, theslopeDefaults.defaultSeason.startWeek,thisYear),
-      endDate: calculateDayFromWeekNumber(4, theslopeDefaults.defaultSeason.endWeek,thisYear),
-      cookingDays: theslopeDefaults.cookingDays,
+      endDate: calculateDayFromWeekNumber(4, theslopeDefaults.defaultSeason.endWeek,thisYear+1),
+      cookingDays: createDefaultWeekdayMap(false)  // todo initialize by ... theslopeDefaults.cookingDays,
       isActive: false,
 
     }
@@ -26,8 +32,8 @@
         diningModeIsEditableMinutesBefore: undefined
     })
 
-    const onSubmitCreateSeason = (event: FormSubmitEvent<SeasonSchema>) =>  {
-      console.info( '📆 > AdminCreateSeason > onSubmit', event)
+    const onSubmitSeason = (event: FormSubmitEvent<SeasonSchema>) =>  {
+      console.info( '📆 > AdminSeason > onSubmit', event, form)
     }
 </script>
 
@@ -40,12 +46,35 @@
           Lejre Kommune.
         </a>
       </h3>
+
     </template>
     <template #default>
-      <UForm :schema="SeasonSchema" :state="createSeasonFormState" class="space-y-4" @submit.prevent="onSubmitCreateSeason">
+
+      <UDivider/>
+      <UForm :schema="SeasonSchema" :state="createSeasonFormState" class="space-y-4" @submit.prevent="onSubmitSeason">
+
+        <UFormGroup label="Kort navn" name="shortName" >
+          <UInput disabled v-model="createSeasonFormState.shortName" />
+        </UFormGroup>
+        <!-- Pick start and end date for the season -->
+
+        <!-- Pick weekdays for cooking -->
+        <UFormGroup label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays" >
+          <UCheckbox
+              v-for="day in WEEKDAYS"
+              :key="day"
+              v-model="createSeasonFormState.cookingDays[day]"
+              :label="capitalize(day)"
+          />
+
+        </UFormGroup>
+
+
+        <!-- Ticket settings -->
         <UFormGroup label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?" name="cancellable" >
           <UInput v-model="createSeasonFormState.ticketIsCancellableDaysBefore" type="number" />
         </UFormGroup>
+
         <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?" name="editable" >
           <UInput v-model="createSeasonFormState.diningModeIsEditableMinutesBefore" type="number" />
         </UFormGroup>

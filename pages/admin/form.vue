@@ -1,18 +1,30 @@
 <script setup lang="ts">
 
-import type {FormMode} from "~/types/form"
-import {FORM_MODES} from "~/types/form"
 
-const formMode = ref<FormMode>(FORM_MODES.VIEW)
+const selectedIndex = ref<number>(1)
+
+const items = [{
+  label: 'Kalender',
+  icon: 'i-heroicons-calendar',
+},
+  {
+    label: 'Madhold',
+    icon: 'i-fluent-mdl2-team-favorite',
+  },
+  {
+    label: 'Chefkokke',
+    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+  }]
+
 
 </script>
 
 <template>
   <div>
-    <UDivider />
-    <p>Form mode: {{ formMode }} </p>
-    <FormModeSelector v-model="formMode"/>
-    <UDivider />
+    <UDivider/>
+    <p>Selected index: {{ selectedIndex }} </p>
+    <FormStepper v-model="selectedIndex" :steps="items"/>
+    <UDivider/>
   </div>
 
 </template>

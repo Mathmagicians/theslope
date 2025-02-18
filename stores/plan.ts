@@ -1,28 +1,46 @@
+import {InternalApi} from "nitropack";
+
+type SeasonsApiResponse = InternalApi['/api/admin/season']['get']
+
 export const usePlanStore = defineStore("Plan", () => {
 
-    const currentSeason = ref<ApiResponse<'/api/admin/season', 'get'> | null>(null)
-    const creatingSeason = ref(false)
+    const activeSeason = ref<ApiResponse<'/api/admin/season/active', 'get'> | null>(null)
+    const loadingSeason = ref(false)
+    const seasons =  ref<SeasonsApiResponse | null>(null)
 
-    const loadSeason = async () => {
+    const loadSeasons = async () => {
+        loadingSeason.value = true
         const response = await useFetch('/api/admin/season')
-        currentSeason.value = response.data.value
+        seasons.value = response.data.value
+        loadingSeason.value = false
     }
 
     const createSeason = async (season: SeasonCreateInput) => {
-        creatingSeason.value = true
+        loadingSeason.value = true
         const response = await useFetch('/api/admin/season', {
-            method: 'POST',
+            method: 'PUT',
             body: season
         })
         const createdSeason = response.data.value
-        creatingSeason.value = false
+        loadingSeason.value = false
+    }
+
+    const updateSeason = async (season: SeasonUpdateInput) => {
+        loadingSeason.value = true
+        const response = await useFetch(`/api/admin/season/${season.id}`,
+            {
+                method: 'POST',
+                body: season
+            })
+        const uodatedSeason = response.data.value
+        loadingSeason.value = false
     }
 
     return {
-        currentSeason,
-        loadSeason,
+        activeSeason,
+        loadSeasons,
         createSeason,
-        creatingSeason
+        updateSeason
     }
 })
 

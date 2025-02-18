@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241230.0",
+    "@iconify-json/fluent-mdl2": "^1.2.1",
     "@iconify-json/material-symbols": "^1.2.14",
     "@iconify-json/pajamas": "^1.2.5",
     "@nuxt/eslint": "^0.7.5",
