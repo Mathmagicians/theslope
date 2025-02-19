@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {type DateRange, WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "vue"
-import { type Ref, inject } from 'vue'
+import {type Ref, inject} from 'vue'
 //import type {Duration} from "date-fns";
 
 const startDate = new Date(2024, 7, 1)
@@ -47,7 +47,7 @@ const attrs = ref([
 ])
 
 const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed(():boolean =>  isMd?.value ?? false)
+const getIsMd = computed((): boolean => isMd?.value ?? false)
 </script>
 
 <template>
@@ -66,7 +66,7 @@ const getIsMd = computed(():boolean =>  isMd?.value ?? false)
       <UButton icon="i-heroicons-calendar-days-20-solid" color="pink">
         Vælg periode
       </UButton>
-      <UBadge> {{ formatDateRange(selected)  }} </UBadge>
+      <UBadge> {{ formatDateRange(selected) }}</UBadge>
 
 
       <template #panel="{ close }">
@@ -78,7 +78,7 @@ const getIsMd = computed(():boolean =>  isMd?.value ?? false)
     <ul>
       <li v-for="(dates, index) in selectedDates" :key="index">
         <div>
-          <UBadge> {{ formatDateRange(dates)  }}</UBadge>
+          <UBadge> {{ formatDateRange(dates) }}</UBadge>
           <UButton @click="selectedDates.splice(index, 1)" color="red" icon="i-heroicons-trash" variant="ghost"/>
         </div>
       </li>

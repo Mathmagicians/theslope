@@ -1,96 +1,160 @@
 <script setup lang="ts">
-    import {SeasonSchema} from "~/prisma/generated/zod"
-    import type {FormSubmitEvent} from "#ui/types"
-    import {WEEKDAYS} from "~/types/dateTypes";
 
-    interface Props {
-      mode: FormMode
-      season?: SeasonSchema
-    }
+import {useSeason} from "~/composables/useSeason"
+import type {Season} from "~/composables/useSeason"
+import type {FormSubmitEvent} from "#ui/types"
+import {WEEKDAYS} from "~/types/dateTypes"
+import type {FormMode} from "~/types/form"
 
-    const store = usePlanStore()
-    const {creatingSeason} = storeToRefs(store)
-    const appConfig = useAppConfig()
-    const theslopeDefaults = appConfig.theslope
-    const thisYear = new Date().getFullYear()
+const { SeasonSchema, createSeasonName, copySeason } = useSeason()
+const props = defineProps<{ mode: FormMode }>()
+const model = defineModel<Season>()
+const emit = defineEmits<{ cancel: [] }>()
 
-    const initialSeasonFormStateValues = {
-      startDate: calculateDayFromWeekNumber(0, theslopeDefaults.defaultSeason.startWeek,thisYear),
-      endDate: calculateDayFromWeekNumber(4, theslopeDefaults.defaultSeason.endWeek,thisYear+1),
-      cookingDays: createDefaultWeekdayMap(false)  // todo initialize by ... theslopeDefaults.cookingDays,
-      isActive: false,
+const state = ref<Season>(copySeason(model.value))
+const selectedDates = ref<DateRange>(state.value.seasonDates)
 
-    }
-    const createSeasonFormState = reactive({
-        shortName: undefined,
-        startDate: undefined,
-        endDate: undefined,
-        isActive:undefined,
-        cookingDays: [],
-        holidays: [],
-        ticketIsCancellableDaysBefore: undefined,
-        diningModeIsEditableMinutesBefore: undefined
-    })
+const appConfig = useAppConfig()
+const { theslope } = appConfig //some default values
 
-    const onSubmitSeason = (event: FormSubmitEvent<SeasonSchema>) =>  {
-      console.info( '📆 > AdminSeason > onSubmit', event, form)
-    }
+const shortName = computed({
+  get: () => createSeasonName(state.value.seasonDates),
+  set: (value) => {
+    state.value.shortName = value
+  }
+})
+
+// Update local state when model changes (e.g., when switching between seasons)
+watch(() => model.value, (newValue) => {
+  state.value = copySeason(newValue)
+}, {deep: true})
+
+const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
+  model.value = event.data
+  console.info('📆 > AdminSeason > onSubmit', event.data)
+}
+
+const formTitle = computed(() => {
+  let action: string
+  switch (props.mode) {
+    case 'create':
+      action = 'Opret ny'
+      break
+    case 'edit':
+      action = 'Rediger'
+      break
+    case 'view':
+      action = 'Vis'
+      break
+    default:
+      throw new Error(`Invalid form mode: ${props.mode}`)
+  }
+  return `${action} fællesspisning sæson`
+})
+
+const buttonText = computed(() => {
+  switch (props.mode) {
+    case 'create':
+      return 'Opret ny sæson'
+    case 'edit':
+      return 'Gem ændringer'
+    case 'view':
+      return 'Vis sæson'
+    default:
+      throw new Error(`Invalid form mode: ${props.mode}`)
+  }
+})
+
+const isViewMode = computed(() => props.mode === 'view')
+
 </script>
 
 <template>
   <UCard>
     <template #header>
-      <h2 class="text-lg font-semibold">Opret ny fællesspisning sæson</h2>
+      <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
-        <a :href="theslopeDefaults.holidayUrl" class="text-blue-500 underline" target="_blank">
+        <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">
           Lejre Kommune.
         </a>
       </h3>
 
     </template>
     <template #default>
+      <div class="flex flex-col md:flex-row gap-6">
+        <!-- Form Section - Below on mobile, Left on desktop -->
+        <div class="flex-1">
 
-      <UDivider/>
-      <UForm :schema="SeasonSchema" :state="createSeasonFormState" class="space-y-4" @submit.prevent="onSubmitSeason">
+          <UForm :schema="SeasonSchema" :state="state" class="space-y-4" @submit.prevent="onSubmitSeason">
+            <UFormGroup label="Kort navn" name="shortName">
+              <UInput disabled :model-value="shortName"/>
+            </UFormGroup>
 
-        <UFormGroup label="Kort navn" name="shortName" >
-          <UInput disabled v-model="createSeasonFormState.shortName" />
-        </UFormGroup>
-        <!-- Pick start and end date for the season -->
+            <!-- Pick start and end date for the season -->
+            <CalendarDateRangePicker v-if=" !isViewMode" v-model="state.seasonDates" />
 
-        <!-- Pick weekdays for cooking -->
-        <UFormGroup label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays" >
-          <UCheckbox
-              v-for="day in WEEKDAYS"
-              :key="day"
-              v-model="createSeasonFormState.cookingDays[day]"
-              :label="capitalize(day)"
-          />
+            <!-- Pick weekdays for cooking -->
 
-        </UFormGroup>
+            <UFormGroup label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays">
+              <UCheckbox
+                  v-for="day in WEEKDAYS"
+                  :key="day"
+                  v-model="state.cookingDays[day]"
+                  :label="day"
+                  class="capitalize"
+                  :disabled="isViewMode"
+              />
 
+            </UFormGroup>
 
-        <!-- Ticket settings -->
-        <UFormGroup label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?" name="cancellable" >
-          <UInput v-model="createSeasonFormState.ticketIsCancellableDaysBefore" type="number" />
-        </UFormGroup>
+            <UDivider/>
 
-        <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?" name="editable" >
-          <UInput v-model="createSeasonFormState.diningModeIsEditableMinutesBefore" type="number" />
-        </UFormGroup>
+            <!-- Add holidays -->
 
+            <!-- Ticket settings -->
 
-      </UForm>
+            <UFormGroup label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
+                        name="cancellable">
+              <UInput v-model="state.ticketIsCancellableDaysBefore" type="number"
+                      :disabled="isViewMode"/>
+            </UFormGroup>
+
+            <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
+                        name="editable">
+              <UInput v-model="state.diningModeIsEditableMinutesBefore" type="number"
+                      :disabled="isViewMode"/>
+            </UFormGroup>
+          </UForm>
+        </div>
+        <!-- Calendar Section - Above on mobile, Right on desktop -->
+        <div class="lg:w-1/3">
+          <UCard>
+            <CalendarDisplay
+                :seasonDates="state.seasonDates"
+                :cookingDays="state.cookingDays"
+                :holidays="state.holidays"
+            />
+          </UCard>
+        </div>
+      </div>
     </template>
-      <template #footer>
+    <template #footer>
+      <div v-if="!isViewMode" class="flex justify-end gap-4">
+        <UButton
+            color="gray"
+            variant="soft"
+            @click="$emit('cancel')"
+        >
+          Annuller
+        </UButton>
         <UButton
             type="submit"
             color="pink"
             icon="i-heroicons-calendar"
-            :loading="creatingSeason"
         >
-          Opret ny sæson!
+          {{ buttonText }}
         </UButton>
-      </template>
+      </div>
+    </template>
   </UCard>
 </template>

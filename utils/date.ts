@@ -83,3 +83,10 @@ export function excludeDatesFromInterval(
         !allExcludedDates.some(excludeDate => isSameDay(date, excludeDate))
     )
 }
+
+export function copyDateRange(range: DateRange): DateRange {
+    return {
+        start: new Date(range.start),
+        end: new Date(range.end)
+    }
+}
