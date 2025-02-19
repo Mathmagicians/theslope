@@ -2,16 +2,40 @@
 import type { FormMode } from '@/types/form'
 import {FORM_MODES} from "@/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts";
+import type {Season} from "~/composables/useSeason";
 
 const store = usePlanStore()
 const {loadSeasons} = store
-loadSeasons()
+const { getDefaultSeason } = useSeason()
 
+// RETRIEVE DATA FROM STORE
+await loadSeasons()
+
+// STATE
 const formMode = ref<FormMode>(FORM_MODES.VIEW)
 const selectedStep = ref<number>(1)
+const currentSeason = ref<Season>(getDefaultSeason()) //initialize state with default values
 
-const showCreateSeason = () => {
-  console.log('Show Not implemented yet')
+const onCreateSeason = () => {
+  currentSeason.value = getDefaultSeason()
+  formMode.value = FORM_MODES.CREATE
+}
+
+const onEditSeason = (season: Season) => {
+  currentSeason.value = season
+  formMode.value = FORM_MODES.EDIT
+}
+
+const onViewSeason = (season: Season) => {
+  currentSeason.value = season
+  formMode.value = FORM_MODES.VIEW
+}
+
+//TODO we need to have a USelectMenu to select the season to view/ edit, and a ref to hold the selected season
+
+const handleSeasonUpdate = (updatedSeason: Season) => {
+  // Handle season updates from child component
+  currentSeason.value = updatedSeason
 }
 
 const items = [{
@@ -46,16 +70,15 @@ const items = [{
         </div>
       </template>
       <template #default>
-        <AdminSeason />
+        <AdminSeason
+          v-model="currentSeason"
+          :mode="formMode"
+          @update="handleSeasonUpdate"
+        />
       </template>
 
 <template #footer>
-  <UButton @click="showCreateSeason" class="m-4 " color="pink" size="lg" variant="soft"
-           icon="i-pajamas-admin">
-    Opret Fællesspisningssæson
-  </UButton>
 </template>
     </UCard>
-
 
 </template>

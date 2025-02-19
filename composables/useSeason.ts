@@ -67,10 +67,20 @@ export const useSeason = () => {
         return isWithinInterval(today, {start, end})
     }
 
+    const copySeason = (season: Season): Season => {
+        return {
+            ...season,
+            seasonDates: copyDateRange(season.seasonDates),
+            cookingDays: { ...season.cookingDays },
+            holidays: season.holidays.map(copyDateRange)
+        }
+    }
+
     return {
         SeasonSchema,
         getDefaultSeason,
         createSeasonName,
-        isActive
+        isActive,
+        copySeason
     }
 }

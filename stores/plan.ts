@@ -1,4 +1,6 @@
-import {InternalApi} from "nitropack";
+import {type InternalApi} from "nitropack";
+import {Season, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
+import type SeasonCreateInput = PrismaFromClient.SeasonCreateInput
 
 type SeasonsApiResponse = InternalApi['/api/admin/season']['get']
 
@@ -36,8 +38,12 @@ export const usePlanStore = defineStore("Plan", () => {
         loadingSeason.value = false
     }
 
+    //todo create a converter from Season to SeasonCreateInput and SeasonUpdateInput
+
     return {
         activeSeason,
+        loadingSeason,
+        seasons,
         loadSeasons,
         createSeason,
         updateSeason
