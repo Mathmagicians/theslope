@@ -3,7 +3,8 @@ import {
     calculateDayFromWeekNumber,
     createDefaultWeekdayMap,
     eachDayOfManyIntervals,
-    getEachDayOfIntervalWithSelectedWeekdays
+    getEachDayOfIntervalWithSelectedWeekdays,
+    copyDateRange
 } from "~/utils/date"
 import {isValid} from "date-fns"
 describe('test calculateDayFromWeekNumber', async () => {
@@ -180,4 +181,29 @@ describe('parseDate works for dd-MM-yyyy format', () => {
         expect(invalidDate.getTime()).toBeNaN()
 
     })
+})
+
+describe('copyDateRange', () => {
+    it('should preserve date values in the copy', () => {
+        const original = {
+            start: new Date(2024, 5, 15),
+            end: new Date(2024, 6, 30)
+        }
+
+        const copy = copyDateRange(original)
+
+        expect(copy.start.getTime()).toBe(original.start.getTime())
+        expect(copy.end.getTime()).toBe(original.end.getTime())
+    })
+    it('should handle undefined date range', () => {
+        const undefinedRange = {
+            start: undefined,
+            end: undefined
+        }
+
+        const copy = copyDateRange(undefinedRange)
+        expect(copy).toEqual(undefinedRange)
+        expect(copy).not.toBe(undefinedRange)
+    })
+
 })

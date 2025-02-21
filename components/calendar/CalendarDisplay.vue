@@ -48,6 +48,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
         show-iso-weeknumbers
         :expanded="!getIsMd"
         :columns="getIsMd ? 2: 1"
+        :rows="getIsMd ? 2: 1"
         :attributes="attrs"
         :min-date="seasonDates.start"
         :max-date="seasonDates.end"
