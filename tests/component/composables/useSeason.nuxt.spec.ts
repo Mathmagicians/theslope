@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useSeason} from '@/composables/useSeason'
 import type {DateRange} from "~/types/dateTypes";
+import {WEEKDAYS} from "~/types/dateTypes";
 
 describe('useSeasonSchema', () => {
     // Update the test in useSeason.nuxt.spec.ts
@@ -85,5 +86,42 @@ describe('useSeasonSchema', () => {
             expect(anotherCopy.holidays).toStrictEqual([])
             expect(anotherCopy.holidays.length).toBe(0)
         })
+    })
+
+    it('should copy season with undefined values', () => {
+        const { copySeason } = useSeason()
+        const undefinedSeason = {
+            shortName: undefined,
+            seasonDates: undefined,
+            isActive: undefined,
+            cookingDays: {},
+            holidays: undefined,
+            ticketIsCancellableDaysBefore: undefined,
+            diningModeIsEditableMinutesBefore: undefined
+        }
+
+        const result = copySeason(undefinedSeason)
+        expect(result).toEqual(undefinedSeason)
+        expect(result).not.toBe(undefinedSeason)
+    })
+
+    it('should provide default values for season with undefined properties', () => {
+        const { copySeason, getDefaultSeason } = useSeason()
+       const  undefinedSeason = undefined
+        const result = copySeason(undefined)
+        const defaultSeason = getDefaultSeason()
+
+        // Test that result matches the default season values
+        expect(result).toEqual(defaultSeason)
+        // Test that it's a different object instance
+        expect(result).not.toBe(undefinedSeason)
+        // Test specific default values
+        expect(result.shortName).toMatch(/^Sæson \d{2}\/\d{4}-\d{2}\/\d{4}$/)
+        expect(result.seasonDates).toBeDefined()
+        expect(result.isActive).toBe(false)
+        expect(Object.keys(result.cookingDays)).toEqual(WEEKDAYS)
+        expect(result.holidays).toEqual([])
+        expect(result.ticketIsCancellableDaysBefore).toBe(10)
+        expect(result.diningModeIsEditableMinutesBefore).toBe(90)
     })
 })

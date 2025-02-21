@@ -6,7 +6,7 @@ import type {FormSubmitEvent} from "#ui/types"
 import {WEEKDAYS} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
-const { SeasonSchema, createSeasonName, copySeason } = useSeason()
+const {SeasonSchema, createSeasonName, copySeason} = useSeason()
 const props = defineProps<{ mode: FormMode }>()
 const model = defineModel<Season>()
 const emit = defineEmits<{ cancel: [] }>()
@@ -15,7 +15,7 @@ const state = ref<Season>(copySeason(model.value))
 const selectedDates = ref<DateRange>(state.value.seasonDates)
 
 const appConfig = useAppConfig()
-const { theslope } = appConfig //some default values
+const {theslope} = appConfig //some default values
 
 const shortName = computed({
   get: () => createSeasonName(state.value.seasonDates),
@@ -70,7 +70,28 @@ const isViewMode = computed(() => props.mode === 'view')
 </script>
 
 <template>
-  <UCard>
+  <UCard
+      class="w-full ring-none ring-0 shadow-none"
+      padding="px-0"
+      :ui="
+      {
+        rounded: 'rounded-none',
+        shadow: 'shadow-none',
+        body: {
+          padding: 'px-0',
+          base: 'ring-0',
+          shadow: 'shadow-none'
+        },
+        header: {
+          padding: 'px-0',
+          background: 'bg-violet-50 dark:bg-violet-700'
+        },
+        footer: {
+          padding: 'px-0',
+          background: 'bg-violet-50 dark:bg-violet-700'
+        }
+  }
+">
     <template #header>
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
@@ -81,17 +102,17 @@ const isViewMode = computed(() => props.mode === 'view')
 
     </template>
     <template #default>
-      <div class="flex flex-col md:flex-row gap-6">
+      <div class="flex flex-col-reverse xl:flex-row gap-2 md:gap-6">
         <!-- Form Section - Below on mobile, Left on desktop -->
-        <div class="flex-1">
+        <div class="grow">
 
           <UForm :schema="SeasonSchema" :state="state" class="space-y-4" @submit.prevent="onSubmitSeason">
-            <UFormGroup label="Kort navn" name="shortName">
+            <UFormGroup label="Sæson" name="shortName">
               <UInput disabled :model-value="shortName"/>
             </UFormGroup>
 
             <!-- Pick start and end date for the season -->
-            <CalendarDateRangePicker v-if=" !isViewMode" v-model="state.seasonDates" />
+            <CalendarDateRangePicker v-if=" !isViewMode" v-model="state.seasonDates"/>
 
             <!-- Pick weekdays for cooking -->
 
@@ -127,14 +148,12 @@ const isViewMode = computed(() => props.mode === 'view')
           </UForm>
         </div>
         <!-- Calendar Section - Above on mobile, Right on desktop -->
-        <div class="lg:w-1/3">
-          <UCard>
-            <CalendarDisplay
-                :seasonDates="state.seasonDates"
-                :cookingDays="state.cookingDays"
-                :holidays="state.holidays"
-            />
-          </UCard>
+        <div class="min-w-1/2 lg:w-1/2  grow-0">
+          <CalendarDisplay class="mx-auto"
+                           :seasonDates="state.seasonDates"
+                           :cookingDays="state.cookingDays"
+                           :holidays="state.holidays"
+          />
         </div>
       </div>
     </template>

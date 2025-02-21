@@ -67,12 +67,16 @@ export const useSeason = () => {
         return isWithinInterval(today, {start, end})
     }
 
-    const copySeason = (season: Season): Season => {
+    //Copies the season. If the season is null or undefined, a default season is returned
+    const copySeason = (season: Season|undefined|null): Season => {
+        if (!season) {
+            return getDefaultSeason()
+        }
         return {
             ...season,
             seasonDates: copyDateRange(season.seasonDates),
-            cookingDays: { ...season.cookingDays },
-            holidays: season.holidays.map(copyDateRange)
+            cookingDays:  { ...season.cookingDays },
+            holidays: season.holidays?.map(copyDateRange)
         }
     }
 

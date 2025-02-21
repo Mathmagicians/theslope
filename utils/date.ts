@@ -84,9 +84,9 @@ export function excludeDatesFromInterval(
     )
 }
 
-export function copyDateRange(range: DateRange): DateRange {
-    return {
-        start: new Date(range.start),
+export function copyDateRange(range: DateRange): DateRange|undefined {
+    return range ? {
+        start:  new Date(range.start),
         end: new Date(range.end)
-    }
+    } :  undefined
 }
