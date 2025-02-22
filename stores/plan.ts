@@ -11,6 +11,8 @@ export const usePlanStore = defineStore("Plan", () => {
     // DEPENDENCIES
     const {apiCall} = useApiHandler()
     const draftStorage = useDraftStorage()
+    const authStore = useAuthStore()
+    const {isAdmin} = storeToRefs(authStore)
 
     // STATE
     const activeSeason = ref<ApiResponse<'/api/admin/season/active', 'get'> | null>(null)
@@ -188,11 +190,13 @@ export const usePlanStore = defineStore("Plan", () => {
         activeSeason,
         selectedSeason,
         draftSeason,
+        // computed state
         isLoading,
         isNoSeasons,
         seasons,
         state,
         error,
+        disabledModes,
         // actions
         loadSeasons,
         createSeason,

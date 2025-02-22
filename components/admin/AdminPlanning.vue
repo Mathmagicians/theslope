@@ -8,7 +8,7 @@ const authStore = useAuthStore()
 const {isAdmin} = storeToRefs(authStore)
 
 const store = usePlanStore()
-const {isLoading, isNoSeasons, selectedSeason, draftSeason, seasons} = storeToRefs(store)
+const {isLoading, isNoSeasons, selectedSeason, draftSeason, seasons, disabledModes} = storeToRefs(store)
 const {loadSeasons} = store
 
 const {getDefaultSeason} = useSeason()
