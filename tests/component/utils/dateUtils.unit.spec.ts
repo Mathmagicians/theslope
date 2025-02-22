@@ -4,9 +4,10 @@ import {
     createDefaultWeekdayMap,
     eachDayOfManyIntervals,
     getEachDayOfIntervalWithSelectedWeekdays,
-    copyDateRange
+    copyPartialDateRange
 } from "~/utils/date"
 import {isValid} from "date-fns"
+
 describe('test calculateDayFromWeekNumber', async () => {
 
     const testData = [
@@ -36,7 +37,7 @@ describe('test calculateDayFromWeekNumber', async () => {
         }
     ]
     testData.forEach((data) => {
-        it("should return a date in the right week and year "+data.expected.toLocaleDateString('da'), async () => {
+        it("should return a date in the right week and year " + data.expected.toLocaleDateString('da'), async () => {
             const res = calculateDayFromWeekNumber(data.weekday, data.weekNumber, data.year)
             expect(res).toBeInstanceOf(Date)
             expect(res).toStrictEqual(data.expected)
@@ -114,8 +115,8 @@ describe('getEachDayOfIntervalWithSelectedWeekdays', () => {
 describe('eachDayOfManyIntervals', () => {
     it('should return all days from multiple intervals', () => {
         const intervals = [
-            { start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) },
-            { start: new Date(2025, 0, 5), end: new Date(2025, 0, 6) }
+            {start: new Date(2025, 0, 1), end: new Date(2025, 0, 3)},
+            {start: new Date(2025, 0, 5), end: new Date(2025, 0, 6)}
         ]
         const result = eachDayOfManyIntervals(intervals)
         expect(result).toHaveLength(5)
@@ -131,7 +132,7 @@ describe('excludeDatesFromInterval', () => {
         ]
 
         const holidays = [
-            { start: new Date(2025, 0, 13), end: new Date(2025, 0, 14) } // Excludes second Monday
+            {start: new Date(2025, 0, 13), end: new Date(2025, 0, 14)} // Excludes second Monday
         ]
 
         const result = excludeDatesFromInterval(dinnerDays, holidays)
@@ -183,27 +184,54 @@ describe('parseDate works for dd-MM-yyyy format', () => {
     })
 })
 
-describe('copyDateRange', () => {
+describe('copyPartialDateRange', () => {
     it('should preserve date values in the copy', () => {
         const original = {
             start: new Date(2024, 5, 15),
             end: new Date(2024, 6, 30)
         }
 
-        const copy = copyDateRange(original)
-
-        expect(copy.start.getTime()).toBe(original.start.getTime())
-        expect(copy.end.getTime()).toBe(original.end.getTime())
+        const copy = copyPartialDateRange(original)
+        expect(copy).not.toBeNull()
+        expect(copy).not.toBe(undefined)
+        expect(copy).not.toBe(original)
+        expect(copy?.start?.getTime()).toBe(original.start.getTime())
+        expect(copy?.end?.getTime()).toBe(original.end.getTime())
     })
-    it('should handle undefined date range', () => {
+    it('should handle partially defined date range', () => {
         const undefinedRange = {
-            start: undefined,
+            start: new Date(2024, 5, 15),
             end: undefined
         }
 
-        const copy = copyDateRange(undefinedRange)
+        const copy = copyPartialDateRange(undefinedRange)
         expect(copy).toEqual(undefinedRange)
         expect(copy).not.toBe(undefinedRange)
     })
 
+})
+
+describe('formatDateRange', () => {
+    it('should format undefined range as ?->?', () => {
+        const result = formatDateRange(undefined)
+        expect(result).toBe('?->?')
+    })
+
+    it('should format date range correctly with default mask', () => {
+        const range = {
+            start: new Date(2024, 0, 1), // January 1, 2024
+            end: new Date(2024, 11, 31)  // December 31, 2024
+        }
+        const result = formatDateRange(range)
+        expect(result).toBe('01/01/2024 - 31/12/2024')
+    })
+
+    it('should format date range with custom mask', () => {
+        const range = {
+            start: new Date(2024, 0, 1),
+            end: new Date(2024, 11, 31)
+        }
+        const result = formatDateRange(range, 'MM/yy')
+        expect(result).toBe('01/24 - 12/24')
+    })
 })

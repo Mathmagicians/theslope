@@ -1,7 +1,7 @@
 import {z} from 'zod'
-import {WEEKDAYS, type WeekDay, type WeekDayMap, type DateRange} from '@/types/dateTypes'
+import {WEEKDAYS, type DateRange} from '@/types/dateTypes'
 import {dateRangeSchema} from '@/composables/useDateRangeValidation'
-import {formatDate, calculateDayFromWeekNumber, createDefaultWeekdayMap} from '@/utils/date'
+import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange} from '@/utils/date'
 import {isWithinInterval} from "date-fns"
 
 const WeekDayMapSchema = z.record(z.enum(WEEKDAYS), z.boolean())
@@ -54,37 +54,70 @@ export const useSeason = () => {
         } satisfies Partial<Season>
     }
 
-    const createSeasonName = (dates: DateRange): string => {
-        const startMonth = dates.start.getMonth() + 1
-        const startYear = dates.start.getFullYear()
-        const endMonth = dates.end.getMonth() + 1
-        const endYear = dates.end.getFullYear()
+    const createSeasonName = (range: DateRange): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
 
-        return `Sæson ${startMonth.toString().padStart(2, '0')}/${startYear}-${endMonth.toString().padStart(2, '0')}/${endYear}`
-    }
 
     const isActive = (today: Date, start: Date, end: Date): boolean => {
         return isWithinInterval(today, {start, end})
     }
 
-    //Copies the season. If the season is null or undefined, a default season is returned
-    const copySeason = (season: Season|undefined|null): Season => {
-        if (!season) {
-            return getDefaultSeason()
-        }
-        return {
+    //Cooalesce the data from a partial season with a default season
+    const coalesceSeason = (season?: Partial<Season>, defaultSeason: Season = getDefaultSeason()): Season => {
+        return <Season>{
+            ...defaultSeason,
             ...season,
-            seasonDates: copyDateRange(season.seasonDates),
-            cookingDays:  { ...season.cookingDays },
-            holidays: season.holidays?.map(copyDateRange)
+            seasonDates: copyPartialDateRange(season?.seasonDates ?? defaultSeason.seasonDates),
+            cookingDays: {...(season?.cookingDays ?? defaultSeason.cookingDays)},
+            holidays: season?.holidays?.map(copyPartialDateRange) ?? defaultSeason.holidays
         }
     }
+
+    // we have a different represenation of season in application, but it is not how we will serialize it (dates are not serializable in JS)
+
+// In useSeason.ts
+    const SerializedSeasonSchema = SeasonSchema.extend({
+        cookingDays: z.string(),
+        holidays: z.string(),
+        seasonDates: z.object({
+            start: z.string(),
+            end: z.string()
+        })
+    })
+
+    const serializeSeason = (season: Season) => {
+        const serialized = {
+            ...season,
+            cookingDays: JSON.stringify(season.cookingDays),
+            holidays: JSON.stringify(season.holidays),
+            seasonDates: {
+                start: formatDate(season.seasonDates.start),
+                end: formatDate(season.seasonDates.end)
+            }
+        }
+        return SerializedSeasonSchema.parse(serialized)
+    }
+
+    const deserializeSeason = (data: unknown) => {
+        const parsed = SerializedSeasonSchema.parse(data)
+        return SeasonSchema.parse({
+            ...parsed,
+            cookingDays: JSON.parse(parsed.cookingDays),
+            holidays: JSON.parse(parsed.holidays),
+            seasonDates: {
+                start: parseDate(parsed.seasonDates.start),
+                end: parseDate(parsed.seasonDates.end)
+            }
+        })
+    }
+
 
     return {
         SeasonSchema,
         getDefaultSeason,
         createSeasonName,
         isActive,
-        copySeason
+        coalesceSeason,
+        serializeSeason,
+        deserializeSeason
     }
 }

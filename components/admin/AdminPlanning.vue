@@ -19,9 +19,10 @@ await loadSeasons()
 
 // STATE
 const selectedStep = ref<number>(1)
+const formMode = ref<FormMode | undefined>()
 
 // COMPUTED
-const defaultFormMode = (): FormMode | undefined => {
+const defaultFormMode = computed( (): FormMode | undefined => {
   if (!isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.VIEW)) {
     return FORM_MODES.VIEW
   } else if (isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.CREATE)) {
@@ -29,76 +30,46 @@ const defaultFormMode = (): FormMode | undefined => {
   } else {
     return undefined
   }
-}
-
-const disabledModes = computed(() => {
-  const disabledSet: Set<FormMode> = new Set()
-  if (isNoSeasons.value) {
-    disabledSet.add(FORM_MODES.EDIT)
-    disabledSet.add(FORM_MODES.VIEW)
-  }
-  if (!isAdmin.value) {
-    disabledSet.add(FORM_MODES.CREATE)
-    disabledSet.add(FORM_MODES.EDIT)
-  }
-  return [...disabledSet]
 })
 
-//STATE PART II - thanks to BLOCK TYPESCRIPT DECLARATION RULES
-const formMode = ref<FormMode | undefined>(defaultFormMode())
+
+
+const showAdminSeason = computed(() =>
+    !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE))
+
 
 //HANDLING STATE CHANGE
+const handleSeasonUpdate = (updatedSeason: Season) => {
+  // Handle season updates from child component - by delegating to store
+  console.warn("AdminPlanning > handleSeasonUpdate - not implemented", updatedSeason, draftSeason.value)
+}
+
 const onCreateSeason = () => {
-  draftSeason.value = getDefaultSeason()
-  return draftSeason
+  // Handle create season button click
+  // if CREATE is not in disableModes, let's set the formMode to CREATE
+
 }
 
-const onEditSeason = () => {
-  draftSeason.value = copySeason(selectedSeason.value)
-  return draftSeason
-}
-const onViewSeason = () => selectedSeason
+// INITIALIZATION
+formMode.value = defaultFormMode
+// VIEW STUFF
 
-const getModelForAdminSeason = computed(() => {
-  switch (formMode.value) {
-    case FORM_MODES.CREATE:
-      return onCreateSeason()
-    case FORM_MODES.EDIT:
-      return onEditSeason()
-    case FORM_MODES.VIEW:
-      return onViewSeason()
-    default:
-      console.warn("AdminPlanning > Get model for admin season - invalid form mode", formMode.value)
-      return selectedSeason
+const items = [
+  {
+    label: 'Kalender',
+    icon: 'i-heroicons-calendar',
+  },
+  {
+    label: 'Madhold',
+    icon: 'i-fluent-mdl2-team-favorite',
+  },
+  {
+    label: 'Chefkokke',
+    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
   }
-})
+]
 
-
-  const showAdminSeason = computed(()  =>
-      !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE))
-
-
-  const handleSeasonUpdate = (updatedSeason: Season) => {
-    // Handle season updates from child component
-    console.warn("AdminPlanning > handleSeasonUpdate - not implemented", updatedSeason, draftSeason.value)
-  }
-
-  const items = [
-    {
-      label: 'Kalender',
-      icon: 'i-heroicons-calendar',
-    },
-    {
-      label: 'Madhold',
-      icon: 'i-fluent-mdl2-team-favorite',
-    },
-    {
-      label: 'Chefkokke',
-      icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
-    }
-  ]
-
-  const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
+const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
 </script>
 
 <template>
@@ -147,7 +118,7 @@ const getModelForAdminSeason = computed(() => {
     </template>
     <template #default>
       <AdminSeason v-if="showAdminSeason"
-                   :v-model="getModelForAdminSeason"
+                   v-model="getModelForAdminSeason"
                    :mode="formMode"
                    @update="handleSeasonUpdate"
       />
