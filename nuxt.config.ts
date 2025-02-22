@@ -41,7 +41,7 @@ export default defineNuxtConfig({
             apiBase: '/api',
             HEY_NABO_API: process.env.NUXT_HEY_NABO_API || '' //Set in NUXT_HEYNABO_API env variable
         }
-    }
+    },
 
 
 })

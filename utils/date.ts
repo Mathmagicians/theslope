@@ -9,7 +9,8 @@ export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
         locale: da,
-        USER_MASK: 'dd/mm/åååå'
+        USER_MASK: 'dd/mm/åååå',
+        SEASON_NAME_MASK: 'MM/yy'
     }
 
 // Takes a iso week number, and a year in which the week is in, and a weekday number (0-6),
@@ -19,23 +20,28 @@ export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, 
     return addDays(firstDay, weekday)
 }
 
-export function createDateRange(start: Date, end: Date): DateRange {
+export function createDateRange(start:Date = new Date(), end:Date= new Date()): DateRange {
     return {
-        start: start,
+        start: start ,
         end: end
     }
 }
 
-export const formatDate = (date: Date | undefined) =>
-    date !== undefined && isValid(date) ? format(date, DATE_SETTINGS.DATE_MASK, {locale: DATE_SETTINGS.locale}) : ''
+export function copyPartialDateRange(range: Partial<DateRange>): Partial<DateRange> {
+    return range.start && range.end ?   createDateRange( range.start, range.end) :
+        {start: range.start ?? undefined, end: range.end ?? undefined}
+}
+
+export const formatDate = (date: Date | undefined, mask:string = DATE_SETTINGS.DATE_MASK) =>
+    date !== undefined && isValid(date) ? format(date, mask, {locale: DATE_SETTINGS.locale}) : ''
 
 export const parseDate = (dateStr: string) => {
     const parsedDate = parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
     return parsedDate
 }
 
-export function formatDateRange(range: DateRange | undefined): string {
-    return range === undefined ? '?->?' : `${formatDate(range?.start)} -> ${formatDate(range?.end)}`
+export function formatDateRange(range: DateRange | undefined, mask:string = DATE_SETTINGS.DATE_MASK): string {
+    return ! range  ? '?->?' : `${formatDate(range?.start, mask)} - ${formatDate(range?.end, mask)}`
 }
 
 export function getEachDayOfIntervalWithSelectedWeekdays(
@@ -82,11 +88,4 @@ export function excludeDatesFromInterval(
     return intervalDates.filter(date =>
         !allExcludedDates.some(excludeDate => isSameDay(date, excludeDate))
     )
-}
-
-export function copyDateRange(range: DateRange): DateRange|undefined {
-    return range ? {
-        start:  new Date(range.start),
-        end: new Date(range.end)
-    } :  undefined
 }
