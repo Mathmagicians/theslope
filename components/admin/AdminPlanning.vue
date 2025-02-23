@@ -8,21 +8,23 @@ const authStore = useAuthStore()
 const {isAdmin} = storeToRefs(authStore)
 
 const store = usePlanStore()
-const {isLoading, isNoSeasons, selectedSeason, draftSeason, seasons, disabledModes} = storeToRefs(store)
-const {loadSeasons} = store
-
-const {getDefaultSeason} = useSeason()
-
-// RETRIEVE DATA FROM STORE
-await loadSeasons()
-
+const {
+  formMode,
+  isLoading,
+  isNoSeasons,
+  selectedSeason,
+  draftSeason,
+  seasons,
+  disabledModes,
+  getModel
+} = storeToRefs(store)
+const {init} = store
 
 // STATE
 const selectedStep = ref<number>(1)
-const formMode = ref<FormMode | undefined>()
 
 // COMPUTED
-const defaultFormMode = computed( (): FormMode | undefined => {
+const defaultFormMode = computed((): FormMode | undefined => {
   if (!isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.VIEW)) {
     return FORM_MODES.VIEW
   } else if (isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.CREATE)) {
@@ -31,8 +33,6 @@ const defaultFormMode = computed( (): FormMode | undefined => {
     return undefined
   }
 })
-
-
 
 const showAdminSeason = computed(() =>
     !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE))
@@ -45,13 +45,13 @@ const handleSeasonUpdate = (updatedSeason: Season) => {
 }
 
 const onCreateSeason = () => {
-  // Handle create season button click
-  // if CREATE is not in disableModes, let's set the formMode to CREATE
-
+  if (disabledModes.value.includes(FORM_MODES.CREATE)) return
+  formMode.value = FORM_MODES.CREATE
 }
 
 // INITIALIZATION
-formMode.value = defaultFormMode
+await init(defaultFormMode.value)
+
 // VIEW STUFF
 
 const items = [
@@ -117,14 +117,12 @@ const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
       </div>
     </template>
     <template #default>
-      <AdminSeason v-if="showAdminSeason"
-                   v-model="getModelForAdminSeason"
+      <AdminSeason v-if=" showAdminSeason"
+                   v-model="getModel.value"
                    :mode="formMode"
                    @update="handleSeasonUpdate"
       />
-      <Loader v-else-if="isLoading" text="Fællesspisning Sæson">
-
-      </Loader>
+      <Loader v-else-if="isLoading" text="Fællesspisning Sæson" />
       <div v-else
            class="flex flex-col items-center justify-center space-y-4">
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>

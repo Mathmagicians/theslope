@@ -7,15 +7,15 @@ import type { FormMode } from "~/types/form"
 
 const { SeasonSchema, createSeasonName } = useSeason()
 const props = defineProps<{ mode: FormMode }>()
-const model = defineModel<Season>()
+const model = defineModel<Season>({ required: true })
 const emit = defineEmits<{ cancel: [] }>()
 
-const selectedDates = ref<DateRange>(model.value?.seasonDates ?? createDateRange(new Date(), new Date()))
+//const selectedDates = ref<DateRange>(model.value?.seasonDates ?? createDateRange(new Date(), new Date()))
 
 const appConfig = useAppConfig()
 const { theslope } = appConfig //some default values
 
-const shortName = computed(() => createSeasonName(model.value?.seasonDates))
+const shortName = computed(() => createSeasonName(model.value.seasonDates))
 
 const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
   console.info('📆 > AdminSeason > onSubmit', event.data)
@@ -45,14 +45,13 @@ const buttonText = computed(() => {
       return 'Opret ny sæson'
     case 'edit':
       return 'Gem ændringer'
-    case 'view':
-      return 'Vis sæson'
     default:
-      throw new Error(`Invalid form mode: ${props.mode}`)
+      return 'OK'
   }
 })
 
 const isViewMode = computed(() => props.mode === 'view')
+console.log("AdminSeason > intialization done, formMode,  model", props.mode, model.value.shortName, model.value.seasonDates)
 </script>
 
 <template>
@@ -77,6 +76,7 @@ const isViewMode = computed(() => props.mode === 'view')
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
         <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
+        <p>Debug: {{ modelValue.shortName }}</p>
       </h3>
     </template>
 
@@ -93,7 +93,7 @@ const isViewMode = computed(() => props.mode === 'view')
             <CalendarDateRangePicker v-if="!isViewMode" v-model="model.seasonDates" />
 
             <!-- Pick weekdays for cooking -->
-            <UFormGroup label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays">
+            <UFormGroup  label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays">
               <UCheckbox v-for="day in WEEKDAYS" :key="day"
                          v-model="model.cookingDays[day]"
                          :label="day"
