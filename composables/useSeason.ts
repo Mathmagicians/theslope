@@ -31,9 +31,10 @@ export type Season = z.infer<typeof SeasonSchema>
 
 
 export const useSeason = () => {
+    const appConfig = useAppConfig()
+    const {theslope} = appConfig
     const getDefaultSeason = () => {
-        const appConfig = useAppConfig()
-        const {theslope} = appConfig
+
         const thisYear = new Date().getFullYear()
         const defaultCookingDaysArray = WEEKDAYS.map(day =>
             theslope.defaultCookingDays.includes(day)
@@ -54,7 +55,7 @@ export const useSeason = () => {
         } satisfies Partial<Season>
     }
 
-    const createSeasonName = (range: DateRange): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
+    const createSeasonName = (range: DateRange|undefined): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
 
 
     const isActive = (today: Date, start: Date, end: Date): boolean => {

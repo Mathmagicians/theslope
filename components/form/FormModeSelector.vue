@@ -45,6 +45,16 @@ const handleSelect = (selected: FormMode): void => {
 }
 
 const isSelected = (mode: FormMode):boolean => model.value === mode
+
+const getButtonVariant = (mode: FormMode) => {
+  if(  isDisabled(mode) ) {
+    return 'ghost'
+  } else {
+    return isSelected(mode) ? 'solid' : 'outline'
+  }
+}
+
+
 </script>
 
 <template>
@@ -55,7 +65,7 @@ const isSelected = (mode: FormMode):boolean => model.value === mode
         :value="item.mode"
         :disabled="isDisabled(item.mode)"
         :active="isSelected(item.mode)"
-        :variant="isSelected(item.mode) ? 'solid': 'outline'"
+        :variant="getButtonVariant(item.mode)"
         color="orange"
         active-class="ring-2 border-2 ring-orange-200 shadow-md"
         @click="handleSelect(item.mode)"
