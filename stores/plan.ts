@@ -1,7 +1,8 @@
 import {type InternalApi} from "nitropack";
 import {type Season} from '~/composables/useSeason'
 import {FORM_MODES, type FormMode, STORE_STATES, type StoreState} from '~/types/form'
-import type {ApiResponse} from "~/composables/ApiResponse";
+import type {ApiResponse} from "~/composables/ApiResponse"
+import {useDebounceFn} from '@vueuse/core'
 
 type SeasonsApiResponse = InternalApi['/api/admin/season']['get']
 
@@ -9,9 +10,10 @@ export const usePlanStore = defineStore("Plan", () => {
     // DEPENDENCIES
     const {apiCall} = useApiHandler()
     const draftStorage = useDraftStorage()
-    const  {getDefaultSeason, coalesceSeason}  = useSeason()
+    const {getDefaultSeason, coalesceSeason} = useSeason()
     const authStore = useAuthStore()
     const {isAdmin} = storeToRefs(authStore)
+
 
     // STATE
     const activeSeason = ref<ApiResponse<'/api/admin/season/active', 'get'> | null>(null)
@@ -106,6 +108,20 @@ export const usePlanStore = defineStore("Plan", () => {
         }
     }
 
+    const debouncedSave = useDebounceFn(async () => {
+        if (draftSeason.value && isShouldUseDraft.value) {
+            return draftStorage.saveDraft({
+                state: state.value,
+                season: draftSeason.value
+            })
+                .then(() => console.debug('Draft saved successfully'))
+                .catch(() => console.info('promise cancelled by debounce'))
+                .catch((error: Error) => {
+                    console.error('Failed to save draft:', error)
+                })
+        }
+    }, 1000)
+
     // Initialize draft season
     const initDraft = async () => {
         const stored = await draftStorage.loadDraft()
@@ -128,23 +144,26 @@ export const usePlanStore = defineStore("Plan", () => {
 
     const viewSeason = () => selectedSeason
 
-    const getModel = computed(( ) => {
+    const getModel = computed(() => {
         console.info("??PlanStore > getModel, mode, state, draft, view", formMode.value, state.value, draftSeason.value?.shortName, viewSeason().value?.shortName)
         switch (state.value) {
-            case STORE_STATES.CREATE: return draftSeason
-            case STORE_STATES.EDIT: return draftSeason
-            case STORE_STATES.VIEW_SELECTED: return viewSeason()
+            case STORE_STATES.CREATE:
+                return draftSeason
+            case STORE_STATES.EDIT:
+                return draftSeason
+            case STORE_STATES.VIEW_SELECTED:
+                return viewSeason()
             default:
                 return viewSeason()
         }
     })
 
     const onEnterCreate = async () => {
-        console.info('📆PLAN > onEnterCreate > mode, state, draft',  formMode.value, state.value,draftSeason.value?.shortName)
+        console.info('📆PLAN > onEnterCreate > mode, state, draft', formMode.value, state.value, draftSeason.value?.shortName)
         state.value = STORE_STATES.CREATE
         draftSeason.value = coalesceSeason(draftSeason.value)
         await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
-        console.info('📆PLAN > onEnterCreate > mode, state, draftSeason',  formMode.value, state.value,draftSeason.value?.shortName)
+        console.info('📆PLAN > onEnterCreate > mode, state, draftSeason', formMode.value, state.value, draftSeason.value?.shortName)
     }
 
     const onEnterEdit = async () => {
@@ -155,15 +174,18 @@ export const usePlanStore = defineStore("Plan", () => {
     }
 
     const onEnterView = async () => {
-        state.value =  isNoSeasons ? STORE_STATES.VIEW_NO_SEASONS:  STORE_STATES.VIEW_SELECTED
+        state.value = isNoSeasons ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
         draftSeason.value = null
         await draftStorage.clearDraft()
     }
     const onModeChange = async (mode: FormMode) => {
         switch (mode) {
-            case FORM_MODES.CREATE: return onEnterCreate()
-            case FORM_MODES.EDIT: return onEnterEdit()
-            case FORM_MODES.VIEW: return onEnterView()
+            case FORM_MODES.CREATE:
+                return onEnterCreate()
+            case FORM_MODES.EDIT:
+                return onEnterEdit()
+            case FORM_MODES.VIEW:
+                return onEnterView()
             default:
                 console.warn("PlanStore > onEnter - invalid form mode", mode)
         }
@@ -198,7 +220,7 @@ export const usePlanStore = defineStore("Plan", () => {
     // WATCH FOR CHANGES
     watch(draftSeason, async (newDraft) => {
         if (newDraft && isShouldUseDraft.value) {
-            await draftStorage.saveDraft({state: state.value, season: newDraft})
+            debouncedSave()
         }
     }, {deep: true})
 

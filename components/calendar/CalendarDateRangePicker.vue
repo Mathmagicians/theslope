@@ -2,9 +2,13 @@
 import type {DateRange} from "~/types/dateTypes";
 import {DATE_SETTINGS, formatDateRange} from "~/utils/date";
 import {inject, Ref} from "vue";
+import {FormMode} from "~/types/form";
 
 
 const model = defineModel<DateRange>({required: true})
+const props = withDefaults(defineProps<{ debug?: boolean }>(),  {
+  debug: false
+})
 const errors = ref<Map<string, string[]>>(new Map())
 
 const inputState = ref({
@@ -94,8 +98,9 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
                 </template>
               </UInput>
             </UFormGroup>
-            <p>CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is: {{ inputState }} </p>
+            <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is: {{ inputState }} </p>
             <UButton
+                v-if="props.debug"
                 class="p-2 bg-blue-500 text-sm text-white font-semibold rounded-md"
                 @click="togglePopover"
                 icon="i-heroicons-calendar"

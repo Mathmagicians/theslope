@@ -87,4 +87,32 @@ describe('dateRangeSchema', () => {
         expect(result?.error?.format()._errors?.length).toBe(1)
         expect(result?.error?.format()._errors.some( (e) => e.startsWith('Wow, wow, lidt for meget planlægning'))).toBe(true)
     })
+
+    it('should accept both Date objects and formatted strings', () => {
+        const dateInput = {
+            start: new Date(2025, 0, 25),
+            end: new Date(2025, 0, 26)
+        }
+
+        const stringInput = {
+            start: '25/01/2025',
+            end: '26/01/2025'
+        }
+
+        // Test Date objects
+        const dateResult = dateRangeSchema.safeParse(dateInput)
+        expect(dateResult.success).toBe(true)
+        if (dateResult.success) {
+            expect(dateResult.data.start).toEqual(dateInput.start)
+            expect(dateResult.data.end).toEqual(dateInput.end)
+        }
+
+        // Test formatted strings
+        const stringResult = dateRangeSchema.safeParse(stringInput)
+        expect(stringResult.success).toBe(true)
+        if (stringResult.success) {
+            expect(stringResult.data.start).toEqual(dateInput.start)
+            expect(stringResult.data.end).toEqual(dateInput.end)
+        }
+    })
 })

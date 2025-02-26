@@ -47,6 +47,33 @@ describe('useSeasonSchema', () => {
         expect(isActive(start, start, end)).toBe(true)
         expect(isActive(end, start, end)).toBe(true)
     })
+
+    it('should accept both Date and string formats for seasonDates and holidays', () => {
+        const validSeason = {
+            shortName: "Test 2025",
+            seasonDates: {
+                start: "01/01/2025",
+                end: "31/01/2025"
+            },
+            isActive: true,
+            cookingDays: createDefaultWeekdayMap(true),
+            holidays: [
+                {
+                    start: new Date(2025, 0, 5),
+                    end: new Date(2025, 0, 10)
+                },
+                {
+                    start: "15/01/2025",
+                    end: "20/01/2025"
+                }
+            ],
+            ticketIsCancellableDaysBefore: 7,
+            diningModeIsEditableMinutesBefore: 720
+        }
+
+        const result = SeasonSchema.safeParse(validSeason)
+        expect(result.success).toBe(true)
+    })
 })
 
 
@@ -147,5 +174,77 @@ describe('season serialization', () => {
 
         const result = SeasonSchema.safeParse(deserialized)
         expect(result.success).toBe(true)
+    })
+})
+
+describe('holiday validations', () => {
+    const { SeasonSchema } = useSeason()
+
+    const january2025 = createDateRange(
+        new Date(2025, 0, 1),
+        new Date(2025, 0, 31)
+    )
+
+    it('should accept non-overlapping holidays within season', () => {
+        const validSeason = {
+            shortName: "Test 2025",
+            seasonDates: january2025,
+            isActive: true,
+            cookingDays: createDefaultWeekdayMap(true),
+            holidays: [
+                createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 5)),
+                createDateRange(new Date(2025, 0, 10), new Date(2025, 0, 15)),
+                createDateRange(new Date(2025, 0, 20), new Date(2025, 0, 25))
+            ],
+            ticketIsCancellableDaysBefore: 7,
+            diningModeIsEditableMinutesBefore: 720
+        }
+
+        const result = SeasonSchema.safeParse(validSeason)
+        expect(result.success).toBe(true)
+    })
+
+    it('should reject overlapping holidays', () => {
+        const seasonWithOverlappingHolidays = {
+            shortName: "Test 2025",
+            seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
+            isActive: true,
+            cookingDays:  createDefaultWeekdayMap(true),
+            holidays: [
+                { start: new Date(2025, 0, 1), end: new Date(2025, 0, 10) },
+                { start: new Date(2025, 0, 5), end: new Date(2025, 0, 15) },
+                { start: new Date(2025, 0, 20), end: new Date(2025, 0, 25) }
+            ],
+            ticketIsCancellableDaysBefore: 7,
+            diningModeIsEditableMinutesBefore: 720
+        }
+
+        const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.errors[0].message).toBe("Ferieperioder må ikke overlappe hinanden")
+        }
+    })
+
+    it('should reject holidays outside season', () => {
+        const seasonWithOutsideHolidays = {
+            shortName: "Test 2025",
+            seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
+            isActive: true,
+            cookingDays: createDefaultWeekdayMap(true),
+            holidays: [
+                { start: new Date(2024, 11, 25), end: new Date(2025, 0, 5) },
+                { start: new Date(2025, 0, 10), end: new Date(2025, 0, 15) },
+                { start: new Date(2025, 0, 20), end: new Date(2025, 1, 5) }
+            ],
+            ticketIsCancellableDaysBefore: 7,
+            diningModeIsEditableMinutesBefore: 720
+        }
+
+        const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.errors[0].message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        }
     })
 })
