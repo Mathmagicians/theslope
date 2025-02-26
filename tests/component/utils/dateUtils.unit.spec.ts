@@ -4,9 +4,10 @@ import {
     createDefaultWeekdayMap,
     eachDayOfManyIntervals,
     getEachDayOfIntervalWithSelectedWeekdays,
-    copyPartialDateRange
+    copyPartialDateRange, isDateRangeInside
 } from "~/utils/date"
 import {isValid} from "date-fns"
+import type {DateRange} from "~/types/dateTypes";
 
 describe('test calculateDayFromWeekNumber', async () => {
 
@@ -234,4 +235,74 @@ describe('formatDateRange', () => {
         const result = formatDateRange(range, 'MM/yy')
         expect(result).toBe('01/24 - 12/24')
     })
+})
+
+describe('isDateRangeInside', () => {
+    it('should return true when range is inside base range', () => {
+        const base: DateRange = {
+            start: parseDate('01/08/2024'),
+            end: parseDate('25/06/2025')
+        }
+        const range: DateRange = {
+            start: parseDate('26/01/2025'),
+            end: parseDate('28/01/2025')
+        }
+
+        expect(isDateRangeInside(base, range)).toBe(true)
+    })
+
+    it('should return false when base range is smaller than test range', () => {
+        const base: DateRange = {
+            start: parseDate('26/01/2025'),
+            end: parseDate('28/01/2025')
+        }
+        const range: DateRange = {
+            start: parseDate('01/08/2024'),
+            end: parseDate('25/06/2025')
+        }
+
+        expect(isDateRangeInside(base, range)).toBe(false)
+    })
+})
+
+describe('areRangesOverlapping', () => {
+    it('should return false when ranges do not overlap', () => {
+        const ranges: DateRange[] = [
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025
+                new Date(2025, 0, 5)   // Jan 5, 2025
+            ),
+            createDateRange(
+                new Date(2025, 0, 6),  // Jan 6, 2025
+                new Date(2025, 0, 10)  // Jan 10, 2025
+            )
+        ]
+        expect(areRangesOverlapping(ranges)).toBe(false)
+        const range_of3 = [... ranges, createDateRange(
+            new Date(2024, 0, 1),  // Jan 1, 2026
+            new Date(2024, 0, 5) )]  // Jan 5, 2026
+
+        expect(areRangesOverlapping(range_of3)).toBe(false)
+    })
+
+    it('should return true when ranges overlap', () => {
+        const ranges: DateRange[] = [
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025
+                new Date(2025, 0, 7)   // Jan 7, 2025
+            ),
+            createDateRange(
+                new Date(2025, 0, 6),  // Jan 6, 2025
+                new Date(2025, 0, 10)  // Jan 10, 2025
+            )
+        ]
+        expect(areRangesOverlapping(ranges)).toBe(true)
+
+        const range_of3 = [... ranges, createDateRange(
+            new Date(2024, 0, 1),
+            new Date(2024, 0, 5) )]
+        expect(areRangesOverlapping(range_of3)).toBe(true)
+        expect(areRangesOverlapping(range_of3.reverse())).toBe(true)
+    })
+
 })

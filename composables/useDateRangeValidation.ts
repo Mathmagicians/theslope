@@ -11,14 +11,31 @@ const dateSchema = z.string({
     .refine((date) => isValid(date), {
         message: 'Ugyldig dato'
     })
-export const dateRangeSchema = z.object({
-    start: dateSchema.pipe(z.date().describe('Startdato')),
-    end: dateSchema.pipe(z.date().describe('Slutdato'))
-}).refine((data) => data.start <= data.end, {
+
+const baseDateRangeSchema = z.object({
+    start: z.date().describe('Startdato'),
+    end: z.date().describe('Slutdato')
+})
+
+const stringDateRangeSchema = z.object({
+    start: dateSchema,
+    end: dateSchema
+})
+
+export const dateRangeSchema = z.union([
+    stringDateRangeSchema,
+    baseDateRangeSchema
+]).refine((data) => data.start <= data.end, {
     message: 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
 }).refine((data) => (intervalToDuration(data).years ?? 0) < 1, {
     message: 'Wow, wow, lidt for meget planlægning - max et år ad gangen'
 })
+
+
+//z.object({
+//start: dateSchema.pipe(z.date().describe('Startdato')),
+//end: dateSchema.pipe(z.date().describe('Slutdato'))
+
 
 type RangeAsStrings = {start: string, end: string}
 

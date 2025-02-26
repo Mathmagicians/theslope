@@ -1,25 +1,23 @@
 <script setup lang="ts">
-import { useSeason } from "~/composables/useSeason"
-import type { Season } from "~/composables/useSeason"
-import type { FormSubmitEvent } from "#ui/types"
-import { type DateRange, WEEKDAYS } from "~/types/dateTypes"
-import type { FormMode } from "~/types/form"
+import type {Season} from "~/composables/useSeason"
+import type {FormSubmitEvent} from "#ui/types"
+import {type DateRange, WEEKDAYS} from "~/types/dateTypes"
+import type {FormMode} from "~/types/form"
 
-const { SeasonSchema, createSeasonName } = useSeason()
+//COMPONENT DEPENDENCIES
+const {SeasonSchema, createSeasonName} = useSeason()
+const appConfig = useAppConfig()
+const {theslope} = appConfig //some default values
+
+// COMPONENT DEFINITION
 const props = defineProps<{ mode: FormMode }>()
-const model = defineModel<Season>({ required: true })
+const model = defineModel<Season>({required: true})
 const emit = defineEmits<{ cancel: [] }>()
 
-//const selectedDates = ref<DateRange>(model.value?.seasonDates ?? createDateRange(new Date(), new Date()))
-
-const appConfig = useAppConfig()
-const { theslope } = appConfig //some default values
-
+// COMPUTED STATE
 const shortName = computed(() => createSeasonName(model.value.seasonDates))
 
-const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
-  console.info('📆 > AdminSeason > onSubmit', event.data)
-}
+const isViewMode = computed(() => props.mode === 'view')
 
 const formTitle = computed(() => {
   let action: string
@@ -39,6 +37,13 @@ const formTitle = computed(() => {
   return `${action} fællesspisning sæson`
 })
 
+// ACTIONS
+const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
+  console.info('📆 > AdminSeason > onSubmit', event.data)
+}
+
+
+// UI METHODS
 const buttonText = computed(() => {
   switch (props.mode) {
     case 'create':
@@ -50,7 +55,6 @@ const buttonText = computed(() => {
   }
 })
 
-const isViewMode = computed(() => props.mode === 'view')
 console.log("AdminSeason > intialization done, formMode,  model", props.mode, model.value.shortName, model.value.seasonDates)
 </script>
 
@@ -76,7 +80,7 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
         <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
-        <p>Debug: {{ modelValue.shortName }}</p>
+        <span>Debug: {{ modelValue.shortName }}</span>
       </h3>
     </template>
 
@@ -86,36 +90,62 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
         <div class="grow">
           <UForm :schema="SeasonSchema" :state="model" class="space-y-4" @submit.prevent="onSubmitSeason">
             <UFormGroup label="Sæson" name="shortName">
-              <UInput disabled :model-value="shortName" />
+              <UInput disabled
+                      name="seasonShortName"
+                      :model-value="shortName"/>
             </UFormGroup>
 
-            <!-- Pick start and end date for the season -->
-            <CalendarDateRangePicker v-if="!isViewMode" v-model="model.seasonDates" />
+            <!-- Season date picker -->
+            <CalendarDateRangePicker
+                v-if="!isViewMode"
+                name="seasonDates"
+                v-model="model.seasonDates"/>
 
             <!-- Pick weekdays for cooking -->
-            <UFormGroup  label="Hvilke ugedage skal der være fællesspisning?" name="cookingDays">
-              <UCheckbox v-for="day in WEEKDAYS" :key="day"
+            <UFormGroup label="Hvilke ugedage skal der være fællesspisning?"
+                        name="cookingDaysGroup">
+              <UCheckbox v-for="day in WEEKDAYS"
+                         :key="day"
+                         :name="`cookingDay-${day}`"
                          v-model="model.cookingDays[day]"
                          :label="day"
                          class="capitalize"
-                         :disabled="isViewMode" />
+                         :disabled="isViewMode"/>
             </UFormGroup>
 
-            <UDivider />
+            <!-- Pick holidays -->
+            <UDivider/>
+            <UFormGroup label="Hvornår holder fællesspisning fri?"
+                        name="holidaysGroup">
+
+              <CalendarDateRangeListPicker
+                name="holidays"
+                v-model="model.holidays"
+                disabled:="isViewMode"
+              />
+
+            </UFormGroup>
+
+            <UDivider/>
 
             <!-- Ticket settings -->
-            <UFormGroup label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
-                        name="cancellable">
-              <UInput v-model="model.ticketIsCancellableDaysBefore"
-                      type="number"
-                      :disabled="isViewMode" />
+            <UFormGroup
+                label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
+                name="cancellableGroup">
+              <UInput
+                  v-model="model.ticketIsCancellableDaysBefore"
+                  name="cancellableDays"
+                  type="number"
+                  :disabled="isViewMode"/>
             </UFormGroup>
 
             <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
-                        name="editable">
-              <UInput v-model="model.diningModeIsEditableMinutesBefore"
-                      type="number"
-                      :disabled="isViewMode" />
+                        name="editableGroup">
+              <UInput
+                  v-model="model.diningModeIsEditableMinutesBefore"
+                  name="editableMinutes"
+                  type="number"
+                  :disabled="isViewMode"/>
             </UFormGroup>
           </UForm>
         </div>
@@ -125,14 +155,14 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
           <CalendarDisplay class="mx-auto"
                            :seasonDates="model.seasonDates"
                            :cookingDays="model.cookingDays"
-                           :holidays="model.holidays" />
+                           :holidays="model.holidays"/>
         </div>
       </div>
     </template>
 
     <template #footer>
       <div v-if="!isViewMode" class="flex justify-end gap-4">
-        <UButton color="gray" variant="soft" @click="$emit('cancel')">
+        <UButton color="gray" variant="soft" @click="emit('cancel')">
           Annuller
         </UButton>
         <UButton type="submit" color="pink" icon="i-heroicons-calendar">

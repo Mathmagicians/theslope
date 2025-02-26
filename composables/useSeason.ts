@@ -6,20 +6,19 @@ import {isWithinInterval} from "date-fns"
 
 const WeekDayMapSchema = z.record(z.enum(WEEKDAYS), z.boolean())
     .refine((map) => Object.values(map).some(v => v), {
-        message: "At least one cooking day must be selected"
+        message: "Man skal lave mad mindst en dag om ugen"
     })
 
-export const holidaysSchema = z.array(dateRangeSchema).default([])
+export const holidaysSchema = z.array(dateRangeSchema)
+    .default([])
+    .refine((holidays) => !areRangesOverlapping(holidays), {
+        message: "Ferieperioder må ikke overlappe hinanden"
+    })
 
-export const SeasonSchema = z.object({
+export const BaseSeasonSchema = z.object({
     id: z.string().optional(),
     shortName: z.string().min(4),
-    seasonDates: z.union([dateRangeSchema, z.object({
-        start: z.date(),
-        end: z.date()
-    })]).refine((data) => data.start <= data.end, {
-        message: 'Season end date must be after start date'
-    }),
+    seasonDates: dateRangeSchema,
     isActive: z.boolean(),
     cookingDays: WeekDayMapSchema,
     holidays: holidaysSchema,
@@ -27,7 +26,25 @@ export const SeasonSchema = z.object({
     diningModeIsEditableMinutesBefore: z.number().min(0).max(1440)
 })
 
+    export const SeasonSchema = BaseSeasonSchema.refine((data) => data.holidays.every(holiday => isDateRangeInside(data.seasonDates, holiday)), {
+    message: "Ferieperioder skal være inden for fællesspisningssæsonen",
+    path: ["holidays"]
+})
+
 export type Season = z.infer<typeof SeasonSchema>
+
+export const SerializedSeasonSchema = SeasonSchema.transform((season) => ({
+    ...season,
+    cookingDays: JSON.stringify(season.cookingDays),
+    holidays: JSON.stringify(season.holidays.map(holiday => ({
+        start: formatDate(holiday.start),
+        end: formatDate(holiday.end)
+    }))),
+    seasonDates: {
+        start: formatDate(season.seasonDates.start),
+        end: formatDate(season.seasonDates.end)
+    }
+}))
 
 
 export const useSeason = () => {
@@ -55,7 +72,7 @@ export const useSeason = () => {
         } satisfies Partial<Season>
     }
 
-    const createSeasonName = (range: DateRange|undefined): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
+    const createSeasonName = (range: DateRange | undefined): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
 
 
     const isActive = (today: Date, start: Date, end: Date): boolean => {
@@ -73,44 +90,24 @@ export const useSeason = () => {
         }
     }
 
-    // we have a different represenation of season in application, but it is not how we will serialize it (dates are not serializable in JS)
-
-// In useSeason.ts
-    const SerializedSeasonSchema = SeasonSchema.extend({
-        cookingDays: z.string(),
-        holidays: z.string(),
-        seasonDates: z.object({
-            start: z.string(),
-            end: z.string()
-        })
-    })
-
-    const serializeSeason = (season: Season) => {
-        const serialized = {
-            ...season,
-            cookingDays: JSON.stringify(season.cookingDays),
-            holidays: JSON.stringify(season.holidays),
-            seasonDates: {
-                start: formatDate(season.seasonDates.start),
-                end: formatDate(season.seasonDates.end)
-            }
-        }
-        return SerializedSeasonSchema.parse(serialized)
-    }
+//Used to prepare the season for storage, requieres to have the types with date ranges transformed to strings
+    const serializeSeason = (season: Season) => SerializedSeasonSchema.parse(season)
 
     const deserializeSeason = (data: unknown) => {
-        const parsed = SerializedSeasonSchema.parse(data)
-        return SeasonSchema.parse({
-            ...parsed,
-            cookingDays: JSON.parse(parsed.cookingDays),
-            holidays: JSON.parse(parsed.holidays),
+        const serialized = data as Record<string, any>
+        return {
+            ...serialized,
+            cookingDays: JSON.parse(serialized.cookingDays),
+            holidays: JSON.parse(serialized.holidays).map((holiday: any) => ({
+                start: parseDate(holiday.start),
+                end: parseDate(holiday.end)
+            })),
             seasonDates: {
-                start: parseDate(parsed.seasonDates.start),
-                end: parseDate(parsed.seasonDates.end)
+                start: parseDate(serialized.seasonDates.start),
+                end: parseDate(serialized.seasonDates.end)
             }
-        })
+        }
     }
-
 
     return {
         SeasonSchema,

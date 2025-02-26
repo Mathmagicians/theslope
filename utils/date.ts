@@ -1,6 +1,7 @@
 import {
-    addDays,  setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
-    isValid, parse, format} from "date-fns"
+    addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
+    isValid, parse, format, isWithinInterval, areIntervalsOverlapping
+} from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
@@ -88,4 +89,21 @@ export function excludeDatesFromInterval(
     return intervalDates.filter(date =>
         !allExcludedDates.some(excludeDate => isSameDay(date, excludeDate))
     )
+}
+
+export function isDateRangeInside(base: DateRange, other: DateRange): boolean {
+    return isWithinInterval(other.start, base) && isWithinInterval(other.end, base)
+}
+
+export function compareDateRanges(a: DateRange, b: DateRange): number {
+    return a.start.getTime() - b.start.getTime()
+}
+export function areRangesOverlapping(ranges: DateRange[]): boolean {
+    if(ranges.length < 2) return false
+   return  ranges.sort(compareDateRanges)
+       .reduce((acc, current, index, sorted) => {
+            if(index === 0) return acc
+           return acc || areIntervalsOverlapping(sorted[index-1], current)
+       }, false)
+
 }
