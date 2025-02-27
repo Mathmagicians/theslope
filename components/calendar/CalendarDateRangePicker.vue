@@ -1,41 +1,106 @@
 <script setup lang="ts">
-import type {DateRange} from "~/types/dateTypes";
-import {DATE_SETTINGS, formatDateRange} from "~/utils/date";
-import {inject, Ref} from "vue";
-import {FormMode} from "~/types/form";
+import type {DateRange} from "~/types/dateTypes"
+import {DATE_SETTINGS, formatDateRange} from "~/utils/date"
+import {inject, type Ref} from "vue"
+import {mapZodErrorsToFormErrors} from "~/utils/validtation";
 
+// TYPES
+type DateRangeInput = {
+  start: string;
+  end: string;
+}
 
+// COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
-const props = withDefaults(defineProps<{ debug?: boolean }>(),  {
+const props = withDefaults(defineProps<{ debug?: boolean }>(), {
   debug: false
 })
+const emit = defineEmits(['update:model-value', 'close'])
+
+// STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
-const inputState = ref({
+const inputState: Ref<DateRangeInput>  = ref({
   start: formatDate(model.value.start),
   end: formatDate(model.value.end)
 })
 
-const emit = defineEmits(['update:model-value', 'close'])
+// COMPUTED STATE
 
-const dates = computed({
+const pickerDateRange = computed({
   get: () => model.value,
   set: (value) => {
-    if(value) {
-      emit('update:model-value', value)
+    if (value) {
+      // Update model and inputState
+      updateDateRange(value)
       emit('close')
     }
   }
 })
 
-const handleInputChange = (value: string, key: keyof DateRange) => {
-  const newRange = {
-    ...model.value,
-    [key]: parseDate(value)
-  }
-  model.value = newRange
-  errors.value = validateDateRange(inputState.value).errors
+// DEBUG LOGGING
+if (props.debug) {
+  console.log('CalendarDateRangePicker > Initialization:', {
+    modelValue: {
+      start: model.value?.start instanceof Date ? 'Date' : typeof model.value?.start,
+      end: model.value?.end instanceof Date ? 'Date' : typeof model.value?.end,
+      raw: formatDateRange(model.value)
+    },
+    inputState: inputState.value
+  })
 }
+
+// ACTIONS
+const updateDateRange = (newRange: DateRange) => {
+  const validation = dateRangeSchema.safeParse(newRange)
+  if(validation.success) {
+    model.value = newRange
+    inputState.value = {
+      start: formatDate(newRange.start),
+      end: formatDate(newRange.end)
+    }
+    emit('update:model-value', newRange)
+    // Clear errors
+    errors.value.clear()
+    return true
+  }
+  // Set errors properly from validation
+  const errorMap = mapZodErrorsToFormErrors(validation.error)
+  errors.value.clear()
+  errorMap.forEach((value, key) => {
+    errors.value.set(key, value)
+  })
+  return false
+}
+
+const handleInputChange = (value: string, key: keyof DateRange) => {
+  // Update the input field
+  inputState.value[key] = value
+  
+  // Create an object to validate with stringDateRangeSchema
+  const stringRange = {
+    start: key === 'start' ? value : inputState.value.start,
+    end: key === 'end' ? value : inputState.value.end
+  }
+  
+  // Validate using the string schema first
+  const validation = stringDateRangeSchema.safeParse(stringRange)
+  
+  if (validation.success) {
+    // If validation passes, update with the transformed dates
+    updateDateRange(validation.data)
+  } else {
+    // If validation fails, map the errors
+    const errorMap = mapZodErrorsToFormErrors(validation.error)
+    errors.value.clear()
+    errorMap.forEach((value, key) => {
+      errors.value.set(key, value)
+    })
+  }
+}
+
+// handlePickerChange is no longer needed as we're using the computed dates property
+
 const formatLabel = (key: keyof DateRange): string => {
   switch (key) {
     case 'start':
@@ -58,11 +123,15 @@ function onDayClick(_: any, event: MouseEvent): void {
   target.blur() //unfocus the clicked element
 }
 
-watch(model, async (newModelValue:DateRange, oldModelValue:DateRange) => {
-  const newDateStringRange = { start:formatDate(newModelValue.start), end:formatDate(newModelValue.end)}
-  inputState.value = newDateStringRange
-  errors.value = validateDateRange(inputState.value).errors
-})
+// Watch for external model changes
+watch(() => model.value, (newModelValue) => {
+  if (newModelValue) {
+    inputState.value = {
+      start: formatDate(newModelValue.start),
+      end: formatDate(newModelValue.end)
+    }
+  }
+}, { deep: true })
 
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
@@ -73,7 +142,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
   <div>
     <client-only>
       <VDatePicker
-          v-model.range="dates"
+          v-model.range="pickerDateRange"
           isrange
           :columns="getIsMd ? 2: 1"
           v-bind="{ ...attrs, ...$attrs }"
@@ -98,7 +167,8 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
                 </template>
               </UInput>
             </UFormGroup>
-            <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is: {{ inputState }} </p>
+            <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is:
+              {{ inputState }} </p>
             <UButton
                 v-if="props.debug"
                 class="p-2 bg-blue-500 text-sm text-white font-semibold rounded-md"
