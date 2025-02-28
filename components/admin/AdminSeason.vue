@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeason"
 import type {FormSubmitEvent} from "#ui/types"
-import {type DateRange, WEEKDAYS} from "~/types/dateTypes"
+import {type DateRange, WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName} = useSeason()
 const appConfig = useAppConfig()
-const {theslope} = appConfig //some default values
+const {theslope} = appConfig  //some default values
 
 // COMPONENT DEFINITION
 const props = defineProps<{ mode: FormMode }>()
@@ -155,7 +155,7 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
         <div class="min-w-1/2 lg:w-1/2 grow-0">
           <CalendarDisplay class="mx-auto"
                            :seasonDates="model.seasonDates"
-                           :cookingDays="model.cookingDays"
+                           :cookingDays="model.cookingDays as WeekDayMap"
                            :holidays="model.holidays"/>
         </div>
       </div>

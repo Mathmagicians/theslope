@@ -69,7 +69,7 @@ export const useSeason = () => {
             holidays: [] as DateRange[],
             ticketIsCancellableDaysBefore: theslope.ticketIsCancellableDaysBefore,
             diningModeIsEditableMinutesBefore: theslope.diningModeIsEditableMinutesBefore
-        } satisfies Partial<Season>
+        } satisfies Season
     }
 
     const createSeasonName = (range: DateRange | undefined): string => formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
