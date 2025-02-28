@@ -9,7 +9,7 @@ const dateSchema = z.string({
     .describe(`Dato ${DATE_SETTINGS.USER_MASK}`)
     .transform((dateStr): Date => parseDate(dateStr))
     .refine((date) => isValid(date), {
-        message: 'Ugyldig dato'
+        message: `Ugyldig dato. Brug formatet ${DATE_SETTINGS.USER_MASK}`
     })
 
 const baseDateRangeSchema = z.object({
@@ -17,7 +17,7 @@ const baseDateRangeSchema = z.object({
     end: z.date().describe('Slutdato')
 })
 
-const stringDateRangeSchema = z.object({
+export const stringDateRangeSchema = z.object({
     start: dateSchema,
     end: dateSchema
 })

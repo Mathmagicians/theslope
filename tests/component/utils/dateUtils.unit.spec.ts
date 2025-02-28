@@ -168,7 +168,6 @@ describe('parseDate works for dd-MM-yyyy format', () => {
 
     it('should parse "12-20-2025" as invalid date', () => {
         const invalidDate = parseDate('2-1-2025')
-        console.log("Parsed date", invalidDate)
         expect(isValid(invalidDate)).toBe(false)
         expect(invalidDate).toBeInstanceOf(Date)
         expect(invalidDate.getTime()).toBeNaN()
@@ -177,7 +176,6 @@ describe('parseDate works for dd-MM-yyyy format', () => {
 
     it('should parse "2-1-2025" as invalid date', () => {
         const invalidDate = parseDate('2-1-2025')
-        console.log("Parsed date", invalidDate)
         expect(isValid(invalidDate)).toBe(false)
         expect(invalidDate).toBeInstanceOf(Date)
         expect(invalidDate.getTime()).toBeNaN()
@@ -266,6 +264,16 @@ describe('isDateRangeInside', () => {
 })
 
 describe('areRangesOverlapping', () => {
+    it('should return false for single range', () => {
+        const single = [
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025
+                new Date(2025, 0, 5)   // Jan 5, 2025
+            )
+        ]
+        expect(areRangesOverlapping(single)).toBe(false)
+    })
+
     it('should return false when ranges do not overlap', () => {
         const ranges: DateRange[] = [
             createDateRange(
@@ -305,4 +313,30 @@ describe('areRangesOverlapping', () => {
         expect(areRangesOverlapping(range_of3.reverse())).toBe(true)
     })
 
+    it('should detect duplicate ranges as overlapping', () => {
+        const ranges: DateRange[] = [
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025
+                new Date(2025, 0, 5)   // Jan 5, 2025
+            ),
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025 (identical to first range)
+                new Date(2025, 0, 5)   // Jan 5, 2025 (identical to first range)
+            )
+        ]
+        expect(areRangesOverlapping(ranges)).toBe(true)
+    })
+    it('should detect duplicate ranges of same day as overlapping', () => {
+        const ranges: DateRange[] = [
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025
+                new Date(2025, 0, 1)   // Jan 5, 2025
+            ),
+            createDateRange(
+                new Date(2025, 0, 1),  // Jan 1, 2025 (identical to first range)
+                new Date(2025, 0, 1)   // Jan 5, 2025 (identical to first range)
+            )
+        ]
+        expect(areRangesOverlapping(ranges)).toBe(true)
+    })
 })

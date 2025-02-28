@@ -110,6 +110,7 @@ export const useSeason = () => {
     }
 
     return {
+        holidaysSchema,
         SeasonSchema,
         getDefaultSeason,
         createSeasonName,

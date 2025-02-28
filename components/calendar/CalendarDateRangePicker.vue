@@ -2,7 +2,7 @@
 import type {DateRange} from "~/types/dateTypes"
 import {DATE_SETTINGS, formatDateRange} from "~/utils/date"
 import {inject, type Ref} from "vue"
-import {mapZodErrorsToFormErrors} from "~/utils/validtation";
+import {mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // TYPES
 type DateRangeInput = {
@@ -98,8 +98,6 @@ const handleInputChange = (value: string, key: keyof DateRange) => {
     })
   }
 }
-
-// handlePickerChange is no longer needed as we're using the computed dates property
 
 const formatLabel = (key: keyof DateRange): string => {
   switch (key) {

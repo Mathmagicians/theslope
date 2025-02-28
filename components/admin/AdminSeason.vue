@@ -122,6 +122,7 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
                 name="holidays"
                 v-model="model.holidays"
                 disabled:="isViewMode"
+                :season-dates="model.seasonDates"
               />
 
             </UFormGroup>
