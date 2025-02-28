@@ -167,13 +167,6 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
             </UFormGroup>
             <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is:
               {{ inputState }} </p>
-            <UButton
-                v-if="props.debug"
-                class="p-2 bg-blue-500 text-sm text-white font-semibold rounded-md"
-                @click="togglePopover"
-                icon="i-heroicons-calendar"
-                color="blue"
-            />
           </div>
         </template>
 

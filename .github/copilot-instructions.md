@@ -28,6 +28,23 @@
 - Purpose: Testing with Nuxt context
 - Framework: Nuxt Test Utils + Vitest
 
+### Testing Vue 3 Components with defineModel
+When testing components that use the `defineModel` API:
+1. Use a reactive reference (`ref`) to track model changes
+2. Provide event handlers via `attrs` not `props`:
+   ```typescript
+   const modelValue = ref(initialValue);
+   const wrapper = await mountSuspended(Component, {
+     props: { modelValue: modelValue.value },
+     attrs: {
+       'onUpdate:modelValue': (val) => { modelValue.value = val; }
+     }
+   });
+   ```
+3. After triggering events, wait for reactivity with `nextTick()`
+4. Test the state directly with `expect(modelValue.value)`
+5. Don't test for emitted events when using `defineModel`
+
 ## E2E Tests (*.e2e.spec.ts)
 - Location: tests/e2e/
 - Framework: Playwright

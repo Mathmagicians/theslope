@@ -62,6 +62,7 @@ const onAddHolidayRange = () => {
           v-if="!props.disabled"
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
           @click="onAddHolidayRange"
+          name="holidayRangeAddToList"
           color="pink"
           size="lg"
           icon="i-heroicons-sun"
@@ -79,12 +80,14 @@ const onAddHolidayRange = () => {
         <UFormGroup :label="index === 0 ?  'Valgte ferieperioder' : '' " >
           <UInput
               :model-value="formatDateRange(dates)"
+              :name="`holidayRangeList-${index}`"
               disabled
               :ui="{ icon: { trailing: { pointer: '' } } }">
             <template #trailing>
               <UButton
                   v-if="!props.disabled"
                   @click="model.splice(index, 1)"
+                  :name="`holidayRangeRemoveFromList-${index}`"
                   color="red"
                   icon="i-heroicons-trash"
                   size="sm"
