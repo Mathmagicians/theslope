@@ -18,14 +18,14 @@ const allHolidays = computed(() => eachDayOfManyIntervals(props.holidays))
 
 const resultDays = computed(() => excludeDatesFromInterval(
     dinnerDays.value,
-    allHolidays.value))
+    props.holidays))
 
 // CALENDAR ATTRIBUTES TO DISPLAY COOKINGDAYS AND HOLIDAYS
 const attrs = ref([
   {
     key: 'holidays',
     dot: 'green',
-    dates: allHolidays
+    dates: allHolidays.value
   },
   {
     key: 'dinners',
@@ -33,7 +33,7 @@ const attrs = ref([
       color: 'purple',
       fillMode: 'solid'
     },
-    dates: resultDays
+    dates: resultDays.value
   }
 ])
 
