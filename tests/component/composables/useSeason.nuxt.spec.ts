@@ -185,6 +185,18 @@ describe('holiday validations', () => {
         new Date(2025, 0, 31)
     )
 
+
+    it('holiday schema should accept a single holiday', () => {
+        const { holidaysSchema } = useSeason()
+        const holidaysWithOnlyOnePeriod = [january2025]
+        holidaysSchema.safeParse(holidaysWithOnlyOnePeriod)
+        expect(holidaysSchema.safeParse(holidaysWithOnlyOnePeriod).success).toBe(true)
+
+        const holidaysWithOnlyOneDay = [createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 1))]
+        holidaysSchema.safeParse(holidaysWithOnlyOneDay)
+        expect(holidaysSchema.safeParse(holidaysWithOnlyOneDay).success).toBe(true)
+    })
+
     it('should accept non-overlapping holidays within season', () => {
         const validSeason = {
             shortName: "Test 2025",
@@ -225,6 +237,7 @@ describe('holiday validations', () => {
             expect(result.error.errors[0].message).toBe("Ferieperioder må ikke overlappe hinanden")
         }
     })
+
 
     it('should reject holidays outside season', () => {
         const seasonWithOutsideHolidays = {
