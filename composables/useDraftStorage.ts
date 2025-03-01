@@ -23,12 +23,17 @@ export const useDraftStorage = (key = DEFAULT_DRAFT_KEY) => {
     const { serializeSeason, deserializeSeason, coalesceSeason } = useSeason()
 
     const serializeDraftData = (data: DraftData): string => {
-        const serializedSeason = serializeSeason(data.season)
-        const draftData = {
-            state: data.state,
-            season: serializedSeason
+        try {
+            const serializedSeason = serializeSeason(data.season)
+            const draftData = {
+                state: data.state,
+                season: serializedSeason
+            }
+            return JSON.stringify(draftData)
+        } catch (error) {
+            console.error("Error serializing draft data:", error)
+            throw error // Re-throw to allow higher-level handlers to deal with it
         }
-        return JSON.stringify(draftData)
     }
 
     const deserializeDraftData = (stored: string): DraftData => {
@@ -41,9 +46,14 @@ export const useDraftStorage = (key = DEFAULT_DRAFT_KEY) => {
 
     const saveDraft = async (data: DraftData) => {
         if (!storage) return
-        const serializedData = serializeDraftData(data)
-        console.log("SAVE", serializedData)
-        await storage.setItem<string>(key, serializedData)
+        try {
+            const serializedData = serializeDraftData(data)
+            console.log("SAVE", serializedData)
+            await storage.setItem<string>(key, serializedData)
+        } catch (error) {
+            console.error("Failed to save draft:", error)
+            throw error // Re-throw for higher level handling
+        }
     }
 
     const loadDraft = async (): Promise<DraftData | null> => {

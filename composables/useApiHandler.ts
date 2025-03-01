@@ -52,6 +52,7 @@ export const useApiHandler = () => {
     }
 
     return {
-        apiCall
+        apiCall,
+        handleApiError
     }
 }

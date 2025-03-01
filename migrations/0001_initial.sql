@@ -21,7 +21,7 @@ CREATE TABLE "User" (
     "email" TEXT NOT NULL,
     "phone" TEXT,
     "passwordHash" TEXT NOT NULL,
-    "systemRole" TEXT NOT NULL,
+    "systemRole" TEXT NOT NULL DEFAULT 'USER',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -138,8 +138,7 @@ CREATE TABLE "CookingTeamAssignment" (
 CREATE TABLE "Season" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shortName" TEXT,
-    "startDate" DATETIME NOT NULL,
-    "endDate" DATETIME NOT NULL,
+    "seasonDates" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL,
     "cookingDays" TEXT NOT NULL,
     "holidays" TEXT NOT NULL,
