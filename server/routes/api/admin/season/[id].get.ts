@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
         return season
     } catch (error) {
         console.error("👨‍💻 > SEASON > Error getting season: ", error)
-        if (e instanceof z.ZodError && e.format()?.id) {
+        if (error instanceof z.ZodError && error.format()?.id) {
             throw createError({
                 statusCode: 400,
                 statusMessage: "Invalid season id: " + z.ZodError && e.format()?.id

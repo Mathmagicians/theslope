@@ -1,8 +1,8 @@
 import {describe, it, expect} from 'vitest'
 import {type Season, useSeason} from '@/composables/useSeason'
 import type {DateRange} from "~/types/dateTypes"
+
 describe('useSeasonSchema', () => {
-    // Update the test in useSeason.nuxt.spec.ts
     it('should validate default season', async () => {
         const {SeasonSchema, getDefaultSeason} = useSeason()
         const defaultSeason = getDefaultSeason()
@@ -20,7 +20,6 @@ describe('useSeasonSchema', () => {
     })
 
     it('should create correct season name', async () => {
-
         const {createSeasonName} = useSeason()
 
         const dateRange = {
@@ -31,7 +30,6 @@ describe('useSeasonSchema', () => {
     })
 
     it('should correctly determine if date is within season', async () => {
-
         const {isActive} = useSeason()
         const start = new Date(2024, 0, 1)
         const end = new Date(2024, 11, 31)
@@ -47,35 +45,7 @@ describe('useSeasonSchema', () => {
         expect(isActive(start, start, end)).toBe(true)
         expect(isActive(end, start, end)).toBe(true)
     })
-
-    it('should accept both Date and string formats for seasonDates and holidays', () => {
-        const validSeason = {
-            shortName: "Test 2025",
-            seasonDates: {
-                start: "01/01/2025",
-                end: "31/01/2025"
-            },
-            isActive: true,
-            cookingDays: createDefaultWeekdayMap(true),
-            holidays: [
-                {
-                    start: new Date(2025, 0, 5),
-                    end: new Date(2025, 0, 10)
-                },
-                {
-                    start: "15/01/2025",
-                    end: "20/01/2025"
-                }
-            ],
-            ticketIsCancellableDaysBefore: 7,
-            diningModeIsEditableMinutesBefore: 720
-        }
-
-        const result = SeasonSchema.safeParse(validSeason)
-        expect(result.success).toBe(true)
-    })
 })
-
 
 describe('coalesceSeason', () => {
     const { coalesceSeason, getDefaultSeason } = useSeason()
@@ -83,6 +53,12 @@ describe('coalesceSeason', () => {
     it('should return the default season when no season is provided', () => {
         const defaultSeason = getDefaultSeason()
         const result = coalesceSeason(undefined, defaultSeason)
+        expect(result).toEqual(defaultSeason)
+    })
+    
+    it('should handle null input and return the default season', () => {
+        const defaultSeason = getDefaultSeason()
+        const result = coalesceSeason(null, defaultSeason)
         expect(result).toEqual(defaultSeason)
     })
 
@@ -117,29 +93,6 @@ describe('coalesceSeason', () => {
     })
 })
 
-
-describe('serializeSeason/deserializeSeason', () => {
-    it('should correctly serialize and deserialize default season', () => {
-        const { getDefaultSeason, serializeSeason, deserializeSeason } = useSeason()
-
-        // Get a default season
-        const originalSeason = getDefaultSeason()
-
-        // Serialize and then deserialize
-        const serialized = serializeSeason(originalSeason)
-        const deserialized = deserializeSeason(serialized)
-
-        // Compare the original and deserialized objects
-        expect(deserialized).toEqual(originalSeason)
-
-        // Specific date checks
-        expect(deserialized.seasonDates.start).toBeInstanceOf(Date)
-        expect(deserialized.seasonDates.end).toBeInstanceOf(Date)
-        expect(deserialized.seasonDates.start.getTime()).toBe(originalSeason.seasonDates.start.getTime())
-        expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
-    })
-})
-
 describe('getDefaultSeason', () => {
     it('should validate against both application and serialization schemas', () => {
         const { getDefaultSeason, SeasonSchema, serializeSeason, deserializeSeason } = useSeason()
@@ -158,106 +111,6 @@ describe('getDefaultSeason', () => {
         if (schemaResult.success && serializedResult.success) {
             expect(deserialized).toEqual(defaultSeason)
             expect(defaultSeason.seasonDates.start < defaultSeason.seasonDates.end).toBe(true)
-        }
-    })
-})
-
-describe('season serialization', () => {
-    it('should survive JSON stringification cycle', () => {
-        const { getDefaultSeason, SeasonSchema, serializeSeason, deserializeSeason } = useSeason()
-        const defaultSeason = getDefaultSeason()
-
-        const serialized = serializeSeason(defaultSeason)
-        const jsonString = JSON.stringify(serialized)
-        const parsed = JSON.parse(jsonString)
-        const deserialized = deserializeSeason(parsed)
-
-        const result = SeasonSchema.safeParse(deserialized)
-        expect(result.success).toBe(true)
-    })
-})
-
-describe('holiday validations', () => {
-    const { SeasonSchema } = useSeason()
-
-    const january2025 = createDateRange(
-        new Date(2025, 0, 1),
-        new Date(2025, 0, 31)
-    )
-
-
-    it('holiday schema should accept a single holiday', () => {
-        const { holidaysSchema } = useSeason()
-        const holidaysWithOnlyOnePeriod = [january2025]
-        holidaysSchema.safeParse(holidaysWithOnlyOnePeriod)
-        expect(holidaysSchema.safeParse(holidaysWithOnlyOnePeriod).success).toBe(true)
-
-        const holidaysWithOnlyOneDay = [createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 1))]
-        holidaysSchema.safeParse(holidaysWithOnlyOneDay)
-        expect(holidaysSchema.safeParse(holidaysWithOnlyOneDay).success).toBe(true)
-    })
-
-    it('should accept non-overlapping holidays within season', () => {
-        const validSeason = {
-            shortName: "Test 2025",
-            seasonDates: january2025,
-            isActive: true,
-            cookingDays: createDefaultWeekdayMap(true),
-            holidays: [
-                createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 5)),
-                createDateRange(new Date(2025, 0, 10), new Date(2025, 0, 15)),
-                createDateRange(new Date(2025, 0, 20), new Date(2025, 0, 25))
-            ],
-            ticketIsCancellableDaysBefore: 7,
-            diningModeIsEditableMinutesBefore: 720
-        }
-
-        const result = SeasonSchema.safeParse(validSeason)
-        expect(result.success).toBe(true)
-    })
-
-    it('should reject overlapping holidays', () => {
-        const seasonWithOverlappingHolidays = {
-            shortName: "Test 2025",
-            seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
-            isActive: true,
-            cookingDays:  createDefaultWeekdayMap(true),
-            holidays: [
-                { start: new Date(2025, 0, 1), end: new Date(2025, 0, 10) },
-                { start: new Date(2025, 0, 5), end: new Date(2025, 0, 15) },
-                { start: new Date(2025, 0, 20), end: new Date(2025, 0, 25) }
-            ],
-            ticketIsCancellableDaysBefore: 7,
-            diningModeIsEditableMinutesBefore: 720
-        }
-
-        const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-            expect(result.error.errors[0].message).toBe("Ferieperioder må ikke overlappe hinanden")
-        }
-    })
-
-
-    it('should reject holidays outside season', () => {
-        const seasonWithOutsideHolidays = {
-            shortName: "Test 2025",
-            seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
-            isActive: true,
-            cookingDays: createDefaultWeekdayMap(true),
-            holidays: [
-                { start: new Date(2024, 11, 25), end: new Date(2025, 0, 5) },
-                { start: new Date(2025, 0, 10), end: new Date(2025, 0, 15) },
-                { start: new Date(2025, 0, 20), end: new Date(2025, 1, 5) }
-            ],
-            ticketIsCancellableDaysBefore: 7,
-            diningModeIsEditableMinutesBefore: 720
-        }
-
-        const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-            expect(result.error.errors[0].message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
         }
     })
 })

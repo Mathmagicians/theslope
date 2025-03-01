@@ -36,7 +36,7 @@ export const CookingTeamScalarFieldEnumSchema = z.enum(['id','seasonId','name'])
 
 export const CookingTeamAssignmentScalarFieldEnumSchema = z.enum(['id','chefForcookingTeamId','cookForcookingTeamId','juniorForcookingTeamId','inhabitantId','role']);
 
-export const SeasonScalarFieldEnumSchema = z.enum(['id','shortName','startDate','endDate','isActive','cookingDays','holidays','ticketIsCancellableDaysBefore','diningModeIsEditableMinutesBefore']);
+export const SeasonScalarFieldEnumSchema = z.enum(['id','shortName','seasonDates','isActive','cookingDays','holidays','ticketIsCancellableDaysBefore','diningModeIsEditableMinutesBefore']);
 
 export const TicketPriceScalarFieldEnumSchema = z.enum(['id','seasonId','ticketType','price','description']);
 
@@ -253,8 +253,7 @@ export type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
 export const SeasonSchema = z.object({
   id: z.number().int(),
   shortName: z.string().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -684,8 +683,7 @@ export const SeasonCountOutputTypeSelectSchema: z.ZodType<Prisma.SeasonCountOutp
 export const SeasonSelectSchema: z.ZodType<Prisma.SeasonSelect> = z.object({
   id: z.boolean().optional(),
   shortName: z.boolean().optional(),
-  startDate: z.boolean().optional(),
-  endDate: z.boolean().optional(),
+  seasonDates: z.boolean().optional(),
   isActive: z.boolean().optional(),
   cookingDays: z.boolean().optional(),
   holidays: z.boolean().optional(),
@@ -1649,8 +1647,7 @@ export const SeasonWhereInputSchema: z.ZodType<Prisma.SeasonWhereInput> = z.obje
   NOT: z.union([ z.lazy(() => SeasonWhereInputSchema),z.lazy(() => SeasonWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
   shortName: z.union([ z.lazy(() => StringNullableFilterSchema),z.string() ]).optional().nullable(),
-  startDate: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
-  endDate: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  seasonDates: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   isActive: z.union([ z.lazy(() => BoolFilterSchema),z.boolean() ]).optional(),
   cookingDays: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   holidays: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
@@ -1664,8 +1661,7 @@ export const SeasonWhereInputSchema: z.ZodType<Prisma.SeasonWhereInput> = z.obje
 export const SeasonOrderByWithRelationInputSchema: z.ZodType<Prisma.SeasonOrderByWithRelationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   shortName: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  startDate: z.lazy(() => SortOrderSchema).optional(),
-  endDate: z.lazy(() => SortOrderSchema).optional(),
+  seasonDates: z.lazy(() => SortOrderSchema).optional(),
   isActive: z.lazy(() => SortOrderSchema).optional(),
   cookingDays: z.lazy(() => SortOrderSchema).optional(),
   holidays: z.lazy(() => SortOrderSchema).optional(),
@@ -1685,8 +1681,7 @@ export const SeasonWhereUniqueInputSchema: z.ZodType<Prisma.SeasonWhereUniqueInp
   OR: z.lazy(() => SeasonWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => SeasonWhereInputSchema),z.lazy(() => SeasonWhereInputSchema).array() ]).optional(),
   shortName: z.union([ z.lazy(() => StringNullableFilterSchema),z.string() ]).optional().nullable(),
-  startDate: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
-  endDate: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  seasonDates: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   isActive: z.union([ z.lazy(() => BoolFilterSchema),z.boolean() ]).optional(),
   cookingDays: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   holidays: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
@@ -1700,8 +1695,7 @@ export const SeasonWhereUniqueInputSchema: z.ZodType<Prisma.SeasonWhereUniqueInp
 export const SeasonOrderByWithAggregationInputSchema: z.ZodType<Prisma.SeasonOrderByWithAggregationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   shortName: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  startDate: z.lazy(() => SortOrderSchema).optional(),
-  endDate: z.lazy(() => SortOrderSchema).optional(),
+  seasonDates: z.lazy(() => SortOrderSchema).optional(),
   isActive: z.lazy(() => SortOrderSchema).optional(),
   cookingDays: z.lazy(() => SortOrderSchema).optional(),
   holidays: z.lazy(() => SortOrderSchema).optional(),
@@ -1720,8 +1714,7 @@ export const SeasonScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Season
   NOT: z.union([ z.lazy(() => SeasonScalarWhereWithAggregatesInputSchema),z.lazy(() => SeasonScalarWhereWithAggregatesInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema),z.number() ]).optional(),
   shortName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema),z.string() ]).optional().nullable(),
-  startDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema),z.coerce.date() ]).optional(),
-  endDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema),z.coerce.date() ]).optional(),
+  seasonDates: z.union([ z.lazy(() => StringWithAggregatesFilterSchema),z.string() ]).optional(),
   isActive: z.union([ z.lazy(() => BoolWithAggregatesFilterSchema),z.boolean() ]).optional(),
   cookingDays: z.union([ z.lazy(() => StringWithAggregatesFilterSchema),z.string() ]).optional(),
   holidays: z.union([ z.lazy(() => StringWithAggregatesFilterSchema),z.string() ]).optional(),
@@ -2543,8 +2536,7 @@ export const CookingTeamAssignmentUncheckedUpdateManyInputSchema: z.ZodType<Pris
 
 export const SeasonCreateInputSchema: z.ZodType<Prisma.SeasonCreateInput> = z.object({
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -2558,8 +2550,7 @@ export const SeasonCreateInputSchema: z.ZodType<Prisma.SeasonCreateInput> = z.ob
 export const SeasonUncheckedCreateInputSchema: z.ZodType<Prisma.SeasonUncheckedCreateInput> = z.object({
   id: z.number().int().optional(),
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -2572,8 +2563,7 @@ export const SeasonUncheckedCreateInputSchema: z.ZodType<Prisma.SeasonUncheckedC
 
 export const SeasonUpdateInputSchema: z.ZodType<Prisma.SeasonUpdateInput> = z.object({
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -2587,8 +2577,7 @@ export const SeasonUpdateInputSchema: z.ZodType<Prisma.SeasonUpdateInput> = z.ob
 export const SeasonUncheckedUpdateInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -2602,8 +2591,7 @@ export const SeasonUncheckedUpdateInputSchema: z.ZodType<Prisma.SeasonUncheckedU
 export const SeasonCreateManyInputSchema: z.ZodType<Prisma.SeasonCreateManyInput> = z.object({
   id: z.number().int().optional(),
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -2613,8 +2601,7 @@ export const SeasonCreateManyInputSchema: z.ZodType<Prisma.SeasonCreateManyInput
 
 export const SeasonUpdateManyMutationInputSchema: z.ZodType<Prisma.SeasonUpdateManyMutationInput> = z.object({
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -2625,8 +2612,7 @@ export const SeasonUpdateManyMutationInputSchema: z.ZodType<Prisma.SeasonUpdateM
 export const SeasonUncheckedUpdateManyInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateManyInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3570,8 +3556,7 @@ export const TicketPriceOrderByRelationAggregateInputSchema: z.ZodType<Prisma.Ti
 export const SeasonCountOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonCountOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   shortName: z.lazy(() => SortOrderSchema).optional(),
-  startDate: z.lazy(() => SortOrderSchema).optional(),
-  endDate: z.lazy(() => SortOrderSchema).optional(),
+  seasonDates: z.lazy(() => SortOrderSchema).optional(),
   isActive: z.lazy(() => SortOrderSchema).optional(),
   cookingDays: z.lazy(() => SortOrderSchema).optional(),
   holidays: z.lazy(() => SortOrderSchema).optional(),
@@ -3588,8 +3573,7 @@ export const SeasonAvgOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonAvgOrd
 export const SeasonMaxOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMaxOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   shortName: z.lazy(() => SortOrderSchema).optional(),
-  startDate: z.lazy(() => SortOrderSchema).optional(),
-  endDate: z.lazy(() => SortOrderSchema).optional(),
+  seasonDates: z.lazy(() => SortOrderSchema).optional(),
   isActive: z.lazy(() => SortOrderSchema).optional(),
   cookingDays: z.lazy(() => SortOrderSchema).optional(),
   holidays: z.lazy(() => SortOrderSchema).optional(),
@@ -3600,8 +3584,7 @@ export const SeasonMaxOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMaxOrd
 export const SeasonMinOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMinOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   shortName: z.lazy(() => SortOrderSchema).optional(),
-  startDate: z.lazy(() => SortOrderSchema).optional(),
-  endDate: z.lazy(() => SortOrderSchema).optional(),
+  seasonDates: z.lazy(() => SortOrderSchema).optional(),
   isActive: z.lazy(() => SortOrderSchema).optional(),
   cookingDays: z.lazy(() => SortOrderSchema).optional(),
   holidays: z.lazy(() => SortOrderSchema).optional(),
@@ -5941,8 +5924,7 @@ export const OrderCreateManyDinnerEventInputEnvelopeSchema: z.ZodType<Prisma.Ord
 
 export const SeasonCreateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.SeasonCreateWithoutDinnerEventsInput> = z.object({
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -5955,8 +5937,7 @@ export const SeasonCreateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedCreateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.SeasonUncheckedCreateWithoutDinnerEventsInput> = z.object({
   id: z.number().int().optional(),
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -6068,8 +6049,7 @@ export const SeasonUpdateToOneWithWhereWithoutDinnerEventsInputSchema: z.ZodType
 
 export const SeasonUpdateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.SeasonUpdateWithoutDinnerEventsInput> = z.object({
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -6082,8 +6062,7 @@ export const SeasonUpdateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedUpdateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateWithoutDinnerEventsInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -6488,8 +6467,7 @@ export const HouseholdUncheckedUpdateWithoutInvoiceInputSchema: z.ZodType<Prisma
 
 export const SeasonCreateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonCreateWithoutCookingTeamsInput> = z.object({
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -6502,8 +6480,7 @@ export const SeasonCreateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedCreateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonUncheckedCreateWithoutCookingTeamsInput> = z.object({
   id: z.number().int().optional(),
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -6639,8 +6616,7 @@ export const SeasonUpdateToOneWithWhereWithoutCookingTeamsInputSchema: z.ZodType
 
 export const SeasonUpdateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonUpdateWithoutCookingTeamsInput> = z.object({
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -6653,8 +6629,7 @@ export const SeasonUpdateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedUpdateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateWithoutCookingTeamsInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -7106,8 +7081,7 @@ export const DinnerEventUpdateManyWithWhereWithoutSeasonInputSchema: z.ZodType<P
 
 export const SeasonCreateWithoutTicketPricesInputSchema: z.ZodType<Prisma.SeasonCreateWithoutTicketPricesInput> = z.object({
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -7120,8 +7094,7 @@ export const SeasonCreateWithoutTicketPricesInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedCreateWithoutTicketPricesInputSchema: z.ZodType<Prisma.SeasonUncheckedCreateWithoutTicketPricesInput> = z.object({
   id: z.number().int().optional(),
   shortName: z.string().optional().nullable(),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  seasonDates: z.string(),
   isActive: z.boolean(),
   cookingDays: z.string(),
   holidays: z.string(),
@@ -7149,8 +7122,7 @@ export const SeasonUpdateToOneWithWhereWithoutTicketPricesInputSchema: z.ZodType
 
 export const SeasonUpdateWithoutTicketPricesInputSchema: z.ZodType<Prisma.SeasonUpdateWithoutTicketPricesInput> = z.object({
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -7163,8 +7135,7 @@ export const SeasonUpdateWithoutTicketPricesInputSchema: z.ZodType<Prisma.Season
 export const SeasonUncheckedUpdateWithoutTicketPricesInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateWithoutTicketPricesInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   shortName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
-  endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  seasonDates: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   isActive: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   cookingDays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),

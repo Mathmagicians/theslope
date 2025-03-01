@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
+import {getErrorMessage} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
 const {holidaysSchema} = useSeason()
@@ -46,53 +47,64 @@ const onAddHolidayRange = () => {
 </script>
 
 <template>
-  <div>
+  <div  v-if="false">
     <!-- Calendar Date Range Picker with validation -->
-    <div class="flex flex-col md:flex-row items-center md:items-end  space-x-2 md:space-x-4">
+    <div
+        v-if="!props.disabled"
+        class="flex flex-col md:flex-row items-center md:items-end  space-x-2 md:space-x-4">
       <UFormGroup
           name="holidayPicker"
           :error="errors.get('_')?.[0] || errors.get('holidays')?.[0] || ''">
         <CalendarDateRangePicker
             name="holidayRangeList"
-            v-if="!props.disabled"
             v-model="addedRange"/>
 
       </UFormGroup>
       <UButton
-          v-if="!props.disabled"
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
           @click="onAddHolidayRange"
           name="holidayRangeAddToList"
           color="pink"
           size="lg"
-          icon="i-heroicons-sun"
           variant="outline">
+        <template #leading>
+          <UIcon name="i-heroicons-sun" />
+        </template>
         Tilføj ferie
       </UButton>
     </div>
 
     <!-- List of holidays -->
-    <ul v-if="model.length > 0" class="mt-4 space-y-2">
+    <ul v-if="model?.length > 0" class="mt-4 space-y-2">
       <li
           v-for="(dates, index) in model"
-          :name="`holidayRangeList-${index}`"
+          :id="`holidayRangeList-${index}`"
           :key="index">
-        <UFormGroup :label="index === 0 ?  'Valgte ferieperioder' : '' " >
+        <UFormGroup :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <UInput
               :model-value="formatDateRange(dates)"
               :name="`holidayRangeList-${index}`"
               disabled
-              :ui="{ icon: { trailing: { pointer: '' } } }">
-            <template #trailing>
-              <UButton
-                  v-if="!props.disabled"
-                  @click="model.splice(index, 1)"
-                  :name="`holidayRangeRemoveFromList-${index}`"
-                  color="red"
-                  icon="i-heroicons-trash"
-                  size="sm"
-                  variant="ghost"/>
-            </template>
+              :ui="{
+                icon: {
+                  leading: { name: '' },
+                  trailing: { name: '' }
+                }
+              }"
+          >
+          <template #trailing>
+            <UButton
+                v-if="!props.disabled"
+                @click="model.splice(index, 1)"
+                :name="`holidayRangeRemoveFromList-${index}`"
+                color="red"
+                size="sm"
+                variant="ghost">
+                <template #default>
+                  <UIcon name="i-heroicons-trash" />
+                </template>
+            </UButton>
+          </template>
           </UInput>
         </UFormGroup>
       </li>

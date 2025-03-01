@@ -10,7 +10,7 @@ generator client {
 }
 
 generator zod {
-  provider       = "zod-prisma-types"
+  provider = "zod-prisma-types"
 }
 
 datasource db {
@@ -72,7 +72,7 @@ model User {
   email        String      @unique
   phone        String?
   passwordHash String
-  systemRole   SystemRole @default(USER)
+  systemRole   SystemRole  @default(USER)
   Inhabitant   Inhabitant?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -202,12 +202,11 @@ model CookingTeamAssignment {
 model Season {
   id                                Int           @id @default(autoincrement())
   shortName                         String?
-  startDate                         DateTime
-  endDate                           DateTime
+  seasonDates                       String // JSON stringified DateRange object
   isActive                          Boolean
   CookingTeams                      CookingTeam[]
-  cookingDays                       String // json stringfied array of Weekday
-  holidays                          String // json stringfied array of Date
+  cookingDays                       String // JSON stringified map of Weekday to boolean
+  holidays                          String // JSON stringified array of DateRange
   ticketPrices                      TicketPrice[]
   dinnerEvents                      DinnerEvent[]
   ticketIsCancellableDaysBefore     Int

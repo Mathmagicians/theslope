@@ -84,40 +84,53 @@ There is an error about preflight, that can be removed by adding to package.json
 ```
 
 ### Database - schemas, ORM, migrations
-We use D1 - a cloudflare database. It is built on top of SQLITE. 
-We use prisma ORM to generate the repository client.
-Database is created with wrangler
-```
+We use D1 - a cloudflare database built on top of SQLite with Prisma ORM for the repository client.
+
+#### Database Setup Process
+
+##### Creating a new database
+```bash
 npx wrangler d1 create theslope
 ```
 
-1. Set the DATABASE_URL in the .env file to point to your existing database. If your database has no tables yet, read https://pris.ly/d/getting-started
-2. Set the provider of the datasource block in schema.prisma to match your database: postgresql, mysql, sqlite, sqlserver, mongodb or cockroachdb.
-3. Run prisma db pull to turn your database schema into a Prisma schema.
-4. Run prisma generate to generate the Prisma Client. You can then start querying your database.
-5. Tip: Explore how you can extend the ORM with scalable connection pooling, global caching, and real-time database events. Read: https://pris.ly/cli/beyond-orm
+After creating the database, update the database ID in `wrangler.toml`.
 
-#### Migration
-! Imporant - follow [cloudflares](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/), not prisma's migration model:
+##### Schema Management
+1. Define your data models in `prisma/schema.prisma`
+2. Validate the schema: `npx prisma format`
+3. Generate migration SQL:
+   ```bash
+   npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0001_initial.sql
+   ```
+   For subsequent migrations with a new sequence number:
+   ```bash
+   npx prisma migrate diff --from-migrations ./migrations --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0002_migration_name.sql
+   ```
+4. Apply migrations:
+   - Local: `npm run db:migrate:local`
+   - Production: `npm run db:migrate`
+5. Seed the database:
+   - Local: `npm run db:seed:local`
+   - Production: `npx wrangler d1 execute theslope --file migrations/seed/seed.sql --remote`
+6. Generate Prisma client: `npm run db:generate-client`
 
-##### Validate model
-To validate the prisma model
-```prisma
-npx prisma format
-```
-To create sql migration script
-```
-# Generate SQL using Prisma Migrate
-npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0001_initial.sql
-```
-Generate prisma db client - now you can use prisma types in the client to save and fetch data:
-```
-npx prisma generate
+> ⚠️ Important: Follow [Cloudflare's guidelines](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/) for D1 and Prisma, not the standard Prisma migration model.
+
+##### Database Recreation
+If you need to recreate the database completely:
+1. Delete the database: `npx wrangler d1 delete theslope`
+2. Create a new database: `npx wrangler d1 create theslope`
+3. Update the database ID in `wrangler.toml`
+4. Apply migrations and seed as described above
+
+##### Interacting with the Database
+Query the database:
+```bash
+# View local data
+npx wrangler d1 execute theslope --local --command="SELECT * FROM User"
+
+# View production data
+npx wrangler d1 execute theslope --remote --command="SELECT * FROM User"
 ```
 
 ![Prisma workflow](https://www.prisma.io/docs/assets/images/prisma-client-generation-workflow-3b42c24d27aef3025f2eb4ffc4644642.png)
-
-For at se data i lokal database: 
-```
-npx wrangler d1 execute prod-d1-tutorial --command="SELECT * FROM User"
-```

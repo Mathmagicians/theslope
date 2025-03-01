@@ -2,7 +2,7 @@
 import type {DateRange} from "~/types/dateTypes"
 import {DATE_SETTINGS, formatDateRange} from "~/utils/date"
 import {inject, type Ref} from "vue"
-import {mapZodErrorsToFormErrors} from "~/utils/validtation"
+import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
 // TYPES
 type DateRangeInput = {
@@ -152,7 +152,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
             <UFormGroup v-for="key in ['start', 'end'] as const" :key="key"
                         class="p-2"
                         :label="formatLabel(key)"
-                        :error="errors.get(key)?.[0] || errors.get('_')?.[0] || ''">
+                        :error="getErrorMessage(errors, [key, '_'])">
               <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
                       :ui="{ icon: { trailing: { pointer: '' } } }"
                       :name="key"

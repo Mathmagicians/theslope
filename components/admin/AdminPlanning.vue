@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import type {FormMode} from '@/types/form'
 import {FORM_MODES} from "@/types/form"
-import {ADMIN_HELP_TEXTS} from "~/config/help-texts";
-import type {Season} from "~/composables/useSeason";
-
-const authStore = useAuthStore()
-const {isAdmin} = storeToRefs(authStore)
+import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
+import type {Season} from "~/composables/useSeasonValidation"
 
 const store = usePlanStore()
 const {
@@ -13,35 +9,46 @@ const {
   isLoading,
   isNoSeasons,
   selectedSeason,
-  draftSeason,
   seasons,
   disabledModes,
   getModel
 } = storeToRefs(store)
-const {init} = store
+const {init, createSeason, updateSeason, loadSeasons} = store
 
 // STATE
 const selectedStep = ref<number>(1)
+const defaultFormMode =  FORM_MODES.VIEW
 
 // COMPUTED
-const defaultFormMode = computed((): FormMode | undefined => {
-  if (!isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.VIEW)) {
-    return FORM_MODES.VIEW
-  } else if (isNoSeasons.value && !disabledModes.value.includes(FORM_MODES.CREATE)) {
-    return FORM_MODES.CREATE
-  } else {
-    return undefined
-  }
-})
-
 const showAdminSeason = computed(() =>
-    !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE))
-
+    !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE)) && getModel.value
 
 //HANDLING STATE CHANGE
-const handleSeasonUpdate = (updatedSeason: Season) => {
-  // Handle season updates from child component - by delegating to store
-  console.warn("AdminPlanning > handleSeasonUpdate - not implemented", updatedSeason, draftSeason.value)
+const handleSeasonUpdate = async (updatedSeason: Season) => {
+  try {
+    // Determine if we're creating a new season or updating an existing one
+    if (formMode.value === FORM_MODES.CREATE) {
+      await createSeason(updatedSeason)
+      // After successful creation, switch to view mode and refresh the seasons list
+      await loadSeasons()
+      formMode.value = FORM_MODES.VIEW
+    } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
+      await updateSeason(updatedSeason)
+      // After successful update, switch to view mode and refresh the seasons list
+      await loadSeasons()
+      formMode.value = FORM_MODES.VIEW
+    }
+  } catch (error) {
+    console.error('ADMIN PLANNING > Failed to update season:', error)
+    // Here you could show an error notification to the user
+  }
+}
+
+const handleCancel = async () => {
+  console.info('AdminPlanning > handleCancel > resetting to default form mode and clearing draft')
+  // Reset to default form mode which will trigger the watcher on formMode
+  // The watcher will call onModeChange which handles draft clearing
+  formMode.value = defaultFormMode
 }
 
 const onCreateSeason = () => {
@@ -50,7 +57,11 @@ const onCreateSeason = () => {
 }
 
 // INITIALIZATION
-await init(defaultFormMode.value)
+// Initialize the store - it will handle client vs server logic internally
+const initializeStore = async () => {
+  await init(defaultFormMode)
+}
+initializeStore()
 
 // VIEW STUFF
 
@@ -68,8 +79,6 @@ const items = [
     icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
   }
 ]
-
-const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
 </script>
 
 <template>
@@ -99,8 +108,10 @@ const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
           <USelect
               color="orange"
               :loading="isLoading"
-              :placeholder="seasonItems?.length>0  ? 'Vælg sæson' : 'Ingen sæsoner'"
-              :options="seasonItems"
+              :placeholder="seasons?.length>0  ? 'Vælg sæson' : 'Ingen sæsoner'"
+              :options="seasons"
+              option-attribute="shortName"
+              v-model="selectedSeason"
           >
             <template #trailing>
               <UIcon name="i-heroicons-chevron-down-20-solid" class="w-5 h-5"/>
@@ -117,13 +128,21 @@ const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
       </div>
     </template>
     <template #default>
-      <AdminSeason v-if=" showAdminSeason"
-                   v-model="getModel.value"
-                   :mode="formMode"
-                   @update="handleSeasonUpdate"
-      />
+      <div v-if="showAdminSeason ">
+        <ClientOnly>
+          <AdminSeason v-if="getModel?.value"
+                     v-model="getModel.value"
+                     :mode="formMode"
+                     @update="handleSeasonUpdate"
+                     @cancel="handleCancel"
+          />
+          <template #fallback>
+            <Loader text="Fællesspisning Sæson" />
+          </template>
+        </ClientOnly>
+      </div>
       <Loader v-else-if="isLoading" text="Fællesspisning Sæson" />
-      <div v-else
+      <div v-else-if="isNoSeasons"
            class="flex flex-col items-center justify-center space-y-4">
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>
         <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
@@ -134,6 +153,9 @@ const seasonItems = computed(() => seasons.value?.map(s => s.shortName) ?? [])
           Opret ny sæson
         </UButton>
         <p>Der er ingen sæsoner at vise. Bed din administrator om at oprette en fællespisningsæson.</p>
+      </div>
+      <div v-else>
+        <h3 class="text-lg font-semibold">Vælg en sæson for at komme i gang</h3>
       </div>
     </template>
 

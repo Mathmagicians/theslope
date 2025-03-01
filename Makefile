@@ -60,10 +60,12 @@ d1-migrate: d1-prisma
 d1-migrate-local: d1-migrate
 	$(info "🏗️ Migrating schemas of local database")
 	@yes | npm run db:migrate:local
+	@npm run db:seed:local
 
 d1-migrate-prod: d1-migrate
 	$(info "🏗️ Migrating schemas of production database")
 	@yes | npm run db:migrate
+	@npm run db:seed
 
 d1-migrate-all: d1-migrate-local d1-migrate-prod
 	$(info '🤖Will build d1 databases - local and remote - using Prisma migrations')

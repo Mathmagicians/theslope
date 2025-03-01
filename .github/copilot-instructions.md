@@ -13,9 +13,24 @@
 - Vue 3 Composition API
 - Prefer arrow functions
 - Prefer switch statements over long if-else chains
+- No semicolons (;) at the end of statements
 - Concise, readable code style
 - Preserve existing comments in code
 - State management through Pinia stores
+
+## API Route Patterns
+- Server routes use file-based routing under `server/routes/api/`
+- **Always** validate input data:
+  - Use H3's validation methods with Zod schemas when working with raw inputs:
+    - `readValidatedBody` for validating request bodies
+    - `getValidatedRouterParams` for validating route parameters
+    - `getValidatedQuery` for validating query parameters
+  - These methods are automatically imported by Nuxt
+  - For serialized data (especially with nested Dates), use appropriate deserialization methods before validation
+  - The same schemas should be used for both client-side and server-side validation
+- Distinguish between validation errors (H3Error) and server errors
+- Repository pattern with CRUD functions in `server/data/prismaRepository.ts`
+- Always use `prisma.entity.upsert()` for saving data, with the appropriate unique identifier field in the `where` clause
 
 # Testing Structure
 ## Unit Tests (*.unit.spec.ts)
@@ -56,3 +71,6 @@ When testing components that use the `defineModel` API:
 - Follow existing project patterns
 - DONT REMOVE TEST CASES when refactoring
 - DONT REMOVE COMMENTS when refactoring
+- NEVER "FIX" TESTS BY ACCEPTING ERRORS or ignoring failing cases
+- ALWAYS fix the underlying issue when tests are failing
+- Tests should be reliable and consistent, not accommodating broken code
