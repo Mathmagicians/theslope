@@ -5,13 +5,14 @@ export const useApiHandler = () => {
 
         switch (error.statusCode) {
             case 400:
-                message = 'Ugyldig forespørgsel. Tjek venligst dine data'
+                message = '' +
+                    'Ugyldig forespørgsel. Tjek venligst dine data'
                 break
             case 404:
-                message = 'Sæsonen blev ikke fundet'
+                message = 'Data blev ikke fundet'
                 break
             case 500:
-                message = 'Der kunne ikke gemmes kladde'
+                message = 'Vi har desværre en intern server fejl'
                 break
             default:
                 message = 'Der opstod en uventet fejl'
@@ -20,15 +21,10 @@ export const useApiHandler = () => {
         const toast = useToast()
         toast.add({
             icon: 'i-heroicons-exclamation-triangle',
-            title: 'Uh, åh, fejl kan ske',
-            description: message,
+            title: `${error.statusCode ?? 500}: Uh, åh, fejl kan ske`,
+            description: `${error.message ?? 'Der opstod en uventet fejl'}: ${error.cause ?? 'Ukendt fejl'}`,
             timeout: 10000,
-            color: 'red',
-            component: 'ViewError',
-            props: {
-                error: error.statusCode,
-                message: message
-            }
+            color: 'orange'
         })
 
         return message

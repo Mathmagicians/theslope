@@ -6,7 +6,7 @@ const props = defineProps<{ text?: string }>()
     <h2 class="text-large  uppercase text-blue-600">
       Loading data for
     </h2>
-    <h3 class="text-base text-blue-400">{ {  text }} </h3>
+    <h3 class="text-base text-blue-400">{{  text }} </h3>
 
   </div>
 </template>

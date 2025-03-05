@@ -1,4 +1,4 @@
-import {type Season} from '~/composables/useSeasonValidation'
+import {type Season, type SerializedSeason} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode, STORE_STATES, type StoreState} from '~/types/form'
 import {useDebounceFn} from '@vueuse/core'
 
@@ -13,11 +13,11 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // STATE
         const activeSeason = ref<Season | null>(null)
-        const selectedSeason = ref<Season | undefined>(undefined)  // Changed from null to undefined
+        const selectedSeason = ref<Season | null>(null)
         const draftSeason = ref<Season | null>(null)
         const error = ref<string | null>(null)
         const seasons = ref<Season[]>([])
-        const state = ref<StoreState>(STORE_STATES.VIEW_NO_SEASONS)
+        const state = ref<StoreState>(STORE_STATES.LOADING)
         const formMode = ref<FormMode>(FORM_MODES.VIEW)
 
         // COMPUTED STATE
@@ -42,29 +42,56 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // ACTIONS
 
+        const prettyPrint = (action: string) => {
+            console.log(`📆 > PLAN > ${action} :`, {
+                seasonsLength: seasons.value.length,
+                isNoSeasons: isNoSeasons.value,
+                name: selectedSeason.value?.shortName,
+                id: selectedSeason.value?.id,
+                formMode: formMode.value,
+                state: state.value,
+                draft: draftSeason.value?.shortName
+            })
+        }
+
         const loadSeasons = async () => {
             try {
                 const response = await apiCall(
-                    async () => useFetch('/api/admin/season'),
+                    async () => useFetch<SerializedSeason[]>('/api/admin/season'),
                     state,
                     'loadSeasons'
                 )
                 const deserializedSeasons: Season[] = response.data.value?.map(serialized => deserializeSeason(serialized)) ?? []
                 seasons.value = deserializedSeasons
-                if (deserializedSeasons.length > 0) {
-                    selectedSeason.value = seasons.value[0] // FIXME select current season if available
+                prettyPrint('loadSeasons after fetch')
+                if (seasons.value.length > 0) {
+                    onSeasonSelect(seasons.value.at(-1)?.id ?? -1)
+                    await onEnterView()
+                    prettyPrint('loadSeasons after onSeasonSelect')
                 }
-
             } catch (e: any) {
-                error.value = e.message
+                handleApiError(e, 'loadSeasons')
             }
         }
+
+        const onSeasonSelect = (id: number) => {
+            console.log("📆 > PLAN > onSeasonSelect > id:", id)
+            if (id >= 0)
+                selectedSeason.value = seasons.value.find(season => season.id === id) ?? null
+            prettyPrint('onSeasonSelect')
+        }
+
+        // debug purpose
+        watch(selectedSeason, (newValue) => {
+            console.log("📆 > PLAN > selectedSeason changed:", newValue)
+        }, {deep: true})
 
         const createSeason = async (season: Season) => {
             try {
                 // Serialize the season data before sending it to the API
                 const serializedSeason = serializeSeason(season)
                 console.log("📆 > PLAN > createSeason > Serialized season:", serializedSeason)
+                prettyPrint('createSeason')
 
                 await apiCall(
                     async () => useFetch('/api/admin/season', {
@@ -78,7 +105,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     'createSeason'
                 )
             } catch (e: any) {
-                handleApiError(e.message, 'createSeason')
+                handleApiError(e, 'createSeason')
             }
         }
 
@@ -100,7 +127,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     'updateSeason'
                 )
             } catch (e: any) {
-                handleApiError(e.message, 'updateSeason')
+                handleApiError(e, 'updateSeason call failed')
             }
         }
 
@@ -116,9 +143,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 })
                 state.value = afterState
             } catch (e: any) {
-                state.value = STORE_STATES.ERROR
-                const err = {statusCode: 500, message: 'Der kunne ikke gemmes kladde'}
-                throw new Error(handleApiError(err, 'saveDraftSeason'))
+                handleApiError( {statusCode: 500, message: 'Din kladde kunne ikke gemmes', cause: e}, 'saveDraftSeason')
             }
         }
 
@@ -131,7 +156,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     .then(() => console.debug('Draft saved successfully'))
                     .catch(() => console.info('promise cancelled by debounce'))
                     .catch((error: Error) => {
-                        console.error('Failed to save draft:', error)
+                        handleApiError(error, 'Failed to save draft:')
                     })
             }
         }, 1000)
@@ -142,7 +167,7 @@ export const usePlanStore = defineStore("Plan", () => {
             if (stored) {
                 state.value = stored.state
                 draftSeason.value = stored.season
-                console.info("📆PlanStore > initDraft - found draft in local storage", stored.state, draftSeason.value?.shortName)
+                prettyPrint('initDraft - found stored draft')
             }
         }
 
@@ -156,33 +181,32 @@ export const usePlanStore = defineStore("Plan", () => {
             return draftSeason
         }
 
-        const viewSeason = () => selectedSeason
-
         const getModel = computed(() => {
-            console.info("📆 PlanStore > getModel, mode, state, draft, view", formMode.value, state.value, draftSeason.value?.shortName, selectedSeason.value?.shortName)
+            prettyPrint('getModel')
             switch (state.value) {
                 case STORE_STATES.CREATE:
                     return draftSeason
                 case STORE_STATES.EDIT:
                     return draftSeason
                 case STORE_STATES.VIEW_SELECTED:
+                    return selectedSeason
                 case STORE_STATES.VIEW_NO_SEASONS:
-                    return selectedSeason  // Changed from viewSeason function to selectedSeason ref
                 default:
-                    console.warn("PlanStore > getModel - invalid state - model is undefined", state.value)
-                    return undefined
+                    console.warn("PlanStore > getModel - model is null", state.value)
+                    return null
             }
         })
 
         const onEnterCreate = async () => {
-            console.info('📆PLAN > onEnterCreate > mode, state, draft', formMode.value, state.value, draftSeason.value?.shortName)
+            formMode.value = FORM_MODES.CREATE
             state.value = STORE_STATES.CREATE
             draftSeason.value = coalesceSeason(draftSeason.value)
-            await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
-            console.info('📆PLAN > onEnterCreate > mode, state, draftSeason', formMode.value, state.value, draftSeason.value?.shortName)
+            if (process.client) await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
+            prettyPrint('onEnterCreate')
         }
 
         const onEnterEdit = async () => {
+            formMode.value = FORM_MODES.EDIT
             try {
                 state.value = STORE_STATES.EDIT
                 if (draftSeason.value && draftSeason.value?.shortName === selectedSeason.value?.shortName) {
@@ -190,80 +214,69 @@ export const usePlanStore = defineStore("Plan", () => {
                 } else {
                     draftSeason.value = selectedSeason.value
                 }
-                await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
-            } catch
-                (e) {
-                console.error("Error entering edit mode:", e)
-                state.value = STORE_STATES.ERROR
-                error.value = e instanceof Error ? e.message : 'Failed to enter edit mode'
-                // Consider showing a notification to the user
+                if (process.client && draftSeason.value) await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
+                prettyPrint('onEnterEdit')
+            } catch (e) {
+                console.error("Plan > onEnterEdit > Error entering edit mode:", e)
+                handleApiError(e, 'Plan > onEnterEdit > Error entering edit mode:')
             }
         }
 
         const onEnterView = async () => {
-            state.value = isNoSeasons ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
+            formMode.value = FORM_MODES.VIEW
+            state.value = isNoSeasons.value  ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
             draftSeason.value = null
-            await draftStorage.clearDraft()
+            if (process.client) await draftStorage.clearDraft()
+            prettyPrint('onEnterView - after state change')
+
         }
+
         const onModeChange = async (mode: FormMode) => {
+            prettyPrint('onModeChange')
             switch (mode) {
                 case FORM_MODES.CREATE:
                     return onEnterCreate()
                 case FORM_MODES.EDIT:
                     return onEnterEdit()
                 case FORM_MODES.VIEW:
-                    return onEnterView()
                 default:
-                    console.warn("PlanStore > onEnter - invalid form mode", mode)
+                    return onEnterView()
             }
         }
 
 
         // INITIALIZE
 
-        const init = async (mode: FormMode) => {
-            console.log("📆 PlanStore > init - mode, state", mode, state.value)
+        const init = async () => {
+            prettyPrint('init')
             // Load seasons (server or client)
             await loadSeasons()
 
-            // Initialize draft season from storage (client-only)
-            if (process.client) {
-                await initDraft()
-                switch (state.value) {
-                    case STORE_STATES.CREATE:
-                        formMode.value = FORM_MODES.CREATE
-                        return onModeChange(FORM_MODES.CREATE)
-                    case STORE_STATES.EDIT:
-                        formMode.value = FORM_MODES.EDIT
-                        return onModeChange(FORM_MODES.EDIT)
-                    case STORE_STATES.VIEW_SELECTED:
-                    case STORE_STATES.VIEW_NO_SEASONS:
-                        formMode.value = FORM_MODES.VIEW
-                        return onEnterView()
-                    default:
-                        console.warn("📆 PlanStore > init > dropped to default: mode, state", formMode.value, state.value)
-                        formMode.value = mode
-                        await onModeChange(mode)
-                }
-            } else {
-                // On server, always use the specified mode without loading draft
-                formMode.value = mode
-                if (mode === FORM_MODES.VIEW) {
-                    state.value = isNoSeasons.value ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
-                }
+            if(process.client) await initDraft()
+
+            switch (state.value) {
+                case STORE_STATES.CREATE:
+                    return onModeChange(FORM_MODES.CREATE)
+                case STORE_STATES.EDIT:
+                    return onModeChange(FORM_MODES.EDIT)
+                case STORE_STATES.VIEW_SELECTED:
+                case STORE_STATES.VIEW_NO_SEASONS:
+                case STORE_STATES.ERROR:
+                case STORE_STATES.LOADING:
+                default:
+                    return onModeChange(FORM_MODES.VIEW)
             }
         }
 
         // WATCH FOR CHANGES
         watch(draftSeason, async (newDraft) => {
-            if (newDraft && isShouldUseDraft.value) {
-                await debouncedSave()
+            if (process.client) {
+                if (newDraft && isShouldUseDraft.value) {
+                    await debouncedSave()
+                }
             }
         }, {deep: true})
 
-        watch(formMode, async (newMode) => {
-            if (newMode) await onModeChange(newMode)
-        })
 
         return {
             // state
@@ -283,10 +296,11 @@ export const usePlanStore = defineStore("Plan", () => {
             loadSeasons,
             createSeason,
             updateSeason,
+            onSeasonSelect,
             saveDraftSeason,
             createDraft,
             editDraft,
-            viewSeason,
+            onModeChange,
             init
         }
     }

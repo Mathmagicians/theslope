@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {getErrorMessage} from "~/utils/validtation"
+import {createDateRange, formatDateRange} from "~/utils/date"
+import {mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
-const {holidaysSchema} = useSeason()
+const {holidaysSchema} = useSeasonValidation()
 
 // COMPONENT DEFINITION
 
-const model = defineModel<DateRange[]>({required: true})
+const model = defineModel<DateRange[]>({required: true, default: () => []})
 const props = withDefaults(defineProps<{
   disabled?: boolean,
   seasonDates?: DateRange
@@ -47,7 +48,7 @@ const onAddHolidayRange = () => {
 </script>
 
 <template>
-  <div  v-if="false">
+  <div>
     <!-- Calendar Date Range Picker with validation -->
     <div
         v-if="!props.disabled"
@@ -66,10 +67,8 @@ const onAddHolidayRange = () => {
           name="holidayRangeAddToList"
           color="pink"
           size="lg"
+          icon="i-heroicons-sun"
           variant="outline">
-        <template #leading>
-          <UIcon name="i-heroicons-sun" />
-        </template>
         Tilføj ferie
       </UButton>
     </div>
@@ -79,18 +78,14 @@ const onAddHolidayRange = () => {
       <li
           v-for="(dates, index) in model"
           :id="`holidayRangeList-${index}`"
-          :key="index">
+          :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`">
         <UFormGroup :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <UInput
               :model-value="formatDateRange(dates)"
               :name="`holidayRangeList-${index}`"
               disabled
-              :ui="{
-                icon: {
-                  leading: { name: '' },
-                  trailing: { name: '' }
-                }
-              }"
+              placeholder="Ferieperiode"
+              :ui="{ icon: { trailing: { pointer: '' } } }"
           >
           <template #trailing>
             <UButton
@@ -98,16 +93,17 @@ const onAddHolidayRange = () => {
                 @click="model.splice(index, 1)"
                 :name="`holidayRangeRemoveFromList-${index}`"
                 color="red"
+                icon="i-heroicons-trash"
                 size="sm"
                 variant="ghost">
-                <template #default>
-                  <UIcon name="i-heroicons-trash" />
-                </template>
             </UButton>
+            <UIcon v-else name="i-heroicons-sun" class="flex-shrink-0 text-gray-400 dark:text-gray-500 h-5 w-5"/>
           </template>
           </UInput>
         </UFormGroup>
       </li>
     </ul>
+    <h3 v-else
+        class="text-md mx-auto">Fællesspisning sæsonen har ingen ferier.</h3>
   </div>
 </template>
