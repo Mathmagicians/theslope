@@ -39,7 +39,7 @@ export const useSeasonValidation = () => {
   )
 
   // Type definition
-  type Season = z.infer<typeof SeasonSchema>
+ type Season = z.infer<typeof SeasonSchema>
 
   // Serialization schema for transforming to database format
   const SerializedSeasonSchema = SeasonSchema.transform((season:Season) => ({
@@ -59,13 +59,8 @@ export const useSeasonValidation = () => {
   // Serialization and deserialization functions
   const serializeSeason = (season:Season):SerializedSeason => SerializedSeasonSchema.parse(season)
 
-  const deserializeSeason = (data: unknown): Season => {
-    console.log("🔄 > DESERIALIZE > Input:", JSON.stringify(data))
-    
+  const deserializeSeason = (serialized: SerializedSeason): Season => {
     try {
-      const serialized = data as Record<string, any>
-      
-      // Parse seasonDates JSON string
       const parsedSeasonDates = JSON.parse(serialized.seasonDates)
       
       return {
@@ -81,7 +76,6 @@ export const useSeasonValidation = () => {
         }
       }
     } catch (err) {
-      console.error("🔄 > DESERIALIZE > Error:", err)
       throw err
     }
   }
@@ -98,5 +92,6 @@ export const useSeasonValidation = () => {
   }
 }
 
-// Re-export the Season type for convenient access
-export type Season = z.infer<ReturnType<typeof useSeasonValidation>['SeasonSchema']>
+// Re-export the Season and serializedSeason types
+ export type Season = z.infer<ReturnType<typeof useSeasonValidation>['SeasonSchema']>
+export type SerializedSeason = z.infer<ReturnType<typeof useSeasonValidation>['SerializedSeasonSchema']>

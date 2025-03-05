@@ -13,11 +13,10 @@ const {
   disabledModes,
   getModel
 } = storeToRefs(store)
-const {init, createSeason, updateSeason, loadSeasons} = store
+const {init, createSeason, updateSeason, loadSeasons, onSeasonSelect, onModeChange} = store
 
 // STATE
 const selectedStep = ref<number>(1)
-const defaultFormMode =  FORM_MODES.VIEW
 
 // COMPUTED
 const showAdminSeason = computed(() =>
@@ -31,12 +30,10 @@ const handleSeasonUpdate = async (updatedSeason: Season) => {
       await createSeason(updatedSeason)
       // After successful creation, switch to view mode and refresh the seasons list
       await loadSeasons()
-      formMode.value = FORM_MODES.VIEW
     } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
       await updateSeason(updatedSeason)
       // After successful update, switch to view mode and refresh the seasons list
       await loadSeasons()
-      formMode.value = FORM_MODES.VIEW
     }
   } catch (error) {
     console.error('ADMIN PLANNING > Failed to update season:', error)
@@ -48,20 +45,9 @@ const handleCancel = async () => {
   console.info('AdminPlanning > handleCancel > resetting to default form mode and clearing draft')
   // Reset to default form mode which will trigger the watcher on formMode
   // The watcher will call onModeChange which handles draft clearing
-  formMode.value = defaultFormMode
+  await onModeChange(FORM_MODES.VIEW)
 }
 
-const onCreateSeason = () => {
-  if (disabledModes.value.includes(FORM_MODES.CREATE)) return
-  formMode.value = FORM_MODES.CREATE
-}
-
-// INITIALIZATION
-// Initialize the store - it will handle client vs server logic internally
-const initializeStore = async () => {
-  await init(defaultFormMode)
-}
-initializeStore()
 
 // VIEW STUFF
 
@@ -111,13 +97,15 @@ const items = [
               :placeholder="seasons?.length>0  ? 'Vælg sæson' : 'Ingen sæsoner'"
               :options="seasons"
               option-attribute="shortName"
-              v-model="selectedSeason"
+              value-attribute="id"
+             @change="onSeasonSelect"
+              model-value="selectedSeasonId"
           >
             <template #trailing>
               <UIcon name="i-heroicons-chevron-down-20-solid" class="w-5 h-5"/>
             </template>
           </USelect>
-          <FormModeSelector v-model="formMode" :steps="items" :disabled-modes="disabledModes"/>
+          <FormModeSelector v-model="formMode"  :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
         <div class="w-full md:w-auto md:mx-auto">
           <FormStepper :steps="items" v-model="selectedStep"/>
@@ -128,18 +116,13 @@ const items = [
       </div>
     </template>
     <template #default>
-      <div v-if="showAdminSeason ">
-        <ClientOnly>
-          <AdminSeason v-if="getModel?.value"
-                     v-model="getModel.value"
-                     :mode="formMode"
-                     @update="handleSeasonUpdate"
-                     @cancel="handleCancel"
-          />
-          <template #fallback>
-            <Loader text="Fællesspisning Sæson" />
-          </template>
-        </ClientOnly>
+      <div v-if="showAdminSeason">
+        <AdminSeason v-if="getModel?.value && showAdminSeason"
+                   v-model="getModel.value"
+                   :mode="formMode"
+                   @update="handleSeasonUpdate"
+                   @cancel="handleCancel"
+        />
       </div>
       <Loader v-else-if="isLoading" text="Fællesspisning Sæson" />
       <div v-else-if="isNoSeasons"
@@ -148,7 +131,7 @@ const items = [
         <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
                  color="orange"
                  icon="i-heroicons-plus-circle"
-                 @click="onCreateSeason"
+                 @click="onModeChange(FORM_MODES.CREATE)"
         >
           Opret ny sæson
         </UButton>

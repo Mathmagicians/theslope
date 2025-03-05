@@ -2,7 +2,7 @@ import { createStorage } from 'unstorage'
 import localStorageDriver from 'unstorage/drivers/localstorage'
 import { type StoreState } from '~/types/form'
 import { useSeason } from './useSeason'
-import type { Season } from '~/types/seasonTypes'
+import type {Season} from "~/composables/useSeasonValidation"
 
 const DEFAULT_DRAFT_KEY = 'draftSeason'
 
@@ -45,7 +45,8 @@ export const useDraftStorage = (key = DEFAULT_DRAFT_KEY) => {
     }
 
     const saveDraft = async (data: DraftData) => {
-        if (!storage) return
+        if(!process.client || !storage) return
+
         try {
             const serializedData = serializeDraftData(data)
             console.log("SAVE", serializedData)
@@ -57,7 +58,7 @@ export const useDraftStorage = (key = DEFAULT_DRAFT_KEY) => {
     }
 
     const loadDraft = async (): Promise<DraftData | null> => {
-        if (!storage) return null
+        if (!process.client || !storage) return null
         const stored = await storage.getItemRaw<string>(key)
         if (!stored ) return null
         console.log("LOAD", stored)
@@ -65,7 +66,7 @@ export const useDraftStorage = (key = DEFAULT_DRAFT_KEY) => {
     }
 
     const clearDraft = async () => {
-        if (!storage) return
+        if (!process.client ||  !storage) return
         await storage.removeItem(key)
     }
 

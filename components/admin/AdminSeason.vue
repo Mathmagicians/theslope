@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormSubmitEvent} from "#ui/types"
-import {type WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
+import {type DateRange, type WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
 //COMPONENT DEPENDENCIES
@@ -19,6 +19,7 @@ const emit = defineEmits<{
 
 // COMPUTED STATE
 const shortName = computed(() => createSeasonName(model.value.seasonDates))
+const holidays = ref<DateRange[]>(model.value.holidays ?? [])
 
 const isViewMode = computed(() => props.mode === 'view')
 
@@ -32,10 +33,8 @@ const formTitle = computed(() => {
       action = 'Rediger'
       break
     case 'view':
-      action = 'Vis'
-      break
     default:
-      throw new Error(`Invalid form mode: ${props.mode}`)
+      action = 'Vis'
   }
   return `${action} fællesspisning sæson`
 })
@@ -64,7 +63,7 @@ const buttonText = computed(() => {
   }
 })
 
-console.log("AdminSeason > intialization done, formMode,  model", props.mode, model.value.shortName)
+console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "model (season)", model.value.shortName)
 </script>
 
 <template>
@@ -132,7 +131,7 @@ console.log("AdminSeason > intialization done, formMode,  model", props.mode, mo
 
               <CalendarDateRangeListPicker
                   name="holidays"
-                  v-model="model.holidays"
+                  v-model="holidays"
                   :disabled="isViewMode"
                   :season-dates="model.seasonDates"
               />

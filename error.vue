@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import type { NuxtError } from '#app'
+import type {ErrorWithStatusCode} from "~/types/error"
 
-const props = defineProps({
-  error: Object as () => NuxtError
-})
-console.log('Error', props.error)
+const props = defineProps<{
+  error: ErrorWithStatusCode
+}>()
+
+console.warn('Error:', props.error)
+
 </script>
 
 <template>
   <div class="bg-white">
-    <ViewError :error="props.error.statusCode" :message="props.error.message" />
+    <ViewError
+        :error="props.error.statusCode ?? 500"
+        :message="props.error.message ?? 'Der er sket en fejl'"
+        :cause="props.error.cause ?? new Error('Øv bøv, ukendt fejl')"/>
   </div>
 
 </template>

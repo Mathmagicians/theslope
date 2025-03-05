@@ -10,17 +10,23 @@ useHead({
 
 const isMd: Ref<boolean> = ref(false)
 const checkMdBreakpoint = () => {
-  isMd.value = document.getElementById('breakpoint-md')?.offsetParent ? true: false
-  console.log('📺 > LAYOUT > isMd', isMd.value)
+  if (import.meta.client) {
+    isMd.value = !!document.getElementById('breakpoint-md')?.offsetParent
+    console.log('📺 > LAYOUT > isMd', isMd.value)
+  }
 }
 
 onMounted(() => {
   checkMdBreakpoint(); // Initial check
-  window.addEventListener('resize', checkMdBreakpoint);
+  if (import.meta.client) {
+    window.addEventListener('resize', checkMdBreakpoint);
+  }
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMdBreakpoint);
+  if (import.meta.client) {
+    window.removeEventListener('resize', checkMdBreakpoint);
+  }
 })
 
 provide('isMd', isMd) //exposes the reactive variable to all children - it detects tailwind breakpoint md
@@ -32,6 +38,9 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
   font-sans flex flex-col bg-white dark:bg-slate-900">
     <PageHeader/>
     <slot/>
+    <ClientOnly>
+      <UNotifications />
+    </ClientOnly>
     <PageFooter/>
     <div id="breakpoint-md" class="hidden md:block w-0 h-0"></div>
   </div>
