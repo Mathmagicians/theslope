@@ -63,7 +63,7 @@ const buttonText = computed(() => {
   }
 })
 
-console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "model (season)", model.value.shortName)
+console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "model (season)", model.value.shortName)
 </script>
 
 <template>
