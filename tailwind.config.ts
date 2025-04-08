@@ -7,7 +7,7 @@ export default {
 
             animation: {
                 marquee: 'marquee 25s linear infinite',
-                marqueer: 'marqueer 35s linear infinite',
+                marqueer: 'marqueer 50s linear infinite',
             },
             keyframes: {
                 marquee: {
@@ -21,7 +21,7 @@ export default {
             },
 
             colors: {
-                'mocha-mousse': {
+                'amber': {
                     '50': '#f8f5f2',
                     '100': '#eae2db',
                     '200': '#d4c3b3',
@@ -34,7 +34,7 @@ export default {
                     '900': '#523635',
                     '950': '#2d1b1b',
                 },
-                'pink-lemonade': {
+                'pink': {
                     '50': '#fef2f4',
                     '100': '#fde6ea',
                     '200': '#fad1d9',
@@ -47,7 +47,7 @@ export default {
                     '900': '#7e1d43',
                     '950': '#460b21',
                 },
-                'orange-mandarin': {
+                'orange': {
                     '50': '#fef5ee',
                     '100': '#fce8d8',
                     '200': '#f9ceaf',
@@ -60,7 +60,7 @@ export default {
                     '900': '#752419',
                     '950': '#3f0f0b',
                 },
-                'blue-curacao': {
+                'blue': {
                     '50': '#effcfc',
                     '100': '#d6f5f7',
                     '200': '#b2ebef',
@@ -73,7 +73,7 @@ export default {
                     '900': '#224b57',
                     '950': '#11313b',
                 },
-                'blue-hippie': {
+                'sky': {
                     '50': '#f1fafa',
                     '100': '#dbeff2',
                     '200': '#bcdfe5',
@@ -86,7 +86,7 @@ export default {
                     '900': '#2a444f',
                     '950': '#182b34',
                 },
-                'red-winery': {
+                'red': {
                     '50': '#fbf6f5',
                     '100': '#f8edeb',
                     '200': '#f1dcda',
@@ -99,7 +99,7 @@ export default {
                     '900': '#693236',
                     '950': '#391819',
                 },
-                'lavender-bonbon': {
+                'violet': {
                     '50': '#fcf3f8',
                     '100': '#fae9f3',
                     '200': '#f7d3e6',

@@ -4,6 +4,10 @@ compatibility_date = "2024-12-30"
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
 
+[vars]
+HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+DB_D1_NAME = "theslope"
+
 # Workers Logs
 # Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
 # Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
@@ -13,4 +17,4 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "05a6501a-9f4c-4708-8a13-780af6fa7200"
+database_id = "d413c489-78d8-43af-837c-d99947ee33d8"
