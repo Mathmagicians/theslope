@@ -1,0 +1,42 @@
+{
+  "name": "Devbox Development Environment",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "onCreateCommand": "curl -fsSL https://get.jetpack.io/devbox | bash && echo 'export PATH=$PATH:/home/vscode/.devbox/bin' >> ~/.bashrc",
+  "updateContentCommand": "cd ${containerWorkspaceFolder} && devbox install && npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "bradlc.vscode-tailwindcss",
+        "vue.volar",
+        "vue.vscode-typescript-vue-plugin",
+        "nuxt.mdc",
+        "prisma.prisma",
+        "Prisma.prisma-insider",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "antfu.iconify",
+        "cloudflare.cloudflare-wrangler"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true
+        },
+        "files.associations": {
+          "*.css": "tailwindcss"
+        },
+        "tailwindCSS.includeLanguages": {
+          "vue": "html",
+          "vue-html": "html"
+        },
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  },
+  "forwardPorts": [],
+  "remoteUser": "vscode"
+}
