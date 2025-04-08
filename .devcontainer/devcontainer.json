@@ -1,6 +1,6 @@
 {
   "name": "The Slope Development Environment - based on Node.js & TypeScript",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:0-22",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:dev-22",
   "features": {},
   "customizations": {
     "vscode": {
