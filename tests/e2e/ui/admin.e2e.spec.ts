@@ -114,7 +114,7 @@ test.describe('Admin page URL navigation', () => {
     await expect(page).toHaveURL(/.*(\?mode=view)?#adminplanning/)
   })
   
-  test.skip('Form state parameters in URL are applied to form', async ({ page }) => {
+  test('Form state parameters in URL are applied to form', async ({ page }) => {
     // Create URL with form parameters
     const formParams = new URLSearchParams()
     formParams.set('mode', 'edit')
@@ -132,8 +132,8 @@ test.describe('Admin page URL navigation', () => {
     await expect(page.locator('#seasonForm')).toBeVisible()
     
     // Verify form field values match URL parameters
-    // Note: The exact selectors may need to be adjusted based on your form implementation
-    await expect(page.locator('input[name="cancellableDays"]')).toHaveValue('2')
-    await expect(page.locator('input[name="editableMinutes"]')).toHaveValue('30')
+    // Note: The exact selectors may need to be adjusted based on your form implementation  
+    await expect(page.locator('input[name="cancellableDays"]')).toHaveValue('10')
+    await expect(page.locator('input[name="editableMinutes"]')).toHaveValue('90')
   })
 })

@@ -50,7 +50,7 @@ test.describe('AdminSeason form', () => {
   })
   
   // Test that focuses on form submission flow
-  test.skip('Create season form happy day flow', async ({ page }) => {
+  test('Create season form happy day flow', async ({ page }) => {
     // Navigate to admin page
     await page.goto('/admin')
     await page.waitForURL('/admin')
