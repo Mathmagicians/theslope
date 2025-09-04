@@ -55,7 +55,19 @@
 - Repository pattern with CRUD functions in `server/data/prismaRepository.ts`
 - Distinguish between validation errors (H3Error) and server errors
 
-## Collaboration Approach
+## Git & Collaboration Guidelines
+### Commit Messages
+- Write clear, concise commit messages
+- **DO NOT** add co-author information for AI assistants
+- **DO NOT** include "Generated with Claude Code" or similar AI attribution
+- Focus on describing the changes and their purpose
+
+### Pull Requests
+- **DO NOT** mention AI assistants as co-authors in PR descriptions
+- Focus on technical changes and test results
+- Include clear summary of what was updated and why
+
+### Collaboration Approach
 - **Planning and Strategy**: Discuss features, create a detailed written plan
 - **Implementation**: 
   - You write the core application code
