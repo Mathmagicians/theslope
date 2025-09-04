@@ -64,6 +64,18 @@ When testing components that use the `defineModel` API:
 - Location: tests/e2e/
 - Framework: Playwright
 
+# Git & Collaboration Guidelines
+## Commit Messages
+- Write clear, concise commit messages
+- **DO NOT** add co-author information for AI assistants
+- **DO NOT** include "Generated with Claude Code" or similar AI attribution
+- Focus on describing the changes and their purpose
+
+## Pull Requests
+- **DO NOT** mention AI assistants as co-authors in PR descriptions
+- Focus on technical changes and test results
+- Include clear summary of what was updated and why
+
 # Important Notes
 - Project is pre-configured with the tech stack
 - No need to suggest installation steps
