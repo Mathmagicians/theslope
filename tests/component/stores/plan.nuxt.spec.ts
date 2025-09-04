@@ -22,11 +22,6 @@ describe('Plan Store', () => {
             useApiHandler: () => ({
                 apiCall: async (action) => action()
             }),
-            useDraftStorage: () => ({
-                loadDraft: () => Promise.resolve(null),
-                saveDraft: vi.fn(),
-                clearDraft: vi.fn()
-            }),
             useSeason: () => ({
                 getDefaultSeason: () => ({
                     shortName: 'Default Season',

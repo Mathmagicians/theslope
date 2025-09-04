@@ -3,11 +3,10 @@
 // COMPONENT DEPENDENCIES
 const toast = useToast()
 const {init} = usePlanStore()
+const route = useRoute()
+const router = useRouter()
 
-// STATE
-const selectedTab = ref(0)
-
-// UI
+// UI - ITEMS
 const items = [
   {
     label: 'Planlægning',
@@ -55,17 +54,74 @@ const items = [
 
 const asyncComponents = items.map(item => defineAsyncComponent(() => import(`~/components/admin/${item.component}.vue`)))
 
-useHead({
-  title: "😎 Administration",
-  meta: [
-    {
-      name: "Administration",
-      content: "you can view households and their dinner preferences here",
-    },
-  ],
+
+// STATE
+const selectedTab = ref(0)
+const isInitialized = ref(false)
+
+// COMPUTED STATE
+
+const isReady = computed(() => status.value === 'success' && isInitialized.value)
+const componentToTabIndex = computed(() => {
+  return items.reduce((acc, item, index) => {
+    acc[item.component.toLowerCase()] = index
+    return acc
+  }, {} as Record<string, number>)
+})
+
+// ACTIONS
+const syncTabWithHash = () :boolean => {
+  const hash = route.hash
+  console.info('🔗 > Admin > syncTabWithHash > hash:', hash)
+  if (hash) {
+    const hashComponent = hash.slice(1).toLowerCase()
+    const tab = componentToTabIndex.value[hashComponent]
+    if ( hashComponent && tab) {
+      selectedTab.value = tab
+      console.info('🔗 > Admin > syncTabWithHash > selectedTab:', selectedTab.value, 'selected component:', hashComponent, 'isReady:', isReady.value)
+      return true
+    }
+  }
+  return false
+}
+
+// updates the page fragement # in the url to match the selected tab
+const updateHashFromTab = () => {
+  const component = items[selectedTab.value].component.toLowerCase()
+  const hash = component ? `#${component}` : '#'
+  console.log('🔗 > Admin > updateHashFromTab > selectedTab:', selectedTab.value, 'routes hash:', route.hash, 'hash:', hash, 'query:', route.query)
+  router.replace({
+    path: route.path,
+    hash: hash,
+    query: route.query
+  },  { preserveState: true })
+  console.info('🔗 > Admin > updateHashFromTab > updated hash:', component, 'with query:', route.query)
+}
+
+// WATCH
+watch(selectedTab, () => {
+  updateHashFromTab()
 })
 
 // INITIALIZATION
+
+onMounted(() => {
+  console.info('🔗 > Admin > onMounted >', 
+    'route.hash:', route.hash,
+    'route.query:', route.query, 
+    'route.fullPath:', route.fullPath,
+    'window.location.hash:', window.location.hash,
+    'window.location.search:', window.location.search
+  )
+  
+  // check if there is a hash in the url already and sync the tab with it
+  const synced = syncTabWithHash()
+  if (!synced) {
+    updateHashFromTab()
+  }
+  isInitialized.value = true
+})
+
 const {status, error} = await useAsyncData('planStore', async () => {
   await init()
   toast.add({
@@ -76,15 +132,27 @@ const {status, error} = await useAsyncData('planStore', async () => {
   })
   return { initialized: true }
 })
+
+// UI - CONTINUED
+
+useHead({
+  title: "😎 Administration",
+  meta: [
+    {
+      name: "Administration",
+      content: "you can view households and their dinner preferences here",
+    },
+  ],
+})
+
 </script>
 
 
 <template>
   <div>
-    <Loader v-if="status === 'pending'"/>
+    <Loader v-if="status==='pending'"/>
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
     <div
-        v-if="status !== 'pending'"
         class="py-1 md:py-2 lg:p-4 min-h-screen">
     <UTabs
         v-model="selectedTab"
@@ -106,11 +174,12 @@ const {status, error} = await useAsyncData('planStore', async () => {
         <UIcon :name="item.icon" class="size-4 md:size-6 flex-shrink-0 mx-2"/>
       </template>
       <template #item="{ item, selected, index }">
-        <div class="flex flex-col gap-2 md:gap-4">
+        <!-- Invisible anchor above the content -->
+        <a :id="item.component.toLowerCase()" style="position: relative; top: -80px; visibility: hidden;"></a>
+        <div v-if="isInitialized"
+            class="flex flex-col gap-2 md:gap-4">
           <Ticker class="py-1" :words="item.content.split('.')"/>
-          <ClientOnly>
             <component v-if="selected" :is="asyncComponents[index]"/>
-          </ClientOnly>
         </div>
       </template>
     </UTabs>

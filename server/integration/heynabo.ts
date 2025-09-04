@@ -195,7 +195,7 @@ function inhabitantFromMember(locationId: number, member: HeynaboMember): Inhabi
         household: {} as HouseholdCreateNestedOneWithoutInhabitantsInput
     } satisfies InhabitantCreateInput
 
-    if (member.email && 'member.role' !== 'limited') {
+    if (member.email && member.role  !== 'limited') {
         const user: UserCreateInput = {
             email: member.email,
             phone: member.phone,

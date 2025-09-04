@@ -1,8 +1,9 @@
 import {test, expect} from '@playwright/test'
 import {formatDate} from '~/utils/date'
 import {useSeasonValidation} from '~/composables/useSeasonValidation'
+import {authFiles} from '../config'
+const { adminFile } = authFiles
 
-const adminFile = 'playwright/.auth/admin.json'
 const headers = {'Content-Type': 'application/json'}
 
 // Generate unique test data
