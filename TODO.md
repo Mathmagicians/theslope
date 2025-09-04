@@ -33,3 +33,34 @@ The following E2E tests have been temporarily disabled with `test.skip()` to all
 - All other E2E tests (27/29) are passing
 - Authentication and API tests work correctly
 - Only UI form interaction tests need fixes
+
+---
+
+## Major Framework Migrations Plan
+
+### Phase 1: Dependency Updates ✅ COMPLETED
+- [x] Safe dependency updates (PR #21) - MERGED  
+- [x] Wrangler 4 migration (PR #22) - IN REVIEW
+- [x] Security vulnerabilities resolved (0 vulnerabilities)
+
+### Phase 2: Major Framework Updates (Planned)
+
+#### 1. Nuxt 4 Migration (HIGH PRIORITY)
+**Branch**: `migrate-nuxt-4`  
+**Current**: 3.19.0 → **Target**: 4.1.0  
+**Impact**: HIGH - Core framework affecting all components
+
+#### 2. Pinia 3 Migration (MEDIUM PRIORITY)  
+**Branch**: `migrate-pinia-3`
+**Current**: 2.3.1 → **Target**: 3.0.3
+**Impact**: MEDIUM - State management changes
+
+#### 3. Zod 4 Migration (MEDIUM PRIORITY)
+**Branch**: `migrate-zod-4`
+**Current**: 3.24.1 → **Target**: 4.1.5  
+**Impact**: MEDIUM - Form validation and API schemas
+
+### Migration Principles
+1. **One migration per branch/PR** - Isolate changes
+2. **Comprehensive testing** - Full test suite must pass
+3. **Rollback ready** - Keep fallback options
