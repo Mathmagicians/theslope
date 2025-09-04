@@ -15,12 +15,21 @@ const {
 } = storeToRefs(store)
 const {init, createSeason, updateSeason, loadSeasons, onSeasonSelect, onModeChange} = store
 
+const route = useRoute()
+const router = useRouter()
+
 // STATE
 const selectedStep = ref<number>(1)
 
 // COMPUTED
-const showAdminSeason = computed(() =>
-    !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE)) && getModel.value
+const showAdminSeason = computed(() => {
+  console.log('📆 > AdminPlanning > showAdminSeason > state:',
+      'formMode:', formMode.value,
+      'isLoading:', isLoading.value,
+      'isNoSeasons:', isNoSeasons.value,
+      'getModel exists:', !!getModel.value)
+  return !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && getModel.value
+})
 
 //HANDLING STATE CHANGE
 const handleSeasonUpdate = async (updatedSeason: Season) => {
@@ -48,8 +57,41 @@ const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
 
+const updateURLQueryFromMode = (mode: FORM_MODES) => {
+  console.log('📆 > AdminPlanning > updateURLfromMode > updating URL query with mode:', mode)
+  router.replace({
+    path: route.path,
+    hash: route.hash, // Explicitly preserve the hash
+    query: {
+      ...route.query,
+      mode: mode
+    }
+  }, {preserveState: true})
+}
 
-// VIEW STUFF
+//INITIALIZATION
+onMounted(async () => {
+  // Get form mode from query params (before hash)
+  const modeFromQuery = toFormMode(route.query.mode as string)
+  console.log('📆 > AdminPlanning > onMounted > route.query:', route.query)
+  console.info('📆 > AdminPlanning > onMounted > modeFromQuery:', modeFromQuery, 'route.query.mode:', route.query.mode)
+
+  // Update form mode based on URL parameter if valid
+  if (modeFromQuery) {
+    await onModeChange(modeFromQuery)
+  }
+})
+
+// Watch for form mode changes and update URL
+watch(formMode, (newMode) => {
+  // Only update if we're changing modes and not already matching the URL
+  if (route.query.mode !== newMode && toFormMode(newMode)) {
+    console.log('📆 > AdminPlanning > watch formMode > updating URL query with mode:', newMode)
+    updateURLQueryFromMode(newMode)
+  }
+})
+
+// UI STUFF
 
 const items = [
   {
@@ -70,6 +112,7 @@ const items = [
 <template>
 
   <UCard
+      data-test-id="admin-planning"
       class="w-full px-0"
       :ui="{
     base: '',
@@ -98,14 +141,14 @@ const items = [
               :options="seasons"
               option-attribute="shortName"
               value-attribute="id"
-             @change="onSeasonSelect"
+              @change="onSeasonSelect"
               model-value="selectedSeasonId"
           >
             <template #trailing>
               <UIcon name="i-heroicons-chevron-down-20-solid" class="w-5 h-5"/>
             </template>
           </USelect>
-          <FormModeSelector v-model="formMode"  :disabled-modes="disabledModes" @change="onModeChange"/>
+          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
         <div class="w-full md:w-auto md:mx-auto">
           <FormStepper :steps="items" v-model="selectedStep"/>
@@ -117,18 +160,19 @@ const items = [
     </template>
     <template #default>
       <div v-if="showAdminSeason">
-        <AdminSeason v-if="getModel?.value && showAdminSeason"
-                   v-model="getModel.value"
-                   :mode="formMode"
-                   @update="handleSeasonUpdate"
-                   @cancel="handleCancel"
+        <AdminPlanningSeason v-if="getModel?.value && showAdminSeason"
+                             v-model="getModel.value"
+                             :mode="formMode"
+                             @update="handleSeasonUpdate"
+                             @cancel="handleCancel"
         />
       </div>
-      <Loader v-else-if="isLoading" text="Fællesspisning Sæson" />
+      <Loader v-else-if="isLoading" text="Fællesspisning Sæson"/>
       <div v-else-if="isNoSeasons"
            class="flex flex-col items-center justify-center space-y-4">
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>
         <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
+                 name="create-new-season"
                  color="orange"
                  icon="i-heroicons-plus-circle"
                  @click="onModeChange(FORM_MODES.CREATE)"

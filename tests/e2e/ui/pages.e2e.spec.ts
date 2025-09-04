@@ -15,7 +15,7 @@ publicPages.forEach(pageName => {
     test(`All public pages can load - /${pageName}`, async ({page}) => {
         for (const pageName of publicPages) {
             const response = await page.goto(`/${pageName}`);
-            expect(response.status()).toBe(200)
+            expect(response?.status()).toBe(200)
         }
     })
 })
@@ -24,7 +24,7 @@ protectedPages.forEach(pageName => {
     test(`All protected pages give 401 unauthorized error when not logged in - /${pageName}`, async ({page}) => {
         for (const pageName of protectedPages) {
             const response = await page.goto(`/${pageName}`);
-            expect(response.status()).toBe(401)
+            expect(response?.status()).toBe(401)
         }
     })
 })

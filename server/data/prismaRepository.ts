@@ -99,7 +99,7 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
         name: inhabitant.name,
         lastName: inhabitant.lastName,
         birthDate: inhabitant.birthDate,
-        user: Prisma.skip,
+        user: PrismaFromClient.skip,
         household: {
             connect: {id: householdId}
         }

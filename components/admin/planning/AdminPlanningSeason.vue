@@ -23,6 +23,14 @@ const holidays = ref<DateRange[]>(model.value.holidays ?? [])
 
 const isViewMode = computed(() => props.mode === 'view')
 
+// Update shortName when seasonDates changes
+watch(() => model.value.seasonDates, (newDates) => {
+  if (newDates) {
+    model.value.shortName = createSeasonName(newDates)
+    console.log('📆 > AdminSeason > Updated shortName to:', model.value.shortName)
+  }
+}, { deep: true })
+
 const formTitle = computed(() => {
   let action: string
   switch (props.mode) {
@@ -174,10 +182,10 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
 
     <template #footer>
       <div v-if="!isViewMode" class="flex justify-end gap-4">
-        <UButton color="gray" variant="soft" @click="emit('cancel')">
+        <UButton name="cancel-season" color="gray" variant="soft" @click="emit('cancel')">
           Annuller
         </UButton>
-        <UButton type="submit" form="seasonForm" color="pink" icon="i-heroicons-calendar">
+        <UButton name="submit-season" type="submit" form="seasonForm" color="pink" icon="i-heroicons-calendar">
           {{ buttonText }}
         </UButton>
       </div>
