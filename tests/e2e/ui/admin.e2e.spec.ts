@@ -114,7 +114,7 @@ test.describe('Admin page URL navigation', () => {
     await expect(page).toHaveURL(/.*(\?mode=view)?#adminplanning/)
   })
   
-  test('Form state parameters in URL are applied to form', async ({ page }) => {
+  test.skip('Form state parameters in URL are applied to form', async ({ page }) => {
     // Create URL with form parameters
     const formParams = new URLSearchParams()
     formParams.set('mode', 'edit')

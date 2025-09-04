@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {formatDate} from '~/utils/date'
 import {useSeasonValidation} from '~/composables/useSeasonValidation'
-import {authFiles} from '../config'
+import {authFiles} from '../../config'
 const { adminFile } = authFiles
 
 const headers = {'Content-Type': 'application/json'}
