@@ -1,5 +1,19 @@
 {
-  "isCreateButtonActive": false,
-  "enabledInputsCount": 0,
-  "inputNames": []
+  "isCreateButtonActive": true,
+  "enabledInputsCount": 13,
+  "inputNames": [
+    "start",
+    "end",
+    "cookingDay-mandag",
+    "cookingDay-tirsdag",
+    "cookingDay-onsdag",
+    "cookingDay-torsdag",
+    "cookingDay-fredag",
+    "cookingDay-loerdag",
+    "cookingDay-soendag",
+    "start",
+    "end",
+    "cancellableDays",
+    "editableMinutes"
+  ]
 }
