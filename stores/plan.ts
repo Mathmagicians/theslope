@@ -1,15 +1,12 @@
 import {type Season, type SerializedSeason} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode, STORE_STATES, type StoreState} from '~/types/form'
-import {useDebounceFn} from '@vueuse/core'
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {apiCall, handleApiError} = useApiHandler()
-        const draftStorage = useDraftStorage()
         const {getDefaultSeason, coalesceSeason, serializeSeason, deserializeSeason} = useSeason()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
-
 
         // STATE
         const activeSeason = ref<Season | null>(null)
@@ -50,7 +47,12 @@ export const usePlanStore = defineStore("Plan", () => {
                 id: selectedSeason.value?.id,
                 formMode: formMode.value,
                 state: state.value,
-                draft: draftSeason.value?.shortName
+                draft: draftSeason.value?.shortName,
+                draftId: draftSeason.value?.id,
+                hasDraft: !!draftSeason.value,
+                getModelType: draftSeason.value && state.value === STORE_STATES.CREATE ? 'draftSeason' : 
+                             draftSeason.value && state.value === STORE_STATES.EDIT ? 'draftSeason' :
+                             selectedSeason.value && state.value === STORE_STATES.VIEW_SELECTED ? 'selectedSeason' : 'null'
             })
         }
 
@@ -94,13 +96,18 @@ export const usePlanStore = defineStore("Plan", () => {
                 prettyPrint('createSeason')
 
                 await apiCall(
-                    async () => useFetch('/api/admin/season', {
-                        method: 'PUT',
-                        body: serializedSeason,
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    }),
+                    async () => {
+                        // Use $fetch instead of useFetch to avoid warning when component is already mounted
+                        const result = await $fetch('/api/admin/season', {
+                            method: 'PUT',
+                            body: serializedSeason,
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        // Return with the same structure as useFetch would
+                        return { data: { value: result } }
+                    },
                     state,
                     'createSeason'
                 )
@@ -116,58 +123,23 @@ export const usePlanStore = defineStore("Plan", () => {
                 console.log("📆 > PLAN > updateSeason > Serialized season:", serializedSeason)
 
                 await apiCall(
-                    async () => useFetch(`/api/admin/season/${season.id}`, {
-                        method: 'POST',
-                        body: serializedSeason,
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    }),
+                    async () => {
+                        // Use $fetch instead of useFetch to avoid warning when component is already mounted
+                        const result = await $fetch(`/api/admin/season/${season.id}`, {
+                            method: 'POST',
+                            body: serializedSeason,
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        // Return with the same structure as useFetch would
+                        return { data: { value: result } }
+                    },
                     state,
                     'updateSeason'
                 )
             } catch (e: any) {
                 handleApiError(e, 'updateSeason call failed')
-            }
-        }
-
-        // saves form content in storage
-        const saveDraftSeason = async (season: Season, nextState: StoreState, afterState: StoreState) => {
-            const prevState = state.value
-            try {
-                state.value = nextState
-                draftSeason.value = season
-                await draftStorage.saveDraft({
-                    state: nextState,
-                    season: season
-                })
-                state.value = afterState
-            } catch (e: any) {
-                handleApiError( {statusCode: 500, message: 'Din kladde kunne ikke gemmes', cause: e}, 'saveDraftSeason')
-            }
-        }
-
-        const debouncedSave = useDebounceFn(async () => {
-            if (draftSeason.value && isShouldUseDraft.value) {
-                return draftStorage.saveDraft({
-                    state: state.value,
-                    season: draftSeason.value
-                })
-                    .then(() => console.debug('Draft saved successfully'))
-                    .catch(() => console.info('promise cancelled by debounce'))
-                    .catch((error: Error) => {
-                        handleApiError(error, 'Failed to save draft:')
-                    })
-            }
-        }, 1000)
-
-        // Initialize draft season
-        const initDraft = async () => {
-            const stored = await draftStorage.loadDraft()
-            if (stored) {
-                state.value = stored.state
-                draftSeason.value = stored.season
-                prettyPrint('initDraft - found stored draft')
             }
         }
 
@@ -199,10 +171,16 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const onEnterCreate = async () => {
             formMode.value = FORM_MODES.CREATE
-            state.value = STORE_STATES.CREATE
-            draftSeason.value = coalesceSeason(draftSeason.value)
-            if (process.client) await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
-            prettyPrint('onEnterCreate')
+            
+            if (draftSeason.value && !draftSeason.value.id && state.value === STORE_STATES.CREATE) {
+                // Keep existing valid draft
+                prettyPrint('onEnterCreate - using existing draft')
+            } else {
+                // Start fresh
+                state.value = STORE_STATES.CREATE
+                draftSeason.value = getDefaultSeason()
+                prettyPrint('onEnterCreate - created new draft')
+            }
         }
 
         const onEnterEdit = async () => {
@@ -214,7 +192,6 @@ export const usePlanStore = defineStore("Plan", () => {
                 } else {
                     draftSeason.value = selectedSeason.value
                 }
-                if (process.client && draftSeason.value) await draftStorage.saveDraft({state: state.value, season: draftSeason.value})
                 prettyPrint('onEnterEdit')
             } catch (e) {
                 console.error("Plan > onEnterEdit > Error entering edit mode:", e)
@@ -224,11 +201,9 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const onEnterView = async () => {
             formMode.value = FORM_MODES.VIEW
-            state.value = isNoSeasons.value  ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
+            state.value = isNoSeasons.value ? STORE_STATES.VIEW_NO_SEASONS : STORE_STATES.VIEW_SELECTED
             draftSeason.value = null
-            if (process.client) await draftStorage.clearDraft()
             prettyPrint('onEnterView - after state change')
-
         }
 
         const onModeChange = async (mode: FormMode) => {
@@ -244,15 +219,11 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-
         // INITIALIZE
-
         const init = async () => {
             prettyPrint('init')
             // Load seasons (server or client)
             await loadSeasons()
-
-            if(process.client) await initDraft()
 
             switch (state.value) {
                 case STORE_STATES.CREATE:
@@ -267,16 +238,6 @@ export const usePlanStore = defineStore("Plan", () => {
                     return onModeChange(FORM_MODES.VIEW)
             }
         }
-
-        // WATCH FOR CHANGES
-        watch(draftSeason, async (newDraft) => {
-            if (process.client) {
-                if (newDraft && isShouldUseDraft.value) {
-                    await debouncedSave()
-                }
-            }
-        }, {deep: true})
-
 
         return {
             // state
@@ -297,7 +258,6 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             onSeasonSelect,
-            saveDraftSeason,
             createDraft,
             editDraft,
             onModeChange,

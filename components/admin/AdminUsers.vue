@@ -22,7 +22,8 @@ const classForSystemRole = (role: string) => role=== 'ADMIN' ? 'bg-red-100 text-
 
 
 <template>
-  <div class="flex flex-col items-center">
+  <div data-test-id="admin-users"
+      class="flex flex-col items-center">
     <h1>Brugere</h1>
     <UButton @click="importHeynaboData" :loading="importing" class="m-4 " color="red" size="lg" variant="soft"
              icon="i-pajamas-admin">

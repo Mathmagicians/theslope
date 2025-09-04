@@ -38,13 +38,15 @@ export const useUsersStore = defineStore("Users", () => {
             importing.value = true
             console.log("🍍 > PINA > USERS > Importing Heynabo data")
             users.value = await $fetch("/api/admin/heynabo/import")
-            importing.value = false
         } catch (error: any) {
+            console.error("🍍 > PINA > USERS > Error importing Heynabo data:", error)
             createError({
                 statusMessage: "Error Importing users from Heynabo",
                 statusCode: 500,
                 cause: error
             })
+        } finally {
+            importing.value = false
         }
     };
 
