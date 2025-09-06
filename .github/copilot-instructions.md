@@ -65,6 +65,12 @@ When testing components that use the `defineModel` API:
 - Framework: Playwright
 
 # Git & Collaboration Guidelines
+## Branch Management
+- **NEVER work directly on main branch**
+- **ALWAYS create an appropriate feature branch** for each task
+- **ALWAYS create a PR** for review before merging to main
+- Branch naming: Use descriptive names like `fix-e2e-tests`, `migrate-nuxt-4`, `update-dependencies`
+
 ## Commit Messages
 - Write clear, concise commit messages
 - **DO NOT** add co-author information for AI assistants
