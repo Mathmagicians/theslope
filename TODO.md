@@ -16,11 +16,12 @@ The following E2E tests have been temporarily disabled with `test.skip()` to all
 ### 2. Season form create flow test  
 **File**: `tests/e2e/ui/AdminSeason.e2e.spec.ts:53`  
 **Test**: `Create season form happy day flow`  
-**Issue**: Cannot find selector `#seasonForm` - element not visible within 10s timeout  
+**Issue**: Cannot find delete button selector - various delete holiday button selectors fail  
+**Error**: `locator('#seasonForm button:has(.i-heroicons-trash), #seasonForm button.delete-holiday, #seasonForm button:has(i.trash), #seasonForm .remove-item').first()` not found
 **Fix needed**:
-- Update selector to match current component structure
-- Check if form ID changed from `#seasonForm` to something else
-- Verify form loading timing and add proper waits
+- Update delete button selector to match current component structure
+- Check actual HTML structure of holiday delete buttons
+- Verify form state before attempting to delete holiday entries
 
 ## Action Items
 - [ ] Investigate actual form field names and IDs in current component structure
