@@ -50,7 +50,7 @@ const heynaboUserSchema = z.object({
     phone: z.string().nullable(),
     emergencyContact: z.string().nullable(),
     dateOfBirth: z.string().nullable(),
-    description: z.string(),
+    description: z.string().nullable(),
     uiStorage: z.string(),
     role: z.string(),
     roles: z.array(z.string()),

@@ -48,4 +48,8 @@ jobs:
           path: playwright-report/
           retention-days: 30
       - name: Deploy to dev server on Cloudflare 😎
+        if: github.ref != 'refs/heads/main'
         run: npm run deploy
+      - name: Deploy to production server on Cloudflare 🚀
+        if: github.ref == 'refs/heads/main'
+        run: npm run deploy:prod

@@ -1,8 +1,13 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "theslope"
-compatibility_date = "2024-12-30"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
+
+routes = [
+    { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
+]
 
 [vars]
 HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
@@ -18,3 +23,20 @@ enabled = true
 binding = "DB"
 database_name = "theslope"
 database_id = "d413c489-78d8-43af-837c-d99947ee33d8"
+
+[env.prod]
+name = "theslope-prod"
+workers_dev = false
+routes = [
+    { pattern = "www.skraaningen.dk/*", zone_name = "skraaningen.dk" },
+    { pattern = "skraaningen.dk/*", zone_name = "skraaningen.dk" }
+]
+
+[env.prod.vars]
+HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
+DB_D1_NAME = "theslope-prod"
+
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "theslope-prod"
+database_id = "bf772049-5ce5-4caf-a8c9-30c673a4fe38"
