@@ -7,9 +7,8 @@ const words = ['natur', 'fællesskab', 'bæredygtighed', 'nationalpark', 'fælle
 <template>
   <div class="flex flex-col">
     <Hero />
-    <div class="bg-amber-500 flex flex-col space-y-2 md:space-y-4 min-h-24">
+    <div class="w-full bg-amber-500 py-21 md:py-2 min-h-12 overflow-hidden">
       <Ticker :words="words" class="my-2"/>
-      <Ticker :words="words" :reverse="true" class="my-2"/>
     </div>
 
     <div class="min-h-screen md:min-h-1/4  bg-pink-500">
