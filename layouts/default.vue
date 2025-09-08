@@ -34,9 +34,9 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
 
 <template>
   <div
-      class="w-screen min-w-screen h-full
-  font-sans flex flex-col bg-white dark:bg-slate-900">
-    <PageHeader/>
+      class="min-h-screen w-full
+  font-sans flex flex-col bg-amber-500 dark:bg-amber-600 space-y-1 ">
+    <PageHeader class="my-2"/>
     <slot/>
     <ClientOnly>
       <UNotifications />

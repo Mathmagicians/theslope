@@ -2,15 +2,14 @@
 
 interface Props {
   words: string[]
-  reverse?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  reverse: false
-});
+  words:  ()  => ['marque test']
+})
 
 const animationClass = () => {
-  return props.reverse ? 'animate-marqueer' : 'animate-marquee';
+  return 'animate-marquee'
 }
 
 const seed = Math.floor(Math.random() * 10)
@@ -46,9 +45,9 @@ const style = (index: number) => {
 </script>
 
 <template>
-  <ul class="w-screen flex flex-nowrap flex-row
+  <ul class="w-full flex flex-nowrap flex-row
   items-center justify-center md:justify-start
-  text-center lowercase  text-xs md:text-base whitespace-nowrap m-1 overflow-clip"
+  text-center lowercase  text-xs md:text-base whitespace-nowrap"
       :class="animationClass()">
     <li v-for="(word, index)  in words" :key="index">
         <span class="p-1 m-1 md:px-4 md:px-2 border-1 md:border-2 rounded-lg" :class="style(index)">
