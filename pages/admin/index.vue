@@ -177,7 +177,7 @@ useHead({
         <!-- Invisible anchor above the content -->
         <a :id="item.component.toLowerCase()" style="position: relative; top: -80px; visibility: hidden;"></a>
         <div v-if="isInitialized"
-            class="flex flex-col gap-2 md:gap-4">
+            class="flex flex-col gap-2 md:gap-4 overflow-hidden">
           <Ticker class="py-1" :words="item.content.split('.')"/>
             <component v-if="selected" :is="asyncComponents[index]"/>
         </div>

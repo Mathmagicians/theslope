@@ -1,4 +1,22 @@
-# TODO - Fix E2E Tests
+# TODO
+
+## Current Issues (Header Responsiveness)
+
+**Priority Issues - Fix Header Menu Overlay:**
+
+1. **Mobile Header Responsiveness**: Burger menu is cut off or invisible on small screens, likely due to container width constraints or margin issues
+
+2. **Horizontal Overflow**: Content is approximately 10% too wide for mobile viewport, causing horizontal scrolling and layout breaking  
+
+3. **Ticker Animation Problems**: Fixed ticker keyframes but badges may still be scrolling off-screen due to container constraints
+
+4. **Container Conflicts**: Switching between UContainer and div elements has created inconsistent width behaviors and styling conflicts
+
+5. **Responsive Design Regression**: Changes broke the working responsive design from main branch - need to preserve desktop floating overlay while ensuring mobile compatibility
+
+*Core issue: Fighting with container width constraints while trying to achieve both full-width mobile layout and centered desktop overlay behavior.*
+
+## Fix E2E Tests
 
 ## Temporarily Disabled E2E Tests
 

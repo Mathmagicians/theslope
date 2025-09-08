@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { loggedIn, greeting } = storeToRefs(useAuthStore())
+const {loggedIn, greeting} = storeToRefs(useAuthStore())
 
 const navigationLinks = computed(() => [
   {
@@ -29,6 +29,12 @@ const navigationLinks = computed(() => [
   }
 ])
 
+const loginLink = computed(() => ({
+  label: 'LOGIN',
+  to: "/login",
+  icon: 'i-guidance-entry'
+}))
+
 const isMenuOpen = ref(false)
 
 const closeMenu = () => {
@@ -37,27 +43,48 @@ const closeMenu = () => {
 </script>
 
 <template>
-  <UContainer class="w-full bg-blue-100 dark:bg-blue-900">
-    <div class="flex items-center justify-between p-2">
-      <NuxtLink to="/" class="shrink-0 w-24 md:w-32 shrink-0 md:mr-8">
-        <Logo />
+  <div
+      class="sticky top-0 md:top-4 z-30 md:mx-auto w-full md:max-w-max bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg">
+    <div class="flex items-center justify-between p-1 lg:p-2">
+      <NuxtLink to="/" class="shrink-0 w-24 lg:w-32 shrink-0 md:mr-2 lg:mr-4">
+        <Logo/>
       </NuxtLink>
-      <div class="flex-grow bg-red"></div>
-      <UHorizontalNavigation
-          :links="navigationLinks"
-          class="hidden md:flex "
+      <!-- Spacer to push navigation to the right -->
+      <div class="flex-grow w-2 md:w-8"></div>
+      <!-- Desktop Navigation, menu items not shown when user not logged in -->
+      <UHorizontalNavigation v-if="loggedIn"
+                             :links="navigationLinks"
+                             class="hidden md:flex "
       />
+      <UHorizontalNavigation v-else
+                             :links="[loginLink]"
+                             class="hidden md:flex "/>
 
-      <UButton
-          variant="ghost"
-          @click="isMenuOpen = !isMenuOpen"
-          class="md:hidden"
-      >
-        <Icon
-            :name="isMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'"
-            class="w-6 h-6"
-        />
-      </UButton>
+      <div v-if="loggedIn">
+        <UButton
+            variant="ghost"
+            @click="isMenuOpen = !isMenuOpen"
+            class="md:hidden"
+        >
+          <Icon
+              :name="isMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'"
+              class="w-6 h-6"
+          />
+        </UButton>
+      </div>
+      <div v-else>
+        <NuxtLink to="/login" class="md:hidden">
+          <UButton
+              variant="ghost"
+          >
+            <Icon
+                name="i-guidance-entry"
+                class="w-6 h-6"
+            />
+          </UButton>
+        </NuxtLink>
+      </div>
+
     </div>
 
     <Transition
@@ -69,7 +96,7 @@ const closeMenu = () => {
         leave-to-class="opacity-0"
     >
       <div v-if="isMenuOpen"
-           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-blue-900 z-50 md:hidden">
+           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-gray-900 z-50 md:hidden">
         <div class="flex justify-end p-2">
           <UButton variant="ghost" @click="closeMenu">
             <Icon name="i-heroicons-x-mark" class="w-6 h-6"/>
@@ -84,5 +111,5 @@ const closeMenu = () => {
         </div>
       </div>
     </Transition>
-  </UContainer>
+  </div>
 </template>

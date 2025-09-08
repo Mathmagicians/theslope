@@ -6,17 +6,12 @@ export default {
         extend: {
 
             animation: {
-                marquee: 'marquee 25s linear infinite',
-                marqueer: 'marqueer 50s linear infinite',
+                marquee: 'marquee 90s linear infinite'
             },
             keyframes: {
                 marquee: {
-                    '0%': { transform: 'translateX(0%)' },
-                    '100%': { transform: 'translateX(-100%)' },
-                },
-                marqueer: {
-                    '0%, 100%': { transform: 'translateX(0%)' },
-                    '50%': { transform: 'translateX(100%)' },
+                    '0%, 100%': { transform: 'translateX(100%)' },
+                    '50%': { transform: 'translateX(-100%)' },
                 }
             },
 
