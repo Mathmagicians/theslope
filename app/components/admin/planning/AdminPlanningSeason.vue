@@ -133,7 +133,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
             </UFormGroup>
 
             <!-- Pick holidays -->
-            <UDivider/>
+            <USeparator/>
             <UFormGroup label="Hvornår holder fællesspisning fri?"
                         name="holidaysGroup">
 
@@ -146,7 +146,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
 
             </UFormGroup>
 
-            <UDivider/>
+            <USeparator/>
 
             <!-- Ticket settings -->
             <UFormGroup

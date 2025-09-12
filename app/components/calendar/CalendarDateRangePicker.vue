@@ -139,9 +139,9 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 <template>
   <div>
     <client-only>
-      <VDatePicker
-          v-model.range="pickerDateRange"
-          isrange
+      <UCalendar
+          v-model="pickerDateRange"
+          range
           :columns="getIsMd ? 2: 1"
           v-bind="{ ...attrs, ...$attrs }"
           @dayclick="onDayClick"

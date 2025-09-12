@@ -1,2 +1,106 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+@theme {
+    /* Custom amber color palette */
+    --color-amber-50: #f8f5f2;
+    --color-amber-100: #eae2db;
+    --color-amber-200: #d4c3b3;
+    --color-amber-300: #bda38c;
+    --color-amber-400: #ae8a71;
+    --color-amber-500: #a47864;
+    --color-amber-600: #8d5f52;
+    --color-amber-700: #774c46;
+    --color-amber-800: #633f3d;
+    --color-amber-900: #523635;
+    --color-amber-950: #2d1b1b;
+
+    /* Custom blue color palette */
+    --color-blue-50: #effcfc;
+    --color-blue-100: #d6f5f7;
+    --color-blue-200: #b2ebef;
+    --color-blue-300: #7ddbe3;
+    --color-blue-400: #33becc;
+    --color-blue-500: #25a6b5;
+    --color-blue-600: #228698;
+    --color-blue-700: #226d7d;
+    --color-blue-800: #235a67;
+    --color-blue-900: #224b57;
+    --color-blue-950: #11313b;
+
+    /* Custom pink color palette */
+    --color-pink-50: #fef2f4;
+    --color-pink-100: #fde6ea;
+    --color-pink-200: #fad1d9;
+    --color-pink-300: #f6abba;
+    --color-pink-400: #ee6d8a;
+    --color-pink-500: #e54e74;
+    --color-pink-600: #d12d5e;
+    --color-pink-700: #b0204f;
+    --color-pink-800: #941d48;
+    --color-pink-900: #7e1d43;
+    --color-pink-950: #460b21;
+
+    /* Custom orange color palette */
+    --color-orange-50: #fef5ee;
+    --color-orange-100: #fce8d8;
+    --color-orange-200: #f9ceaf;
+    --color-orange-300: #f4ab7d;
+    --color-orange-400: #ef7e48;
+    --color-orange-500: #ec6a37;
+    --color-orange-600: #dc441a;
+    --color-orange-700: #b63218;
+    --color-orange-800: #91291b;
+    --color-orange-900: #752419;
+    --color-orange-950: #3f0f0b;
+
+    /* Custom sky color palette */
+    --color-sky-50: #f1fafa;
+    --color-sky-100: #dbeff2;
+    --color-sky-200: #bcdfe5;
+    --color-sky-300: #8dc8d3;
+    --color-sky-400: #52a5b6;
+    --color-sky-500: #3c8c9e;
+    --color-sky-600: #357385;
+    --color-sky-700: #305f6e;
+    --color-sky-800: #2e4f5c;
+    --color-sky-900: #2a444f;
+    --color-sky-950: #182b34;
+
+    /* Custom red color palette */
+    --color-red-50: #fbf6f5;
+    --color-red-100: #f8edeb;
+    --color-red-200: #f1dcda;
+    --color-red-300: #e5c1bc;
+    --color-red-400: #d69c96;
+    --color-red-500: #c4746f;
+    --color-red-600: #ad5351;
+    --color-red-700: #904040;
+    --color-red-800: #833c3f;
+    --color-red-900: #693236;
+    --color-red-950: #391819;
+
+    /* Custom violet color palette */
+    --color-violet-50: #fcf3f8;
+    --color-violet-100: #fae9f3;
+    --color-violet-200: #f7d3e6;
+    --color-violet-300: #f1a9cf;
+    --color-violet-400: #e97db3;
+    --color-violet-500: #de5697;
+    --color-violet-600: #cb3777;
+    --color-violet-700: #b0265d;
+    --color-violet-800: #91234d;
+    --color-violet-900: #7a2144;
+    --color-violet-950: #4a0d24;
+
+    /* Animations */
+    --animate-marquee: marquee 90s linear infinite;
+    @keyframes marquee {
+        0%, 100% {
+            transform: translateX(100%);
+        }
+        50% {
+            transform: translateX(-100%);
+        }
+    }
+}

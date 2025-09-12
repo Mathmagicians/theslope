@@ -12,7 +12,9 @@ export default defineAppConfig({
         holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage'
     },
     ui: {
-        primary: 'amber', //amber-500
-        gray: 'blue', //blue-curacao-400
+        colors: {
+            primary: 'amber',
+            neutral: 'blue'
+        }
     }
 })

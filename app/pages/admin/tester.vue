@@ -60,7 +60,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
                  :attributes="attrs" :min-date="startDate" :max-date="endDate"/>
     </client-only>
 
-    <UDivider/>
+    <USeparator/>
     <h2>Calendar fra egen komponent DateRangePicker</h2>
     <UPopover :popper="{ placement: 'bottom-start' }" color="white dark:purple">
       <UButton icon="i-heroicons-calendar-days-20-solid" color="pink">
@@ -83,7 +83,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
         </div>
       </li>
     </ul>
-    <UDivider/>
+    <USeparator/>
     <UCard>
       <template #header>
         <h3 class="text-lg font-medium">Hvilke ugedage skal der være fællesspisning?</h3>
@@ -99,7 +99,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
         </div>
       </template>
     </UCard>
-    <UDivider/>
+    <USeparator/>
     <h2>
       AdminPlanning
     </h2>

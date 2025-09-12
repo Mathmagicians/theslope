@@ -29,7 +29,7 @@ const classForSystemRole = (role: string) => role=== 'ADMIN' ? 'bg-red-100 text-
              icon="i-pajamas-admin">
       Importer data fra Heynabo
     </UButton>
-    <UDivider class="my-2 md:my-4"/>
+    <USeparator class="my-2 md:my-4"/>
     <!-- Show when users are loaded -->
     <div class="bg-white dark:bg-orange-900" >
       <UTable

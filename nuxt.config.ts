@@ -30,9 +30,9 @@ export default defineNuxtConfig({
         "@nuxt/ui",
         '@nuxt/test-utils/module',
         "@nuxt/eslint",
-        "nuxt-auth-utils",
-        '@samk-dev/nuxt-vcalendar'
+        "nuxt-auth-utils"
     ],
+
 
     runtimeConfig: {
         HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable

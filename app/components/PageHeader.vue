@@ -52,13 +52,16 @@ const closeMenu = () => {
       <!-- Spacer to push navigation to the right -->
       <div class="grow w-2 md:w-8"></div>
       <!-- Desktop Navigation, menu items not shown when user not logged in -->
-      <UHorizontalNavigation v-if="loggedIn"
-                             :links="navigationLinks"
-                             class="hidden md:flex "
+      <UNavigationMenu v-if="loggedIn"
+                       :items="navigationLinks"
+                       class="hidden md:flex "
+                       orientation="horizontal"
       />
-      <UHorizontalNavigation v-else
-                             :links="[loginLink]"
-                             class="hidden md:flex "/>
+      <UNavigationMenu v-else
+                       :items="[loginLink]"
+                       class="hidden md:flex"
+                       orientation="horizontal"
+      />
 
       <div v-if="loggedIn">
         <UButton
@@ -103,10 +106,11 @@ const closeMenu = () => {
           </UButton>
         </div>
         <div class="flex flex-col items-center pt-10">
-          <UVerticalNavigation
-              :links="navigationLinks"
+          <UNavigationMenu
+              :items="navigationLinks"
               class="text-xl space-y-6"
               @click="closeMenu"
+              orientation="vertical"
           />
         </div>
       </div>

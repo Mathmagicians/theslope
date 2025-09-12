@@ -9,7 +9,7 @@
       <USelect
           :key="`select-${day}`"
           :v-model="weeklyPreferences[day]"
-          :options="mealOptions"
+          :items="mealOptions"
           class="w-24 md:w-32"
       />
     </div>

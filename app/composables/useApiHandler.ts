@@ -23,7 +23,7 @@ export const useApiHandler = () => {
             icon: 'i-heroicons-exclamation-triangle',
             title: `${error.statusCode ?? 500}: Uh, åh, fejl kan ske`,
             description: `${error.message ?? 'Der opstod en uventet fejl'}: ${error.cause ?? 'Ukendt fejl'}`,
-            timeout: 10000,
+            duration: 10000,
             color: 'orange'
         })
 
