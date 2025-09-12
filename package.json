@@ -39,6 +39,7 @@
     "nuxt": "^4.1.1",
     "nuxt-auth-utils": "^0.5.10",
     "pinia": "^3.0.3",
+    "tailwindcss": "^4.1.13",
     "vue": "latest",
     "vue-router": "latest",
     "zod": "^3.24.1"
