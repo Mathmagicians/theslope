@@ -1,5 +1,5 @@
 import {defineEventHandler, H3Error} from "h3";
-import {saveUser} from "~/server/data/prismaRepository"
+import {saveUser} from "~~/server/data/prismaRepository"
 import * as z  from 'zod'
 import {SystemRole} from "@prisma/client"
 

@@ -1,6 +1,6 @@
 import {defineEventHandler, H3Error} from "h3"
 import z from 'zod'
-import {fetchCurrentSeason, fetchSeason} from "~/server/data/prismaRepository";
+import {fetchCurrentSeason, fetchSeason} from "~~/server/data/prismaRepository";
 
 const seasonQuerySchema = z.object({
     start: z.string().date().optional(),

@@ -59,7 +59,9 @@ export const usePlanStore = defineStore("Plan", () => {
         const loadSeasons = async () => {
             try {
                 const response = await apiCall(
-                    async () => useFetch<SerializedSeason[]>('/api/admin/season'),
+                    async () => useFetch<SerializedSeason[]>('/api/admin/season', {
+                        deep: true
+                    }),
                     state,
                     'loadSeasons'
                 )

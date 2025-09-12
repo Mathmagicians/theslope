@@ -13,7 +13,9 @@ export const useUsersStore = defineStore("Users", () => {
     const loadData = async () => {
         try {
             // Fetch data from the server
-            const response = await useFetch("/api/admin/users")
+            const response = await useFetch("/api/admin/users", {
+                deep: true
+            })
             users.value = response.data.value
             console.log("🍍 > PINA > USERS > Fetched users data")
         } catch (error: any) {

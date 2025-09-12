@@ -9,7 +9,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
         try {
             // Fetch data from the server
             console.log("🍍 > PINA > HOUSEHOLDS > Fetching household data")
-            const response = await useFetch("/api/household")
+            const response = await useFetch("/api/household", {
+                deep: true
+            })
             households.value = response.data.value
             console.log('Type:', typeof households.value)
             console.log('Is array?', Array.isArray(households.value))
