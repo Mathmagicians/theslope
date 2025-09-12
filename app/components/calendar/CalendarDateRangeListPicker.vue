@@ -97,7 +97,7 @@ const onAddHolidayRange = () => {
                 size="sm"
                 variant="ghost">
             </UButton>
-            <UIcon v-else name="i-heroicons-sun" class="flex-shrink-0 text-gray-400 dark:text-gray-500 h-5 w-5"/>
+            <UIcon v-else name="i-heroicons-sun" class="shrink-0 text-gray-400 dark:text-gray-500 h-5 w-5"/>
           </template>
           </UInput>
         </UFormGroup>

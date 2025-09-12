@@ -21,7 +21,7 @@ defineProps({
             class="flex flex-row items-center m-1 md:m-4 border-b-2 border-dotted border-amber-400">
           <UAvatar
               :src="inhabitant.pictureUrl"
-              class="border-1 border-amber-400"
+              class="border border-amber-400"
               chip-color="orange"
               chip-text="BARN"
               chip-text-color="blue-curacao-100"

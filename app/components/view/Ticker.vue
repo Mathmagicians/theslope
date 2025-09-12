@@ -50,7 +50,7 @@ const style = (index: number) => {
   text-center lowercase  text-xs md:text-base whitespace-nowrap"
       :class="animationClass()">
     <li v-for="(word, index)  in words" :key="index">
-        <span class="p-1 m-1 md:px-4 md:px-2 border-1 md:border-2 rounded-lg" :class="style(index)">
+        <span class="p-1 m-1 md:px-4 md:px-2 border md:border-2 rounded-lg" :class="style(index)">
           {{ word }}
         </span>
     </li>

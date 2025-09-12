@@ -50,7 +50,7 @@ const closeMenu = () => {
         <Logo/>
       </NuxtLink>
       <!-- Spacer to push navigation to the right -->
-      <div class="flex-grow w-2 md:w-8"></div>
+      <div class="grow w-2 md:w-8"></div>
       <!-- Desktop Navigation, menu items not shown when user not logged in -->
       <UHorizontalNavigation v-if="loggedIn"
                              :links="navigationLinks"

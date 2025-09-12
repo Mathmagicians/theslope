@@ -171,7 +171,7 @@ useHead({
         <p class="hidden md:flex">{{ item.title }}</p>
       </template>
       <template #icon="{ item, selected }">
-        <UIcon :name="item.icon" class="size-4 md:size-6 flex-shrink-0 mx-2"/>
+        <UIcon :name="item.icon" class="size-4 md:size-6 shrink-0 mx-2"/>
       </template>
       <template #item="{ item, selected, index }">
         <!-- Invisible anchor above the content -->

@@ -17,7 +17,7 @@ const userColumns = [
 ]
 
 const classForSystemRole = (role: string) => role=== 'ADMIN' ? 'bg-red-100 text-red-800 px-2 py-1 dark:ring-2 dark:ring-red-50 rounded-full text-sm'
-    : 'bg-green-100 text-green-800 dark:border-1 dark:border-green-100 px-2 py-1 rounded-full text-sm'
+    : 'bg-green-100 text-green-800 dark:border dark:border-green-100 px-2 py-1 rounded-full text-sm'
 </script>
 
 
