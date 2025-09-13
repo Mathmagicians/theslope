@@ -241,7 +241,7 @@ sampleItems: [
   },
       ],
       // Media query to check screen size
-      isSmallScreen: window.innerWidth < 768,
+      isSmallScreen: false, // Default value for SSR, will be updated in mounted()
     };
   },
   computed: {
@@ -269,7 +269,8 @@ sampleItems: [
     },
   },
   mounted() {
-    // Add a resize listener to update `isSmallScreen`
+    // Set initial screen size and add resize listener
+    this.updateScreenSize();
     window.addEventListener("resize", this.updateScreenSize);
   },
   beforeDestroy() {

@@ -19,5 +19,3 @@ const words = ['natur', 'fællesskab', 'bæredygtighed', 'nationalpark', 'fælle
     </div>
   </div>
 </template>
-<script setup lang="ts">
-</script>

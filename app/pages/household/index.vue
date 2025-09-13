@@ -5,8 +5,8 @@ const {loadData} = useHouseholdsStore()
 await loadData()
 
 const householdColumns = [
-  {key: 'id', label: 'ID', class: 'text-orange-800'},
-  {key: 'address', label: 'Adresse', class: 'text-blue-900'}
+  {accessorKey: 'id', header: 'ID', class: 'text-orange-800'},
+  {accessorKey: 'address', header: 'Adresse', class: 'text-blue-900'}
 ]
 
 useHead({
@@ -22,21 +22,18 @@ useHead({
 
 <template>
   <div>
-    <h1 class="text-orange-900 text-xl">Oversigt over husstande på Skråningen</h1>
-    <h2 class="text-orange-600 text-sm">
+    <h1 class="text-xl">Oversigt over husstande på Skråningen</h1>
+    <h2 class= "text-muted">
       Her ser du en tabel med husstande, og view / edit knapper der leder til /household/[id]
       man kan se navne, børn/voksen/baby billettype, billeder
     </h2>
 
     <!-- show when households are loaded -->
     <UCard  v-if="households ? households.length > 0: false"
-            :ui="{
-          background: 'bg-white dark:bg-amber-800',
-          divide: 'divide-amber-50 dark:divide-amber-900'}"
         >
       <UTable
               :columns="householdColumns"
-              :rows="households"
+              :data="households ? households : []"
       />
     </UCard>
     <!-- show when households are not loaded -->
