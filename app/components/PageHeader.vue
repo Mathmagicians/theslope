@@ -40,11 +40,6 @@ const burgerLink = computed(() => ({
   children: navigationLinks.value
 }))
 
-const isMenuOpen = ref(false)
-
-const closeMenu = () => {
-  isMenuOpen.value = false
-}
 </script>
 
 <template>
@@ -56,72 +51,22 @@ const closeMenu = () => {
       </NuxtLink>
       <!-- Spacer to push navigation to the right -->
       <div class="grow w-2 md:w-8"></div>
-      <!-- Desktop Navigation, menu items not shown when user not logged in -->
+      <!-- Desktop Navigation-->
       <UNavigationMenu
           :items="loggedIn ? navigationLinks: [loginLink]"
           class="hidden md:flex "
           orientation="horizontal"
       />
+      <!-- Mobile Navigation -->
       <UNavigationMenu
           :items="loggedIn ? [burgerLink]: [loginLink]"
           class="md:hidden w-full items-center"
           orientation="vertical"
           color="primary"
-          popover
-          collapsed
+          arrow
       />
-      <div v-if="loggedIn">
-
-        <UButton
-            variant="ghost"
-            @click="isMenuOpen = !isMenuOpen"
-            class="md:hidden"
-        >
-          <Icon
-              :name="isMenuOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'"
-              class="w-6 h-6"
-          />
-        </UButton>
-      </div>
-      <div v-else>
-        <NuxtLink to="/login" class="md:hidden">
-          <UButton
-              variant="ghost"
-          >
-            <Icon
-                name="i-guidance-entry"
-                class="w-6 h-6"
-            />
-          </UButton>
-        </NuxtLink>
-      </div>
 
     </div>
 
-    <Transition
-        enter-active-class="transition-opacity duration-200"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition-opacity duration-200"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-    >
-      <div v-if="isMenuOpen"
-           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-primary-900 z-50 md:hidden">
-        <div class="flex justify-end p-2">
-          <UButton variant="ghost" @click="closeMenu">
-            <Icon name="i-heroicons-x-mark" class="w-6 h-6"/>
-          </UButton>
-        </div>
-        <div class="flex flex-col items-center pt-10">
-          <UNavigationMenu
-              :items="navigationLinks"
-              class="text-xl space-y-6"
-              @click="closeMenu"
-              orientation="vertical"
-          />
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>

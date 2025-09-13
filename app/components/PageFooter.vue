@@ -8,7 +8,7 @@ const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop'
 
 <template>
   <UContainer>
-    <footer class="flex flex-row items-start justify-between text-xs text-muted text-amber-100 p-4 border-t-amber-100">
+    <footer class="flex flex-row items-start justify-between text-xs text-amber-100 p-4 border-t-amber-100">
       <span>Theslope v {{ $config.public.COMMIT_ID?.substring(0, 7) }}</span>
       <span>Created with  🦄 & 🌈</span>
       <span>Copyright @themathmagician  @2025 </span>
