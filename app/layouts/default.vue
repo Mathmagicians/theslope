@@ -35,7 +35,7 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
 <template>
   <div
       class="min-h-screen w-full
-  font-sans flex flex-col bg-amber-500 dark:bg-amber-600 space-y-1 ">
+  font-sans flex flex-col bg-amber-500 dark:bg-amber-800 space-y-1 ">
     <PageHeader class="my-2"/>
     <slot/>
     <ClientOnly>

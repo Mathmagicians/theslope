@@ -35,6 +35,11 @@ const loginLink = computed(() => ({
   icon: 'i-guidance-entry'
 }))
 
+const burgerLink = computed(() => ({
+  icon: 'heroicons:bars-3',
+  children: navigationLinks.value
+}))
+
 const isMenuOpen = ref(false)
 
 const closeMenu = () => {
@@ -52,18 +57,21 @@ const closeMenu = () => {
       <!-- Spacer to push navigation to the right -->
       <div class="grow w-2 md:w-8"></div>
       <!-- Desktop Navigation, menu items not shown when user not logged in -->
-      <UNavigationMenu v-if="loggedIn"
-                       :items="navigationLinks"
-                       class="hidden md:flex "
-                       orientation="horizontal"
+      <UNavigationMenu
+          :items="loggedIn ? navigationLinks: [loginLink]"
+          class="hidden md:flex "
+          orientation="horizontal"
       />
-      <UNavigationMenu v-else
-                       :items="[loginLink]"
-                       class="hidden md:flex"
-                       orientation="horizontal"
+      <UNavigationMenu
+          :items="loggedIn ? [burgerLink]: [loginLink]"
+          class="md:hidden w-full items-center"
+          orientation="vertical"
+          color="primary"
+          popover
+          collapsed
       />
-
       <div v-if="loggedIn">
+
         <UButton
             variant="ghost"
             @click="isMenuOpen = !isMenuOpen"
@@ -99,7 +107,7 @@ const closeMenu = () => {
         leave-to-class="opacity-0"
     >
       <div v-if="isMenuOpen"
-           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-gray-900 z-50 md:hidden">
+           class="fixed top-0 right-0 w-3/4 h-full bg-blue-100 dark:bg-primary-900 z-50 md:hidden">
         <div class="flex justify-end p-2">
           <UButton variant="ghost" @click="closeMenu">
             <Icon name="i-heroicons-x-mark" class="w-6 h-6"/>
