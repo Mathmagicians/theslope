@@ -5,8 +5,8 @@ const {loadData} = useHouseholdsStore()
 await loadData()
 
 const householdColumns = [
-  {accessorKey: 'id', header: 'ID', class: 'text-orange-800'},
-  {accessorKey: 'address', header: 'Adresse', class: 'text-blue-900'}
+  {accessorKey: 'id', header: 'ID'},
+  {accessorKey: 'address', header: 'Adresse'}
 ]
 
 useHead({

@@ -5,6 +5,7 @@ import {
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
+import { CalendarDate } from '@internationalized/date'
 
 export const DATE_SETTINGS =
     {
@@ -108,4 +109,24 @@ export function areRangesOverlapping(ranges: DateRange[]): boolean {
             )
         }, false)
 
+}
+
+export function toCalendarDate(date: Date | undefined): CalendarDate | undefined {
+    if (!date || !isValid(date)) return undefined
+
+    return new CalendarDate(
+        date.getFullYear(),
+        date.getMonth() + 1, // JavaScript months are 0-based, CalendarDate uses 1-based
+        date.getDate()
+    )
+}
+
+// Helper for ranges
+export function toCalendarDateRange(range: DateRange | undefined): { start?: CalendarDate, end?: CalendarDate } {
+    if (!range) return { start: undefined, end: undefined }
+
+    return {
+        start: toCalendarDate(range.start),
+        end: toCalendarDate(range.end)
+    }
 }

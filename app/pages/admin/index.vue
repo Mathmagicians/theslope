@@ -70,13 +70,13 @@ const componentToTabIndex = computed(() => {
 })
 
 // ACTIONS
-const syncTabWithHash = () :boolean => {
+const syncTabWithHash = (): boolean => {
   const hash = route.hash
   console.info('🔗 > Admin > syncTabWithHash > hash:', hash)
   if (hash) {
     const hashComponent = hash.slice(1).toLowerCase()
     const tab = componentToTabIndex.value[hashComponent]
-    if ( hashComponent && tab) {
+    if (hashComponent && tab !== undefined) {
       selectedTab.value = tab
       console.info('🔗 > Admin > syncTabWithHash > selectedTab:', selectedTab.value, 'selected component:', hashComponent, 'isReady:', isReady.value)
       return true
@@ -90,47 +90,61 @@ const updateHashFromTab = () => {
   const component = items[selectedTab.value].component.toLowerCase()
   const hash = component ? `#${component}` : '#'
   console.log('🔗 > Admin > updateHashFromTab > selectedTab:', selectedTab.value, 'routes hash:', route.hash, 'hash:', hash, 'query:', route.query)
-  router.replace({
-    path: route.path,
-    hash: hash,
-    query: route.query
-  },  { preserveState: true })
-  console.info('🔗 > Admin > updateHashFromTab > updated hash:', component, 'with query:', route.query)
+
+  // Only update if hash is different to avoid unnecessary router calls
+  if (route.hash !== hash) {
+    router.replace({
+      path: route.path,
+      hash: hash,
+      query: route.query
+    })
+    console.info('🔗 > Admin > updateHashFromTab > updated hash:', component, 'with query:', route.query)
+  } else {
+    console.info('🔗 > Admin > updateHashFromTab > hash already correct, skipping update')
+  }
 }
 
-// WATCH
-watch(selectedTab, () => {
-  updateHashFromTab()
+// WATCH - only update hash when user actually clicks tabs, not during focus events
+watch(selectedTab, (newTab, oldTab) => {
+  // Only update hash if truly initialized and tab actually changed meaningfully
+  if (isInitialized.value && newTab !== oldTab && typeof newTab === 'number') {
+    // Add a small delay to avoid conflicts with UTabs internal state changes
+    setTimeout(() => {
+      updateHashFromTab()
+    }, 50)
+  }
 })
 
 // INITIALIZATION
 
 onMounted(() => {
-  console.info('🔗 > Admin > onMounted >', 
-    'route.hash:', route.hash,
-    'route.query:', route.query, 
-    'route.fullPath:', route.fullPath,
-    'window.location.hash:', window.location.hash,
-    'window.location.search:', window.location.search
+  console.info('🔗 > Admin > onMounted >',
+      'route.hash:', route.hash,
+      'route.query:', route.query,
+      'route.fullPath:', route.fullPath,
+      'window.location.hash:', window.location.hash,
+      'window.location.search:', window.location.search
   )
-  
+
   // check if there is a hash in the url already and sync the tab with it
   const synced = syncTabWithHash()
   if (!synced) {
+    // Only update hash if there wasn't one to sync with
     updateHashFromTab()
   }
   isInitialized.value = true
-})
 
-const {status, error} = await useAsyncData('planStore', async () => {
-  await init()
   toast.add({
     id: 'seasons-loaded',
     title: 'Data for Sæsoner indlæst',
     description: 'Sæsoner er indlæst og klar til brug',
-    color: 'orange'
+    color: 'info'
   })
-  return { initialized: true }
+})
+
+const {status, error} = await useAsyncData('planStore', async () => {
+  await init()
+  return {initialized: true}
 })
 
 // UI - CONTINUED
@@ -154,35 +168,26 @@ useHead({
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
     <div
         class="py-1 md:py-2 lg:p-4 min-h-screen">
-    <UTabs
-        v-model="selectedTab"
-        :items="items"
-        class="w-full "
-        :ui="{
-          list: {
-          background: 'bg-amber-400 dark:bg-amber-500',
-        tab: {
-          active: 'bg-amber-100 dark:bg-amber-800 text-amber-900 dark:text-amber-100',
-          inactive: 'bg-amber-400 dark:bg-amber-500 text-900 dark:text-amber-100'
-        } }}"
-        color="pink"
-    >
-      <template #default="{ item, selected, index }">
-        <p class="hidden md:flex">{{ item.title }}</p>
-      </template>
-      <template #icon="{ item, selected }">
-        <UIcon :name="item.icon" class="size-4 md:size-6 shrink-0 mx-2"/>
-      </template>
-      <template #item="{ item, selected, index }">
-        <!-- Invisible anchor above the content -->
-        <a :id="item.component.toLowerCase()" style="position: relative; top: -80px; visibility: hidden;"></a>
-        <div v-if="isInitialized"
-            class="flex flex-col gap-2 md:gap-4 overflow-hidden">
-          <Ticker class="py-1" :words="item.content.split('.')"/>
-            <component v-if="selected" :is="asyncComponents[index]"/>
-        </div>
-      </template>
-    </UTabs>
-  </div>
+      <UTabs
+          v-model="selectedTab"
+          :items="items"
+          class="w-full"
+          color="primary"
+          unmount-on-hide
+      >
+        <template #default="{ item, index }">
+          <p class="hidden md:flex">{{ item.title }}</p>
+        </template>
+        <template #content="{ item, index }">
+          <!-- Invisible anchor above the content -->
+          <a :id="item.component.toLowerCase()" style="position: relative; top: -80px; visibility: hidden;"></a>
+          <div v-if="isInitialized"
+               class="flex flex-col gap-2 md:gap-4 overflow-hidden">
+            <Ticker class="py-1" :words="item.content.split('.')"/>
+            <component :is="asyncComponents[index]"/>
+          </div>
+        </template>
+      </UTabs>
+    </div>
   </div>
 </template>

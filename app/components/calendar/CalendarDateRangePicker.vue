@@ -170,7 +170,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
           </div>
         </template>
 
-      </VDatePicker>
+      </UCalendar>
     </client-only>
 
   </div>

@@ -20,7 +20,9 @@ const resultDays = computed(() => excludeDatesFromInterval(
     dinnerDays.value,
     props.holidays))
 
-// CALENDAR ATTRIBUTES TO DISPLAY COOKINGDAYS AND HOLIDAYS
+const seasonDatesAsCalendarDates = computed(() => toCalendarDateRange(props.seasonDates))
+
+// CALENDAR ATTRIBUTES TO DISPLAY COOKING DAYS AND HOLIDAYS
 const attrs = ref([
   {
     key: 'holidays',
@@ -43,15 +45,12 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 </script>
 
 <template>
-  <client-only>
-    <VCalendar
+    <UCalendar
         show-iso-weeknumbers
-        :expanded="!getIsMd"
-        :columns="getIsMd ? 2: 1"
-        :rows="getIsMd ? 2: 1"
+        :size="getIsMd ? 'xl': 'sm'"
+        :number-of-months="getIsMd ? 3: 1"
         :attributes="attrs"
-        :min-date="seasonDates.start"
-        :max-date="seasonDates.end"
+        :min-value="seasonDatesAsCalendarDates.start"
+        :max-value="seasonDatesAsCalendarDates.end"
     />
-  </client-only>
 </template>
