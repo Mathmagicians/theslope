@@ -17,7 +17,7 @@ export default defineAppConfig({
             neutral: 'blue',
             secondary: "pink",
             info: "violet",
-            success: "sky",
+            success: "green",
             warning: "orange",
             error: "red"
         }

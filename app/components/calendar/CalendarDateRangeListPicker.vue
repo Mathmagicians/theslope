@@ -53,14 +53,14 @@ const onAddHolidayRange = () => {
     <div
         v-if="!props.disabled"
         class="flex flex-col md:flex-row items-center md:items-end  space-x-2 md:space-x-4">
-      <UFormGroup
+      <UFormField
           name="holidayPicker"
           :error="errors.get('_')?.[0] || errors.get('holidays')?.[0] || ''">
         <CalendarDateRangePicker
             name="holidayRangeList"
             v-model="addedRange"/>
 
-      </UFormGroup>
+      </UFormField>
       <UButton
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
           @click="onAddHolidayRange"
@@ -79,7 +79,7 @@ const onAddHolidayRange = () => {
           v-for="(dates, index) in model"
           :id="`holidayRangeList-${index}`"
           :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`">
-        <UFormGroup :label="index === 0 ?  'Valgte ferieperioder' : '' ">
+        <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <UInput
               :model-value="formatDateRange(dates)"
               :name="`holidayRangeList-${index}`"
@@ -100,7 +100,7 @@ const onAddHolidayRange = () => {
             <UIcon v-else name="i-heroicons-sun" class="shrink-0 text-gray-400 dark:text-gray-500 h-5 w-5"/>
           </template>
           </UInput>
-        </UFormGroup>
+        </UFormField>
       </li>
     </ul>
     <h3 v-else

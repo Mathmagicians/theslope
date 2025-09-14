@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
+import type {DateValue} from "@internationalized/date"
+import {isCalendarDateInDateList} from "~/utils/date"
 
 interface Props {
   seasonDates: DateRange
@@ -21,6 +23,29 @@ const resultDays = computed(() => excludeDatesFromInterval(
     props.holidays))
 
 const seasonDatesAsCalendarDates = computed(() => toCalendarDateRange(props.seasonDates))
+
+const translateToDanish = (day: string) => {
+  const mapping = {
+    'Mon': 'M',
+    'Tue': 'T',
+    'Wed': 'O',
+    'Thu': 'T',
+    'Fri': 'F',
+    'Sat': 'L',
+    'Sun': 'S'
+  }
+  return mapping[day] || day
+}
+
+
+
+const isHoliday = (day: DateValue): boolean => {
+  return isCalendarDateInDateList(day, allHolidays.value)
+}
+
+const isCookingDay = (day: DateValue): boolean => {
+  return isCalendarDateInDateList(day, resultDays.value)
+}
 
 // CALENDAR ATTRIBUTES TO DISPLAY COOKING DAYS AND HOLIDAYS
 const attrs = ref([
@@ -45,12 +70,27 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 </script>
 
 <template>
-    <UCalendar
-        show-iso-weeknumbers
-        :size="getIsMd ? 'xl': 'sm'"
-        :number-of-months="getIsMd ? 3: 1"
-        :attributes="attrs"
-        :min-value="seasonDatesAsCalendarDates.start"
-        :max-value="seasonDatesAsCalendarDates.end"
-    />
+  <UCalendar
+    :size="getIsMd ? 'xl': 'sm'"
+    :number-of-months="getIsMd ? 2: 1"
+    :min-value="seasonDatesAsCalendarDates.start"
+    :max-value="seasonDatesAsCalendarDates.end"
+    :week-starts-on="1"
+    :fixed-weeks="false"
+    weekday-format="short"
+  >
+    <template #day="{ day }">
+      <UChip v-if="isHoliday(day)" show size="md" color="success">
+        {{ day.day }}
+      </UChip>
+      <div v-else-if="isCookingDay(day)" class="w-8 h-8 bg-pink-800 text-pink-50 rounded-full flex items-center justify-center text-sm font-medium">
+        {{ day.day }}
+      </div>
+    </template>
+    <template #week-day="{ day}">
+      <span class="text-sm text-muted uppercase">
+        {{ translateToDanish(day) }}
+      </span>
+    </template>
+  </UCalendar>
 </template>

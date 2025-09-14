@@ -10,42 +10,36 @@ const router = useRouter()
 const items = [
   {
     label: 'Planlægning',
-    title: 'Planlægning',
     icon: 'i-heroicons-calendar',
     content: 'Planlægning af middage og events. Oprette fællesspisninger (dinnerevents). Se kalendar, oprette sæson, oprette ferier. See teams. Se chefkokke',
     component: 'AdminPlanning'
   },
   {
     label: 'Husstande',
-    title: 'Husstande',
     icon: 'i-heroicons-home',
     content: 'Oversigt over husstande. Se allergier. Administrer flytninger og husstandsændringer',
     component: 'AdminHouseholds'
   },
   {
     label: 'Allergier',
-    title: 'Allergier',
     icon: 'i-heroicons-hand-raised',
     content: 'Se allergier. Administrer allergier. Plakat til udprintning.',
     component: 'AdminAllergies'
   },
   {
     label: 'Brugere',
-    title: 'Brugere',
     icon: 'i-heroicons-users',
     content: 'Importer data fra Heynabo. Se importerede brugere fra HeyNabo. Administrer brugere',
     component: 'AdminUsers'
   },
   {
     label: 'Økonomi',
-    title: 'Økonomi',
     icon: 'i-heroicons-currency-dollar',
     content: 'Økonomisk overblik. Chefkokkebudgetter. Basisvarerbudgetter. Inberetning til PBS.',
     component: 'AdminEconomy'
   },
   {
     label: 'Indstillinger',
-    title: 'Indstillinger',
     icon: 'i-heroicons-cog-6-tooth',
     content: 'Se systemindstillinger. Ændre systemindstillinger.',
     component: 'AdminSettings'
@@ -87,7 +81,7 @@ const syncTabWithHash = (): boolean => {
 
 // updates the page fragement # in the url to match the selected tab
 const updateHashFromTab = () => {
-  const component = items[selectedTab.value].component.toLowerCase()
+  const component = items[selectedTab.value]?.component?.toLowerCase()
   const hash = component ? `#${component}` : '#'
   console.log('🔗 > Admin > updateHashFromTab > selectedTab:', selectedTab.value, 'routes hash:', route.hash, 'hash:', hash, 'query:', route.query)
 
@@ -121,10 +115,10 @@ onMounted(() => {
   console.info('🔗 > Admin > onMounted >',
       'route.hash:', route.hash,
       'route.query:', route.query,
-      'route.fullPath:', route.fullPath,
-      'window.location.hash:', window.location.hash,
-      'window.location.search:', window.location.search
+      'route.fullPath:', route.fullPath
   )
+  selectedTab.value = 0
+
 
   // check if there is a hash in the url already and sync the tab with it
   const synced = syncTabWithHash()
@@ -164,7 +158,7 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="status==='pending'"/>
+    <Loader v-if="status==='pending' || !isInitialized"/>
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
     <div
         class="py-1 md:py-2 lg:p-4 min-h-screen">
@@ -175,12 +169,8 @@ useHead({
           color="primary"
           unmount-on-hide
       >
-        <template #default="{ item, index }">
-          <p class="hidden md:flex">{{ item.title }}</p>
-        </template>
+
         <template #content="{ item, index }">
-          <!-- Invisible anchor above the content -->
-          <a :id="item.component.toLowerCase()" style="position: relative; top: -80px; visibility: hidden;"></a>
           <div v-if="isInitialized"
                class="flex flex-col gap-2 md:gap-4 overflow-hidden">
             <Ticker class="py-1" :words="item.content.split('.')"/>

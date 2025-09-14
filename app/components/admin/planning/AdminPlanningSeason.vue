@@ -108,11 +108,11 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
         <div class="grow">
           <UForm id="seasonForm" :schema="SeasonSchema" :state="model" class="space-y-4"
                  @submit.prevent="onSubmitSeason">
-            <UFormGroup label="Sæson" name="shortName">
+            <UFormField label="Sæson" name="shortName">
               <UInput disabled
                       name="seasonShortName"
                       :model-value="shortName"/>
-            </UFormGroup>
+            </UFormField>
 
             <!-- Season date picker -->
             <CalendarDateRangePicker
@@ -121,7 +121,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
                 v-model="model.seasonDates"/>
 
             <!-- Pick weekdays for cooking -->
-            <UFormGroup label="Hvilke ugedage skal der være fællesspisning?"
+            <UFormField label="Hvilke ugedage skal der være fællesspisning?"
                         name="cookingDaysGroup">
               <UCheckbox v-for="day in WEEKDAYS"
                          :key="day"
@@ -130,11 +130,11 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
                          :label="day"
                          class="capitalize"
                          :disabled="isViewMode"/>
-            </UFormGroup>
+            </UFormField>
 
             <!-- Pick holidays -->
             <USeparator/>
-            <UFormGroup label="Hvornår holder fællesspisning fri?"
+            <UFormField label="Hvornår holder fællesspisning fri?"
                         name="holidaysGroup">
 
               <CalendarDateRangeListPicker
@@ -144,12 +144,12 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
                   :season-dates="model.seasonDates"
               />
 
-            </UFormGroup>
+            </UFormField>
 
             <USeparator/>
 
             <!-- Ticket settings -->
-            <UFormGroup
+            <UFormField
                 label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
                 name="cancellableGroup">
               <UInput
@@ -157,16 +157,16 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
                   name="cancellableDays"
                   type="number"
                   :disabled="isViewMode"/>
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
+            <UFormField label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
                         name="editableGroup">
               <UInput
                   v-model="model.diningModeIsEditableMinutesBefore"
                   name="editableMinutes"
                   type="number"
                   :disabled="isViewMode"/>
-            </UFormGroup>
+            </UFormField>
           </UForm>
         </div>
 

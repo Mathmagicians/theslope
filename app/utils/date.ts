@@ -5,7 +5,7 @@ import {
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
-import { CalendarDate } from '@internationalized/date'
+import {CalendarDate, type DateValue} from '@internationalized/date'
 
 export const DATE_SETTINGS =
     {
@@ -129,4 +129,10 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
         start: toCalendarDate(range.start),
         end: toCalendarDate(range.end)
     }
+}
+
+// Check if a CalendarDate is in a list of Date objects
+export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
+    const dateToCheck = dateValue.toDate('UTC')
+    return dateList.some(date => isSameDay(date, dateToCheck))
 }

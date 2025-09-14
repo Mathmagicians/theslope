@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import {type DateRange, WEEKDAYS} from "~/types/dateTypes"
+import {type DateRange, type WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "vue"
 import {type Ref, inject} from 'vue'
 //import type {Duration} from "date-fns";
 
-const startDate = new Date(2024, 7, 1)
-const endDate = new Date(2025, 5, 31)
+const startDate = new Date(2025, 7, 1)
+const endDate = new Date(2026, 5, 31)
 
-const selectedDates = ref<DateRange[]>([])
+const selectedDates = ref<DateRange[]>([
+  { start: new Date(2025, 8, 20), end: new Date(2025, 8, 26) },
+  { start: new Date(2025, 11, 24), end: new Date(2025, 11, 26) }, // Christmas 2024
+  { start: new Date(2025, 0, 1), end: new Date(2025, 0, 1) },     // New Year 2025
+  { start: new Date(2025, 3, 14), end: new Date(2025, 3, 21) }    // Easter break 2025
+])
 
 //v-model for the date picker
 const selected = ref<DateRange>({start: new Date(), end: new Date()})
 
 const weekdays = ref(createDefaultWeekdayMap(false))
+weekdays.value.mandag = true // Enable Monday
 
-const handleClose = () => {
-  selectedDates.value.push(selected.value)
-}
 
 const dinnerDays = ref(getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, weekdays.value))
 const allHolidays = computed(() => eachDayOfManyIntervals(selectedDates.value))
@@ -26,7 +29,7 @@ watch(weekdays, (selectedDays: WeekDayMap) => {
   dinnerDays.value = getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, selectedDays)
   console.log("DinnerDays:", dinnerDays.value.length)
   console.log('selectedDates:', selectedDates.value)
-  console.log('resultDays:', resultDays?.length ?? 0)
+  console.log('resultDays:', resultDays.value.length ?? 0)
 }, {immediate: true, deep: true})
 
 
@@ -52,60 +55,11 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 <template>
   <div>
-    <h2>Calendar fra nuxt module</h2>
-    <client-only>
-      {{ 'IS MD: ' + getIsMd }}
-      <!-- isMd is a ref, that should be provided by layout -->
-      <VCalendar show-iso-weeknumbers :expanded="!isMd"
-                 :attributes="attrs" :min-date="startDate" :max-date="endDate"/>
-    </client-only>
-
-    <USeparator/>
-    <h2>Calendar fra egen komponent DateRangePicker</h2>
-    <UPopover :popper="{ placement: 'bottom-start' }" color="white dark:purple">
-      <UButton icon="i-heroicons-calendar-days-20-solid" color="pink">
-        Vælg periode
-      </UButton>
-      <UBadge> {{ formatDateRange(selected) }}</UBadge>
-
-
-      <template #panel="{ close }">
-        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-          <CalendarDateRangePicker v-model="selected" @close="handleClose()"/>
-        </div>
-      </template>
-    </UPopover>
-    <ul>
-      <li v-for="(dates, index) in selectedDates" :key="index">
-        <div>
-          <UBadge> {{ formatDateRange(dates) }}</UBadge>
-          <UButton @click="selectedDates.splice(index, 1)" color="red" icon="i-heroicons-trash" variant="ghost"/>
-        </div>
-      </li>
-    </ul>
-    <USeparator/>
-    <UCard>
-      <template #header>
-        <h3 class="text-lg font-medium">Hvilke ugedage skal der være fællesspisning?</h3>
-      </template>
-      <template #default>
-        <div class="flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
-          <UCheckbox
-              v-for="day in WEEKDAYS"
-              :key="day"
-              v-model="weekdays[day]"
-              :label="capitalize(day)"
-          />
-        </div>
-      </template>
-    </UCard>
-    <USeparator/>
-    <h2>
-      AdminPlanning
-    </h2>
-    <AdminPlanning/>
-
+    <h2>CalendarDisplay Test</h2>
+    <CalendarDisplay
+      :season-dates="{ start: startDate, end: endDate }"
+      :holidays="selectedDates"
+      :cooking-days="weekdays"
+    />
   </div>
-
-
 </template>
