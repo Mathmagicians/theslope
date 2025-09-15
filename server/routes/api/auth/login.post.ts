@@ -1,6 +1,6 @@
 import {defineEventHandler} from "h3"
-import {loginUserIntoHeynabo} from "~/server/integration/heynabo"
-import {fetchUser} from "~/server/data/prismaRepository"
+import {loginUserIntoHeynabo} from "~~/server/integration/heynabo"
+import {fetchUser} from "~~/server/data/prismaRepository"
 import { z } from 'zod'
 
 const loginSchema = z.object({

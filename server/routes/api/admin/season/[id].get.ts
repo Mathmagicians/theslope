@@ -1,5 +1,5 @@
 import {defineEventHandler} from "h3";
-import {fetchSeason} from "~/server/data/prismaRepository"
+import {fetchSeason} from "~~/server/data/prismaRepository"
 import z from "zod"
 
 const idSchema = z.object({

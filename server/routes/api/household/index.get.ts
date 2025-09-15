@@ -1,7 +1,7 @@
 // return data for all households
 
 import {defineEventHandler} from "h3";
-import {fetchHouseholds} from "~/server/data/prismaRepository";
+import {fetchHouseholds} from "~~/server/data/prismaRepository";
 
 export default defineEventHandler(async (event) => {
    const {cloudflare} = event.context

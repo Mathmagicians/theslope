@@ -1,6 +1,6 @@
 import {defineEventHandler} from 'h3';
-import {createHouseholdsFromImport, importFromHeyNabo} from "~/server/integration/heynabo";
-import {saveHousehold} from "~/server/data/prismaRepository";
+import {createHouseholdsFromImport, importFromHeyNabo} from "~~/server/integration/heynabo";
+import {saveHousehold} from "~~/server/data/prismaRepository";
 
 
 // Returns imported locations and members from HeyNabo
