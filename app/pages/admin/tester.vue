@@ -1,65 +1,46 @@
 <script setup lang="ts">
-import {type DateRange, type WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
-import {capitalize} from "vue"
-import {type Ref, inject} from 'vue'
-//import type {Duration} from "date-fns";
+import type { DateRange } from "~/types/dateTypes"
 
-const startDate = new Date(2025, 7, 1)
-const endDate = new Date(2026, 5, 31)
+// Sample data for testing CalendarDateRangePicker
+const selected = ref<DateRange>({
+  start: new Date(2025, 8, 1),
+  end: new Date(2025, 8, 15)
+})
 
-const selectedDates = ref<DateRange[]>([
-  { start: new Date(2025, 8, 20), end: new Date(2025, 8, 26) },
-  { start: new Date(2025, 11, 24), end: new Date(2025, 11, 26) }, // Christmas 2024
-  { start: new Date(2025, 0, 1), end: new Date(2025, 0, 1) },     // New Year 2025
-  { start: new Date(2025, 3, 14), end: new Date(2025, 3, 21) }    // Easter break 2025
-])
+const selectedRanges = ref<DateRange[]>([])
 
-//v-model for the date picker
-const selected = ref<DateRange>({start: new Date(), end: new Date()})
+const handleClose = () => {
+  selectedRanges.value.push({ ...selected.value })
+  console.log('New range added:', selected.value)
+}
 
-const weekdays = ref(createDefaultWeekdayMap(false))
-weekdays.value.mandag = true // Enable Monday
-
-
-const dinnerDays = ref(getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, weekdays.value))
-const allHolidays = computed(() => eachDayOfManyIntervals(selectedDates.value))
-const resultDays = computed(() => excludeDatesFromInterval(dinnerDays.value, selectedDates.value))
-
-watch(weekdays, (selectedDays: WeekDayMap) => {
-  dinnerDays.value = getEachDayOfIntervalWithSelectedWeekdays(startDate, endDate, selectedDays)
-  console.log("DinnerDays:", dinnerDays.value.length)
-  console.log('selectedDates:', selectedDates.value)
-  console.log('resultDays:', resultDays.value.length ?? 0)
-}, {immediate: true, deep: true})
-
-
-const attrs = ref([
-  {
-    key: 'holidays',
-    dot: 'green',
-    dates: allHolidays
-  },
-  {
-    key: 'dinners',
-    highlight: {
-      color: 'purple',
-      fillMode: 'solid'
-    },
-    dates: resultDays
-  }
-])
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
+const removeRange = (index: number) => {
+  selectedRanges.value.splice(index, 1)
+}
 </script>
 
 <template>
-  <div>
-    <h2>CalendarDisplay Test</h2>
-    <CalendarDisplay
-      :season-dates="{ start: startDate, end: endDate }"
-      :holidays="selectedDates"
-      :cooking-days="weekdays"
+  <div class="space-y-6">
+    <h2>CalendarDateRangePicker Test</h2>
+
+    <div>
+      <h3>Selected Range:</h3>
+      <p>{{ formatDateRange(selected) }}</p>
+    </div>
+
+    <CalendarDateRangePicker
+      v-model="selected"
+      @close="handleClose"
     />
+
+    <div v-if="selectedRanges.length > 0">
+      <h3>Collected Ranges:</h3>
+      <ul class="space-y-2">
+        <li v-for="(range, index) in selectedRanges" :key="index" class="flex items-center gap-2">
+          <UBadge>{{ formatDateRange(range) }}</UBadge>
+          <UButton @click="removeRange(index)" color="red" icon="i-heroicons-trash" variant="ghost" size="xs" />
+        </li>
+      </ul>
+    </div>
   </div>
 </template>

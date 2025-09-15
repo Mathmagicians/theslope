@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {DATE_SETTINGS, formatDateRange} from "~/utils/date"
+import {DATE_SETTINGS, formatDateRange, translateToDanish} from "~/utils/date"
 import {inject, type Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
@@ -20,7 +20,7 @@ const emit = defineEmits(['update:model-value', 'close'])
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
-const inputState: Ref<DateRangeInput>  = ref({
+const inputState: Ref<DateRangeInput> = ref({
   start: formatDate(model.value.start),
   end: formatDate(model.value.end)
 })
@@ -28,11 +28,24 @@ const inputState: Ref<DateRangeInput>  = ref({
 // COMPUTED STATE
 
 const pickerDateRange = computed({
-  get: () => model.value,
+  get: () => {
+    // Convert Date objects to CalendarDate for UCalendar
+    if (model.value?.start && model.value?.end) {
+      return {
+        start: toCalendarDate(model.value.start),
+        end: toCalendarDate(model.value.end)
+      }
+    }
+    return null
+  },
   set: (value) => {
-    if (value) {
-      // Update model and inputState
-      updateDateRange(value)
+    if (value?.start && value?.end) {
+      // Convert CalendarDate back to Date objects
+      const dateRange = {
+        start: toDate(value.start),
+        end: toDate(value.end)
+      }
+      updateDateRange(dateRange)
       emit('close')
     }
   }
@@ -53,7 +66,7 @@ if (props.debug) {
 // ACTIONS
 const updateDateRange = (newRange: DateRange) => {
   const validation = dateRangeSchema.safeParse(newRange)
-  if(validation.success) {
+  if (validation.success) {
     model.value = newRange
     inputState.value = {
       start: formatDate(newRange.start),
@@ -76,16 +89,16 @@ const updateDateRange = (newRange: DateRange) => {
 const handleInputChange = (value: string, key: keyof DateRange) => {
   // Update the input field
   inputState.value[key] = value
-  
+
   // Create an object to validate with stringDateRangeSchema
   const stringRange = {
     start: key === 'start' ? value : inputState.value.start,
     end: key === 'end' ? value : inputState.value.end
   }
-  
+
   // Validate using the string schema first
   const validation = stringDateRangeSchema.safeParse(stringRange)
-  
+
   if (validation.success) {
     // If validation passes, update with the transformed dates
     updateDateRange(validation.data)
@@ -121,6 +134,10 @@ function onDayClick(_: any, event: MouseEvent): void {
   target.blur() //unfocus the clicked element
 }
 
+const togglePopover = () => {
+  console.log("toggle popover")
+}
+
 // Watch for external model changes
 watch(() => model.value, (newModelValue) => {
   if (newModelValue) {
@@ -129,7 +146,7 @@ watch(() => model.value, (newModelValue) => {
       end: formatDate(newModelValue.end)
     }
   }
-}, { deep: true })
+}, {deep: true})
 
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
@@ -137,41 +154,47 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 </script>
 
 <template>
-  <div>
-    <client-only>
+  <UPopover :content="{
+      align: 'center',
+      side: 'bottom',
+      sideOffset: 16
+    }">
+    <template #content>
       <UCalendar
           v-model="pickerDateRange"
           range
-          :columns="getIsMd ? 2: 1"
-          v-bind="{ ...attrs, ...$attrs }"
-          @dayclick="onDayClick"
-          color="purple"
+          :size="getIsMd ? 'xl': 'sm'"
+          :number-of-months="getIsMd ? 2: 1"
+          :week-starts-on="1"
+          :fixed-weeks="false"
+          weekday-format="short"
+          color="success"
       >
-        <template #default="{ togglePopover, inputValue, inputEvents }">
-          <div class="flex flex-col md:flex-row gap-4">
-            <UFormGroup v-for="key in ['start', 'end'] as const" :key="key"
-                        class="p-2"
-                        :label="formatLabel(key)"
-                        :error="getErrorMessage(errors, [key, '_'])">
-              <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
-                      :ui="{ icon: { trailing: { pointer: '' } } }"
-                      :name="key"
-                      @update:model-value="handleInputChange($event, key)"
-                      v-model="inputState[key]"
-              >
-                <template #trailing>
-                  <UButton @click="togglePopover" icon="i-heroicons-calendar"
-                           color="pink"/>
-                </template>
-              </UInput>
-            </UFormGroup>
-            <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is:
-              {{ inputState }} </p>
-          </div>
+        <template #week-day="{ day}">
+      <span class="text-sm text-muted uppercase">
+        {{ translateToDanish(day) }}
+      </span>
         </template>
-
       </UCalendar>
-    </client-only>
-
-  </div>
+    </template>
+    <div class="flex flex-row gap-1 md:gap-4">
+      <UFormField v-for="key in ['start', 'end'] as const" :key="key"
+                  class="p-2"
+                  :label="formatLabel(key)"
+                  :error="getErrorMessage(errors, [key, '_'])">
+        <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
+                :name="key"
+                @update:model-value="handleInputChange($event, key)"
+                v-model="inputState[key]"
+        >
+          <template #trailing>
+            <UButton @click="togglePopover" icon="i-heroicons-calendar"
+                     color="info"/>
+          </template>
+        </UInput>
+      </UFormField>
+      <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is:
+        {{ inputState }} </p>
+    </div>
+  </UPopover>
 </template>

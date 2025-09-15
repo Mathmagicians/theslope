@@ -136,3 +136,22 @@ export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[])
     const dateToCheck = dateValue.toDate('UTC')
     return dateList.some(date => isSameDay(date, dateToCheck))
 }
+
+// Convert DateValue to JavaScript Date
+export function toDate(dateValue: DateValue): Date {
+    return dateValue.toDate('UTC')
+}
+
+// Translate English weekday abbreviations to Danish
+export function translateToDanish(day: string): string {
+    const mapping = {
+        'Mon': 'M',
+        'Tue': 'T',
+        'Wed': 'O',
+        'Thu': 'T',
+        'Fri': 'F',
+        'Sat': 'L',
+        'Sun': 'S'
+    }
+    return mapping[day] || day
+}

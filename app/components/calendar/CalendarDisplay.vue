@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import type {DateValue} from "@internationalized/date"
-import {isCalendarDateInDateList} from "~/utils/date"
+import {isCalendarDateInDateList, translateToDanish} from "~/utils/date"
 
 interface Props {
   seasonDates: DateRange
@@ -24,21 +24,6 @@ const resultDays = computed(() => excludeDatesFromInterval(
 
 const seasonDatesAsCalendarDates = computed(() => toCalendarDateRange(props.seasonDates))
 
-const translateToDanish = (day: string) => {
-  const mapping = {
-    'Mon': 'M',
-    'Tue': 'T',
-    'Wed': 'O',
-    'Thu': 'T',
-    'Fri': 'F',
-    'Sat': 'L',
-    'Sun': 'S'
-  }
-  return mapping[day] || day
-}
-
-
-
 const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, allHolidays.value)
 }
@@ -46,23 +31,6 @@ const isHoliday = (day: DateValue): boolean => {
 const isCookingDay = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, resultDays.value)
 }
-
-// CALENDAR ATTRIBUTES TO DISPLAY COOKING DAYS AND HOLIDAYS
-const attrs = ref([
-  {
-    key: 'holidays',
-    dot: 'green',
-    dates: allHolidays.value
-  },
-  {
-    key: 'dinners',
-    highlight: {
-      color: 'purple',
-      fillMode: 'solid'
-    },
-    dates: resultDays.value
-  }
-])
 
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
