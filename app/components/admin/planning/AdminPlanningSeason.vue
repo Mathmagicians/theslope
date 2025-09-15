@@ -77,23 +77,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
 <template>
   <UCard
       v-if="model"
-      class="w-full ring-none ring-0 shadow-none" padding="px-0" :ui="{
-    rounded: 'rounded-none',
-    shadow: 'shadow-none',
-    body: {
-      padding: 'px-0',
-      base: 'ring-0',
-      shadow: 'shadow-none'
-    },
-    header: {
-      padding: 'px-0',
-      background: 'bg-violet-50 dark:bg-violet-700'
-    },
-    footer: {
-      padding: 'px-0',
-      background: 'bg-violet-50 dark:bg-violet-700'
-    }
-  }">
+      class="w-full ring-none ring-0 shadow-none" padding="px-0" >
     <template #header>
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
@@ -107,7 +91,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
         <!-- Form Section - Below on mobile, Left on desktop -->
         <div class="grow">
           <UForm id="seasonForm" :schema="SeasonSchema" :state="model" class="space-y-4"
-                 @submit.prevent="onSubmitSeason">
+                 @submit="onSubmitSeason">
             <UFormField label="Sæson" name="shortName">
               <UInput disabled
                       name="seasonShortName"
@@ -182,10 +166,10 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
 
     <template #footer>
       <div v-if="!isViewMode" class="flex justify-end gap-4">
-        <UButton name="cancel-season" color="gray" variant="soft" @click="emit('cancel')">
+        <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
           Annuller
         </UButton>
-        <UButton name="submit-season" type="submit" form="seasonForm" color="pink" icon="i-heroicons-calendar">
+        <UButton name="submit-season" type="submit" form="seasonForm" color="info" icon="i-heroicons-check-circle">
           {{ buttonText }}
         </UButton>
       </div>

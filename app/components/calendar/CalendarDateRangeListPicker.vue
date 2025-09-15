@@ -65,7 +65,7 @@ const onAddHolidayRange = () => {
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
           @click="onAddHolidayRange"
           name="holidayRangeAddToList"
-          color="pink"
+          color="info"
           size="lg"
           icon="i-heroicons-sun"
           variant="outline">
@@ -85,14 +85,13 @@ const onAddHolidayRange = () => {
               :name="`holidayRangeList-${index}`"
               disabled
               placeholder="Ferieperiode"
-              :ui="{ icon: { trailing: { pointer: '' } } }"
           >
           <template #trailing>
             <UButton
                 v-if="!props.disabled"
                 @click="model.splice(index, 1)"
                 :name="`holidayRangeRemoveFromList-${index}`"
-                color="red"
+                color="error"
                 icon="i-heroicons-trash"
                 size="sm"
                 variant="ghost">
