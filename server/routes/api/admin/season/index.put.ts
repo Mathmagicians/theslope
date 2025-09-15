@@ -1,5 +1,5 @@
 import {defineEventHandler, readBody, H3Error, setResponseStatus, createError} from "h3"
-import {createSeason} from "~/server/data/prismaRepository"
+import {createSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 
 // Get the validation utilities from our composable

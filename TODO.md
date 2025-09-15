@@ -1,21 +1,8 @@
 # TODO
 
-## Current Issues (Header Responsiveness)
-
-**Priority Issues - Fix Header Menu Overlay:**
-
-1. **Mobile Header Responsiveness**: Burger menu is cut off or invisible on small screens, likely due to container width constraints or margin issues
-
-2. **Horizontal Overflow**: Content is approximately 10% too wide for mobile viewport, causing horizontal scrolling and layout breaking  
-
-3. **Ticker Animation Problems**: Fixed ticker keyframes but badges may still be scrolling off-screen due to container constraints
-
-4. **Container Conflicts**: Switching between UContainer and div elements has created inconsistent width behaviors and styling conflicts
-
-5. **Responsive Design Regression**: Changes broke the working responsive design from main branch - need to preserve desktop floating overlay while ensuring mobile compatibility
-
-*Core issue: Fighting with container width constraints while trying to achieve both full-width mobile layout and centered desktop overlay behavior.*
-
+## Current Issues 
+- tabs navigation with url fragment broken on first entry
+- calendar picker port to nuxtui3 
 ## Fix E2E Tests
 
 ## Temporarily Disabled E2E Tests
@@ -61,12 +48,9 @@ The following E2E tests have been temporarily disabled with `test.skip()` to all
 - [x] Wrangler 4 migration (PR #22) - IN REVIEW
 - [x] Security vulnerabilities resolved (0 vulnerabilities)
 
-### Phase 2: Major Framework Updates (Planned)
+### Phase 2: Major Framework Updates ✅ COMPLETED
 
-#### 1. Nuxt 4 Migration (HIGH PRIORITY)
-**Branch**: `migrate-nuxt-4`  
-**Current**: 3.19.0 → **Target**: 4.1.0  
-**Impact**: HIGH - Core framework affecting all components
+#### 1. Nuxt 4 + Nuxt UI + Tailwind CSS Migration (HIGH PRIORITY) ✅ COMPLETED
 
 #### 2. Pinia 3 Migration (MEDIUM PRIORITY)  
 **Branch**: `migrate-pinia-3`

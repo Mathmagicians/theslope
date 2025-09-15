@@ -1,5 +1,5 @@
-import { formatDate } from '../../utils/date'
-import type { Season } from '../../composables/useSeasonValidation'
+import { formatDate } from '../../app/utils/date'
+import type { Season } from '../../app/composables/useSeasonValidation'
 
 // Generate unique test data
 const testSalt = Date.now().toString()

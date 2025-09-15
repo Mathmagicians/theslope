@@ -1,5 +1,5 @@
 import {defineEventHandler, createError} from "h3"
-import {deleteSeason} from "~/server/data/prismaRepository"
+import {deleteSeason} from "~~/server/data/prismaRepository"
 import * as z from 'zod'
 
 // Define schema for ID parameter

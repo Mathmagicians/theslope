@@ -38,7 +38,7 @@ const newSeason = {
 // Variable to store ID for cleanup
 let createdSeasonId: number|undefined = undefined
 
-const { serializeSeason } = useSeasonValidation()
+const { serializeSeason, deserializeSeason } = useSeasonValidation()
 
 // Test for creating and retrieving a season
 test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
@@ -81,6 +81,66 @@ test("PUT should create a new season and GET should retrieve it", async ({browse
   
   expect(foundSeason).toBeTruthy()
   expect(foundSeason.id).toBe(createdSeasonId)
+})
+
+// Test for updating a season
+test("POST should update an existing season", async ({browser}) => {
+  const context = await browser.newContext({
+    storageState: adminFile
+  })
+
+  // First create a season to update
+  const serializedSeason = serializeSeason(newSeason)
+  const createResponse = await context.request.put('/api/admin/season', {
+    headers: headers,
+    data: serializedSeason
+  })
+  expect(createResponse.status()).toBe(201)
+
+  const createdSeason = await createResponse.json()
+  const seasonId = createdSeason.id
+
+  // Check initial holiday count (deserialize the response data first)
+  const deserializedCreatedSeason = deserializeSeason(createdSeason)
+  const initialHolidayCount = deserializedCreatedSeason.holidays.length
+
+  // Add an extra holiday period to the existing holidays
+  const holidayStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+  const holidayEnd = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000)   // 35 days from now
+
+  const updatedData = {
+    ...newSeason,
+    id: seasonId,
+    holidays: [
+      ...newSeason.holidays, // Keep existing holidays
+      {
+        start: formatDate(holidayStart),
+        end: formatDate(holidayEnd)
+      }
+    ]
+  }
+
+  const serializedUpdate = serializeSeason(updatedData)
+  const updateResponse = await context.request.post(`/api/admin/season/${seasonId}`, {
+    headers: headers,
+    data: serializedUpdate
+  })
+
+  // Check status
+  const status = updateResponse.status()
+  const responseBody = await updateResponse.json()
+
+  expect(status, `Expected 200 but got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(200)
+
+  // Verify the update worked - should have one more holiday than before
+  expect(responseBody.id).toBe(seasonId)
+
+  // Deserialize the updated response to check holidays properly
+  const deserializedUpdatedSeason = deserializeSeason(responseBody)
+  expect(deserializedUpdatedSeason.holidays).toHaveLength(initialHolidayCount + 1)
+
+  // Clean up the test season
+  await context.request.delete(`/api/admin/season/${seasonId}`)
 })
 
 // Test for validation
