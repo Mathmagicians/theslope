@@ -76,16 +76,53 @@ test.describe('Admin page URL navigation', () => {
     // Navigate to a specific tab
     await page.goto(`${adminUrl}#adminusers`)
     await page.waitForLoadState('networkidle')
-    
+
     // Verify we're on the right tab
     await expect(page).toHaveURL(/.*#adminusers/)
-    
+
     // Refresh the page
     await page.reload()
     await page.waitForLoadState('networkidle')
-    
+
     // Verify URL hash is preserved
     await expect(page).toHaveURL(/.*#adminusers/)
+  })
+
+  test('Clicking tabs updates URL hash (Use Case 3)', async ({ page }) => {
+    // Start at the default admin page
+    await page.goto(adminUrl)
+    await page.waitForLoadState('networkidle')
+
+    // Verify we start with default tab (adminplanning)
+    await expect(page).toHaveURL(/.*#adminplanning/)
+
+    // Click on the "Brugere" (Users) tab
+    // UTabs generates buttons with role="tab" and the label text
+    const usersTab = page.locator('button[role="tab"]').filter({ hasText: 'Brugere' })
+    await expect(usersTab).toBeVisible()
+    await usersTab.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify URL hash updated to adminusers
+    await expect(page).toHaveURL(/.*#adminusers/)
+
+    // Click on the "Økonomi" (Economy) tab
+    const economyTab = page.locator('button[role="tab"]').filter({ hasText: 'Økonomi' })
+    await expect(economyTab).toBeVisible()
+    await economyTab.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify URL hash updated to admineconomy
+    await expect(page).toHaveURL(/.*#admineconomy/)
+
+    // Click back to "Planlægning" (Planning) tab
+    const planningTab = page.locator('button[role="tab"]').filter({ hasText: 'Planlægning' })
+    await expect(planningTab).toBeVisible()
+    await planningTab.click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify URL hash updated back to adminplanning
+    await expect(page).toHaveURL(/.*#adminplanning/)
   })
   
   test('Form mode in URL query parameter works', async ({ page }) => {

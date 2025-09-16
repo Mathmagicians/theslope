@@ -5,9 +5,10 @@ const toast = useToast()
 const {init} = usePlanStore()
 const route = useRoute()
 const router = useRouter()
+const url = useRequestURL()
 
 // UI - ITEMS
-const items = [
+const baseItems = [
   {
     label: 'Planlægning',
     icon: 'i-heroicons-calendar',
@@ -46,98 +47,88 @@ const items = [
   }
 ]
 
-const asyncComponents = items.map(item => defineAsyncComponent(() => import(`~/components/admin/${item.component}.vue`)))
+const items = baseItems.map(item => ({
+  ...item,
+  value: item.component.toLowerCase()
+}))
 
+const asyncComponents = Object.fromEntries(
+    items.map(item => [
+      item.value,
+      defineAsyncComponent(() => import(`~/components/admin/${item.component}.vue`))
+    ])
+)
 
+const defaultTabValue = items[0]!.value
+const tabFromHash = (hash: string | undefined) => hash ? hash.slice(1).toLowerCase() : defaultTabValue
+const hashFromTab = (tab: string) => `#${tab.toLowerCase()}`
 // STATE
-const selectedTab = ref(0)
-const isInitialized = ref(false)
+const selectedTab = ref(tabFromHash(route.hash))
+
 
 // COMPUTED STATE
-
-const isReady = computed(() => status.value === 'success' && isInitialized.value)
-const componentToTabIndex = computed(() => {
-  return items.reduce((acc, item, index) => {
-    acc[item.component.toLowerCase()] = index
-    return acc
-  }, {} as Record<string, number>)
+const activeTab = computed({
+  get() {
+    return selectedTab.value
+  },
+  set(tab) {
+    selectedTab.value = tab && asyncComponents[tab] ? tab : defaultTabValue
+    updateHashFromTab(selectedTab.value)
+    console.info('🔗 > Admin > activeTab > setting tab:', tab, ', selectedTab:', selectedTab.value, 'url.hash:', url.hash)
+  }
 })
 
 // ACTIONS
-const syncTabWithHash = (): boolean => {
-  const hash = route.hash
-  console.info('🔗 > Admin > syncTabWithHash > hash:', hash)
-  if (hash) {
-    const hashComponent = hash.slice(1).toLowerCase()
-    const tab = componentToTabIndex.value[hashComponent]
-    if (hashComponent && tab !== undefined) {
-      selectedTab.value = tab
-      console.info('🔗 > Admin > syncTabWithHash > selectedTab:', selectedTab.value, 'selected component:', hashComponent, 'isReady:', isReady.value)
-      return true
-    }
-  }
-  return false
-}
 
 // updates the page fragement # in the url to match the selected tab
-const updateHashFromTab = () => {
-  const component = items[selectedTab.value]?.component?.toLowerCase()
-  const hash = component ? `#${component}` : '#'
-  console.log('🔗 > Admin > updateHashFromTab > selectedTab:', selectedTab.value, 'routes hash:', route.hash, 'hash:', hash, 'query:', route.query)
-
-  // Only update if hash is different to avoid unnecessary router calls
-  if (route.hash !== hash) {
-    router.replace({
-      path: route.path,
-      hash: hash,
-      query: route.query
-    })
-    console.info('🔗 > Admin > updateHashFromTab > updated hash:', component, 'with query:', route.query)
-  } else {
-    console.info('🔗 > Admin > updateHashFromTab > hash already correct, skipping update')
-  }
+const updateHashFromTab = (tab: string) => {
+  const hash = hashFromTab(tab)
+  if (route.hash === hash) return // no need to update
+  navigateTo({
+    path: route.path,
+    hash: hash,
+    query: route.query
+  }, {replace: true})
+  console.info('🔗 > Admin > updateHashFromTab > updated hash:', hash, 'requested tab:', tab)
 }
 
-// WATCH - only update hash when user actually clicks tabs, not during focus events
-watch(selectedTab, (newTab, oldTab) => {
-  // Only update hash if truly initialized and tab actually changed meaningfully
-  if (isInitialized.value && newTab !== oldTab && typeof newTab === 'number') {
-    // Add a small delay to avoid conflicts with UTabs internal state changes
-    setTimeout(() => {
-      updateHashFromTab()
-    }, 50)
+// INITIALIZATION
+onMounted(() => {
+  // If URL doesn't have a hash or has a different hash than our selected tab
+  if (!url.hash || !asyncComponents[tabFromHash(url.hash)]) {
+    console.info('🔗 > Admin > onMounted > no hash in URL, or invalid hash, setting hash to selectedTab:', selectedTab.value)
+    updateHashFromTab(selectedTab.value)
+  } else if (asyncComponents[tabFromHash(url.hash)] && tabFromHash(url.hash) !== selectedTab.value) {
+    console.info('🔗 > Admin > onMounted > valid hash in URL, updating activeTab to hash:', url.hash, '->', selectedTab.value)
+    activeTab.value = tabFromHash(url.hash)
+  } else {
+    console.info('🔗 > Admin > onMounted > hash in URL matches selectedTab:', selectedTab.value, 'hash:', url.hash, 'no action needed')
   }
 })
 
-// INITIALIZATION
 
-onMounted(() => {
-  console.info('🔗 > Admin > onMounted >',
-      'route.hash:', route.hash,
-      'route.query:', route.query,
-      'route.fullPath:', route.fullPath
-  )
-  selectedTab.value = 0
+// /*
+// watch(selectedTab, (newVal, oldVal) => {
+//   if (newVal === oldVal) return
+//   console.info('🔗 > Admin > watch selectedTab > tab changed:', oldVal, '->', newVal)
+//   updateHashFromTab()
+// })
+//
+// watch(() => router.currentRoute.value.hash, (newHash, oldHash) => {
+//   if (newHash === oldHash) return
+//   console.info('🔗 > Admin > watch route.hash > hash changed:', oldHash, '->', newHash)
+//   syncTabWithHash(newHash)
+// })
+// */
 
-
-  // check if there is a hash in the url already and sync the tab with it
-  const synced = syncTabWithHash()
-  if (!synced) {
-    // Only update hash if there wasn't one to sync with
-    updateHashFromTab()
-  }
-  isInitialized.value = true
-
+const {status, error} = await useAsyncData('planStore', async () => {
+  await init()
   toast.add({
     id: 'seasons-loaded',
     title: 'Data for Sæsoner indlæst',
     description: 'Sæsoner er indlæst og klar til brug',
     color: 'info'
   })
-})
-
-const {status, error} = await useAsyncData('planStore', async () => {
-  await init()
   return {initialized: true}
 })
 
@@ -158,26 +149,28 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="status==='pending' || !isInitialized"/>
+    <Loader v-if="status==='pending'"/>
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
-    <div
-        class="py-1 md:py-2 lg:p-4 min-h-screen">
+    <div class="relative py-1 md:py-2 lg:p-4 min-h-screen">
+      <!-- Invisible scroll anchor -->
+      <a :id="activeTab" class="absolute w-0 h-0 -top-24 opacity-0 pointer-events-none" href="#">⚓︎</a>
       <UTabs
-          v-model="selectedTab"
+          v-model="activeTab"
           :items="items"
           class="w-full"
           color="primary"
-          unmount-on-hide
       >
-
-        <template #content="{ item, index }">
-          <div v-if="isInitialized"
-               class="flex flex-col gap-2 md:gap-4 overflow-hidden">
+        <template #content="{ item }">
+          <div class="flex flex-col gap-2 md:gap-4 overflow-hidden">
             <Ticker class="py-1" :words="item.content.split('.')"/>
-            <component :is="asyncComponents[index]"/>
+            <component :is="asyncComponents[item.value]"/>
           </div>
         </template>
       </UTabs>
+      <client-only>
+        <p> DEBUG: selectedTab is {{ selectedTab }}. Full path: {{ route.fullPath }} hash is: {{ route.hash }}</p>
+        <p>currentRoute in router: {{ router.currentRoute.value.hash }}</p>
+      </client-only>
     </div>
   </div>
 </template>

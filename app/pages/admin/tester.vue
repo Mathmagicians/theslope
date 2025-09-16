@@ -1,46 +1,94 @@
 <script setup lang="ts">
-import type { DateRange } from "~/types/dateTypes"
 
-// Sample data for testing CalendarDateRangePicker
-const selected = ref<DateRange>({
-  start: new Date(2025, 8, 1),
-  end: new Date(2025, 8, 15)
+// COMPONENT DEPENDENCIES
+const toast = useToast()
+const {init} = usePlanStore()
+const route = useRoute()
+const router = useRouter()
+const url = useRequestURL()
+
+// UI - ITEMS
+const items = [
+
+  {
+    label: 'Brugere',
+    icon: 'i-heroicons-users',
+    content: 'Importer data fra Heynabo. Se importerede brugere fra HeyNabo. Administrer brugere',
+    component: 'AdminUsers',
+    value: 'AdminUsers'
+  },
+  {
+    label: 'Økonomi',
+    icon: 'i-heroicons-currency-dollar',
+    content: 'Økonomisk overblik. Chefkokkebudgetter. Basisvarerbudgetter. Inberetning til PBS.',
+    component: 'AdminEconomy',
+    value: 'AdminEconomy'
+  },
+  {
+    label: 'Indstillinger',
+    icon: 'i-heroicons-cog-6-tooth',
+    content: 'Se systemindstillinger. Ændre systemindstillinger.',
+    component: 'AdminSettings',
+    value: 'AdminSettings'
+  }
+]
+
+const asyncComponents = Object.fromEntries(
+    items.map(item => [
+      item.value,
+      defineAsyncComponent(() => import(`~/components/admin/${item.component}.vue`))
+    ])
+)
+const defaultTab = 'AdminUsers'
+
+// STATE
+const selectedTab = ref(defaultTab)
+
+const activeTab = computed({
+  get() {
+    return (route.hash as string) || defaultTab
+  },
+  set(tab) {
+    const computedHash = asyncComponents[tab] ?`#${tab.toLowerCase()}`: `#${defaultTab.toLowerCase()}`
+    console.log('AdminTester > activeTab > setting tab:', {tab, computedHash})
+    // Hash is specified here to prevent the page from scrolling to the top
+    router.push({
+      path: route.path,
+      query: route.query,
+      hash: computedHash
+    })
+  }
 })
 
-const selectedRanges = ref<DateRange[]>([])
-
-const handleClose = () => {
-  selectedRanges.value.push({ ...selected.value })
-  console.log('New range added:', selected.value)
-}
-
-const removeRange = (index: number) => {
-  selectedRanges.value.splice(index, 1)
-}
 </script>
 
+
 <template>
-  <div class="space-y-6">
-    <h2>CalendarDateRangePicker Test</h2>
+  <div>
+    <div class="py-1 md:py-2 lg:p-4 min-h-screen">
+      <client-only>
+        <p> DEBUG: selectedTab is {{ selectedTab }}. Full path: {{ route.fullPath }} hash is: {{ route.hash }}</p>
+        <p>currentRoute in router: {{ router.currentRoute.value.hash }}</p>
+      </client-only>
 
-    <div>
-      <h3>Selected Range:</h3>
-      <p>{{ formatDateRange(selected) }}</p>
-    </div>
-
-    <CalendarDateRangePicker
-      v-model="selected"
-      @close="handleClose"
-    />
-
-    <div v-if="selectedRanges.length > 0">
-      <h3>Collected Ranges:</h3>
-      <ul class="space-y-2">
-        <li v-for="(range, index) in selectedRanges" :key="index" class="flex items-center gap-2">
-          <UBadge>{{ formatDateRange(range) }}</UBadge>
-          <UButton @click="removeRange(index)" color="red" icon="i-heroicons-trash" variant="ghost" size="xs" />
-        </li>
-      </ul>
+      <UTabs
+          v-model="activeTab"
+          :items="items"
+          class="w-full"
+          color="primary"
+          default-value="0"
+      >
+        <template #content="{ item }">
+          <!-- Invisible anchor for Vue Router scroll behavior -->
+          <div class="flex flex-col gap-2 md:gap-4 overflow-hidden">
+            <a :id="`${item.value.toLowerCase()}`" class="border-blue-600 border-8">{{
+                item.value.toLowerCase()
+              }}</a>
+            <p>DEBUG: Current item is {{ item.label }}, selectedTab is {{ selectedTab }}</p>
+            <component :is="asyncComponents[selectedTab]"/>
+          </div>
+        </template>
+      </UTabs>
     </div>
   </div>
 </template>

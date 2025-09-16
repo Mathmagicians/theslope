@@ -1,11 +1,54 @@
 # TODO
 
-## Current Issues 
-- tabs navigation with url fragment broken on first entry
-- calendar picker port to nuxtui3 
+# Highest priority: Fix url fragment navigation with tabs
+What we want to achieve. We use a navigation menu and pages for primary navigation. On each page, we want to use tabs as secondary navigation.
+
+## Desired Behavior
+1. when user navigates to /admin, the site loads the default tab, and rewrites the url to /admin#tabname
+2. when user navigates to /admin#tabname, the site loads the correct tab
+3. when user switches tabs, the url fragment updates accordingly
+4. tests should be updated to reflect the above behavior
+
+## TDD Implementation Plan
+
+### Phase 1: Test-First Approach ✅
+- [x] 1. Check existing tests and identify missing test cases
+- [x] 2. Add missing test case for tab click behavior
+
+### Phase 2: Revert to Working State 🔄
+- [ ] 3. Revert broken Nuxt 4 upgrade changes to working pre-upgrade version
+  - Restore working UTabs template structure (#item with v-if="selected")
+  - Restore simple watch logic without complex conditions
+  - Remove isInitialized complexity
+
+### Phase 3: Nuxt 4 Compatibility 🆕
+- [ ] 4. Replace router.replace with navigateTo for Nuxt 4 compatibility
+
+### Phase 4: Implement Simplified Logic 🎯
+- [ ] 5. Implement simplified hash-driven navigation logic
+  - Single source of truth: hash drives tab state
+  - Two-way binding: hash ↔ tab synchronization
+  - Remove over-engineered initialization logic
+
+### Phase 5: Validation ✅
+- [ ] 6. Run tests to verify all 3 use cases work correctly
+  - Use Case 1: /admin → /admin#adminplanning
+  - Use Case 2: /admin#tabname → correct tab loads
+  - Use Case 3: Click tab → hash updates
+
+### Key Principles
+- **TDD**: Tests drive implementation, not the other way around
+- **Incremental**: Each step should pass existing tests before moving to next
+- **Single Source of Truth**: Hash controls everything, no competing state
+- **KISS**: Remove complexity, embrace simplicity
+
+# Medium priority: Fix E2E tests
+
+## Refactor login.vue, to use zod validation from api schema
+
 ## Fix E2E Tests
 
-## Temporarily Disabled E2E Tests
+### Temporarily Disabled E2E Tests
 
 The following E2E tests have been temporarily disabled with `test.skip()` to allow CI pipeline to pass. They need to be fixed and re-enabled:
 
@@ -27,7 +70,7 @@ The following E2E tests have been temporarily disabled with `test.skip()` to all
 - Check if form ID changed from `#seasonForm` to something else
 - Verify form loading timing and add proper waits
 
-## Action Items
+## Action Itemshe
 - [ ] Investigate actual form field names and IDs in current component structure
 - [ ] Fix form URL parameter initialization 
 - [ ] Update test selectors to match current implementation
