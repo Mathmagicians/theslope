@@ -62,19 +62,24 @@ const asyncComponents = Object.fromEntries(
 const defaultTabValue = items[0]!.value
 const tabFromHash = (hash: string | undefined) => hash ? hash.slice(1).toLowerCase() : defaultTabValue
 const hashFromTab = (tab: string) => `#${tab.toLowerCase()}`
-// STATE
-const selectedTab = ref(tabFromHash(route.hash))
 
+const getSafeTabFromHash = (hash: string | undefined) => {
+  const tab = tabFromHash(hash)
+  return asyncComponents[tab] ? tab : defaultTabValue
+}
+
+const getSafeTab = (tab: string) =>{
+  return asyncComponents[tab] ? tab : defaultTabValue
+}
 
 // COMPUTED STATE
 const activeTab = computed({
   get() {
-    return selectedTab.value
+    return getSafeTabFromHash(route.hash)
   },
   set(tab) {
-    selectedTab.value = tab && asyncComponents[tab] ? tab : defaultTabValue
-    updateHashFromTab(selectedTab.value)
-    console.info('🔗 > Admin > activeTab > setting tab:', tab, ', selectedTab:', selectedTab.value, 'url.hash:', url.hash)
+    updateHashFromTab(getSafeTab(tab))
+    console.info('🔗 > Admin > activeTab > setting tab:', tab, ', safeTab:', getSafeTab(tab), 'url.hash:', url.hash)
   }
 })
 
@@ -96,13 +101,13 @@ const updateHashFromTab = (tab: string) => {
 onMounted(() => {
   // If URL doesn't have a hash or has a different hash than our selected tab
   if (!url.hash || !asyncComponents[tabFromHash(url.hash)]) {
-    console.info('🔗 > Admin > onMounted > no hash in URL, or invalid hash, setting hash to selectedTab:', selectedTab.value)
-    updateHashFromTab(selectedTab.value)
-  } else if (asyncComponents[tabFromHash(url.hash)] && tabFromHash(url.hash) !== selectedTab.value) {
-    console.info('🔗 > Admin > onMounted > valid hash in URL, updating activeTab to hash:', url.hash, '->', selectedTab.value)
+    console.info('🔗 > Admin > onMounted > no hash in URL, or invalid hash, setting hash to activeTab:', activeTab.value, 'hash:', url.hash)
+    updateHashFromTab(activeTab.value)
+  } else if (tabFromHash(url.hash) !== activeTab.value) {
+    console.info('🔗 > Admin > onMounted > valid hash in URL, updating activeTab to hash:', url.hash, '->', activeTab.value)
     activeTab.value = tabFromHash(url.hash)
   } else {
-    console.info('🔗 > Admin > onMounted > hash in URL matches selectedTab:', selectedTab.value, 'hash:', url.hash, 'no action needed')
+    console.info('🔗 > Admin > onMounted > hash in URL matches activeTab:', activeTab.value, 'hash:', url.hash, 'no action needed')
   }
 })
 
@@ -168,7 +173,7 @@ useHead({
         </template>
       </UTabs>
       <client-only>
-        <p> DEBUG: selectedTab is {{ selectedTab }}. Full path: {{ route.fullPath }} hash is: {{ route.hash }}</p>
+        <p> DEBUG: activeTab is {{ activeTab }}. Full path: {{ route.fullPath }} hash is: {{ route.hash }}</p>
         <p>currentRoute in router: {{ router.currentRoute.value.hash }}</p>
       </client-only>
     </div>
