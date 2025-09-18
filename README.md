@@ -1,5 +1,17 @@
 # theslope
 
+## 🖥️ User Interface
+
+### Navigation
+#### Admin URLs
+- **Admin Dashboard**: `/admin` (redirects to `/admin/planning`)
+- **Planning**: `/admin/planning` - Plan dinners, events, calendar, seasons
+- **Households**: `/admin/households` - Manage households, allergies, moves
+- **Allergies**: `/admin/allergies` - View and manage allergies, print poster
+- **Users**: `/admin/users` - Import HeyNabo data, manage users
+- **Economy**: `/admin/economy` - Financial overview, chef budgets, PBS reports
+- **Settings**: `/admin/settings` - System configuration
+
 ## 👩🏽‍💻How to develop
 - npm + node  installeret 
 - git installeret

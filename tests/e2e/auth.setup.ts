@@ -38,7 +38,8 @@ setup('Authenticate admin for UI', async ({page}) => {
     await page.waitForURL('/login')
     await performLogin(page.request)
     await page.goto('/admin')
-    await page.waitForURL('/admin', { waitUntil: 'networkidle' })
+    // Wait for redirect to default admin tab
+    await page.waitForURL('/admin/planning', { waitUntil: 'networkidle' })
     // Save browser state
     await page.context().storageState({ path: authFiles.adminUIFile })
     await page.screenshot({ path: 'docs/screenshots/admin/admin-page.png', fullPage: true })
