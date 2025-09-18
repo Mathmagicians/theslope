@@ -69,17 +69,14 @@ const handleSubmit = async () => {
   <div class="flex items-center justify-center bg-pink-50">
     <!-- Show login component if user is not logged in -->
     <div v-if="!loggedIn" class="max-w-md w-full p-6 ">
-      <form @submit.prevent="handleSubmit" class="space-y-6">
-        <UCard :ui="{
-          background: 'bg-pink-400 dark:bg-pink-500',
-          divide: 'divide-pink-50 dark:divide-pink-100'
-        }">
+      <UForm :state="{ email: formEmail, password: password }" @submit="handleSubmit" class="space-y-6">
+        <UCard >
           <template #header>
             <h2 class="text-xl font-bold">Log ind</h2>
           </template>
 
           <div class="space-y-4 ">
-            <UFormGroup label="Email">
+            <UFormField label="Email">
               <UInput
                   v-model="formEmail"
                   type="email"
@@ -87,24 +84,24 @@ const handleSubmit = async () => {
                   :error="emailError"
                   @blur="validateEmail"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="Adgangskode">
+            <UFormField label="Adgangskode">
               <UInput
                   v-model="password"
-                  color="pink"
+                  color="secondary"
                   type="password"
                   placeholder="Indtast din Heynabo adgangskode"
                   :error="passwordError"
                   @blur="validatePassword"
               />
-            </UFormGroup>
+            </UFormField>
           </div>
 
           <template #footer>
             <UButton
                 type="submit"
-                color="blue"
+                color="secondary"
                 :loading="isLoading"
                 block
             >
@@ -112,17 +109,14 @@ const handleSubmit = async () => {
             </UButton>
           </template>
         </UCard>
-      </form>
+      </UForm>
     </div>
 
     <!-- Show username, hello and logout button if user is logged in -->
     <div v-else class="flex flex-row items-center justify-between ">
-      <UCard :ui="{
-          background: 'bg-pink-400 dark:bg-pink-500',
-          divide: 'divide-pink-50 dark:divide-pink-100'
-        }">
+      <UCard >
         <template #header>
-          <h2 class="text-xl font-bold text-pink-50">Hej {{ greeting }}!</h2>
+          <h2 class="text-lg">Hej {{ greeting }}!</h2>
         </template>
 
         <div class="space-y-4 ">
@@ -133,17 +127,17 @@ const handleSubmit = async () => {
               :alt="greeting"
               icon="i-material-symbols-person-celebrate-rounded"
           />
-          <p class="flex items-center"><UIcon name="i-guidance-mail" class="mr-2 text-pink-200"/> <span class="mx-2 text-pink-50">{{ email }}</span> </p>
-          <p class="flex items-center"><UIcon name="i-guidance-phone" class="mr-2"/> <span class="mx-2">{{ phone }}</span> </p>
-          <p class="flex items-center"><UIcon name="i-guidance-home-2" class="mr-2"/> <span class="mx-2">{{ address }}</span> </p>
+          <p class="flex items-center"><UIcon name="i-guidance-mail" class="mr-2 "/> <span class="mx-2 text-muted">{{ email }}</span> </p>
+          <p class="flex items-center"><UIcon name="i-guidance-phone" class="mr-2"/> <span class="mx-2 text-muted">{{ phone }}</span> </p>
+          <p class="flex items-center"><UIcon name="i-guidance-home-2" class="mr-2"/> <span class="mx-2 text-muted">{{ address }}</span> </p>
 
         </div>
 
         <template #footer>
           <UButton
               icon="i-tdesign-wave-bye"
-              color="blue"
-              style="link"
+              color="secondary"
+              variant="outline"
               type="submit"
               @click="clear">
             Log ud
