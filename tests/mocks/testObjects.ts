@@ -1,5 +1,6 @@
 import { formatDate } from '../../app/utils/date'
 import type { Season } from '../../app/composables/useSeasonValidation'
+import type { CookingTeam, CookingTeamWithMembers } from '../../app/composables/useCookingTeamValidation'
 
 // Generate unique test data
 const testSalt = Date.now().toString()
@@ -56,4 +57,44 @@ export const completeTestSeason: Season = {
   ],
   ticketIsCancellableDaysBefore: 7,
   diningModeIsEditableMinutesBefore: 120
+}
+
+// Test cooking team for API calls and validation
+export const testCookingTeam: CookingTeam = {
+  seasonId: 12345,
+  name: `TestTeam-${testSalt}`
+}
+
+// Complete test cooking team with ID
+export const completeTestCookingTeam: CookingTeam = {
+  id: 100,
+  seasonId: 12345,
+  name: "Team Alpha"
+}
+
+// Test cooking team with members
+export const testCookingTeamWithMembers: CookingTeamWithMembers = {
+  id: 100,
+  seasonId: 12345,
+  name: "Team Alpha",
+  chefs: [
+    { id: 1, inhabitantId: 10, role: 'CHEF' }
+  ],
+  cooks: [
+    { id: 2, inhabitantId: 20, role: 'COOK' },
+    { id: 3, inhabitantId: 21, role: 'COOK' }
+  ],
+  juniorHelpers: [
+    { id: 4, inhabitantId: 30, role: 'JUNIORHELPER' }
+  ]
+}
+
+// Empty test cooking team (for testing validation)
+export const emptyTestCookingTeam: CookingTeamWithMembers = {
+  id: 101,
+  seasonId: 12345,
+  name: "Empty Team",
+  chefs: [],
+  cooks: [],
+  juniorHelpers: []
 }

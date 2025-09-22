@@ -1,8 +1,9 @@
 import {PrismaD1} from "@prisma/adapter-d1"
-import {Season, User, Inhabitant, Household, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
+import {Season, User, Inhabitant, Household, CookingTeam, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 import InhabitantCreateInput = PrismaFromClient.InhabitantCreateInput
 import SeasonCreateInput = PrismaFromClient.SeasonCreateInput
+import CookingTeamCreateInput = PrismaFromClient.CookingTeamCreateInput
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
     const adapter = new PrismaD1(d1Client)
@@ -320,3 +321,160 @@ export async function updateSeason(d1Client: D1Database, seasonData: any): Promi
 }
 
 // saveSeason function removed in favor of separate createSeason and updateSeason functions
+
+export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<CookingTeam[]> {
+    console.log(`>>>👥 Fetching teams${seasonId ? ` for season ${seasonId}` : ''}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const teams = await prisma.cookingTeam.findMany({
+        where: seasonId ? { seasonId } : undefined,
+        include: {
+            season: true,
+            chefs: {
+                include: {
+                    inhabitant: true
+                }
+            },
+            cooks: {
+                include: {
+                    inhabitant: true
+                }
+            },
+            juniorHelpers: {
+                include: {
+                    inhabitant: true
+                }
+            }
+        },
+        orderBy: {
+            name: 'asc'
+        }
+    })
+
+    console.log(`<<<👥 Got ${teams.length} teams from database`)
+    return teams
+}
+
+export async function fetchTeam(d1Client: D1Database, id: number): Promise<CookingTeam | null> {
+    console.log(`>>>👥 Fetching team with id ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const team = await prisma.cookingTeam.findFirst({
+        where: { id },
+        include: {
+            season: true,
+            chefs: {
+                include: {
+                    inhabitant: true
+                }
+            },
+            cooks: {
+                include: {
+                    inhabitant: true
+                }
+            },
+            juniorHelpers: {
+                include: {
+                    inhabitant: true
+                }
+            },
+            dinners: true
+        }
+    })
+
+    console.log(`<<<👥 Got team ${team?.name} from database`)
+    return team
+}
+
+export async function createTeam(d1Client: D1Database, teamData: CookingTeamCreateInput): Promise<CookingTeam> {
+    console.info(`>>>👥 CREATE > team: ${teamData.name} for season ${teamData.seasonId}`)
+
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const newTeam = await prisma.cookingTeam.create({
+            data: teamData,
+            include: {
+                season: true
+            }
+        })
+
+        console.info(`<<<👥 CREATE > Created team: ${newTeam.name} with id ${newTeam.id}`)
+        return newTeam
+    } catch (e) {
+        const errStr = `>>>👥 CREATE > Error creating team: ${teamData?.name}`
+        console.error(errStr, e)
+        throw createError({
+            statusCode: 500,
+            message: errStr,
+            cause: e
+        })
+    }
+}
+
+export async function updateTeam(d1Client: D1Database, id: number, teamData: Partial<CookingTeamCreateInput>): Promise<CookingTeam> {
+    console.info(`>>>👥 UPDATE > team with id ${id}`)
+
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const updatedTeam = await prisma.cookingTeam.update({
+            where: { id },
+            data: teamData,
+            include: {
+                season: true
+            }
+        })
+
+        console.info(`<<<👥 UPDATE > Updated team: ${updatedTeam.name} with id ${updatedTeam.id}`)
+        return updatedTeam
+    } catch (e) {
+        const errStr = `>>>👥 UPDATE > Error updating team with id ${id}`
+        console.error(errStr, e)
+        throw createError({
+            statusCode: 500,
+            message: errStr,
+            cause: e
+        })
+    }
+}
+
+export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeam> {
+    console.log(`>>>👥 DELETE > Deleting team with id ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Check if team has dinner events assigned
+        const teamWithEvents = await prisma.cookingTeam.findUnique({
+            where: { id },
+            include: {
+                dinners: true
+            }
+        })
+
+        if (teamWithEvents?.dinners && teamWithEvents.dinners.length > 0) {
+            throw new Error(`Cannot delete team: ${teamWithEvents.dinners.length} dinner events are assigned to this team`)
+        }
+
+        const deletedTeam = await prisma.cookingTeam.delete({
+            where: { id }
+        })
+
+        console.log(`<<<👥 DELETE > Successfully deleted team ${deletedTeam.name}`)
+        return deletedTeam
+    } catch (e) {
+        const errStr = `>>>👥 DELETE > Error deleting team with id ${id}`
+        console.error(errStr, e)
+
+        // Re-throw specific error messages
+        if (e.message?.includes('Cannot delete team')) {
+            throw new Error(e.message)
+        }
+
+        throw createError({
+            statusCode: 500,
+            message: errStr,
+            cause: e
+        })
+    }
+}

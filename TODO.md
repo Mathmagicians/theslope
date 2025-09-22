@@ -1,5 +1,123 @@
 # TODO
 
+## 🎯 HIGH PRIORITY: Admin Dining Season Management
+**Milestone**: Admin can create a dining season with cooking teams and corresponding events
+
+### Phase 1: Cooking Team Management
+**API Development**
+- Create PUT /api/admin/teams - Create team
+- Create GET /api/admin/teams - List teams by season
+- Create POST /api/admin/teams/[id] - Update team
+- Create DELETE /api/admin/teams/[id] - Delete team
+- Write API tests for all team endpoints
+
+**UI Development**
+- Create AdminCookingTeams.vue component
+- Create CookingTeamForm.vue for create/edit
+- Create CookingTeamList.vue for display
+- Add "Teams" step to season workflow
+- Write component tests for team UI
+- Write E2E tests for team CRUD operations
+
+### Phase 2: Team Member Assignment
+**API Development**
+- Create PUT /api/admin/teams/[id]/members - Add member
+- Create DELETE /api/admin/teams/[id]/members/[memberId] - Remove member
+- Create GET /api/admin/inhabitants/available - List available inhabitants
+- Write API tests for member assignment endpoints
+
+**UI Development**
+- Create TeamMemberSelector.vue with search
+- Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
+- Implement drag-and-drop for member assignment
+- Write component tests for member assignment
+- Write E2E tests for team composition
+
+### Phase 3: Dinner Event Generation
+**API Development**
+- Create POST /api/admin/season/[id]/generate-events endpoint
+- Implement event generation algorithm considering:
+  - Season date range and cooking days
+  - Holiday exclusions
+  - Team rotation schedule
+- Create GET /api/admin/events - List events with filters
+- Write unit tests for generation algorithm
+- Write API tests for event endpoints
+
+**UI Development**
+- Create EventCalendar.vue with monthly view
+- Create EventDetails.vue for single event editing
+- Create BulkEventActions.vue for mass operations
+- Add chef assignment to events
+- Write component tests for event UI
+- Write E2E tests for event generation flow
+
+### Phase 4: Integration & Validation
+**Workflow Integration**
+- Create unified season creation wizard:
+  1. Define season (existing)
+  2. Create cooking teams
+  3. Assign team members
+  4. Generate dinner events
+  5. Review & activate
+- Write E2E tests for complete workflow
+
+**Validation & Business Rules**
+- Implement overlapping season prevention
+- Add team size validation rules
+- Check scheduling conflicts
+- Add warnings for incomplete teams
+- Write unit tests for all validation rules
+
+**Testing & Documentation**
+- Write integration tests for season-team-event flow
+- Add error handling and recovery tests
+- Create API documentation
+- Update ADR with team/event architecture decisions
+
+### Technical Implementation Details
+
+**Extend Validation Schemas**
+```typescript
+// Add to useSeasonValidation.ts
+const CookingTeamSchema = z.object({
+  id: z.number().optional(),
+  seasonId: z.number(),
+  name: z.string().min(1),
+  chefs: z.array(z.number()), // inhabitant IDs
+  cooks: z.array(z.number()),
+  juniorHelpers: z.array(z.number()).optional()
+})
+
+const EventGenerationConfigSchema = z.object({
+  seasonId: z.number(),
+  rotationPattern: z.enum(['weekly', 'biweekly', 'custom']),
+  teamRotation: z.array(z.number()) // team IDs in order
+})
+```
+
+**Repository Functions**
+- `createCookingTeam()`
+- `updateCookingTeam()`
+- `deleteCookingTeam()`
+- `assignTeamMembers()`
+- `generateDinnerEvents()`
+- `getTeamsBySeasonId()`
+
+**Store Extensions**
+- Extend `usePlanStore()` with team management
+- Add `useEventStore()` for dinner events
+- Include optimistic updates for UI responsiveness
+
+### Test Coverage Requirements
+- Unit tests: Business logic, validation, algorithms
+- Component tests: UI components with mocked data
+- API tests: All endpoints with error cases
+- E2E tests: User workflows and edge cases
+- Integration tests: Season-team-event relationships
+
+---
+
 # ✅ COMPLETED: Path-based admin navigation
 **Status**: COMPLETED - Successfully migrated from fragment-based to path-based routing
 

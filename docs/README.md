@@ -1,52 +1,118 @@
-# Purpose
+# TheSlope Documentation
 
-Solve problems with signing up for meals, and paying for them
+Welcome to TheSlope documentation. This directory contains all technical and feature documentation for the community dining management platform.
 
-# Features
+## Table of Contents
 
-## User roles
-- 👩‍🍳Chef  - responsible for menu of dinner event, managing cooking team, shopping, cooking
-- 🤖Admin - rsponsible for creating dinner events (according to school plan in Lejre)
-- 😋Skråner - participates in cooking teams, and consumes meals together with the household, has a list of allergies
+### =� Core Documentation
 
-## Data model
-- Dinner event
-- Meal ticket - has type (regular, child, guest), venue (dining hall, take away),  household, date and is linked to a dinner event
-- Household - has a pbs number, adress, associated users (skråner), and a list of household members - integrated from Heynabo 🤖
+- [**Architecture Decision Records (ADRs)**](./adr.md)
+  - ADR-001: Core Framework and Technology Stack
+  - Documenting important architectural decisions and their rationale
 
-## Functionality
+- [**Features Overview**](./features.md)
+  - User roles (Chef, Admin, Skr�ner)
+  - Data model overview
+  - Complete functionality breakdown by role
 
-### Admin
-- Create dinner event
-- Assign chef for dinner event
-- Assign cooking team for dinner event
-- Create new household for families that move to Skråningen
-- Disable household for families that have left Skråningen
-- Monthly overview of meal tickets sold
-- Monthly report in cvs format for invoicing
-- Send monthly report to pbs system
-- Store monthly report in blob archive
-- Upgrade baby to child meal ticket type
-- Upgrade child to adult meal ticket type
+- [**Quick Reference**](./prompt.md)
+  - Technology stack summary
+  - Testing approach
+  - Development patterns
 
-### Chef
-#### Planning menu
-- Create menu / edit menu
-- See budget based on meal ticket quantity
-- See kitchen team 
-- see allergies
+### =' Development Resources
 
-#### Cooking menu
-- See number of dining guests
-- see split for dining hall / take away - numbers and perentages
-- see cancellations
-- see allergies 
+- [**Project TODO**](../TODO.md)
+  - Current development priorities
+  - Framework migration plans
+  - Test fixes and improvements
 
-### Skråner
-- Buy meal tickets (monthly view of household members and all dinner events) 
-- See meal cost for invoice period (this and previous period)
-- Buy extra tickets for guests
-- Sell dinner tickets to other skråner safter deadline (if you can't make it)
-- Cancel meal tickets (before deadline) - no cost
-- Cancel meal tickets (after deadline) - cost
-- change venue from dining hall to take away (before deadline)
+- [**Development Guide**](../CLAUDE.md)
+  - Commands reference
+  - Code style guidelines
+  - Testing patterns
+  - Git workflow
+
+- [**Main README**](../README.md)
+  - Project setup instructions
+  - Database configuration
+  - Deployment guide
+  - Environment variables
+
+### =� Additional Resources
+
+- [**API Samples**](./heynabo_api_samples/)
+  - Heynabo API integration examples
+  - Request/response samples
+
+- [**Screenshots**](./screenshots/)
+  - UI/UX reference images
+  - Feature demonstrations
+
+## Quick Links
+
+### Common Development Tasks
+
+| Task | Command | Description |
+|------|---------|-------------|
+| Development | `npm run dev` | Start local development server on port 3000 |
+| Testing | `npm run test` | Run all Vitest and Playwright tests |
+| Build | `npm run build` | Build production-ready application |
+| Deploy | `npm run deploy` | Deploy to Cloudflare Workers/Pages |
+| Database | `npm run db:migrate:local` | Apply database migrations locally |
+
+### Key Technologies
+
+- **Framework**: Nuxt 3.15 with Vue 3 Composition API
+- **Language**: TypeScript 5.7 with strict mode
+- **Validation**: Zod for runtime validation and type inference
+- **Database**: Prisma with Cloudflare D1 (SQLite)
+- **State Management**: Pinia 3.0
+- **UI Framework**: Nuxt UI 3 with Tailwind CSS 4
+- **Deployment**: Cloudflare Workers/Pages
+
+### Testing Strategy
+
+| Test Type | File Pattern | Framework | Purpose |
+|-----------|-------------|-----------|---------|
+| Unit | `*.unit.spec.ts` | Vitest | Pure function testing |
+| Nuxt | `*.nuxt.spec.ts` | Vitest | Nuxt component testing |
+| E2E | `*.e2e.spec.ts` | Playwright | End-to-end testing |
+
+## Navigation Guide
+
+### For New Developers
+1. Start with [Main README](../README.md) for setup
+2. Review [Architecture Decision Records](./adr.md) to understand technology choices
+3. Check [Development Guide](../CLAUDE.md) for coding standards
+4. Explore [Features Overview](./features.md) to understand the domain
+
+### For Contributing
+1. Review [TODO](../TODO.md) for current priorities
+2. Follow guidelines in [Development Guide](../CLAUDE.md)
+3. Understand validation patterns in [ADR-001](./adr.md#zod-integration-examples)
+4. Run tests before submitting PRs
+
+### For Architecture Decisions
+- All major technology decisions are documented in [ADRs](./adr.md)
+- Framework choices, patterns, and rationale are explained
+- Code examples demonstrate implementation patterns
+
+## Documentation Standards
+
+- **Language**: Technical documentation in English, user-facing content in Danish
+- **Format**: Markdown with GitHub-flavored extensions
+- **Code Examples**: Include real examples from the codebase
+- **Updates**: Keep documentation in sync with code changes
+- **ADRs**: Document all significant architectural decisions
+
+## Need Help?
+
+- Check the [Quick Reference](./prompt.md) for common patterns
+- Review [ADRs](./adr.md) for architectural guidance
+- See [Main README](../README.md) for setup issues
+- Explore code examples in the documentation
+
+---
+
+*Last Updated: January 2025*
