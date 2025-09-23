@@ -1,3 +1,4 @@
+
 import { formatDate } from '../../app/utils/date'
 import type { Season } from '../../app/composables/useSeasonValidation'
 import type { CookingTeam, CookingTeamWithMembers } from '../../app/composables/useCookingTeamValidation'
@@ -9,12 +10,12 @@ const testSalt = Date.now().toString()
 const today = new Date();
 const ninetyDaysLater = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
-// Test season for API calls and validation
+// Test season for API calls and validation (with properly formatted dates)
 export const testSeason = {
   shortName: `TestSeason-${testSalt}`,
   seasonDates: {
-    start: today,
-    end: ninetyDaysLater
+    start: formatDate(today),
+    end: formatDate(ninetyDaysLater)
   },
   isActive: false,
   cookingDays: {
@@ -29,6 +30,27 @@ export const testSeason = {
   holidays: [],
   ticketIsCancellableDaysBefore: 10,
   diningModeIsEditableMinutesBefore: 90
+}
+
+/**
+ * Helper function to create a test season with unique names and proper serialization
+ * @param customName Optional custom name suffix (defaults to timestamp)
+ * @param serializeSeason The serializeSeason function from useSeasonValidation composable
+ * @returns Object with rawSeason and serializedSeason for API calls
+ */
+export const createTestSeason = (customName?: string, serializeSeason?: (season: any) => any) => {
+  const rawSeason = customName
+    ? { ...testSeason, shortName: `${customName}-${testSeason.shortName}` }
+    : testSeason
+
+  if (!serializeSeason) {
+    throw new Error('createTestSeason requires serializeSeason function from useSeasonValidation composable')
+  }
+
+  return {
+    rawSeason,
+    serializedSeason: serializeSeason(rawSeason)
+  }
 }
 
 // For tests that need a complete season with IDs
