@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
-
-include .env.prod
+# change .env, .env.test, .env.prod to access localhost, dev, prod system
+include .env
 export
 
 .PHONY: heynabo-print-token heynabo-api heynabo-get-locations heynabo-get-nhbrs heynabo-get-admin heynabo
@@ -28,18 +28,18 @@ heynabo-get-admin:
 heynabo-post-event:
 	curl -v "$(HEY_NABO_API)/members/events/" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d "@docs/heynabo.json"
 
-#logs into heynabo and saves the session cookie into .cookies.txt
+#logs into heynabo (-i show headers, -s silent, -d implies POST and sends data, -c saves the session cookie into .cookies.txt
 theslope-login:
-	@curl -i -v -c .cookies.txt -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
+	@curl -c .cookies.txt $(THE_SLOPE_API)/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } ' |  jq
 
 theslope-admin-get-users:
-	@curl -b .cookies.txt http://localhost:3000/api/admin/users | jq
+	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/users | jq
 
 theslope-admin-import:
-	@curl -b .cookies.txt http://localhost:3000/api/admin/heynabo/import | jq
+	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/heynabo/import | jq
 
 theslope-put-user:
-	@curl -b .cookies.txt -X PUT "http://localhost:3000/api/admin/users" \
+	@curl -b .cookies.txt -X PUT "$(THE_SLOPE_API)/api/admin/users" \
 		--url-query "email=andemad@andeby.dk" \
 		--url-query "phone=+4512345678" \
 		--url-query "systemRole=ADMIN" \
