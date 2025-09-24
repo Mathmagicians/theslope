@@ -1,5 +1,170 @@
 # Architecture Decision Records
 
+## ADR-004: Logging and Security Standards
+
+**Date:** 2025-01-24
+**Status:** Accepted
+**Deciders:** Development Team
+
+### Context
+
+As our API endpoints handle sensitive user data (passwords, personal information), we need consistent logging practices that:
+
+- **Prevent credential leakage**: Never log passwords, tokens, or other sensitive data
+- **Use appropriate log levels**: Distinguish between expected behavior and actual errors
+- **Support debugging**: Provide useful information without compromising security
+- **Follow security best practices**: Minimize attack surface through careful logging
+
+Current inconsistencies include logging validation errors as `console.error` when they're expected behavior, and potential for sensitive data exposure in error logs.
+
+### Decision
+
+We adopt **Secure Logging Standards** with clear guidelines for log levels and sensitive data handling:
+
+#### 1. Log Level Classification
+
+**`console.info` - Expected Operations:**
+```typescript
+// Successful operations and normal flow
+console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
+console.info(`👨‍💻 > USER > Got users: ${users.length}`)
+```
+
+**`console.warn` - Expected Failures:**
+```typescript
+// Validation failures (client errors - 400 status)
+console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
+console.warn("👨‍💻 > TEAM > Invalid team composition")
+```
+
+**`console.error` - Unexpected Failures:**
+```typescript
+// Server errors and system failures (500 status)
+console.error("👨‍💻 > USER > Error saving user:", error)
+console.error("👨‍💻 > DB > Database connection failed")
+```
+
+#### 2. Sensitive Data Protection
+
+**NEVER LOG:**
+- `passwordHash`, `password`, `token`
+- Full error objects that may contain sensitive data
+- User input before validation/sanitization
+- Authentication credentials
+
+**SAFE LOGGING PATTERNS:**
+```typescript
+// ❌ DANGEROUS - May expose credentials
+console.error("Validation error:", error)
+
+// ✅ SAFE - Only logs field names and messages
+const validationMessage = error instanceof ZodError
+    ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
+    : 'Invalid input'
+console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
+```
+
+**SAFE USER IDENTIFICATION:**
+```typescript
+// ✅ SAFE - Use email or ID for user identification
+console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
+
+// ❌ AVOID - Don't log full user objects
+console.info("Adding user:", userFromQuery)
+```
+
+#### 3. Error Context Logging
+
+**Validation Errors (400):**
+```typescript
+try {
+    userFromQuery = await getValidatedQuery(event, UserCreateSchema.parse)
+} catch (error) {
+    const validationMessage = error instanceof ZodError
+        ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
+        : 'Invalid input'
+    console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
+    throw createError({
+        statusCode: 400,
+        message: '💻 > USER > Lousy credentials',
+        cause: error
+    })
+}
+```
+
+**Server Errors (500):**
+```typescript
+try {
+    const newUser = await saveUser(d1Client, userFromQuery)
+    console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
+    return newUser
+} catch (error) {
+    console.error("👨‍💻 > USER > Error saving user:", error)
+    throw createError({
+        statusCode: 500,
+        message: '👨‍💻 > USER > Server Error',
+        cause: error
+    })
+}
+```
+
+#### 4. Structured Logging Format
+
+**Consistent Format:**
+- `👨‍💻 > [MODULE] > [ACTION] [message]`
+- Examples: `👨‍💻 > USER > Adding user`, `👨‍💻 > TEAM > Validation failed`
+
+**HTTP Method Context:**
+```typescript
+console.info(`👨‍💻 > USER > [GET] Fetching users from db`)
+console.info(`👨‍💻 > USER > [DELETE] Deleting user with ID ${userId}`)
+```
+
+### Rationale
+
+**Security Benefits:**
+- **Prevents credential exposure** in logs that could be accessed by unauthorized parties
+- **Reduces attack surface** by not logging sensitive data that could be exploited
+- **Compliance ready** for security audits and data protection regulations
+
+**Operational Benefits:**
+- **Clear error classification** helps distinguish between client errors and system issues
+- **Consistent log levels** enable proper monitoring and alerting
+- **Structured format** improves log parsing and analysis
+- **Debugging support** provides useful context without compromising security
+
+**Alignment with ADR-002:**
+- Validation errors (expected) → `console.warn` + 400 status
+- Server errors (unexpected) → `console.error` + 500 status
+- Successful operations → `console.info` + 200/201 status
+
+### Consequences
+
+#### Positive
+- **Enhanced security**: No sensitive data leakage in logs
+- **Better monitoring**: Appropriate log levels for alerting
+- **Debugging efficiency**: Clear, structured log messages
+- **Compliance ready**: Meets security audit requirements
+- **Consistent patterns**: All endpoints follow same logging approach
+
+#### Negative
+- **Learning curve**: Developers must follow specific logging patterns
+- **Verbose validation logging**: More code required for safe error logging
+- **Review overhead**: Code reviews must verify logging security
+
+### Compliance
+
+All API endpoints must:
+1. **Use appropriate log levels** based on error type and expectation
+2. **Never log sensitive data** including passwords, tokens, or full user objects
+3. **Follow structured format** for consistent log parsing
+4. **Separate validation warnings** from server errors
+5. **Include safe user identification** using email or ID only
+
+### Examples
+
+See updated user endpoints (`/api/admin/users/*`) for reference implementations following these standards.
+
 ## ADR-003: BDD-Driven Testing Strategy with Factory Pattern
 
 **Date:** 2025-01-24

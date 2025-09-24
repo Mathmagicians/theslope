@@ -87,5 +87,5 @@ generate-session-secret:
 run-e2e-team:
 	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
 
-run-e2e-season:
-	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+run-e2e-user:
+	@npx playwright test tests/e2e/api/admin/users.e2e.spec.ts --reporter=line

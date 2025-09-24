@@ -1,33 +1,28 @@
-import {defineEventHandler, H3Error} from "h3";
+import {defineEventHandler} from "h3";
 import {saveUser} from "~~/server/data/prismaRepository"
-import * as z  from 'zod'
-import {SystemRole} from "@prisma/client"
+import {useUserValidation, type UserCreate} from "~/composables/useUserValidation"
+import {ZodError} from "zod"
 
-
-export const userSchema = z.object({
-    email: z.string().email('Email-adressen er ikke gyldig'),
-    phone: z.string()
-        .regex(/^\+?\d+$/, 'Telefonnummer må kun indeholde tal og eventuelt et plus-tegn i starten')
-        .optional(),
-    passwordHash: z.string().default('caramba'),
-    systemRole: z.nativeEnum(SystemRole).default(SystemRole.USER)
-})
+const {UserCreateSchema} = useUserValidation()
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    console.log("👨‍💻 > USER > data received", getQuery(event))
+    console.info("👨‍💻 > USER > [PUT] Processing user creation request")
 
     // Validate input - fail early on invalid data
-    let userFromQuery
+    let userFromQuery: UserCreate
     try {
-        userFromQuery = await getValidatedQuery(event, userSchema.parse)
+        userFromQuery = await getValidatedQuery(event, UserCreateSchema.parse)
     } catch (error) {
-        console.error("👨‍💻 > USER > Validation error: ", error)
+        const validationMessage = error instanceof ZodError
+            ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
+            : 'Invalid input'
+        console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
         throw createError({
             statusCode: 400,
-            message: 'Forkert brugerinput',
+            message: '💻 > USER > Lousy credentials',
             cause: error
         })
     }
@@ -35,7 +30,7 @@ export default defineEventHandler(async (event) => {
     // Save user to database
     try {
         console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
-        const newUser = await saveUser(d1Client, userFromQuery)
+        const newUser = await saveUser(d1Client, userFromo,Query)
         console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
         setResponseStatus(event, 201)
         return newUser
