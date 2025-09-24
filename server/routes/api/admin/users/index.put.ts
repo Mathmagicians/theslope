@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     // Save user to database
     try {
         console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
-        const newUser = await saveUser(d1Client, userFromo,Query)
+        const newUser = await saveUser(d1Client, userFromQuery)
         console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
         setResponseStatus(event, 201)
         return newUser
