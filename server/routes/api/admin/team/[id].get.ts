@@ -11,16 +11,26 @@ const idSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+    } catch (error) {
+        console.error("👥 > TEAM > [GET] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        // Validate and get the ID from route params using Zod
-        const { id } = await getValidatedRouterParams(event, idSchema.parse)
-
-        console.log(`=e > TEAM > [GET] Fetching team with id ${id}`)
-
-        // Fetch the team with members
+    // Database operations try-catch - separate concerns
+    try {
+        console.log(`👥 > TEAM > [GET] Fetching team with id ${id}`)
         const team = await fetchTeam(d1Client, id)
 
         if (!team) {
@@ -30,31 +40,19 @@ export default defineEventHandler(async (event) => {
             })
         }
 
-        console.info(`=e > TEAM > [GET] Successfully fetched team ${team.name}`)
-
-        // Return the team
+        console.info(`👥 > TEAM > [GET] Successfully fetched team ${team.name}`)
         return team
     } catch (error) {
-        console.error(`=e > TEAM > [GET] Error: ${error.message}`)
-
-        // For Zod validation errors, return 400
-        if (error.name === 'ZodError') {
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team ID: ' + error.errors[0].message,
-                cause: error
-            })
-        }
+        console.error("👥 > TEAM > [GET] Error fetching team:", error)
 
         // For "not found" errors, return 404
         if (error.statusCode === 404) {
             throw error
         }
 
-        // For other errors, return 500
         throw createError({
             statusCode: 500,
-            message: '=e > TEAM > Server Error: ' + error.message,
+            message: '👥 > TEAM > Server Error',
             cause: error
         })
     }

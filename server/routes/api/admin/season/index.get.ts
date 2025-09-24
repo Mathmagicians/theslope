@@ -1,4 +1,4 @@
-import {defineEventHandler, H3Error} from "h3"
+import {defineEventHandler} from "h3"
 import {fetchSeasons} from "~~/server/data/prismaRepository";
 
 export default defineEventHandler(async (event) => {

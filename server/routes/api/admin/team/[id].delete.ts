@@ -10,32 +10,31 @@ const idSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+    } catch (error) {
+        console.error("👥 > TEAM > [DELETE] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        // Validate and get the ID from route params using Zod
-        const { id } = await getValidatedRouterParams(event, idSchema.parse)
-
+    // Database operations try-catch - separate concerns
+    try {
         console.log(`👥 > TEAM > [DELETE] Deleting team with id ${id}`)
-
-        // Delete the team
         const deletedTeam = await deleteTeam(d1Client, id)
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
-
-        // Return the deleted team
         return deletedTeam
     } catch (error) {
-        console.error(`👥 > TEAM > [DELETE] Error: ${error.message}`)
-
-        // For Zod validation errors, return 400
-        if (error.name === 'ZodError') {
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team ID: ' + error.errors[0].message,
-                cause: error
-            })
-        }
+        console.error("👥 > TEAM > [DELETE] Error deleting team:", error)
 
         // For "not found" errors, return 404
         if (error.message?.includes('Record to delete does not exist')) {
@@ -46,10 +45,9 @@ export default defineEventHandler(async (event) => {
             })
         }
 
-        // For other errors, return 500
         throw createError({
             statusCode: 500,
-            message: '👥 > TEAM > Server Error: ' + error.message,
+            message: '👥 > TEAM > Server Error',
             cause: error
         })
     }

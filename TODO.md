@@ -1,5 +1,8 @@
 # TODO
+#1 priority 
+MAke sure makefile commands to login to theslope work
 
+## The rest
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management
 **Milestone**: Admin can create a dining season with cooking teams and corresponding events
 

@@ -1,6 +1,6 @@
 // POST /api/admin/teams/[id] - Update team, only if season is not in the past
 
-import {defineEventHandler, createError, getValidatedRouterParams, readBody} from "h3"
+import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import * as z from 'zod'
@@ -17,47 +17,32 @@ const {CookingTeamSchema} = useCookingTeamValidation()
 const PostTeamSchema = CookingTeamSchema.partial().omit({ id: true })
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id, teamData
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+        teamData = await readValidatedBody(event, PostTeamSchema.parse)
+    } catch (error) {
+        console.error("👥 > TEAM > [POST] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        // Validate and get the ID from route params using Zod
-        const { id } = await getValidatedRouterParams(event, idSchema.parse)
-
-        // Read and validate the body
-        const rawBody = await readBody(event)
-
-        // Validate using the application schema
-        const validationResult = PostTeamSchema.safeParse(rawBody)
-        if (!validationResult.success) {
-            console.error("👥 > TEAM > [POST] Validation error:", JSON.stringify(validationResult.error.format()))
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team data',
-                data: validationResult.error
-            })
-        }
-
+    // Database operations try-catch - separate concerns
+    try {
         console.log(`👥 > TEAM > [POST] Updating team with id ${id}`)
-
-        // Update the team
-        const updatedTeam = await updateTeam(d1Client, id, rawBody)
-
+        const updatedTeam = await updateTeam(d1Client, id, teamData)
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
-
-        // Return the updated team
         return updatedTeam
     } catch (error) {
-        console.error(`👥 > TEAM > [POST] Error: ${error.message}`)
-
-        // For Zod validation errors, return 400
-        if (error.name === 'ZodError') {
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team ID: ' + error.errors[0].message,
-                cause: error
-            })
-        }
+        console.error("👥 > TEAM > [POST] Error updating team:", error)
 
         // For "not found" errors, return 404
         if (error.message?.includes('Record to update not found')) {
@@ -68,10 +53,9 @@ export default defineEventHandler(async (event) => {
             })
         }
 
-        // For other errors, return 500
         throw createError({
             statusCode: 500,
-            message: '👥 > TEAM > Server Error: ' + error.message,
+            message: '👥 > TEAM > Server Error',
             cause: error
         })
     }

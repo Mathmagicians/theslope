@@ -1,4 +1,4 @@
-import {defineEventHandler} from "h3";
+import {defineEventHandler, createError, getValidatedRouterParams} from "h3";
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import z from "zod"
 
@@ -7,27 +7,34 @@ const idSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id
     try {
-        const id: number = getValidatedRouterParam(event, idSchema.parse) as number
-        console.info("👨‍💻> SEASON > [GET] >  id/", id)
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+    } catch (error) {
+        console.error("🌞 > SEASON > [GET] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
-
+    // Database operations try-catch - separate concerns
+    try {
+        console.info("🌞 > SEASON > [GET] Fetching season with id:", id)
         const season = await fetchSeason(d1Client, id)
-        console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
+        console.info(`🌞 > SEASON > Returning season ${season?.shortName}`)
         return season
     } catch (error) {
-        console.error("👨‍💻 > SEASON > Error getting season: ", error)
-        if (error instanceof z.ZodError && error.format()?.id) {
-            throw createError({
-                statusCode: 400,
-                statusMessage: "Invalid season id: " + z.ZodError && e.format()?.id
-            })
-        }
+        console.error("🌞 > SEASON > Error getting season:", error)
         throw createError({
             statusCode: 500,
-            message: '👨‍💻> SEASON > Server Error',
+            message: '🌞 > SEASON > Server Error',
             cause: error
         })
     }

@@ -1,5 +1,189 @@
 # Architecture Decision Records
 
+## ADR-002: Event Handler Error Handling and Validation Patterns
+
+**Date:** 2025-01-24
+**Status:** Accepted
+**Deciders:** Development Team
+
+### Context
+
+As the API surface grows, we need consistent patterns for event handler implementation that ensure:
+- Robust error handling without nested try-catch blocks
+- Early validation failure to prevent invalid data processing
+- Aggressive schema validation using H3 framework methods
+- Clear separation of concerns between input validation and business logic
+- Consistent error responses across all endpoints
+
+### Decision
+
+We adopt the following patterns for all API event handlers:
+
+#### 1. Fail Early Validation Pattern
+
+**Separate Try-Catch Blocks:**
+```typescript
+export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id, requestData
+    try {
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+        requestData = await readValidatedBody(event, bodySchema.parse)
+    } catch (error) {
+        console.error("Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
+
+    // Database operations try-catch - separate concerns
+    try {
+        const result = await businessLogic(d1Client, requestData)
+        setResponseStatus(event, 200)
+        return result
+    } catch (error) {
+        console.error("Business logic error:", error)
+        throw createError({
+            statusCode: 500,
+            message: 'Server Error',
+            cause: error
+        })
+    }
+})
+```
+
+#### 2. H3 Framework Validation Methods
+
+**Always use H3 validation helpers:**
+- `getValidatedRouterParams(event, schema.parse)` for route parameters
+- `readValidatedBody(event, schema.parse)` for request bodies
+- `getValidatedQuery(event, schema.parse)` for query parameters
+
+**Never use manual parsing:**
+```typescript
+// ❌ Manual parsing
+const id = getRouterParam(event, 'id')
+const body = await readBody(event)
+
+// ✅ H3 validation
+const { id } = await getValidatedRouterParams(event, idSchema.parse)
+const requestData = await readValidatedBody(event, bodySchema.parse)
+```
+
+#### 3. Schema Refinements for Complex Validation
+
+**Move validation logic into schemas:**
+```typescript
+// Schema-based ID consistency validation
+const createUpdateSchema = (expectedId: number) =>
+    BaseSchema
+        .refine(data => data.id, {
+            message: 'ID is required for updates',
+            path: ['id']
+        })
+        .refine(data => !data.id || data.id === expectedId, {
+            message: 'ID in URL does not match ID in request body',
+            path: ['id']
+        })
+```
+
+#### 4. Error Handling Principles
+
+**Consistent error responses:**
+- `400 Bad Request`: Input validation failures
+- `404 Not Found`: Resource not found
+- `500 Internal Server Error`: Database/server errors
+
+**No nested try-catch blocks:**
+- One try-catch for input validation
+- One try-catch for business logic
+- No throwing from within try blocks (re-throwing)
+
+### Implementation Examples
+
+**Route Parameter + Body Validation:**
+```typescript
+const idSchema = z.object({
+    id: z.coerce.number().int().positive('ID must be a positive integer')
+})
+
+const createUpdateSeasonSchema = (expectedId: number) =>
+    SerializedSeasonValidationSchema
+        .refine(season => season.id === expectedId, {
+            message: 'Season ID in URL does not match ID in request body',
+            path: ['id']
+        })
+```
+
+**Query Parameter Validation:**
+```typescript
+const querySchema = z.object({
+    seasonId: z.coerce.number().int().positive().optional(),
+    page: z.coerce.number().int().min(1).default(1)
+})
+
+// Input validation
+try {
+    const query = await getValidatedQuery(event, querySchema.parse)
+    // Use validated query...
+} catch (error) {
+    throw createError({
+        statusCode: 400,
+        message: 'Invalid query parameters',
+        cause: error
+    })
+}
+```
+
+### Rationale
+
+#### Why Separate Try-Catch Blocks?
+- **Clear separation of concerns**: Input validation vs business logic errors
+- **Fail early principle**: Stop processing immediately on invalid input
+- **No nested complexity**: Flat error handling structure
+- **Appropriate error codes**: 400 for validation, 500 for server errors
+
+#### Why H3 Validation Methods?
+- **Framework consistency**: Use H3's built-in validation capabilities
+- **Type safety**: Automatic TypeScript inference from schemas
+- **Error handling**: H3 methods throw appropriate errors automatically
+- **DRY principle**: Avoid manual parsing and validation logic
+
+#### Why Schema Refinements?
+- **Declarative validation**: Complex logic expressed in schemas
+- **Reusable validation**: Schema functions can be reused across endpoints
+- **Single responsibility**: Schemas handle all validation concerns
+- **Better error messages**: Zod provides detailed validation feedback
+
+### Consequences
+
+#### Positive
+- **Consistent error handling**: All endpoints follow the same pattern
+- **Early failure detection**: Invalid requests fail immediately
+- **Maintainable code**: Clear structure and separation of concerns
+- **Type safety**: Full TypeScript integration with validation
+- **Better debugging**: Clear error sources and consistent logging
+
+#### Negative
+- **Learning curve**: Developers must understand the specific patterns
+- **Verbose schemas**: Complex validation requires detailed schema definitions
+- **Rigid structure**: Less flexibility in error handling approaches
+
+### Compliance
+
+All new API endpoints must:
+1. Use H3 validation methods for all inputs
+2. Implement separate try-catch blocks for validation and business logic
+3. Use schema refinements for complex validation rules
+4. Return consistent error status codes and messages
+5. Avoid nested try-catch patterns
+
 ## ADR-001: Core Framework and Technology Stack
 
 **Date:** 2025-01-22

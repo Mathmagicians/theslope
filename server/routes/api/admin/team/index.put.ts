@@ -1,6 +1,6 @@
 // PUT /api/admin/teams - Create team (seasonId in body)
 
-import {defineEventHandler, readBody, H3Error, setResponseStatus, createError} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 
@@ -17,51 +17,35 @@ const PutTeamSchema = CookingTeamSchema.refine(
 )
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let teamData
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
+        teamData = await readValidatedBody(event, PutTeamSchema.parse)
+    } catch (error) {
+        console.error("👥 > TEAM > [PUT] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        // Read and validate the body
-        const rawBody = await readBody(event)
-
-        // Validate using the application schema
-        const validationResult = PutTeamSchema.safeParse(rawBody)
-        if (!validationResult.success) {
-            console.error("👥 > TEAM > [PUT] Validation error:", JSON.stringify(validationResult.error.format()))
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team data',
-                data: validationResult.error
-            })
-        }
-
-        // Create a new team
-        const savedTeam = await createTeam(d1Client, rawBody)
+    // Database operations try-catch - separate concerns
+    try {
+        const savedTeam = await createTeam(d1Client, teamData)
 
         // Return the saved team with 201 Created status
         setResponseStatus(event, 201)
         return savedTeam
     } catch (error) {
         console.error("👥 > TEAM > Error creating team:", error)
-
-        // If it's a validation error (H3Error), return 400 Bad Request
-        if (error instanceof H3Error) {
-            console.error("👥 > TEAM > Validation Error:", error.data, error)
-            const errorData = error.data || error
-            console.error("👥 > TEAM > [PUT] H3Error details:", JSON.stringify(errorData))
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid team input',
-                data: errorData
-            })
-        } else {
-            // Otherwise return 500 Internal Server Error
-            console.error("👥 > TEAM > [PUT] Server error:", error)
-            throw createError({
-                statusCode: 500,
-                message: '👥 > TEAM > Server Error',
-                cause: error
-            })
-        }
+        throw createError({
+            statusCode: 500,
+            message: '👥 > TEAM > Server Error',
+            cause: error
+        })
     }
 })

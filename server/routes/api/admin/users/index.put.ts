@@ -14,11 +14,26 @@ export const userSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    console.log("👨‍💻 > USER > data received", getQuery(event))
+
+    // Validate input - fail early on invalid data
+    let userFromQuery
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
-        console.log("👨‍💻 > USER > data received", getQuery(event))
-        const userFromQuery = await getValidatedQuery(event, userSchema.parse)
+        userFromQuery = await getValidatedQuery(event, userSchema.parse)
+    } catch (error) {
+        console.error("👨‍💻 > USER > Validation error: ", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Forkert brugerinput',
+            cause: error
+        })
+    }
+
+    // Save user to database
+    try {
         console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
         const newUser = await saveUser(d1Client, userFromQuery)
         console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
@@ -26,19 +41,10 @@ export default defineEventHandler(async (event) => {
         return newUser
     } catch (error) {
         console.error("👨‍💻 > USER > Error saving user: ", error)
-        if (error instanceof H3Error) {
-            console.error("👨‍💻 > USER > ZodError: ", error.errors)
-            throw createError({
-                statusCode: 400,
-                message: 'Forkert brugerinput',
-                cause: error
-            })
-        } else {
-            throw createError({
-                statusCode: 500,
-                message: '👨‍💻> CREATE > Server Error',
-                cause: error
-            })
-        }
+        throw createError({
+            statusCode: 500,
+            message: '👨‍💻 > USER > Server Error',
+            cause: error
+        })
     }
 })

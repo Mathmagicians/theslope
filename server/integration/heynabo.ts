@@ -97,9 +97,8 @@ export async function getApiToken(username: string, password: string, api: strin
 }
 
 export async function loginUserIntoHeynabo(username: string, password: string): Promise<HeynaboUser> {
-    const result = getTokenFromHeynaboApi(username, password, heyNaboApi)
-    console.log("🔑 > HEYNABO > Logged into Heynabo for username: ", username)
-
+    const result = await getTokenFromHeynaboApi(username, password, heyNaboApi)
+    console.log("🔑 > HEYNABO > Logged into Heynabo for username: ", username, result?.token.length > 0 ? "🔑" : "❌")
     return result
 }
 

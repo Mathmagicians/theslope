@@ -1,101 +1,58 @@
-import {defineEventHandler, readBody, H3Error, setResponseStatus, createError, getRouterParam} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus, createError, getValidatedRouterParams} from "h3"
 import {updateSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
+import * as z from 'zod'
 
 // Get the validation utilities from our composable
-const {deserializeSeason, SeasonSchema} = useSeasonValidation()
+const {SerializedSeasonValidationSchema, serializeSeason} = useSeasonValidation()
 
-// Create a refined schema for POST operations that requires an ID
-const PostSeasonSchema = SeasonSchema.refine(
-    season => season.id,
-    {
-        message: 'ID is required when updating an existing season. Use PUT to create a new season.',
-        path: ['id']
-    }
-)
+// Schema for route parameters
+const idSchema = z.object({
+    id: z.coerce.number().int().positive('Season ID must be a positive integer')
+})
+
+// Create a function that returns a refined schema for POST operations with ID validation
+const createPostSeasonSchema = (expectedId: number) =>
+    SerializedSeasonValidationSchema
+        .refine(season => season.id, {
+            message: 'ID is required when updating an existing season. Use PUT to create a new season.',
+            path: ['id']
+        })
+        .refine(season => !season.id || season.id === expectedId, {
+            message: 'Season ID in URL does not match ID in request body',
+            path: ['id']
+        })
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch
+    let id, seasonData
     try {
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
+        seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
+    } catch (error) {
+        console.error("🌞 > SEASON > [POST] Input validation error:", error)
+        throw createError({
+            statusCode: 400,
+            message: 'Invalid input data',
+            cause: error
+        })
+    }
 
-        // Get the ID from the route parameter
-        const seasonId = getRouterParam(event, 'id')
-        if (!seasonId) {
-            throw createError({
-                statusCode: 400,
-                message: 'Season ID is required'
-            })
-        }
-
-        // Read the raw body
-        let rawBody = await readBody(event)
-
-        // Deserialize the data
-        let seasonData
-        try {
-           seasonData = deserializeSeason(rawBody)
-        } catch (err) {
-            console.error("🌞per > SEASON > [POST] Deserialization error:", err)
-            throw createError({
-                statusCode: 400,
-                message: 'Error deserializing season data in POST request',
-                cause: err
-            })
-        }
-
-        // Ensure the ID from the route matches the ID in the body
-        if (seasonData.id && seasonData.id.toString() !== seasonId) {
-            throw createError({
-                statusCode: 400,
-                message: 'Season ID in URL does not match ID in request body'
-            })
-        }
-
-        // Set the ID from the route if not present in body
-        if (!seasonData.id) {
-            seasonData.id = parseInt(seasonId)
-        }
-
-        // Validate the deserialized data using the application schema
-        const validationResult = PostSeasonSchema.safeParse(seasonData)
-        if (!validationResult.success) {
-            console.error("🌞 > SEASON > [POST] Validation error:", JSON.stringify(validationResult.error.format()))
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid season data',
-                data: validationResult.error
-            })
-        }
-
-        // Update the existing season
-        const updatedSeason = await updateSeason(d1Client, rawBody)
-
-        // Return the updated season with 200 OK status
+    // Database operations try-catch
+    try {
+        const updatedSeason = await updateSeason(d1Client, seasonData)
         setResponseStatus(event, 200)
         return updatedSeason
     } catch (error) {
         console.error("🌞 > SEASON > Error updating season:", error)
-
-        // If it's a validation error (H3Error), return 400 Bad Request
-        if (error instanceof H3Error) {
-            console.error("🌞 > SEASON > Validation Error:", error.data, error)
-            // Include more detailed error information for debugging
-            const errorData = error.data || error
-            console.error("🌞 > SEASON > [POST] H3Error details:", JSON.stringify(errorData))
-            throw createError({
-                statusCode: 400,
-                message: 'Invalid season input',
-                data: errorData
-            })
-        } else {
-            // Otherwise return 500 Internal Server Error
-            console.error("🌞 > SEASON > [POST] Server error:", error)
-            throw createError({
-                statusCode: 500,
-                message: '🌞 > SEASON > Server Error',
-                cause: error
-            })
-        }
+        throw createError({
+            statusCode: 500,
+            message: '🌞 > SEASON > Server Error',
+            cause: error
+        })
     }
 })
