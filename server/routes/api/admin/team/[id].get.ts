@@ -1,4 +1,3 @@
-
 // GET /api/admin/team/[id] - Get team details with members
 
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
@@ -30,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👥 > TEAM > [GET] Fetching team with id ${id}`)
+        console.info("👥 > TEAM > [GET] Fetching team", "id", id)
         const team = await fetchTeam(d1Client, id)
 
         if (!team) {
@@ -40,16 +39,15 @@ export default defineEventHandler(async (event) => {
             })
         }
 
-        console.info(`👥 > TEAM > [GET] Successfully fetched team ${team.name}`)
+        console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
         return team
-    } catch (error) {
-        console.error("👥 > TEAM > [GET] Error fetching team:", error)
-
-        // For "not found" errors, return 404
+    } catch (error: any) {
+        // Handle 404 errors separately (these should pass through)
         if (error.statusCode === 404) {
             throw error
         }
 
+        console.error("👥 > TEAM > [GET] Error fetching team:", error)
         throw createError({
             statusCode: 500,
             message: '👥 > TEAM > Server Error',

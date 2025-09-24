@@ -4,14 +4,16 @@ Welcome to TheSlope documentation. This directory contains all technical and fea
 
 ## Table of Contents
 
-### =Ú Core Documentation
+### =ï¿½ Core Documentation
 
 - [**Architecture Decision Records (ADRs)**](./adr.md)
   - ADR-001: Core Framework and Technology Stack
+  - ADR-002: Event Handler Error Handling and Validation Patterns
+  - ADR-003: BDD-Driven Testing Strategy with Factory Pattern
   - Documenting important architectural decisions and their rationale
 
 - [**Features Overview**](./features.md)
-  - User roles (Chef, Admin, Skråner)
+  - User roles (Chef, Admin, Skrï¿½ner)
   - Data model overview
   - Complete functionality breakdown by role
 
@@ -39,7 +41,7 @@ Welcome to TheSlope documentation. This directory contains all technical and fea
   - Deployment guide
   - Environment variables
 
-### =Á Additional Resources
+### =ï¿½ Additional Resources
 
 - [**API Samples**](./heynabo_api_samples/)
   - Heynabo API integration examples

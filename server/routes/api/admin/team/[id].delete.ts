@@ -1,4 +1,4 @@
-// DELETE /api/admin/teams/[id] - Delete team
+// DELETE /api/admin/teams/[id] - Delete
 
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {deleteTeam} from "~~/server/data/prismaRepository"

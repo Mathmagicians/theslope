@@ -1,6 +1,6 @@
 import {defineEventHandler, createError, getQuery, getValidatedQuery} from "h3"
 import z from 'zod'
-import {fetchCurrentSeason, fetchSeason} from "~~/server/data/prismaRepository";
+import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository";
 
 const seasonQuerySchema = z.object({
     start: z.string().date().optional(),
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
     // Fetch season from database
     try {
         const season = seasonQuery && seasonQuery.start && seasonQuery.end
-            ? await fetchSeason(d1Client, seasonQuery.start, seasonQuery.end)
+            ? await fetchSeasonForRange(d1Client, seasonQuery.start, seasonQuery.end)
             : await fetchCurrentSeason(d1Client)
         console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
         return season

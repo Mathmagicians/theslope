@@ -3,6 +3,8 @@ const adminFile = 'playwright/.auth/admin.json'
 
 const testSalt = Date.now().toString()
 const userEmail = `minnie-admin-users-${testSalt}@andeby.dk`
+//TODO refactor to use testObjects users
+// TODO refactor to use beforeAll, afterAll for setup/teardown
 
 // Create a test fixture that shares the context and handles cleanup
 const testWithCleanup = test.extend({

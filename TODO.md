@@ -1,6 +1,11 @@
 # TODO
 #1 priority 
-MAke sure makefile commands to login to theslope work
+team delete should remove team meber assignments, and disassociate events
+the bdd test should reuse a team definition from mock objects
+simple team (no members) should be creatable
+team with members
+team with members and dinners
+delete should iterate over these 3 team types
 
 ## The rest
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management

@@ -1,3 +1,4 @@
+import type { D1Database } from '@cloudflare/workers-types'
 import {PrismaD1} from "@prisma/adapter-d1"
 import {Season, User, Inhabitant, Household, CookingTeam, Prisma as PrismaFromClient, PrismaClient} from "@prisma/client"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
@@ -65,12 +66,12 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
         console.error(errStr, e)
         
         // Re-throw the error with the message intact so we can check for specific messages
-        if (e.message?.includes('Record to delete does not exist')) {
+        if (e?.message?.includes('Record to delete does not exist')) {
             throw new Error('Record to delete does not exist')
         }
         
         // Re-throw with more details
-        throw new Error(`${errStr}: ${e.message}`)
+        throw new Error(`${errStr}: ${e?.message}`)
     }
 }
 

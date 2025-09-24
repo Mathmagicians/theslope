@@ -1,5 +1,307 @@
 # Architecture Decision Records
 
+## ADR-003: BDD-Driven Testing Strategy with Factory Pattern
+
+**Date:** 2025-01-24
+**Status:** Accepted
+**Deciders:** Development Team
+
+### Context
+
+TheSlope follows a Test-Driven Development (TDD) approach where tests drive the implementation of features. We need a consistent approach that:
+
+- **Starts with BDD**: Formulate end-to-end tests for non-existing code to define business requirements
+- **Uses Test-First Development**: Write tests before implementing functionality
+- **Maintains DRY Tests**: Use factory patterns for object creation to keep tests maintainable
+- **Ensures Consistency**: Standardized patterns across all test types (unit, integration, e2e)
+
+### Decision
+
+We adopt a **BDD-First Testing Strategy** with **Factory Pattern** for test data creation:
+
+#### 1. BDD-First Development Cycle
+
+**Process Flow:**
+```
+1. Write E2E Test (BDD) → 2. Write Unit Tests → 3. Implement Code → 4. Tests Pass
+```
+
+**E2E Tests Define Business Behavior:**
+```typescript
+test(`DELETE /api/admin/team/[id] should remove all cooking team assignments and unassign team from dinner events`, async ({browser}) => {
+    // GIVEN: A team with cooking assignments and dinner events
+    const context = await validatedBrowserContext(browser)
+    const newTeam = TeamFactory.defaultTeam()
+    const createdTeam = await TeamFactory.createTeam(context, newTeam.team)
+
+    // AND: Team has member assignments
+    await TeamFactory.assignMembers(context, createdTeam.id, testMembers)
+
+    // AND: Team is assigned to dinner events
+    await DinnerEventFactory.assignTeam(context, dinnerEventId, createdTeam.id)
+
+    // WHEN: Team is deleted
+    const deleteResponse = await context.request.delete(`/api/admin/team/${createdTeam.id}`)
+
+    // THEN: Delete succeeds and returns team data
+    expect(deleteResponse.status()).toBe(200)
+    const deletedTeam = await deleteResponse.json()
+
+    // AND: Team no longer exists
+    const verifyResponse = await context.request.get(`/api/admin/team/${createdTeam.id}`)
+    expect(verifyResponse.status()).toBe(404)
+
+    // AND: Dinner events are unassigned (cookingTeamId = null)
+    const dinnerEvent = await DinnerEventFactory.getEvent(context, dinnerEventId)
+    expect(dinnerEvent.cookingTeamId).toBeNull()
+})
+```
+
+#### 2. Factory Pattern for Test Data Creation
+
+**Factory Structure:**
+```typescript
+// tests/e2e/testDataFactories/entityFactory.ts
+export class EntityFactory {
+    // Data creation (no HTTP calls)
+    static readonly defaultEntity = (testSalt?: string) => {
+        const saltedEntity = {...this.defaultEntityData, name: salt(name, testSalt)}
+        return {
+            entity: saltedEntity,              // Raw object for API calls
+            serializedEntity: serialize(saltedEntity)  // Pre-serialized when needed
+        }
+    }
+
+    // HTTP operations (with built-in assertions)
+    static readonly createEntity = async (context: BrowserContext, entity: Entity): Promise<Entity> => {
+        const response = await context.request.put('/api/admin/entity', {
+            headers: headers,
+            data: serialize(entity)
+        })
+
+        expect(response.status(), 'Create should return 201').toBe(201)
+        const responseBody = await response.json()
+        expect(responseBody.id, 'Response should include ID').toBeDefined()
+        return responseBody
+    }
+
+    static readonly deleteEntity = async (context: BrowserContext, id: number): Promise<Entity> => {
+        const deleteResponse = await context.request.delete(`/api/admin/entity/${id}`)
+        expect(deleteResponse.status()).toBe(200)
+        return await deleteResponse.json()
+    }
+}
+```
+
+#### 3. Test Structure Patterns
+
+**E2E Test Implementation:**
+```typescript
+// tests/e2e/api/admin/entity.e2e.spec.ts
+const newEntity = EntityFactory.defaultEntity()
+let createdEntityIds: number[] = []
+
+test.describe('Entity Management', () => {
+    test.beforeAll(async ({browser}) => {
+        // Setup test dependencies (seasons, users, etc.)
+        const context = await validatedBrowserContext(browser)
+        // Create dependent entities using factories
+    })
+
+    test('Business behavior description', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: Initial state using factories
+        const created = await EntityFactory.createEntity(context, newEntity.entity)
+        createdEntityIds.push(created.id)
+
+        // WHEN: Action being tested
+        // THEN: Expected outcomes with assertions
+    })
+
+    test.afterAll(async ({browser}) => {
+        // Cleanup using factories
+        const context = await validatedBrowserContext(browser)
+        for (const id of createdEntityIds) {
+            try {
+                await EntityFactory.deleteEntity(context, id)
+            } catch (error) {
+                console.log(`Failed to cleanup entity ${id}:`, error)
+            }
+        }
+    })
+})
+```
+
+**Unit Test Implementation:**
+```typescript
+// tests/component/data/entityRepository.unit.spec.ts
+describe('EntityRepository', () => {
+    test('should handle entity deletion with related record cleanup', async () => {
+        // GIVEN: Entity with related records
+        const mockD1 = createMockD1Database()
+        const entity = EntityFactory.defaultEntity().entity
+
+        // WHEN: Delete is called
+        const result = await deleteEntity(mockD1, entity.id)
+
+        // THEN: Entity and related records are removed
+        expect(result.id).toBe(entity.id)
+        // Verify related records cleanup
+    })
+})
+```
+
+#### 4. Factory Method Conventions
+
+**Naming Patterns:**
+- `defaultEntity()` - Creates test data objects
+- `createEntity()` - HTTP POST/PUT operations
+- `updateEntity()` - HTTP POST operations
+- `deleteEntity()` - HTTP DELETE operations
+- `getEntity()` - HTTP GET operations
+- `assignRelatedEntity()` - Relationship management
+
+**Method Signatures:**
+```typescript
+// Data factories (synchronous)
+static readonly defaultEntity = (testSalt?: string) => EntityData
+
+// HTTP factories (async with context)
+static readonly createEntity = async (context: BrowserContext, entity: Entity): Promise<Entity>
+static readonly deleteEntity = async (context: BrowserContext, id: number): Promise<Entity>
+```
+
+#### 5. Test-First Implementation Process
+
+**Step 1: Write E2E Test (Business Behavior)**
+```typescript
+test('DELETE should remove team and clean up assignments', async ({browser}) => {
+    // Test written before any implementation exists
+    // Defines the exact business behavior expected
+})
+```
+
+**Step 2: Write Unit Tests (Implementation Details)**
+```typescript
+describe('deleteTeam repository function', () => {
+    test('should remove team assignments in transaction', () => {
+        // Unit tests define the implementation contract
+    })
+})
+```
+
+**Step 3: Implement Code to Pass Tests**
+```typescript
+export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeam> {
+    // Implementation written to satisfy the test contract
+}
+```
+
+**Step 4: Verify All Tests Pass**
+```bash
+npm run test  # All tests must pass before feature is complete
+```
+
+### Implementation Examples
+
+**Current Factory: SeasonFactory**
+```typescript
+// ✅ Working implementation in tests/e2e/testDataFactories/seasonFactory.ts
+export class SeasonFactory {
+    static readonly defaultSeason = (testSalt?: string) => ({
+        season: saltedSeasonObject,
+        serializedSeason: serializeSeason(saltedSeasonObject)
+    })
+
+    static readonly createSeason = async (context: BrowserContext, season: Season): Promise<Season> => {
+        const response = await context.request.put('/api/admin/season', {
+            headers: headers,
+            data: serializeSeason(season)
+        })
+        expect(response.status()).toBe(201)
+        return await response.json()
+    }
+
+    static readonly deleteSeason = async (context: BrowserContext, id: number): Promise<Season> => {
+        const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
+        expect(deleteResponse.status()).toBe(200)
+        return await deleteResponse.json()
+    }
+}
+```
+
+**Usage in Tests:**
+```typescript
+// E2E Test Usage
+const newSeason = SeasonFactory.defaultSeason()
+const created = await SeasonFactory.createSeason(context, newSeason.season)
+expect(created.shortName).toBe(newSeason.season.shortName)
+await SeasonFactory.deleteSeason(context, created.id)
+```
+
+### Rationale
+
+#### Why BDD-First?
+- **Business Focus**: Tests express business requirements, not implementation details
+- **Living Documentation**: E2E tests serve as executable specifications
+- **Early Validation**: Business logic is validated before implementation begins
+- **Stakeholder Communication**: BDD scenarios can be shared with non-technical stakeholders
+
+#### Why Factory Pattern?
+- **DRY Principle**: Eliminates duplicate test data creation code
+- **Consistency**: Standardized object creation across all tests
+- **Maintenance**: Changes to data structure only require factory updates
+- **Built-in Assertions**: Factory methods include success/failure validations
+
+#### Why Test-First?
+- **Design Driver**: Tests drive better API design and implementation
+- **Regression Prevention**: Comprehensive test coverage from the start
+- **Confidence**: Implementation guided by clear behavioral contracts
+- **Documentation**: Tests serve as implementation documentation
+
+### Consequences
+
+#### Positive
+- **Quality Assurance**: Business requirements tested before implementation
+- **Maintainable Tests**: Factory pattern reduces test maintenance burden
+- **Clear Requirements**: BDD scenarios define exact business behavior
+- **Consistent Patterns**: Standardized approach across all features
+- **Living Documentation**: Tests document actual system behavior
+
+#### Negative
+- **Upfront Investment**: More time required before implementing features
+- **Learning Curve**: Developers must understand factory patterns and BDD
+- **Test Maintenance**: Factory methods require maintenance as APIs evolve
+
+#### Neutral
+- **Development Speed**: Slower initial development, faster feature delivery
+- **Test Coverage**: Higher coverage requirements but better quality assurance
+
+### Compliance
+
+All new features must:
+
+1. **Start with E2E Tests**: Write BDD-style tests defining business behavior
+2. **Use Factory Pattern**: Create factories for all test data and HTTP operations
+3. **Follow Test-First**: Implement code only after tests are written
+4. **Include Cleanup**: Use factories for test cleanup in `afterAll` blocks
+5. **Validate Business Logic**: Focus tests on business requirements, not implementation
+
+**Required Factory Structure:**
+- Located in `tests/e2e/testDataFactories/`
+- Export class with static readonly methods
+- Separate data creation from HTTP operations
+- Include built-in assertions in HTTP methods
+- Follow consistent naming conventions
+
+**Required Test Structure:**
+- BDD-style test names expressing business behavior
+- GIVEN/WHEN/THEN structure in test implementations
+- Factory-based test data creation
+- Proper cleanup using factories
+- Integration between unit and e2e tests
+
 ## ADR-002: Event Handler Error Handling and Validation Patterns
 
 **Date:** 2025-01-24
