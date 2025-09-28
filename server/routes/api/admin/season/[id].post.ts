@@ -2,6 +2,8 @@ import {defineEventHandler, readValidatedBody, setResponseStatus, createError, g
 import {updateSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
 const {SerializedSeasonValidationSchema, serializeSeason} = useSeasonValidation()
@@ -34,14 +36,16 @@ export default defineEventHandler(async (event) => {
         id = params.id
         seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
     } catch (error) {
-        console.error("🌞 > SEASON > [POST] Input validation error:", error)
-        throw createError({
-            statusCode: 400,
-            message: 'Invalid input data',
-            cause: error
-        })
+        const h3e = h3eFromCatch('Validation error', error)
+        console.error("🌞 > SEASON > [POST] Input validation error:", h3e.statusMessage)
+        throw h3e
     }
 
+    if (!seasonData.id || seasonData.id !== id) {
+        const h3e = h3eFromCatch('Invalid input', new Error(`Season ID ${id} in URL must match ID in body ${seasonId.id}`))
+        console.warn("🌞 > SEASON > [POST] ID mismatch:", h3e.statusMessage)
+        throw h3e
+    }
     // Database operations try-catch
     try {
         const updatedSeason = await updateSeason(d1Client, seasonData)

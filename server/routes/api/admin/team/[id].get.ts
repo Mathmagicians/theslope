@@ -1,4 +1,6 @@
-// GET /api/admin/team/[id] - Get team details with members
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
+const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
 
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {fetchTeam} from "~~/server/data/prismaRepository"
@@ -19,39 +21,27 @@ export default defineEventHandler(async (event) => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        console.error("👥 > TEAM > [GET] Input validation error:", error)
-        throw createError({
-            statusCode: 400,
-            message: 'Invalid input data',
-            cause: error
-        })
+        const h3e = h3eFromCatch('Record does not exist', 'Input validation error for team')
+        console.warn("👥 > TEAM > [GET] Input validation error:", h3e.statusMessage)
+        throw h3e
     }
 
+    let team
     // Database operations try-catch - separate concerns
     try {
         console.info("👥 > TEAM > [GET] Fetching team", "id", id)
-        const team = await fetchTeam(d1Client, id)
-
-        if (!team) {
-            throw createError({
-                statusCode: 404,
-                message: 'Team not found'
-            })
-        }
-
-        console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
-        return team
+        team = await fetchTeam(d1Client, id)
     } catch (error: any) {
-        // Handle 404 errors separately (these should pass through)
-        if (error.statusCode === 404) {
-            throw error
-        }
-
-        console.error("👥 > TEAM > [GET] Error fetching team:", error)
-        throw createError({
-            statusCode: 500,
-            message: '👥 > TEAM > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch('Could not fetch team', error)
+        console.warn(`"👥 > TEAM > [GET] Error fetching team: ${h3e.statusMessage}`)
+        throw h3e
     }
+
+    if (!team) {
+        const h3e = h3eFromCatch('Record does not exist', new Error(`Team with ID ${id} not found`))
+        console.warn(`👨‍💻 > USER > Validation failed: ${h3e.statusMessage}`)
+        throw h3e
+    }
+    console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
+    return team
 })

@@ -1,7 +1,7 @@
 import type {BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {User, UserCreate} from "~/composables/useUserValidation"
+import type {User, UserCreate} from "../../../app/composables/useUserValidation"
 
 const {salt, headers} = testHelpers
 

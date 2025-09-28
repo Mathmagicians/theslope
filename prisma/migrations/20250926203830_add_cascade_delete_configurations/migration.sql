@@ -46,7 +46,7 @@ CREATE TABLE "Inhabitant" (
     "lastName" TEXT NOT NULL,
     "birthDate" DATETIME,
     CONSTRAINT "Inhabitant_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "Inhabitant_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "Inhabitant_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable

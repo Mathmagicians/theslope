@@ -5,8 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 generator zod {
@@ -61,9 +60,9 @@ model AllergyType {
 model Allergy {
   id            Int         @id @default(autoincrement())
   inhabitantId  Int
-  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id])
+  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   allergyTypeId Int
-  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id])
+  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
 }
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles
@@ -82,7 +81,7 @@ model User {
 model DinnerPreference {
   id           Int        @id @default(autoincrement())
   inhabitantId Int
-  inhabitant   Inhabitant @relation(fields: [inhabitantId], references: [id])
+  inhabitant   Inhabitant @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   weekday      Weekday
   dinnerMode   DinnerMode
 }
@@ -96,10 +95,10 @@ model DinnerPreference {
 model Inhabitant {
   id                    Int                     @id @default(autoincrement())
   heynaboId             Int                     @unique // reference to Heynabo user
-  user                  User?                   @relation(fields: [userId], references: [id])
+  user                  User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId                Int?                    @unique // foreign key to User
   householdId           Int
-  household             Household               @relation(fields: [householdId], references: [id])
+  household             Household               @relation(fields: [householdId], references: [id], onDelete: Cascade)
   pictureUrl            String?
   name                  String
   lastName              String
@@ -131,22 +130,22 @@ model DinnerEvent {
   menuPictureUrl  String?
   dinnerMode      DinnerMode
   chefId          Int?
-  chef            Inhabitant?  @relation(fields: [chefId], references: [id])
+  chef            Inhabitant?  @relation(fields: [chefId], references: [id], onDelete: SetNull)
   cookingTeamId   Int?
-  cookingTeam     CookingTeam? @relation(fields: [cookingTeamId], references: [id])
+  cookingTeam     CookingTeam? @relation(fields: [cookingTeamId], references: [id], onDelete: SetNull)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   tickets         Order[]
-  Season          Season?      @relation(fields: [seasonId], references: [id])
+  Season          Season?      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   seasonId        Int?
 }
 
 model Order {
   id            Int          @id @default(autoincrement())
   dinnerEventId Int
-  dinnerEvent   DinnerEvent  @relation(fields: [dinnerEventId], references: [id])
+  dinnerEvent   DinnerEvent  @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
   inhabitantId  Int
-  inhabitant    Inhabitant   @relation(fields: [inhabitantId], references: [id])
+  inhabitant    Inhabitant   @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   ticketType    TicketType
@@ -156,11 +155,11 @@ model Order {
 model Transaction {
   id        Int      @id @default(autoincrement())
   orderId   Int      @unique
-  order     Order    @relation(fields: [orderId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   amount    Int
   createdAt DateTime @default(now())
   invoiceId Int?     @unique
-  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 }
 
 model Invoice {
@@ -178,7 +177,7 @@ model Invoice {
 model CookingTeam {
   id            Int                     @id @default(autoincrement())
   seasonId      Int
-  season        Season                  @relation(fields: [seasonId], references: [id])
+  season        Season                  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   name          String
   dinners       DinnerEvent[]
   chefs         CookingTeamAssignment[] @relation("Chefs")
@@ -189,13 +188,13 @@ model CookingTeam {
 model CookingTeamAssignment {
   id                     Int          @id @default(autoincrement())
   chefForcookingTeamId   Int?
-  chefForCcookingTeam    CookingTeam? @relation("Chefs", fields: [chefForcookingTeamId], references: [id])
+  chefForCcookingTeam    CookingTeam? @relation("Chefs", fields: [chefForcookingTeamId], references: [id], onDelete: Cascade)
   cookForcookingTeamId   Int?
-  cookForCcookingTeam    CookingTeam? @relation("Cooks", fields: [cookForcookingTeamId], references: [id])
+  cookForCcookingTeam    CookingTeam? @relation("Cooks", fields: [cookForcookingTeamId], references: [id], onDelete: Cascade)
   juniorForcookingTeamId Int?
-  juniorForCcookingTeam  CookingTeam? @relation("JuniorHelpers", fields: [juniorForcookingTeamId], references: [id])
+  juniorForCcookingTeam  CookingTeam? @relation("JuniorHelpers", fields: [juniorForcookingTeamId], references: [id], onDelete: Cascade)
   inhabitantId           Int
-  inhabitant             Inhabitant   @relation(fields: [inhabitantId], references: [id])
+  inhabitant             Inhabitant   @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   role                   Role
 }
 
@@ -216,7 +215,7 @@ model Season {
 model TicketPrice {
   id          Int        @id @default(autoincrement())
   seasonId    Int
-  season      Season     @relation(fields: [seasonId], references: [id])
+  season      Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   ticketType  TicketType
   price       Int
   description String?

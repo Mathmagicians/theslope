@@ -1,11 +1,88 @@
 # TODO
-#1 priority 
-team delete should remove team meber assignments, and disassociate events
-the bdd test should reuse a team definition from mock objects
-simple team (no members) should be creatable
-team with members
-team with members and dinners
-delete should iterate over these 3 team types
+
+## 🚨 BDD/TDD TEST-FIRST - CRITICAL PRIORITY
+
+### 1a. Write BDD Tests for deleteCookingTeam functionality (test-first) - CRITICAL
+- **Test scenarios**:
+    - Simple team (no members) should be deletable
+    - Team with members - assignments should cascade delete (strong relation)
+    - Team with dinner events - associations should be cleared (events preserved - weak relation)
+- **Verify**: Both strong relation cascades AND weak association clearing
+- **Use**: Factory patterns from ADR-003
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 1b. Write BDD Tests for CookingTeam creation with assignments
+- **Test scenarios**:
+    - Team with member assignments (strong relation)
+    - Team association with dinner events (weak relation)
+    - Member role assignments (CHEF, COOK, JUNIORHELPER)
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+
+### 2a. Write BDD Tests for Season creation with nested aggregates
+- **Test scenarios**:
+    - Season with CookingTeams (strong relation)
+    - Season with DinnerEvents (strong relation)
+    - Complete seasonal aggregate creation flow
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+- 
+### 2b. Write BDD Tests for deleteSeason functionality (test-first) - CRITICAL
+- **Test scenarios**:
+    - Season with CookingTeams (strong relation - cascade delete)
+    - Season with DinnerEvents (strong relation - cascade delete)
+    - Complete seasonal aggregate deletion flow
+- **Verify**: All nested aggregates properly cleaned up
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 3a. Write BDD Tests for Household creation with nested entities
+- **Test scenarios**:
+    - Household with Inhabitants (strong relation)
+    - Inhabitants with Users (weak relation - optional)
+    - Heynabo import-style nested creation
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+- 
+### 3b. Write BDD Tests for deleteHousehold functionality (test-first) - HIGH
+- **Test scenarios**:
+    - Household with Inhabitants (strong relation - cascade delete)
+    - Inhabitants with Users (weak relation - clear association, preserve users)
+    - Complete household cascade with proper User preservation
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 4 a-b. Write BDD Tests for  createIhnabitant - deleteInhabitant functionality (test-first) - HIGH
+- **Test scenarios**:
+    - Inhabitant with User (weak relation - clear association, preserve user)
+    - Inhabitant with CookingTeamAssignments (strong relation - cascade delete)
+    - Complete inhabitant cleanup without orphaning data
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+## 🚨 IMPLEMENTATION - After Tests Creation
+
+### 1. Fix deleteCookingTeam - Currently Broken (CRITICAL)
+- **Problem**: Currently ignores CookingTeamAssignments (strong relation)
+- **Impact**: Leaves orphaned team assignments in database
+- **Fix**: Update repository function to delete assignments before team
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 2. Create deleteSeason Function (CRITICAL)
+- **Problem**: No cascade to CookingTeams/DinnerEvents (strong relations)
+- **Impact**: Cannot properly delete seasons
+- **Fix**: Implement function following ADR-005 patterns
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 3. Create deleteInhabitant Function (HIGH)
+- **Problem**: No proper cascade function exists
+- **Impact**: Cannot delete inhabitants without orphaning data
+- **Fix**: Implement with User/Assignment cleanup
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 4. Create deleteHousehold Function (HIGH)
+- **Problem**: No proper cascade function exists
+- **Impact**: Cannot delete households properly
+- **Fix**: Implement with Inhabitant/User cascade
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
 
 ## The rest
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management

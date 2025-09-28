@@ -1,5 +1,174 @@
 # Architecture Decision Records
 
+## ADR-005: Aggregate Entity Deletion and Repository Patterns
+
+**Date:** 2025-01-24
+**Updated:** 2025-01-27
+**Status:** Accepted
+**Deciders:** Development Team
+
+### Context
+
+TheSlope manages complex aggregate entities with deep relationships (Households→Inhabitants→Users, CookingTeams→Assignments→Inhabitants). We need consistent deletion patterns that distinguish between strong and weak relationships.
+
+**Critical Constraint**: Cloudflare D1 does not support transactions, making manual multi-step deletion operations susceptible to race conditions.
+
+**Business Requirement**: "Deletion should mirror creation" - entities created as part of aggregates must handle all dependent relationships properly without race conditions.
+
+### Decision
+
+We adopt **Prisma Schema-Driven Deletion** leveraging database-level constraints to prevent race conditions:
+
+#### 1. Strong vs Weak Relationship Classification
+
+**Strong Relations (Existential Dependency - CASCADE DELETE):**
+- **DinnerEvent → Season**: `onDelete: Cascade` - Events cannot exist without season
+- **CookingTeam → Season**: `onDelete: Cascade` - Teams are seasonal entities
+- **Inhabitant → Household**: `onDelete: Cascade` - Inhabitants belong to households
+- **CookingTeamAssignment → CookingTeam**: `onDelete: Cascade` - Assignments require teams
+- **CookingTeamAssignment → Inhabitant**: `onDelete: Cascade` - Assignments require inhabitants
+- **Allergy → Inhabitant**: `onDelete: Cascade` - Allergies belong to inhabitants
+- **Order → DinnerEvent**: `onDelete: Cascade` - Orders are for specific events
+- **Transaction → Order**: `onDelete: Cascade` - Transactions belong to orders
+- **TicketPrice → Season**: `onDelete: Cascade` - Prices are seasonal
+
+**Weak Relations (Optional Association - SET NULL):**
+- **Inhabitant → User**: `onDelete: SetNull` - User can exist without inhabitant
+- **DinnerEvent → Inhabitant (chef)**: `onDelete: SetNull` - Events can exist without assigned chef
+- **DinnerEvent → CookingTeam**: `onDelete: SetNull` - Events can exist without assigned team
+- **Transaction → Invoice**: `onDelete: SetNull` - Transactions can exist without invoice
+
+#### 2. Prisma Schema-Driven Deletion Patterns
+
+**Leverage Database Constraints - Season Deletion:**
+```typescript
+// CORRECT: Let Prisma schema handle cascading
+export async function deleteSeason(d1Client: D1Database, seasonId: number): Promise<Season> {
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Single atomic operation - Prisma schema handles all cascading
+    return await prisma.season.delete({
+        where: { id: seasonId }
+    })
+
+    // Prisma automatically cascades:
+    // - DinnerEvent (onDelete: Cascade)
+    // - CookingTeam (onDelete: Cascade)
+    // - CookingTeamAssignment (via CookingTeam cascade)
+    // - TicketPrice (onDelete: Cascade)
+    // - Sets cookingTeamId=null in DinnerEvents (onDelete: SetNull)
+}
+```
+
+**Schema-Driven Team Deletion:**
+```typescript
+// CORRECT: Prisma schema handles both cascades and null-setting
+export async function deleteCookingTeam(d1Client: D1Database, teamId: number): Promise<CookingTeam> {
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Single atomic operation - schema handles relationships
+    return await prisma.cookingTeam.delete({
+        where: { id: teamId }
+    })
+
+    // Prisma automatically:
+    // - Cascades CookingTeamAssignment deletions (onDelete: Cascade)
+    // - Sets cookingTeamId=null in DinnerEvents (onDelete: SetNull)
+}
+```
+
+**ANTI-PATTERN - Manual Multi-Step Operations:**
+```typescript
+// ❌ WRONG: Creates race conditions without transactions
+export async function deleteSeasonManually(d1Client: D1Database, seasonId: number) {
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // RACE CONDITION: Between these steps, other operations can create inconsistent state
+    await prisma.cookingTeamAssignment.deleteMany({ /* ... */ })  // Step 1
+    await prisma.cookingTeam.deleteMany({ /* ... */ })           // Step 2
+    await prisma.dinnerEvent.deleteMany({ /* ... */ })           // Step 3
+    return await prisma.season.delete({ /* ... */ })             // Step 4
+
+    // Problems:
+    // - No transaction isolation in D1
+    // - Other requests can interfere between steps
+    // - Partial failures leave inconsistent state
+    // - Race conditions with concurrent operations
+}
+```
+
+#### 3. E2E Testing Requirements
+
+**CRUD E2E Tests must verify relationship handling:**
+```typescript
+test("DELETE /api/admin/season/[id] should cascade to dinner events and teams", async ({browser}) => {
+    // GIVEN: Season with teams and dinner events
+    const season = await SeasonFactory.createSeason(context, seasonData)
+    const team = await TeamFactory.createTeam(context, { seasonId: season.id })
+    const dinnerEvent = await DinnerEventFactory.create(context, { seasonId: season.id, cookingTeamId: team.id })
+
+    // WHEN: Season is deleted
+    await context.request.delete(`/api/admin/season/${season.id}`)
+
+    // THEN: All strong relations cascaded
+    // Verify CookingTeam is DELETED (strong relation to Season)
+    const teams = await fetchTeams(season.id)
+    expect(teams).toHaveLength(0)
+
+    // Verify DinnerEvent is DELETED (strong relation to Season - part of season schedule)
+    const events = await fetchDinnerEvents(season.id)
+    expect(events).toHaveLength(0)
+})
+
+test("DELETE /api/admin/team/[id] should clear associations but preserve dinner events", async ({browser}) => {
+    // GIVEN: Team assigned to dinner event
+    const team = await TeamFactory.createTeam(context, teamData)
+    const dinnerEvent = await DinnerEventFactory.createWithTeam(context, team.id)
+
+    // WHEN: Team is deleted
+    await context.request.delete(`/api/admin/team/${team.id}`)
+
+    // THEN: Weak association cleared, dinner event preserved
+    const event = await fetchDinnerEvent(dinnerEvent.id)
+    expect(event.cookingTeamId).toBeNull() // Association cleared
+    expect(event).toBeDefined() // Event still exists
+})
+```
+
+### Rationale
+
+**Business Logic Accuracy:**
+- **Strong relations** represent existential dependency (DinnerEvent is part of Season schedule)
+- **Weak relations** represent optional associations (DinnerEvent can exist without team assignment)
+- **Seasonal consistency** - Dinner events and teams are tied to their season lifecycle
+
+**Data Integrity:**
+- **Prevents orphaned data** - Strong relations properly cascaded
+- **Preserves valuable data** - Weak relations cleared but entities preserved
+- **Season lifecycle** - All season-dependent entities deleted together
+
+### Consequences
+
+#### Positive
+- **Accurate business modeling** - Deletion behavior matches domain relationships
+- **Season integrity** - Complete seasonal data lifecycle management
+- **Clear semantics** - Strong vs weak distinction guides deletion behavior
+- **Flexible team assignments** - Teams can be unassigned without deleting events
+
+#### Negative
+- **Increased complexity** - Must analyze and classify each relationship type
+- **Cascade complexity** - Season deletion affects multiple entity types
+- **Data loss potential** - Strong relations mean more entities deleted
+
+### Compliance Requirements
+
+**All aggregate deletion functions must:**
+1. **Classify relationships** - Identify strong (cascade) vs weak (clear) relations
+2. **Clear weak associations first** - Update foreign keys to null
+3. **Delete strong dependencies** - CASCADE DELETE for existentially dependent entities
+4. **Use transactions** - Ensure atomicity across all relationship operations
+5. **Respect business rules** - Season deletion removes all season-specific data
+
 ## ADR-004: Logging and Security Standards
 
 **Date:** 2025-01-24

@@ -80,7 +80,14 @@ export const useCookingTeamValidation = () => {
     }
   }
 
-  const validateTeamComposition = (team: CookingTeamWithMembers) => {
+  const getAllAssignmentIds = (team: CookingTeamWithMembers) =>  [
+        ...team.chefs.map(c => c.id),
+        ...team.cooks.map(c => c.id),
+        ...team.juniorHelpers.map(c => c.id)
+    ]
+
+
+    const validateTeamComposition = (team: CookingTeamWithMembers) => {
     const counts = getTeamMemberCounts(team)
     const errors: string[] = []
 
@@ -109,6 +116,7 @@ export const useCookingTeamValidation = () => {
     validateMemberAssignment,
     validateBulkMemberAssignment,
     getTeamMemberCounts,
+    getAllAssignmentIds,
     validateTeamComposition
   }
 }

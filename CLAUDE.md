@@ -74,3 +74,9 @@
   - Claude helps with test boilerplate, debugging, and refactoring
 - **Testing**: TDD approach - write tests first to guide implementation
 - **Review**: Claude helps identify issues and suggest optimizations
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+ALWAYS GENERATE WITH UTF-8 encoding for all files.

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(npm list:*)",
+      "Bash(npm run test:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx vitest:*)",
+      "WebSearch",
+      "WebFetch(domain:nuxt.com)",
+      "WebFetch(domain:ui4.nuxt.com)",
+      "WebFetch(domain:ui.nuxt.com)"
+    ],
+    "deny": [
+      "Read(./.cookies.txt)",
+      "Read(./.env)",
+      "Read(./.env.test)",
+      "Read(./.env.prod)"
+    ],
+    "ask": [],
+    "includeCoAuthoredBy": false
+  }
+}

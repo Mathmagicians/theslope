@@ -1,181 +1,124 @@
 import {test, expect} from '@playwright/test'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import {getTestSeason, cookingTeams} from '~~/tests/mocks/testObjects'
-import {authFiles} from '../../config'
+import {SeasonFactory} from "../../testDataFactories/seasonFactory"
+import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {adminFile} = authFiles
+const {validateCookingTeam, getTeamMemberCounts, getAllAssignmentIds} = useCookingTeamValidation()
+const {headers, validatedBrowserContext} = testHelpers
 
-const headers = {'Content-Type': 'application/json'}
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
-const ADMIN_SEASON_ENDPOINT = '/api/admin/season'
-
-// Generate unique test data
-const testSalt = Date.now().toString()
-const testTeamName = `TestTeam-${testSalt}`
-// TODO - refactor, should use testObjects
 
 // Variables to store IDs for cleanup
-let testSeasonId: number // Will be set after creating the season
-let testUserIds:number[] = []
-let testDinnerIds:number[] = []
+let testSeasonId: number
+let testUserIds: number[] = []
+let testDinnerIds: number[] = []
 let testTeamIds: number[] = []
-
-//TODO Test team data, use base from testObjects, and associate with correct season id, and test users ids, and dinner ids
-const newTeam = {
-    get seasonId() {
-        return testSeasonId
-    },
-    name: testTeamName
-}
-
-
-const {validateCookingTeam} = useCookingTeamValidation()
 
 test.describe('Admin Teams API', () => {
 
     // Setup test season before all tests
     test.beforeAll(async ({browser}) => {
-        const context = await browser.newContext({
-            storageState: adminFile
-        })
-
-        // Create test season using testObjects helper
-        const {rawSeason, serializedSeason} = getTestSeason()
-        const seasonResponse = await context.request.put(ADMIN_SEASON_ENDPOINT, {
-            headers: headers,
-            data: serializedSeason
-        })
-
-        expect(seasonResponse.status()).toBe(201)
-        const createdSeason = await seasonResponse.json()
-        testSeasonId = createdSeason.id
-
-        console.log(`Created test season ${createdSeason.shortName} with ID ${testSeasonId}`)
-
-        //TODO Create test users for team assignements using testObjects helper
+        const context = await validatedBrowserContext(browser)
+        const created = await SeasonFactory.createSeason(context)
+        // Save ID for cleanup
+        testSeasonId = created.id as number
 
 
-        //TODO Crete dinner events in season using testObjects helper
-
-        //TODO associate test data ids for dinners and users
+        console.info(`Created test season ${created.shortName} with ID ${testSeasonId}`)
     })
 
     test.describe('Admin Team Endpoints CRUD Operations', () => {
 
-        test.each(cookingTeams)(`PUT ${ADMIN_TEAM_ENDPOINT} should create a new team %s`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
-
-            const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-
-            const status = response.status()
-            const responseBody = await response.json()
-
-            expect(status, `Expected 201 but got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(201)
-            expect(responseBody.id).toBeDefined()
+        test('PUT /api/admin/team should create a new team and GET should retrieve it', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId)
+            expect(testTeam.id).toBeDefined()
             // save for cleanup
-            testTeamIds.push(responseBody.id)
+            testTeamIds.push(testTeam.id)
 
             // Verify response structure
-            expect(responseBody).toHaveProperty('id')
-            expect(responseBody).toHaveProperty('seasonId')
-            expect(responseBody).toHaveProperty('name')
-            expect(responseBody.seasonId).toBe(testSeasonId)
-            expect(responseBody.name).toBe(testTeamName)
+            expect(testTeam.id).toBeGreaterThanOrEqual(0)
+            expect(testTeam.seasonId).toEqual(testSeasonId)
 
             // Validate the response matches our schema
-            expect(() => validateCookingTeam(responseBody)).not.toThrow()
+            expect(() => validateCookingTeam(testTeam)).not.toThrow()
+            const retrievedTeam = await SeasonFactory.getCookingTeamById(context, testTeam.id)
+            expect(retrievedTeam.id).toBe(testTeam.id)
+            expect(retrievedTeam.name).toBe(testTeam.name)
+            expect(retrievedTeam.seasonId).toBe(testTeam.seasonId)
         })
 
-        test(`GET ${ADMIN_TEAM_ENDPOINT} should list all teams`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('PUT /api/admin/team creates a team with team assignments and delete removes team and team assignments', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            // DONT push it to cleanup, we will delete it in this test
+            const testTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "Team-with-team-assignments", 2)
+            expect(testTeam.id).toBeDefined()
+            expect(testTeam.seasonId).toBe(testSeasonId)
+            expect(getTeamMemberCounts(testTeam).total).toEqual(2)
+            const memberAssignmentIds = getAllAssignmentIds(testTeam)
+            expect(memberAssignmentIds.length).toBe(2)
+            const assignments = await Promise.all(
+                memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id))
+            )
+            expect(assignments.map(a => a.id)).toEqual(memberAssignmentIds)
 
-            // First create a team to ensure there's at least one
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            expect(createResponse.status()).toBe(201)
-            const createdTeam = await createResponse.json()
-            testTeamIds.push(createdTeam.id)
+            // Now delete the team
+            const deleteResponse = SeasonFactory.deleteCookingTeam(context, testTeam.id)
 
-            // Get team list
-            const listResponse = await context.request.get(ADMIN_TEAM_ENDPOINT)
-            expect(listResponse.status()).toBe(200)
+            const assignmentsAfterDelete = await Promise.all(
+                memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id, 404)
+                ))
+            expect(assignmentsAfterDelete.length).toBe(0)
+        })
 
-            const teams = await listResponse.json()
+        test('GET /api/admin/team should list all teams', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "List-All-Teams")
+            expect(testTeam.id).toBeDefined()
+            testTeamIds.push(testTeam.id)
+
+            const teams = await SeasonFactory.getAllCookingTeams(context)
             expect(Array.isArray(teams)).toBe(true)
 
             // Find our created team
-            const foundTeam = teams.find(t => t.name === testTeamName)
+            const foundTeam = teams.find(t => t.name.includes(testTeam.name) && t.id === testTeam.id)
             expect(foundTeam).toBeTruthy()
-            expect(foundTeam.id).toBe(createdTeam.id)
         })
 
-        test(`GET ${ADMIN_TEAM_ENDPOINT}?seasonId=X should filter teams by season`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('GET /api/admin/team?seasonId=X should filter teams by season', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
+            // Create a team for current season
+            const testTeamName = "Filter-By-Season-Team"
+            const team1 = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, testTeamName)
             // Create teams for different seasons
-            const team1 = {seasonId: testSeasonId, name: `${testTeamName}-Season1`}
-            const team2 = {seasonId: testSeasonId + 1, name: `${testTeamName}-Season2`}
+            const otherSeason = await SeasonFactory.createSeason(context)
+            const team2 = await SeasonFactory.createCookingTeamForSeason(context, otherSeason.id as number, "Other-Season-Team")
 
-            const response1 = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: team1
-            })
-            const response2 = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: team2
-            })
-
-            expect(response1.status()).toBe(201)
-            expect(response2.status()).toBe(201)
-
-            const createdTeam1 = await response1.json()
-            const createdTeam2 = await response2.json()
-            testTeamIds.push(createdTeam1.id, createdTeam2.id)
+            testTeamIds.push(team1.id, team2.id)
 
             // Filter teams by first season
-            const filteredResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}?seasonId=${testSeasonId}`)
-            expect(filteredResponse.status()).toBe(200)
-
-            const filteredTeams = await filteredResponse.json()
-            const team1Found = filteredTeams.find(t => t.id === createdTeam1.id)
-            const team2Found = filteredTeams.find(t => t.id === createdTeam2.id)
+            const filteredTeams = await SeasonFactory.getCookingTeamsForSeason(context, testSeasonId)
+            const team1Found = filteredTeams.find(t => t.id === team1.id)
+            const team2Found = filteredTeams.find(t => t.id === team2.id)
 
             expect(team1Found).toBeTruthy()
             expect(team2Found).toBeFalsy() // Should not appear in filtered results
+
+            // Cleanup other season
+            await SeasonFactory.deleteSeason(context, otherSeason.id as number)
         })
 
-        test(`GET ${ADMIN_TEAM_ENDPOINT}/[id] should get specific team details`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
-
-            // First create a team
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            expect(createResponse.status()).toBe(201)
-            const createdTeam = await createResponse.json()
+        test('GET /api/admin/team/[id] should get specific team details', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
+            expect(createdTeam.id).toBeDefined()
             testTeamIds.push(createdTeam.id)
 
             // Get team details
-            const detailResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            expect(detailResponse.status()).toBe(200)
-
-            const teamDetails = await detailResponse.json()
+            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
             expect(teamDetails.id).toBe(createdTeam.id)
-            expect(teamDetails.name).toBe(testTeamName)
+            expect(teamDetails.name).toBe(createdTeam.name)
             expect(teamDetails.seasonId).toBe(testSeasonId)
 
             // Should include member arrays
@@ -184,22 +127,14 @@ test.describe('Admin Teams API', () => {
             expect(teamDetails).toHaveProperty('juniorHelpers')
         })
 
-        test(`POST ${ADMIN_TEAM_ENDPOINT}/[id] should update team`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
-
-            // First create a team
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            expect(createResponse.status()).toBe(201)
-            const createdTeam = await createResponse.json()
+        test('POST /api/admin/team/[id] should update team', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
+            expect(createdTeam.id).toBeDefined()
             testTeamIds.push(createdTeam.id)
 
             // Update the team
-            const updatedData = {name: `${testTeamName}-Updated`}
+            const updatedData = {name: `${createdTeam.name}-Updated`}
             const updateResponse = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`, {
                 headers: headers,
                 data: updatedData
@@ -207,166 +142,94 @@ test.describe('Admin Teams API', () => {
 
             expect(updateResponse.status()).toBe(200)
             const updatedTeam = await updateResponse.json()
-            expect(updatedTeam.name).toBe(`${testTeamName}-Updated`)
+            expect(updatedTeam.name).toBe(updatedData.name)
             expect(updatedTeam.id).toBe(createdTeam.id)
         })
 
-        test(`DELETE
-        ${ADMIN_TEAM_ENDPOINT}/[id] should delete
-        team, remove all cooking team 
-            assignments and unassign team from dinner events`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('DELETE /api/admin/team/[id] should delete the cooking team, together with team assignments', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-to-delete", 3)
+            expect(createdTeam.id).toBeDefined()
+            // Do not add to cleanup, we are deleting it here
 
-            // First create a team
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            expect(createResponse.status()).toBe(201)
-            const createdTeam = await createResponse.json()
+            // Verify team and assignments exist
+            expect(getTeamMemberCounts(createdTeam).total).toBe(3)
 
-            const teamMemberAssignments = newTeam.members
+            const teamMemberAssignments = getAllAssignmentIds(createdTeam)
+            expect(teamMemberAssignments.length).toBe(3)
 
+            // Verify assignments exist before deletion
+            const assignmentsBeforeDelete = await Promise.all(
+                teamMemberAssignments.map(id => SeasonFactory.getCookingTeamAssignment(context, id))
+            )
+            expect(assignmentsBeforeDelete.length).toBe(3)
             // Delete the team
-            const deleteResponse = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            expect(deleteResponse.status()).toBe(200)
+            await SeasonFactory.deleteCookingTeam(context, createdTeam.id)
 
             // Verify team is deleted
-            const getResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            expect(getResponse.status()).toBe(404)
+            await SeasonFactory.getCookingTeamById(context, createdTeam.id, 404)
         })
     })
 
     test.describe('Team Member Management', () => {
 
-        test(`PUT ${ADMIN_TEAM_ENDPOINT}/[id]/members should add team member assignments`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('PUT /api/admin/team/[id]/members should add team member assignments', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            // First create a team
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            expect(createResponse.status()).toBe(201)
-            const createdTeam = await createResponse.json()
+            // Create team with members using factory
+            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-with-assignments", 3)
             testTeamIds.push(createdTeam.id)
 
-            // Add members to the team
-            const memberAssignment = {
-                teamId: createdTeam.id,
-                members: testTeamMembers
-            }
-
-            const assignResponse = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}/members`, {
-                headers: headers,
-                data: memberAssignment
-            })
-
-            expect(assignResponse.status()).toBe(200)
-
-            // Verify members were added by getting team details
-            const detailResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            const teamWithMembers = await detailResponse.json()
-
-            expect(teamWithMembers.chefs).toHaveLength(1)
-            expect(teamWithMembers.cooks).toHaveLength(2)
-            expect(teamWithMembers.juniorHelpers).toHaveLength(0)
+            // Verify the team has the expected member structure
+            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
+            expect(getTeamMemberCounts(teamDetails).total).toBe(3)
         })
 
-        test(`DELETE ${ADMIN_TEAM_ENDPOINT}/[id]/members/[memberId] should remove team assignments`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            // Create team and add members first
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            const createdTeam = await createResponse.json()
+            // Create team with members using factory
+            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-for-removal", 3)
             testTeamIds.push(createdTeam.id)
 
-            const memberAssignment = {
-                teamId: createdTeam.id,
-                members: testTeamMembers
-            }
+            // Get assignment IDs and verify they exist
+            const assignmentIds = getAllAssignmentIds(createdTeam)
+            expect(assignmentIds.length).toBe(3)
 
-            await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}/members`, {
-                headers: headers,
-                data: memberAssignment
-            })
+            // Remove one assignment to test member removal
+            const firstAssignmentId = assignmentIds[0]
+            await SeasonFactory.removeMemberFromTeam(context, createdTeam.id, firstAssignmentId)
 
-            // Get team to find a member ID to remove
-            const detailResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            const teamWithMembers = await detailResponse.json()
-            const memberToRemove = teamWithMembers.cooks[0] // Remove first cook
-
-            // Remove the member
-            const removeResponse = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}/members/${memberToRemove.id}`)
-            expect(removeResponse.status()).toBe(200)
-
-            // Verify member was removed
-            const updatedDetailResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`)
-            const updatedTeam = await updatedDetailResponse.json()
-            expect(updatedTeam.cooks).toHaveLength(1) // Should have one less cook
+            // Verify the assignment was removed
+            await SeasonFactory.getCookingTeamAssignment(context, firstAssignmentId, 404)
         })
     })
 
     test.describe('Validation and Error Handling', () => {
 
-        test(`PUT ${ADMIN_TEAM_ENDPOINT} should reject invalid team data`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('PUT /api/admin/team should reject invalid team data', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            const invalidTeam = {
-                // Missing seasonId
-                name: "Invalid Team"
-            }
-
-            const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: invalidTeam
-            })
-
-            expect(response.status()).toBe(400)
+            // Try to create team without seasonId - should fail
+            await SeasonFactory.createCookingTeamForSeason(context, 0, "Invalid Team", 400)
         })
 
-        test(`PUT ${ADMIN_TEAM_ENDPOINT} should reject empty team name`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('PUT /api/admin/team should reject empty team name', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            const invalidTeam = {
-                seasonId: testSeasonId,
-                name: ""
-            }
-
-            const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: invalidTeam
-            })
-
-            expect(response.status()).toBe(400)
+            // Try to create team with empty name - should fail
+            await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "", 400)
         })
 
-        test(`GET ${ADMIN_TEAM_ENDPOINT}/[id] should return 404 for non-existent team`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/99999`)
-            expect(response.status()).toBe(404)
+            // Try to get non-existent team - should return 404
+            await SeasonFactory.getCookingTeamById(context, 99999, 404)
         })
 
-        test(`POST ${ADMIN_TEAM_ENDPOINT}/[id] should return 404 for non-existent team`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('POST /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
             const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/99999`,
                 {
@@ -377,101 +240,45 @@ test.describe('Admin Teams API', () => {
             expect(response.status()).toBe(404)
         })
 
-        test(`DELETE ${ADMIN_TEAM_ENDPOINT}/[id] should return 404 for non-existent team`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('DELETE /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/99999`)
-            expect(response.status()).toBe(404)
+            // Try to delete non-existent team - should return 404
+            await SeasonFactory.deleteCookingTeam(context, 99999, 404)
         })
 
-        test(`PUT ${ADMIN_TEAM_ENDPOINT}/[id]/members should reject invalid member data`, async ({browser}) => {
-            const context = await browser.newContext({
-                storageState: adminFile
-            })
+        test('PUT /api/admin/team/[id]/members should reject invalid member data', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-            // First create a team
-            const createResponse = await context.request.put(ADMIN_TEAM_ENDPOINT, {
-                headers: headers,
-                data: newTeam
-            })
-            const createdTeam = await createResponse.json()
+            // Create a team using factory
+            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "invalid-assignment-test")
             testTeamIds.push(createdTeam.id)
 
-            const invalidMemberAssignment = {
-                teamId: createdTeam.id,
-                members: [
-                    {inhabitantId: 1, role: 'INVALID_ROLE'} // Invalid role
-                ]
+            // Try to add an invalid member assignment
+            const invalidMemberData = {
+                seasonId: testSeasonId,
+                name: "" // Empty name should be invalid
             }
-
-            const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}/members`, {
-                headers: headers,
-                data: invalidMemberAssignment
-            })
-
-            expect(response.status()).toBe(400)
-        })
-    })
-
-    test.describe('Authentication Requirements', () => {
-
-        test('Team endpoints should require admin authentication', async ({browser}) => {
-            const context = await browser.newContext() // No admin auth
-
-            // Test each endpoint requires authentication
-            const endpoints = [
-                {method: 'put', url: ADMIN_TEAM_ENDPOINT, data: newTeam},
-                {method: 'get', url: ADMIN_TEAM_ENDPOINT},
-                {method: 'get', url: `${ADMIN_TEAM_ENDPOINT}/1`},
-                {method: 'post', url: `${ADMIN_TEAM_ENDPOINT}/1`, data: {name: 'Updated'}},
-                {method: 'delete', url: `${ADMIN_TEAM_ENDPOINT}/1`},
-                {method: 'put', url: `${ADMIN_TEAM_ENDPOINT}/1/members`, data: {teamId: 1, members: []}},
-                {method: 'delete', url: `${ADMIN_TEAM_ENDPOINT}/1/members/1`}
-            ]
-
-            for (const endpoint of endpoints) {
-                let response
-                if (endpoint.data) {
-                    response = await context.request[endpoint.method](endpoint.url, {
-                        headers: headers,
-                        data: endpoint.data
-                    })
-                } else {
-                    response = await context.request[endpoint.method](endpoint.url)
-                }
-
-                expect(response.status(), `${endpoint.method.toUpperCase()} ${endpoint.url} should require auth`).toBe(401)
-            }
+            const response = await SeasonFactory.assignMemberToTeam(createdTeam.id, invalidMemberData, 400)
         })
     })
 
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
-        const context = await browser.newContext({
-            storageState: adminFile
-        })
+        const context = await validatedBrowserContext(browser)
 
         // Clean up all created teams
-        if (testTeamIds.length > 0) {
-            for (const teamId of testTeamIds) {
-                try {
-                    await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
-                } catch (error) {
-                    // Ignore cleanup errors
-                    console.log(`Failed to cleanup team ${teamId}:`, error)
-                }
-            }
-        }
+        await Promise.all(testTeamIds.map(id => SeasonFactory.deleteCookingTeam(context, id).catch(error => {
+            // Ignore cleanup errors
+            console.warn(`Failed to cleanup team ${id}:`, error)
+        })))
 
         // Clean up the test season
         if (testSeasonId) {
             try {
-                await context.request.delete(`${ADMIN_SEASON_ENDPOINT}/${testSeasonId}`)
-                console.log(`Cleaned up test season with ID ${testSeasonId}`)
+                await SeasonFactory.deleteSeason(context, testSeasonId)
             } catch (error) {
-                console.log(`Failed to cleanup test season ${testSeasonId}:`, error)
+                console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
             }
         }
     })

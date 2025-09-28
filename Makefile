@@ -7,6 +7,55 @@ export
 
 export HEY_TOKEN?="$(shell curl -s -X POST $(HEY_NABO_API)/login  -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)"}' | jq .'token')"
 
+prisma-to-zod:
+	@npx prisma generate zod
+
+d1-prisma: prisma-to-zod
+	@npx prisma format
+	@npx prisma validate
+	@npm run db:generate-client
+
+d1-migrate: d1-prisma
+	@echo "🏗️ Generating db client from model, and migrating all d1 databases to new data model"
+	@npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_initial.sql
+
+d1-migrate-local: d1-migrate
+	$(info "🏗️ Migrating schemas of local database")
+	@yes | npm run db:migrate:local
+	@npm run db:seed:local
+
+d1-migrate-dev: d1-migrate
+	$(info "🏗️ Migrating schemas of dev database (theslope --remote)")
+	@yes | npm run db:migrate
+	@npm run db:seed
+
+
+d1-migrate-prod: d1-migrate
+	$(info "🏗️ Migrating schemas of production database")
+	@yes | npm run db_prod:migrate
+	@npm run db:seed
+
+d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
+	$(info '🤖Will build d1 databases - local and remote - using Prisma migrations')
+
+d1-create-migration:
+	@ npx wrangler d1 migrations create theslope update_delete_constraints_1
+
+d1-list-users-local:
+	@npx wrangler d1 execute theslope --command  "SELECT * FROM user"
+
+d1-list-tables:
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
+
+d1-list-tables-local:
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
+
+.env.example:
+	@cat .env | sed 's/=.*$$/=/g' > .env.examples
+
+generate-session-secret:
+	@openssl rand -base64 32
+
 heynabo-api:
 	@echo $(HEY_NABO_API)
 
@@ -32,8 +81,8 @@ heynabo-post-event:
 theslope-login:
 	@curl -c .cookies.txt $(THE_SLOPE_API)/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } ' |  jq
 
-theslope-admin-get-users:
-	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/users | jq
+theslope-admin-get-team:
+	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/team| jq
 
 theslope-admin-import:
 	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/heynabo/import | jq
@@ -45,47 +94,8 @@ theslope-put-user:
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
-prisma-to-zod:
-	@npx prisma generate zod
-
-d1-prisma: prisma-to-zod
-	@npx prisma format
-	@npm run db:generate-client
-
-d1-migrate: d1-prisma
-	@echo "🏗️ Generating db client from model, and migrating all d1 databases to new data model"
-	@npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_initial.sql
-
-d1-migrate-local: d1-migrate
-	$(info "🏗️ Migrating schemas of local database")
-	@yes | npm run db:migrate:local
-	@npm run db:seed:local
-
-d1-migrate-prod: d1-migrate
-	$(info "🏗️ Migrating schemas of production database")
-	@yes | npm run db:migrate
-	@npm run db:seed
-
-d1-migrate-all: d1-migrate-local d1-migrate-prod
-	$(info '🤖Will build d1 databases - local and remote - using Prisma migrations')
-
-d1-list-users-local:
-	@npx wrangler d1 execute theslope --command  "SELECT * FROM user"
-
-d1-list-tables:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
-
-d1-list-tables-local:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
-
-.env.example:
-	@cat .env | sed 's/=.*$$/=/g' > .env.examples
-
-generate-session-secret:
-	@openssl rand -base64 32
-
 run-e2e-team:
 	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
 
-run-e2e-user:
-	@npx playwright test tests/e2e/api/admin/users.e2e.spec.ts --reporter=line
+run-e2e-season:
+	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line

@@ -1,11 +1,8 @@
 import {test, expect} from '@playwright/test'
-import {formatDate} from '~/utils/date'
-import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import testHelpers from '~~/tests/e2e/testHelpers'
-import {useSeasonValidation} from '~/composables/useSeasonValidation'
-import {authFiles} from '../../config'
-
-const {adminFile} = authFiles
+import {formatDate} from '../../../../app/utils/date'
+import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import testHelpers from '../../testHelpers'
+import {useSeasonValidation} from '../../../../app/composables/useSeasonValidation'
 
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 const {headers, validatedBrowserContext} = testHelpers
@@ -83,24 +80,63 @@ test("POST should update an existing season", async ({browser}) => {
 })
 
 // Test for validation
-test("Validation should fail for invalid season data", async ({browser}) => {
+test("PUT Validation should fail for invalid season data", async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create invalid season (missing required fields)
+    // Create invalid season (missing required fields) using factory
     const invalidSeason = {
-        shortName: newSeason.season.shortName,
-        // Missing seasonDates
+        shortName: "Invalid-season-put",
+        // Missing seasonDates - should cause validation error
         isActive: false
     }
 
-    // Submit with matching how Pinia sends it
-    const response = await context.request.put('/api/admin/season', {
-        headers: headers,
-        data: invalidSeason
-    })
+    // Use createSeason with expected 400 status
+    await SeasonFactory.createSeason(context, invalidSeason, 400)
+})
 
-    // Should return 400 Bad Request for validation error
-    expect(response.status()).toBe(400)
+
+// === BDD TEST CASES FOR SEASON AGGREGATE (ADR-005) ===
+
+test.skip("PUT should create season with cooking teams", async ({browser}) => {
+    // TODO: Implement BDD test - create season with cooking teams (strong relation)
+    // Use SeasonFactory.createSeasonWithTeams()
+    throw new Error('Test not implemented - BDD mock')
+})
+
+test.skip("PUT should create season with dinner events", async ({browser}) => {
+    // TODO: Implement BDD test - create season with dinner events (strong relation)
+    // Use SeasonFactory.createDinnerEventsForSeason()
+    throw new Error('Test not implemented - BDD mock')
+})
+
+test.skip("PUT should create complete seasonal aggregate", async ({browser}) => {
+    // TODO: Implement BDD test - create season with teams AND events
+    // Use SeasonFactory.createSeasonWithTeamsAndDinners()
+    throw new Error('Test not implemented - BDD mock')
+})
+
+test.skip("DELETE should cascade delete cooking teams (strong relation)", async ({browser}) => {
+    // TODO: Implement BDD test - mirrors PUT season with teams
+    // 1. Create season with teams using SeasonFactory.createSeasonWithTeams()
+    // 2. DELETE season using SeasonFactory.deleteSeason()
+    // 3. Verify teams are cascade deleted (strong relation)
+    throw new Error('Test not implemented - BDD mock')
+})
+
+test.skip("DELETE should cascade delete dinner events (strong relation)", async ({browser}) => {
+    // TODO: Implement BDD test - mirrors PUT season with events
+    // 1. Create season with events using SeasonFactory.createDinnerEventsForSeason()
+    // 2. DELETE season using SeasonFactory.deleteSeason()
+    // 3. Verify events are cascade deleted (strong relation)
+    throw new Error('Test not implemented - BDD mock')
+})
+
+test.skip("DELETE should cascade delete complete seasonal aggregate", async ({browser}) => {
+    // TODO: Implement BDD test - mirrors PUT complete seasonal aggregate
+    // 1. Create complete season aggregate
+    // 2. DELETE season
+    // 3. Verify ALL nested aggregates properly cleaned up (teams AND events)
+    throw new Error('Test not implemented - BDD mock')
 })
 
 // Cleanup after all tests

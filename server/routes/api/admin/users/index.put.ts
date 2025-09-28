@@ -1,4 +1,4 @@
-import {defineEventHandler} from "h3";
+// h3 utilities are auto-imported in Nuxt 4tha
 import {saveUser} from "~~/server/data/prismaRepository"
 import {useUserValidation, type UserCreate} from "~/composables/useUserValidation"
 import {ZodError} from "zod"
