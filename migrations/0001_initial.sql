@@ -123,14 +123,10 @@ CREATE TABLE "CookingTeam" (
 -- CreateTable
 CREATE TABLE "CookingTeamAssignment" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "chefForcookingTeamId" INTEGER,
-    "cookForcookingTeamId" INTEGER,
-    "juniorForcookingTeamId" INTEGER,
+    "cookingTeamId" INTEGER NOT NULL,
     "inhabitantId" INTEGER NOT NULL,
     "role" TEXT NOT NULL,
-    CONSTRAINT "CookingTeamAssignment_chefForcookingTeamId_fkey" FOREIGN KEY ("chefForcookingTeamId") REFERENCES "CookingTeam" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CookingTeamAssignment_cookForcookingTeamId_fkey" FOREIGN KEY ("cookForcookingTeamId") REFERENCES "CookingTeam" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "CookingTeamAssignment_juniorForcookingTeamId_fkey" FOREIGN KEY ("juniorForcookingTeamId") REFERENCES "CookingTeam" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CookingTeamAssignment_cookingTeamId_fkey" FOREIGN KEY ("cookingTeamId") REFERENCES "CookingTeam" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "CookingTeamAssignment_inhabitantId_fkey" FOREIGN KEY ("inhabitantId") REFERENCES "Inhabitant" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 

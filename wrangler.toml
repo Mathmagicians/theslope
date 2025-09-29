@@ -23,6 +23,7 @@ enabled = true
 binding = "DB"
 database_name = "theslope"
 database_id = "373cce02-f8be-4f44-ae68-544f94385367"
+migrations_dir = "migrations"
 
 [env.prod]
 name = "theslope-prod"
@@ -40,3 +41,4 @@ DB_D1_NAME = "theslope-prod"
 binding = "DB"
 database_name = "theslope-prod"
 database_id = "f512e46a-3c93-4723-9fb8-74a177953ffb"
+migrations_dir = "migrations"

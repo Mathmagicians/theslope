@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test'
-import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import testHelpers from '~~/tests/e2e/testHelpers'
+import {UserFactory} from '../../testDataFactories/userFactory'
+import testHelpers from '../../testHelpers'
 
 const {validatedBrowserContext} = testHelpers
 
@@ -13,7 +13,7 @@ test("PUT /api/admin/users should create a new user and GET should retrieve it",
     const context = await validatedBrowserContext(browser)
     const created = await UserFactory.createUser(context, newUser)
     // Save ID for cleanup
-    createdUserIds.push(created.id)
+    createdUserIds.push(created.id as number)
 
     // Verify response
     expect(created).toHaveProperty('email')

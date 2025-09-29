@@ -13,7 +13,7 @@ export class UserFactory {
         systemRole: 'USER'
     }
 
-    static readonly defaultUser = (testSalt: string = Date.now().toString()) => {
+    static readonly defaultUser = (testSalt: string = Date.now().toString()): UserCreate => {
         const saltedUser = {
             ...this.defaultUserData,
             email: salt('minnie-admin-users', testSalt) + '@andeby.dk'
@@ -21,14 +21,14 @@ export class UserFactory {
         return saltedUser
     }
 
-    static readonly createUser = async (context: BrowserContext, aUser: UserCreate): Promise<User> => {
+    static readonly createUser = async (context: BrowserContext, aUser: UserCreate = this.defaultUser() ): Promise<User> => {
         // Users API uses query parameters, not request body
         const response = await context.request.put('/api/admin/users', {
             headers: headers,
             params: {
-                email: aUser.email,
-                phone: aUser.phone,
-                systemRole: aUser.systemRole
+                email: aUser.email as string,
+                phone: aUser.phone as string,
+                systemRole: aUser.systemRole as string
             }
         })
 

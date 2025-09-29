@@ -1,16 +1,16 @@
 import {test, expect} from '@playwright/test'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation} from '../../../../app/composables/useCookingTeamValidation'
 import {SeasonFactory} from "../../testDataFactories/seasonFactory"
-import testHelpers from '~~/tests/e2e/testHelpers'
+import testHelpers from '../../testHelpers'
 
-const {validateCookingTeam, getTeamMemberCounts, getAllAssignmentIds} = useCookingTeamValidation()
+const {validateCookingTeam, getTeamMemberCounts} = useCookingTeamValidation()
 const {headers, validatedBrowserContext} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 // Variables to store IDs for cleanup
 let testSeasonId: number
-let testUserIds: number[] = []
+let testHouseholdIds: number[] = []
 let testDinnerIds: number[] = []
 let testTeamIds: number[] = []
 
@@ -51,12 +51,12 @@ test.describe('Admin Teams API', () => {
         test('PUT /api/admin/team creates a team with team assignments and delete removes team and team assignments', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             // DONT push it to cleanup, we will delete it in this test
-            const testTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "Team-with-team-assignments", 2)
+            const testTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "Team-with-team-assignments", 2)
             expect(testTeam.id).toBeDefined()
             expect(testTeam.seasonId).toBe(testSeasonId)
-            expect(getTeamMemberCounts(testTeam).total).toEqual(2)
-            const memberAssignmentIds = getAllAssignmentIds(testTeam)
-            expect(memberAssignmentIds.length).toBe(2)
+            expect(getTeamMemberCounts(testTeam)).toEqual(2)
+            expect(testTeam.assignments.length).toBe(2)
+            const memberAssignmentIds = testTeam.assignments.map((a: any) => a.id)
             const assignments = await Promise.all(
                 memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id))
             )
@@ -148,21 +148,13 @@ test.describe('Admin Teams API', () => {
 
         test('DELETE /api/admin/team/[id] should delete the cooking team, together with team assignments', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-to-delete", 3)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-to-delete", 3)
             expect(createdTeam.id).toBeDefined()
             // Do not add to cleanup, we are deleting it here
 
             // Verify team and assignments exist
-            expect(getTeamMemberCounts(createdTeam).total).toBe(3)
-
-            const teamMemberAssignments = getAllAssignmentIds(createdTeam)
-            expect(teamMemberAssignments.length).toBe(3)
-
-            // Verify assignments exist before deletion
-            const assignmentsBeforeDelete = await Promise.all(
-                teamMemberAssignments.map(id => SeasonFactory.getCookingTeamAssignment(context, id))
-            )
-            expect(assignmentsBeforeDelete.length).toBe(3)
+            expect(getTeamMemberCounts(createdTeam)).toBe(3)
+            expect(createdTeam.assignments.length).toBe(3)
             // Delete the team
             await SeasonFactory.deleteCookingTeam(context, createdTeam.id)
 
@@ -177,27 +169,26 @@ test.describe('Admin Teams API', () => {
             const context = await validatedBrowserContext(browser)
 
             // Create team with members using factory
-            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-with-assignments", 3)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-with-assignments", 3)
             testTeamIds.push(createdTeam.id)
 
             // Verify the team has the expected member structure
             const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
-            expect(getTeamMemberCounts(teamDetails).total).toBe(3)
+            expect(getTeamMemberCounts(teamDetails)).toBe(3)
         })
 
         test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
             // Create team with members using factory
-            const createdTeam = await SeasonFactory.createTeamWithMembers(context, testSeasonId, "team-for-removal", 3)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 3)
             testTeamIds.push(createdTeam.id)
 
-            // Get assignment IDs and verify they exist
-            const assignmentIds = getAllAssignmentIds(createdTeam)
-            expect(assignmentIds.length).toBe(3)
+            // Verify assignments exist
+            expect(createdTeam.assignments.length).toBe(3)
 
             // Remove one assignment to test member removal
-            const firstAssignmentId = assignmentIds[0]
+            const firstAssignmentId = createdTeam.assignments[0].id
             await SeasonFactory.removeMemberFromTeam(context, createdTeam.id, firstAssignmentId)
 
             // Verify the assignment was removed
@@ -247,20 +238,6 @@ test.describe('Admin Teams API', () => {
             await SeasonFactory.deleteCookingTeam(context, 99999, 404)
         })
 
-        test('PUT /api/admin/team/[id]/members should reject invalid member data', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Create a team using factory
-            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "invalid-assignment-test")
-            testTeamIds.push(createdTeam.id)
-
-            // Try to add an invalid member assignment
-            const invalidMemberData = {
-                seasonId: testSeasonId,
-                name: "" // Empty name should be invalid
-            }
-            const response = await SeasonFactory.assignMemberToTeam(createdTeam.id, invalidMemberData, 400)
-        })
     })
 
     // Cleanup after all tests

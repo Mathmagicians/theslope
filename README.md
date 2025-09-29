@@ -54,33 +54,6 @@ Run on development server (localhost:3000)
 - There is a Makefile to test the heynabo api. you must have an .env file with username and password. Fx the following will return a list of neighbors:
 ```make heynabo-get-nhbrs```
 
-## Design ideas
- - understory.io - pantone colors, with contrasting type colors 
- - round corner box with a paired box neighbour dd
- - semi transparent menu stays at the top (but with offset) in mobile mode / and a hamburger menu / slides out - in
- - weird lenses for background and images on top
-
-## Colors - pantone color of the year 2025 / deliciousness palette
-<style>
-    m { color: #a47864 }
-    pink { color:  #fa7b95 }
-    orange { color: #ec6a37 }
-    winery { color: #7e212a }
-    party { color: #c4516c }
-    peach { color: #ffb482 }
-    bonbon { color: #f1a9cf }
-    caramel { color: #ca815a}
-</style>
-
-- <m>mocha mouse</m> #a47864
-- <pink>pink lemonade</pink> #fa7b95
-- <orange>mandarin orange</orange> #b7d7b0
-- <winery>winery</winery> #b7e212a
-- <party>party punch</party> #c4516c
-- <peach>peach cobbler</peach> #ffb482
-- <bonbon>bonbon</bonbon> #f1a9cf
-- <caramel>caramel</caramel> #ca815a
-
 
 ## 📚 Documentation
 ### NPM
@@ -109,22 +82,20 @@ After creating the database, update the database ID in `wrangler.toml`.
 
 ##### Schema Management
 1. Define your data models in `prisma/schema.prisma`
-2. Validate the schema: `npx prisma format`
-3. Generate migration SQL:
+2. Generate migration:
    ```bash
-   npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0001_initial.sql
+   # Initial migration
+   make prisma-create-migration name=initial
+
+   # Subsequent migrations
+   make prisma-create-migration name=add_feature_name
    ```
-   For subsequent migrations with a new sequence number:
-   ```bash
-   npx prisma migrate diff --from-migrations ./migrations --to-schema-datamodel ./prisma/schema.prisma --script --output ./migrations/0002_migration_name.sql
-   ```
+3. Generate Prisma client: `make d1-prisma`
 4. Apply migrations:
-   - Local: `npm run db:migrate:local`
-   - Production: `npm run db:migrate`
-5. Seed the database:
-   - Local: `npm run db:seed:local`
-   - Production: `npx wrangler d1 execute theslope --file migrations/seed/seed.sql --remote`
-6. Generate Prisma client: `npm run db:generate-client`
+   - Local: `make d1-migrate-local` (applies migrations + seeds)
+   - Dev: `make d1-migrate-dev`
+   - Production: `make d1-migrate-prod`
+   - All: `make d1-migrate-all`
 
 > ⚠️ Important: Follow [Cloudflare's guidelines](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/) for D1 and Prisma, not the standard Prisma migration model.
 

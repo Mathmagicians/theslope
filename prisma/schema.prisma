@@ -41,6 +41,7 @@ enum Weekday {
 enum TicketType {
   ADULT
   CHILD
+  BABY
 }
 
 enum DinnerMode {
@@ -175,27 +176,23 @@ model Invoice {
 
 // Cooking teams are seasonal, and created by the system administrator
 model CookingTeam {
-  id            Int                     @id @default(autoincrement())
-  seasonId      Int
-  season        Season                  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  name          String
-  dinners       DinnerEvent[]
-  chefs         CookingTeamAssignment[] @relation("Chefs")
-  cooks         CookingTeamAssignment[] @relation("Cooks")
-  juniorHelpers CookingTeamAssignment[] @relation("JuniorHelpers")
+  id          Int                     @id @default(autoincrement())
+  seasonId    Int
+  season      Season                  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name        String
+  dinners     DinnerEvent[]
+  assignments CookingTeamAssignment[]
 }
 
 model CookingTeamAssignment {
-  id                     Int          @id @default(autoincrement())
-  chefForcookingTeamId   Int?
-  chefForCcookingTeam    CookingTeam? @relation("Chefs", fields: [chefForcookingTeamId], references: [id], onDelete: Cascade)
-  cookForcookingTeamId   Int?
-  cookForCcookingTeam    CookingTeam? @relation("Cooks", fields: [cookForcookingTeamId], references: [id], onDelete: Cascade)
-  juniorForcookingTeamId Int?
-  juniorForCcookingTeam  CookingTeam? @relation("JuniorHelpers", fields: [juniorForcookingTeamId], references: [id], onDelete: Cascade)
-  inhabitantId           Int
-  inhabitant             Inhabitant   @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  role                   Role
+  id            Int         @id @default(autoincrement())
+  cookingTeamId Int
+  cookingTeam   CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
+  inhabitantId  Int
+  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  role          Role
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }
 
 model Season {

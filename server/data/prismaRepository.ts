@@ -435,7 +435,7 @@ export async function deleteCookingTeamAssignments(d1Client: D1Database, assignm
     }
 }
 
-export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<CookingTeam[]> {
+export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<any[]> {
     console.info(`👥 > TEAM > [GET] Fetching teams${seasonId ? ` for season ${seasonId}` : ''}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -444,17 +444,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
             where: seasonId ? {seasonId} : undefined,
             include: {
                 season: true,
-                chefs: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                cooks: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                juniorHelpers: {
+                assignments: {
                     include: {
                         inhabitant: true
                     }
@@ -465,8 +455,16 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
             }
         })
 
+        // Transform assignments array into role-based arrays for backward compatibility
+        const transformedTeams = teams.map(team => ({
+            ...team,
+            chefs: team.assignments.filter(a => a.role === 'CHEF'),
+            cooks: team.assignments.filter(a => a.role === 'COOK'),
+            juniorHelpers: team.assignments.filter(a => a.role === 'JUNIORHELPER')
+        }))
+
         console.info(`👥 > TEAM > [GET] Successfully fetched ${teams.length} teams`, 'Season: ', seasonId ? ` for season ${seasonId}` : '')
-        return teams
+        return transformedTeams
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching teams for season ${seasonId}` , error)
         console.error(`👥 > TEAM > [GET] ${h3e.message}`, error)
@@ -474,7 +472,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
     }
 }
 
-export async function fetchTeam(d1Client: D1Database, id: number): Promise<CookingTeam | null> {
+export async function fetchTeam(d1Client: D1Database, id: number): Promise<any | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -483,17 +481,7 @@ export async function fetchTeam(d1Client: D1Database, id: number): Promise<Cooki
             where: {id},
             include: {
                 season: true,
-                chefs: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                cooks: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                juniorHelpers: {
+                assignments: {
                     include: {
                         inhabitant: true
                     }
@@ -504,10 +492,17 @@ export async function fetchTeam(d1Client: D1Database, id: number): Promise<Cooki
 
         if (team) {
             console.info(`👥 > TEAM > [GET] Found team ${team.name} (ID: ${team.id})`)
+            // Transform assignments array into role-based arrays for backward compatibility
+            return {
+                ...team,
+                chefs: team.assignments.filter(a => a.role === 'CHEF'),
+                cooks: team.assignments.filter(a => a.role === 'COOK'),
+                juniorHelpers: team.assignments.filter(a => a.role === 'JUNIORHELPER')
+            }
         } else {
             console.info(`👥 > TEAM > [GET] No team found with ID ${id}`)
         }
-        return team
+        return null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching team with ID ${id}`, error)
         console.error(`👥 > TEAM > [GET] ${h3e.message}`, error)

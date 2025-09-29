@@ -1,3 +1,4 @@
+import type {Browser} from "@playwright/test"
 import {authFiles} from './config'
 const { adminFile } = authFiles
 

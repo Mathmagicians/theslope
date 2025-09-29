@@ -16,7 +16,7 @@ export class HouseholdFactory {
             heynaboId: 0,
             pbsId: 0,
             name: salt('Test Household', testSalt),
-            address: salt('123 Test Street', testSalt),
+            address: salt('123 Andeby', testSalt),
             movedInDate: now
         }
     }
@@ -53,10 +53,15 @@ export class HouseholdFactory {
      */
     static readonly createHouseholdWithInhabitants = async (
         context: BrowserContext,
-        householdData?: any, // FIXME create zod schema for household and use as type
+        name: string = 'Test Household', // FIXME create zod schema for household and use as type
         inhabitantCount: number = 2
     ): Promise<{household: any, inhabitants: any[]}> => {
-        throw new Error('createHouseholdWithInhabitants: Not implemented - mock method')
+        const household = await this.createHousehold(context, name)
+        const inhabitants = await Promise.all(
+            Array(inhabitantCount).fill(0)
+                .map((_, i) => this.createInhabitantForHousehold(context, household.id, `Inhabitant ${i}`))
+        )
+        return {household, inhabitants}
     }
 
     /**

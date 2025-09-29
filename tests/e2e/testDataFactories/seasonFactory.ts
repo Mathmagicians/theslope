@@ -1,8 +1,15 @@
 import {formatDate} from "../../../app/utils/date"
-import type {Season} from "../../../app/composables/useSeasonValidation"
-import {useSeasonValidation} from "../../../app/composables/useSeasonValidation"
+import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
+import {
+    useCookingTeamValidation,
+    type CookingTeam,
+    type CookingTeamWithMembers,
+    type CookingTeamAssignment,
+    type TeamRole
+} from "../../../app/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
 import {expect, BrowserContext} from "@playwright/test";
+import {HouseholdFactory} from "./householdFactory";
 
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 const {salt, headers} = testHelpers
@@ -92,22 +99,18 @@ export class SeasonFactory {
         return null
     }
 
-    // === SEASON AGGREGATE METHODS ===
-
-    /**
-     * Create a season with cooking teams (for 2a, 2b test scenarios)
-     */
     static readonly createSeasonWithTeams = async (
         context: BrowserContext,
-        seasonData?: Partial<Season>,
+        seasonData: Partial<Season> = this.defaultSeason().season,
         teamCount: number = 2
     ): Promise<{ season: Season, teams: any[] }> => {
-        throw new Error('createSeasonWithTeams: Not implemented - mock method')
+        const season = await this.createSeason(context, seasonData)
+        const teams = await Promise.all(
+            Array(teamCount).fill(0).map(() => this.createCookingTeamForSeason(context, season.id as number))
+        )
+        return {season, teams}
     }
 
-    /**
-     * Create dinner events for season (for 2a, 2b test scenarios)
-     */
     static readonly createDinnerEventsForSeason = async (
         context: BrowserContext,
         seasonId: number,
@@ -132,66 +135,52 @@ export class SeasonFactory {
 
     // === COOKING TEAM METHODS ===
 
-    /**
-     * Create cooking team for existing season (for 1a, 1b test scenarios)
-     */
     static readonly createCookingTeamForSeason = async (
         context: BrowserContext,
         seasonId: number,
         teamName: string = 'TestTeam',
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<CookingTeam> => {
         const teamData = {
-            name: salt(teamName, Date.now().toString()),
+            name: salt(teamName),
             seasonId: seasonId
         }
-
         const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
             headers: headers,
             data: teamData
         })
-
         const status = response.status()
         const responseBody = await response.json()
-
         expect(status, 'Unexpected status').toBe(expectedStatus)
-
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new team ID').toBeDefined()
             expect(responseBody.seasonId).toBe(seasonId)
         }
-
         return responseBody
     }
 
-    /**
-     * Create cooking team with member assignments (for 1a, 1b test scenarios)
-     */
-    static readonly createTeamWithMembers = async (
+    static readonly createCookingTeamWithMembersForSeason = async (
         context: BrowserContext,
         seasonId: number,
-        teamName: string = 'TestTeam',
+        teamName: string = salt('TestTeam'),
         memberCount: number = 3
     ): Promise<any> => {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
-        // Then add the specified number of members
-        const members = []
-        for (let i = 0; i < memberCount; i++) {
-            const memberData = {
-                seasonId: seasonId,
-                name: salt(`TestMember${i + 1}`),
-                role: i === 0 ? 'CHEF' : (i === 1 ? 'COOK' : 'JUNIOR_HELPER') // Vary roles
-            }
+        // Create household with inhabitants
+        const household = await HouseholdFactory.createHouseholdWithInhabitants(context, `House-of-${teamName}`, memberCount)
 
-            const member = await this.assignMemberToTeam(context, team.id, memberData)
-            members.push(member)
-        }
+        // Assign members to team with different roles
+        const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
+        await Promise.all(
+            household.inhabitants.map((inhabitant: any, index: number) =>
+                this.assignMemberToTeam(context, team.id, inhabitant.id, roles[index % roles.length])
+            )
+        )
 
         // Return team with member assignments populated
-        const teamWithMembers = await this.getCookingTeamById(context, team.id)
-        return teamWithMembers
+        return await this.getCookingTeamById(context, team.id)
     }
 
     static readonly getCookingTeamById = async (
@@ -235,12 +224,18 @@ export class SeasonFactory {
     static readonly assignMemberToTeam = async (
         context: BrowserContext,
         teamId: number,
-        memberData: any,
+        inhabitantId: number,
+        role: TeamRole,
         expectedStatus: number = 201
     ): Promise<any> => {
-        const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/assignments`, {
+        const teamAssignmentData = {
+            teamId: teamId,
+            inhabitantId: inhabitantId,
+            role: role
+        }
+        const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/assignment`, {
             headers: headers,
-            data: memberData
+            data: teamAssignmentData
         })
 
         const status = response.status()
@@ -255,10 +250,18 @@ export class SeasonFactory {
     static readonly removeMemberFromTeam = async (
         context: BrowserContext,
         teamId: number,
-        memberAssignmentIds: number,
+        assignmentId: number,
         expectedStatus: number = 200
-    ): Promise<any[]> => {
-        throw new Error('assignMembersToTeam: Not implemented - mock method')
+    ): Promise<any> => {
+        const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/assignment/${assignmentId}`)
+
+        const status = response.status()
+        expect(status, 'Unexpected status').toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return await response.json()
+        }
+        return null
     }
 
     /**

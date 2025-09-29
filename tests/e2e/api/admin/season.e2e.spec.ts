@@ -16,7 +16,7 @@ test("PUT should create a new season and GET should retrieve it", async ({browse
     const context = await validatedBrowserContext(browser)
     const created = await SeasonFactory.createSeason(context, newSeason.season)
     // Save ID for cleanup
-    createdSeasonIds.push(created.id)
+    createdSeasonIds.push(created.id as number)
 
     // Verify response
     expect(created).toHaveProperty('shortName')
@@ -38,10 +38,10 @@ test("POST should update an existing season", async ({browser}) => {
     const context = await validatedBrowserContext(browser)
     const created = await SeasonFactory.createSeason(context, newSeason.season)
     // Save ID for cleanup
-    createdSeasonIds.push(created.id)
+    createdSeasonIds.push(created.id as number)
     const seasonId = created.id
 
-    const initialHolidayCount = newSeason.season.holidays.length
+    const initialHolidayCount = newSeason.season.holidays?.length
 
     // Add an extra holiday period to the existing holidays
     const holidayStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now

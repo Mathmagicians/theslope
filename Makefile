@@ -15,40 +15,64 @@ d1-prisma: prisma-to-zod
 	@npx prisma validate
 	@npm run db:generate-client
 
-d1-migrate: d1-prisma
-	@echo "🏗️ Generating db client from model, and migrating all d1 databases to new data model"
-	@npx prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script --output migrations/0001_initial.sql
+prisma-create-migration:
+	@echo "📝 Creating new Prisma migration..."
+	@npx prisma migrate dev --name $(name) --create-only
+	@echo "✅ Migration created in prisma/migrations/"
+	@echo "🔄 Flattening for Wrangler..."
+	@$(MAKE) prisma-flatten-migrations
 
-d1-migrate-local: d1-migrate
-	$(info "🏗️ Migrating schemas of local database")
-	@yes | npm run db:migrate:local
+prisma-flatten-migrations:
+	@echo "🔄 Flattening Prisma migrations for Wrangler..."
+	@mkdir -p migrations
+	@counter=1; \
+	for dir in $$(ls -d prisma/migrations/[0-9]*_*/ 2>/dev/null | sort); do \
+		if [ -f "$${dir}migration.sql" ]; then \
+			dirname=$${dir%/}; \
+			desc_name=$${dirname##*_}; \
+			padded_num=$$(printf "%04d" $$counter); \
+			target="migrations/$${padded_num}_$${desc_name}.sql"; \
+			if [ ! -f "$$target" ]; then \
+				cp "$${dir}migration.sql" "$$target"; \
+				echo "  ✅ Created $${padded_num}_$${desc_name}.sql"; \
+			fi; \
+			counter=$$((counter + 1)); \
+		fi \
+	done
+	@echo "✅ Migrations flattened!"
+
+d1-migrate-local:
+	@echo "🏗️ Applying migrations to local database"
+	@npm run db:migrate:local
 	@npm run db:seed:local
 
-d1-migrate-dev: d1-migrate
-	$(info "🏗️ Migrating schemas of dev database (theslope --remote)")
-	@yes | npm run db:migrate
+d1-migrate-dev:
+	@echo "🏗️ Applying migrations to dev database (theslope --remote)"
+	@npm run db:migrate
 	@npm run db:seed
 
-
-d1-migrate-prod: d1-migrate
-	$(info "🏗️ Migrating schemas of production database")
-	@yes | npm run db_prod:migrate
-	@npm run db:seed
+d1-migrate-prod:
+	@echo "🏗️ Applying migrations to production database"
+	@npm run db_prod:migrate
+	@npm run db_prod:seed
 
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
-	$(info '🤖Will build d1 databases - local and remote - using Prisma migrations')
-
-d1-create-migration:
-	@ npx wrangler d1 migrations create theslope update_delete_constraints_1
+	@echo "✅ Applied migrations to all databases"
 
 d1-list-users-local:
-	@npx wrangler d1 execute theslope --command  "SELECT * FROM user"
+	@npx wrangler d1 execute theslope --command  "SELECT * FROM User"
 
 d1-list-tables:
 	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
 
 d1-list-tables-local:
 	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
+
+logs-dev:
+	@npx wrangler tail theslope --format pretty
+
+logs-prod:
+	@npx wrangler tail theslope-prod --env prod --format pretty
 
 .env.example:
 	@cat .env | sed 's/=.*$$/=/g' > .env.examples
