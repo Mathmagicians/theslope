@@ -28,12 +28,9 @@ export default defineEventHandler(async (event) => {
     try {
         teamData = await readValidatedBody(event, PutTeamSchema.parse)
     } catch (error) {
-        console.error("👥 > TEAM > [PUT] Input validation error:", error)
-        throw createError({
-            statusCode: 400,
-            message: 'Invalid input data',
-            cause: error
-        })
+        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Input validation error", error)
+        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 
     // Database operations try-catch - separate concerns

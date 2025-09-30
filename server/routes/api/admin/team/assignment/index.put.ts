@@ -1,64 +1,40 @@
-// PUT /api/admin/team/[id]/members - Add team members
+// PUT /api/admin/team/assignment - Create single team member assignment
 
-import {defineEventHandler, createError, getValidatedRouterParams, readBody} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
+import {createTeamAssignment} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
 
 const {h3eFromCatch} = eventHandlerHelper
 
-// Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Team ID must be a positive integer')
-})
-
-// Get the validation utilities from our composable
-const {validateBulkMemberAssignment} = useCookingTeamValidation()
+// Get schema from composable and refine for create operation (remove optional id)
+const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
+const TeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true })
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id, validatedData
+    let assignmentData
     try {
-        // Validate and get the ID from route params using Zod
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        id = params.id
-
-        // Read and validate the body
-        const rawBody = await readBody(event)
-
-        // Validate using the bulk member assignment schema
-        validatedData = validateBulkMemberAssignment(rawBody)
-
-        // Ensure the teamId matches the route parameter
-        if (validatedData.teamId !== id) {
-            throw createError({
-                statusCode: 400,
-                message: 'Team ID in body must match route parameter'
-            })
-        }
+        assignmentData = await readValidatedBody(event, TeamAssignmentCreateSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('👥 > TEAM > [PUT MEMBERS] Input validation error', error)
-        console.error(`👥 > TEAM > [PUT MEMBERS] ${h3e.statusMessage}`, error)
+        const h3e = h3eFromCatch('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
+        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👥 > TEAM > [PUT MEMBERS] Adding ${validatedData.members.length} members to team ${id}`)
-
-        // TODO: Implement member assignment logic
-        // This would need database operations to assign members to teams
-        // For now, return success status
-
-        console.info(`👥 > TEAM > [PUT MEMBERS] Successfully added members to team ${id}`)
-
-        return { success: true, message: 'Members added successfully' }
+        console.log(`👥🔗 > ASSIGNMENT > [PUT] Creating assignment for inhabitant ${assignmentData.inhabitantId} to team ${assignmentData.teamId} as ${assignmentData.role}`)
+        const assignment = await createTeamAssignment(d1Client, assignmentData.teamId, assignmentData.inhabitantId, assignmentData.role)
+        console.info(`👥🔗 > ASSIGNMENT > [PUT] Successfully created assignment with ID ${assignment.id}`)
+        setResponseStatus(event, 201)
+        return assignment
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > TEAM > [PUT MEMBERS] Error adding members to team ${id}`, error)
-        console.error(`👥 > TEAM > [PUT MEMBERS] ${h3e.statusMessage}`, error)
+        const h3e = h3eFromCatch(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
+        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }
 })

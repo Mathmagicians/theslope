@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useCookingTeamValidation} from '../../../../app/composables/useCookingTeamValidation'
 import {SeasonFactory} from "../../testDataFactories/seasonFactory"
+import {HouseholdFactory} from "../../testDataFactories/householdFactory"
 import testHelpers from '../../testHelpers'
 
 const {validateCookingTeam, getTeamMemberCounts} = useCookingTeamValidation()
@@ -63,12 +64,15 @@ test.describe('Admin Teams API', () => {
             expect(assignments.map(a => a.id)).toEqual(memberAssignmentIds)
 
             // Now delete the team
-            const deleteResponse = SeasonFactory.deleteCookingTeam(context, testTeam.id)
+            await SeasonFactory.deleteCookingTeam(context, testTeam.id)
 
             const assignmentsAfterDelete = await Promise.all(
                 memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id, 404)
                 ))
-            expect(assignmentsAfterDelete.length).toBe(0)
+            expect(assignmentsAfterDelete.filter(a => a !== null).length).toBe(0)
+
+            // Cleanup household
+            await HouseholdFactory.deleteHousehold(context, testTeam.householdId)
         })
 
         test('GET /api/admin/team should list all teams', async ({browser}) => {
@@ -160,6 +164,9 @@ test.describe('Admin Teams API', () => {
 
             // Verify team is deleted
             await SeasonFactory.getCookingTeamById(context, createdTeam.id, 404)
+
+            // Cleanup household
+            await HouseholdFactory.deleteHousehold(context, createdTeam.householdId)
         })
     })
 
@@ -171,6 +178,7 @@ test.describe('Admin Teams API', () => {
             // Create team with members using factory
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-with-assignments", 3)
             testTeamIds.push(createdTeam.id)
+            testHouseholdIds.push(createdTeam.householdId)
 
             // Verify the team has the expected member structure
             const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
@@ -183,6 +191,7 @@ test.describe('Admin Teams API', () => {
             // Create team with members using factory
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 3)
             testTeamIds.push(createdTeam.id)
+            testHouseholdIds.push(createdTeam.householdId)
 
             // Verify assignments exist
             expect(createdTeam.assignments.length).toBe(3)
@@ -248,6 +257,12 @@ test.describe('Admin Teams API', () => {
         await Promise.all(testTeamIds.map(id => SeasonFactory.deleteCookingTeam(context, id).catch(error => {
             // Ignore cleanup errors
             console.warn(`Failed to cleanup team ${id}:`, error)
+        })))
+
+        // Clean up all created households
+        await Promise.all(testHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(error => {
+            // Ignore cleanup errors
+            console.warn(`Failed to cleanup household ${id}:`, error)
         })))
 
         // Clean up the test season

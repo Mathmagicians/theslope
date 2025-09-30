@@ -242,6 +242,23 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]
     }
 }
 
+export async function deleteHousehold(d1Client: D1Database, id: number): Promise<Household> {
+    console.info(`🏠 > HOUSEHOLD > [DELETE] Deleting household with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const deletedHousehold = await prisma.household.delete({
+            where: {id}
+        })
+        console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${deletedHousehold.name} with ID ${id}`)
+        return deletedHousehold
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error deleting household with id ${id}`, error)
+        console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
 /*** SEASON AGGREGATE ROOT - aggregates team assignments, teams, and dinner events ***/
 
 /*** SEASON ***/
@@ -411,6 +428,58 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // - Strong to Season (team cannot exist without season)
 // - Strong to CookingTeamAssignments (assignments cannot exist without team)
 // - Weak to DinnerEvents (events can exist without assigned team)
+
+export async function createTeamAssignment(d1Client: D1Database, teamId: number, inhabitantId: number, role: string): Promise<any> {
+    console.info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${inhabitantId} in team ${teamId} with role ${role}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const assignment = await prisma.cookingTeamAssignment.create({
+            data: {
+                cookingTeamId: teamId,
+                inhabitantId: inhabitantId,
+                role: role
+            },
+            include: {
+                inhabitant: true,
+                cookingTeam: true
+            }
+        })
+
+        console.info(`👥🔗 > ASSIGNMENT > [CREATE] Successfully created team assignment with ID ${assignment.id}`)
+        return assignment
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error creating team assignment for inhabitant ${inhabitantId}`, error)
+        console.error(`👥🔗 > ASSIGNMENT > [CREATE] ${h3e.message}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchTeamAssignment(d1Client: D1Database, id: number): Promise<any | null> {
+    console.info(`👥🔗 > ASSIGNMENT > [GET] Fetching team assignment with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const assignment = await prisma.cookingTeamAssignment.findUnique({
+            where: { id },
+            include: {
+                inhabitant: true,
+                cookingTeam: true
+            }
+        })
+
+        if (assignment) {
+            console.info(`👥🔗 > ASSIGNMENT > [GET] Found assignment ID ${assignment.id}`)
+        } else {
+            console.info(`👥🔗 > ASSIGNMENT > [GET] No assignment found with ID ${id}`)
+        }
+        return assignment
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching team assignment with ID ${id}`, error)
+        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.message}`, error)
+        throw h3e
+    }
+}
 
 export async function deleteCookingTeamAssignments(d1Client: D1Database, assignmentIds: number[]): Promise<number> {
     if (assignmentIds.length === 0) {

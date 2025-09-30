@@ -10,9 +10,10 @@ const BaseCookingTeamSchema = z.object({
 // Team member role schema
 const TeamRoleSchema = z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
 
-// Team assignment schema
+// Base team assignment schema (includes teamId for API operations)
 const CookingTeamAssignmentSchema = z.object({
     id: z.number().int().positive().optional(),
+    teamId: z.number().int().positive(),
     inhabitantId: z.number().int().positive(),
     role: TeamRoleSchema
 })
@@ -25,20 +26,10 @@ const CookingTeamWithMembersSchema = CookingTeamSchema.extend({
     assignments: z.array(CookingTeamAssignmentSchema).default([])
 })
 
-// Bulk member assignment schema
-const BulkMemberAssignmentSchema = z.object({
-    teamId: z.number().int().positive(),
-    members: z.array(z.object({
-        inhabitantId: z.number().int().positive(),
-        role: TeamRoleSchema
-    })).min(1, 'Der skal tildeles mindst ét medlem')
-})
-
 // Export types early
 export type CookingTeam = z.infer<typeof CookingTeamSchema>
 export type CookingTeamWithMembers = z.infer<typeof CookingTeamWithMembersSchema>
 export type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
-export type BulkMemberAssignment = z.infer<typeof BulkMemberAssignmentSchema>
 export type TeamRole = z.infer<typeof TeamRoleSchema>
 
 /**
@@ -59,10 +50,6 @@ export const useCookingTeamValidation = () => {
         return CookingTeamAssignmentSchema.parse(assignment)
     }
 
-    const validateBulkMemberAssignment = (assignment: unknown): BulkMemberAssignment => {
-        return BulkMemberAssignmentSchema.parse(assignment)
-    }
-
     // Utility functions for team member counts
     const getTeamMemberCounts = (team: CookingTeamWithMembers):number => {
         return team.assignments.length
@@ -80,11 +67,9 @@ export const useCookingTeamValidation = () => {
         CookingTeamWithMembersSchema,
         TeamRoleSchema,
         CookingTeamAssignmentSchema,
-        BulkMemberAssignmentSchema,
         validateCookingTeam,
         validateCookingTeamWithMembers,
         validateMemberAssignment,
-        validateBulkMemberAssignment,
         getTeamMemberCounts,
         getAssignmentIdsForRole
     }

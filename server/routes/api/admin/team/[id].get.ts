@@ -26,22 +26,23 @@ export default defineEventHandler(async (event) => {
         throw h3e
     }
 
-    let team
     // Database operations try-catch - separate concerns
     try {
         console.info("👥 > TEAM > [GET] Fetching team", "id", id)
-        team = await fetchTeam(d1Client, id)
-    } catch (error: any) {
-        const h3e = h3eFromCatch('Could not fetch team', error)
-        console.warn(`"👥 > TEAM > [GET] Error fetching team: ${h3e.statusMessage}`)
-        throw h3e
-    }
+        const team = await fetchTeam(d1Client, id)
 
-    if (!team) {
-        const h3e = h3eFromCatch('Record does not exist', new Error(`Team with ID ${id} not found`))
-        console.warn(`👨‍💻 > USER > Validation failed: ${h3e.statusMessage}`)
+        if (!team) {
+            throw createError({
+                statusCode: 404,
+                message: `Team with ID ${id} not found`
+            })
+        }
+
+        console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
+        return team
+    } catch (error: any) {
+        const h3e = h3eFromCatch(`👥 > TEAM > [GET] Error fetching team with id ${id}`, error)
+        console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
-    console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
-    return team
 })

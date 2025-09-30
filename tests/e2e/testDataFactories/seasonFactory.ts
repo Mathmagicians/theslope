@@ -166,18 +166,22 @@ export class SeasonFactory {
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
         // Create household with inhabitants
-        const household = await HouseholdFactory.createHouseholdWithInhabitants(context, `House-of-${teamName}`, memberCount)
+        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(context, `House-of-${teamName}`, memberCount)
 
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
         await Promise.all(
-            household.inhabitants.map((inhabitant: any, index: number) =>
+            householdWithInhabitants.inhabitants.map((inhabitant: any, index: number) =>
                 this.assignMemberToTeam(context, team.id, inhabitant.id, roles[index % roles.length])
             )
         )
 
-        // Return team with member assignments populated
-        return await this.getCookingTeamById(context, team.id)
+        // Return team with member assignments and household for cleanup
+        const teamWithAssignments = await this.getCookingTeamById(context, team.id)
+        return {
+            ...teamWithAssignments,
+            householdId: householdWithInhabitants.household.id
+        }
     }
 
     static readonly getCookingTeamById = async (
