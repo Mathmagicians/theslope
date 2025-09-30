@@ -40,13 +40,21 @@ Run on development server (localhost:3000)
 
 ## Tech stuff
 
-### T⌨ech Stack
+### Tech Stack
 - Tailwind CSS - frontend css framework
 - Nuxt.js 3  + typescript - frontend framework
 - Nuxt.js 3  + typescript - server backend
 - Cloudflare - serverless deployment  / cloud provider
+- SQLite - database D1 from cloudflare. Note, does not support transactions
 - CICD - Github actions
 - Andre cloud resourcer - Terraform
+
+Note about databse - it doesnt support transactions:
+```
+  ℹ 👥 > TEAM > [CREATE] Creating team team-for-removal-1759187480120                                                                  01.11.20
+[01.11.20] ℹ prisma:warn Cloudflare D1 does not support transactions yet. 
+When using Prisma's D1 adapter, implicit & explicit transactions will be ignored and run as individual queries, which breaks the guarantees of the ACID properties of transactions. For more details see https://pris.ly/d/d1-transactions
+```
 
 ### 3️⃣ 3rd party services
 #### Heynabo

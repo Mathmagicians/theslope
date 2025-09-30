@@ -30,22 +30,8 @@ export default defineEventHandler(async (event) => {
         console.info(`🌞 DELETE SEASON >  Successfully deleted season ${deletedSeason.shortName}`)
         return deletedSeason
     } catch (error) {
-        const h3e = h3eFromCatch('🌞 > DELETE SEASON >  Error deleting season:', error)
-        console.error(h3e.message)
-
-        // For "not found" errors, return 404
-        if (error?.message?.includes('Record to delete does not exist')) {
-            throw createError({
-                statusCode: 404,
-                message: 'Season not found',
-                cause: error
-            })
-        }
-
-        throw createError({
-            statusCode: 500,
-            message: '🌞 > SEASON > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`🌞 > DELETE SEASON > Error deleting season with id ${id}`, error)
+        console.error(`🌞 > DELETE SEASON > ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

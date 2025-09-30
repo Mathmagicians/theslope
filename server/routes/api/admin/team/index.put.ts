@@ -3,6 +3,9 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
+const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
 const {CookingTeamSchema} = useCookingTeamValidation()
@@ -41,11 +44,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 201)
         return savedTeam
     } catch (error) {
-        console.error("👥 > TEAM > Error creating team:", error)
-        throw createError({
-            statusCode: 500,
-            message: '👥 > TEAM > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Error creating team", error)
+        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

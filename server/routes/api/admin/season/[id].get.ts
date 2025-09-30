@@ -1,6 +1,9 @@
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3";
 import {fetchSeason} from "~~/server/data/prismaRepository"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import z from "zod"
+
+const {h3eFromCatch} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.number({ coerce: true }).positive().int(),
@@ -31,11 +34,8 @@ export default defineEventHandler(async (event) => {
         console.info(`🌞 > SEASON > Returning season ${season?.shortName}`)
         return season
     } catch (error) {
-        console.error("🌞 > SEASON > Error getting season:", error)
-        throw createError({
-            statusCode: 500,
-            message: '🌞 > SEASON > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

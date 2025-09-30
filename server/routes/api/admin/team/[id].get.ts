@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('Record does not exist', 'Input validation error for team')
+        const h3e = h3eFromCatch('👥 > TEAM > [GET] Input validation error for team', error)
         console.warn("👥 > TEAM > [GET] Input validation error:", h3e.statusMessage)
         throw h3e
     }

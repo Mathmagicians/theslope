@@ -1,7 +1,10 @@
-import {defineEventHandler, createError} from "h3"
+import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {deleteUser} from "~~/server/data/prismaRepository"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {ZodError} from 'zod'
 import * as z from 'zod'
+
+const {h3eFromCatch} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -18,15 +21,9 @@ export default defineEventHandler(async (event) => {
         const { id } = await getValidatedRouterParams(event, idSchema.parse)
         userId = id
     } catch (error) {
-        const validationMessage = error instanceof ZodError
-            ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
-            : 'Invalid user ID'
-        console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
-        throw createError({
-            statusCode: 400,
-            message: '💻 > USER > Invalid user ID',
-            cause: error
-        })
+        const h3e = h3eFromCatch('👨‍💻 > USER > [DELETE] Input validation error', error)
+        console.error(`👨‍💻 > USER > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 
     // Delete user from database
@@ -36,11 +33,8 @@ export default defineEventHandler(async (event) => {
         console.info(`👨‍💻 > USER > [DELETE] Deleted user ${deletedUser.email}`)
         return deletedUser
     } catch (error) {
-        console.error("👨‍💻 > USER > Error deleting user:", error)
-        throw createError({
-            statusCode: 500,
-            message: '👨‍💻 > USER > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`👨‍💻 > USER > [DELETE] Error deleting user with id ${userId}`, error)
+        console.error(`👨‍💻 > USER > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

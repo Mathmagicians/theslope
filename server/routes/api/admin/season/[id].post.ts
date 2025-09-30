@@ -52,11 +52,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 200)
         return updatedSeason
     } catch (error) {
-        console.error("🌞 > SEASON > Error updating season:", error)
-        throw createError({
-            statusCode: 500,
-            message: '🌞 > SEASON > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
+        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

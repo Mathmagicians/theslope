@@ -3,7 +3,10 @@
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
+
+const {h3eFromCatch} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -42,21 +45,8 @@ export default defineEventHandler(async (event) => {
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        console.error("👥 > TEAM > [POST] Error updating team:", error)
-
-        // For "not found" errors, return 404
-        if (error.message?.includes('Record to update not found')) {
-            throw createError({
-                statusCode: 404,
-                message: 'Team not found',
-                cause: error
-            })
-        }
-
-        throw createError({
-            statusCode: 500,
-            message: '👥 > TEAM > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
+        console.error(`👥 > TEAM > [POST] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

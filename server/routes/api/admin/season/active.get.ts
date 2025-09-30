@@ -1,6 +1,9 @@
 import {defineEventHandler, createError, getQuery, getValidatedQuery} from "h3"
 import z from 'zod'
 import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository";
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
+const {h3eFromCatch} = eventHandlerHelper
 
 const seasonQuerySchema = z.object({
     start: z.string().date().optional(),
@@ -36,11 +39,8 @@ export default defineEventHandler(async (event) => {
         console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
         return season
     } catch (error) {
-        console.error("👨‍💻 > SEASON > Error getting season: ", error)
-        throw createError({
-            statusCode: 500,
-            message: '👨‍💻 > SEASON > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch("👨‍💻 > SEASON > [GET] Error fetching active season", error)
+        console.error(`👨‍💻 > SEASON > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

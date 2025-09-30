@@ -1,9 +1,11 @@
 // h3 utilities are auto-imported in Nuxt 4tha
 import {saveUser} from "~~/server/data/prismaRepository"
 import {useUserValidation, type UserCreate} from "~/composables/useUserValidation"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {ZodError} from "zod"
 
 const {UserCreateSchema} = useUserValidation()
+const {h3eFromCatch} = eventHandlerHelper
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
@@ -16,15 +18,9 @@ export default defineEventHandler(async (event) => {
     try {
         userFromQuery = await getValidatedQuery(event, UserCreateSchema.parse)
     } catch (error) {
-        const validationMessage = error instanceof ZodError
-            ? error.issues.map((issue: any) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
-            : 'Invalid input'
-        console.warn("👨‍💻 > USER > Validation failed:", validationMessage)
-        throw createError({
-            statusCode: 400,
-            message: '💻 > USER > Lousy credentials',
-            cause: error
-        })
+        const h3e = h3eFromCatch('👨‍💻 > USER > [PUT] Input validation error', error)
+        console.error(`👨‍💻 > USER > [PUT] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 
     // Save user to database
@@ -35,11 +31,8 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 201)
         return newUser
     } catch (error) {
-        console.error("👨‍💻 > USER > Error saving user: ", error)
-        throw createError({
-            statusCode: 500,
-            message: '👨‍💻 > USER > Server Error',
-            cause: error
-        })
+        const h3e = h3eFromCatch(`👨‍💻 > USER > [PUT] Error saving user ${userFromQuery.email}`, error)
+        console.error(`👨‍💻 > USER > [PUT] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })
