@@ -721,12 +721,8 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
         const dinnerEvents = await prisma.dinnerEvent.findMany({
             where: seasonId ? {seasonId} : undefined,
             include: {
-                season: true,
-                chef: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
+                Season: true,
+                chef: true,
                 cookingTeam: {
                     include: {
                         season: true
@@ -755,30 +751,11 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
         const dinnerEvent = await prisma.dinnerEvent.findFirst({
             where: {id},
             include: {
-                season: true,
-                chef: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
+                Season: true,
+                chef: true,
                 cookingTeam: {
                     include: {
-                        season: true,
-                        chefs: {
-                            include: {
-                                inhabitant: true
-                            }
-                        },
-                        cooks: {
-                            include: {
-                                inhabitant: true
-                            }
-                        },
-                        juniorHelpers: {
-                            include: {
-                                inhabitant: true
-                            }
-                        }
+                        season: true
                     }
                 }
             }
