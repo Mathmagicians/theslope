@@ -1,6 +1,6 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
+const {h3eFromCatch} = eventHandlerHelper
 
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {fetchTeam} from "~~/server/data/prismaRepository"
@@ -31,18 +31,17 @@ export default defineEventHandler(async (event) => {
         console.info("👥 > TEAM > [GET] Fetching team", "id", id)
         const team = await fetchTeam(d1Client, id)
 
-        if (!team) {
-            throw createError({
-                statusCode: 404,
-                message: `Team with ID ${id} not found`
-            })
+        if (team) {
+            console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
+            return team
         }
-
-        console.info("👥 > TEAM > [GET] fetched team", "name", team.name)
-        return team
     } catch (error: any) {
         const h3e = h3eFromCatch(`👥 > TEAM > [GET] Error fetching team with id ${id}`, error)
         console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
+    throw createError({
+        statusCode: 404,
+        message: `Team with ID ${id} not found`
+    })
 })

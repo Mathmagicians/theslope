@@ -1,8 +1,28 @@
 # TheSlope Project Guide
 
+## Critical Architecture References
+
+### Architecture Decision Records
+**ALWAYS REFERENCE BEFORE IMPLEMENTING:** @docs/adr.md
+
+Key patterns:
+- **ADR-005:** Strong (CASCADE) vs Weak (SET NULL) relationships - Prisma schema onDelete behavior
+- **ADR-004:** Logging standards - `console.info`/`warn`/`error`, never log sensitive data
+- **ADR-003:** Factory pattern for tests in `/tests/e2e/testDataFactories/`
+- **ADR-002:** Separate try-catch for validation vs business logic
+- **ADR-001:** Zod schemas in composables for shared validation
+
+### Prisma Schema
+**ALWAYS REFERENCE BEFORE WORKING WITH ENTITIES:** @prisma/schema.prisma
+
+The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL), and data model.
+
+**Critical:** Repository deletion methods rely on Prisma's automatic cascade handling (D1 has no transactions)
+
 ## Remember Important Files
-- Always check `.github/copilot-instructions.md` for project-specific guidelines and conventions
-- This file contains detailed instructions about code style, patterns, and testing approaches
+- **REFERENCE** @docs/adr.md for architectural patterns before implementation
+- **REFERENCE** @prisma/schema.prisma for entity relationships and deletion behavior
+- `.github/copilot-instructions.md` for project-specific guidelines and conventions
 
 ## Commands
 - **Dev**: `npm run dev` - Run development server (localhost:3000)

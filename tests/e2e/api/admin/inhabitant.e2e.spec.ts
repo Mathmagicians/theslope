@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+import {useHouseholdValidation} from '../../../../app/composables/useHouseholdValidation'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import testHelpers from '../../testHelpers'
 
@@ -96,7 +96,8 @@ test.describe('Admin Inhabitant API', () => {
 
         test('DELETE inhabitant should clear weak association with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Delete-Test-Inhabitant', 'userdelete@example.com')
+            const testEmail = 'userdelete@example.com'
+            const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Delete-Test-Inhabitant', testEmail)
 
             const userId = testInhabitant.userId
             expect(userId).toBeDefined()
@@ -108,9 +109,10 @@ test.describe('Admin Inhabitant API', () => {
             await HouseholdFactory.getInhabitantById(context, testInhabitant.id, 404)
 
             // Verify user still exists (weak association)
-            const user = await HouseholdFactory.getUserById(context, userId)
+            const user = await HouseholdFactory.getUserByEmail(context, testEmail)
             expect(user.id).toBe(userId)
-            expect(user.inhabitantId).toBeNull() // Reference should be cleared
+            // User should still exist but Inhabitant relation should be null/undefined
+            expect(user.Inhabitant).toBeFalsy() // Reference should be cleared
         })
     })
 

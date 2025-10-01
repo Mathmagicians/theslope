@@ -1,8 +1,9 @@
-import {defineEventHandler, readValidatedBody, setResponseStatus, createError, getValidatedRouterParams} from "h3"
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {updateSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
 const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
@@ -42,7 +43,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!seasonData.id || seasonData.id !== id) {
-        const h3e = h3eFromCatch('Invalid input', new Error(`Season ID ${id} in URL must match ID in body ${seasonId.id}`))
+        const h3e = h3eFromCatch('Invalid input', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`))
         console.warn("🌞 > SEASON > [POST] ID mismatch:", h3e.statusMessage)
         throw h3e
     }

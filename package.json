@@ -54,7 +54,7 @@
     "@playwright/test": "^1.50.1",
     "@types/node": "^22.13.1",
     "@vue/test-utils": "^2.4.6",
-    "eslint": "^9.18.0",
+    "eslint": "^9.36.0",
     "happy-dom": "^16.8.1",
     "nitro-cloudflare-dev": "^0.2.1",
     "nitro-test-utils": "^0.9.1",
@@ -65,5 +65,10 @@
     "vitest": "^3.0.5",
     "wrangler": "^4.34.0",
     "zod-prisma-types": "^3.2.4"
+  },
+  "overrides": {
+    "eslint": {
+      "ajv": "^8.17.1"
+    }
   }
 }

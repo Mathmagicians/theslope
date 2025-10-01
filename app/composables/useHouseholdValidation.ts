@@ -1,9 +1,11 @@
 import {z} from 'zod'
+import {useUserValidation} from './useUserValidation'
 
 /**
  * Validation schemas for Household aggregate and its entities (Inhabitants)
  */
 export const useHouseholdValidation = () => {
+    const {UserCreateSchema} = useUserValidation()
     // Base Household schema for API operations
     const BaseHouseholdSchema = z.object({
         id: z.number().int().positive().optional(),
@@ -48,6 +50,8 @@ export const useHouseholdValidation = () => {
     // Inhabitant schemas
     const InhabitantCreateSchema = BaseInhabitantSchema.omit({
         id: true
+    }).extend({
+        user: UserCreateSchema.optional()
     })
 
     const InhabitantUpdateSchema = BaseInhabitantSchema.partial().extend({

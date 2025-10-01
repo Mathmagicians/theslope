@@ -167,6 +167,23 @@ export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant
     }
 }
 
+export async function fetchInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant | null> {
+    console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitant with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const inhabitant = await prisma.inhabitant.findFirst({
+            where: {id}
+        })
+        console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched inhabitant ${inhabitant?.name} with ID ${id}`)
+        return inhabitant
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching inhabitant with ID ${id}`, error)
+        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -238,6 +255,39 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching households', error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchHousehold(d1Client: D1Database, id: number): Promise<Household | null> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const household = await prisma.household.findFirst({
+            where: {id}
+        })
+        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household?.name} with ID ${id}`)
+        return household
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
+        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
+    }
+}
+
+export async function updateHousehold(d1Client: D1Database, id: number, householdData: Partial<HouseholdCreateInput>): Promise<Household> {
+    console.info(`🏠 > HOUSEHOLD > [UPDATE] Updating household with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const updatedHousehold = await prisma.household.update({
+            where: {id},
+            data: householdData
+        })
+        console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${updatedHousehold.name} with ID ${id}`)
+        return updatedHousehold
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
+        console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }

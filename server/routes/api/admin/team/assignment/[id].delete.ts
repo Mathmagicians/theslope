@@ -1,4 +1,4 @@
-// DELETE /api/admin/team/[id]/assignments/[assignmentId] - Remove team assignment
+// DELETE /api/admin/team/assignments/[assignmentId] - Remove team assignment
 
 import {defineEventHandler,  getValidatedRouterParams} from "h3"
 import * as z from 'zod'

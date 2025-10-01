@@ -1,7 +1,8 @@
-import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
 const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
