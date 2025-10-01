@@ -1,5 +1,208 @@
 # TODO
 
+## 🚨 BDD/TDD TEST-FIRST - CRITICAL PRIORITY
+
+### 1a. Write BDD Tests for deleteCookingTeam functionality (test-first) - CRITICAL
+- **Test scenarios**:
+    - Simple team (no members) should be deletable
+    - Team with members - assignments should cascade delete (strong relation)
+    - Team with dinner events - associations should be cleared (events preserved - weak relation)
+- **Verify**: Both strong relation cascades AND weak association clearing
+- **Use**: Factory patterns from ADR-003
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 1b. Write BDD Tests for CookingTeam creation with assignments
+- **Test scenarios**:
+    - Team with member assignments (strong relation)
+    - Team association with dinner events (weak relation)
+    - Member role assignments (CHEF, COOK, JUNIORHELPER)
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+
+### 2a. Write BDD Tests for Season creation with nested aggregates
+- **Test scenarios**:
+    - Season with CookingTeams (strong relation)
+    - Season with DinnerEvents (strong relation)
+    - Complete seasonal aggregate creation flow
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+- 
+### 2b. Write BDD Tests for deleteSeason functionality (test-first) - CRITICAL
+- **Test scenarios**:
+    - Season with CookingTeams (strong relation - cascade delete)
+    - Season with DinnerEvents (strong relation - cascade delete)
+    - Complete seasonal aggregate deletion flow
+- **Verify**: All nested aggregates properly cleaned up
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 3a. Write BDD Tests for Household creation with nested entities
+- **Test scenarios**:
+    - Household with Inhabitants (strong relation)
+    - Inhabitants with Users (weak relation - optional)
+    - Heynabo import-style nested creation
+- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
+- 
+### 3b. Write BDD Tests for deleteHousehold functionality (test-first) - HIGH
+- **Test scenarios**:
+    - Household with Inhabitants (strong relation - cascade delete)
+    - Inhabitants with Users (weak relation - clear association, preserve users)
+    - Complete household cascade with proper User preservation
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+### 4 a-b. Write BDD Tests for  createIhnabitant - deleteInhabitant functionality (test-first) - HIGH
+- **Test scenarios**:
+    - Inhabitant with User (weak relation - clear association, preserve user)
+    - Inhabitant with CookingTeamAssignments (strong relation - cascade delete)
+    - Complete inhabitant cleanup without orphaning data
+- **File**: Create BDD test file first, following ADR-005 patterns
+
+## 🚨 IMPLEMENTATION - After Tests Creation
+
+### 1. Fix deleteCookingTeam - Currently Broken (CRITICAL)
+- **Problem**: Currently ignores CookingTeamAssignments (strong relation)
+- **Impact**: Leaves orphaned team assignments in database
+- **Fix**: Update repository function to delete assignments before team
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 2. Create deleteSeason Function (CRITICAL)
+- **Problem**: No cascade to CookingTeams/DinnerEvents (strong relations)
+- **Impact**: Cannot properly delete seasons
+- **Fix**: Implement function following ADR-005 patterns
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 3. Create deleteInhabitant Function (HIGH)
+- **Problem**: No proper cascade function exists
+- **Impact**: Cannot delete inhabitants without orphaning data
+- **Fix**: Implement with User/Assignment cleanup
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+### 4. Create deleteHousehold Function (HIGH)
+- **Problem**: No proper cascade function exists
+- **Impact**: Cannot delete households properly
+- **Fix**: Implement with Inhabitant/User cascade
+- **File**: `/server/data/prismaRepository.ts`
+- **Prerequisites**: BDD tests must pass first
+
+## The rest
+## 🎯 HIGH PRIORITY: Admin Dining Season Management
+**Milestone**: Admin can create a dining season with cooking teams and corresponding events
+
+### Phase 1: Cooking Team Management
+**API Development**
+- Create PUT /api/admin/teams - Create team
+- Create GET /api/admin/teams - List teams by season
+- Create POST /api/admin/teams/[id] - Update team
+- Create DELETE /api/admin/teams/[id] - Delete team
+- Write API tests for all team endpoints
+
+**UI Development**
+- Create AdminCookingTeams.vue component
+- Create CookingTeamForm.vue for create/edit
+- Create CookingTeamList.vue for display
+- Add "Teams" step to season workflow
+- Write component tests for team UI
+- Write E2E tests for team CRUD operations
+
+### Phase 2: Team Member Assignment
+**API Development**
+- Create PUT /api/admin/teams/[id]/members - Add member
+- Create DELETE /api/admin/teams/[id]/members/[memberId] - Remove member
+- Create GET /api/admin/inhabitants/available - List available inhabitants
+- Write API tests for member assignment endpoints
+
+**UI Development**
+- Create TeamMemberSelector.vue with search
+- Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
+- Implement drag-and-drop for member assignment
+- Write component tests for member assignment
+- Write E2E tests for team composition
+
+### Phase 3: Dinner Event Generation
+**API Development**
+- Create POST /api/admin/season/[id]/generate-events endpoint
+- Implement event generation algorithm considering:
+  - Season date range and cooking days
+  - Holiday exclusions
+  - Team rotation schedule
+- Create GET /api/admin/events - List events with filters
+- Write unit tests for generation algorithm
+- Write API tests for event endpoints
+
+**UI Development**
+- Create EventCalendar.vue with monthly view
+- Create EventDetails.vue for single event editing
+- Create BulkEventActions.vue for mass operations
+- Add chef assignment to events
+- Write component tests for event UI
+- Write E2E tests for event generation flow
+
+### Phase 4: Integration & Validation
+**Workflow Integration**
+- Create unified season creation wizard:
+  1. Define season (existing)
+  2. Create cooking teams
+  3. Assign team members
+  4. Generate dinner events
+  5. Review & activate
+- Write E2E tests for complete workflow
+
+**Validation & Business Rules**
+- Implement overlapping season prevention
+- Add team size validation rules
+- Check scheduling conflicts
+- Add warnings for incomplete teams
+- Write unit tests for all validation rules
+
+**Testing & Documentation**
+- Write integration tests for season-team-event flow
+- Add error handling and recovery tests
+- Create API documentation
+- Update ADR with team/event architecture decisions
+
+### Technical Implementation Details
+
+**Extend Validation Schemas**
+```typescript
+// Add to useSeasonValidation.ts
+const CookingTeamSchema = z.object({
+  id: z.number().optional(),
+  seasonId: z.number(),
+  name: z.string().min(1),
+  chefs: z.array(z.number()), // inhabitant IDs
+  cooks: z.array(z.number()),
+  juniorHelpers: z.array(z.number()).optional()
+})
+
+const EventGenerationConfigSchema = z.object({
+  seasonId: z.number(),
+  rotationPattern: z.enum(['weekly', 'biweekly', 'custom']),
+  teamRotation: z.array(z.number()) // team IDs in order
+})
+```
+
+**Repository Functions**
+- `createCookingTeam()`
+- `updateCookingTeam()`
+- `deleteCookingTeam()`
+- `assignTeamMembers()`
+- `generateDinnerEvents()`
+- `getTeamsBySeasonId()`
+
+**Store Extensions**
+- Extend `usePlanStore()` with team management
+- Add `useEventStore()` for dinner events
+- Include optimistic updates for UI responsiveness
+
+### Test Coverage Requirements
+- Unit tests: Business logic, validation, algorithms
+- Component tests: UI components with mocked data
+- API tests: All endpoints with error cases
+- E2E tests: User workflows and edge cases
+- Integration tests: Season-team-event relationships
+
+---
+
 # ✅ COMPLETED: Path-based admin navigation
 **Status**: COMPLETED - Successfully migrated from fragment-based to path-based routing
 

@@ -22,7 +22,8 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "d413c489-78d8-43af-837c-d99947ee33d8"
+database_id = "373cce02-f8be-4f44-ae68-544f94385367"
+migrations_dir = "migrations"
 
 [env.prod]
 name = "theslope-prod"
@@ -39,4 +40,5 @@ DB_D1_NAME = "theslope-prod"
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "theslope-prod"
-database_id = "bf772049-5ce5-4caf-a8c9-30c673a4fe38"
+database_id = "f512e46a-3c93-4723-9fb8-74a177953ffb"
+migrations_dir = "migrations"
