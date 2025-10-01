@@ -6,7 +6,7 @@ binding = "DB"
 database_name = "theslope"
 database_id = "unique id"
 ```
-created in region wnam - we might want weur for the future.
+created in region weur .
 
 Schema can be changed using migrations:
 ```bash 

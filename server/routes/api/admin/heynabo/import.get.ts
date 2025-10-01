@@ -1,6 +1,9 @@
 import {defineEventHandler} from 'h3';
 import {createHouseholdsFromImport, importFromHeyNabo} from "~~/server/integration/heynabo";
 import {saveHousehold} from "~~/server/data/prismaRepository";
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper";
+
+const {h3eFromCatch} = eventHandlerHelper
 
 
 // Returns imported locations and members from HeyNabo
@@ -14,8 +17,9 @@ export default defineEventHandler(async (event) => {
         console.log("🏠> IMPORT > Saving households: ", households ? households.length: 0 )
         const result = await  Promise.all(  households.map(  household => saveHousehold(d1Client, household) ))
         return result
-    } catch (e) {
-        console.error("🏠 > IMPORT > Error saving households: ", e)
-        createError({cause: e, statusMessage: "🏠 >IMPORT Error saving households", statusCode: 500})
+    } catch (error) {
+        const h3e = h3eFromCatch("🏠 > IMPORT > Error saving households", error)
+        console.error(`🏠 > IMPORT > ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

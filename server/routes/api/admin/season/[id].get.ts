@@ -1,34 +1,41 @@
-import {defineEventHandler} from "h3";
+import {defineEventHandler, createError, getValidatedRouterParams} from "h3";
 import {fetchSeason} from "~~/server/data/prismaRepository"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import z from "zod"
+
+const {h3eFromCatch} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.number({ coerce: true }).positive().int(),
 });
 
 export default defineEventHandler(async (event) => {
+    const {cloudflare} = event.context
+    const d1Client = cloudflare.env.DB
+
+    // Input validation try-catch - FAIL EARLY
+    let id
     try {
-        const id: number = getValidatedRouterParam(event, idSchema.parse) as number
-        console.info("👨‍💻> SEASON > [GET] >  id/", id)
-
-        const {cloudflare} = event.context
-        const d1Client = cloudflare.env.DB
-
-        const season = await fetchSeason(d1Client, id)
-        console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
-        return season
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
     } catch (error) {
-        console.error("👨‍💻 > SEASON > Error getting season: ", error)
-        if (error instanceof z.ZodError && error.format()?.id) {
-            throw createError({
-                statusCode: 400,
-                statusMessage: "Invalid season id: " + z.ZodError && e.format()?.id
-            })
-        }
+        console.error("🌞 > SEASON > [GET] Input validation error:", error)
         throw createError({
-            statusCode: 500,
-            message: '👨‍💻> SEASON > Server Error',
+            statusCode: 400,
+            message: 'Invalid input data',
             cause: error
         })
+    }
+
+    // Database operations try-catch - separate concerns
+    try {
+        console.info("🌞 > SEASON > [GET] Fetching season with id:", id)
+        const season = await fetchSeason(d1Client, id)
+        console.info(`🌞 > SEASON > Returning season ${season?.shortName}`)
+        return season
+    } catch (error) {
+        const h3e = h3eFromCatch(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 })

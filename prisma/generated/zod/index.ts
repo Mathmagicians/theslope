@@ -34,7 +34,7 @@ export const InvoiceScalarFieldEnumSchema = z.enum(['id','cutoffDate','paymentDa
 
 export const CookingTeamScalarFieldEnumSchema = z.enum(['id','seasonId','name']);
 
-export const CookingTeamAssignmentScalarFieldEnumSchema = z.enum(['id','chefForcookingTeamId','cookForcookingTeamId','juniorForcookingTeamId','inhabitantId','role']);
+export const CookingTeamAssignmentScalarFieldEnumSchema = z.enum(['id','cookingTeamId','inhabitantId','role','createdAt','updatedAt']);
 
 export const SeasonScalarFieldEnumSchema = z.enum(['id','shortName','seasonDates','isActive','cookingDays','holidays','ticketIsCancellableDaysBefore','diningModeIsEditableMinutesBefore']);
 
@@ -56,7 +56,7 @@ export const WeekdaySchema = z.enum(['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','
 
 export type WeekdayType = `${z.infer<typeof WeekdaySchema>}`
 
-export const TicketTypeSchema = z.enum(['ADULT','CHILD']);
+export const TicketTypeSchema = z.enum(['ADULT','CHILD','BABY']);
 
 export type TicketTypeType = `${z.infer<typeof TicketTypeSchema>}`
 
@@ -238,10 +238,10 @@ export type CookingTeam = z.infer<typeof CookingTeamSchema>
 export const CookingTeamAssignmentSchema = z.object({
   role: RoleSchema,
   id: z.number().int(),
-  chefForcookingTeamId: z.number().int().nullable(),
-  cookForcookingTeamId: z.number().int().nullable(),
-  juniorForcookingTeamId: z.number().int().nullable(),
+  cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 })
 
 export type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
@@ -593,9 +593,7 @@ export const InvoiceSelectSchema: z.ZodType<Prisma.InvoiceSelect> = z.object({
 export const CookingTeamIncludeSchema: z.ZodType<Prisma.CookingTeamInclude> = z.object({
   season: z.union([z.boolean(),z.lazy(() => SeasonArgsSchema)]).optional(),
   dinners: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
-  chefs: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
-  cooks: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
-  juniorHelpers: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
+  assignments: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => CookingTeamCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
@@ -610,9 +608,7 @@ export const CookingTeamCountOutputTypeArgsSchema: z.ZodType<Prisma.CookingTeamC
 
 export const CookingTeamCountOutputTypeSelectSchema: z.ZodType<Prisma.CookingTeamCountOutputTypeSelect> = z.object({
   dinners: z.boolean().optional(),
-  chefs: z.boolean().optional(),
-  cooks: z.boolean().optional(),
-  juniorHelpers: z.boolean().optional(),
+  assignments: z.boolean().optional(),
 }).strict();
 
 export const CookingTeamSelectSchema: z.ZodType<Prisma.CookingTeamSelect> = z.object({
@@ -621,9 +617,7 @@ export const CookingTeamSelectSchema: z.ZodType<Prisma.CookingTeamSelect> = z.ob
   name: z.boolean().optional(),
   season: z.union([z.boolean(),z.lazy(() => SeasonArgsSchema)]).optional(),
   dinners: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
-  chefs: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
-  cooks: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
-  juniorHelpers: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
+  assignments: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => CookingTeamCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
@@ -631,9 +625,7 @@ export const CookingTeamSelectSchema: z.ZodType<Prisma.CookingTeamSelect> = z.ob
 //------------------------------------------------------
 
 export const CookingTeamAssignmentIncludeSchema: z.ZodType<Prisma.CookingTeamAssignmentInclude> = z.object({
-  chefForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
-  cookForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
-  juniorForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
+  cookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
   inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
 }).strict()
 
@@ -644,14 +636,12 @@ export const CookingTeamAssignmentArgsSchema: z.ZodType<Prisma.CookingTeamAssign
 
 export const CookingTeamAssignmentSelectSchema: z.ZodType<Prisma.CookingTeamAssignmentSelect> = z.object({
   id: z.boolean().optional(),
-  chefForcookingTeamId: z.boolean().optional(),
-  cookForcookingTeamId: z.boolean().optional(),
-  juniorForcookingTeamId: z.boolean().optional(),
+  cookingTeamId: z.boolean().optional(),
   inhabitantId: z.boolean().optional(),
   role: z.boolean().optional(),
-  chefForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
-  cookForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
-  juniorForCcookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
+  createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
+  cookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
   inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
 }).strict()
 
@@ -1514,9 +1504,7 @@ export const CookingTeamWhereInputSchema: z.ZodType<Prisma.CookingTeamWhereInput
   name: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema),z.lazy(() => SeasonWhereInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional()
 }).strict();
 
 export const CookingTeamOrderByWithRelationInputSchema: z.ZodType<Prisma.CookingTeamOrderByWithRelationInput> = z.object({
@@ -1525,9 +1513,7 @@ export const CookingTeamOrderByWithRelationInputSchema: z.ZodType<Prisma.Cooking
   name: z.lazy(() => SortOrderSchema).optional(),
   season: z.lazy(() => SeasonOrderByWithRelationInputSchema).optional(),
   dinners: z.lazy(() => DinnerEventOrderByRelationAggregateInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional()
 }).strict();
 
 export const CookingTeamWhereUniqueInputSchema: z.ZodType<Prisma.CookingTeamWhereUniqueInput> = z.object({
@@ -1542,9 +1528,7 @@ export const CookingTeamWhereUniqueInputSchema: z.ZodType<Prisma.CookingTeamWher
   name: z.union([ z.lazy(() => StringFilterSchema),z.string() ]).optional(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema),z.lazy(() => SeasonWhereInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional()
 }).strict());
 
 export const CookingTeamOrderByWithAggregationInputSchema: z.ZodType<Prisma.CookingTeamOrderByWithAggregationInput> = z.object({
@@ -1572,27 +1556,23 @@ export const CookingTeamAssignmentWhereInputSchema: z.ZodType<Prisma.CookingTeam
   OR: z.lazy(() => CookingTeamAssignmentWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => CookingTeamAssignmentWhereInputSchema),z.lazy(() => CookingTeamAssignmentWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
+  cookingTeamId: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema),z.lazy(() => RoleSchema) ]).optional(),
-  chefForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
-  cookForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
-  juniorForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  cookingTeam: z.union([ z.lazy(() => CookingTeamScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema),z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamAssignmentOrderByWithRelationInputSchema: z.ZodType<Prisma.CookingTeamAssignmentOrderByWithRelationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  cookForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
-  chefForCcookingTeam: z.lazy(() => CookingTeamOrderByWithRelationInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamOrderByWithRelationInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamOrderByWithRelationInputSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeam: z.lazy(() => CookingTeamOrderByWithRelationInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantOrderByWithRelationInputSchema).optional()
 }).strict();
 
@@ -1604,24 +1584,22 @@ export const CookingTeamAssignmentWhereUniqueInputSchema: z.ZodType<Prisma.Cooki
   AND: z.union([ z.lazy(() => CookingTeamAssignmentWhereInputSchema),z.lazy(() => CookingTeamAssignmentWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => CookingTeamAssignmentWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => CookingTeamAssignmentWhereInputSchema),z.lazy(() => CookingTeamAssignmentWhereInputSchema).array() ]).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number().int() ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number().int() ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number().int() ]).optional().nullable(),
+  cookingTeamId: z.union([ z.lazy(() => IntFilterSchema),z.number().int() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema),z.number().int() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema),z.lazy(() => RoleSchema) ]).optional(),
-  chefForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
-  cookForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
-  juniorForCcookingTeam: z.union([ z.lazy(() => CookingTeamNullableScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  cookingTeam: z.union([ z.lazy(() => CookingTeamScalarRelationFilterSchema),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema),z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
 }).strict());
 
 export const CookingTeamAssignmentOrderByWithAggregationInputSchema: z.ZodType<Prisma.CookingTeamAssignmentOrderByWithAggregationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  cookForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => SortOrderSchema),z.lazy(() => SortOrderInputSchema) ]).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => CookingTeamAssignmentCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => CookingTeamAssignmentAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => CookingTeamAssignmentMaxOrderByAggregateInputSchema).optional(),
@@ -1634,11 +1612,11 @@ export const CookingTeamAssignmentScalarWhereWithAggregatesInputSchema: z.ZodTyp
   OR: z.lazy(() => CookingTeamAssignmentScalarWhereWithAggregatesInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereWithAggregatesInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereWithAggregatesInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema),z.number() ]).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema),z.number() ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema),z.number() ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema),z.number() ]).optional().nullable(),
+  cookingTeamId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema),z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema),z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleWithAggregatesFilterSchema),z.lazy(() => RoleSchema) ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema),z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema),z.coerce.date() ]).optional(),
 }).strict();
 
 export const SeasonWhereInputSchema: z.ZodType<Prisma.SeasonWhereInput> = z.object({
@@ -2428,9 +2406,7 @@ export const CookingTeamCreateInputSchema: z.ZodType<Prisma.CookingTeamCreateInp
   name: z.string(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
   dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedCreateInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateInput> = z.object({
@@ -2438,18 +2414,14 @@ export const CookingTeamUncheckedCreateInputSchema: z.ZodType<Prisma.CookingTeam
   seasonId: z.number().int(),
   name: z.string(),
   dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamUpdateInputSchema: z.ZodType<Prisma.CookingTeamUpdateInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
   dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedUpdateInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateInput> = z.object({
@@ -2457,9 +2429,7 @@ export const CookingTeamUncheckedUpdateInputSchema: z.ZodType<Prisma.CookingTeam
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamCreateManyInputSchema: z.ZodType<Prisma.CookingTeamCreateManyInput> = z.object({
@@ -2480,58 +2450,60 @@ export const CookingTeamUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Cooking
 
 export const CookingTeamAssignmentCreateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateInput> = z.object({
   role: z.lazy(() => RoleSchema),
-  chefForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutChefsInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutCooksInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutJuniorHelpersInputSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutAssignmentsInputSchema),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutCookingTeamAssignmentInputSchema)
 }).strict();
 
 export const CookingTeamAssignmentUncheckedCreateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateInput> = z.object({
   id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
+  cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
+  role: z.lazy(() => RoleSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
 export const CookingTeamAssignmentUpdateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutChefsNestedInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutCooksNestedInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutJuniorHelpersNestedInputSchema).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cookingTeam: z.lazy(() => CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentUncheckedUpdateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamAssignmentCreateManyInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyInput> = z.object({
   id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
+  cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
+  role: z.lazy(() => RoleSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
 export const CookingTeamAssignmentUpdateManyMutationInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyMutationInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamAssignmentUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const SeasonCreateInputSchema: z.ZodType<Prisma.SeasonCreateInput> = z.object({
@@ -3475,46 +3447,47 @@ export const EnumRoleFilterSchema: z.ZodType<Prisma.EnumRoleFilter> = z.object({
   not: z.union([ z.lazy(() => RoleSchema),z.lazy(() => NestedEnumRoleFilterSchema) ]).optional(),
 }).strict();
 
+export const CookingTeamScalarRelationFilterSchema: z.ZodType<Prisma.CookingTeamScalarRelationFilter> = z.object({
+  is: z.lazy(() => CookingTeamWhereInputSchema).optional(),
+  isNot: z.lazy(() => CookingTeamWhereInputSchema).optional()
+}).strict();
+
 export const CookingTeamAssignmentCountOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCountOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  cookForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  juniorForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  role: z.lazy(() => SortOrderSchema).optional()
+  role: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentAvgOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentAvgOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  cookForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  juniorForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentMaxOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentMaxOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  cookForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  juniorForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  role: z.lazy(() => SortOrderSchema).optional()
+  role: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentMinOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentMinOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  cookForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  juniorForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  role: z.lazy(() => SortOrderSchema).optional()
+  role: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentSumOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentSumOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-  chefForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  cookForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
-  juniorForcookingTeamId: z.lazy(() => SortOrderSchema).optional(),
+  cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional()
 }).strict();
 
@@ -4379,24 +4352,10 @@ export const DinnerEventCreateNestedManyWithoutCookingTeamInputSchema: z.ZodType
   connect: z.union([ z.lazy(() => DinnerEventWhereUniqueInputSchema),z.lazy(() => DinnerEventWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelopeSchema).optional(),
+export const CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
@@ -4407,24 +4366,10 @@ export const DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema: 
   connect: z.union([ z.lazy(() => DinnerEventWhereUniqueInputSchema),z.lazy(() => DinnerEventWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelopeSchema).optional(),
+export const CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
@@ -4450,45 +4395,17 @@ export const DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema: z.ZodType
   deleteMany: z.union([ z.lazy(() => DinnerEventScalarWhereInputSchema),z.lazy(() => DinnerEventScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelopeSchema).optional(),
+export const CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputEnvelopeSchema).optional(),
   set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
@@ -4506,63 +4423,23 @@ export const DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema: 
   deleteMany: z.union([ z.lazy(() => DinnerEventScalarWhereInputSchema),z.lazy(() => DinnerEventScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelopeSchema).optional(),
+export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputEnvelopeSchema).optional(),
   set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
   connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema).array(),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const CookingTeamCreateNestedOneWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamCreateNestedOneWithoutChefsInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutChefsInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutChefsInputSchema).optional(),
-  connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional()
-}).strict();
-
-export const CookingTeamCreateNestedOneWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamCreateNestedOneWithoutCooksInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutCooksInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutCooksInputSchema).optional(),
-  connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional()
-}).strict();
-
-export const CookingTeamCreateNestedOneWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamCreateNestedOneWithoutJuniorHelpersInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutJuniorHelpersInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutJuniorHelpersInputSchema).optional(),
+export const CookingTeamCreateNestedOneWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamCreateNestedOneWithoutAssignmentsInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamCreateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutAssignmentsInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutAssignmentsInputSchema).optional(),
   connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional()
 }).strict();
 
@@ -4576,34 +4453,12 @@ export const EnumRoleFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumRole
   set: z.lazy(() => RoleSchema).optional()
 }).strict();
 
-export const CookingTeamUpdateOneWithoutChefsNestedInputSchema: z.ZodType<Prisma.CookingTeamUpdateOneWithoutChefsNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutChefsInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutChefsInputSchema).optional(),
-  upsert: z.lazy(() => CookingTeamUpsertWithoutChefsInputSchema).optional(),
-  disconnect: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
-  delete: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
+export const CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInputSchema: z.ZodType<Prisma.CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInput> = z.object({
+  create: z.union([ z.lazy(() => CookingTeamCreateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutAssignmentsInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutAssignmentsInputSchema).optional(),
+  upsert: z.lazy(() => CookingTeamUpsertWithoutAssignmentsInputSchema).optional(),
   connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional(),
-  update: z.union([ z.lazy(() => CookingTeamUpdateToOneWithWhereWithoutChefsInputSchema),z.lazy(() => CookingTeamUpdateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutChefsInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamUpdateOneWithoutCooksNestedInputSchema: z.ZodType<Prisma.CookingTeamUpdateOneWithoutCooksNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutCooksInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutCooksInputSchema).optional(),
-  upsert: z.lazy(() => CookingTeamUpsertWithoutCooksInputSchema).optional(),
-  disconnect: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
-  delete: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
-  connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional(),
-  update: z.union([ z.lazy(() => CookingTeamUpdateToOneWithWhereWithoutCooksInputSchema),z.lazy(() => CookingTeamUpdateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutCooksInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamUpdateOneWithoutJuniorHelpersNestedInputSchema: z.ZodType<Prisma.CookingTeamUpdateOneWithoutJuniorHelpersNestedInput> = z.object({
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutJuniorHelpersInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => CookingTeamCreateOrConnectWithoutJuniorHelpersInputSchema).optional(),
-  upsert: z.lazy(() => CookingTeamUpsertWithoutJuniorHelpersInputSchema).optional(),
-  disconnect: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
-  delete: z.union([ z.boolean(),z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
-  connect: z.lazy(() => CookingTeamWhereUniqueInputSchema).optional(),
-  update: z.union([ z.lazy(() => CookingTeamUpdateToOneWithWhereWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUpdateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutJuniorHelpersInputSchema) ]).optional(),
+  update: z.union([ z.lazy(() => CookingTeamUpdateToOneWithWhereWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUpdateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutAssignmentsInputSchema) ]).optional(),
 }).strict();
 
 export const InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInput> = z.object({
@@ -5503,17 +5358,17 @@ export const OrderCreateManyInhabitantInputEnvelopeSchema: z.ZodType<Prisma.Orde
 
 export const CookingTeamAssignmentCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutInhabitantInput> = z.object({
   role: z.lazy(() => RoleSchema),
-  chefForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutChefsInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutCooksInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutJuniorHelpersInputSchema).optional()
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutAssignmentsInputSchema)
 }).strict();
 
 export const CookingTeamAssignmentUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateWithoutInhabitantInput> = z.object({
   id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
-  role: z.lazy(() => RoleSchema)
+  cookingTeamId: z.number().int(),
+  role: z.lazy(() => RoleSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
 export const CookingTeamAssignmentCreateOrConnectWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateOrConnectWithoutInhabitantInput> = z.object({
@@ -5711,11 +5566,11 @@ export const CookingTeamAssignmentScalarWhereInputSchema: z.ZodType<Prisma.Cooki
   OR: z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
-  chefForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema),z.number() ]).optional().nullable(),
+  cookingTeamId: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema),z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema),z.lazy(() => RoleSchema) ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema),z.coerce.date() ]).optional(),
 }).strict();
 
 export const InhabitantCreateWithoutHouseholdInputSchema: z.ZodType<Prisma.InhabitantCreateWithoutHouseholdInput> = z.object({
@@ -5877,18 +5732,14 @@ export const InhabitantCreateOrConnectWithoutDinnerEventInputSchema: z.ZodType<P
 export const CookingTeamCreateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutDinnersInput> = z.object({
   name: z.string(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
-  chefs: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedCreateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutDinnersInput> = z.object({
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamCreateOrConnectWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutDinnersInput> = z.object({
@@ -6006,18 +5857,14 @@ export const CookingTeamUpdateToOneWithWhereWithoutDinnersInputSchema: z.ZodType
 export const CookingTeamUpdateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutDinnersInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedUpdateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutDinnersInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const OrderUpsertWithWhereUniqueWithoutDinnerEventInputSchema: z.ZodType<Prisma.OrderUpsertWithWhereUniqueWithoutDinnerEventInput> = z.object({
@@ -6531,76 +6378,28 @@ export const DinnerEventCreateManyCookingTeamInputEnvelopeSchema: z.ZodType<Pris
   data: z.union([ z.lazy(() => DinnerEventCreateManyCookingTeamInputSchema),z.lazy(() => DinnerEventCreateManyCookingTeamInputSchema).array() ]),
 }).strict();
 
-export const CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentCreateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutCookingTeamInput> = z.object({
   role: z.lazy(() => RoleSchema),
-  cookForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutCooksInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutJuniorHelpersInputSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutCookingTeamAssignmentInputSchema)
 }).strict();
 
-export const CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInput> = z.object({
   id: z.number().int().optional(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
   inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
-}).strict();
-
-export const CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateOrConnectWithoutChefForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelopeSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyChefForCcookingTeamInputEnvelope> = z.object({
-  data: z.union([ z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateManyChefForCcookingTeamInputSchema).array() ]),
-}).strict();
-
-export const CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutCookForCcookingTeamInput> = z.object({
   role: z.lazy(() => RoleSchema),
-  chefForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutChefsInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutJuniorHelpersInputSchema).optional(),
-  inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutCookingTeamAssignmentInputSchema)
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
-export const CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInput> = z.object({
-  id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
-  inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
-}).strict();
-
-export const CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateOrConnectWithoutCookForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateOrConnectWithoutCookingTeamInput> = z.object({
   where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema) ]),
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema) ]),
 }).strict();
 
-export const CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelopeSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyCookForCcookingTeamInputEnvelope> = z.object({
-  data: z.union([ z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateManyCookForCcookingTeamInputSchema).array() ]),
-}).strict();
-
-export const CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInput> = z.object({
-  role: z.lazy(() => RoleSchema),
-  chefForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutChefsInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutCooksInputSchema).optional(),
-  inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutCookingTeamAssignmentInputSchema)
-}).strict();
-
-export const CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInput> = z.object({
-  id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
-}).strict();
-
-export const CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateOrConnectWithoutJuniorForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelopeSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputEnvelope> = z.object({
-  data: z.union([ z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputSchema).array() ]),
+export const CookingTeamAssignmentCreateManyCookingTeamInputEnvelopeSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyCookingTeamInputEnvelope> = z.object({
+  data: z.union([ z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentCreateManyCookingTeamInputSchema).array() ]),
 }).strict();
 
 export const SeasonUpsertWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonUpsertWithoutCookingTeamsInput> = z.object({
@@ -6655,118 +6454,38 @@ export const DinnerEventUpdateManyWithWhereWithoutCookingTeamInputSchema: z.ZodT
   data: z.union([ z.lazy(() => DinnerEventUpdateManyMutationInputSchema),z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamInputSchema) ]),
 }).strict();
 
-export const CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpsertWithWhereUniqueWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookingTeamInput> = z.object({
   where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutChefForCcookingTeamInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutChefForCcookingTeamInputSchema) ]),
+  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutCookingTeamInputSchema) ]),
+  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema) ]),
 }).strict();
 
-export const CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithWhereUniqueWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookingTeamInput> = z.object({
   where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutChefForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutChefForCcookingTeamInputSchema) ]),
+  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutCookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutCookingTeamInputSchema) ]),
 }).strict();
 
-export const CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithWhereWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInput> = z.object({
   where: z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyMutationInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamInputSchema) ]),
+  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyMutationInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamInputSchema) ]),
 }).strict();
 
-export const CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpsertWithWhereUniqueWithoutCookForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutCookForCcookingTeamInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutCookForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithWhereUniqueWithoutCookForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutCookForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutCookForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithWhereWithoutCookForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyMutationInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpsertWithWhereUniqueWithoutJuniorForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  update: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutJuniorForCcookingTeamInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamAssignmentCreateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedCreateWithoutJuniorForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithWhereUniqueWithoutJuniorForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentWhereUniqueInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateWithoutJuniorForCcookingTeamInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateWithoutJuniorForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyWithWhereWithoutJuniorForCcookingTeamInput> = z.object({
-  where: z.lazy(() => CookingTeamAssignmentScalarWhereInputSchema),
-  data: z.union([ z.lazy(() => CookingTeamAssignmentUpdateManyMutationInputSchema),z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamInputSchema) ]),
-}).strict();
-
-export const CookingTeamCreateWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutChefsInput> = z.object({
+export const CookingTeamCreateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutAssignmentsInput> = z.object({
   name: z.string(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
-  dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
-export const CookingTeamUncheckedCreateWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutChefsInput> = z.object({
+export const CookingTeamUncheckedCreateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutAssignmentsInput> = z.object({
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
-  dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
-export const CookingTeamCreateOrConnectWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutChefsInput> = z.object({
+export const CookingTeamCreateOrConnectWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutAssignmentsInput> = z.object({
   where: z.lazy(() => CookingTeamWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutChefsInputSchema) ]),
-}).strict();
-
-export const CookingTeamCreateWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutCooksInput> = z.object({
-  name: z.string(),
-  season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
-  dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
-}).strict();
-
-export const CookingTeamUncheckedCreateWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutCooksInput> = z.object({
-  id: z.number().int().optional(),
-  seasonId: z.number().int(),
-  name: z.string(),
-  dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
-}).strict();
-
-export const CookingTeamCreateOrConnectWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutCooksInput> = z.object({
-  where: z.lazy(() => CookingTeamWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutCooksInputSchema) ]),
-}).strict();
-
-export const CookingTeamCreateWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutJuniorHelpersInput> = z.object({
-  name: z.string(),
-  season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
-  dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional()
-}).strict();
-
-export const CookingTeamUncheckedCreateWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutJuniorHelpersInput> = z.object({
-  id: z.number().int().optional(),
-  seasonId: z.number().int(),
-  name: z.string(),
-  dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional()
-}).strict();
-
-export const CookingTeamCreateOrConnectWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutJuniorHelpersInput> = z.object({
-  where: z.lazy(() => CookingTeamWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutJuniorHelpersInputSchema) ]),
+  create: z.union([ z.lazy(() => CookingTeamCreateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutAssignmentsInputSchema) ]),
 }).strict();
 
 export const InhabitantCreateWithoutCookingTeamAssignmentInputSchema: z.ZodType<Prisma.InhabitantCreateWithoutCookingTeamAssignmentInput> = z.object({
@@ -6803,88 +6522,28 @@ export const InhabitantCreateOrConnectWithoutCookingTeamAssignmentInputSchema: z
   create: z.union([ z.lazy(() => InhabitantCreateWithoutCookingTeamAssignmentInputSchema),z.lazy(() => InhabitantUncheckedCreateWithoutCookingTeamAssignmentInputSchema) ]),
 }).strict();
 
-export const CookingTeamUpsertWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamUpsertWithoutChefsInput> = z.object({
-  update: z.union([ z.lazy(() => CookingTeamUpdateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutChefsInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutChefsInputSchema) ]),
+export const CookingTeamUpsertWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUpsertWithoutAssignmentsInput> = z.object({
+  update: z.union([ z.lazy(() => CookingTeamUpdateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutAssignmentsInputSchema) ]),
+  create: z.union([ z.lazy(() => CookingTeamCreateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutAssignmentsInputSchema) ]),
   where: z.lazy(() => CookingTeamWhereInputSchema).optional()
 }).strict();
 
-export const CookingTeamUpdateToOneWithWhereWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamUpdateToOneWithWhereWithoutChefsInput> = z.object({
+export const CookingTeamUpdateToOneWithWhereWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUpdateToOneWithWhereWithoutAssignmentsInput> = z.object({
   where: z.lazy(() => CookingTeamWhereInputSchema).optional(),
-  data: z.union([ z.lazy(() => CookingTeamUpdateWithoutChefsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutChefsInputSchema) ]),
+  data: z.union([ z.lazy(() => CookingTeamUpdateWithoutAssignmentsInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutAssignmentsInputSchema) ]),
 }).strict();
 
-export const CookingTeamUpdateWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutChefsInput> = z.object({
+export const CookingTeamUpdateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutAssignmentsInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
-  dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
-export const CookingTeamUncheckedUpdateWithoutChefsInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutChefsInput> = z.object({
+export const CookingTeamUncheckedUpdateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutAssignmentsInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamUpsertWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamUpsertWithoutCooksInput> = z.object({
-  update: z.union([ z.lazy(() => CookingTeamUpdateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutCooksInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutCooksInputSchema) ]),
-  where: z.lazy(() => CookingTeamWhereInputSchema).optional()
-}).strict();
-
-export const CookingTeamUpdateToOneWithWhereWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamUpdateToOneWithWhereWithoutCooksInput> = z.object({
-  where: z.lazy(() => CookingTeamWhereInputSchema).optional(),
-  data: z.union([ z.lazy(() => CookingTeamUpdateWithoutCooksInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutCooksInputSchema) ]),
-}).strict();
-
-export const CookingTeamUpdateWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutCooksInput> = z.object({
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
-  dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamUncheckedUpdateWithoutCooksInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutCooksInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamUpsertWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamUpsertWithoutJuniorHelpersInput> = z.object({
-  update: z.union([ z.lazy(() => CookingTeamUpdateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutJuniorHelpersInputSchema) ]),
-  create: z.union([ z.lazy(() => CookingTeamCreateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedCreateWithoutJuniorHelpersInputSchema) ]),
-  where: z.lazy(() => CookingTeamWhereInputSchema).optional()
-}).strict();
-
-export const CookingTeamUpdateToOneWithWhereWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamUpdateToOneWithWhereWithoutJuniorHelpersInput> = z.object({
-  where: z.lazy(() => CookingTeamWhereInputSchema).optional(),
-  data: z.union([ z.lazy(() => CookingTeamUpdateWithoutJuniorHelpersInputSchema),z.lazy(() => CookingTeamUncheckedUpdateWithoutJuniorHelpersInputSchema) ]),
-}).strict();
-
-export const CookingTeamUpdateWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutJuniorHelpersInput> = z.object({
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
-  dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamUncheckedUpdateWithoutJuniorHelpersInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutJuniorHelpersInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional()
+  dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const InhabitantUpsertWithoutCookingTeamAssignmentInputSchema: z.ZodType<Prisma.InhabitantUpsertWithoutCookingTeamAssignmentInput> = z.object({
@@ -6930,18 +6589,14 @@ export const InhabitantUncheckedUpdateWithoutCookingTeamAssignmentInputSchema: z
 export const CookingTeamCreateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutSeasonInput> = z.object({
   name: z.string(),
   dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedCreateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutSeasonInput> = z.object({
   id: z.number().int().optional(),
   name: z.string(),
   dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutChefForCcookingTeamInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookForCcookingTeamInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutJuniorForCcookingTeamInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional()
 }).strict();
 
 export const CookingTeamCreateOrConnectWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamCreateOrConnectWithoutSeasonInput> = z.object({
@@ -7198,10 +6853,10 @@ export const OrderCreateManyInhabitantInputSchema: z.ZodType<Prisma.OrderCreateM
 
 export const CookingTeamAssignmentCreateManyInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyInhabitantInput> = z.object({
   id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
-  role: z.lazy(() => RoleSchema)
+  cookingTeamId: z.number().int(),
+  role: z.lazy(() => RoleSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
 export const AllergyUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyUpdateWithoutInhabitantInput> = z.object({
@@ -7302,25 +6957,25 @@ export const OrderUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Pri
 
 export const CookingTeamAssignmentUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutInhabitantInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutChefsNestedInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutCooksNestedInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutJuniorHelpersNestedInputSchema).optional()
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cookingTeam: z.lazy(() => CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamAssignmentUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateWithoutInhabitantInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const InhabitantCreateManyHouseholdInputSchema: z.ZodType<Prisma.InhabitantCreateManyHouseholdInput> = z.object({
@@ -7478,28 +7133,12 @@ export const DinnerEventCreateManyCookingTeamInputSchema: z.ZodType<Prisma.Dinne
   seasonId: z.number().int().optional().nullable()
 }).strict();
 
-export const CookingTeamAssignmentCreateManyChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentCreateManyCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyCookingTeamInput> = z.object({
   id: z.number().int().optional(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
   inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
-}).strict();
-
-export const CookingTeamAssignmentCreateManyCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyCookForCcookingTeamInput> = z.object({
-  id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  juniorForcookingTeamId: z.number().int().optional().nullable(),
-  inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
-}).strict();
-
-export const CookingTeamAssignmentCreateManyJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateManyJuniorForCcookingTeamInput> = z.object({
-  id: z.number().int().optional(),
-  chefForcookingTeamId: z.number().int().optional().nullable(),
-  cookForcookingTeamId: z.number().int().optional().nullable(),
-  inhabitantId: z.number().int(),
-  role: z.lazy(() => RoleSchema)
+  role: z.lazy(() => RoleSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional()
 }).strict();
 
 export const DinnerEventUpdateWithoutCookingTeamInputSchema: z.ZodType<Prisma.DinnerEventUpdateWithoutCookingTeamInput> = z.object({
@@ -7542,73 +7181,27 @@ export const DinnerEventUncheckedUpdateManyWithoutCookingTeamInputSchema: z.ZodT
   seasonId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
-export const CookingTeamAssignmentUpdateWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUpdateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutCookingTeamInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutCooksNestedInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutJuniorHelpersNestedInputSchema).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema).optional()
 }).strict();
 
-export const CookingTeamAssignmentUncheckedUpdateWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUncheckedUpdateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateWithoutCookingTeamInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamInput> = z.object({
+export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUpdateWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutCookForCcookingTeamInput> = z.object({
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutChefsNestedInputSchema).optional(),
-  juniorForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutJuniorHelpersNestedInputSchema).optional(),
-  inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamAssignmentUncheckedUpdateWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateWithoutCookForCcookingTeamInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  juniorForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUpdateWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutJuniorForCcookingTeamInput> = z.object({
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutChefsNestedInputSchema).optional(),
-  cookForCcookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutCooksNestedInputSchema).optional(),
-  inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema).optional()
-}).strict();
-
-export const CookingTeamAssignmentUncheckedUpdateWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateWithoutJuniorForCcookingTeamInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  chefForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  cookForcookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  role: z.union([ z.lazy(() => RoleSchema),z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamCreateManySeasonInputSchema: z.ZodType<Prisma.CookingTeamCreateManySeasonInput> = z.object({
@@ -7639,18 +7232,14 @@ export const DinnerEventCreateManySeasonInputSchema: z.ZodType<Prisma.DinnerEven
 export const CookingTeamUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutSeasonInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutSeasonInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
-  chefs: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutChefForCcookingTeamNestedInputSchema).optional(),
-  cooks: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookForCcookingTeamNestedInputSchema).optional(),
-  juniorHelpers: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutJuniorForCcookingTeamNestedInputSchema).optional()
+  assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional()
 }).strict();
 
 export const CookingTeamUncheckedUpdateManyWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateManyWithoutSeasonInput> = z.object({
