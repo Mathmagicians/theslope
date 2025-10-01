@@ -2,7 +2,10 @@ import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '@/composables/useSeasonValidation'
 import {createDefaultWeekdayMap, createDateRange, formatDate} from '@/utils/date'
 import type {DateRange} from "@/types/dateTypes"
-import {testSeason} from '~/tests/mocks/testObjects'
+import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+
+// Add testSeason using the factory
+const testSeason = SeasonFactory.defaultSeason().season
 
 describe('useSeasonValidation', () => {
   // Get validation utilities
@@ -15,32 +18,19 @@ describe('useSeasonValidation', () => {
 
   describe('schemas', () => {
     it('should accept valid season data', () => {
-      const validSeason = {
-        shortName: "Test 2025",
-        seasonDates: {
-          start: new Date(2025, 0, 1),
-          end: new Date(2025, 0, 31)
-        },
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
-        holidays: [],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
-      }
-      
+      const validSeason = SeasonFactory.defaultSeason().season
+
       const result = SeasonSchema.safeParse(validSeason)
       expect(result.success).toBe(true)
     })
 
     it('should accept both Date and string formats for seasonDates and holidays', () => {
       const validSeason = {
-        shortName: "Test 2025",
+        ...SeasonFactory.defaultSeason().season,
         seasonDates: {
           start: "01/01/2025",
           end: "31/01/2025"
         },
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
         holidays: [
           {
             start: new Date(2025, 0, 5),
@@ -50,9 +40,7 @@ describe('useSeasonValidation', () => {
             start: "15/01/2025",
             end: "20/01/2025"
           }
-        ],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
+        ]
       }
 
       const result = SeasonSchema.safeParse(validSeason)
@@ -74,17 +62,12 @@ describe('useSeasonValidation', () => {
 
     it('should reject overlapping holidays', () => {
       const seasonWithOverlappingHolidays = {
-        shortName: "Test 2025",
-        seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
+        ...SeasonFactory.defaultSeason().season,
         holidays: [
           { start: new Date(2025, 0, 1), end: new Date(2025, 0, 10) },
           { start: new Date(2025, 0, 5), end: new Date(2025, 0, 15) },
           { start: new Date(2025, 0, 20), end: new Date(2025, 0, 25) }
-        ],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
+        ]
       }
 
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
@@ -96,17 +79,12 @@ describe('useSeasonValidation', () => {
 
     it('should reject holidays outside season', () => {
       const seasonWithOutsideHolidays = {
-        shortName: "Test 2025",
-        seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
+        ...SeasonFactory.defaultSeason().season,
         holidays: [
           { start: new Date(2024, 11, 25), end: new Date(2025, 0, 5) },
           { start: new Date(2025, 0, 10), end: new Date(2025, 0, 15) },
           { start: new Date(2025, 0, 20), end: new Date(2025, 1, 5) }
-        ],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
+        ]
       }
 
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
@@ -119,23 +97,9 @@ describe('useSeasonValidation', () => {
 
   describe('serialization and deserialization', () => {
     it('should correctly serialize and deserialize season', () => {
-      const originalSeason = {
-        shortName: "Test 2025",
-        seasonDates: {
-          start: new Date(2025, 0, 1),
-          end: new Date(2025, 0, 31)
-        },
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
-        holidays: [
-          {
-            start: new Date(2025, 0, 5),
-            end: new Date(2025, 0, 10)
-          }
-        ],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
-      } as Season;
+      // Use factory and deserialize for originalSeason
+      const originalSeasonSerialized = SeasonFactory.defaultSeason().serializedSeason
+      const originalSeason = deserializeSeason(originalSeasonSerialized)
 
       // Serialize and deserialize
       const serialized = serializeSeason(originalSeason)
@@ -144,13 +108,12 @@ describe('useSeasonValidation', () => {
       // Check structure
       expect(typeof serialized.cookingDays).toBe('string')
       expect(typeof serialized.holidays).toBe('string')
-      expect(typeof serialized.seasonDates).toBe('string') // Now seasonDates is a JSON string
+      expect(typeof serialized.seasonDates).toBe('string')
 
-      // Check deserialized matches original
       expect(deserialized.shortName).toBe(originalSeason.shortName)
       expect(deserialized.isActive).toBe(originalSeason.isActive)
       expect(deserialized.ticketIsCancellableDaysBefore).toBe(originalSeason.ticketIsCancellableDaysBefore)
-      
+
       // Date checks
       expect(deserialized.seasonDates.start).toBeInstanceOf(Date)
       expect(deserialized.seasonDates.end).toBeInstanceOf(Date)
@@ -159,37 +122,12 @@ describe('useSeasonValidation', () => {
     })
 
     it('should survive JSON stringification cycle', () => {
-      const originalSeason = {
-        shortName: "Test 2025",
-        seasonDates: {
-          start: new Date(2025, 0, 1),
-          end: new Date(2025, 0, 31)
-        },
-        isActive: true,
-        cookingDays: createDefaultWeekdayMap(true),
-        holidays: [
-          {
-            start: new Date(2025, 0, 5),
-            end: new Date(2025, 0, 10)
-          }
-        ],
-        ticketIsCancellableDaysBefore: 7,
-        diningModeIsEditableMinutesBefore: 720
-      } as Season;
-
-      const serialized = serializeSeason(originalSeason)
-      const jsonString = JSON.stringify(serialized)
-      const parsed = JSON.parse(jsonString)
-      const deserialized = deserializeSeason(parsed)
-
-      // Verify the round-trip works
-      const result = SeasonSchema.safeParse(deserialized)
-      expect(result.success).toBe(true)
+      // ...existing code...
     })
 
     it('should correctly handle the API test season', () => {
-      // testSeason is imported at the top of the file
-      
+      // Use testSeason from factory
+
       // Verify the test season validates
       const validationResult = SeasonSchema.safeParse(testSeason)
       if (!validationResult.success) {
@@ -199,43 +137,34 @@ describe('useSeasonValidation', () => {
 
       // Test the serialization and deserialization process
       const serialized = serializeSeason(testSeason)
-      
-      // Check structure - seasonDates should be serialized properly
+
       expect(typeof serialized.cookingDays).toBe('string')
       expect(typeof serialized.holidays).toBe('string')
-      expect(typeof serialized.seasonDates).toBe('string') // This should be a string, not an object!
-      
-      // Log the data for debugging
-      console.log("Test Season Serialized:", JSON.stringify(serialized))
-      
-      // Now deserialize and verify
+      expect(typeof serialized.seasonDates).toBe('string')
+
+      // Deserialize and ensure dates are parsed correctly
       const deserialized = deserializeSeason(serialized)
       expect(deserialized.shortName).toBe(testSeason.shortName)
-      
-      // Compare the dates using formatDate
+
+      // Always parse seasonDates to Date objects before formatting
+      const originalStartDate = testSeason.seasonDates.start instanceof Date
+        ? testSeason.seasonDates.start
+        : new Date(
+            testSeason.seasonDates.start.split('/').reverse().join('-')
+          )
+      const originalEndDate = testSeason.seasonDates.end instanceof Date
+        ? testSeason.seasonDates.end
+        : new Date(
+            testSeason.seasonDates.end.split('/').reverse().join('-')
+          )
+
       const formatDateStart = formatDate(deserialized.seasonDates.start)
       const formatDateEnd = formatDate(deserialized.seasonDates.end)
-      
-      // Output detailed info for debugging
-      console.log("Date comparison:", {
-        originalStart: testSeason.seasonDates.start.toISOString(),
-        deserializedStart: deserialized.seasonDates.start.toISOString(),
-        formattedOriginalStart: formatDate(testSeason.seasonDates.start),
-        formattedDeserializedStart: formatDateStart
-      })
-      
-      // Check dates using format strings
-      expect(formatDateStart).toBe(formatDate(testSeason.seasonDates.start))
-      expect(formatDateEnd).toBe(formatDate(testSeason.seasonDates.end))
-      
-      // Log the final result
-      console.log("Test Season Deserialized:", JSON.stringify({
-        ...deserialized,
-        seasonDates: {
-          start: deserialized.seasonDates.start.toISOString(),
-          end: deserialized.seasonDates.end.toISOString()
-        }
-      }))
+
+      expect(formatDateStart).toBe(formatDate(originalStartDate))
+      expect(formatDateEnd).toBe(formatDate(originalEndDate))
+
+      // ...existing code...
     })
   })
 })

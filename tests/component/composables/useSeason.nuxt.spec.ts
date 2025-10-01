@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {type Season, useSeason} from '@/composables/useSeason'
 import type {DateRange} from "~/types/dateTypes"
+import {createDefaultWeekdayMap} from '@/utils/date'
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -112,5 +113,116 @@ describe('getDefaultSeason', () => {
             expect(deserialized).toEqual(defaultSeason)
             expect(defaultSeason.seasonDates.start < defaultSeason.seasonDates.end).toBe(true)
         }
+    })
+})
+
+describe('generateDinnerEventDataForSeason', () => {
+    const { generateDinnerEventDataForSeason, getDefaultSeason } = useSeason()
+
+    it('should generate events for all cooking days within season dates', () => {
+        // GIVEN: A season with Monday and Wednesday as cooking days
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 1,
+            seasonDates: {
+                start: new Date(2025, 0, 6),  // Monday, Jan 6, 2025
+                end: new Date(2025, 0, 31)     // Friday, Jan 31, 2025
+            },
+            cookingDays: createDefaultWeekdayMap([true, false, true, false, false, false, false]) // Mon, Wed
+        }
+
+        // WHEN: Generating dinner event data
+        const events = generateDinnerEventDataForSeason(season)
+
+        // THEN: Events are created for all Mondays and Wednesdays
+        expect(events.length).toBeGreaterThan(0)
+
+        // AND: All events have correct properties
+        events.forEach(event => {
+            expect(event.seasonId).toBe(1)
+            expect(event.menuTitle).toBe('TBD')
+            expect(event.dinnerMode).toBe('NONE')
+            expect(event.chefId).toBeNull()
+            expect(event.cookingTeamId).toBeNull()
+
+            // Verify dates are Monday (1) or Wednesday (3)
+            const dayOfWeek = event.date.getDay()
+            expect([1, 3]).toContain(dayOfWeek)
+        })
+    })
+
+    it('should exclude holidays from generated events', () => {
+        // GIVEN: A season with Tuesday as cooking day and a holiday
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 2,
+            seasonDates: {
+                start: new Date(2025, 0, 1),
+                end: new Date(2025, 0, 31)
+            },
+            cookingDays: createDefaultWeekdayMap([false, true, false, false, false, false, false]), // Tuesday
+            holidays: [
+                {
+                    start: new Date(2025, 0, 14),  // Tuesday, Jan 14
+                    end: new Date(2025, 0, 14)
+                }
+            ]
+        }
+
+        // WHEN: Generating dinner event data
+        const events = generateDinnerEventDataForSeason(season)
+
+        // THEN: No event exists for the holiday date
+        const holidayDate = new Date(2025, 0, 14)
+        const hasHolidayEvent = events.some(event =>
+            event.date.getTime() === holidayDate.getTime()
+        )
+        expect(hasHolidayEvent).toBe(false)
+
+        // AND: Events exist for other Tuesdays
+        expect(events.length).toBeGreaterThan(0)
+        events.forEach(event => {
+            expect(event.date.getDay()).toBe(2) // Tuesday
+        })
+    })
+
+    it('should return empty array when no cooking days are selected', () => {
+        // GIVEN: A season with no cooking days
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 3,
+            cookingDays: createDefaultWeekdayMap(false) // All false
+        }
+
+        // WHEN: Generating dinner event data
+        const events = generateDinnerEventDataForSeason(season)
+
+        // THEN: No events are generated
+        expect(events).toEqual([])
+    })
+
+    it('should respect season date boundaries', () => {
+        // GIVEN: A short season (one week) with daily cooking
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 4,
+            seasonDates: {
+                start: new Date(2025, 0, 6),   // Monday
+                end: new Date(2025, 0, 10)     // Friday
+            },
+            cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]) // Mon-Fri
+        }
+
+        // WHEN: Generating dinner event data
+        const events = generateDinnerEventDataForSeason(season)
+
+        // THEN: Exactly 5 events (Mon-Fri)
+        expect(events.length).toBe(5)
+
+        // AND: All events are within season boundaries
+        events.forEach(event => {
+            expect(event.date >= season.seasonDates.start).toBe(true)
+            expect(event.date <= season.seasonDates.end).toBe(true)
+        })
     })
 })

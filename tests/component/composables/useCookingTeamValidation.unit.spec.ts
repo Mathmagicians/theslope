@@ -9,8 +9,7 @@ describe('useCookingTeamValidation', () => {
     TeamRoleSchema,
     validateCookingTeam,
     validateCookingTeamWithMembers,
-    getTeamMemberCounts,
-    validateTeamComposition
+    getTeamMemberCounts
   } = useCookingTeamValidation()
 
   describe('CookingTeamSchema', () => {
@@ -106,9 +105,7 @@ describe('useCookingTeamValidation', () => {
       const result = CookingTeamWithMembersSchema.safeParse(teamWithoutMembers)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.chefs).toEqual([])
-        expect(result.data.cooks).toEqual([])
-        expect(result.data.juniorHelpers).toEqual([])
+        expect(result.data.assignments).toEqual([])
       }
     })
 
@@ -116,24 +113,18 @@ describe('useCookingTeamValidation', () => {
       const teamWithMembers = {
         seasonId: 1,
         name: "Team Full",
-        chefs: [
-          { inhabitantId: 1, role: 'CHEF' as const }
-        ],
-        cooks: [
-          { inhabitantId: 2, role: 'COOK' as const },
-          { inhabitantId: 3, role: 'COOK' as const }
-        ],
-        juniorHelpers: [
-          { inhabitantId: 4, role: 'JUNIORHELPER' as const }
+        assignments: [
+          { teamId: 1, inhabitantId: 1, role: 'CHEF' as const },
+          { teamId: 1, inhabitantId: 2, role: 'COOK' as const },
+          { teamId: 1, inhabitantId: 3, role: 'COOK' as const },
+          { teamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' as const }
         ]
       }
 
       const result = CookingTeamWithMembersSchema.safeParse(teamWithMembers)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.chefs).toHaveLength(1)
-        expect(result.data.cooks).toHaveLength(2)
-        expect(result.data.juniorHelpers).toHaveLength(1)
+        expect(result.data.assignments).toHaveLength(4)
       }
     })
 
@@ -141,8 +132,8 @@ describe('useCookingTeamValidation', () => {
       const teamWithInvalidRole = {
         seasonId: 1,
         name: "Team Invalid",
-        chefs: [
-          { inhabitantId: 1, role: 'INVALID_ROLE' }
+        assignments: [
+          { teamId: 1, inhabitantId: 1, role: 'INVALID_ROLE' }
         ]
       }
 
@@ -177,16 +168,12 @@ describe('useCookingTeamValidation', () => {
       const teamWithMembers = {
         seasonId: 1,
         name: "Test Team",
-        chefs: [],
-        cooks: [],
-        juniorHelpers: []
+        assignments: []
       }
 
       expect(() => validateCookingTeamWithMembers(teamWithMembers)).not.toThrow()
       const result = validateCookingTeamWithMembers(teamWithMembers)
-      expect(result.chefs).toEqual([])
-      expect(result.cooks).toEqual([])
-      expect(result.juniorHelpers).toEqual([])
+      expect(result.assignments).toEqual([])
     })
   })
 
@@ -196,105 +183,27 @@ describe('useCookingTeamValidation', () => {
         const team: CookingTeamWithMembers = {
           seasonId: 1,
           name: "Test Team",
-          chefs: [
-            { inhabitantId: 1, role: 'CHEF' }
-          ],
-          cooks: [
-            { inhabitantId: 2, role: 'COOK' },
-            { inhabitantId: 3, role: 'COOK' }
-          ],
-          juniorHelpers: [
-            { inhabitantId: 4, role: 'JUNIORHELPER' }
+          assignments: [
+            { teamId: 1, inhabitantId: 1, role: 'CHEF' },
+            { teamId: 1, inhabitantId: 2, role: 'COOK' },
+            { teamId: 1, inhabitantId: 3, role: 'COOK' },
+            { teamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' }
           ]
         }
 
         const counts = getTeamMemberCounts(team)
-        expect(counts.total).toBe(4)
-        expect(counts.chefs).toBe(1)
-        expect(counts.cooks).toBe(2)
-        expect(counts.juniorHelpers).toBe(1)
+        expect(counts).toBe(4)
       })
 
       it('should handle empty team', () => {
         const emptyTeam: CookingTeamWithMembers = {
           seasonId: 1,
           name: "Empty Team",
-          chefs: [],
-          cooks: [],
-          juniorHelpers: []
+          assignments: []
         }
 
         const counts = getTeamMemberCounts(emptyTeam)
-        expect(counts.total).toBe(0)
-        expect(counts.chefs).toBe(0)
-        expect(counts.cooks).toBe(0)
-        expect(counts.juniorHelpers).toBe(0)
-      })
-    })
-
-    describe('validateTeamComposition', () => {
-      it('should validate team with at least one chef', () => {
-        const validTeam: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "Valid Team",
-          chefs: [
-            { inhabitantId: 1, role: 'CHEF' }
-          ],
-          cooks: [],
-          juniorHelpers: []
-        }
-
-        const result = validateTeamComposition(validTeam)
-        expect(result.isValid).toBe(true)
-        expect(result.errors).toHaveLength(0)
-        expect(result.counts.chefs).toBe(1)
-      })
-
-      it('should reject team with no chefs', () => {
-        const invalidTeam: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "No Chef Team",
-          chefs: [],
-          cooks: [
-            { inhabitantId: 2, role: 'COOK' }
-          ],
-          juniorHelpers: []
-        }
-
-        const result = validateTeamComposition(invalidTeam)
-        expect(result.isValid).toBe(false)
-        expect(result.errors).toContain('Holdet skal have mindst én køkkenchef')
-      })
-
-      it('should handle team with multiple validation errors', () => {
-        const problematicTeam: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "Problematic Team",
-          chefs: [],
-          cooks: [],
-          juniorHelpers: []
-        }
-
-        const result = validateTeamComposition(problematicTeam)
-        expect(result.isValid).toBe(false)
-        expect(result.errors.length).toBeGreaterThan(0)
-        expect(result.errors).toContain('Holdet skal have mindst én køkkenchef')
-      })
-
-      it('should return counts even for invalid teams', () => {
-        const invalidTeam: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "Invalid Team",
-          chefs: [],
-          cooks: [],
-          juniorHelpers: []
-        }
-
-        const result = validateTeamComposition(invalidTeam)
-        expect(result.counts.total).toBe(0)
-        expect(result.counts.chefs).toBe(0)
-        expect(result.counts.cooks).toBe(0)
-        expect(result.counts.juniorHelpers).toBe(0)
+        expect(counts).toBe(0)
       })
     })
   })
@@ -327,19 +236,17 @@ describe('useCookingTeamValidation', () => {
       const teamWithMemberIds = {
         seasonId: 1,
         name: "Team with Member IDs",
-        chefs: [
-          { id: 1, inhabitantId: 10, role: 'CHEF' as const }
-        ],
-        cooks: [
-          { id: 2, inhabitantId: 20, role: 'COOK' as const }
+        assignments: [
+          { id: 1, teamId: 1, inhabitantId: 10, role: 'CHEF' as const },
+          { id: 2, teamId: 1, inhabitantId: 20, role: 'COOK' as const }
         ]
       }
 
       const result = CookingTeamWithMembersSchema.safeParse(teamWithMemberIds)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.chefs[0].id).toBe(1)
-        expect(result.data.cooks[0].id).toBe(2)
+        expect(result.data.assignments[0].id).toBe(1)
+        expect(result.data.assignments[1].id).toBe(2)
       }
     })
   })
