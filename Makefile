@@ -7,6 +7,15 @@ export
 
 export HEY_TOKEN?="$(shell curl -s -X POST $(HEY_NABO_API)/login  -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)"}' | jq .'token')"
 
+git-cleanup-branch:
+	@current_branch=$$(git branch --show-current); \
+	if [ "$$current_branch" = "main" ]; then \
+		echo "❌ Already on main branch. Please specify branch to delete: make git-cleanup-branch branch=<branch-name>"; \
+		exit 1; \
+	fi; \
+	git checkout main && git pull && git branch -d $$current_branch && \
+	echo "✅ Cleaned up branch $$current_branch"
+
 prisma-to-zod:
 	@npx prisma generate zod
 
