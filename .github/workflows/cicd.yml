@@ -27,7 +27,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 23
-          cache: 'npm'
       - run: |
           echo "Node version: $(node -v), npm version: $(npm -v)"
       - run: npm install -g npm@11
