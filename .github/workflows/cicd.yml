@@ -33,7 +33,7 @@ jobs:
       - run: |
           echo "Node version: $(node -v), npm version: $(npm -v)"
       # - run: npm run lint
-      - run: npm ci
+      - run: npm install
       - run: npx prisma validate
       - name: Run unit tests
         run: npm run test
