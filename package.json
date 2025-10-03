@@ -1,7 +1,12 @@
 {
   "name": "theslope",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
+  "engines" : {
+    "npm" : ">=10.9.0 <11.0.0",
+    "node" : ">=22.0.0 <23.0.0"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -26,16 +31,16 @@
     "db:generate-client": "npx prisma generate"
   },
   "dependencies": {
-    "@nuxt/ui": "^3.3.3",
-    "@nuxt/vite-builder": ">=3.15.3",
+    "@nuxt/ui": "^4.0.0",
+    "@nuxt/vite-builder": "^4.1.2",
     "@pinia/nuxt": "^0.11.2",
     "@prisma/adapter-d1": "^6.16.2",
     "@prisma/client": "^6.16.2",
-    "@vueuse/core": "^12.4.0",
+    "@vueuse/core": "^13.9.0",
     "date-fns": "^4.1.0",
     "ical-generator": "^8.1.1",
     "nuxt": "^4.1.2",
-    "nuxt-auth-utils": "^0.5.10",
+    "nuxt-auth-utils": "^0.5.25",
     "pinia": "^3.0.3",
     "tailwindcss": "^4.1.13",
     "zod": "^3.24.1"
@@ -47,7 +52,7 @@
     "@iconify-json/pajamas": "^1.2.5",
     "@nuxt/eslint": "^0.7.5",
     "@nuxt/test-utils": "^3.15.4",
-    "@nuxt/vite-builder": ">=3.15.3",
+    "@nuxt/vite-builder": "^4.1.2",
     "@playwright/test": "^1.50.1",
     "@types/node": "^22.13.1",
     "@vue/test-utils": "^2.4.6",
@@ -62,10 +67,5 @@
     "vitest": "^3.0.5",
     "wrangler": "^4.34.0",
     "zod-prisma-types": "^3.2.4"
-  },
-  "overrides": {
-    "eslint": {
-      "ajv": "^8.17.1"
-    }
   }
 }

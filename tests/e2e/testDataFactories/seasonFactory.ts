@@ -108,6 +108,27 @@ export class SeasonFactory {
         return {season, teams}
     }
 
+    static readonly generateDinnerEventsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 201
+    ): Promise<any> => {
+        const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`)
+
+        const status = response.status()
+        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+
+        if (expectedStatus === 201) {
+            const responseBody = await response.json()
+            expect(responseBody.seasonId).toBe(seasonId)
+            expect(responseBody.eventCount).toBeGreaterThan(0)
+            expect(Array.isArray(responseBody.events)).toBe(true)
+            return responseBody
+        }
+
+        return await response.json()
+    }
+
     static readonly createDinnerEventsForSeason = async (
         context: BrowserContext,
         seasonId: number,

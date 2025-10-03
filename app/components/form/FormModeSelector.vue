@@ -58,16 +58,15 @@ const getButtonVariant = (mode: FormMode) => {
 </script>
 
 <template>
-  <UButtonGroup size="md" orientation="horizontal" >
+  <UFieldGroup size="md" orientation="horizontal" >
     <UButton
         v-for="item in items"
         :key="item.mode"
         :name="`form-mode-${item.mode}`"
-        :value="item.mode"
         :disabled="isDisabled(item.mode)"
         :active="isSelected(item.mode)"
         :variant="getButtonVariant(item.mode)"
-        color="orange"
+        color="info"
         active-class="ring-2 border-2 ring-orange-200 shadow-md"
         @click="handleSelect(item.mode)"
     >
@@ -76,5 +75,5 @@ const getButtonVariant = (mode: FormMode) => {
       </template>
       <span class="hidden md:block">{{ item.label }}</span>
     </UButton>
-  </UButtonGroup>
+  </UFieldGroup>
 </template>

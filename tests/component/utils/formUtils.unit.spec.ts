@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {toFormMode} from '../../../app/utils/form'
-import {FORM_MODES} from '../../../types/form'
+import {FORM_MODES} from '../../../app/types/form'
 
 describe('toFormMode', () => {
     it.each([

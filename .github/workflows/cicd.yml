@@ -24,13 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ls -la
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 23
-          cache: 'npm'
- #     - run: npm run lint
-      - run: npx prisma validate
+          node-version: 22
+      # - run: npm run lint
       - run: npm ci
+      - run: npx prisma validate
       - name: Run unit tests
         run: npm run test
       - name: Install Playwright and browser friends

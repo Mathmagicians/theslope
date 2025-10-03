@@ -2,15 +2,6 @@
 
 ## 🚨 BDD/TDD TEST-FIRST - CRITICAL PRIORITY
 
-### 1a. Write BDD Tests for deleteCookingTeam functionality (test-first) - CRITICAL
-- **Test scenarios**:
-    - Simple team (no members) should be deletable
-    - Team with members - assignments should cascade delete (strong relation)
-    - Team with dinner events - associations should be cleared (events preserved - weak relation)
-- **Verify**: Both strong relation cascades AND weak association clearing
-- **Use**: Factory patterns from ADR-003
-- **File**: Create BDD test file first, following ADR-005 patterns
-
 ### 1b. Write BDD Tests for CookingTeam creation with assignments
 - **Test scenarios**:
     - Team with member assignments (strong relation)
@@ -54,47 +45,12 @@
     - Complete inhabitant cleanup without orphaning data
 - **File**: Create BDD test file first, following ADR-005 patterns
 
-## 🚨 IMPLEMENTATION - After Tests Creation
-
-### 1. Fix deleteCookingTeam - Currently Broken (CRITICAL)
-- **Problem**: Currently ignores CookingTeamAssignments (strong relation)
-- **Impact**: Leaves orphaned team assignments in database
-- **Fix**: Update repository function to delete assignments before team
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 2. Create deleteSeason Function (CRITICAL)
-- **Problem**: No cascade to CookingTeams/DinnerEvents (strong relations)
-- **Impact**: Cannot properly delete seasons
-- **Fix**: Implement function following ADR-005 patterns
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 3. Create deleteInhabitant Function (HIGH)
-- **Problem**: No proper cascade function exists
-- **Impact**: Cannot delete inhabitants without orphaning data
-- **Fix**: Implement with User/Assignment cleanup
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 4. Create deleteHousehold Function (HIGH)
-- **Problem**: No proper cascade function exists
-- **Impact**: Cannot delete households properly
-- **Fix**: Implement with Inhabitant/User cascade
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
 ## The rest
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management
 **Milestone**: Admin can create a dining season with cooking teams and corresponding events
 
 ### Phase 1: Cooking Team Management
-**API Development**
-- Create PUT /api/admin/teams - Create team
-- Create GET /api/admin/teams - List teams by season
-- Create POST /api/admin/teams/[id] - Update team
-- Create DELETE /api/admin/teams/[id] - Delete team
-- Write API tests for all team endpoints
+
 
 **UI Development**
 - Create AdminCookingTeams.vue component
