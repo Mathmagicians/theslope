@@ -183,36 +183,133 @@ test.describe('Season API Tests', () => {
             })
         })
 
-        test.skip("POST /season/[id]/generate-dinner-events should exclude holidays", async ({browser}) => {
+        test("POST /season/[id]/generate-dinner-events should exclude holidays", async ({browser}) => {
             // GIVEN: A season with cooking days and holiday periods defined
+            const context = await validatedBrowserContext(browser)
+
+            // Create season with Monday-Thursday as cooking days, Jan 1 - Jan 31
+            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025
+            const seasonEnd = new Date(2025, 0, 31)   // Jan 31, 2025
+
+            // Define holiday period: Jan 15-20 (inclusive)
+            const holidayStart = new Date(2025, 0, 15)
+            const holidayEnd = new Date(2025, 0, 20)
+
+            const seasonData = {
+                ...SeasonFactory.defaultSeason().season,
+                seasonDates: {
+                    start: seasonStart,
+                    end: seasonEnd
+                },
+                cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]), // Mon-Thu
+                holidays: [{
+                    start: holidayStart,
+                    end: holidayEnd
+                }]
+            }
+
+            const season = await SeasonFactory.createSeason(context, seasonData)
+            createdSeasonIds.push(season.id as number)
+
             // WHEN: Generating dinner events
+            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+
             // THEN: No events created for dates within holiday periods
+            expect(result.eventCount).toBeGreaterThan(0)
+            expect(result.events).toBeDefined()
+
             // Verify by checking all generated event dates against holiday ranges
-            throw new Error('Test not implemented - BDD mock')
+            result.events.forEach(event => {
+                const eventDate = new Date(event.date)
+
+                // Event should NOT fall within holiday period
+                const isInHoliday = eventDate >= holidayStart && eventDate <= holidayEnd
+                expect(isInHoliday, `Event on ${eventDate.toISOString()} should not be in holiday period ${holidayStart.toISOString()} - ${holidayEnd.toISOString()}`).toBe(false)
+            })
         })
 
-        test.skip("POST /season/[id]/generate-dinner-events should return 404 for non-existent season", async ({browser}) => {
+        test("POST /season/[id]/generate-dinner-events should return 404 for non-existent season", async ({browser}) => {
             // GIVEN: Invalid season ID
+            const context = await validatedBrowserContext(browser)
+            const nonExistentSeasonId = 999999
+
             // WHEN: POST /api/admin/season/999999/generate-dinner-events
+            const response = await context.request.post(`/api/admin/season/${nonExistentSeasonId}/generate-dinner-events`)
+
             // THEN: Response status 404
-            throw new Error('Test not implemented - BDD mock')
+            expect(response.status()).toBe(404)
         })
 
-        test.skip("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async ({browser}) => {
-            // GIVEN: A season with no cooking days selected (all false)
-            // WHEN: Generating dinner events
-            // THEN: Response status 400 with validation error
-            // Message should indicate cooking days validation failure
-            throw new Error('Test not implemented - BDD mock')
+        test("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async ({browser}) => {
+            // GIVEN: Attempting to create a season with no cooking days selected (all false)
+            const context = await validatedBrowserContext(browser)
+            const seasonData = {
+                ...SeasonFactory.defaultSeason().season,
+                cookingDays: createDefaultWeekdayMap([false, false, false, false, false, false, false]) // All days false
+            }
+
+            // WHEN: Creating the season
+            // THEN: Should fail with 400 validation error (fail fast at creation time)
+            await SeasonFactory.createSeason(context, seasonData, 400)
+
+            // Validation prevents creating seasons with no cooking days
+            // This is good design - no need to test event generation for invalid data
         })
 
-        test.skip("Generated dinner events should respect season date boundaries", async ({browser}) => {
+        test("Generated dinner events should respect season date boundaries", async ({browser}) => {
             // GIVEN: A season with specific start and end dates
+            const context = await validatedBrowserContext(browser)
+
+            // Create season Feb 10 - Feb 25, 2025 (short period for precise testing)
+            const seasonStart = new Date(2025, 1, 10) // Feb 10, 2025
+            const seasonEnd = new Date(2025, 1, 25)   // Feb 25, 2025
+
+            const seasonData = {
+                ...SeasonFactory.defaultSeason().season,
+                seasonDates: {
+                    start: seasonStart,
+                    end: seasonEnd
+                },
+                cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]), // Mon-Fri
+                holidays: []
+            }
+
+            const season = await SeasonFactory.createSeason(context, seasonData)
+            createdSeasonIds.push(season.id as number)
+
             // WHEN: Generating dinner events
+            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+
             // THEN: All generated events fall within seasonDates.start and seasonDates.end
+            expect(result.eventCount).toBeGreaterThan(0)
+            expect(result.events).toBeDefined()
+
+            let firstEventDate: Date | null = null
+            let lastEventDate: Date | null = null
+
+            result.events.forEach(event => {
+                const eventDate = new Date(event.date)
+
+                // All events must be within season boundaries
+                expect(eventDate >= seasonStart, `Event ${eventDate.toISOString()} must be on or after season start ${seasonStart.toISOString()}`).toBe(true)
+                expect(eventDate <= seasonEnd, `Event ${eventDate.toISOString()} must be on or before season end ${seasonEnd.toISOString()}`).toBe(true)
+
+                // Track first and last events
+                if (!firstEventDate || eventDate < firstEventDate) {
+                    firstEventDate = eventDate
+                }
+                if (!lastEventDate || eventDate > lastEventDate) {
+                    lastEventDate = eventDate
+                }
+            })
+
             // AND: First event is on or after seasonDates.start
+            expect(firstEventDate).toBeDefined()
+            expect(firstEventDate! >= seasonStart).toBe(true)
+
             // AND: Last event is on or before seasonDates.end
-            throw new Error('Test not implemented - BDD mock')
+            expect(lastEventDate).toBeDefined()
+            expect(lastEventDate! <= seasonEnd).toBe(true)
         })
 
     }) // End Generate Dinner Events

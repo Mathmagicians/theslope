@@ -50,12 +50,7 @@
 **Milestone**: Admin can create a dining season with cooking teams and corresponding events
 
 ### Phase 1: Cooking Team Management
-**API Development**
-- Create PUT /api/admin/teams - Create team
-- Create GET /api/admin/teams - List teams by season
-- Create POST /api/admin/teams/[id] - Update team
-- Create DELETE /api/admin/teams/[id] - Delete team
-- Write API tests for all team endpoints
+
 
 **UI Development**
 - Create AdminCookingTeams.vue component
