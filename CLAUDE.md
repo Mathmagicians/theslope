@@ -52,15 +52,10 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
   - Don't manually import utils from `~/utils/*` - they're auto-imported
   - Don't manually import composables from `~/composables/*` - they're auto-imported
   - Don't manually import components - they're auto-imported
-- **Testing**:
+- **Testing**: @docs/testing.md
   - `*.unit.spec.ts`: Pure function tests (Vitest)
   - `*.nuxt.spec.ts`: Nuxt component tests
   - `*.e2e.spec.ts`: End-to-end tests (Playwright)
-  - **Testing Guidelines**:
-    - Prefer assertions over console logs (`expect()` instead of `console.log()`)
-    - Use meaningful test names that describe the behavior being tested
-    - Focus tests on business requirements, not implementation details
-    - When testing async behavior, use proper `await` patterns
 - **Best Practices**:
   - Strict TypeScript typing
   - Preserve comments and test cases when refactoring

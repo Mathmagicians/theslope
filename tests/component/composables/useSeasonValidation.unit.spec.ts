@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest'
-import {useSeasonValidation, type Season} from '@/composables/useSeasonValidation'
-import {createDefaultWeekdayMap, createDateRange, formatDate} from '@/utils/date'
-import type {DateRange} from "@/types/dateTypes"
+import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
+import {createDefaultWeekdayMap, createDateRange, formatDate} from '~/utils/date'
+import type {DateRange} from "~/types/dateTypes"
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 
 // Add testSeason using the factory

@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest'
-import {type Season, useSeason} from '@/composables/useSeason'
+import {type Season, useSeason} from '~/composables/useSeason'
 import type {DateRange} from "~/types/dateTypes"
-import {createDefaultWeekdayMap} from '@/utils/date'
+import {createDefaultWeekdayMap} from '~/utils/date'
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {

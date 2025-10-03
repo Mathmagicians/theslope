@@ -1,7 +1,7 @@
 // tests/dateRangeValidation.test.ts
 import {describe, it, expect, assertType} from 'vitest'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
-import {parseDate} from '~/utils/date'
+import {parseDate, createDateRange, compareDateRanges} from '~/utils/date'
 import type { DateRange} from '~/types/dateTypes'
 import {intervalToDuration} from "date-fns"
 

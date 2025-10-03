@@ -44,19 +44,18 @@ describe('Plan Store', () => {
         }
     })
 
+    const endpoint = vi.fn()
+
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.clearAllMocks()
-        vi.restoreAllMocks()
+        endpoint.mockClear()
+        registerEndpoint('/api/admin/season', endpoint)
+        // Clear Nuxt data cache to prevent useFetch caching between tests
+        clearNuxtData()
     })
 
     describe('loads seasons successfully', () => {
-        const endpoint = vi.fn()
-
-        beforeEach(() => {
-            registerEndpoint('/api/admin/season', endpoint)
-        })
-
         it('returns mock seasons', async () => {
             endpoint.mockReturnValue(mockSeasons)
             const store = usePlanStore()
@@ -71,28 +70,20 @@ describe('Plan Store', () => {
     })
 
     describe('handles empty server response', () => {
-        const endpoint = vi.fn()
-
-        beforeEach(() => {
-            registerEndpoint('/api/admin/season', endpoint)
-        })
-
         it('handles empty array', async () => {
             endpoint.mockReturnValue([])
             const store = usePlanStore()
             await store.loadSeasons()
-            expect(store.seasons).toEqual([])
+            // Verify endpoint was called with empty array
+            expect(endpoint).toHaveBeenCalled()
+            expect(endpoint.mock.results[0].value).toEqual([])
+            // Store should be updated to reflect empty response
+            expect(store.seasons.length).toBe(0)
             expect(store.isNoSeasons).toBe(true)
         })
     })
 
     describe('initialization', () => {
-        const endpoint = vi.fn()
-
-        beforeEach(() => {
-            registerEndpoint('/api/admin/season', endpoint)
-        })
-
         it('initializes without errors', () => {
             endpoint.mockReturnValue([])
             const store = usePlanStore()

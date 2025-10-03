@@ -1,5 +1,5 @@
-import {WEEKDAYS, type DateRange} from '@/types/dateTypes'
-import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '@/utils/date'
+import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
+import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import type {DinnerEventCreate} from './useDinnerEventValidation'

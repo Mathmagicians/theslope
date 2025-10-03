@@ -1,7 +1,7 @@
 import {z} from 'zod'
-import {WEEKDAYS, type DateRange} from '@/types/dateTypes'
-import {dateRangeSchema} from '@/composables/useDateRangeValidation'
-import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '@/utils/date'
+import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
+import {dateRangeSchema} from '~/composables/useDateRangeValidation'
+import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '~/utils/date'
 
 /**
  * Validation schemas and serialization functions for Season objects

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {FORM_MODES} from "@/types/form"
+import {FORM_MODES} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 

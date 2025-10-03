@@ -49,7 +49,7 @@ const isNavigation = (index: number): boolean => index === 0 || index === button
 
 <template>
 
-    <UButtonGroup size="md" orientation="horizontal" :ui="{ rounded: 'rounded-xl' }" >
+    <UFieldGroup size="md" orientation="horizontal" :ui="{ rounded: 'rounded-xl' }" >
       <UButton
           v-for="(step, index ) in buttons"
           :key="index"
@@ -67,6 +67,6 @@ const isNavigation = (index: number): boolean => index === 0 || index === button
         <span v-if="!isNavigation(index)" class="rounded-full  border-2 ring-1 border-lavender-300 ring-lavender-100 font-bold px-1.5"> {{ index }}  </span>
         <span  v-if="!isNavigation(index) "  class="hidden lg:block"> {{ step.label }} </span>
       </UButton>
-    </UButtonGroup>
+    </UFieldGroup>
 
 </template>

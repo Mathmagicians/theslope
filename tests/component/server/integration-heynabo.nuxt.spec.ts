@@ -1,6 +1,5 @@
 // @vitest-environment nuxt
-//import {expect, test} from '@nuxt/test-utils/playwright'
-import {loginUserIntoHeynabo} from "~/server/integration/heynabo"
+import {loginUserIntoHeynabo} from "~~/server/integration/heynabo"
 import {describe, expect, test, it} from "vitest"
 
 describe('Heynabo-Integation-e2e-tests', async () => {

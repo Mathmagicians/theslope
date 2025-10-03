@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { useCookingTeamValidation, type CookingTeam, type CookingTeamWithMembers } from '@/composables/useCookingTeamValidation'
+import { useCookingTeamValidation, type CookingTeam, type CookingTeamWithMembers } from '~/composables/useCookingTeamValidation'
 
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
