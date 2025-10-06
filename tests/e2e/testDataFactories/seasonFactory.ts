@@ -1,4 +1,4 @@
-import {formatDate} from "../../../app/utils/date"
+import {formatDate, formatDateRange, createDateRange} from "../../../app/utils/date"
 import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
 import {
     type CookingTeam,
@@ -15,13 +15,16 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 export class SeasonFactory {
     static readonly today = new Date()
     static readonly ninetyDaysLater = new Date(this.today.getTime() + 90 * 24 * 60 * 60 * 1000)
+    static readonly tomorrow = new Date(this.today.getTime() + 1 * 24 * 60 * 60 * 1000)
 
+    // Default season data for tests
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
-            start: formatDate(this.today),
-            end: formatDate(this.ninetyDaysLater)
+            start: this.today,
+            end: this.ninetyDaysLater
         },
+        holidayDates: [createDateRange(this.today, this.tomorrow)],
         isActive: false,
         cookingDays: {
             mandag: true,
@@ -32,7 +35,7 @@ export class SeasonFactory {
             loerdag: false,
             soendag: false
         },
-        holidays: [],
+        holidays: [ createDateRange(this.today, this.tomorrow)],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }

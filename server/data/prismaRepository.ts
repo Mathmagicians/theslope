@@ -17,6 +17,10 @@ import CookingTeamCreateInput = PrismaFromClient.CookingTeamCreateInput
 import DinnerEventCreateInput = PrismaFromClient.DinnerEventCreateInput
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 
+type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
+    include: { Inhabitant: true }
+}>
+
 const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
@@ -79,7 +83,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
     }
 }
 
-export async function fetchUser(email: string, d1Client: D1Database): Promise<(User & {Inhabitant?: Inhabitant}) | null> {
+export async function fetchUser(email: string, d1Client: D1Database): Promise<UserWithInhabitant | null> {
     console.info(`👨‍💻 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
 

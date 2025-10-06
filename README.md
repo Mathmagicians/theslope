@@ -35,7 +35,12 @@ Run on development server (localhost:3000)
 ```npm run deploy```
 
 ## 🤖 How to test
-🚧 on the way
+Check out more information at: [test documentation](docs/testing.md)
+```bash
+npm run test:e2e # run e2e tests
+npm run test # run unit & component tests
+```
+### Test environments
 -  Heynabo test space: - [ ] https://demo.spaces.heynabo.com/, bruger mail `agata@mathmagicians.dk`, kode spørg @themathmagician
 
 ## Tech stuff

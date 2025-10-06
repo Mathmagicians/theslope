@@ -101,46 +101,144 @@ test.describe('Season API Tests', () => {
 
 // === BDD TEST CASES FOR SEASON AGGREGATE (ADR-005) ===
 
-        test.skip("PUT should create season with cooking teams", async ({browser}) => {
-            // TODO: Implement BDD test - create season with cooking teams (strong relation)
-            // Use SeasonFactory.createSeasonWithTeams()
-            throw new Error('Test not implemented - BDD mock')
+        test("PUT should create season with cooking teams", async ({browser}) => {
+            // GIVEN: Season data with request to create cooking teams
+            const context = await validatedBrowserContext(browser)
+
+            // WHEN: Create season with 2 cooking teams
+            const {season, teams} = await SeasonFactory.createSeasonWithTeams(
+                context,
+                SeasonFactory.defaultSeason().season,
+                2
+            )
+            createdSeasonIds.push(season.id as number)
+
+            // THEN: Season should be created
+            expect(season.id).toBeDefined()
+            expect(season.shortName).toBeDefined()
+
+            // AND: Cooking teams should be created and linked to season
+            expect(teams).toHaveLength(2)
+            expect(teams[0].id).toBeDefined()
+            expect(teams[0].seasonId).toBe(season.id)
+            expect(teams[1].id).toBeDefined()
+            expect(teams[1].seasonId).toBe(season.id)
+
+            // Verify teams can be retrieved
+            const team1Response = await context.request.get(`/api/admin/team/${teams[0].id}`)
+            expect(team1Response.status()).toBe(200)
+            const team1Data = await team1Response.json()
+            expect(team1Data.seasonId).toBe(season.id)
         })
 
-        test.skip("PUT should create season with dinner events", async ({browser}) => {
-            // TODO: Implement BDD test - create season with dinner events (strong relation)
-            // Use SeasonFactory.createDinnerEventsForSeason()
-            throw new Error('Test not implemented - BDD mock')
+        test("DELETE should cascade delete cooking teams (strong relation)", async ({browser}) => {
+            // GIVEN: A season with cooking teams
+            const context = await validatedBrowserContext(browser)
+            const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, SeasonFactory.defaultSeason().season, 2)
+            createdSeasonIds.push(season.id as number)
+
+            // Verify teams were created
+            expect(teams).toHaveLength(2)
+            expect(teams[0].id).toBeDefined()
+            expect(teams[1].id).toBeDefined()
+
+            // Verify teams exist via GET
+            const team1Response = await context.request.get(`/api/admin/team/${teams[0].id}`)
+            expect(team1Response.status()).toBe(200)
+
+            // WHEN: Season is deleted
+            await SeasonFactory.deleteSeason(context, season.id as number)
+
+            // THEN: Teams should be cascade deleted 
+            const team1AfterDelete = await context.request.get(`/api/admin/team/${teams[0].id}`)
+            expect(team1AfterDelete.status()).toBe(404)
+
+            const team2AfterDelete = await context.request.get(`/api/admin/team/${teams[1].id}`)
+            expect(team2AfterDelete.status()).toBe(404)
+
+            // Remove from cleanup list (already deleted)
+            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
         })
 
-        test.skip("PUT should create complete seasonal aggregate", async ({browser}) => {
-            // TODO: Implement BDD test - create season with teams AND events
-            // Use SeasonFactory.createSeasonWithTeamsAndDinners()
-            throw new Error('Test not implemented - BDD mock')
+        test("DELETE should cascade delete dinner events (strong relation)", async ({browser}) => {
+            // GIVEN: A season with dinner events
+            const context = await validatedBrowserContext(browser)
+            const seasonData = {
+                ...SeasonFactory.defaultSeason().season,
+                cookingDays: createDefaultWeekdayMap([true, true, false, false, false, false, false]) // Mon, Tue only
+            }
+            const season = await SeasonFactory.createSeason(context, seasonData)
+            createdSeasonIds.push(season.id as number)
+
+            // Generate dinner events for the season
+            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+            expect(result.eventCount).toBeGreaterThan(0)
+            expect(result.events.length).toBeGreaterThan(0)
+
+            // Verify events exist via GET
+            const firstEventId = result.events[0].id
+            const eventResponse = await context.request.get(`/api/admin/dinner-event/${firstEventId}`)
+            expect(eventResponse.status()).toBe(200)
+
+            // WHEN: Season is deleted
+            await SeasonFactory.deleteSeason(context, season.id as number)
+
+            // THEN: Dinner events should be cascade deleted
+            const eventAfterDelete = await context.request.get(`/api/admin/dinner-event/${firstEventId}`)
+            expect(eventAfterDelete.status()).toBe(404)
+
+            // Verify ALL events are deleted
+            for (const event of result.events) {
+                const response = await context.request.get(`/api/admin/dinner-event/${event.id}`)
+                expect(response.status()).toBe(404)
+            }
+
+            // Remove from cleanup list (already deleted)
+            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
         })
 
-        test.skip("DELETE should cascade delete cooking teams (strong relation)", async ({browser}) => {
-            // TODO: Implement BDD test - mirrors PUT season with teams
-            // 1. Create season with teams using SeasonFactory.createSeasonWithTeams()
-            // 2. DELETE season using SeasonFactory.deleteSeason()
-            // 3. Verify teams are cascade deleted (strong relation)
-            throw new Error('Test not implemented - BDD mock')
-        })
+        test("DELETE should cascade delete complete seasonal aggregate", async ({browser}) => {
+            // GIVEN: A season with both cooking teams AND dinner events
+            const context = await validatedBrowserContext(browser)
 
-        test.skip("DELETE should cascade delete dinner events (strong relation)", async ({browser}) => {
-            // TODO: Implement BDD test - mirrors PUT season with events
-            // 1. Create season with events using SeasonFactory.createDinnerEventsForSeason()
-            // 2. DELETE season using SeasonFactory.deleteSeason()
-            // 3. Verify events are cascade deleted (strong relation)
-            throw new Error('Test not implemented - BDD mock')
-        })
+            // Create season with 2 cooking teams
+            const {season, teams} = await SeasonFactory.createSeasonWithTeams(
+                context,
+                SeasonFactory.defaultSeason().season,
+                2
+            )
+            createdSeasonIds.push(season.id as number)
 
-        test.skip("DELETE should cascade delete complete seasonal aggregate", async ({browser}) => {
-            // TODO: Implement BDD test - mirrors PUT complete seasonal aggregate
-            // 1. Create complete season aggregate
-            // 2. DELETE season
-            // 3. Verify ALL nested aggregates properly cleaned up (teams AND events)
-            throw new Error('Test not implemented - BDD mock')
+            // Generate dinner events for the season
+            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+            expect(result.eventCount).toBeGreaterThan(0)
+
+            // Verify teams exist
+            const team1Response = await context.request.get(`/api/admin/team/${teams[0].id}`)
+            expect(team1Response.status()).toBe(200)
+
+            // Verify events exist
+            const firstEventResponse = await context.request.get(`/api/admin/dinner-event/${result.events[0].id}`)
+            expect(firstEventResponse.status()).toBe(200)
+
+            // WHEN: Season is deleted
+            await SeasonFactory.deleteSeason(context, season.id as number)
+
+            // THEN: ALL cooking teams should be cascade deleted
+            const team1AfterDelete = await context.request.get(`/api/admin/team/${teams[0].id}`)
+            expect(team1AfterDelete.status()).toBe(404)
+
+            const team2AfterDelete = await context.request.get(`/api/admin/team/${teams[1].id}`)
+            expect(team2AfterDelete.status()).toBe(404)
+
+            // AND: ALL dinner events should be cascade deleted
+            for (const event of result.events) {
+                const response = await context.request.get(`/api/admin/dinner-event/${event.id}`)
+                expect(response.status()).toBe(404)
+            }
+
+            // Remove from cleanup list (already deleted)
+            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
         })
 
     }) // End Season CRUD operations

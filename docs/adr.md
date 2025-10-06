@@ -1,5 +1,114 @@
 # Architecture Decision Records
 
+## ADR-007: Separation of Concerns - Store vs Component Responsibilities
+
+**Status:** Accepted | **Date:** 2025-01-28
+
+### Decision
+
+**Clear separation between data management (store) and UI state management (component)**
+
+#### Store Responsibilities (Pinia)
+- Server data only (seasons list, selected season)
+- CRUD operations
+- Loading states for async operations
+- Business logic (e.g., which modes are disabled based on data)
+
+#### Component Responsibilities (Vue)
+- UI state (formMode, draftSeason for editing)
+- Mode transitions (create/edit/view)
+- URL synchronization
+- User interactions
+
+### Implementation
+
+**Store** (`app/stores/plan.ts`):
+```typescript
+// STATE - Data only
+const selectedSeason = ref<Season | null>(null)
+const seasons = ref<Season[]>([])
+const isLoading = ref(false)
+
+// COMPUTED - Derived from data
+const isNoSeasons = computed(() => seasons.value?.length === 0)
+const disabledModes = computed(() => {
+    // Business logic based on data state
+    const disabled = []
+    if (isNoSeasons.value) disabled.push('edit')
+    if (!isAdmin.value) disabled.push('create', 'edit')
+    return disabled
+})
+
+// ACTIONS - CRUD only
+const loadSeasons = async () => { /* ... */ }
+const createSeason = async (season: Season) => { /* ... */ }
+const updateSeason = async (season: Season) => { /* ... */ }
+```
+
+**Component** (`app/components/admin/AdminPlanning.vue`):
+```typescript
+// UI STATE - Owned by component
+const formMode = ref<FormMode>(FORM_MODES.VIEW)
+const draftSeason = ref<Season | null>(null)
+
+// MODE TRANSITIONS - Component logic
+const onModeChange = async (mode: FormMode) => {
+    switch (mode) {
+        case FORM_MODES.CREATE:
+            draftSeason.value = getDefaultSeason()
+            break
+        case FORM_MODES.EDIT:
+            draftSeason.value = {...selectedSeason.value}
+            break
+        case FORM_MODES.VIEW:
+            draftSeason.value = null
+            break
+    }
+    formMode.value = mode
+    updateURLQueryFromMode(mode)
+}
+```
+
+### Rationale
+
+1. **Clarity:** It's immediately clear where to find data vs UI state
+2. **Testability:** Store tests focus on data operations, component tests focus on UI behavior
+3. **Maintainability:** Changes to UI flows don't affect data layer and vice versa
+4. **Standards Compliance:** Aligns with ADR-006 (URL-based navigation) - formMode belongs with URL logic in component
+
+### Compliance
+
+1. Store MUST NOT contain UI state (formMode, draftSeason, modal visibility, etc.)
+2. Components MUST NOT duplicate data that belongs in the store
+3. Mode transitions MUST be handled in the component that owns formMode
+4. Store actions MUST throw errors for component to handle (no redundant try-catch)
+
+---
+
+## ADR-006: URL-Based Navigation and Client-Side State
+
+**Status:** Accepted | **Date:** 2025-01-27
+**Updated:** 2025-01-28 (moved draft state to component per ADR-007)
+
+### Decision
+
+**Path-based navigation + query parameters for form mode**
+
+```
+/admin/planning              # Tab navigation
+/admin/planning?mode=edit    # Form mode state
+```
+
+**Client-side draft state:** In-memory Vue ref in component (`app/components/admin/AdminPlanning.vue`)
+
+### Compliance
+
+1. Path-based routing for tabs (`/admin/[tab].vue`)
+2. Query parameter `?mode=edit|create|view` for form mode
+3. Client-side refs for draft data (no persistence) - lives in component, not store
+
+---
+
 ## ADR-005: Aggregate Entity Deletion and Repository Patterns
 
 **Status:** Accepted | **Date:** 2025-01-27

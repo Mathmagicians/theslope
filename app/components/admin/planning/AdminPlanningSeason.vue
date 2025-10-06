@@ -19,7 +19,6 @@ const emit = defineEmits<{
 
 // COMPUTED STATE
 const shortName = computed(() => createSeasonName(model.value.seasonDates))
-const holidays = ref<DateRange[]>(model.value.holidays ?? [])
 
 const isViewMode = computed(() => props.mode === 'view')
 
@@ -27,7 +26,6 @@ const isViewMode = computed(() => props.mode === 'view')
 watch(() => model.value.seasonDates, (newDates) => {
   if (newDates) {
     model.value.shortName = createSeasonName(newDates)
-    console.log('📆 > AdminSeason > Updated shortName to:', model.value.shortName)
   }
 }, { deep: true })
 
@@ -49,15 +47,9 @@ const formTitle = computed(() => {
 
 // ACTIONS
 const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
-  console.info('📆 > AdminSeason > onSubmit', event.data)
-
-  // Create a copy of the form data to emit
   const formData = {...event.data}
-
-  // Emit the update event with the form data
   emit('update', formData)
 }
-
 
 // UI METHODS
 const buttonText = computed(() => {
@@ -70,8 +62,6 @@ const buttonText = computed(() => {
       return 'OK'
   }
 })
-
-console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "model (season)", model.value.shortName)
 </script>
 
 <template>
@@ -82,7 +72,6 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
       <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
         <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
-        <span>Debug: {{ model?.shortName }}</span>
       </h3>
     </template>
 
@@ -123,7 +112,7 @@ console.log("📆 AdminSeason > intialization done, formMode: ", props.mode, "mo
 
               <CalendarDateRangeListPicker
                   name="holidays"
-                  v-model="holidays"
+                  v-model="model.holidays"
                   :disabled="isViewMode"
                   :season-dates="model.seasonDates"
               />

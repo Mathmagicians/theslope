@@ -61,11 +61,6 @@
 - Write E2E tests for team CRUD operations
 
 ### Phase 2: Team Member Assignment
-**API Development**
-- Create PUT /api/admin/teams/[id]/members - Add member
-- Create DELETE /api/admin/teams/[id]/members/[memberId] - Remove member
-- Create GET /api/admin/inhabitants/available - List available inhabitants
-- Write API tests for member assignment endpoints
 
 **UI Development**
 - Create TeamMemberSelector.vue with search

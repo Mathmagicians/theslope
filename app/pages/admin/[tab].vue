@@ -2,7 +2,9 @@
 
 // COMPONENT DEPENDENCIES
 const toast = useToast()
-const {init} = usePlanStore()
+const store = usePlanStore()
+const {initPlanStore} = store
+const {isLoading, error} = storeToRefs(store)
 const route = useRoute()
 
 // UI - ITEMS
@@ -101,16 +103,14 @@ const updateRouteParamFromTab = async (tab: string) => {
 }
 
 // INITIALIZATION
-
-const {status, error} = await useAsyncData('planStore', async () => {
-  await init()
+onMounted(async () => {
+  await initPlanStore()
   toast.add({
     id: 'seasons-loaded',
     title: 'Data for Sæsoner indlæst',
     description: 'Sæsoner er indlæst og klar til brug',
     color: 'info'
   })
-  return {initialized: true}
 })
 
 // UI - CONTINUED
@@ -130,9 +130,9 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="status==='pending'"/>
+    <Loader v-if="isLoading"/>
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
-    <div class="relative py-1 md:py-2 lg:p-4 min-h-screen">
+    <div v-else class="relative py-1 md:py-2 lg:p-4 min-h-screen">
       <!-- Scroll anchor for current tab -->
       <a :id="activeTab" class="absolute w-0 h-0 -top-24 opacity-0 pointer-events-none" href="#">⚓︎</a>
       <UTabs

@@ -8,6 +8,10 @@ export const useApiHandler = () => {
                 message = '' +
                     'Ugyldig forespørgsel. Tjek venligst dine data'
                 break
+            case 401:
+                message = '' +
+                    'Du er ikke autoriseret til at udføre denne handling'
+                break
             case 404:
                 message = 'Data blev ikke fundet'
                 break
@@ -22,9 +26,9 @@ export const useApiHandler = () => {
         toast.add({
             icon: 'i-heroicons-exclamation-triangle',
             title: `${error.statusCode ?? 500}: Uh, åh, fejl kan ske`,
-            description: `${error.message ?? 'Der opstod en uventet fejl'}: ${error.cause ?? 'Ukendt fejl'}`,
+            description: message,
             duration: 10000,
-            color: 'orange'
+            color: 'warning'
         })
 
         return message

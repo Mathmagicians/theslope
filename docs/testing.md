@@ -123,6 +123,37 @@ beforeEach(() => {
 
 Nuxt's `useFetch` caches responses. Without `clearNuxtData()`, cached data from previous tests can leak into subsequent tests.
 
+### E2E UI Testing (Playwright)
+
+**Strategy:** Setup → Interact → Verify
+
+```typescript
+test('GIVEN user in create mode WHEN submitting form THEN season is created', async ({ page, browser }) => {
+  const context = await validatedBrowserContext(browser)
+
+  // GIVEN: Setup via API (fast, reliable)
+  // (optional - only when testing edit/delete flows)
+
+  // WHEN: Interact via UI (test user workflow)
+  await page.goto('/admin/planning?mode=create')
+  await page.locator('input[name="start"]').fill('01/01/2025')
+  await page.locator('button[name="submit-season"]').click()
+
+  // THEN: Verify via API (fast, reliable)
+  const response = await context.request.get('/api/admin/season')
+  const seasons = await response.json()
+  expect(seasons.find(s => s.shortName.includes('2025'))).toBeDefined()
+})
+```
+
+**Key Principles:**
+- Use factories for setup (SeasonFactory, HouseholdFactory)
+- Focus UI tests on user interaction, not data validation
+- Verify data integrity via API, not DOM inspection
+- Keep tests simple - data tests belong in API E2E tests
+
+**Example:** `tests/e2e/ui/AdminSeason.e2e.spec.ts`
+
 ## Common Issues After Framework Upgrades
 
 ### Issue: Click events not emitting
