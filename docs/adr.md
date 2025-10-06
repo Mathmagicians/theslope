@@ -88,6 +88,9 @@ const onModeChange = async (mode: FormMode) => {
 2. Components MUST NOT duplicate data that belongs in the store
 3. Mode transitions MUST be handled in the component that owns formMode
 4. Store actions MUST throw errors for component to handle (no redundant try-catch)
+5. Parent pages MUST initialize stores client-side (`onMounted`), never during SSR setup
+6. Store uses `useFetch` for SSR-compatible data fetching with auth context
+7. Parent pages display loading/error UI using store's `isLoading` and `error` state
 
 ---
 

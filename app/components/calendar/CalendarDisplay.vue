@@ -40,7 +40,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 <template>
   <UCalendar
     :size="getIsMd ? 'xl': 'sm'"
-    :number-of-months="getIsMd ? 2: 1"
+    :number-of-months="getIsMd ? 3: 1"
     :min-value="seasonDatesAsCalendarDates.start"
     :max-value="seasonDatesAsCalendarDates.end"
     :week-starts-on="1"

@@ -82,6 +82,25 @@ export class SeasonFactory {
         return responseBody
     }
 
+    static readonly getAllSeasons = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<Season[]> => {
+        const response = await context.request.get('/api/admin/season')
+        expect(response.status()).toBe(expectedStatus)
+        return await response.json()
+    }
+
+    static readonly getSeason = async (
+        context: BrowserContext,
+        id: number,
+        expectedStatus: number = 200
+    ): Promise<Season> => {
+        const response = await context.request.get(`/api/admin/season/${id}`)
+        expect(response.status()).toBe(expectedStatus)
+        return await response.json()
+    }
+
     static readonly deleteSeason = async (
         context: BrowserContext,
         id: number,

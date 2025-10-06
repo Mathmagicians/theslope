@@ -27,6 +27,13 @@ export const usePlanStore = defineStore("Plan", () => {
         // COMPUTED STATE
         const isNoSeasons = computed(() => seasons.value?.length === 0)
 
+        // HELPER - Auto-select first season
+        const autoSelectFirstSeason = () => {
+            if (seasons.value.length > 0 && !selectedSeason.value) {
+                onSeasonSelect(seasons.value.at(0)?.id ?? -1)
+            }
+        }
+
         const disabledModes = computed(() => {
             const disabledSet: Set<FormMode> = new Set()
             if (isNoSeasons.value) {
@@ -42,9 +49,7 @@ export const usePlanStore = defineStore("Plan", () => {
         // ACTIONS - CRUD operations only
         const loadSeasons = async () => {
             await refreshSeasons()
-            if (seasons.value.length > 0) {
-                onSeasonSelect(seasons.value.at(-1)?.id ?? -1)
-            }
+            autoSelectFirstSeason()
         }
 
         const onSeasonSelect = (id: number) => {
@@ -85,7 +90,7 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // INITIALIZATION - Component will call init() in onMounted
         const initPlanStore = async () => {
-            await loadSeasons()
+            autoSelectFirstSeason()
         }
 
         return {

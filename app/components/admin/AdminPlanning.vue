@@ -136,6 +136,7 @@ const items = [
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
           <USelect
               arrow
+              data-testid="season-selector"
               v-model="selectedSeasonId"
               color="warning"
               :loading="isLoading"

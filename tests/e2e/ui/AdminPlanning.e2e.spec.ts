@@ -1,0 +1,118 @@
+import { test, expect } from '@playwright/test'
+import { authFiles } from '../config'
+import { SeasonFactory } from '../testDataFactories/seasonFactory'
+import testHelpers from '../testHelpers'
+
+const { adminUIFile } = authFiles
+const { validatedBrowserContext } = testHelpers
+
+/**
+ * UI TEST: AdminPlanning Component
+ * Tests season selector dropdown and mode button interactions
+ */
+test.describe('AdminPlanning UI', () => {
+  const adminPlanningUrl = '/admin/planning'
+  let createdSeasonIds: number[] = []
+
+  test.use({ storageState: adminUIFile })
+
+  test.afterAll(async ({ browser }) => {
+    if (createdSeasonIds.length > 0) {
+      const context = await validatedBrowserContext(browser)
+      for (const id of createdSeasonIds) {
+        try {
+          await SeasonFactory.deleteSeason(context, id)
+        } catch (error) {
+          console.error(`Failed to delete test season with ID ${id}:`, error)
+        }
+      }
+    }
+  })
+
+  test('Can load admin planning page with season selector and mode buttons', async ({ page }) => {
+    await page.goto(adminPlanningUrl)
+    await page.waitForLoadState('networkidle')
+
+    // Capture page state for debugging
+    await page.screenshot({ path: 'docs/screenshots/admin/admin-planning-loaded.png', fullPage: true })
+
+    // Verify data-testid attribute exists in HTML
+    const html = await page.content()
+    expect(html).toContain('data-testid="season-selector"')
+
+    // Verify season selector is visible
+    await expect(page.getByTestId('season-selector')).toBeVisible()
+
+    // Verify form mode buttons are visible
+    await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
+    await expect(page.locator('button[name="form-mode-edit"]')).toBeVisible()
+    await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
+  })
+
+  test('GIVEN season exists WHEN selecting from dropdown THEN season is displayed', async ({ page, browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // GIVEN: Create season via API
+    const season = await SeasonFactory.createSeason(context, {
+      ...SeasonFactory.defaultSeason().season,
+      holidays: []
+    })
+    createdSeasonIds.push(season.id)
+
+    // Navigate to planning page
+    await page.goto(adminPlanningUrl)
+    await page.waitForLoadState('networkidle')
+
+    // WHEN: Select season from dropdown
+    await page.getByTestId('season-selector').click()
+    await page.locator(`text=${season.shortName}`).click()
+
+    // THEN: Season should be displayed
+    // Verify the selected season is shown (check combobox text or similar)
+    await expect(page.getByTestId('season-selector')).toContainText(season.shortName.substring(0, 10))
+  })
+
+  test('GIVEN season selected WHEN clicking edit mode THEN form shows in edit mode', async ({ page, browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // GIVEN: Create season via API
+    const season = await SeasonFactory.createSeason(context, {
+      ...SeasonFactory.defaultSeason().season,
+      holidays: []
+    })
+    createdSeasonIds.push(season.id)
+
+    // Navigate and select season
+    await page.goto(adminPlanningUrl)
+    await page.waitForLoadState('networkidle')
+
+    await page.getByTestId('season-selector').click()
+    await page.locator(`text=${season.shortName}`).click()
+
+    // WHEN: Click edit mode button
+    await page.locator('button[name="form-mode-edit"]').click()
+    await page.waitForLoadState('networkidle')
+
+    // THEN: Edit mode button should be active
+    await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+
+    // Form should be visible
+    await expect(page.locator('form#seasonForm')).toBeVisible()
+  })
+
+  test('WHEN clicking create mode THEN form shows in create mode', async ({ page }) => {
+    // GIVEN: Navigate to planning page
+    await page.goto(adminPlanningUrl)
+    await page.waitForLoadState('networkidle')
+
+    // WHEN: Click create mode button
+    await page.locator('button[name="form-mode-create"]').click()
+    await page.waitForLoadState('networkidle')
+
+    // THEN: Create mode button should be active
+    await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
+
+    // Form should be visible
+    await expect(page.locator('form#seasonForm')).toBeVisible()
+  })
+})

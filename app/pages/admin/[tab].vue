@@ -105,12 +105,6 @@ const updateRouteParamFromTab = async (tab: string) => {
 // INITIALIZATION
 onMounted(async () => {
   await initPlanStore()
-  toast.add({
-    id: 'seasons-loaded',
-    title: 'Data for Sæsoner indlæst',
-    description: 'Sæsoner er indlæst og klar til brug',
-    color: 'info'
-  })
 })
 
 // UI - CONTINUED
