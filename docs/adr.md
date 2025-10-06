@@ -20,6 +20,12 @@
 - URL synchronization
 - User interactions
 
+#### Parent Page Responsibilities (`app/pages/admin/[tab].vue`)
+- Store initialization (client-side in `onMounted`)
+- Loading/error UI display (using store's `isLoading` and `error` state)
+- Client-only toast notifications
+- SSR-compatible data fetching (delegated to store via `useFetch`)
+
 ### Implementation
 
 **Store** (`app/stores/plan.ts`):
