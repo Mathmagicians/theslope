@@ -1,13 +1,52 @@
 import {test, expect, BrowserContext} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
-import {formatDate} from '~/utils/date'
-import {useSeasonValidation} from '~/composables/useSeasonValidation'
+import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext} = testHelpers
 const {deserializeSeason} = useSeasonValidation()
+
+/**
+ * Calculate expected dinner event count for a season
+ * Mirrors server logic in generateDinnerEventDataForSeason
+ */
+const calculateExpectedEventCount = (season: Season): number => {
+    const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
+        season.seasonDates.start,
+        season.seasonDates.end,
+        season.cookingDays
+    )
+    const validDates = excludeDatesFromInterval(allCookingDates, season.holidays)
+    return validDates.length
+}
+
+/**
+ * Generate unique test data for UI form submissions
+ * Used when creating seasons via UI (not via factory)
+ */
+const generateUniqueSeasonDates = () => {
+    const date1 = SeasonFactory.generateUniqueDate()
+    const date2 = new Date(date1.getTime() + 90 * 24 * 60 * 60 * 1000) // 90 days later
+
+    // Holiday within season range (30 days after start, 5 days duration)
+    const holidayDate1 = new Date(date1.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const holidayDate2 = new Date(holidayDate1.getTime() + 5 * 24 * 60 * 60 * 1000)
+
+    // Search pattern based on start date: MM/yy
+    const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
+
+    return {
+        startDate: formatDate(date1),
+        endDate: formatDate(date2),
+        holidayStart: formatDate(holidayDate1),
+        holidayEnd: formatDate(holidayDate2),
+        searchPattern
+    }
+}
 
 /**
  * UI TEST STRATEGY:
@@ -23,17 +62,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
     test.use({storageState: adminUIFile})
 
     test.afterAll(async ({browser}) => {
-        // Cleanup using SeasonFactory
-        if (createdSeasonIds.length > 0) {
-            const context = await validatedBrowserContext(browser)
-            for (const id of createdSeasonIds) {
-                try {
-                    await SeasonFactory.deleteSeason(context, id)
-                } catch (error) {
-                    console.error(`Failed to delete test season with ID ${id}:`, error)
-                }
-            }
-        }
+        const context = await validatedBrowserContext(browser)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
     test('Can load admin planning page', async ({page}) => {
@@ -46,7 +76,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
     })
 
-    test('GIVEN user in create mode WHEN filling and submitting form THEN season is created', async ({
+    test('GIVEN user in create mode WHEN filling and submitting form THEN season is created AND dinner events are generated', async ({
                                                                                                          page,
                                                                                                          browser
                                                                                                      }) => {
@@ -62,14 +92,9 @@ test.describe('AdminPlanningSeason Form UI', () => {
         // Wait for form to be visible
         await expect(page.locator('form#seasonForm')).toBeVisible()
 
-        // WHEN: Fill basic form fields
-        const testSalt = Date.now() % 100  // Keep year in reasonable range (2025-2124)
-        const year = 2025 + testSalt
-        const yearLastTwoDigits = String(year).slice(-2)  // Get last 2 digits for shortName match
-        const startDate = formatDate(new Date(year, 0, 1))
-        const endDate = formatDate(new Date(year, 5, 30))
+        // WHEN: Fill basic form fields with unique test data
+        const { startDate, endDate, searchPattern } = generateUniqueSeasonDates()
 
-        // Use scoped selectors - season dates picker has name="seasonDates"
         await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
         await page.locator('[name="seasonDates"] input[name="end"]').fill(endDate)
 
@@ -82,13 +107,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
         // THEN: Form should switch to view mode (indicating success)
         await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
 
-        // Verify season was created via API (shortName format is MM/yy, so match last 2 digits of year)
+        // Verify season was created via API (shortName format is MM/yy)
         const seasons = await SeasonFactory.getAllSeasons(context)
-        const createdSeason = seasons.find(s => s.shortName?.includes(yearLastTwoDigits))
+        const createdSeason = seasons.find(s => s.shortName?.includes(searchPattern))
 
         expect(createdSeason).toBeDefined()
         if (createdSeason) {
-            createdSeasonIds.push(createdSeason.id)
+            createdSeasonIds.push(createdSeason.id!)
+
+            // AND: Verify dinner events were auto-generated for the season
+            const deserializedSeason = deserializeSeason(createdSeason)
+            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+
+            const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, createdSeason.id!)
+            expect(dinnerEvents.length).toBe(expectedEventCount)
         }
     })
 
@@ -96,11 +128,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create season via API
-        const season = await SeasonFactory.createSeason(context, {
-            ...SeasonFactory.defaultSeason().season,
-            holidays: []
-        })
-        createdSeasonIds.push(season.id)
+        const season = await SeasonFactory.createSeason(context, { holidays: [] })
+        createdSeasonIds.push(season.id!)
 
         // Navigate to planning page
         await page.goto(adminPlanningUrl)
@@ -133,18 +162,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.waitForLoadState('networkidle')
         await expect(page.locator('form#seasonForm')).toBeVisible()
 
-        // Fill basic fields with unique year - use scoped selectors
-        const testSalt = Date.now() % 100  // Keep year in reasonable range
-        const year = 2025 + testSalt
-        const yearLastTwoDigits = String(year).slice(-2)
-        const startDate = formatDate(new Date(year, 0, 1))
-        const endDate = formatDate(new Date(year, 5, 30))
+        // Fill basic fields with unique test data
+        const { startDate, endDate, holidayStart, holidayEnd, searchPattern } = generateUniqueSeasonDates()
+
         await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
         await page.locator('[name="seasonDates"] input[name="end"]').fill(endDate)
 
-        // WHEN: Add holiday period via UI - fill holiday dates WITHIN season range
-        const holidayStart = formatDate(new Date(year, 3, 1))   // Apr 1 (within season)
-        const holidayEnd = formatDate(new Date(year, 3, 5))     // Apr 5 (within season)
+        // WHEN: Add holiday period via UI
         await page.locator('[name="holidayRangeList"] input[name="start"]').fill(holidayStart)
         await page.locator('[name="holidayRangeList"] input[name="end"]').fill(holidayEnd)
 
@@ -164,14 +188,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.locator('button[name="submit-season"]').click()
         await page.waitForLoadState('networkidle')
 
-        // Verify season was created with holiday via API (shortName format is MM/yy, match last 2 digits)
+        // Verify season was created with holiday via API (shortName format is MM/yy)
         const serializedSeasons = await SeasonFactory.getAllSeasons(context)
-        const serializedSeason = serializedSeasons.find(s => s.shortName?.includes(yearLastTwoDigits))
+        const serializedSeason = serializedSeasons.find(s => s.shortName?.includes(searchPattern))
 
         expect(serializedSeason).toBeDefined()
         const createdSeason = deserializeSeason(serializedSeason)
         expect(createdSeason.holidays.length).toBeGreaterThan(0)
-        createdSeasonIds.push(createdSeason.id)
+        createdSeasonIds.push(createdSeason.id!)
     })
 
     test('GIVEN season with holiday WHEN removing holiday via UI THEN holiday is removed from list', async ({
@@ -182,11 +206,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
         // GIVEN: Create season with one holiday via API
         const holidayPeriod = {start: new Date(2025, 11, 24), end: new Date(2026, 0, 2)}
-        const season = await SeasonFactory.createSeason(context, {
-            ...SeasonFactory.defaultSeason().season,
-            holidays: [holidayPeriod]
-        })
-        createdSeasonIds.push(season.id)
+        const season = await SeasonFactory.createSeason(context, { holidays: [holidayPeriod] })
+        createdSeasonIds.push(season.id!)
 
         // Navigate and select season
         await page.goto(adminPlanningUrl)
@@ -225,9 +246,4 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
 /**
  * NOTE: Tests for dinner events and cooking teams creation belong in API tests
- * See: tests/e2e/api/admin/season.e2e.spec.ts
- * - PUT should create season with cooking teams (currently skipped)
- * - PUT should create season with dinner events (currently skipped)
- * - DELETE should cascade delete cooking teams (currently skipped)
- * - DELETE should cascade delete dinner events (currently skipped)
  */

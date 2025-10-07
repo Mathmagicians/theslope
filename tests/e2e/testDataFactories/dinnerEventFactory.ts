@@ -93,4 +93,23 @@ export class DinnerEventFactory {
 
         return null
     }
+
+    static readonly getDinnerEventsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 200
+    ): Promise<DinnerEvent[]> => {
+        const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}?seasonId=${seasonId}`)
+
+        const status = response.status()
+        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const responseBody = await response.json()
+            expect(Array.isArray(responseBody)).toBe(true)
+            return responseBody
+        }
+
+        return []
+    }
 }

@@ -12,13 +12,12 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createSeason, updateSeason, onSeasonSelect} = store
+const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect} = store
 
 const route = useRoute()
 const router = useRouter()
 
 // UI STATE - Component owns this
-const selectedStep = ref<number>(1)
 const formMode = ref<FormMode>(FORM_MODES.VIEW)
 const draftSeason = ref<Season | null>(null)
 
@@ -65,14 +64,43 @@ const onModeChange = async (mode: FormMode) => {
   updateURLQueryFromMode(mode)
 }
 
+// UTILITY
+const showSuccessToast = (title: string, description?: string) => {
+  const toast = useToast()
+  toast.add({
+    title,
+    description,
+    icon: 'i-heroicons-check-circle',
+    color: 'success'
+  })
+}
+
 //HANDLING STATE CHANGE
 const handleSeasonUpdate = async (updatedSeason: Season) => {
-  if (formMode.value === FORM_MODES.CREATE) {
-    await createSeason(updatedSeason)
-  } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
-    await updateSeason(updatedSeason)
+  try {
+    if (formMode.value === FORM_MODES.CREATE) {
+      // Step 1: Create season
+      const createdSeason = await createSeason(updatedSeason)
+
+      // Step 2: Generate dinner events for the new season
+      if (createdSeason.id) {
+        try {
+          const eventResult = await generateDinnerEvents(createdSeason.id)
+          showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
+        } catch (eventError) {
+          // Season created but event generation failed
+          showSuccessToast('Sæson oprettet', 'Fællesspisninger kunne ikke genereres automatisk')
+        }
+      }
+    } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
+      await updateSeason(updatedSeason)
+      showSuccessToast('Sæson opdateret')
+    }
+    await onModeChange(FORM_MODES.VIEW)
+  } catch (error) {
+    // Season creation or update failed - stay in current mode
+    // Error toast already shown by handleApiError
   }
-  await onModeChange(FORM_MODES.VIEW)
 }
 
 const handleCancel = async () => {
@@ -105,22 +133,6 @@ watch(formMode, (newMode) => {
   }
 })
 
-// UI STUFF
-
-const items = [
-  {
-    label: 'Kalender',
-    icon: 'i-heroicons-calendar',
-  },
-  {
-    label: 'Madhold',
-    icon: 'i-fluent-mdl2-team-favorite',
-  },
-  {
-    label: 'Chefkokke',
-    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
-  }
-]
 </script>
 
 <template>
@@ -146,9 +158,6 @@ const items = [
           >
           </USelect>
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
-        </div>
-        <div class="w-full md:w-auto md:mx-auto">
-          <FormStepper :steps="items" v-model="selectedStep"/>
         </div>
         <div class="w-full md:w-auto md:ml-auto">
           <HelpButton :text="ADMIN_HELP_TEXTS.planning.calendar"/>

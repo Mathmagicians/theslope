@@ -58,17 +58,31 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const createSeason = async (season: Season) => {
+        const createSeason = async (season: Season): Promise<Season> => {
             try {
                 const serializedSeason = serializeSeason(season)
-                await $fetch('/api/admin/season', {
+                const createdSeason = await $fetch<Season>('/api/admin/season', {
                     method: 'PUT',
                     body: serializedSeason,
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()
+                return createdSeason
             } catch (e: any) {
                 handleApiError(e, 'createSeason')
+                throw e
+            }
+        }
+
+        const generateDinnerEvents = async (seasonId: number) => {
+            try {
+                const result = await $fetch<{seasonId: number, eventCount: number, events: any[]}>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
+                    method: 'POST'
+                })
+                console.info(`🗓️ > PLAN_STORE > Generated ${result.eventCount} dinner events for season ${seasonId}`)
+                return result
+            } catch (e: any) {
+                handleApiError(e, 'generateDinnerEvents')
                 throw e
             }
         }
@@ -107,6 +121,7 @@ export const usePlanStore = defineStore("Plan", () => {
             loadSeasons,
             createSeason,
             updateSeason,
+            generateDinnerEvents,
             onSeasonSelect
         }
     }

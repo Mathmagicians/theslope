@@ -17,16 +17,8 @@ test.describe('AdminPlanning UI', () => {
   test.use({ storageState: adminUIFile })
 
   test.afterAll(async ({ browser }) => {
-    if (createdSeasonIds.length > 0) {
-      const context = await validatedBrowserContext(browser)
-      for (const id of createdSeasonIds) {
-        try {
-          await SeasonFactory.deleteSeason(context, id)
-        } catch (error) {
-          console.error(`Failed to delete test season with ID ${id}:`, error)
-        }
-      }
-    }
+    const context = await validatedBrowserContext(browser)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
   })
 
   test('Can load admin planning page with season selector and mode buttons', async ({ page }) => {
@@ -53,11 +45,8 @@ test.describe('AdminPlanning UI', () => {
     const context = await validatedBrowserContext(browser)
 
     // GIVEN: Create season via API
-    const season = await SeasonFactory.createSeason(context, {
-      ...SeasonFactory.defaultSeason().season,
-      holidays: []
-    })
-    createdSeasonIds.push(season.id)
+    const season = await SeasonFactory.createSeason(context, { holidays: [] })
+    createdSeasonIds.push(season.id!)
 
     // Navigate to planning page
     await page.goto(adminPlanningUrl)
@@ -69,18 +58,15 @@ test.describe('AdminPlanning UI', () => {
 
     // THEN: Season should be displayed
     // Verify the selected season is shown (check combobox text or similar)
-    await expect(page.getByTestId('season-selector')).toContainText(season.shortName.substring(0, 10))
+    await expect(page.getByTestId('season-selector')).toContainText(season.shortName?.substring(0, 10))
   })
 
   test('GIVEN season selected WHEN clicking edit mode THEN form shows in edit mode', async ({ page, browser }) => {
     const context = await validatedBrowserContext(browser)
 
     // GIVEN: Create season via API
-    const season = await SeasonFactory.createSeason(context, {
-      ...SeasonFactory.defaultSeason().season,
-      holidays: []
-    })
-    createdSeasonIds.push(season.id)
+    const season = await SeasonFactory.createSeason(context, { holidays: [] })
+    createdSeasonIds.push(season.id!)
 
     // Navigate and select season
     await page.goto(adminPlanningUrl)

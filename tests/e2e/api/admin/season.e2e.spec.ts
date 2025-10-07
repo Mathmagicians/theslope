@@ -1,11 +1,25 @@
 import {test, expect} from '@playwright/test'
-import {formatDate, createDefaultWeekdayMap} from '../../../../app/utils/date'
+import {formatDate, createDefaultWeekdayMap, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '../../../../app/utils/date'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
-import {useSeasonValidation} from '../../../../app/composables/useSeasonValidation'
+import {useSeasonValidation, type Season} from '../../../../app/composables/useSeasonValidation'
 
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 const {headers, validatedBrowserContext} = testHelpers
+
+/**
+ * Calculate expected dinner event count for a season
+ * Mirrors server logic in generateDinnerEventDataForSeason
+ */
+const calculateExpectedEventCount = (season: Season): number => {
+    const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
+        season.seasonDates.start,
+        season.seasonDates.end,
+        season.cookingDays
+    )
+    const validDates = excludeDatesFromInterval(allCookingDates, season.holidays)
+    return validDates.length
+}
 
 test.describe('Season API Tests', () => {
 
@@ -255,12 +269,16 @@ test.describe('Season API Tests', () => {
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
+            // Calculate expected event count
+            const deserializedSeason = deserializeSeason(season)
+            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+
             // WHEN: POST /api/admin/season/[id]/generate-dinner-events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
-            // THEN: Events created for all Tuesdays and Thursdays within season dates
-            expect(result.eventCount).toBeGreaterThan(0)
-            expect(result.events).toBeDefined()
+            // THEN: Exact number of events created for all Tuesdays and Thursdays
+            expect(result.eventCount).toBe(expectedEventCount)
+            expect(result.events.length).toBe(expectedEventCount)
             expect(Array.isArray(result.events)).toBe(true)
 
             // AND: All events have seasonId set
@@ -309,14 +327,19 @@ test.describe('Season API Tests', () => {
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
+            // Calculate expected event count (excludes holidays)
+            const deserializedSeason = deserializeSeason(season)
+            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+
             // WHEN: Generating dinner events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
-            // THEN: No events created for dates within holiday periods
-            expect(result.eventCount).toBeGreaterThan(0)
+            // THEN: Exact number of events (excluding holidays)
+            expect(result.eventCount).toBe(expectedEventCount)
+            expect(result.events.length).toBe(expectedEventCount)
             expect(result.events).toBeDefined()
 
-            // Verify by checking all generated event dates against holiday ranges
+            // AND: Verify by checking all generated event dates against holiday ranges
             result.events.forEach(event => {
                 const eventDate = new Date(event.date)
 
@@ -375,16 +398,22 @@ test.describe('Season API Tests', () => {
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
+            // Calculate expected event count
+            const deserializedSeason = deserializeSeason(season)
+            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+
             // WHEN: Generating dinner events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
-            // THEN: All generated events fall within seasonDates.start and seasonDates.end
-            expect(result.eventCount).toBeGreaterThan(0)
+            // THEN: Exact number of events for the date range
+            expect(result.eventCount).toBe(expectedEventCount)
+            expect(result.events.length).toBe(expectedEventCount)
             expect(result.events).toBeDefined()
 
             let firstEventDate: Date | null = null
             let lastEventDate: Date | null = null
 
+            // AND: All generated events fall within seasonDates.start and seasonDates.end
             result.events.forEach(event => {
                 const eventDate = new Date(event.date)
 

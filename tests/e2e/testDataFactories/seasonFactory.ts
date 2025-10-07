@@ -17,6 +17,17 @@ export class SeasonFactory {
     static readonly ninetyDaysLater = new Date(this.today.getTime() + 90 * 24 * 60 * 60 * 1000)
     static readonly tomorrow = new Date(this.today.getTime() + 1 * 24 * 60 * 60 * 1000)
 
+    /**
+     * Generate a unique test date to avoid collisions between parallel test runs
+     * @returns Date with random year (4025-4124) and random month (0-11)
+     */
+    static readonly generateUniqueDate = (): Date => {
+        const randomYearOffset = Math.floor(Math.random() * 100) // 0-99
+        const randomMonth = Math.floor(Math.random() * 12) // 0-11
+        const year = 4025 + randomYearOffset
+        return new Date(year, randomMonth, 1)
+    }
+
     // Default season data for tests
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
@@ -55,13 +66,19 @@ export class SeasonFactory {
 
     static readonly createSeason = async (
         context: BrowserContext,
-        aSeason: Partial<Season> = this.defaultSeason().season,
+        aSeason: Partial<Season> = {},
         expectedStatus: number = 201
     ): Promise<Season> => {
+        // Merge partial with defaults to create full Season object
+        const fullSeason: Season = {
+            ...this.defaultSeason().season,
+            ...aSeason
+        }
+
         // For expected failures, send raw data to test server validation
         // For expected success, use serializeSeason for proper client-side validation
         const requestData = expectedStatus === 201
-            ? serializeSeason(aSeason as Season)
+            ? serializeSeason(fullSeason)
             : aSeason
 
         const response = await context.request.put('/api/admin/season',
@@ -116,6 +133,26 @@ export class SeasonFactory {
         }
 
         return null
+    }
+
+    /**
+     * Cleanup multiple seasons by ID (for test afterAll hooks)
+     * Gracefully handles 404 errors for already-deleted seasons
+     */
+    static readonly cleanupSeasons = async (
+        context: BrowserContext,
+        seasonIds: number[]
+    ): Promise<void> => {
+        if (seasonIds.length === 0) return
+
+        for (const id of seasonIds) {
+            try {
+                await this.deleteSeason(context, id)
+            } catch (error) {
+                // Ignore 404 errors (season already deleted), log others
+                console.error(`Failed to delete test season with ID ${id}:`, error)
+            }
+        }
     }
 
     static readonly createSeasonWithTeams = async (

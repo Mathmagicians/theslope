@@ -152,7 +152,74 @@ test('GIVEN user in create mode WHEN submitting form THEN season is created', as
 - Verify data integrity via API, not DOM inspection
 - Keep tests simple - data tests belong in API E2E tests
 
-**Example:** `tests/e2e/ui/AdminSeason.e2e.spec.ts`
+#### Factory Patterns
+
+**Create with defaults:**
+```typescript
+const season = await SeasonFactory.createSeason(context) // Uses all defaults
+const season = await SeasonFactory.createSeason(context, { holidays: [] }) // Override specific fields
+```
+
+**Cleanup:**
+```typescript
+let createdSeasonIds: number[] = []
+
+test.afterAll(async ({browser}) => {
+    const context = await validatedBrowserContext(browser)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+})
+```
+
+**Deserialize API responses:**
+```typescript
+import {useSeasonValidation} from '~/composables/useSeasonValidation'
+const {deserializeSeason} = useSeasonValidation()
+
+const serializedSeason = await SeasonFactory.getSeason(context, id)
+const season = deserializeSeason(serializedSeason)
+expect(season.holidays).toHaveLength(0) // Now an array
+```
+
+#### Component Selection
+
+**Use `data-testid` for complex UI components:**
+```typescript
+// NuxtUI v4+ components may not forward name to DOM
+await page.getByTestId('season-selector').click()
+```
+
+**Use `name` for form elements:**
+```typescript
+await page.locator('input[name="start"]').fill('01/01/2025')
+await page.locator('button[name="submit-season"]').click()
+```
+
+**Use scoped selectors for nested components:**
+```typescript
+await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
+await page.locator('[name="holidayRangeList"] input[name="start"]').fill(holidayStart)
+```
+
+#### Generate Unique Test Data
+
+**For UI form submissions that create unique dates:**
+```typescript
+const generateUniqueSeasonDates = () => {
+    const date1 = SeasonFactory.generateUniqueDate() // Random year/month
+    const date2 = new Date(date1.getTime() + 90 * 24 * 60 * 60 * 1000)
+    const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
+
+    return {
+        startDate: formatDate(date1),
+        endDate: formatDate(date2),
+        searchPattern // For finding created season via API
+    }
+}
+```
+
+**Examples:**
+- `tests/e2e/ui/AdminPlanning.e2e.spec.ts`
+- `tests/e2e/ui/AdminPlanningSeason.e2e.spec.ts`
 
 ## Common Issues After Framework Upgrades
 
