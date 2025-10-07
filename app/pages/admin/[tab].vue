@@ -19,13 +19,13 @@ const baseItems = [
     label: 'Madhold',
     icon: 'i-fluent-mdl2-team-favorite',
     content: 'Oprette madhold i given sæson og administrere madhold. Tildele madhold til madlavningsdage. Tildele medlemmer til madhold',
-    component: 'AdminPlanningTeams'
+    component: 'AdminTeams'
   },
   {
     label: 'Chefkokke',
     icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     content: 'Se og administrer chefkokke. Tildele chefkokke til madlavningsdage',
-    component: 'AdminPlanningChefs'
+    component: 'AdminChefs'
   },
   {
     label: 'Husstande',
