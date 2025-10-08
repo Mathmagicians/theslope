@@ -5,10 +5,12 @@ import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
 import { createDefaultWeekdayMap } from '~/utils/date'
 
-// IMPORTANT: Register endpoint BEFORE importing the store
+// IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
-const endpoint = vi.fn()
-registerEndpoint('/api/admin/season', endpoint)
+const seasonIndexEndpoint = vi.fn()
+const seasonByIdEndpoint = vi.fn()
+registerEndpoint('/api/admin/season', seasonIndexEndpoint)
+registerEndpoint('/api/admin/season/:id', seasonByIdEndpoint)
 
 import { usePlanStore } from '~/stores/plan'
 
@@ -55,14 +57,16 @@ describe('Plan Store', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.clearAllMocks()
-        endpoint.mockClear()
+        seasonIndexEndpoint.mockClear()
+        seasonByIdEndpoint.mockClear()
         // Clear Nuxt data cache to prevent useFetch caching between tests
         clearNuxtData()
     })
 
     describe('loads seasons successfully', () => {
         it('returns mock seasons', async () => {
-            endpoint.mockReturnValue(mockSeasons)
+            seasonIndexEndpoint.mockReturnValue(mockSeasons)
+            seasonByIdEndpoint.mockReturnValue(season1)
             const store = usePlanStore()
             await store.loadSeasons()
             // Check that seasons were loaded by checking their IDs and shortNames
@@ -76,12 +80,12 @@ describe('Plan Store', () => {
 
     describe('handles empty server response', () => {
         it('handles empty array', async () => {
-            endpoint.mockReturnValue([])
+            seasonIndexEndpoint.mockReturnValue([])
             const store = usePlanStore()
             await store.loadSeasons()
             // Verify endpoint was called with empty array
-            expect(endpoint).toHaveBeenCalled()
-            expect(endpoint.mock.results[0].value).toEqual([])
+            expect(seasonIndexEndpoint).toHaveBeenCalled()
+            expect(seasonIndexEndpoint.mock.results[0].value).toEqual([])
             // Store should be updated to reflect empty response
             expect(store.seasons.length).toBe(0)
             expect(store.isNoSeasons).toBe(true)
@@ -90,7 +94,7 @@ describe('Plan Store', () => {
 
     describe('initialization', () => {
         it('initializes without errors', () => {
-            endpoint.mockReturnValue([])
+            seasonIndexEndpoint.mockReturnValue([])
             const store = usePlanStore()
             expect(store.error).toBeUndefined()
             expect(store.seasons).toEqual([])

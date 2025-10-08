@@ -19,8 +19,21 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
+        const selectedSeasonId = ref<number | null>(null)
+        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch(
+            () => `/api/admin/season/${selectedSeasonId.value}`,
+            {
+                transform: (data: SerializedSeason) => deserializeSeason(data),
+                immediate: false,
+                watch: false,
+                onResponseError({ error }) {
+                    handleApiError(error, 'fetchSeason')
+                }
+            }
+        )
+
         // STATE - Data only
-        const selectedSeason = ref<Season | null>(null)
+        const selectedSeason = computed(() => selectedSeasonData.value ?? null)
         const seasons = computed(() => seasonsData.value ?? [])
         const isLoading = computed(() => status.value === 'pending')
 
@@ -28,9 +41,9 @@ export const usePlanStore = defineStore("Plan", () => {
         const isNoSeasons = computed(() => seasons.value?.length === 0)
 
         // HELPER - Auto-select first season
-        const autoSelectFirstSeason = () => {
+        const autoSelectFirstSeason = async () => {
             if (seasons.value.length > 0 && !selectedSeason.value) {
-                onSeasonSelect(seasons.value.at(0)?.id ?? -1)
+                await onSeasonSelect(seasons.value.at(0)?.id ?? -1)
             }
         }
 
@@ -49,22 +62,13 @@ export const usePlanStore = defineStore("Plan", () => {
         // ACTIONS - CRUD operations only
         const loadSeasons = async () => {
             await refreshSeasons()
-            autoSelectFirstSeason()
-        }
-
-        const fetchSeason = async (id: number): Promise<Season> => {
-            try {
-                const serializedSeason = await $fetch<SerializedSeason>(`/api/admin/season/${id}`)
-                return deserializeSeason(serializedSeason)
-            } catch (e: any) {
-                handleApiError(e, 'fetchSeason')
-                throw e
-            }
+            await autoSelectFirstSeason()
         }
 
         const onSeasonSelect = async (id: number) => {
             if (id >= 0) {
-                selectedSeason.value = await fetchSeason(id)
+                selectedSeasonId.value = id
+                await refreshSelectedSeason()
             }
         }
 
@@ -114,7 +118,7 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // INITIALIZATION - Component will call init() in onMounted
         const initPlanStore = async () => {
-            autoSelectFirstSeason()
+            await autoSelectFirstSeason()
         }
 
         return {
