@@ -52,9 +52,19 @@ export const usePlanStore = defineStore("Plan", () => {
             autoSelectFirstSeason()
         }
 
-        const onSeasonSelect = (id: number) => {
+        const fetchSeason = async (id: number): Promise<Season> => {
+            try {
+                const serializedSeason = await $fetch<SerializedSeason>(`/api/admin/season/${id}`)
+                return deserializeSeason(serializedSeason)
+            } catch (e: any) {
+                handleApiError(e, 'fetchSeason')
+                throw e
+            }
+        }
+
+        const onSeasonSelect = async (id: number) => {
             if (id >= 0) {
-                selectedSeason.value = seasons.value.find(season => season.id === id) ?? null
+                selectedSeason.value = await fetchSeason(id)
             }
         }
 

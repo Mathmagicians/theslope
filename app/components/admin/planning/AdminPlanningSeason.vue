@@ -148,7 +148,8 @@ const buttonText = computed(() => {
           <CalendarDisplay class="mx-auto"
                            :seasonDates="model.seasonDates"
                            :cookingDays="model.cookingDays as WeekDayMap"
-                           :holidays="model.holidays"/>
+                           :holidays="model.holidays"
+                           :dinner-events="model.dinnerEvents"/>
         </div>
       </div>
     </template>

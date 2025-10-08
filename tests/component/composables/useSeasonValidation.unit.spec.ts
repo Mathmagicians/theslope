@@ -3,6 +3,7 @@ import {useSeasonValidation, type Season} from '~/composables/useSeasonValidatio
 import {createDefaultWeekdayMap, createDateRange, formatDate} from '~/utils/date'
 import type {DateRange} from "~/types/dateTypes"
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 
 // Add testSeason using the factory
 const testSeason = SeasonFactory.defaultSeason().season
@@ -166,5 +167,67 @@ describe('useSeasonValidation', () => {
 
       // ...existing code...
     })
+
+    it('should correctly serialize and deserialize a Season with relations', () => {
+      const dinnerEvent1 = {
+        ...DinnerEventFactory.defaultDinnerEventData,
+        id: 1,
+        date: new Date(2025, 0, 6),
+        menuTitle: 'Pasta Night',
+        dinnerMode: 'DINEIN' as const,
+        chefId: 1,
+        cookingTeamId: 1
+      }
+
+      const dinnerEvent2 = {
+        ...DinnerEventFactory.defaultDinnerEventData,
+        id: 2,
+        date: new Date(2025, 0, 13),
+        menuTitle: 'Taco Tuesday',
+        dinnerMode: 'TAKEAWAY' as const,
+        chefId: null,
+        cookingTeamId: 2
+      }
+
+      const seasonWithRelations: Season = {
+        ...testSeason,
+        id: 1,
+        dinnerEvents: [dinnerEvent1, dinnerEvent2],
+        CookingTeams: [{id: 1, name: 'Team A'}],
+        ticketPrices: [{id: 1, ticketType: 'ADULT', price: 50}]
+      }
+
+      // Serialize
+      const serialized = serializeSeason(seasonWithRelations)
+
+      // Verify base properties are serialized
+      expect(typeof serialized.cookingDays).toBe('string')
+      expect(typeof serialized.holidays).toBe('string')
+      expect(typeof serialized.seasonDates).toBe('string')
+
+      // Deserialize
+      const deserialized = deserializeSeason({
+        ...serialized,
+        dinnerEvents: seasonWithRelations.dinnerEvents,
+        CookingTeams: seasonWithRelations.CookingTeams,
+        ticketPrices: seasonWithRelations.ticketPrices
+      })
+
+      // Verify base properties
+      expect(deserialized.shortName).toBe(seasonWithRelations.shortName)
+      expect(deserialized.seasonDates.start).toBeInstanceOf(Date)
+      expect(deserialized.seasonDates.end).toBeInstanceOf(Date)
+
+      // Verify relations are preserved
+      const deserializedWithRelations = deserialized 
+      expect(deserializedWithRelations.dinnerEvents).toHaveLength(2)
+      expect(deserializedWithRelations.dinnerEvents![0].date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![0].menuTitle).toBe('Pasta Night')
+      expect(deserializedWithRelations.dinnerEvents![1].date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![1].menuTitle).toBe('Taco Tuesday')
+      expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
+      expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
+    })
+      
   })
 })

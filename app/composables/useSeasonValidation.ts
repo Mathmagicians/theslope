@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '~/utils/date'
+import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 
 /**
  * Validation schemas and serialization functions for Season objects
@@ -19,6 +20,9 @@ export const useSeasonValidation = () => {
             message: "Ferieperioder må ikke overlappe hinanden"
         })
 
+    // Get DinnerEventDisplaySchema for relations
+    const {DinnerEventDisplaySchema} = useDinnerEventValidation()
+
     const BaseSeasonSchema = z.object({
         id: z.number().int().positive().optional(),
         shortName: z.string().min(4),
@@ -27,7 +31,11 @@ export const useSeasonValidation = () => {
         cookingDays: WeekDayMapSchema,
         holidays: holidaysSchema,
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
-        diningModeIsEditableMinutesBefore: z.number().min(0).max(1440)
+        diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),
+        // Optional relations (from server)
+        dinnerEvents: z.array(DinnerEventDisplaySchema).optional(),
+        CookingTeams: z.array(z.any()).optional(), // TODO: add CookingTeam schema when needed
+        ticketPrices: z.array(z.any()).optional()  // TODO: add TicketPrice schema when needed
     })
 
     const SeasonSchema = BaseSeasonSchema.refine(
@@ -37,6 +45,7 @@ export const useSeasonValidation = () => {
             path: ["holidays"]
         }
     )
+    
 
     // Schema for validating already serialized season data (JSON string fields)
     const SerializedSeasonValidationSchema = BaseSeasonSchema.extend({
@@ -66,11 +75,11 @@ export const useSeasonValidation = () => {
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
-    const deserializeSeason = (serialized: SerializedSeason): Season => {
+    const deserializeSeason = (serialized: SerializedSeason | any): Season => {
         try {
             const parsedSeasonDates = JSON.parse(serialized.seasonDates)
 
-            return {
+            const baseSeason = {
                 ...serialized,
                 cookingDays: JSON.parse(serialized.cookingDays),
                 holidays: JSON.parse(serialized.holidays).map((holiday: any) => ({
@@ -82,6 +91,21 @@ export const useSeasonValidation = () => {
                     end: parseDate(parsedSeasonDates.end)
                 }
             }
+
+            // If relations exist, deserialize them
+            if (serialized.dinnerEvents || serialized.CookingTeams || serialized.ticketPrices) {
+                return {
+                    ...baseSeason,
+                    dinnerEvents: serialized.dinnerEvents?.map((event: any) => ({
+                        ...event,
+                        date: new Date(event.date)
+                    })),
+                    CookingTeams: serialized.CookingTeams,
+                    ticketPrices: serialized.ticketPrices
+                }
+            }
+
+            return baseSeason
         } catch (err) {
             throw err
         }
