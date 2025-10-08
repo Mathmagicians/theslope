@@ -142,6 +142,49 @@ The following E2E tests have been temporarily disabled with `test.skip()` to all
 
 ---
 
+## Medium priority: Fix Vitest ECONNREFUSED error on test cleanup
+
+### Issue
+After all tests pass successfully, the test process throws an unhandled ECONNREFUSED error during cleanup:
+```
+AggregateError [ECONNREFUSED]:
+  Error: connect ECONNREFUSED ::1:3000
+  Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+### Current Status
+- **All tests pass**: 125/125 tests passing ✅
+- **Error occurs**: During process teardown after tests complete
+- **Affected**: Only when running all Nuxt tests together (`npm run test`)
+- **Not affected**: Individual test files run without error
+
+### Investigation Done
+- ✅ Confirmed: `plan.ts` uses module-level `useFetch` (Nuxt 4 pattern with `refreshSeasons()`)
+- ✅ Confirmed: Test properly registers mock endpoint before importing store
+- ✅ Confirmed: Other stores use `useFetch` inside actions (users.ts, households.ts)
+- ✅ Searched: Pinia/Nuxt test-utils documentation about `useFetch` in stores
+- ✅ Found: `useFetch` designed for components, not stores (but Nuxt 4 allows it)
+
+### Potential Causes
+1. HMR code (`import.meta.hot`) running in test environment
+2. Nuxt/Vite cleanup trying to connect to dev server (port 3000)
+3. Test environment not fully mocking the Nuxt runtime during cleanup
+4. Known issue with `@nuxt/test-utils` and module-level `useFetch`
+
+### Action Items
+- [ ] Check if `import.meta.hot` is active in test environment
+- [ ] Research `@nuxt/test-utils` GitHub issues for similar problems
+- [ ] Consider using MSW (Mock Service Worker) instead of `registerEndpoint`
+- [ ] Investigate Nuxt 4 test-utils documentation for proper cleanup
+- [ ] Test if issue persists with Pinia 3 migration (scheduled)
+
+### References
+- Pinia testing docs: https://pinia.vuejs.org/cookbook/testing.html
+- `@nuxt/test-utils` issue #943: registerEndpoint doesn't expose to $fetch
+- Search results indicate `useFetch` in stores is problematic for testing
+
+---
+
 ## Major Framework Migrations Plan (Remaining)
 
 ### Pinia 3 Migration (MEDIUM PRIORITY)

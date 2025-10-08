@@ -63,8 +63,8 @@ describe('createDefaultWeekdayMap', () => {
             onsdag: true,
             torsdag: true,
             fredag: true,
-            loerdag: true,
-            soendag: true
+            lørdag: true,
+            søndag: true
         })
     })
 
@@ -77,8 +77,8 @@ describe('createDefaultWeekdayMap', () => {
             onsdag: true,
             torsdag: true,
             fredag: false,
-            loerdag: false,
-            soendag: false
+            lørdag: false,
+            søndag: false
         })
     })
 })

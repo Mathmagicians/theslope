@@ -2,8 +2,15 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
-import { usePlanStore } from '~/stores/plan'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
+import { createDefaultWeekdayMap } from '~/utils/date'
+
+// IMPORTANT: Register endpoint BEFORE importing the store
+// The store's module-level useFetch executes on import
+const endpoint = vi.fn()
+registerEndpoint('/api/admin/season', endpoint)
+
+import { usePlanStore } from '~/stores/plan'
 
 describe('Plan Store', () => {
     // Use SeasonFactory for consistent test data
@@ -28,7 +35,7 @@ describe('Plan Store', () => {
                     shortName: 'Default Season',
                     seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
                     isActive: false,
-                    cookingDays: { mandag: true, tirsdag: true, onsdag: true, torsdag: true, fredag: false, loerdag: false, soendag: false },
+                    cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
                     holidays: [],
                     ticketIsCancellableDaysBefore: 10,
                     diningModeIsEditableMinutesBefore: 90
@@ -36,7 +43,7 @@ describe('Plan Store', () => {
                 deserializeSeason: (data) => ({
                     ...data,
                     seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
-                    cookingDays: { mandag: true, tirsdag: true, onsdag: true, torsdag: true, fredag: false, loerdag: false, soendag: false },
+                    cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
                     holidays: []
                 }),
                 serializeSeason: (season) => season,
@@ -45,13 +52,10 @@ describe('Plan Store', () => {
         }
     })
 
-    const endpoint = vi.fn()
-
     beforeEach(() => {
         setActivePinia(createPinia())
         vi.clearAllMocks()
         endpoint.mockClear()
-        registerEndpoint('/api/admin/season', endpoint)
         // Clear Nuxt data cache to prevent useFetch caching between tests
         clearNuxtData()
     })

@@ -1,4 +1,4 @@
-import {formatDate, formatDateRange, createDateRange} from "../../../app/utils/date"
+import {formatDate, formatDateRange, createDateRange, createDefaultWeekdayMap} from "../../../app/utils/date"
 import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
 import {
     type CookingTeam,
@@ -37,15 +37,7 @@ export class SeasonFactory {
         },
         holidayDates: [createDateRange(this.today, this.tomorrow)],
         isActive: false,
-        cookingDays: {
-            mandag: true,
-            tirsdag: true,
-            onsdag: true,
-            torsdag: true,
-            fredag: false,
-            loerdag: false,
-            soendag: false
-        },
+        cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
         holidays: [ createDateRange(this.today, this.tomorrow)],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90

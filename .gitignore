@@ -33,6 +33,9 @@ nuxt.run.xml server_ nuxt.run.xml
 # testing files
 .cookies.txt
 test-results
+# Ignore compiled JS files in tests (TypeScript source is .ts)
+tests/**/*.js
+!tests/**/*.config.js
 
 # Playwright
 /playwright-report/

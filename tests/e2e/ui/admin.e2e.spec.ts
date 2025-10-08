@@ -18,6 +18,8 @@ test.describe('Admin page path-based navigation', () => {
   // Define admin tabs to test with path-based routing
   const tabs = [
     { name: 'Planlægning', path: 'planning', selector: '[data-test-id="admin-planning"]' },
+    { name: 'Madhold', path: 'teams', selector: '[data-test-id="admin-teams"]' },
+    { name: 'Chefkokke', path: 'chefs', selector: '[data-test-id="admin-chefs"]' },
     { name: 'Husstande', path: 'households', selector: '[data-test-id="admin-households"]' },
     { name: 'Allergier', path: 'allergies', selector: '[data-test-id="admin-allergies"]' },
     { name: 'Brugere', path: 'users', selector: '[data-test-id="admin-users"]' },
