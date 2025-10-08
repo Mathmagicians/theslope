@@ -110,6 +110,10 @@ export const usePlanStore = defineStore("Plan", () => {
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()
+                // Refresh the selected season to get updated data
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
             } catch (e: any) {
                 handleApiError(e, 'updateSeason')
                 throw e
