@@ -119,7 +119,12 @@ test.describe('AdminPlanningSeason Form UI', () => {
             const deserializedSeason = deserializeSeason(createdSeason)
             const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
 
-            const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, createdSeason.id!)
+            // Wait for async dinner event generation to complete
+            const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
+                context,
+                createdSeason.id!,
+                expectedEventCount
+            )
             expect(dinnerEvents.length).toBe(expectedEventCount)
         }
     })

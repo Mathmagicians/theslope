@@ -47,8 +47,8 @@ const formTitle = computed(() => {
 
 // ACTIONS
 const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
-  const formData = {...event.data}
-  emit('update', formData)
+  // Use model.value directly instead of event.data to ensure v-model changes are included
+  emit('update', model.value)
 }
 
 // UI METHODS
