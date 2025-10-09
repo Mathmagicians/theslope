@@ -1,5 +1,62 @@
 # Architecture Decision Records
 
+**NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
+
+## ADR-009: API Index Endpoint Data Inclusion Strategy
+
+**Status:** Accepted | **Date:** 2025-01-28
+
+### Decision
+
+**Weight-based relation inclusion for index endpoints** - Include relations if ALL criteria met:
+
+1. **Bounded Cardinality** (1:1 or 1:few, max ~20 items)
+2. **Lightweight Data** (scalar fields only, max 1 level)
+3. **Essential Context** (necessary to understand list item)
+4. **Performance Safe** (no degradation at scale)
+
+**Index endpoints** (`GET /api/admin/[entity]`): Display-ready data with lightweight relations
+**Detail endpoints** (`GET /api/admin/[entity]/[id]`): Operation-ready data with comprehensive relations
+
+### Examples
+
+**✅ Household → Inhabitants (basic)**
+```typescript
+// GET /api/admin/household - Returns HouseholdListItem[]
+export type HouseholdListItem = Household & {
+  inhabitants: Pick<Inhabitant, 'id' | 'name' | 'lastName' | 'pictureUrl' | 'birthDate'>[]
+}
+
+fetchHouseholds() {
+    return prisma.household.findMany({
+        include: {
+            inhabitants: {
+                select: { id: true, name: true, lastName: true, pictureUrl: true, birthDate: true }
+            }
+        }
+    })
+}
+```
+Bounded (~5-10), lightweight (scalars), essential (identity), performant (single JOIN)
+
+**❌ Season → DinnerEvents**
+```typescript
+// GET /api/admin/season - Returns Season[]
+fetchSeasons() {
+    return prisma.season.findMany() // No includes
+}
+```
+Unbounded (100+), heavy (nested), not essential, performance risk
+
+### Compliance
+
+1. Use Prisma Payload types: `EntityListItem` vs `EntityDetail`
+2. Use `select` for lightweight fields in included relations
+3. Document criteria decisions in repository comments
+4. Index = display-ready, Detail = operation-ready
+
+---
+
 ## ADR-008: useEntityFormManager Composable Pattern
 
 **Status:** Accepted | **Date:** 2025-01-28

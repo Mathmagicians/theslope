@@ -114,8 +114,8 @@ heynabo-post-event:
 theslope-login:
 	@curl -c .cookies.txt $(THE_SLOPE_API)/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } ' |  jq
 
-theslope-admin-get-team:
-	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/team| jq
+theslope-admin-get-households:
+	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/household | jq
 
 theslope-admin-import:
 	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/heynabo/import | jq

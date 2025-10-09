@@ -42,6 +42,28 @@ export type CookingTeamAssignmentWithRelations = PrismaFromClient.CookingTeamAss
     }
 }>
 
+// ADR-009: Lightweight type for list display (index endpoint)
+export type HouseholdSummary = PrismaFromClient.HouseholdGetPayload<{
+    include: {
+        inhabitants: {
+            select: {
+                id: true
+                name: true
+                lastName: true
+                pictureUrl: true
+                birthDate: true
+            }
+        }
+    }
+}>
+
+// ADR-009: Comprehensive type for detail operations (detail endpoint)
+export type HouseholdWithInhabitants = PrismaFromClient.HouseholdGetPayload<{
+    include: {
+        inhabitants: true
+    }
+}>
+
 const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
@@ -269,12 +291,25 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
     }
 }
 
-export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]> {
-    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households`)
+// ADR-009: Index endpoint returns lightweight inhabitant data
+export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSummary[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with basic inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const households = await prisma.household.findMany()
+        const households = await prisma.household.findMany({
+            include: {
+                inhabitants: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
+            }
+        })
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
         return households
     } catch (error) {
@@ -284,14 +319,17 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<Household[]
     }
 }
 
-export async function fetchHousehold(d1Client: D1Database, id: number): Promise<Household | null> {
+export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdWithInhabitants | null> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {
         const household = await prisma.household.findFirst({
-            where: {id}
+            where: {id},
+            include: {
+                inhabitants: true
+            }
         })
-        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household?.name} with ID ${id}`)
+        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household?.name} with ${household?.inhabitants?.length ?? 0} inhabitants`)
         return household ?? null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
