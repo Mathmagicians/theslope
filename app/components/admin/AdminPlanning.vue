@@ -1,82 +1,126 @@
 <script setup lang="ts">
-import {FORM_MODES} from "@/types/form"
+import {FORM_MODES, type FormMode} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 
+const {getDefaultSeason} = useSeason()
 const store = usePlanStore()
 const {
-  formMode,
   isLoading,
   isNoSeasons,
   selectedSeason,
   seasons,
-  disabledModes,
-  getModel
+  disabledModes
 } = storeToRefs(store)
-const {init, createSeason, updateSeason, loadSeasons, onSeasonSelect, onModeChange} = store
+const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect} = store
 
 const route = useRoute()
 const router = useRouter()
 
-// STATE
-const selectedStep = ref<number>(1)
+// UI STATE - Component owns this
+const formMode = ref<FormMode>(FORM_MODES.VIEW)
+const draftSeason = ref<Season | null>(null)
 
 // COMPUTED
-const showAdminSeason = computed(() => {
-  console.log('📆 > AdminPlanning > showAdminSeason > state:',
-      'formMode:', formMode.value,
-      'isLoading:', isLoading.value,
-      'isNoSeasons:', isNoSeasons.value,
-      'getModel exists:', !!getModel.value)
-  return !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && getModel.value
+const selectedSeasonId = computed({
+  get: () => selectedSeason.value?.id ?? undefined,
+  set: (id: number | undefined) => {
+    if (id) {
+      onSeasonSelect(id)
+    }
+  }
 })
+
+const currentModel = computed({
+  get: () => {
+    if (formMode.value === FORM_MODES.VIEW) {
+      return selectedSeason.value
+    }
+    return draftSeason.value
+  },
+  set: (val) => {
+    draftSeason.value = val
+  }
+})
+
+const showAdminSeason = computed(() => {
+  return !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
+})
+
+// MODE TRANSITIONS
+const onModeChange = async (mode: FormMode) => {
+  switch (mode) {
+    case FORM_MODES.CREATE:
+      draftSeason.value = getDefaultSeason()
+      break
+    case FORM_MODES.EDIT:
+      draftSeason.value = selectedSeason.value ? {...selectedSeason.value} : null
+      break
+    case FORM_MODES.VIEW:
+      draftSeason.value = null
+      break
+  }
+  formMode.value = mode
+  updateURLQueryFromMode(mode)
+}
+
+// UTILITY
+const showSuccessToast = (title: string, description?: string) => {
+  const toast = useToast()
+  toast.add({
+    title,
+    description,
+    icon: 'i-heroicons-check-circle',
+    color: 'success'
+  })
+}
 
 //HANDLING STATE CHANGE
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   try {
-    // Determine if we're creating a new season or updating an existing one
     if (formMode.value === FORM_MODES.CREATE) {
-      await createSeason(updatedSeason)
-      // After successful creation, switch to view mode and refresh the seasons list
-      await loadSeasons()
+      // Step 1: Create season
+      const createdSeason = await createSeason(updatedSeason)
+
+      // Step 2: Generate dinner events for the new season
+      if (createdSeason.id) {
+        try {
+          const eventResult = await generateDinnerEvents(createdSeason.id)
+          showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
+        } catch (eventError) {
+          // Season created but event generation failed
+          showSuccessToast('Sæson oprettet', 'Fællesspisninger kunne ikke genereres automatisk')
+        }
+      }
     } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
       await updateSeason(updatedSeason)
-      // After successful update, switch to view mode and refresh the seasons list
-      await loadSeasons()
+      showSuccessToast('Sæson opdateret')
     }
+    await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
-    console.error('ADMIN PLANNING > Failed to update season:', error)
-    // Here you could show an error notification to the user
+    // Season creation or update failed - stay in current mode
+    // Error toast already shown by handleApiError
   }
 }
 
 const handleCancel = async () => {
-  console.info('AdminPlanning > handleCancel > resetting to default form mode and clearing draft')
-  // Reset to default form mode which will trigger the watcher on formMode
-  // The watcher will call onModeChange which handles draft clearing
   await onModeChange(FORM_MODES.VIEW)
 }
 
-const updateURLQueryFromMode = (mode: FORM_MODES) => {
-  console.log('📆 > AdminPlanning > updateURLfromMode > updating URL query with mode:', mode)
+const updateURLQueryFromMode = (mode: FormMode) => {
   router.replace({
     path: route.path,
-    hash: route.hash, // Explicitly preserve the hash
+    hash: route.hash,
     query: {
       ...route.query,
       mode: mode
-    }
+    },
   }, {preserveState: true})
 }
 
 //INITIALIZATION
 onMounted(async () => {
-  // Get form mode from query params (before hash)
   const modeFromQuery = toFormMode(route.query.mode as string)
-  console.log('📆 > AdminPlanning > onMounted > route.query:', route.query)
-  console.info('📆 > AdminPlanning > onMounted > modeFromQuery:', modeFromQuery, 'route.query.mode:', route.query.mode)
-
-  // Update form mode based on URL parameter if valid
   if (modeFromQuery) {
     await onModeChange(modeFromQuery)
   }
@@ -84,29 +128,11 @@ onMounted(async () => {
 
 // Watch for form mode changes and update URL
 watch(formMode, (newMode) => {
-  // Only update if we're changing modes and not already matching the URL
   if (route.query.mode !== newMode && toFormMode(newMode)) {
-    console.log('📆 > AdminPlanning > watch formMode > updating URL query with mode:', newMode)
     updateURLQueryFromMode(newMode)
   }
 })
 
-// UI STUFF
-
-const items = [
-  {
-    label: 'Kalender',
-    icon: 'i-heroicons-calendar',
-  },
-  {
-    label: 'Madhold',
-    icon: 'i-fluent-mdl2-team-favorite',
-  },
-  {
-    label: 'Chefkokke',
-    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
-  }
-]
 </script>
 
 <template>
@@ -114,20 +140,6 @@ const items = [
   <UCard
       data-test-id="admin-planning"
       class="w-full px-0"
-      :ui="{
-    base: '',
-    body: {
-      padding: 'px-0',
-      base: ''
-    },
-    header: {
-      padding: 'px-0',
-      base: ''
-    },
-    footer: {
-      padding: 'px-0',
-      base: ''
-    }}"
   >
     <template #header>
       <div class=" flex flex-col md:flex-row items-center justify-between w-full gap-4
@@ -135,23 +147,17 @@ const items = [
         <!-- Left aligned on mobile, spread across on desktop -->
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
           <USelect
-              color="orange"
+              arrow
+              data-testid="season-selector"
+              v-model="selectedSeasonId"
+              color="warning"
               :loading="isLoading"
-              :placeholder="seasons?.length>0  ? 'Vælg sæson' : 'Ingen sæsoner'"
-              :items="seasons"
-              option-attribute="shortName"
-              value-attribute="id"
-              @change="onSeasonSelect"
-              model-value="selectedSeasonId"
+              :placeholder="seasons?.length > 0 ? 'Vælg sæson' : 'Ingen sæsoner'"
+              :items="seasons?.map(s => ({ ...s, label: s.shortName }))"
+              value-key="id"
           >
-            <template #trailing>
-              <UIcon name="i-heroicons-chevron-down-20-solid" class="w-5 h-5"/>
-            </template>
           </USelect>
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
-        </div>
-        <div class="w-full md:w-auto md:mx-auto">
-          <FormStepper :steps="items" v-model="selectedStep"/>
         </div>
         <div class="w-full md:w-auto md:ml-auto">
           <HelpButton :text="ADMIN_HELP_TEXTS.planning.calendar"/>
@@ -160,8 +166,8 @@ const items = [
     </template>
     <template #default>
       <div v-if="showAdminSeason">
-        <AdminPlanningSeason v-if="getModel?.value && showAdminSeason"
-                             v-model="getModel.value"
+        <AdminPlanningSeason v-if="currentModel && showAdminSeason"
+                             v-model="currentModel"
                              :mode="formMode"
                              @update="handleSeasonUpdate"
                              @cancel="handleCancel"
@@ -173,7 +179,7 @@ const items = [
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>
         <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
                  name="create-new-season"
-                 color="orange"
+                 color="secondary"
                  icon="i-heroicons-plus-circle"
                  @click="onModeChange(FORM_MODES.CREATE)"
         >
@@ -184,9 +190,6 @@ const items = [
       <div v-else>
         <h3 class="text-lg font-semibold">Vælg en sæson for at komme i gang</h3>
       </div>
-    </template>
-
-    <template #footer>
     </template>
   </UCard>
 

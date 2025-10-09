@@ -2,7 +2,9 @@
 
 // COMPONENT DEPENDENCIES
 const toast = useToast()
-const {init} = usePlanStore()
+const store = usePlanStore()
+const {initPlanStore} = store
+const {isLoading, error} = storeToRefs(store)
 const route = useRoute()
 
 // UI - ITEMS
@@ -12,6 +14,18 @@ const baseItems = [
     icon: 'i-heroicons-calendar',
     content: 'Planlægning af middage og events. Oprette fællesspisninger (dinnerevents). Se kalendar, oprette sæson, oprette ferier. See teams. Se chefkokke',
     component: 'AdminPlanning'
+  },
+  {
+    label: 'Madhold',
+    icon: 'i-fluent-mdl2-team-favorite',
+    content: 'Oprette madhold i given sæson og administrere madhold. Tildele madhold til madlavningsdage. Tildele medlemmer til madhold',
+    component: 'AdminTeams'
+  },
+  {
+    label: 'Chefkokke',
+    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    content: 'Se og administrer chefkokke. Tildele chefkokke til madlavningsdage',
+    component: 'AdminChefs'
   },
   {
     label: 'Husstande',
@@ -101,16 +115,8 @@ const updateRouteParamFromTab = async (tab: string) => {
 }
 
 // INITIALIZATION
-
-const {status, error} = await useAsyncData('planStore', async () => {
-  await init()
-  toast.add({
-    id: 'seasons-loaded',
-    title: 'Data for Sæsoner indlæst',
-    description: 'Sæsoner er indlæst og klar til brug',
-    color: 'info'
-  })
-  return {initialized: true}
+onMounted(async () => {
+  await initPlanStore()
 })
 
 // UI - CONTINUED
@@ -130,9 +136,9 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="status==='pending'"/>
+    <Loader v-if="isLoading"/>
     <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
-    <div class="relative py-1 md:py-2 lg:p-4 min-h-screen">
+    <div v-else class="relative py-1 md:py-2 lg:p-4 min-h-screen">
       <!-- Scroll anchor for current tab -->
       <a :id="activeTab" class="absolute w-0 h-0 -top-24 opacity-0 pointer-events-none" href="#">⚓︎</a>
       <UTabs

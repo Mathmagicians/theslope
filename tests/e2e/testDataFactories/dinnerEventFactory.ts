@@ -93,4 +93,65 @@ export class DinnerEventFactory {
 
         return null
     }
+
+    static readonly getDinnerEventsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 200
+    ): Promise<DinnerEvent[]> => {
+        const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}?seasonId=${seasonId}`)
+
+        const status = response.status()
+        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const responseBody = await response.json()
+            expect(Array.isArray(responseBody)).toBe(true)
+            return responseBody
+        }
+
+        return []
+    }
+
+    /**
+     * Wait for dinner events to be generated for a season
+     * Polls the API with exponential backoff until the expected number of events are created
+     *
+     * @param context - Browser context for API requests
+     * @param seasonId - Season ID to check
+     * @param expectedCount - Expected number of events
+     * @param maxAttempts - Maximum polling attempts (default 5)
+     * @param initialDelayMs - Initial delay between attempts in ms (default 500ms), doubles on each attempt
+     * @returns Promise<DinnerEvent[]> - Array of generated dinner events
+     * @throws Error if expected count not reached within maxAttempts
+     */
+    static readonly waitForDinnerEventsGeneration = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedCount: number,
+        maxAttempts: number = 5,
+        initialDelayMs: number = 500
+    ): Promise<DinnerEvent[]> => {
+        let currentDelay = initialDelayMs
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const events = await this.getDinnerEventsForSeason(context, seasonId)
+
+            if (events.length === expectedCount) {
+                console.info(`✅ Dinner events generated: ${events.length}/${expectedCount} (attempt ${attempt}/${maxAttempts})`)
+                return events
+            }
+
+            if (attempt < maxAttempts) {
+                console.info(`⏳ Waiting for dinner events: ${events.length}/${expectedCount} (attempt ${attempt}/${maxAttempts}, delay ${currentDelay}ms)`)
+                await new Promise(resolve => setTimeout(resolve, currentDelay))
+                currentDelay *= 2 // Exponential backoff
+            }
+        }
+
+        throw new Error(
+            `Timeout waiting for dinner events to be generated. ` +
+            `Expected ${expectedCount} events for season ${seasonId}, but generation did not complete within ${maxAttempts} attempts`
+        )
+    }
 }

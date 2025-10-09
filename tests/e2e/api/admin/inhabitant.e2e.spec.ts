@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useHouseholdValidation} from '../../../../app/composables/useHouseholdValidation'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
+import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
 
 const {InhabitantResponseSchema} = useHouseholdValidation()
@@ -113,6 +114,51 @@ test.describe('Admin Inhabitant API', () => {
             expect(user.id).toBe(userId)
             // User should still exist but Inhabitant relation should be null/undefined
             expect(user.Inhabitant).toBeFalsy() // Reference should be cleared
+        })
+    })
+
+    test.describe('Inhabitant with CookingTeamAssignments', () => {
+
+        test('DELETE should cascade delete cooking team assignments (strong relation)', async ({browser}) => {
+            // GIVEN: An inhabitant assigned to a cooking team
+            const context = await validatedBrowserContext(browser)
+
+            // Create a season for the team
+            const season = await SeasonFactory.createSeason(context)
+
+            // Create a cooking team with 1 member (creates its own household + inhabitant)
+            const team = await SeasonFactory.createCookingTeamWithMembersForSeason(
+                context,
+                season.id as number,
+                'Team-For-Cascade-Test',
+                1  // Single member
+            )
+
+            // Verify the team and assignment exist
+            expect(team.id).toBeDefined()
+            expect(team.assignments.length).toBe(1)
+            const assignmentId = team.assignments[0].id
+            const inhabitantId = team.assignments[0].inhabitantId
+            expect(assignmentId).toBeDefined()
+            expect(inhabitantId).toBeDefined()
+
+            // Verify assignment exists via GET
+            const assignmentResponse = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
+            expect(assignmentResponse.status()).toBe(200)
+
+            // WHEN: Inhabitant is deleted
+            await HouseholdFactory.deleteInhabitant(context, inhabitantId)
+
+            // THEN: Inhabitant should be deleted
+            await HouseholdFactory.getInhabitantById(context, inhabitantId, 404)
+
+            // AND: Cooking team assignment should be cascade deleted
+            const assignmentAfterDelete = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
+            expect(assignmentAfterDelete.status()).toBe(404)
+
+            // Cleanup: Delete season (cascades to team), then household
+            await SeasonFactory.deleteSeason(context, season.id as number)
+            await HouseholdFactory.deleteHousehold(context, team.householdId)
         })
     })
 

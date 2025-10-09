@@ -8,7 +8,12 @@
     "types": [
       "@nuxt/types",
       "@nuxtjs/date-fns",
-      "@cloudflare/workers-types/2023-07-01"
+      "@cloudflare/workers-types/2023-07-01",
+      "vitest/globals",
+      "@nuxt/test-utils"
     ]
-  }
+  },
+  "include": [
+    "tests/**/*"
+  ]
 }

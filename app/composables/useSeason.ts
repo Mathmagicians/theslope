@@ -1,7 +1,8 @@
-import {WEEKDAYS, type DateRange} from '@/types/dateTypes'
-import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS} from '@/utils/date'
+import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
+import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
+import type {DinnerEventCreate} from './useDinnerEventValidation'
 
 /**
  * Business logic for working with seasons
@@ -62,7 +63,7 @@ export const useSeason = () => {
     const coalesceSeason = (season?: Partial<Season> | null, defaultSeason: Season = getDefaultSeason()): Season => {
         // If season is falsy (null, undefined, etc.), just return the default season
         if (!season) return defaultSeason;
-        
+
         return <Season>{
             ...defaultSeason,
             ...season,
@@ -70,6 +71,39 @@ export const useSeason = () => {
             cookingDays: {...(season?.cookingDays ?? defaultSeason.cookingDays)},
             holidays: season?.holidays?.map(copyPartialDateRange) ?? defaultSeason.holidays
         }
+    }
+
+    /**
+     * Generate dinner event data for a season
+     *
+     * Interprets season configuration (dates, cooking days, holidays) to determine
+     * which dates should have dinner events. Returns data structures ready for persistence.
+     *
+     * @param season - Season configuration (must be deserialized with Date objects)
+     * @returns Array of DinnerEventCreate objects for each valid dinner date
+     */
+    const generateDinnerEventDataForSeason = (season: Season): DinnerEventCreate[] => {
+        // Step 1: Generate all dates matching cooking days within season range
+        const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
+            season.seasonDates.start,
+            season.seasonDates.end,
+            season.cookingDays
+        )
+
+        // Step 2: Exclude holiday periods
+        const validDates = excludeDatesFromInterval(allCookingDates, season.holidays)
+
+        // Step 3: Create dinner event data for each valid date
+        return validDates.map(date => ({
+            date,
+            menuTitle: 'TBD',
+            menuDescription: null,
+            menuPictureUrl: null,
+            dinnerMode: 'NONE',
+            chefId: null,
+            cookingTeamId: null,
+            seasonId: season.id!
+        }))
     }
 
     return {
@@ -80,6 +114,7 @@ export const useSeason = () => {
         isActive,
         coalesceSeason,
         serializeSeason,
-        deserializeSeason
+        deserializeSeason,
+        generateDinnerEventDataForSeason
     }
 }

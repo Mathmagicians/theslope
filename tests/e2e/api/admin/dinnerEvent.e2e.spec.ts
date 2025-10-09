@@ -47,6 +47,75 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         // TODO: Implement POST endpoint and test
     })
 
+    test('GET /api/admin/dinner-event should return all dinner events', async ({browser}) => {
+        // GIVEN: Existing dinner events with seasonId
+        const context = await validatedBrowserContext(browser)
+
+        const dinnerEvent1 = await DinnerEventFactory.createDinnerEvent(context, {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        })
+        testDinnerEventIds.push(dinnerEvent1.id)
+
+        const dinnerEvent2 = await DinnerEventFactory.createDinnerEvent(context, {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        })
+        testDinnerEventIds.push(dinnerEvent2.id)
+
+        // WHEN: GET /api/admin/dinner-event
+        const response = await context.request.get('/api/admin/dinner-event')
+
+        // THEN: Should return 200 with array of dinner events
+        expect(response.status()).toBe(200)
+        const events = await response.json()
+        expect(Array.isArray(events)).toBe(true)
+
+        // AND: Should include our created events
+        const createdEventIds = [dinnerEvent1.id, dinnerEvent2.id]
+        const foundEvents = events.filter((e: any) => createdEventIds.includes(e.id))
+        expect(foundEvents.length).toBe(2)
+    })
+
+    test('GET /api/admin/dinner-event?seasonId should filter by season', async ({browser}) => {
+        // GIVEN: Dinner events for testSeasonId
+        const context = await validatedBrowserContext(browser)
+
+        const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        })
+        testDinnerEventIds.push(dinnerEvent.id)
+
+        // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId
+        const response = await context.request.get(`/api/admin/dinner-event?seasonId=${testSeasonId}`)
+
+        // THEN: Should return 200 with filtered events
+        expect(response.status()).toBe(200)
+        const events = await response.json()
+        expect(Array.isArray(events)).toBe(true)
+
+        // AND: All events should belong to testSeasonId
+        events.forEach((event: any) => {
+            expect(event.seasonId).toBe(testSeasonId)
+        })
+
+        // AND: Should include our created event
+        const foundEvent = events.find((e: any) => e.id === dinnerEvent.id)
+        expect(foundEvent).toBeDefined()
+    })
+
+    test('GET /api/admin/dinner-event with invalid seasonId should return 400', async ({browser}) => {
+        // GIVEN: Invalid seasonId (non-numeric)
+        const context = await validatedBrowserContext(browser)
+
+        // WHEN: GET /api/admin/dinner-event?seasonId=invalid
+        const response = await context.request.get('/api/admin/dinner-event?seasonId=invalid')
+
+        // THEN: Should return 400 (validation error)
+        expect(response.status()).toBe(400)
+    })
+
     test('DELETE can remove existing dinner event with status 200', async ({browser}) => {
         // GIVEN: An existing dinner event
         const context = await validatedBrowserContext(browser)

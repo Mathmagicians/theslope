@@ -1,141 +1,40 @@
 # TODO
 
-## 🚨 BDD/TDD TEST-FIRST - CRITICAL PRIORITY
-
-### 1a. Write BDD Tests for deleteCookingTeam functionality (test-first) - CRITICAL
-- **Test scenarios**:
-    - Simple team (no members) should be deletable
-    - Team with members - assignments should cascade delete (strong relation)
-    - Team with dinner events - associations should be cleared (events preserved - weak relation)
-- **Verify**: Both strong relation cascades AND weak association clearing
-- **Use**: Factory patterns from ADR-003
-- **File**: Create BDD test file first, following ADR-005 patterns
-
-### 1b. Write BDD Tests for CookingTeam creation with assignments
-- **Test scenarios**:
-    - Team with member assignments (strong relation)
-    - Team association with dinner events (weak relation)
-    - Member role assignments (CHEF, COOK, JUNIORHELPER)
-- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
-
-### 2a. Write BDD Tests for Season creation with nested aggregates
-- **Test scenarios**:
-    - Season with CookingTeams (strong relation)
-    - Season with DinnerEvents (strong relation)
-    - Complete seasonal aggregate creation flow
-- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
-- 
-### 2b. Write BDD Tests for deleteSeason functionality (test-first) - CRITICAL
-- **Test scenarios**:
-    - Season with CookingTeams (strong relation - cascade delete)
-    - Season with DinnerEvents (strong relation - cascade delete)
-    - Complete seasonal aggregate deletion flow
-- **Verify**: All nested aggregates properly cleaned up
-- **File**: Create BDD test file first, following ADR-005 patterns
-
-### 3a. Write BDD Tests for Household creation with nested entities
-- **Test scenarios**:
-    - Household with Inhabitants (strong relation)
-    - Inhabitants with Users (weak relation - optional)
-    - Heynabo import-style nested creation
-- **Purpose**: Mirror deletion tests for symmetry (ADR-005)
-- 
-### 3b. Write BDD Tests for deleteHousehold functionality (test-first) - HIGH
-- **Test scenarios**:
-    - Household with Inhabitants (strong relation - cascade delete)
-    - Inhabitants with Users (weak relation - clear association, preserve users)
-    - Complete household cascade with proper User preservation
-- **File**: Create BDD test file first, following ADR-005 patterns
-
-### 4 a-b. Write BDD Tests for  createIhnabitant - deleteInhabitant functionality (test-first) - HIGH
-- **Test scenarios**:
-    - Inhabitant with User (weak relation - clear association, preserve user)
-    - Inhabitant with CookingTeamAssignments (strong relation - cascade delete)
-    - Complete inhabitant cleanup without orphaning data
-- **File**: Create BDD test file first, following ADR-005 patterns
-
-## 🚨 IMPLEMENTATION - After Tests Creation
-
-### 1. Fix deleteCookingTeam - Currently Broken (CRITICAL)
-- **Problem**: Currently ignores CookingTeamAssignments (strong relation)
-- **Impact**: Leaves orphaned team assignments in database
-- **Fix**: Update repository function to delete assignments before team
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 2. Create deleteSeason Function (CRITICAL)
-- **Problem**: No cascade to CookingTeams/DinnerEvents (strong relations)
-- **Impact**: Cannot properly delete seasons
-- **Fix**: Implement function following ADR-005 patterns
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 3. Create deleteInhabitant Function (HIGH)
-- **Problem**: No proper cascade function exists
-- **Impact**: Cannot delete inhabitants without orphaning data
-- **Fix**: Implement with User/Assignment cleanup
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-### 4. Create deleteHousehold Function (HIGH)
-- **Problem**: No proper cascade function exists
-- **Impact**: Cannot delete households properly
-- **Fix**: Implement with Inhabitant/User cascade
-- **File**: `/server/data/prismaRepository.ts`
-- **Prerequisites**: BDD tests must pass first
-
-## The rest
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management
 **Milestone**: Admin can create a dining season with cooking teams and corresponding events
 
-### Phase 1: Cooking Team Management
-**API Development**
-- Create PUT /api/admin/teams - Create team
-- Create GET /api/admin/teams - List teams by season
-- Create POST /api/admin/teams/[id] - Update team
-- Create DELETE /api/admin/teams/[id] - Delete team
-- Write API tests for all team endpoints
+**Architecture Decision**: Separate admin tabs (simple workflow for once-a-year task)
+- `/admin/planning` - Season creation + auto-generated events view
+- `/admin/teams` - Cooking team management (NEW tab)
 
-**UI Development**
-- Create AdminCookingTeams.vue component
-- Create CookingTeamForm.vue for create/edit
-- Create CookingTeamList.vue for display
-- Add "Teams" step to season workflow
-- Write component tests for team UI
-- Write E2E tests for team CRUD operations
+### Phase 1: Display Generated Events (Finishing touches)
+**Current PR**: `create-dinner-events-for-season`
 
-### Phase 2: Team Member Assignment
-**API Development**
-- Create PUT /api/admin/teams/[id]/members - Add member
-- Create DELETE /api/admin/teams/[id]/members/[memberId] - Remove member
-- Create GET /api/admin/inhabitants/available - List available inhabitants
-- Write API tests for member assignment endpoints
+**Remaining Tasks**:
+- [ ] Create component to display generated events in season view mode
+- [ ] Write component tests for events display
 
-**UI Development**
-- Create TeamMemberSelector.vue with search
+### Phase 2: Cooking Teams Admin Tab
+**Goal**: Separate "Teams" tab for managing cooking teams per season
+
+**UI Development**:
+- [ ] Add "Teams" tab to admin navigation (alongside Planning)
+- [ ] Create `/admin/teams` page component
+- [ ] Create AdminTeams.vue with season selector dropdown
+- [ ] Create AdminTeamsList.vue for team CRUD operations
+- [ ] Add reminder in Planning tab: "Remember to set up cooking teams →"
+- [ ] Write component tests for team UI
+- [ ] Write E2E tests for teams tab workflow
+
+### Phase 3: Team Member Assignment (FUTURE)
+**Goal**: Assign inhabitants to teams with roles
+
+**UI Development** (Future):
+- Create TeamMemberSelector.vue with inhabitant search
 - Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
-- Implement drag-and-drop for member assignment
+- Add/remove members from teams
 - Write component tests for member assignment
 - Write E2E tests for team composition
-
-### Phase 3: Dinner Event Generation
-**API Development**
-- Create POST /api/admin/season/[id]/generate-events endpoint
-- Implement event generation algorithm considering:
-  - Season date range and cooking days
-  - Holiday exclusions
-  - Team rotation schedule
-- Create GET /api/admin/events - List events with filters
-- Write unit tests for generation algorithm
-- Write API tests for event endpoints
-
-**UI Development**
-- Create EventCalendar.vue with monthly view
-- Create EventDetails.vue for single event editing
-- Create BulkEventActions.vue for mass operations
-- Add chef assignment to events
-- Write component tests for event UI
-- Write E2E tests for event generation flow
 
 ### Phase 4: Integration & Validation
 **Workflow Integration**
@@ -203,16 +102,158 @@ const EventGenerationConfigSchema = z.object({
 
 ---
 
-# ✅ COMPLETED: Path-based admin navigation
+## Medium priority: Fix E2E tests
+
+### Refactor login.vue to use zod validation from api schema
+
+### Temporarily Disabled E2E Tests
+
+The following E2E tests have been temporarily disabled with `test.skip()` to allow CI pipeline to pass. They need to be fixed and re-enabled:
+
+#### 1. Form state parameters test
+**File**: `tests/e2e/ui/admin.e2e.spec.ts:117`
+**Test**: `Form state parameters in URL are applied to form`
+**Issue**: Expected form field `cancellableDays` to have value `"2"` but got `"10"`
+**Fix needed**:
+- Update test to use correct default values OR
+- Fix form initialization from URL parameters
+- Check if form field names match component implementation
+
+#### 2. Season form create flow test
+**File**: `tests/e2e/ui/AdminSeason.e2e.spec.ts:53`
+**Test**: `Create season form happy day flow`
+**Issue**: Cannot find selector `#seasonForm` - element not visible within 10s timeout
+**Fix needed**:
+- Update selector to match current component structure
+- Check if form ID changed from `#seasonForm` to something else
+- Verify form loading timing and add proper waits
+
+### Action Items
+- [ ] Investigate actual form field names and IDs in current component structure
+- [ ] Fix form URL parameter initialization
+- [ ] Update test selectors to match current implementation
+- [ ] Re-enable tests with `test()` instead of `test.skip()`
+- [ ] Verify all E2E tests pass locally before merging
+
+### Notes
+- All other E2E tests (27/29) are passing
+- Authentication and API tests work correctly
+- Only UI form interaction tests need fixes
+
+---
+
+## Medium priority: Fix Vitest ECONNREFUSED error on test cleanup
+
+### Issue
+After all tests pass successfully, the test process throws an unhandled ECONNREFUSED error during cleanup:
+```
+AggregateError [ECONNREFUSED]:
+  Error: connect ECONNREFUSED ::1:3000
+  Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+### Current Status
+- **All tests pass**: 125/125 tests passing ✅
+- **Error occurs**: During process teardown after tests complete
+- **Affected**: Only when running all Nuxt tests together (`npm run test`)
+- **Not affected**: Individual test files run without error
+
+### Investigation Done
+- ✅ Confirmed: `plan.ts` uses module-level `useFetch` (Nuxt 4 pattern with `refreshSeasons()`)
+- ✅ Confirmed: Test properly registers mock endpoint before importing store
+- ✅ Confirmed: Other stores use `useFetch` inside actions (users.ts, households.ts)
+- ✅ Searched: Pinia/Nuxt test-utils documentation about `useFetch` in stores
+- ✅ Found: `useFetch` designed for components, not stores (but Nuxt 4 allows it)
+
+### Potential Causes
+1. HMR code (`import.meta.hot`) running in test environment
+2. Nuxt/Vite cleanup trying to connect to dev server (port 3000)
+3. Test environment not fully mocking the Nuxt runtime during cleanup
+4. Known issue with `@nuxt/test-utils` and module-level `useFetch`
+
+### Action Items
+- [ ] Check if `import.meta.hot` is active in test environment
+- [ ] Research `@nuxt/test-utils` GitHub issues for similar problems
+- [ ] Consider using MSW (Mock Service Worker) instead of `registerEndpoint`
+- [ ] Investigate Nuxt 4 test-utils documentation for proper cleanup
+- [ ] Test if issue persists with Pinia 3 migration (scheduled)
+
+### References
+- Pinia testing docs: https://pinia.vuejs.org/cookbook/testing.html
+- `@nuxt/test-utils` issue #943: registerEndpoint doesn't expose to $fetch
+- Search results indicate `useFetch` in stores is problematic for testing
+
+---
+
+## Major Framework Migrations Plan (Remaining)
+
+### Pinia 3 Migration (MEDIUM PRIORITY)
+**Branch**: `migrate-pinia-3`
+**Current**: 2.3.1 → **Target**: 3.0.3
+**Impact**: MEDIUM - State management changes
+
+### Zod 4 Migration (MEDIUM PRIORITY)
+**Branch**: `migrate-zod-4`
+**Current**: 3.24.1 → **Target**: 4.1.5
+**Impact**: MEDIUM - Form validation and API schemas
+
+### Migration Principles
+1. **One migration per branch/PR** - Isolate changes
+2. **Comprehensive testing** - Full test suite must pass
+3. **Rollback ready** - Keep fallback options
+
+---
+
+# ✅ COMPLETED
+
+## Phase 1: Auto-Generate Dinner Events (PR: create-dinner-events-for-season)
+- ✅ Season creation handler auto-generates dinner events via component orchestration
+- ✅ Component orchestrates createSeason() → generateDinnerEvents() → toast notification
+- ✅ Toast notification: "Sæson oprettet - X fællesspisninger genereret"
+- ✅ GET /api/admin/dinner-event endpoint with optional seasonId filter
+- ✅ API tests for GET endpoint (all events, filtered by season, validation)
+- ✅ Exact count assertions in generate-dinner-events API tests (3 tests)
+- ✅ UI E2E test verifies exact event count after season creation
+- ✅ POST /api/admin/season/[id]/generate-dinner-events endpoint
+- ✅ Event generation algorithm (cooking days, holidays, date range)
+- ✅ E2E API tests for event generation (7 tests passing)
+
+## Phase 2: Cooking Teams Admin Tab - API
+- ✅ PUT/POST/DELETE /api/admin/team endpoints
+- ✅ Team member assignment endpoints
+- ✅ E2E API tests passing
+
+## BDD/TDD Tests Completed (ADR-005 compliance)
+
+**Season Aggregate** (tests/e2e/api/admin/season.e2e.spec.ts):
+- ✅ Task 2a: PUT should create season with cooking teams (line 118)
+- ✅ Task 2b: DELETE should cascade delete cooking teams (line 148)
+- ✅ Task 2b: DELETE should cascade delete dinner events (line 177)
+- ✅ Task 2b: DELETE should cascade delete complete seasonal aggregate (line 214)
+
+**CookingTeam Aggregate** (tests/e2e/api/admin/team.e2e.spec.ts):
+- ✅ Task 1b: PUT creates team with assignments + DELETE cascades (line 52)
+- ✅ Task 1b: PUT /api/admin/team/[id]/members adds assignments (line 175)
+- ✅ Task 1b: DELETE /api/admin/team/[id]/members removes assignments (line 188)
+
+**Household Aggregate** (tests/e2e/api/admin/household.e2e.spec.ts):
+- ✅ Task 3a: PUT can create household with inhabitants (line 68)
+- ✅ Task 3b: DELETE should cascade delete inhabitants (line 89)
+
+**Inhabitant Aggregate** (tests/e2e/api/admin/inhabitant.e2e.spec.ts):
+- ✅ Task 4a: Inhabitant with User weak relation tests (line 85+)
+- ✅ Task 4b: DELETE should cascade delete cooking team assignments (line 122)
+
+## Path-based admin navigation
 **Status**: COMPLETED - Successfully migrated from fragment-based to path-based routing
 
-## Implementation Summary
-✅ **Path-based routing implemented**: `/admin/planning`, `/admin/users`, etc.
-✅ **Clean URLs**: Replaced fragment URLs (`/admin#adminplanning`) with paths (`/admin/planning`)
-✅ **Single page component maintained**: Used `[tab].vue` dynamic routing
-✅ **Invalid route handling**: `/admin/unicorn` redirects to `/admin/planning`
-✅ **Tests updated and passing**: All 13 E2E tests passing
-✅ **Documentation added**: Admin URLs documented in README.md
+### Implementation Summary
+- ✅ Path-based routing implemented: `/admin/planning`, `/admin/users`, etc.
+- ✅ Clean URLs: Replaced fragment URLs (`/admin#adminplanning`) with paths (`/admin/planning`)
+- ✅ Single page component maintained: Used `[tab].vue` dynamic routing
+- ✅ Invalid route handling: `/admin/unicorn` redirects to `/admin/planning`
+- ✅ Tests updated and passing: All 13 E2E tests passing
+- ✅ Documentation added: Admin URLs documented in README.md
 
 ### Architecture Benefits Achieved
 - Better SEO with distinct page URLs
@@ -221,70 +262,12 @@ const EventGenerationConfigSchema = z.object({
 - Standard browser back/forward behavior
 - Query parameters work seamlessly with paths
 
-# Medium priority: Fix E2E tests
+## Major Framework Migrations Completed
 
-## Refactor login.vue, to use zod validation from api schema
+### Phase 1: Dependency Updates ✅
+- ✅ Safe dependency updates (PR #21) - MERGED
+- ✅ Wrangler 4 migration (PR #22) - IN REVIEW
+- ✅ Security vulnerabilities resolved (0 vulnerabilities)
 
-## Fix E2E Tests
-
-### Temporarily Disabled E2E Tests
-
-The following E2E tests have been temporarily disabled with `test.skip()` to allow CI pipeline to pass. They need to be fixed and re-enabled:
-
-### 1. Form state parameters test
-**File**: `tests/e2e/ui/admin.e2e.spec.ts:117`  
-**Test**: `Form state parameters in URL are applied to form`  
-**Issue**: Expected form field `cancellableDays` to have value `"2"` but got `"10"`  
-**Fix needed**: 
-- Update test to use correct default values OR
-- Fix form initialization from URL parameters
-- Check if form field names match component implementation
-
-### 2. Season form create flow test  
-**File**: `tests/e2e/ui/AdminSeason.e2e.spec.ts:53`  
-**Test**: `Create season form happy day flow`  
-**Issue**: Cannot find selector `#seasonForm` - element not visible within 10s timeout  
-**Fix needed**:
-- Update selector to match current component structure
-- Check if form ID changed from `#seasonForm` to something else
-- Verify form loading timing and add proper waits
-
-## Action Itemshe
-- [ ] Investigate actual form field names and IDs in current component structure
-- [ ] Fix form URL parameter initialization 
-- [ ] Update test selectors to match current implementation
-- [ ] Re-enable tests with `test()` instead of `test.skip()`
-- [ ] Verify all E2E tests pass locally before merging
-
-## Notes
-- All other E2E tests (27/29) are passing
-- Authentication and API tests work correctly
-- Only UI form interaction tests need fixes
-
----
-
-## Major Framework Migrations Plan
-
-### Phase 1: Dependency Updates ✅ COMPLETED
-- [x] Safe dependency updates (PR #21) - MERGED  
-- [x] Wrangler 4 migration (PR #22) - IN REVIEW
-- [x] Security vulnerabilities resolved (0 vulnerabilities)
-
-### Phase 2: Major Framework Updates ✅ COMPLETED
-
-#### 1. Nuxt 4 + Nuxt UI + Tailwind CSS Migration (HIGH PRIORITY) ✅ COMPLETED
-
-#### 2. Pinia 3 Migration (MEDIUM PRIORITY)  
-**Branch**: `migrate-pinia-3`
-**Current**: 2.3.1 → **Target**: 3.0.3
-**Impact**: MEDIUM - State management changes
-
-#### 3. Zod 4 Migration (MEDIUM PRIORITY)
-**Branch**: `migrate-zod-4`
-**Current**: 3.24.1 → **Target**: 4.1.5  
-**Impact**: MEDIUM - Form validation and API schemas
-
-### Migration Principles
-1. **One migration per branch/PR** - Isolate changes
-2. **Comprehensive testing** - Full test suite must pass
-3. **Rollback ready** - Keep fallback options
+### Phase 2: Major Framework Updates ✅
+- ✅ Nuxt 4 + Nuxt UI + Tailwind CSS Migration

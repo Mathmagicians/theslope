@@ -86,6 +86,37 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         })
     })
 
+    test('DELETE should cascade delete inhabitants (strong relation)', async ({browser}) => {
+        // GIVEN: A household with inhabitants
+        const context = await validatedBrowserContext(browser)
+        const result = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            'Household For Cascade Delete',
+            3
+        )
+        // Don't add to cleanup - we're testing deletion
+
+        // Verify inhabitants were created (returned IDs prove creation succeeded)
+        expect(result.household.id).toBeGreaterThan(0)
+        expect(result.inhabitants.length).toBe(3)
+
+        const inhabitantIds = result.inhabitants.map(i => i.id)
+        expect(inhabitantIds[0]).toBeGreaterThan(0)
+        expect(inhabitantIds[1]).toBeGreaterThan(0)
+        expect(inhabitantIds[2]).toBeGreaterThan(0)
+
+        // WHEN: Household is deleted
+        await HouseholdFactory.deleteHousehold(context, result.household.id)
+
+        // THEN: All inhabitants should be cascade deleted
+        const checksAfter = await Promise.all(
+            inhabitantIds.map(id => context.request.get(`/api/admin/inhabitant/${id}`))
+        )
+        checksAfter.forEach(response => {
+            expect(response.status()).toBe(404)
+        })
+    })
+
     test('GET /api/admin/household/[id] should return 404 for non-existent household', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
