@@ -135,6 +135,42 @@ AggregateError [ECONNREFUSED]:
 
 # ✅ COMPLETED
 
+## Household Management View (Admin Husstande Tab)
+**Date**: 2025-01-28 | **Compliance**: ADR-009
+
+### Implementation
+- ✅ **ADR-009 created**: Weight-Based Data Inclusion Strategy for API endpoints
+  - Index endpoints include lightweight relations if: bounded cardinality, lightweight data, essential context, performance safe
+  - Detail endpoints include comprehensive relations
+  - Clear decision criteria documented
+- ✅ **HouseholdSummary type** created for lightweight index data
+  - Includes basic inhabitant fields (id, name, lastName, pictureUrl, birthDate)
+  - Full HouseholdWithInhabitants type for detail operations
+- ✅ **AdminHouseholds.vue** component created
+  - UTable with address and inhabitants columns
+  - Top-level await for SSR-compatible data loading
+  - Compact household display with avatar groups and name badges
+  - Empty state handling
+- ✅ **HouseholdCard.vue** extended with compact mode
+  - Boolean `compact` prop (false by default)
+  - Compact view: UAvatarGroup (max 3, with tooltips) + UBadge for names
+  - Full view: UCard with inhabitant list
+- ✅ **E2E tests** (6/6 passing)
+  - Load households page
+  - Display household with inhabitants
+  - Display multiple households
+  - Display household without inhabitants (empty state)
+  - API test verifying lightweight vs comprehensive data
+- ✅ **HouseholdFactory** updated
+  - Sequential inhabitant creation (prevents unique constraint violations)
+  - Unique inhabitant names (Donald0 Duck, Donald1 Duck, etc.)
+
+### Key Patterns
+- **ADR-009 compliance**: GET index returns HouseholdSummary, GET by ID returns HouseholdWithInhabitants
+- **Prisma select**: Efficient queries with specific field selection
+- **Component reuse**: HouseholdCard supports both compact and full views
+- **Type safety**: Separate types for lightweight vs comprehensive data
+
 ## Phase 1: Display Generated Events with Calendar Visualization (PR #31: create-dinner-events-for-season)
 **Merged**: 2025-10-09
 

@@ -57,11 +57,12 @@ test.describe('AdminHouseholds View', () => {
         await page.waitForLoadState('networkidle')
 
         // THEN: Household address should be visible
-        await expect(page.getByText(household.address)).toBeVisible()
+        const householdRow = page.getByRole('row', { name: new RegExp(household.address) })
+        await expect(householdRow).toBeVisible()
 
-        // THEN: All 3 inhabitants' first names should be visible
+        // THEN: All 3 inhabitants' first names should be visible in badges within the household row
         for (const inhabitant of inhabitants) {
-            await expect(page.getByText(inhabitant.name)).toBeVisible()
+            await expect(householdRow.getByText(inhabitant.name)).toBeVisible()
         }
     })
 
