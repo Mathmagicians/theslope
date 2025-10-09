@@ -18,6 +18,8 @@ test.describe('Admin page path-based navigation', () => {
   // Define admin tabs to test with path-based routing
   const tabs = [
     { name: 'Planlægning', path: 'planning', selector: '[data-test-id="admin-planning"]' },
+    { name: 'Madhold', path: 'teams', selector: '[data-test-id="admin-teams"]' },
+    { name: 'Chefkokke', path: 'chefs', selector: '[data-test-id="admin-chefs"]' },
     { name: 'Husstande', path: 'households', selector: '[data-test-id="admin-households"]' },
     { name: 'Allergier', path: 'allergies', selector: '[data-test-id="admin-allergies"]' },
     { name: 'Brugere', path: 'users', selector: '[data-test-id="admin-users"]' },
@@ -150,28 +152,5 @@ test.describe('Admin page path-based navigation', () => {
 
     // Verify URL updates to view mode or removes mode parameter
     await expect(page).toHaveURL(/.*\/admin\/planning(\?mode=view)?$/)
-  })
-
-  test.skip('Form state parameters in URL are applied to form', async ({ page }) => {
-    // Create URL with form parameters
-    const formParams = new URLSearchParams()
-    formParams.set('mode', 'edit')
-    formParams.set('ticketIsCancellableDaysBefore', '2')
-    formParams.set('diningModeIsEditableMinutesBefore', '30')
-
-    // Navigate to URL with form parameters - query params with path
-    await page.goto(`${adminUrl}/planning?${formParams.toString()}`)
-    await page.waitForLoadState('networkidle')
-
-    // Verify we're in edit mode
-    await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-
-    // Wait for form to load
-    await expect(page.locator('#seasonForm')).toBeVisible()
-
-    // Verify form field values match URL parameters
-    // Note: The exact selectors may need to be adjusted based on your form implementation
-    await expect(page.locator('input[name="cancellableDays"]')).toHaveValue('2')
-    await expect(page.locator('input[name="editableMinutes"]')).toHaveValue('30')
   })
 })

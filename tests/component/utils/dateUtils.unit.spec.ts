@@ -1,13 +1,19 @@
-import {describe, expect, test, it} from "vitest"
+import {describe, expect, it} from "vitest"
 import {
     calculateDayFromWeekNumber,
+    copyPartialDateRange,
     createDefaultWeekdayMap,
     eachDayOfManyIntervals,
     getEachDayOfIntervalWithSelectedWeekdays,
-    copyPartialDateRange, isDateRangeInside
+    isDateRangeInside,
+    createDateRange,
+    formatDateRange,
+    parseDate,
+    excludeDatesFromInterval,
+    areRangesOverlapping
 } from "~/utils/date"
 import {isValid} from "date-fns"
-import type {DateRange} from "~/types/dateTypes";
+import type {DateRange} from "~/types/dateTypes"
 
 describe('test calculateDayFromWeekNumber', async () => {
 
@@ -57,8 +63,8 @@ describe('createDefaultWeekdayMap', () => {
             onsdag: true,
             torsdag: true,
             fredag: true,
-            loerdag: true,
-            soendag: true
+            lørdag: true,
+            søndag: true
         })
     })
 
@@ -71,8 +77,8 @@ describe('createDefaultWeekdayMap', () => {
             onsdag: true,
             torsdag: true,
             fredag: false,
-            loerdag: false,
-            soendag: false
+            lørdag: false,
+            søndag: false
         })
     })
 })
@@ -286,9 +292,9 @@ describe('areRangesOverlapping', () => {
             )
         ]
         expect(areRangesOverlapping(ranges)).toBe(false)
-        const range_of3 = [... ranges, createDateRange(
+        const range_of3 = [...ranges, createDateRange(
             new Date(2024, 0, 1),  // Jan 1, 2026
-            new Date(2024, 0, 5) )]  // Jan 5, 2026
+            new Date(2024, 0, 5))]  // Jan 5, 2026
 
         expect(areRangesOverlapping(range_of3)).toBe(false)
     })
@@ -306,9 +312,9 @@ describe('areRangesOverlapping', () => {
         ]
         expect(areRangesOverlapping(ranges)).toBe(true)
 
-        const range_of3 = [... ranges, createDateRange(
+        const range_of3 = [...ranges, createDateRange(
             new Date(2024, 0, 1),
-            new Date(2024, 0, 5) )]
+            new Date(2024, 0, 5))]
         expect(areRangesOverlapping(range_of3)).toBe(true)
         expect(areRangesOverlapping(range_of3.reverse())).toBe(true)
     })

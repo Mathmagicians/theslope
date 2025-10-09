@@ -7,6 +7,15 @@ export
 
 export HEY_TOKEN?="$(shell curl -s -X POST $(HEY_NABO_API)/login  -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)"}' | jq .'token')"
 
+git-cleanup-branch:
+	@current_branch=$$(git branch --show-current); \
+	if [ "$$current_branch" = "main" ]; then \
+		echo "❌ Already on main branch. Please specify branch to delete: make git-cleanup-branch branch=<branch-name>"; \
+		exit 1; \
+	fi; \
+	git checkout main && git pull && git branch -d $$current_branch && \
+	echo "✅ Cleaned up branch $$current_branch"
+
 prisma-to-zod:
 	@npx prisma generate zod
 
@@ -60,16 +69,16 @@ d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
 
 d1-list-users-local:
-	@npx wrangler d1 execute theslope --command  "SELECT * FROM User"
+	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local
 
 d1-list-tables:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --env dev --remote
 
 d1-list-tables-local:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
 
 logs-dev:
-	@npx wrangler tail theslope --format pretty
+	@npx wrangler tail theslope-dev --env dev --format pretty
 
 logs-prod:
 	@npx wrangler tail theslope-prod --env prod --format pretty
@@ -118,8 +127,14 @@ theslope-put-user:
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
-run-e2e-team:
+e2e-team:
 	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
 
-run-e2e-season:
+e2e-season:
 	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+
+unit-test:
+	@npx vitest --run
+
+unit-test-single:
+	@npx vitest --run --testNamePattern=$(name)

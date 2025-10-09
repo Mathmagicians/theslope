@@ -12,8 +12,9 @@ type DateRangeInput = {
 
 // COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
-const props = withDefaults(defineProps<{ debug?: boolean }>(), {
-  debug: false
+const props = withDefaults(defineProps<{ debug?: boolean, name?: string }>(), {
+  debug: false,
+  name: undefined
 })
 const emit = defineEmits(['update:model-value', 'close'])
 
@@ -177,7 +178,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
         </template>
       </UCalendar>
     </template>
-    <div class="flex flex-row gap-1 md:gap-4">
+    <div :name="props.name" class="flex flex-row gap-1 md:gap-4">
       <UFormField v-for="key in ['start', 'end'] as const" :key="key"
                   class="p-2"
                   :label="formatLabel(key)"

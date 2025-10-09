@@ -1,21 +1,46 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import {PrismaD1} from "@prisma/adapter-d1"
-import {
+import {PrismaClient, Prisma as PrismaFromClient} from "@prisma/client"
+import eventHandlerHelper from "../utils/eventHandlerHelper"
+import type {
     Season,
     User,
     Inhabitant,
     Household,
     CookingTeam,
-    DinnerEvent,
-    Prisma as PrismaFromClient,
-    PrismaClient
+    DinnerEvent
 } from "@prisma/client"
-import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
-import InhabitantCreateInput = PrismaFromClient.InhabitantCreateInput
-import SeasonCreateInput = PrismaFromClient.SeasonCreateInput
-import CookingTeamCreateInput = PrismaFromClient.CookingTeamCreateInput
-import DinnerEventCreateInput = PrismaFromClient.DinnerEventCreateInput
-import eventHandlerHelper from "../utils/eventHandlerHelper"
+
+import type {SerializedSeason} from "~/composables/useSeasonValidation"
+import type {InhabitantCreate, HouseholdCreate} from '~/composables/useHouseholdValidation'
+import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
+import type {CookingTeam as CookingTeamCreate, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
+import type {UserCreate} from '~/composables/useUserValidation'
+
+export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
+    include: { Inhabitant: true }
+}>
+
+export type SeasonWithRelations = PrismaFromClient.SeasonGetPayload<{
+    include: {
+        dinnerEvents: true,
+        CookingTeams: {
+            include: {
+                assignments: {
+                    include: { inhabitant: true }
+                }
+            }
+        },
+        ticketPrices: true
+    }
+}>
+
+export type CookingTeamAssignmentWithRelations = PrismaFromClient.CookingTeamAssignmentGetPayload<{
+    include: {
+        inhabitant: true
+        cookingTeam: true
+    }
+}>
 
 const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
 
@@ -28,7 +53,7 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
 
 /*** USERS ***/
 
-export async function saveUser(d1Client: D1Database, user: PrismaFromClient.UserCreateInput): Promise<User> {
+export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
     console.info(`👨‍💻 > USER > [SAVE] Saving user ${user.email}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -79,7 +104,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
     }
 }
 
-export async function fetchUser(email: string, d1Client: D1Database): Promise<(User & {Inhabitant?: Inhabitant}) | null> {
+export async function fetchUser(email: string, d1Client: D1Database): Promise<UserWithInhabitant | null> {
     console.info(`👨‍💻 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -104,7 +129,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<(U
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreateInput, householdId: number): Promise<Inhabitant> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<Inhabitant> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -189,7 +214,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        
+
         // Delete inhabitant - cascade handles strong associations automatically:
         // - Strong associations (Allergies, DinnerPreferences, Orders, CookingTeamAssignments) → CASCADE DELETE
         // TODO check if we need to change prisma setting for cascade and setNull to work properly ?
@@ -208,7 +233,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
 /*** HOUSEHOLDS ***/
 
-export async function saveHousehold(d1Client: D1Database, household: HouseholdCreateInput): Promise<Household> {
+export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<Household> {
     console.info(`🏠 > HOUSEHOLD > [SAVE] Saving household at ${household.address} (Heynabo ID: ${household.heynaboId})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -229,7 +254,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
         })
         console.info(`🏠 > HOUSEHOLD > [SAVE] Successfully saved household ${newHousehold.address} with ID ${newHousehold.id}`)
 
-        if (household.inhabitants ) {
+        if (household.inhabitants) {
             const inhabitantIds = await Promise.all(
                 household.inhabitants.map(inhabitant => saveInhabitant(d1Client, inhabitant, newHousehold.id))
             )
@@ -267,14 +292,15 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
             where: {id}
         })
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household?.name} with ID ${id}`)
-        return household
+        return household ?? null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 }
 
-export async function updateHousehold(d1Client: D1Database, id: number, householdData: Partial<HouseholdCreateInput>): Promise<Household> {
+export async function updateHousehold(d1Client: D1Database, id: number, householdData: Partial<HouseholdCreate>): Promise<Household> {
     console.info(`🏠 > HOUSEHOLD > [UPDATE] Updating household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -310,14 +336,6 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
 }
 
 /*** SEASON AGGREGATE ROOT - aggregates team assignments, teams, and dinner events ***/
-
-/*** SEASON ***/
-
-// ADR-005: Season is an aggregate root with strong relationships to:
-// - CookingTeams (strong - teams cannot exist without season)
-// - DinnerEvents (strong - events are part of season's dining schedule)
-// - CookingTeamAssignments (strong via teams)
-// Deletion must cascade to all dependent entities
 
 export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season for range ${start} to ${end}`)
@@ -372,13 +390,24 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
     }
 }
 
-export async function fetchSeason(d1Client: D1Database, id: number): Promise<Season | null> {
+export async function fetchSeason(d1Client: D1Database, id: number): Promise<SeasonWithRelations | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const season = await prisma.season.findFirst({
-            where: {id}
+            where: {id},
+            include: {
+                dinnerEvents: true,
+                CookingTeams: {
+                    include: {
+                        assignments: {
+                            include: {inhabitant: true}
+                        }
+                    }
+                },
+                ticketPrices: true
+            }
         })
 
         if (season) {
@@ -434,13 +463,15 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
     }
 }
 
-export async function createSeason(d1Client: D1Database, seasonData: SeasonCreateInput): Promise<Season> {
+export async function createSeason(d1Client: D1Database, seasonData: SerializedSeason): Promise<Season> {
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    // Exclude id and read-only relation fields from create
+    const {id, dinnerEvents, CookingTeams, ticketPrices, ...createData} = seasonData
 
     try {
         const newSeason = await prisma.season.create({
-            data: seasonData
+            data: createData
         })
 
         console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id}`)
@@ -455,7 +486,8 @@ export async function createSeason(d1Client: D1Database, seasonData: SeasonCreat
 export async function updateSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const { id, ...updateData } = seasonData
+    // Exclude id and read-only relation fields from update
+    const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = seasonData
     try {
 
         const updatedSeason = await prisma.season.update({
@@ -473,14 +505,14 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 }
 
 /*** SEASON > TEAM ***/
-
 // ADR-005: CookingTeam relationships:
 // - Strong to Season (team cannot exist without season)
 // - Strong to CookingTeamAssignments (assignments cannot exist without team)
 // - Weak to DinnerEvents (events can exist without assigned team)
 
-export async function createTeamAssignment(d1Client: D1Database, teamId: number, inhabitantId: number, role: string): Promise<any> {
-    console.info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${inhabitantId} in team ${teamId} with role ${role}`)
+export async function createTeamAssignment(d1Client: D1Database, teamId: number, inhabitantId: number, role: TeamRoleCreate): Promise<any> {
+    console
+        .info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${inhabitantId} in team ${teamId} with role ${role}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -505,13 +537,13 @@ export async function createTeamAssignment(d1Client: D1Database, teamId: number,
     }
 }
 
-export async function fetchTeamAssignment(d1Client: D1Database, id: number): Promise<any | null> {
+export async function fetchTeamAssignment(d1Client: D1Database, id: number): Promise<Promise<CookingTeamAssignmentWithRelations | null> | null> {
     console.info(`👥🔗 > ASSIGNMENT > [GET] Fetching team assignment with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const assignment = await prisma.cookingTeamAssignment.findUnique({
-            where: { id },
+            where: {id},
             include: {
                 inhabitant: true,
                 cookingTeam: true
@@ -585,7 +617,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
         console.info(`👥 > TEAM > [GET] Successfully fetched ${teams.length} teams`, 'Season: ', seasonId ? ` for season ${seasonId}` : '')
         return transformedTeams
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching teams for season ${seasonId}` , error)
+        const h3e = h3eFromCatch(`Error fetching teams for season ${seasonId}`, error)
         console.error(`👥 > TEAM > [GET] ${h3e.message}`, error)
         throw h3e
     }
@@ -629,7 +661,7 @@ export async function fetchTeam(d1Client: D1Database, id: number): Promise<any |
     }
 }
 
-export async function createTeam(d1Client: D1Database, teamData: CookingTeamCreateInput): Promise<CookingTeam> {
+export async function createTeam(d1Client: D1Database, teamData: CookingTeamCreate): Promise<CookingTeam> {
     console.info(`👥 > TEAM > [CREATE] Creating team ${teamData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -650,7 +682,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
     }
 }
 
-export async function updateTeam(d1Client: D1Database, id: number, teamData: Partial<CookingTeamCreateInput>): Promise<CookingTeam> {
+export async function updateTeam(d1Client: D1Database, id: number, teamData: Partial<CookingTeamCreate>): Promise<CookingTeam> {
     console.info(`👥 > TEAM > [UPDATE] Updating team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {
@@ -673,7 +705,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
 export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeam> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-   try {
+    try {
         // Delete team - cascade will handle strong associations (CookingTeamAssignments) automatically, and clear weak associations
         const deletedTeam = await prisma.cookingTeam.delete({
             where: {id}
@@ -695,7 +727,7 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 // - Weak to CookingTeam (event can exist without assigned team)
 // - Weak to Inhabitant chef (event can exist without assigned chef)
 
-export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreateInput): Promise<DinnerEvent> {
+export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEvent> {
     console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -774,7 +806,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
     }
 }
 
-export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreateInput>): Promise<DinnerEvent> {
+export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEvent> {
     console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {

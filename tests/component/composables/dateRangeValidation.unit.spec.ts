@@ -1,9 +1,9 @@
 // tests/dateRangeValidation.test.ts
 import {describe, it, expect, assertType} from 'vitest'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
-import {parseDate} from '~/utils/date'
+import {parseDate, createDateRange, compareDateRanges} from '~/utils/date'
 import type { DateRange} from '~/types/dateTypes'
-import {intervalToDuration} from "date-fns";
+import {intervalToDuration} from "date-fns"
 
 describe('dateRangeSchema', () => {
     it('should safeParse the date range "25/01/2025" to "26/01/2025"', () => {

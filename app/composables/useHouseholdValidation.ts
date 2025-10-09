@@ -74,11 +74,17 @@ export const useHouseholdValidation = () => {
         pictureUrl: z.string().optional().nullable()
     })
 
+    // Household with nested inhabitants for creation (used by repository)
+    const HouseholdCreateWithInhabitantsSchema = HouseholdCreateSchema.extend({
+        inhabitants: z.array(InhabitantCreateSchema.omit({ householdId: true })).optional()
+    })
+
     return {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
         HouseholdUpdateSchema,
         HouseholdResponseSchema,
+        HouseholdCreateWithInhabitantsSchema,
         BaseInhabitantSchema,
         InhabitantCreateSchema,
         InhabitantUpdateSchema,
@@ -92,6 +98,7 @@ export type Household = z.infer<ReturnType<typeof useHouseholdValidation>['BaseH
 export type HouseholdCreate = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdCreateSchema']>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdUpdateSchema']>
 export type HouseholdResponse = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdResponseSchema']>
+export type HouseholdCreateWithInhabitants = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdCreateWithInhabitantsSchema']>
 
 export type Inhabitant = z.infer<ReturnType<typeof useHouseholdValidation>['BaseInhabitantSchema']>
 export type InhabitantCreate = z.infer<ReturnType<typeof useHouseholdValidation>['InhabitantCreateSchema']>

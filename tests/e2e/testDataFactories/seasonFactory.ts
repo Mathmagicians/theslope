@@ -1,4 +1,4 @@
-import {formatDate} from "../../../app/utils/date"
+import {formatDate, formatDateRange, createDateRange, createDefaultWeekdayMap} from "../../../app/utils/date"
 import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
 import {
     type CookingTeam,
@@ -15,24 +15,30 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 export class SeasonFactory {
     static readonly today = new Date()
     static readonly ninetyDaysLater = new Date(this.today.getTime() + 90 * 24 * 60 * 60 * 1000)
+    static readonly tomorrow = new Date(this.today.getTime() + 1 * 24 * 60 * 60 * 1000)
 
+    /**
+     * Generate a unique test date to avoid collisions between parallel test runs
+     * @returns Date with random year (4025-4124) and random month (0-11)
+     */
+    static readonly generateUniqueDate = (): Date => {
+        const randomYearOffset = Math.floor(Math.random() * 100) // 0-99
+        const randomMonth = Math.floor(Math.random() * 12) // 0-11
+        const year = 4025 + randomYearOffset
+        return new Date(year, randomMonth, 1)
+    }
+
+    // Default season data for tests
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
-            start: formatDate(this.today),
-            end: formatDate(this.ninetyDaysLater)
+            start: this.today,
+            end: this.ninetyDaysLater
         },
+        holidayDates: [createDateRange(this.today, this.tomorrow)],
         isActive: false,
-        cookingDays: {
-            mandag: true,
-            tirsdag: true,
-            onsdag: true,
-            torsdag: true,
-            fredag: false,
-            loerdag: false,
-            soendag: false
-        },
-        holidays: [],
+        cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
+        holidays: [ createDateRange(this.today, this.tomorrow)],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }
@@ -52,13 +58,19 @@ export class SeasonFactory {
 
     static readonly createSeason = async (
         context: BrowserContext,
-        aSeason: Partial<Season> = this.defaultSeason().season,
+        aSeason: Partial<Season> = {},
         expectedStatus: number = 201
     ): Promise<Season> => {
+        // Merge partial with defaults to create full Season object
+        const fullSeason: Season = {
+            ...this.defaultSeason().season,
+            ...aSeason
+        }
+
         // For expected failures, send raw data to test server validation
         // For expected success, use serializeSeason for proper client-side validation
         const requestData = expectedStatus === 201
-            ? serializeSeason(aSeason as Season)
+            ? serializeSeason(fullSeason)
             : aSeason
 
         const response = await context.request.put('/api/admin/season',
@@ -79,6 +91,25 @@ export class SeasonFactory {
         return responseBody
     }
 
+    static readonly getAllSeasons = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<Season[]> => {
+        const response = await context.request.get('/api/admin/season')
+        expect(response.status()).toBe(expectedStatus)
+        return await response.json()
+    }
+
+    static readonly getSeason = async (
+        context: BrowserContext,
+        id: number,
+        expectedStatus: number = 200
+    ): Promise<Season> => {
+        const response = await context.request.get(`/api/admin/season/${id}`)
+        expect(response.status()).toBe(expectedStatus)
+        return await response.json()
+    }
+
     static readonly deleteSeason = async (
         context: BrowserContext,
         id: number,
@@ -96,6 +127,26 @@ export class SeasonFactory {
         return null
     }
 
+    /**
+     * Cleanup multiple seasons by ID (for test afterAll hooks)
+     * Gracefully handles 404 errors for already-deleted seasons
+     */
+    static readonly cleanupSeasons = async (
+        context: BrowserContext,
+        seasonIds: number[]
+    ): Promise<void> => {
+        if (seasonIds.length === 0) return
+
+        for (const id of seasonIds) {
+            try {
+                await this.deleteSeason(context, id)
+            } catch (error) {
+                // Ignore 404 errors (season already deleted), log others
+                console.error(`Failed to delete test season with ID ${id}:`, error)
+            }
+        }
+    }
+
     static readonly createSeasonWithTeams = async (
         context: BrowserContext,
         seasonData: Partial<Season> = this.defaultSeason().season,
@@ -106,6 +157,27 @@ export class SeasonFactory {
             Array(teamCount).fill(0).map(() => this.createCookingTeamForSeason(context, season.id as number))
         )
         return {season, teams}
+    }
+
+    static readonly generateDinnerEventsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 201
+    ): Promise<any> => {
+        const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`)
+
+        const status = response.status()
+        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+
+        if (expectedStatus === 201) {
+            const responseBody = await response.json()
+            expect(responseBody.seasonId).toBe(seasonId)
+            expect(responseBody.eventCount).toBeGreaterThan(0)
+            expect(Array.isArray(responseBody.events)).toBe(true)
+            return responseBody
+        }
+
+        return await response.json()
     }
 
     static readonly createDinnerEventsForSeason = async (
