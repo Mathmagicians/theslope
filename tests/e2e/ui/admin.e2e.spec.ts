@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { authFiles } from '../config'
+import testHelpers from '../testHelpers'
+import { SeasonFactory } from '../testDataFactories/seasonFactory'
 
 const { adminUIFile } = authFiles
+const { validatedBrowserContext } = testHelpers
 
 /**
  * TEST PURPOSE:
@@ -155,34 +158,49 @@ test.describe('Admin page path-based navigation', () => {
       })
     }
 
-    test(`Tab "${tab.name}" can switch between all form modes via UI`, async ({ page }) => {
-      // Start in view mode
-      await page.goto(`${adminUrl}/${tab.path}`)
-      await page.waitForLoadState('networkidle')
+    test(`Tab "${tab.name}" can switch between all form modes via UI`, async ({ page, browser }) => {
+      // SETUP: Ensure test data exists - edit button is disabled when no seasons exist
+      const context = await validatedBrowserContext(browser)
 
-      // Wait for data to load - edit button should be enabled when data is ready
-      const editButton = page.locator('button[name="form-mode-edit"]')
-      await expect(editButton).toBeEnabled({ timeout: 10000 })
+      // Create a season so edit mode is available
+      const season = await SeasonFactory.createSeason(context)
 
-      // Switch to edit mode
-      await editButton.click()
-      await page.waitForLoadState('networkidle')
-      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=edit$`))
-      await expect(editButton).toHaveClass(/ring-2/)
+      try {
+        // Start in view mode
+        await page.goto(`${adminUrl}/${tab.path}`)
+        await page.waitForLoadState('networkidle')
 
-      // Switch to create mode
-      const createButton = page.locator('button[name="form-mode-create"]')
-      await createButton.click()
-      await page.waitForLoadState('networkidle')
-      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=create$`))
-      await expect(createButton).toHaveClass(/ring-2/)
+        // Wait for data to load - edit button should be enabled when data is ready
+        const editButton = page.locator('button[name="form-mode-edit"]')
+        await expect(editButton).toBeEnabled({ timeout: 10000 })
 
-      // Switch back to view mode
-      const viewButton = page.locator('button[name="form-mode-view"]')
-      await viewButton.click()
-      await page.waitForLoadState('networkidle')
-      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}(\\?mode=view)?$`))
-      await expect(viewButton).toHaveClass(/ring-2/)
+        // Switch to edit mode
+        await editButton.click()
+        await page.waitForLoadState('networkidle')
+        await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=edit$`))
+        await expect(editButton).toHaveClass(/ring-2/)
+
+        // Switch to create mode
+        const createButton = page.locator('button[name="form-mode-create"]')
+        await createButton.click()
+        await page.waitForLoadState('networkidle')
+        await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=create$`))
+        await expect(createButton).toHaveClass(/ring-2/)
+
+        // Switch back to view mode
+        const viewButton = page.locator('button[name="form-mode-view"]')
+        await viewButton.click()
+        await page.waitForLoadState('networkidle')
+        await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}(\\?mode=view)?$`))
+        await expect(viewButton).toHaveClass(/ring-2/)
+      } finally {
+        // CLEANUP: Delete test season
+        if (season.id) {
+          await SeasonFactory.deleteSeason(context, season.id).catch(() => {
+            // Ignore cleanup errors
+          })
+        }
+      }
     })
   }
 })

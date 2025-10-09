@@ -134,6 +134,27 @@ const handleDeleteTeam = async (teamId: number) => {
 const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
+
+// TABLE COLUMNS for VIEW mode
+const columns = [
+  {
+    accessorKey: 'name',
+    header: 'Madhold'
+  },
+  {
+    accessorKey: 'assignments',
+    header: 'Medlemmer',
+    cell: ({row}: any) => {
+      const teamIndex = teams.value.findIndex(t => t.id === row.original.id)
+      return h(resolveComponent('CookingTeamAssignments'), {
+        teamId: row.original.id,
+        teamNumber: teamIndex + 1,
+        assignments: row.original.assignments || [],
+        compact: true
+      })
+    }
+  }
+]
 </script>
 
 <template>
@@ -209,16 +230,31 @@ const handleCancel = async () => {
           </div>
         </div>
 
-        <!-- VIEW MODE: Read-only live data -->
-        <div v-else class="p-4 space-y-2">
-          <CookingTeamCard
-            v-for="team in displayedTeams"
-            :key="team.id"
-            :team="team"
-            mode="view"
-            variant="list"
-          />
-        </div>
+        <!-- VIEW MODE: Table with team assignments -->
+        <UTable
+          v-else
+          :columns="columns"
+          :data="displayedTeams"
+          :loading="isLoading"
+          :ui="{ td: 'py-2' }"
+        >
+          <template #empty-state>
+            <div class="flex flex-col items-center justify-center py-6 gap-3">
+              <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
+              <p class="text-sm text-gray-500">Ingen madhold endnu. Opret madhold for at komme i gang!</p>
+              <UButton
+                v-if="!disabledModes.includes(FORM_MODES.CREATE)"
+                name="create-new-team"
+                color="secondary"
+                size="sm"
+                icon="i-heroicons-plus-circle"
+                @click="onModeChange(FORM_MODES.CREATE)"
+              >
+                Opret madhold
+              </UButton>
+            </div>
+          </template>
+        </UTable>
       </div>
 
       <Loader v-else-if="isLoading" text="Madhold"/>
@@ -226,19 +262,6 @@ const handleCancel = async () => {
            class="flex flex-col items-center justify-center space-y-4 p-8">
         <h3 class="text-lg font-semibold">Ingen sæson valgt</h3>
         <p>Vælg en sæson for at se madhold, eller opret en ny sæson under Planlægning.</p>
-      </div>
-      <div v-else-if="isNoTeams && formMode === FORM_MODES.VIEW"
-           class="flex flex-col items-center justify-center space-y-4 p-8">
-        <h3 class="text-lg font-semibold">Her ser lidt tomt ud!</h3>
-        <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
-                 name="create-new-team"
-                 color="secondary"
-                 icon="i-heroicons-plus-circle"
-                 @click="onModeChange(FORM_MODES.CREATE)"
-        >
-          Opret madhold
-        </UButton>
-        <p>Der er ingen madhold for denne sæson. Opret madhold for at komme i gang.</p>
       </div>
     </template>
   </UCard>
