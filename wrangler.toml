@@ -1,34 +1,33 @@
 #:schema node_modules/wrangler/config-schema.json
-# Shared configuration
+# Top-level configuration: Used for LOCAL development (nuxt dev, wrangler dev)
+name = "theslope-local"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
 
-# Workers Logs
-# Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
-# Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
-[observability]
-enabled = true
-
-# Development environment
-[env.dev]
-name = "theslope"
-routes = [
-    { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
-]
-
-[env.dev.vars]
+[vars]
 HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
-[[env.dev.d1_databases]]
+# Workers Logs
+[observability]
+enabled = true
+
+[[d1_databases]]
 binding = "DB"
 database_name = "theslope"
 database_id = "373cce02-f8be-4f44-ae68-544f94385367"
 migrations_dir = "migrations"
 
-# Production environment
+# Development deployment: Remote dev.skraaningen.dk (inherits from top-level, overrides name and routes)
+[env.dev]
+name = "theslope-dev"
+routes = [
+    { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
+]
+
+# Production deployment: Remote www.skraaningen.dk (overrides name, routes, vars, and database)
 [env.prod]
 name = "theslope-prod"
 workers_dev = false

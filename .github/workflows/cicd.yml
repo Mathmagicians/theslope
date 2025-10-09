@@ -38,7 +38,7 @@ jobs:
         run: |
           npm run db:migrate:local
           npm run db:seed:local
-          npx wrangler d1 execute theslope --command="SELECT * FROM User" --env dev --local
+          npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
       - name: Run e2e tests
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
