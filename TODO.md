@@ -7,13 +7,6 @@
 - `/admin/planning` - Season creation + auto-generated events view
 - `/admin/teams` - Cooking team management (NEW tab)
 
-### Phase 1: Display Generated Events (Finishing touches)
-**Current PR**: `create-dinner-events-for-season`
-
-**Remaining Tasks**:
-- [ ] Create component to display generated events in season view mode
-- [ ] Write component tests for events display
-
 ### Phase 2: Cooking Teams Admin Tab
 **Goal**: Separate "Teams" tab for managing cooking teams per season
 
@@ -206,17 +199,48 @@ AggregateError [ECONNREFUSED]:
 
 # ✅ COMPLETED
 
-## Phase 1: Auto-Generate Dinner Events (PR: create-dinner-events-for-season)
+## Phase 1: Display Generated Events with Calendar Visualization (PR #31: create-dinner-events-for-season)
+**Merged**: 2025-10-09
+
+### Auto-Generate Dinner Events
 - ✅ Season creation handler auto-generates dinner events via component orchestration
 - ✅ Component orchestrates createSeason() → generateDinnerEvents() → toast notification
 - ✅ Toast notification: "Sæson oprettet - X fællesspisninger genereret"
 - ✅ GET /api/admin/dinner-event endpoint with optional seasonId filter
 - ✅ API tests for GET endpoint (all events, filtered by season, validation)
 - ✅ Exact count assertions in generate-dinner-events API tests (3 tests)
-- ✅ UI E2E test verifies exact event count after season creation
 - ✅ POST /api/admin/season/[id]/generate-dinner-events endpoint
 - ✅ Event generation algorithm (cooking days, holidays, date range)
 - ✅ E2E API tests for event generation (7 tests passing)
+
+### Calendar Display Component
+- ✅ CalendarDisplay.vue shows dinner events with visual indicators:
+  - Filled circle (●) for generated events
+  - Ring (○) for expected cooking days
+- ✅ Season type extended to support optional relations (dinnerEvents, CookingTeams, ticketPrices)
+- ✅ Store fetches full season data with relations when selected
+- ✅ UI E2E test verifies exact event count after async generation with exponential backoff polling
+- ✅ Comprehensive E2E test coverage in AdminPlanningSeason.e2e.spec.ts
+
+### Critical Infrastructure Fixes
+- ✅ **Wrangler Environment Configuration** - Fixed login 500 error
+  - Implemented three-environment structure (local/dev/prod)
+  - Explicit vars and d1_databases for each environment
+  - Updated package.json, Makefile, cicd.yml, README.md
+- ✅ **CI Cross-Platform Compatibility** - Tests now pass on macOS and Linux
+  - Changed text locators to semantic selectors (getByRole)
+  - Documented OS-specific rendering differences in testing.md
+- ✅ **Async Event Generation Polling** - DinnerEventFactory.waitForDinnerEventsGeneration()
+  - Exponential backoff (500ms → 1s → 2s → 4s → 8s)
+  - Handles timing issues in CI environment
+- ✅ **Nuxt UI 4 Form Submission Bug** - Fixed array mutations not persisting
+  - Changed from event.data to model.value for v-model changes
+  - Ensures holiday removal works correctly
+- ✅ **Repository Type Fixes** - All functions use properly imported types
+  - Added relation field exclusion in createSeason and updateSeason
+- ✅ **Cloudflare Compatibility Dates** - Updated to 2025-10-01
+  - Both nuxt.config.ts and wrangler.toml synchronized
+  - Includes latest Node.js compatibility improvements
 
 ## Phase 2: Cooking Teams Admin Tab - API
 - ✅ PUT/POST/DELETE /api/admin/team endpoints
