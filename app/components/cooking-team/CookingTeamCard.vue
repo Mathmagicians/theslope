@@ -20,12 +20,14 @@ interface Props {
   assignments?: TeamMember[]
   compact?: boolean
   mode?: FormMode         // Form mode: view, edit, create
+  showMembers?: boolean   // If false, only show count badge in compact mode
 }
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
   assignments: () => [],
-  mode: 'view'
+  mode: 'view',
+  showMembers: true
 })
 
 const emit = defineEmits<{
@@ -104,43 +106,64 @@ defineExpose({
 
 <template>
   <!-- COMPACT VIEW for table display -->
-  <div v-if="compact" class="flex flex-col md:flex-row gap-2">
-    <div
-      v-for="(members, role) in roleGroups"
-      :key="role"
-      v-show="members.length > 0"
-      class="flex flex-col gap-1"
-    >
-      <span class="text-xs text-gray-500 font-medium">{{ roleLabels[role] }}</span>
-      <div class="flex items-center gap-2">
-        <UAvatarGroup size="sm" :max="3">
-          <UTooltip
-            v-for="member in members"
-            :key="member.id"
-            :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-          >
-            <UAvatar
-              :src="member.inhabitant.pictureUrl"
-              :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-              icon="i-heroicons-user"
+  <div v-if="compact">
+    <!-- Show only count badge when showMembers is false -->
+    <div v-if="!showMembers" class="flex items-center gap-2">
+      <UBadge
+        :color="teamColor"
+        variant="soft"
+        size="md"
+      >
+        {{ teamName }}
+      </UBadge>
+      <UBadge
+        :color="teamColor"
+        variant="soft"
+        size="md"
+      >
+        {{ assignments.length }} medlem{{ assignments.length !== 1 ? 'mer' : '' }}
+      </UBadge>
+    </div>
+
+    <!-- Show full member details when showMembers is true -->
+    <div v-else class="flex flex-col md:flex-row gap-2">
+      <div
+        v-for="(members, role) in roleGroups"
+        :key="role"
+        v-show="members.length > 0"
+        class="flex flex-col gap-1"
+      >
+        <span class="text-xs text-gray-500 font-medium">{{ roleLabels[role] }}</span>
+        <div class="flex items-center gap-2">
+          <UAvatarGroup size="sm" :max="3">
+            <UTooltip
+              v-for="member in members"
+              :key="member.id"
+              :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+            >
+              <UAvatar
+                :src="member.inhabitant.pictureUrl"
+                :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                icon="i-heroicons-user"
+                class="cursor-pointer"
+                @click="navigateToInhabitant(member.inhabitant.id)"
+              />
+            </UTooltip>
+          </UAvatarGroup>
+
+          <div class="flex flex-wrap gap-1">
+            <UBadge
+              v-for="member in members"
+              :key="member.id"
+              size="sm"
+              variant="soft"
+              :color="teamColor"
               class="cursor-pointer"
               @click="navigateToInhabitant(member.inhabitant.id)"
-            />
-          </UTooltip>
-        </UAvatarGroup>
-
-        <div class="flex flex-wrap gap-1">
-          <UBadge
-            v-for="member in members"
-            :key="member.id"
-            size="sm"
-            variant="soft"
-            :color="teamColor"
-            class="cursor-pointer"
-            @click="navigateToInhabitant(member.inhabitant.id)"
-          >
-            {{ member.inhabitant.name }}
-          </UBadge>
+            >
+              {{ member.inhabitant.name }}
+            </UBadge>
+          </div>
         </div>
       </div>
     </div>

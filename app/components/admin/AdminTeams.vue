@@ -240,18 +240,7 @@ const columns = [
   },
   {
     accessorKey: 'assignments',
-    header: 'Medlemmer',
-    cell: ({row}: any) => {
-      const teamIndex = teams.value.findIndex(t => t.id === row.original.id)
-      return h(resolveComponent('CookingTeamCard'), {
-        teamId: row.original.id,
-        teamNumber: teamIndex + 1,
-        teamName: row.original.name,
-        assignments: row.original.assignments || [],
-        compact: true,
-        mode: formMode.value
-      })
-    }
+    header: 'Medlemmer'
   }
 ]
 </script>
@@ -319,25 +308,15 @@ const columns = [
                 size="xl"
               >
                 <template #item="{ item }">
-                  <div class="w-full space-y-2">
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <UIcon :name="item.icon" :class="`text-${item.color}-500`" />
-                        <span class="font-semibold">{{ item.label }}</span>
-                      </div>
-                      <UBadge :color="item.color" size="sm">
-                        {{ item.badge }}
-                      </UBadge>
-                    </div>
-                    <CookingTeamCard
-                      :team-id="displayedTeams[item.value].id"
-                      :team-number="item.value + 1"
-                      :team-name="item.label"
-                      :assignments="displayedTeams[item.value].assignments || []"
-                      compact
-                      :mode="FORM_MODES.VIEW"
-                    />
-                  </div>
+                  <CookingTeamCard
+                    :team-id="displayedTeams[item.value].id"
+                    :team-number="item.value + 1"
+                    :team-name="item.label"
+                    :assignments="displayedTeams[item.value].assignments || []"
+                    compact
+                    :mode="FORM_MODES.VIEW"
+                    :show-members="false"
+                  />
                 </template>
               </UTabs>
             </div>
@@ -385,6 +364,18 @@ const columns = [
             >
               {{ row.original.name }}
             </UBadge>
+          </template>
+
+          <!-- Team assignments column with compact CookingTeamCard -->
+          <template #assignments-cell="{ row }">
+            <CookingTeamCard
+              :team-id="row.original.id"
+              :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
+              :team-name="row.original.name"
+              :assignments="row.original.assignments || []"
+              compact
+              :mode="FORM_MODES.VIEW"
+            />
           </template>
 
           <template #empty-state>
