@@ -128,29 +128,55 @@ test.describe('Admin page path-based navigation', () => {
     await expect(page).toHaveURL(/.*\/admin\/planning$/)
   })
 
-  test('Form mode in URL query parameter works with paths', async ({ page }) => {
-    // Navigate to admin page with edit mode - query params with path
-    await page.goto(`${adminUrl}/planning?mode=edit`)
-    await page.waitForLoadState('networkidle')
+  // Matrix test: Form modes work consistently across tabs that use useEntityFormManager
+  const tabsWithFormModes = [
+    { name: 'Planlægning', path: 'planning' },
+    { name: 'Madhold', path: 'teams' }
+  ]
 
-    // Verify we're in edit mode by checking the edit button has active class
-    await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+  const formModes = [
+    { mode: 'view', buttonName: 'form-mode-view' },
+    { mode: 'edit', buttonName: 'form-mode-edit' },
+    { mode: 'create', buttonName: 'form-mode-create' }
+  ]
 
-    // Verify URL maintains the mode parameter with path
-    await expect(page).toHaveURL(/.*\/admin\/planning\?mode=edit$/)
+  for (const tab of tabsWithFormModes) {
+    for (const formMode of formModes) {
+      test(`Tab "${tab.name}" supports mode=${formMode.mode} in URL query`, async ({ page }) => {
+        // Navigate to tab with form mode in URL query
+        await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
+        await page.waitForLoadState('networkidle')
 
-    // Switch to create mode using the UI
-    await page.locator('button[name="form-mode-create"]').click()
-    await page.waitForLoadState('networkidle')
+        // Verify we're in the correct mode by checking the button has active class
+        await expect(page.locator(`button[name="${formMode.buttonName}"]`)).toHaveClass(/ring-2/)
 
-    // Verify URL updates to create mode
-    await expect(page).toHaveURL(/.*\/admin\/planning\?mode=create$/)
+        // Verify URL maintains the mode parameter with path
+        await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=${formMode.mode}$`))
+      })
+    }
 
-    // Switch to view mode
-    await page.locator('button[name="form-mode-view"]').click()
-    await page.waitForLoadState('networkidle')
+    test(`Tab "${tab.name}" can switch between all form modes via UI`, async ({ page }) => {
+      // Start in view mode
+      await page.goto(`${adminUrl}/${tab.path}`)
+      await page.waitForLoadState('networkidle')
 
-    // Verify URL updates to view mode or removes mode parameter
-    await expect(page).toHaveURL(/.*\/admin\/planning(\?mode=view)?$/)
-  })
+      // Switch to edit mode
+      await page.locator('button[name="form-mode-edit"]').click()
+      await page.waitForLoadState('networkidle')
+      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=edit$`))
+      await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+
+      // Switch to create mode
+      await page.locator('button[name="form-mode-create"]').click()
+      await page.waitForLoadState('networkidle')
+      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=create$`))
+      await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
+
+      // Switch back to view mode
+      await page.locator('button[name="form-mode-view"]').click()
+      await page.waitForLoadState('networkidle')
+      await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}(\\?mode=view)?$`))
+      await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
+    })
+  }
 })

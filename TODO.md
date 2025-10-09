@@ -10,14 +10,24 @@
 ### Phase 2: Cooking Teams Admin Tab
 **Goal**: Separate "Teams" tab for managing cooking teams per season
 
+**Architecture Refactoring** (TDD - Composition Pattern):
+- [ ] Create AdminTeams.vue using same composable pattern
+  - Reuse `useEntityFormManager()` for form logic
+  - Implement team-specific business logic
+  - Use same UI pattern (USelect + FormModeSelector)
+
 **UI Development**:
 - [ ] Add "Teams" tab to admin navigation (alongside Planning)
 - [ ] Create `/admin/teams` page component
-- [ ] Create AdminTeams.vue with season selector dropdown
-- [ ] Create AdminTeamsList.vue for team CRUD operations
+- [ ] Create AdminTeamsForm.vue for team CRUD form
+- [ ] Create AdminTeamsList.vue component (view mode display)
 - [ ] Add reminder in Planning tab: "Remember to set up cooking teams →"
-- [ ] Write component tests for team UI
+
+**Testing**:
+- [ ] Write component tests for AdminTeams.vue
+- [ ] Write component tests for AdminTeamsForm.vue
 - [ ] Write E2E tests for teams tab workflow
+- [ ] Verify AdminPlanning still works after refactor
 
 ### Phase 3: Team Member Assignment (FUTURE)
 **Goal**: Assign inhabitants to teams with roles
@@ -246,6 +256,40 @@ AggregateError [ECONNREFUSED]:
 - ✅ PUT/POST/DELETE /api/admin/team endpoints
 - ✅ Team member assignment endpoints
 - ✅ E2E API tests passing
+
+## Phase 2: useEntityFormManager() Composable Pattern (TDD Composition Pattern)
+**Date**: 2025-01-28 | **Compliance**: ADR-007
+
+### Implementation
+- ✅ **Unit tests written first** (`tests/component/composables/useEntityFormManager.nuxt.spec.ts`)
+  - Form mode state management (view/edit/create)
+  - Draft entity state transitions
+  - URL query parameter synchronization
+  - currentModel computed property logic
+  - Initialization from URL query on mount
+  - Edge cases (null entities, reactive updates)
+- ✅ **Composable implemented** (`app/composables/useEntityFormManager.ts`)
+  - Generic form mode management for any entity type
+  - Draft vs selected entity logic (prevents store mutation)
+  - URL sync using `navigateTo()` with `{replace: true}`
+  - Reactive `watch()` for v-model updates (handles FormModeSelector changes)
+- ✅ **AdminPlanning.vue refactored** to use composable
+  - Reduced from ~197 lines to ~140 lines
+  - Removed 60+ lines of manual form management code
+  - Kept season-specific business logic (`generateDinnerEvents`, `handleSeasonUpdate`)
+  - E2E tests passing (matrix tests for Planning + Teams tabs)
+
+### Key Patterns Established
+- **Composition over duplication**: Reusable form logic extracted to composable
+- **v-model + watch pattern**: FormModeSelector uses `defineModel` (emits `update:modelValue`), composable watches `formMode` ref for URL sync
+- **ADR-007 compliance**: UI state (formMode, draftEntity) in component/composable, server data in store
+- **Generic type support**: `useEntityFormManager<T>()` works with any entity type
+
+### Architecture Benefits
+- DRY principle: Form management logic written once, reused across admin tabs
+- Type safety: Generic TypeScript types ensure compile-time correctness
+- Testability: Composable tested independently, components focus on business logic
+- Maintainability: Changes to form logic propagate to all consumers automatically
 
 ## BDD/TDD Tests Completed (ADR-005 compliance)
 
