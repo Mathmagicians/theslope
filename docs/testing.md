@@ -246,3 +246,47 @@ const generateUniqueSeasonDates = () => {
 **Cause:** Missing `await nextTick()` after state changes
 
 **Fix:** Add `await nextTick()` after `trigger()`, `setProps()`, or manual state changes
+
+### Issue: Tests pass locally (macOS) but fail on CI (Linux)
+
+**Symptom:** E2E tests pass on local macOS but fail on GitHub Actions (Linux) with "strict mode violation" errors:
+```
+Error: locator('text=...') resolved to 2 elements
+```
+
+**Cause:** OS-specific browser rendering differences between macOS and Linux (not headless vs headed):
+- Playwright strict mode is active in both environments
+- Component rendering timing/behavior differs between platforms
+- Text locators (e.g., `locator('text=...')`) may match multiple elements on Linux but only one on macOS
+- Common with dropdowns where selected value AND menu option both contain same text
+
+**Investigation:**
+```bash
+# Running with CI=true and headless locally (macOS) may still pass
+CI=true npx playwright test tests/e2e/ui/file.spec.ts --reporter=line
+
+# Create diagnostic test to verify strict mode is active
+test('verify strict mode', async ({ page }) => {
+  await page.setContent('<div>Text</div><div>Text</div>')
+  await expect(async () => {
+    await page.locator('text=Text').click()
+  }).rejects.toThrow(/strict mode violation/)
+})
+```
+
+**Fix:** Use more specific locators that only match one element:
+```typescript
+// ❌ BAD: Text locator can match multiple elements
+await page.locator('text=TestSeason-123').click()
+
+// ✅ GOOD: Specific role-based locator
+await page.getByRole('option', { name: 'TestSeason-123' }).click()
+
+// ✅ GOOD: Scoped selector
+await page.locator('[role="listbox"] >> text=TestSeason-123').click()
+
+// ✅ GOOD: Use first() when multiple matches are expected but you want the first
+await page.locator('text=TestSeason-123').first().click()
+```
+
+**Prevention:** Always use semantic locators (`getByRole`, `getByLabel`) or scoped selectors instead of broad text matches. These work reliably across platforms.
