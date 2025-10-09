@@ -69,16 +69,16 @@ d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
 
 d1-list-users-local:
-	@npx wrangler d1 execute theslope --command  "SELECT * FROM User"
+	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local
 
 d1-list-tables:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --remote
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --env dev --remote
 
 d1-list-tables-local:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list'
+	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
 
 logs-dev:
-	@npx wrangler tail theslope --format pretty
+	@npx wrangler tail theslope-dev --env dev --format pretty
 
 logs-prod:
 	@npx wrangler tail theslope-prod --env prod --format pretty

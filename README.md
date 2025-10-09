@@ -13,17 +13,35 @@
 - **Settings**: `/admin/settings` - System configuration
 
 ## 👩🏽‍💻How to develop
-- npm + node  installeret 
+- npm + node  installeret
 - git installeret
 
-###  🏗️Start applikationen lokalt 
-Clone the repo friom github:
+### 🌍 Development Environments
 
-```git clone```
+TheSlope uses **three distinct Wrangler environments** defined in `wrangler.toml`:
 
-Run on development server (localhost:3000)
+| Environment | Worker Name | Database | Usage | URL |
+|-------------|-------------|----------|-------|-----|
+| **Top-level (local)** | `theslope-local` | `theslope` (local D1) | Local development (`nuxt dev`, Playwright tests) | `localhost:3000` |
+| **dev** | `theslope-dev` | `theslope` (remote D1) | Dev deployment (PRs, testing) | `dev.skraaningen.dk` |
+| **prod** | `theslope-prod` | `theslope-prod` (remote D1) | Production deployment | `www.skraaningen.dk` |
 
-```npm run dev```
+**Important:** Wrangler environments **do NOT inherit** `vars` and `d1_databases` from top-level config!
+
+###  🏗️ Start applikationen lokalt
+Clone the repo from github:
+
+```bash
+git clone https://github.com/your-org/theslope.git
+cd theslope
+npm install
+```
+
+Run on development server (uses **top-level** environment):
+
+```bash
+npm run dev  # Uses theslope-local worker with local D1 database
+```
 
 - Frontend is available on `localhost:3000`.
 - Api is available on `localhost:3000/api`.
@@ -31,8 +49,37 @@ Run on development server (localhost:3000)
 - Lint inspector: run `npx @eslint/config-inspector.` and browse on` ` http://localhost:7777 `
 - Nuxt DevTools is enabled by default in Nuxt v3.8.0. You can press Shift + Alt / ⇧ Shift + ⌥ Option + D in your app to open it up.
 
-### 🚀 Deploy to cloudflare
-```npm run deploy```
+**Local database operations** (NO --env flag):
+```bash
+npm run db:migrate:local      # Apply migrations to local database
+npm run db:seed:local         # Seed local database with test data
+npx wrangler d1 execute theslope --local --command="SELECT * FROM User"
+```
+
+### 🚀 Deploy to Cloudflare
+
+**Deploy to dev environment:**
+```bash
+npm run deploy  # Builds and deploys to dev.skraaningen.dk (theslope-dev worker)
+```
+
+**Deploy to production environment:**
+```bash
+npm run deploy:prod  # Builds and deploys to www.skraaningen.dk (theslope-prod worker)
+```
+
+**Remote database operations:**
+```bash
+# Dev environment
+npm run db:migrate            # Migrate remote dev database
+npm run db:seed               # Seed remote dev database
+
+# Prod environment
+npm run db_prod:migrate       # Migrate remote prod database
+npm run db_prod:seed          # Seed remote prod database
+```
+
+Useful commands are defined in the [Makefile](./Makefile)
 
 ## 🤖 How to test
 Check out more information at: [test documentation](docs/testing.md)
@@ -83,6 +130,8 @@ There is an error about preflight, that can be removed by adding to package.json
 
 ### Database - schemas, ORM, migrations
 We use D1 - a cloudflare database built on top of SQLite with Prisma ORM for the repository client.
+
+See [Development Environments](#-development-environments) for information about local, dev, and prod database configurations.
 
 #### Database Setup Process
 
