@@ -154,7 +154,7 @@ const handleCancel = async () => {
             :items="seasons?.map(s => ({ ...s, label: s.shortName }))"
             value-key="id"
           />
-          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes"/>
+          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
         <div class="w-full md:w-auto md:ml-auto">
           <HelpButton :text="ADMIN_HELP_TEXTS.planning.teams"/>

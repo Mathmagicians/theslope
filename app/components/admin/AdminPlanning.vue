@@ -101,7 +101,7 @@ const handleCancel = async () => {
               value-key="id"
           >
           </USelect>
-          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes"/>
+          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
         <div class="w-full md:w-auto md:ml-auto">
           <HelpButton :text="ADMIN_HELP_TEXTS.planning.calendar"/>

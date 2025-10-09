@@ -7,141 +7,67 @@
 - `/admin/planning` - Season creation + auto-generated events view
 - `/admin/teams` - Cooking team management (NEW tab)
 
-### Phase 2: Cooking Teams Admin Tab
-**Goal**: Separate "Teams" tab for managing cooking teams per season
-
-**Architecture Refactoring** (TDD - Composition Pattern):
-- [ ] Create AdminTeams.vue using same composable pattern
-  - Reuse `useEntityFormManager()` for form logic
-  - Implement team-specific business logic
-  - Use same UI pattern (USelect + FormModeSelector)
-
-**UI Development**:
-- [ ] Add "Teams" tab to admin navigation (alongside Planning)
-- [ ] Create `/admin/teams` page component
-- [ ] Create AdminTeamsForm.vue for team CRUD form
-- [ ] Create AdminTeamsList.vue component (view mode display)
-- [ ] Add reminder in Planning tab: "Remember to set up cooking teams →"
-
-**Testing**:
-- [ ] Write component tests for AdminTeams.vue
-- [ ] Write component tests for AdminTeamsForm.vue
-- [ ] Write E2E tests for teams tab workflow
-- [ ] Verify AdminPlanning still works after refactor
-
 ### Phase 3: Team Member Assignment (FUTURE)
 **Goal**: Assign inhabitants to teams with roles
 
 **UI Development** (Future):
-- Create TeamMemberSelector.vue with inhabitant search
-- Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
-- Add/remove members from teams
-- Write component tests for member assignment
-- Write E2E tests for team composition
+[] Create TeamMemberSelector.vue with inhabitant search
+[] Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
+[] extend database model with team affinitiy (preferred cooking days)
+[] add endpoint that auto assigns teams to cooking days
+[] Add/remove members from teams
+[] Write component tests for member assignment
+[] Write E2E tests for team composition
 
 ### Phase 4: Integration & Validation
-**Workflow Integration**
-- Create unified season creation wizard:
-  1. Define season (existing)
-  2. Create cooking teams
-  3. Assign team members
-  4. Generate dinner events
-  5. Review & activate
-- Write E2E tests for complete workflow
-
 **Validation & Business Rules**
-- Implement overlapping season prevention
-- Add team size validation rules
-- Check scheduling conflicts
-- Add warnings for incomplete teams
-- Write unit tests for all validation rules
+[] Implement overlapping season prevention
+[] Add team size validation rules
+[] Check scheduling conflicts
+[] Add warnings for incomplete teams
+[] Write unit tests for all validation rules
 
 **Testing & Documentation**
-- Write integration tests for season-team-event flow
-- Add error handling and recovery tests
-- Create API documentation
-- Update ADR with team/event architecture decisions
+[] Write integration tests for season-team-event flow
+[] Add error handling and recovery tests
+[] Create API documentation
+[] Update ADR with team/event architecture decisions
 
-### Technical Implementation Details
+### Technical Implementation Details (Remaining)
 
-**Extend Validation Schemas**
+**Extend Validation Schemas** (Future - for team member assignment):
 ```typescript
-// Add to useSeasonValidation.ts
-const CookingTeamSchema = z.object({
-  id: z.number().optional(),
-  seasonId: z.number(),
-  name: z.string().min(1),
-  chefs: z.array(z.number()), // inhabitant IDs
-  cooks: z.array(z.number()),
-  juniorHelpers: z.array(z.number()).optional()
-})
-
-const EventGenerationConfigSchema = z.object({
-  seasonId: z.number(),
-  rotationPattern: z.enum(['weekly', 'biweekly', 'custom']),
-  teamRotation: z.array(z.number()) // team IDs in order
+// Add to useCookingTeamValidation.ts or new composable
+const CookingTeamAssignmentSchema = z.object({
+  teamId: z.number(),
+  inhabitantId: z.number(),
+  role: z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
 })
 ```
 
-**Repository Functions**
-- `createCookingTeam()`
-- `updateCookingTeam()`
-- `deleteCookingTeam()`
-- `assignTeamMembers()`
-- `generateDinnerEvents()`
-- `getTeamsBySeasonId()`
-
-**Store Extensions**
-- Extend `usePlanStore()` with team management
-- Add `useEventStore()` for dinner events
-- Include optimistic updates for UI responsiveness
-
-### Test Coverage Requirements
-- Unit tests: Business logic, validation, algorithms
-- Component tests: UI components with mocked data
-- API tests: All endpoints with error cases
-- E2E tests: User workflows and edge cases
-- Integration tests: Season-team-event relationships
+**Store Extensions** (Future):
+- Add `useEventStore()` for dinner events (currently in plan store)
 
 ---
 
-## Medium priority: Fix E2E tests
+## Low priority: Future E2E test work
 
-### Refactor login.vue to use zod validation from api schema
+### Skipped E2E Tests (1 test)
 
-### Temporarily Disabled E2E Tests
+**`tests/e2e/api/admin/dinnerEvent.e2e.spec.ts:46`**
+- Test: `POST can update existing dinner event with status 200`
+- Status: Intentionally skipped - feature not yet implemented
+- Action: Implement POST /api/admin/dinner-event/[id] endpoint when needed
 
-The following E2E tests have been temporarily disabled with `test.skip()` to allow CI pipeline to pass. They need to be fixed and re-enabled:
+### Current Status
+- **101 total E2E tests** in 13 files
+- **100 tests passing** ✅
+- **1 test skipped** (POST dinner-event - future feature)
+- All critical user workflows covered
 
-#### 1. Form state parameters test
-**File**: `tests/e2e/ui/admin.e2e.spec.ts:117`
-**Test**: `Form state parameters in URL are applied to form`
-**Issue**: Expected form field `cancellableDays` to have value `"2"` but got `"10"`
-**Fix needed**:
-- Update test to use correct default values OR
-- Fix form initialization from URL parameters
-- Check if form field names match component implementation
-
-#### 2. Season form create flow test
-**File**: `tests/e2e/ui/AdminSeason.e2e.spec.ts:53`
-**Test**: `Create season form happy day flow`
-**Issue**: Cannot find selector `#seasonForm` - element not visible within 10s timeout
-**Fix needed**:
-- Update selector to match current component structure
-- Check if form ID changed from `#seasonForm` to something else
-- Verify form loading timing and add proper waits
-
-### Action Items
-- [ ] Investigate actual form field names and IDs in current component structure
-- [ ] Fix form URL parameter initialization
-- [ ] Update test selectors to match current implementation
-- [ ] Re-enable tests with `test()` instead of `test.skip()`
-- [ ] Verify all E2E tests pass locally before merging
-
-### Notes
-- All other E2E tests (27/29) are passing
-- Authentication and API tests work correctly
-- Only UI form interaction tests need fixes
+### Future Test Enhancements
+- [ ] Refactor login.vue to use zod validation from api schema
+- [ ] Add POST endpoint for dinner event updates (when required)
 
 ---
 
@@ -256,6 +182,53 @@ AggregateError [ECONNREFUSED]:
 - ✅ PUT/POST/DELETE /api/admin/team endpoints
 - ✅ Team member assignment endpoints
 - ✅ E2E API tests passing
+
+## Phase 2: Cooking Teams Admin Tab - UI (Immediate Operations Pattern)
+**Date**: 2025-01-28 | **Compliance**: ADR-007, ADR-008
+
+### UI Development
+- ✅ **Teams tab** added to admin navigation (alongside Planning)
+- ✅ **`/admin/teams` page component** created (handled by `/admin/[tab].vue`)
+- ✅ **AdminTeams.vue** refactored with immediate operations pattern
+  - Partial `useEntityFormManager()` usage (URL/mode management only)
+  - Component-owned CREATE draft for dynamic team generation
+  - Immediate save operations (add team, delete team, rename on blur)
+  - No "Gem ændringer" button - operations save immediately
+- ✅ **CookingTeamCard.vue component** created (replaces separate form/list components)
+  - Reusable team display component
+  - List and standalone variants
+  - Edit mode with immediate save-on-blur for team names
+  - View mode for read-only display
+
+### Testing
+- ✅ **E2E tests for teams workflow** (9/9 passing)
+  - Create teams via batch generation
+  - Add team (immediate save)
+  - Delete team (immediate save)
+  - Rename team (save on blur)
+  - All immediate operations verified via API
+- ✅ **AdminPlanning verified** working after refactor
+
+### Infrastructure Fixes
+- ✅ **Fixed hydration mismatch**
+  - SSR-safe mode initialization from URL query parameters
+  - Synchronous `formMode` initialization prevents server/client mismatch
+
+### Architecture Patterns Documented
+- ✅ **ADR-008 created**: Form Draft Ownership and Operation Patterns
+  - Deferred Save Pattern (AdminPlanning) - full composable usage
+  - Immediate Operations Pattern (AdminTeams) - partial composable usage
+  - Clear decision criteria for when to use each pattern
+- ✅ **Draft ownership clarified**
+  - Composable: URL/mode management (always)
+  - Component: CREATE draft when dynamic generation needed
+  - Live data: EDIT/VIEW modes show store data directly
+
+### Key Learnings
+- `useEntityFormManager` designed for deferred-save patterns
+- Components can opt out of draft management for immediate operations
+- Separation: composable handles URL sync, component handles business logic
+- No synchronization issues when showing live data in EDIT mode
 
 ## Phase 2: useEntityFormManager() Composable Pattern (TDD Composition Pattern)
 **Date**: 2025-01-28 | **Compliance**: ADR-007
