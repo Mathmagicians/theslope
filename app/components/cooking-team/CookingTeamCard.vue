@@ -174,11 +174,12 @@ defineExpose({
     <!-- TEAM HEADER (for CREATE/EDIT modes) -->
     <div v-if="isEditable" class="flex items-center justify-between p-4 border rounded-lg" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
       <div class="flex items-center gap-3 flex-1">
-        <UIcon name="i-heroicons-user-group" class="text-xl" :class="`text-${teamColor}-500`" />
+        <UIcon name="i-fluent-mdl2-team-favorite" class="text-xl" :class="`text-${teamColor}-500`" />
         <UInput
           v-model="editedName"
           class="flex-1 max-w-md"
           placeholder="Holdnavn"
+          trailing-icon="i-heroicons-pencil"
           @blur="handleNameUpdate"
           @keyup.enter="handleNameUpdate"
         />

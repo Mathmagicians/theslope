@@ -138,7 +138,7 @@ const columns = [
     <!-- Search -->
     <UInput
       v-model="searchQuery"
-      icon="i-heroicons-magnifying-glass"
+      trailing-icon="i-heroicons-magnifying-glass"
       placeholder="Søg efter navn..."
     />
 

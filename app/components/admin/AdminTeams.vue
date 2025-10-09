@@ -83,7 +83,7 @@ const teamTabs = computed(() => {
   return displayedTeams.value.map((team, index) => ({
     label: team.name,
     value: index,
-    icon: 'i-heroicons-user-group',
+    icon: 'i-fluent-mdl2-team-favorite',
     badge: team.assignments?.length || 0,
     color: getTeamColor(index)
   }))
@@ -297,7 +297,7 @@ const columns = [
         <div v-else-if="formMode === FORM_MODES.EDIT" class="p-4 space-y-6">
           <div class="flex flex-col lg:flex-row gap-6">
             <!-- LEFT PANEL: Vertical Team Tabs -->
-            <div class="lg:w-1/3 space-y-3">
+            <div class="lg:w-1/5 space-y-3">
               <h3 class="text-lg font-semibold mb-4">Madhold</h3>
 
               <UTabs
@@ -322,7 +322,7 @@ const columns = [
             </div>
 
             <!-- RIGHT PANEL: Edit Selected Team -->
-            <div class="lg:w-2/3 space-y-4">
+            <div class="lg:w-4/5 space-y-4">
               <div v-if="selectedTeam" class="space-y-4">
                 <CookingTeamCard
                   ref="cookingTeamCardRef"
