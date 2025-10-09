@@ -54,7 +54,7 @@ test.describe('AdminPlanning UI', () => {
 
     // WHEN: Select season from dropdown
     await page.getByTestId('season-selector').click()
-    await page.locator(`text=${season.shortName}`).click()
+    await page.getByRole('option', { name: season.shortName }).click()
 
     // THEN: Season should be displayed
     // Verify the selected season is shown (check combobox text or similar)
@@ -73,7 +73,7 @@ test.describe('AdminPlanning UI', () => {
     await page.waitForLoadState('networkidle')
 
     await page.getByTestId('season-selector').click()
-    await page.locator(`text=${season.shortName}`).click()
+    await page.getByRole('option', { name: season.shortName }).click()
 
     // WHEN: Click edit mode button
     await page.locator('button[name="form-mode-edit"]').click()

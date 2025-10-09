@@ -137,7 +137,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
         // USelect: Click button to open dropdown, then click option
         await page.getByTestId('season-selector').click()
-        await page.locator(`text=${season.shortName}`).click()
+        await page.getByRole('option', { name: season.shortName }).click()
 
         // WHEN: Switch to edit mode
         await page.locator('button[name="form-mode-edit"]').click()
@@ -215,7 +215,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
         // USelect: Click button to open dropdown, then click option
         await page.getByTestId('season-selector').click()
-        await page.locator(`text=${season.shortName}`).click()
+        await page.getByRole('option', { name: season.shortName }).click()
 
         // Switch to edit mode
         await page.locator('button[name="form-mode-edit"]').click()
