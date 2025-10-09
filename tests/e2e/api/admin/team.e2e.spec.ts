@@ -256,7 +256,7 @@ test.describe('Admin Teams API', () => {
         // Clean up all created teams
         await Promise.all(testTeamIds.map(id => SeasonFactory.deleteCookingTeam(context, id).catch(error => {
             // Ignore cleanup errors
-            console.warn(`Failed to cleanup team ${id}:`, error)
+            console.warn(`Failed to cleanup team ${id}: `, error.statusMessage || '')
         })))
 
         // Clean up all created households

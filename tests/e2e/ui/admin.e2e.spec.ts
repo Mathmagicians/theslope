@@ -160,23 +160,29 @@ test.describe('Admin page path-based navigation', () => {
       await page.goto(`${adminUrl}/${tab.path}`)
       await page.waitForLoadState('networkidle')
 
+      // Wait for data to load - edit button should be enabled when data is ready
+      const editButton = page.locator('button[name="form-mode-edit"]')
+      await expect(editButton).toBeEnabled({ timeout: 10000 })
+
       // Switch to edit mode
-      await page.locator('button[name="form-mode-edit"]').click()
+      await editButton.click()
       await page.waitForLoadState('networkidle')
       await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=edit$`))
-      await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+      await expect(editButton).toHaveClass(/ring-2/)
 
       // Switch to create mode
-      await page.locator('button[name="form-mode-create"]').click()
+      const createButton = page.locator('button[name="form-mode-create"]')
+      await createButton.click()
       await page.waitForLoadState('networkidle')
       await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=create$`))
-      await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
+      await expect(createButton).toHaveClass(/ring-2/)
 
       // Switch back to view mode
-      await page.locator('button[name="form-mode-view"]').click()
+      const viewButton = page.locator('button[name="form-mode-view"]')
+      await viewButton.click()
       await page.waitForLoadState('networkidle')
       await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}(\\?mode=view)?$`))
-      await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
+      await expect(viewButton).toHaveClass(/ring-2/)
     })
   }
 })
