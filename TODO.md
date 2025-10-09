@@ -7,15 +7,41 @@
 - `/admin/planning` - Season creation + auto-generated events view
 - `/admin/teams` - Cooking team management (NEW tab)
 
-### Phase 3: Team Member Assignment (FUTURE)
-**Goal**: Assign inhabitants to teams with roles
+### Phase 3: Team Member Assignment (IN PROGRESS)
+**Goal**: Assign inhabitants to teams with roles (100-200 users across ~10 teams)
 
-**UI Development** (Future):
-[] Create TeamMemberSelector.vue with inhabitant search
-[] Create TeamRoster.vue showing roles (CHEF, COOK, JUNIORHELPER)
-[] extend database model with team affinitiy (preferred cooking days)
-[] add endpoint that auto assigns teams to cooking days
-[] Add/remove members from teams
+**UX Pattern**: Master-Detail Layout
+```
+┌─────────────────┬──────────────────────────────┐
+│ TEAMS (Left)    │ EDIT TEAM (Right)            │
+│                 │                              │
+│ □ Hold 1 [8]    │ ┌─ Hold 1 ────────────┐     │
+│ ■ Hold 2 [6]    │ │ Name: [Hold 2      ]│     │
+│ □ Hold 3 [0]    │ └─────────────────────┘     │
+│ □ Hold 4 [5]    │                              │
+│ ...             │ Current Members:             │
+│                 │ 👤 Anna (Chef)               │
+│                 │ 👤 Bob (Cook)                │
+│                 │                              │
+│                 │ Add Members: [search...]     │
+│                 │ ☐ Charlie (available)        │
+│                 │ ☐ Diana (available)          │
+│                 │ ☑ Anna (in Hold 2)           │
+└─────────────────┴──────────────────────────────┘
+```
+
+**Implementation Tasks**:
+[] Left panel: Teams list (compact cards showing name, member count, status)
+[] Add team selection state (selectedTeamId) and highlight selected team
+[] Right panel: Edit selected team (name editor, current members by role)
+[] Create inhabitant selector component (search, filter, pagination for 100-200 users)
+[] Wire up add/remove member actions (checkboxes → immediate save)
+[] Add responsive layout (stack vertically on mobile, side-by-side on desktop)
+[] Test EDIT mode with master-detail UX (manual + E2E if needed)
+
+**Future Enhancements**:
+[] Extend database model with team affinity (preferred cooking days)
+[] Add endpoint that auto-assigns teams to cooking days
 [] Write component tests for member assignment
 [] Write E2E tests for team composition
 

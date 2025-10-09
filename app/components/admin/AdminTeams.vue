@@ -1,9 +1,30 @@
 <script setup lang="ts">
+/**
+ * AdminTeams Component - Master-Detail Pattern for Team Management
+ *
+ * EDIT MODE Layout:
+ * ┌─────────────────┬──────────────────────────────┐
+ * │ TEAMS (Left)    │ EDIT TEAM (Right)            │
+ * │                 │                              │
+ * │ □ Hold 1 [8]    │ ┌─ Hold 1 ────────────┐     │
+ * │ ■ Hold 2 [6]    │ │ Name: [Hold 2      ]│     │
+ * │ □ Hold 3 [0]    │ └─────────────────────┘     │
+ * │ □ Hold 4 [5]    │                              │
+ * │ ...             │ Current Members:             │
+ * │                 │ 👤 Anna (Chef)               │
+ * │                 │ 👤 Bob (Cook)                │
+ * │                 │                              │
+ * │                 │ Add Members: [search...]     │
+ * │                 │ ☐ Charlie (available)        │
+ * │                 │ ☐ Diana (available)          │
+ * │                 │ ☑ Anna (in Hold 2)           │
+ * └─────────────────┴──────────────────────────────┘
+ */
 import {FORM_MODES} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {CookingTeam} from "~/composables/useCookingTeamValidation"
 
-const {getDefaultCookingTeam} = useCookingTeam()
+const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
 const {
   isLoading,
@@ -42,12 +63,41 @@ watch([formMode, teamCount, selectedSeason], () => {
 }, { immediate: true })
 
 // DISPLAYED TEAMS - Component-owned draft for CREATE, live data for EDIT/VIEW
+// NOTE: Must be defined BEFORE selectedTeam and teamTabs that depend on it
 const displayedTeams = computed(() => {
   if (formMode.value === FORM_MODES.CREATE) {
     return createDraft.value
   }
   return teams.value
 })
+
+// EDIT MODE - Team selection for master-detail pattern
+const selectedTeamIndex = ref(0)
+const selectedTeam = computed(() => {
+  if (displayedTeams.value.length === 0) return null
+  return displayedTeams.value[selectedTeamIndex.value] ?? null
+})
+
+// Team tabs for vertical navigation
+const teamTabs = computed(() => {
+  return displayedTeams.value.map((team, index) => ({
+    label: team.name,
+    value: index,
+    icon: 'i-heroicons-user-group',
+    badge: team.assignments?.length || 0,
+    color: getTeamColor(index)
+  }))
+})
+
+// Auto-select first team when entering EDIT mode or when teams change
+watch([formMode, displayedTeams], () => {
+  if (formMode.value === FORM_MODES.EDIT && displayedTeams.value.length > 0) {
+    // Reset to first team if current selection is invalid
+    if (selectedTeamIndex.value >= displayedTeams.value.length) {
+      selectedTeamIndex.value = 0
+    }
+  }
+}, { immediate: true })
 
 // COMPUTED
 const selectedSeasonId = computed({
@@ -109,10 +159,13 @@ const handleAddTeam = async () => {
   }
 }
 
-// EDIT MODE: Update team (IMMEDIATE SAVE)
-const handleUpdateTeam = async (team: CookingTeam) => {
+// EDIT MODE: Update team name (IMMEDIATE SAVE)
+const handleUpdateTeamName = async (teamId: number, newName: string) => {
+  const team = teams.value.find(t => t.id === teamId)
+  if (!team) return
+
   try {
-    await updateTeam(team) // Immediate save to DB
+    await updateTeam({...team, name: newName}) // Immediate save to DB
     // No toast for individual name updates (too noisy)
     // teams reactively updates from store refresh - no manual update needed
   } catch (error) {
@@ -126,6 +179,50 @@ const handleDeleteTeam = async (teamId: number) => {
     await deleteTeam(teamId) // Immediate delete from DB
     showSuccessToast('Madhold slettet')
     // teams reactively updates from store refresh - no manual update needed
+  } catch (error) {
+    // Error toast already shown by handleApiError
+  }
+}
+
+// Ref to InhabitantSelector for refreshing after operations
+const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
+
+// EDIT MODE: Add member to team (IMMEDIATE SAVE)
+const handleAddMember = async (inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER') => {
+  if (!selectedTeam.value?.id) return
+
+  try {
+    await $fetch('/api/admin/team/assignment', {
+      method: 'PUT',
+      body: {
+        teamId: selectedTeam.value.id,
+        inhabitantId,
+        role
+      }
+    })
+    showSuccessToast('Medlem tilføjet til hold')
+    // Refresh both season data and inhabitant selector
+    await Promise.all([
+      onSeasonSelect(selectedSeason.value!.id!),
+      inhabitantSelectorRef.value?.refresh()
+    ])
+  } catch (error) {
+    // Error toast already shown by handleApiError
+  }
+}
+
+// EDIT MODE: Remove member from team (IMMEDIATE DELETE)
+const handleRemoveMember = async (assignmentId: number) => {
+  try {
+    await $fetch(`/api/admin/team/assignment/${assignmentId}`, {
+      method: 'DELETE'
+    })
+    showSuccessToast('Medlem fjernet fra hold')
+    // Refresh both season data and inhabitant selector
+    await Promise.all([
+      onSeasonSelect(selectedSeason.value!.id!),
+      inhabitantSelectorRef.value?.refresh()
+    ])
   } catch (error) {
     // Error toast already shown by handleApiError
   }
@@ -146,11 +243,13 @@ const columns = [
     header: 'Medlemmer',
     cell: ({row}: any) => {
       const teamIndex = teams.value.findIndex(t => t.id === row.original.id)
-      return h(resolveComponent('CookingTeamAssignments'), {
+      return h(resolveComponent('CookingTeamCard'), {
         teamId: row.original.id,
         teamNumber: teamIndex + 1,
+        teamName: row.original.name,
         assignments: row.original.assignments || [],
-        compact: true
+        compact: true,
+        mode: formMode.value
       })
     }
   }
@@ -188,7 +287,7 @@ const columns = [
         <!-- CREATE MODE: Team count input + preview -->
         <div v-if="formMode === FORM_MODES.CREATE" class="p-4 space-y-4">
           <div class="flex items-center gap-4">
-            <label for="team-count" class="text-sm font-medium">Antal madhold:</label>
+            <label for="team-count" class="text-lg font-bold">Hvor mange madhold skal vi have?</label>
             <input
               id="team-count"
               v-model.number="teamCount"
@@ -203,30 +302,69 @@ const columns = [
               <h3 class="font-semibold">{{ team.name }}</h3>
             </div>
           </div>
-          <div class="flex gap-2">
-            <UButton color="primary" @click="handleBatchCreateTeams">Opret madhold</UButton>
-            <UButton color="gray" @click="handleCancel">Annuller</UButton>
-          </div>
         </div>
 
-        <!-- EDIT MODE: Live data with immediate operations -->
-        <div v-else-if="formMode === FORM_MODES.EDIT" class="p-4 space-y-4">
-          <div class="space-y-2">
-            <CookingTeamCard
-              v-for="team in displayedTeams"
-              :key="team.id"
-              :team="team"
-              mode="edit"
-              variant="list"
-              @update="handleUpdateTeam"
-              @delete="handleDeleteTeam"
-            />
-          </div>
-          <UButton color="secondary" icon="i-heroicons-plus-circle" @click="handleAddTeam">
-            Tilføj madhold
-          </UButton>
-          <div class="flex gap-2">
-            <UButton color="gray" @click="handleCancel">Færdig</UButton>
+        <!-- EDIT MODE: Master-Detail Layout -->
+        <div v-else-if="formMode === FORM_MODES.EDIT" class="p-4 space-y-6">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <!-- LEFT PANEL: Vertical Team Tabs -->
+            <div class="lg:w-1/3 space-y-3">
+              <h3 class="text-lg font-semibold mb-4">Madhold</h3>
+
+              <UTabs
+                v-model="selectedTeamIndex"
+                orientation="vertical"
+                :items="teamTabs"
+                variant="link"
+                size="xl"
+              >
+                <template #item="{ item }">
+                  <div class="w-full space-y-2">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <UIcon :name="item.icon" :class="`text-${item.color}-500`" />
+                        <span class="font-semibold">{{ item.label }}</span>
+                      </div>
+                      <UBadge :color="item.color" size="sm">
+                        {{ item.badge }}
+                      </UBadge>
+                    </div>
+                    <CookingTeamCard
+                      :team-id="displayedTeams[item.value].id"
+                      :team-number="item.value + 1"
+                      :team-name="item.label"
+                      :assignments="displayedTeams[item.value].assignments || []"
+                      compact
+                      :mode="FORM_MODES.VIEW"
+                    />
+                  </div>
+                </template>
+              </UTabs>
+            </div>
+
+            <!-- RIGHT PANEL: Edit Selected Team -->
+            <div class="lg:w-2/3 space-y-4">
+              <div v-if="selectedTeam" class="space-y-4">
+                <CookingTeamCard
+                  ref="cookingTeamCardRef"
+                  :team-id="selectedTeam.id"
+                  :team-number="displayedTeams.findIndex(t => t.id === selectedTeam.id) + 1"
+                  :team-name="selectedTeam.name"
+                  :season-id="selectedSeason?.id"
+                  :assignments="selectedTeam.assignments || []"
+                  :mode="FORM_MODES.EDIT"
+                  @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id!, newName)"
+                  @delete="handleDeleteTeam"
+                  @add:member="handleAddMember"
+                  @remove:member="handleRemoveMember"
+                />
+              </div>
+
+              <div v-else class="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg text-gray-500">
+                <UIcon name="i-heroicons-arrow-left" class="text-4xl mb-2" />
+                <p>Vælg et madhold for at redigere</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -238,10 +376,21 @@ const columns = [
           :loading="isLoading"
           :ui="{ td: 'py-2' }"
         >
+          <!-- Team name column with colored badge -->
+          <template #name-cell="{ row }">
+            <UBadge
+              :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
+              variant="soft"
+              size="md"
+            >
+              {{ row.original.name }}
+            </UBadge>
+          </template>
+
           <template #empty-state>
             <div class="flex flex-col items-center justify-center py-6 gap-3">
               <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
-              <p class="text-sm text-gray-500">Ingen madhold endnu. Opret madhold for at komme i gang!</p>
+              <p class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle madhold for at komme i gang!</p>
               <UButton
                 v-if="!disabledModes.includes(FORM_MODES.CREATE)"
                 name="create-new-team"
@@ -262,6 +411,30 @@ const columns = [
            class="flex flex-col items-center justify-center space-y-4 p-8">
         <h3 class="text-lg font-semibold">Ingen sæson valgt</h3>
         <p>Vælg en sæson for at se madhold, eller opret en ny sæson under Planlægning.</p>
+      </div>
+    </template>
+
+    <template #footer>
+      <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
+        <UButton color="primary" @click="handleBatchCreateTeams">
+          Opret madhold
+        </UButton>
+        <UButton color="gray" variant="ghost" @click="handleCancel">
+          Annuller
+        </UButton>
+      </div>
+
+      <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2">
+        <UButton
+          color="secondary"
+          icon="i-heroicons-plus-circle"
+          @click="handleAddTeam"
+        >
+          Tilføj madhold
+        </UButton>
+        <UButton color="gray" variant="ghost" @click="handleCancel">
+          Færdig
+        </UButton>
       </div>
     </template>
   </UCard>

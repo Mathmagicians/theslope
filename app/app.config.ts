@@ -19,7 +19,16 @@ export default defineAppConfig({
             info: "violet",
             success: "green",
             warning: "orange",
-            error: "red"
+            error: "red",
+            // Pantone team colors (defined in main.css)
+            mocha: "amber",
+            pink: "pink",
+            orange: "orange",
+            winery: "winery",
+            party: "party",
+            peach: "peach",
+            bonbon: "violet",
+            caramel: "caramel"
         }
     }
 })

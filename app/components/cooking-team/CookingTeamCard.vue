@@ -1,115 +1,310 @@
 <script setup lang="ts">
-import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type { FormMode } from '~/types/form'
 
-type TeamMode = 'view' | 'edit'
-type TeamVariant = 'list' | 'standalone'
+interface TeamMember {
+  id: number
+  role: 'CHEF' | 'COOK' | 'JUNIORHELPER'
+  inhabitant: {
+    id: number
+    name: string
+    lastName: string
+    pictureUrl: string | null
+  }
+}
 
 interface Props {
-  team: CookingTeam
-  mode?: TeamMode
-  variant?: TeamVariant
+  teamId?: number          // Database ID (optional for create mode)
+  teamNumber: number      // Logical number 1..N in season
+  teamName: string        // Team name (editable)
+  seasonId?: number       // Required for EDIT mode (inhabitant selector)
+  assignments?: TeamMember[]
+  compact?: boolean
+  mode?: FormMode         // Form mode: view, edit, create
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'view',
-  variant: 'list'
+  compact: false,
+  assignments: () => [],
+  mode: 'view'
 })
 
 const emit = defineEmits<{
-  update: [team: CookingTeam]
-  delete: [teamId: number]
+  'update:teamName': [name: string]
+  delete: [teamId: number | undefined]
+  'add:member': [inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER']
+  'remove:member': [assignmentId: number]
 }>()
 
-// Local state for editing
-const editedName = ref(props.team.name)
+// Local state for editing team name
+const editedName = ref(props.teamName)
 
-// Reset edited name when team prop changes
-watch(() => props.team.name, (newName) => {
+// Reset edited name when team name prop changes
+watch(() => props.teamName, (newName) => {
   editedName.value = newName
 })
 
+// Team color rotation based on teamNumber (1..N)
+const { getTeamColor } = useCookingTeam()
+const teamColor = computed(() => {
+  return getTeamColor(props.teamNumber - 1) // teamNumber is 1-based, getTeamColor expects 0-based
+})
+
+// Group assignments by role
+const roleGroups = computed(() => {
+  const groups = {
+    CHEF: [] as TeamMember[],
+    COOK: [] as TeamMember[],
+    JUNIORHELPER: [] as TeamMember[]
+  }
+
+  props.assignments.forEach(assignment => {
+    if (assignment.role in groups) {
+      groups[assignment.role].push(assignment)
+    }
+  })
+
+  return groups
+})
+
+const roleLabels = {
+  CHEF: 'Chefkok',
+  COOK: 'Kok',
+  JUNIORHELPER: 'Kokkespire'
+}
+
+const navigateToInhabitant = (inhabitantId: number) => {
+  navigateTo(`/inhabitant/${inhabitantId}`)
+}
+
 const handleNameUpdate = () => {
-  // Only emit if name actually changed
-  if (editedName.value !== props.team.name && editedName.value.trim()) {
-    emit('update', {
-      ...props.team,
-      name: editedName.value.trim()
-    })
+  if (editedName.value !== props.teamName && editedName.value.trim()) {
+    emit('update:teamName', editedName.value.trim())
   } else if (!editedName.value.trim()) {
     // Revert to original if empty
-    editedName.value = props.team.name
+    editedName.value = props.teamName
   }
 }
 
 const handleDelete = () => {
-  if (props.team.id) {
-    emit('delete', props.team.id)
-  }
+  emit('delete', props.teamId)
 }
+
+const isEditable = computed(() => props.mode === 'create' || props.mode === 'edit')
+
+// Ref to InhabitantSelector for refresh
+const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
+
+// Expose refresh method to parent
+defineExpose({
+  refreshInhabitants: async () => {
+    await inhabitantSelectorRef.value?.refresh()
+  }
+})
 </script>
 
 <template>
-  <!-- LIST VARIANT: Compact single-line -->
-  <div v-if="variant === 'list'" class="flex items-center gap-2 p-2 border rounded">
-    <!-- VIEW MODE -->
-    <div v-if="mode === 'view'" class="flex-1">
-      <h3 class="font-semibold">{{ team.name }}</h3>
-    </div>
+  <!-- COMPACT VIEW for table display -->
+  <div v-if="compact" class="flex flex-col md:flex-row gap-2">
+    <div
+      v-for="(members, role) in roleGroups"
+      :key="role"
+      v-show="members.length > 0"
+      class="flex flex-col gap-1"
+    >
+      <span class="text-xs text-gray-500 font-medium">{{ roleLabels[role] }}</span>
+      <div class="flex items-center gap-2">
+        <UAvatarGroup size="sm" :max="3">
+          <UTooltip
+            v-for="member in members"
+            :key="member.id"
+            :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+          >
+            <UAvatar
+              :src="member.inhabitant.pictureUrl"
+              :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+              icon="i-heroicons-user"
+              class="cursor-pointer"
+              @click="navigateToInhabitant(member.inhabitant.id)"
+            />
+          </UTooltip>
+        </UAvatarGroup>
 
-    <!-- EDIT MODE -->
-    <template v-else>
-      <input
-        v-model="editedName"
-        @blur="handleNameUpdate"
-        @keyup.enter="handleNameUpdate"
-        type="text"
-        class="flex-1 px-3 py-2 border rounded"
-        placeholder="Madhold navn"
-      />
-      <UButton
-        color="red"
-        size="sm"
-        icon="i-heroicons-trash"
-        @click="handleDelete"
-        aria-label="Slet madhold"
-      />
-    </template>
-  </div>
-
-  <!-- STANDALONE VARIANT: Full card for detailed view -->
-  <UCard v-else class="w-full">
-    <template #header>
-      <div class="flex items-center justify-between">
-        <!-- VIEW MODE -->
-        <h3 v-if="mode === 'view'" class="text-lg font-semibold">{{ team.name }}</h3>
-
-        <!-- EDIT MODE -->
-        <div v-else class="flex-1 flex items-center gap-2">
-          <input
-            v-model="editedName"
-            @blur="handleNameUpdate"
-            @keyup.enter="handleNameUpdate"
-            type="text"
-            class="flex-1 px-3 py-2 border rounded"
-            placeholder="Madhold navn"
-          />
-          <UButton
-            color="red"
+        <div class="flex flex-wrap gap-1">
+          <UBadge
+            v-for="member in members"
+            :key="member.id"
             size="sm"
-            icon="i-heroicons-trash"
-            @click="handleDelete"
-            aria-label="Slet madhold"
-          />
+            variant="soft"
+            :color="teamColor"
+            class="cursor-pointer"
+            @click="navigateToInhabitant(member.inhabitant.id)"
+          >
+            {{ member.inhabitant.name }}
+          </UBadge>
         </div>
       </div>
-    </template>
+    </div>
+  </div>
 
-    <template #default>
-      <!-- Future: Team assignments, cooking schedule, etc. -->
-      <div class="text-sm text-gray-500">
-        <p>Team ID: {{ team.id }}</p>
-        <p>Season ID: {{ team.seasonId }}</p>
+  <!-- FULL VIEW with role sections -->
+  <div v-else class="space-y-4">
+    <!-- TEAM HEADER (for CREATE/EDIT modes) -->
+    <div v-if="isEditable" class="flex items-center justify-between p-4 border rounded-lg" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
+      <div class="flex items-center gap-3 flex-1">
+        <UIcon name="i-heroicons-user-group" class="text-xl" :class="`text-${teamColor}-500`" />
+        <UInput
+          v-model="editedName"
+          class="flex-1 max-w-md"
+          placeholder="Holdnavn"
+          @blur="handleNameUpdate"
+          @keyup.enter="handleNameUpdate"
+        />
       </div>
-    </template>
-  </UCard>
+      <UButton
+        v-if="mode === 'create'"
+        color="red"
+        variant="ghost"
+        icon="i-heroicons-trash"
+        @click="handleDelete"
+      >
+        Slet
+      </UButton>
+    </div>
+
+    <!-- VIEW MODE: Team name header -->
+    <div v-else class="flex items-center gap-3 p-4 border rounded-lg" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
+      <UIcon name="i-heroicons-user-group" class="text-xl" :class="`text-${teamColor}-500`" />
+      <h3 class="text-lg font-semibold">{{ teamName }}</h3>
+    </div>
+
+    <!-- EDIT MODE: Two-column layout on large screens -->
+    <div v-if="mode === 'edit'" class="flex flex-col lg:flex-row gap-6">
+      <!-- LEFT: Team assignments -->
+      <div class="flex-1 space-y-4">
+        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
+        <div
+          v-for="(members, role) in roleGroups"
+          :key="role"
+          class="space-y-2"
+        >
+          <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
+            {{ roleLabels[role] }}
+          </h5>
+
+          <div v-if="members.length > 0" class="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+            <UAvatarGroup size="md" :max="5">
+              <UTooltip
+                v-for="member in members"
+                :key="member.id"
+                :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+              >
+                <UAvatar
+                  :src="member.inhabitant.pictureUrl"
+                  :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                  icon="i-heroicons-user"
+                  class="cursor-pointer hover:ring-2 hover:ring-offset-2"
+                  :class="`hover:ring-${teamColor}`"
+                  @click="navigateToInhabitant(member.inhabitant.id)"
+                />
+              </UTooltip>
+            </UAvatarGroup>
+
+            <div class="flex flex-wrap gap-2">
+              <UBadge
+                v-for="member in members"
+                :key="member.id"
+                size="md"
+                variant="subtle"
+                :color="teamColor"
+                class="cursor-pointer hover:opacity-80 transition-opacity"
+                @click="navigateToInhabitant(member.inhabitant.id)"
+              >
+                {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
+                <UButton
+                  color="red"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-heroicons-x-mark"
+                  class="ml-1"
+                />
+              </UBadge>
+            </div>
+          </div>
+
+          <div v-else class="text-sm text-gray-500 italic p-3">
+            Ingen medlemmer tildelt
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Available inhabitants -->
+      <div class="flex-1 space-y-4">
+        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilgængelige beboere</h4>
+        <InhabitantSelector
+          v-if="teamId && seasonId"
+          :team-id="teamId"
+          :team-name="teamName"
+          :team-number="teamNumber"
+          :team-color="teamColor"
+          :season-id="seasonId"
+          @add:member="(inhabitantId, role) => emit('add:member', inhabitantId, role)"
+          @remove:member="(assignmentId) => emit('remove:member', assignmentId)"
+        />
+        <div v-else class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
+          <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
+          <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CREATE/VIEW MODE: Single column with role sections -->
+    <div v-else class="space-y-4">
+      <div
+        v-for="(members, role) in roleGroups"
+        :key="role"
+        class="space-y-2"
+      >
+        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          {{ roleLabels[role] }}
+        </h4>
+
+        <div v-if="members.length > 0" class="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+          <UAvatarGroup size="md" :max="5">
+            <UTooltip
+              v-for="member in members"
+              :key="member.id"
+              :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+            >
+              <UAvatar
+                :src="member.inhabitant.pictureUrl"
+                :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                icon="i-heroicons-user"
+                class="cursor-pointer hover:ring-2 hover:ring-offset-2"
+                :class="`hover:ring-${teamColor}`"
+                @click="navigateToInhabitant(member.inhabitant.id)"
+              />
+            </UTooltip>
+          </UAvatarGroup>
+
+          <div class="flex flex-wrap gap-2">
+            <UBadge
+              v-for="member in members"
+              :key="member.id"
+              size="md"
+              variant="subtle"
+              :color="teamColor"
+              class="cursor-pointer hover:opacity-80 transition-opacity"
+              @click="navigateToInhabitant(member.inhabitant.id)"
+            >
+              {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
+            </UBadge>
+          </div>
+        </div>
+
+        <div v-else class="text-sm text-gray-500 italic p-3">
+          Madhold uden kokke!
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
