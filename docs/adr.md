@@ -1,5 +1,68 @@
 # Architecture Decision Records
 
+## ADR-008: useEntityFormManager Composable Pattern
+
+**Status:** Accepted | **Date:** 2025-01-28
+
+### Decision
+
+**`useEntityFormManager` composable extracts common form management logic:**
+- Form mode state (`formMode`)
+- URL query synchronization (`?mode=create|edit|view`)
+- Mode transitions (`onModeChange`)
+- Optional: Draft entity management (`currentModel`)
+
+**Two usage patterns:**
+
+1. **Full usage** - Deferred save (AdminPlanning):
+   - Use `currentModel` for draft management
+   - Explicit save button ("Gem ændringer")
+   - Static default entity generation
+
+2. **Partial usage** - Immediate operations (AdminTeams):
+   - Use only `formMode` + `onModeChange` for URL/mode management
+   - Component owns draft (dynamic generation)
+   - Operations save immediately (no explicit save button)
+
+### Implementation
+
+**Full usage (static defaults, deferred save):**
+```typescript
+const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
+  getDefaultEntity: getDefaultSeason,
+  selectedEntity: computed(() => store.selectedSeason)
+})
+// currentModel used directly in form
+```
+
+**Partial usage (dynamic generation, immediate save):**
+```typescript
+const { formMode, onModeChange } = useEntityFormManager<CookingTeam[]>({
+  getDefaultEntity: () => [],
+  selectedEntity: computed(() => store.teams)
+})
+
+// Component owns draft
+const createDraft = ref<CookingTeam[]>([])
+watch([formMode, teamCount], () => {
+  if (formMode.value === FORM_MODES.CREATE) {
+    createDraft.value = generateTeams(teamCount.value)
+  }
+})
+```
+
+### Compliance
+
+1. MUST use `useEntityFormManager` for URL/mode synchronization in all CRUD forms
+2. MAY skip `currentModel` when component needs custom draft logic
+3. MUST initialize mode synchronously from URL (SSR-safe)
+
+### Related ADRs
+- **ADR-007:** Separation of Concerns (component owns formMode/draft, store owns data)
+- **ADR-006:** URL-Based Navigation (mode in query parameters)
+
+---
+
 ## ADR-007: Separation of Concerns - Store vs Component Responsibilities
 
 **Status:** Accepted | **Date:** 2025-01-28

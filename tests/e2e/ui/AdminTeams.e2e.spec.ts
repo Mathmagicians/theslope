@@ -114,7 +114,7 @@ test.describe('AdminTeams Form UI', () => {
         await expect(teamInputs).toHaveCount(2)
     })
 
-    test('GIVEN user in edit mode WHEN renaming team and saving THEN team name is updated', async ({
+    test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async ({
                                                                                                         page,
                                                                                                         browser
                                                                                                     }) => {
@@ -137,22 +137,19 @@ test.describe('AdminTeams Form UI', () => {
         await page.locator('button[name="form-mode-edit"]').click()
         await page.waitForLoadState('networkidle')
 
-        // WHEN: Rename team
+        // WHEN: Rename team and blur (immediate save on blur)
         const teamInput = page.locator('input[type="text"][placeholder="Madhold navn"]').first()
         await teamInput.clear()
         await teamInput.fill('Renamed Team')
+        await teamInput.blur() // Trigger save on blur
+        await page.waitForTimeout(500) // Wait for async save
 
-        // Save changes
-        const saveButton = page.getByRole('button', {name: /Gem ændringer/i})
-        await saveButton.click()
-        await page.waitForLoadState('networkidle')
-
-        // THEN: Team name should be updated via API
+        // THEN: Team name should be updated immediately via API
         const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id)
         expect(updatedTeam.name).toBe('Renamed Team')
     })
 
-    test('GIVEN user in edit mode WHEN adding new team THEN team is added to list', async ({page, browser}) => {
+    test('GIVEN user in edit mode WHEN adding new team THEN team is saved immediately', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create season with one team
@@ -176,26 +173,23 @@ test.describe('AdminTeams Form UI', () => {
         let teamInputs = page.locator('input[type="text"][placeholder="Madhold navn"]')
         await expect(teamInputs).toHaveCount(1)
 
-        // WHEN: Add new team
+        // WHEN: Add new team (saves immediately)
         const addButton = page.getByRole('button', {name: /Tilføj madhold/i})
         await addButton.click()
+        await page.waitForTimeout(500) // Wait for async save
 
-        // THEN: New team input should appear
+        // THEN: Team should be saved immediately via API
+        const teams = await pollUntil(
+            () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
+            (teams) => teams.length === 2
+        )
+        expect(teams.length).toBe(2)
+
+        // New team input should appear in UI with default name
         teamInputs = page.locator('input[type="text"][placeholder="Madhold navn"]')
         await expect(teamInputs).toHaveCount(2)
-
-        // New team should have default name
         const newTeamInput = teamInputs.nth(1)
         await expect(newTeamInput).toHaveValue(/Madhold 2/)
-
-        // Save to persist
-        const saveButton = page.getByRole('button', {name: /Gem ændringer/i})
-        await saveButton.click()
-        await page.waitForLoadState('networkidle')
-
-        // Verify via API
-        const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
-        expect(teams.length).toBe(2)
     })
 
     test('GIVEN season with team WHEN deleting team via UI THEN team is removed', async ({page, browser}) => {
@@ -222,16 +216,19 @@ test.describe('AdminTeams Form UI', () => {
         const teamInput = page.locator('input[type="text"][placeholder="Madhold navn"]').first()
         await expect(teamInput).toBeVisible()
 
-        // WHEN: Delete team
-        const deleteButton = page.locator('button[icon="i-heroicons-trash"]').first()
+        // WHEN: Delete team (find by aria-label)
+        const deleteButton = page.getByRole('button', {name: /Slet madhold/i})
         await expect(deleteButton).toBeVisible()
         await deleteButton.click()
 
         // Wait for deletion to complete
         await page.waitForTimeout(500)
 
-        // THEN: Team should be removed via API (immediate delete)
-        const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+        // THEN: Team should be removed immediately via API
+        const teams = await pollUntil(
+            () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
+            (teams) => teams.length === 0
+        )
         expect(teams.length).toBe(0)
     })
 
