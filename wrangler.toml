@@ -1,17 +1,9 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "theslope"
+# Shared configuration
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
-
-routes = [
-    { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
-]
-
-[vars]
-HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope"
 
 # Workers Logs
 # Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
@@ -19,12 +11,24 @@ DB_D1_NAME = "theslope"
 [observability]
 enabled = true
 
-[[d1_databases]]
+# Development environment
+[env.dev]
+name = "theslope"
+routes = [
+    { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
+]
+
+[env.dev.vars]
+HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+DB_D1_NAME = "theslope"
+
+[[env.dev.d1_databases]]
 binding = "DB"
 database_name = "theslope"
 database_id = "373cce02-f8be-4f44-ae68-544f94385367"
 migrations_dir = "migrations"
 
+# Production environment
 [env.prod]
 name = "theslope-prod"
 workers_dev = false
