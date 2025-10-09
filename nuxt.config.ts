@@ -5,7 +5,7 @@ export default defineNuxtConfig({
     colorMode: {
         preference: 'light'
     },
-    compatibilityDate: '2024-11-01',
+    compatibilityDate: '2025-10-01',
     components: [
         {
             path: '~/components',

@@ -1,7 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 # Top-level configuration: Used for LOCAL development (nuxt dev, wrangler dev)
 name = "theslope-local"
-compatibility_date = "2025-09-01"
+compatibility_date = "2025-10-01"
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
@@ -20,12 +20,22 @@ database_name = "theslope"
 database_id = "373cce02-f8be-4f44-ae68-544f94385367"
 migrations_dir = "migrations"
 
-# Development deployment: Remote dev.skraaningen.dk (inherits from top-level, overrides name and routes)
+# Development deployment: Remote dev.skraaningen.dk
 [env.dev]
 name = "theslope-dev"
 routes = [
     { pattern = "dev.skraaningen.dk/*", zone_name = "skraaningen.dk" }
 ]
+
+[env.dev.vars]
+HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+DB_D1_NAME = "theslope"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "theslope"
+database_id = "373cce02-f8be-4f44-ae68-544f94385367"
+migrations_dir = "migrations"
 
 # Production deployment: Remote www.skraaningen.dk (overrides name, routes, vars, and database)
 [env.prod]

@@ -26,8 +26,6 @@ TheSlope uses **three distinct Wrangler environments** defined in `wrangler.toml
 | **dev** | `theslope-dev` | `theslope` (remote D1) | Dev deployment (PRs, testing) | `dev.skraaningen.dk` |
 | **prod** | `theslope-prod` | `theslope-prod` (remote D1) | Production deployment | `www.skraaningen.dk` |
 
-**Important:** Wrangler environments **do NOT inherit** `vars` and `d1_databases` from top-level config!
-
 ###  🏗️ Start applikationen lokalt
 Clone the repo from github:
 
