@@ -140,18 +140,11 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up all created dinner events
-        await Promise.all(testDinnerEventIds.map(id =>
-            DinnerEventFactory.deleteDinnerEvent(context, id).catch(error => {
-                console.warn(`Failed to cleanup dinner event ${id}:`, error)
-            })
-        ))
-
-        // Clean up the test season (will cascade delete any remaining dinner events)
+        // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
         if (testSeasonId) {
             try {
                 await SeasonFactory.deleteSeason(context, testSeasonId)
-                console.info(`Cleaned up test season ${testSeasonId}`)
+                console.info(`Cleaned up test season ${testSeasonId} (cascade deleted ${testDinnerEventIds.length} dinner events)`)
             } catch (error) {
                 console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
             }
