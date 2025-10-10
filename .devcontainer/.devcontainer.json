@@ -1,0 +1,31 @@
+{
+  "name": "theslope-dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",  // Matches ubuntu-latest
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+     "ghcr.io/devcontainers-contrib/features/playwright:1": {
+      "installBrowsers": "chromium"
+    },
+    "ghcr.io/devcontainers-contrib/features/prisma:1": {},
+    "ghcr.io/devcontainers-contrib/features/wrangler:2": {}
+
+  },
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+        "ms-playwright.playwright",
+        "esbenp.prettier-vscode",
+        "nuxt.nuxt-vscode",
+      "Prisma.prisma",
+      ]
+    }
+  },
+  "forwardPorts": [3000],
+  "remoteEnv": {
+    "CI": "true"
+  }
+}
