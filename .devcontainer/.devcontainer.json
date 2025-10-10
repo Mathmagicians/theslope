@@ -3,7 +3,8 @@
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",  // Matches ubuntu-latest
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
+      "version": "22",
+      "npmVersion": "10"
     },
      "ghcr.io/devcontainers-contrib/features/playwright:1": {
       "installBrowsers": "chromium"
