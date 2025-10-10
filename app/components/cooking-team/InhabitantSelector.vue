@@ -42,8 +42,8 @@ const emit = defineEmits<{
 }>()
 
 // Business logic: Fetch inhabitants with assignments (ADR-009 compliant)
-const { useInhabitantsWithAssignments, getTeamColor } = useCookingTeam()
-const { inhabitants: inhabitantsWithAssignments, pending, error, refresh } = await useInhabitantsWithAssignments()
+const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
+const {inhabitants: inhabitantsWithAssignments, pending, error, refresh} = await useInhabitantsWithAssignments()
 
 // Expose refresh method to parent
 defineExpose({
@@ -59,32 +59,14 @@ const roleLabels = {
   JUNIORHELPER: 'Kokkespire'
 }
 
-// Filter inhabitants
+// Filter inhabitants by search query
 const filteredInhabitants = computed(() => {
   if (!inhabitantsWithAssignments.value) return []
 
-  let filtered = inhabitantsWithAssignments.value.filter((inhabitant) => {
+  return inhabitantsWithAssignments.value.filter((inhabitant) => {
     const fullName = `${inhabitant.name} ${inhabitant.lastName}`.toLowerCase()
     return fullName.includes(searchQuery.value.toLowerCase())
   })
-
-  // Sort by assignment status (available first, then current team, then other teams)
-  filtered.sort((a, b) => {
-    const aAssignment = a.CookingTeamAssignment?.[0]
-    const bAssignment = b.CookingTeamAssignment?.[0]
-
-    const aInCurrentTeam = aAssignment?.cookingTeamId === props.teamId
-    const bInCurrentTeam = bAssignment?.cookingTeamId === props.teamId
-
-    if (aInCurrentTeam && !bInCurrentTeam) return -1
-    if (!aInCurrentTeam && bInCurrentTeam) return 1
-    if (!aAssignment && bAssignment) return -1
-    if (aAssignment && !bAssignment) return 1
-
-    return a.name.localeCompare(b.name)
-  })
-
-  return filtered
 })
 
 // Helper functions to get team info from assignment
@@ -92,7 +74,7 @@ const getTeamInfo = (inhabitant: Inhabitant) => {
   const assignment = inhabitant.CookingTeamAssignment?.[0]
 
   if (!assignment) {
-    return { type: 'available' as const, teamNumber: null, color: null, assignmentId: null }
+    return {type: 'available' as const, teamNumber: null, color: null, assignmentId: null}
   }
 
   if (assignment.cookingTeamId === props.teamId) {
@@ -117,6 +99,26 @@ const getTeamInfo = (inhabitant: Inhabitant) => {
   }
 }
 
+// Custom sort function for status column
+const sortByStatusTeamAndName = (rowA: any, rowB: any): number => {
+  const a = rowA.original
+  const b = rowB.original
+
+  const aInfo = getTeamInfo(a)
+  const bInfo = getTeamInfo(b)
+
+  // Available (no assignment) comes first
+  if (aInfo.type === 'available' && bInfo.type !== 'available') return -1
+  if (aInfo.type !== 'available' && bInfo.type === 'available') return 1
+
+  // Current team comes before other teams
+  if (aInfo.type === 'current' && bInfo.type === 'other') return -1
+  if (aInfo.type === 'other' && bInfo.type === 'current') return 1
+
+  // Secondary sort by name for equal status
+  return `${a.name} ${a.lastName}`.localeCompare(`${b.name} ${b.lastName}`)
+}
+
 const handleAddMember = (inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER') => {
   emit('add:member', inhabitantId, role)
 }
@@ -125,38 +127,61 @@ const handleRemoveMember = (assignmentId: number) => {
   emit('remove:member', assignmentId)
 }
 
-// Table columns - use template slots for better component compatibility
+// Table columns - simplified configuration
 const columns = [
-  { accessorKey: 'name', header: 'Navn' },
-  { accessorKey: 'status', header: 'Status' },
-  { accessorKey: 'actions', header: 'Tilføj til team' }
+  {
+    accessorKey: 'name',
+    header: 'Navn',
+    enableSorting: false
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    enableSorting: true,
+    sortingFn: sortByStatusTeamAndName
+  },
+  {
+    accessorKey: 'actions',
+    header: 'Tilføj til team',
+    enableSorting: false
+  }
 ]
+
+const sorting = ref([
+  {
+    id: 'status',
+    desc: true
+  }
+])
+
 </script>
 
 <template>
   <div class="space-y-4">
     <!-- Search -->
     <UInput
-      v-model="searchQuery"
-      trailing-icon="i-heroicons-magnifying-glass"
-      placeholder="Søg efter navn..."
+        v-model="searchQuery"
+        trailing-icon="i-heroicons-magnifying-glass"
+        placeholder="Søg efter navn..."
     />
 
     <!-- Table -->
     <UTable
-      :columns="columns"
-      :data="filteredInhabitants"
-      :loading="pending"
-      :ui="{ td: 'py-2' }"
+        sticky
+        :columns="columns"
+        :data="filteredInhabitants"
+        :loading="pending"
+        :ui="{ td: 'py-2' }"
+        v-model:sorting="sorting"
     >
       <!-- Name column with avatar -->
       <template #name-cell="{ row }">
         <div class="flex items-center gap-3">
           <UAvatar
-            :src="row.original.pictureUrl"
-            :alt="`${row.original.name} ${row.original.lastName}`"
-            icon="i-heroicons-user"
-            size="sm"
+              :src="row.original.pictureUrl"
+              :alt="`${row.original.name} ${row.original.lastName}`"
+              icon="i-heroicons-user"
+              size="sm"
           />
           <span class="font-medium">{{ row.original.name }} {{ row.original.lastName }}</span>
         </div>
@@ -165,18 +190,18 @@ const columns = [
       <!-- Status column with colored badge -->
       <template #status-cell="{ row }">
         <UBadge
-          v-if="getTeamInfo(row.original).type === 'available'"
-          color="success"
-          variant="outline"
-          size="sm"
+            v-if="getTeamInfo(row.original).type === 'available'"
+            color="success"
+            variant="outline"
+            size="sm"
         >
           LEDIG
         </UBadge>
         <UBadge
-          v-else
-          :color="getTeamInfo(row.original).color"
-          variant="solid"
-          size="sm"
+            v-else
+            :color="getTeamInfo(row.original).color"
+            variant="solid"
+            size="sm"
         >
           Madhold {{ getTeamInfo(row.original).teamNumber }}
         </UBadge>
@@ -186,37 +211,37 @@ const columns = [
       <template #actions-cell="{ row }">
         <div v-if="getTeamInfo(row.original).type === 'available'" class="flex gap-1">
           <UButton
-            color="primary"
-            size="xs"
-            icon="i-heroicons-plus"
-            @click="handleAddMember(row.original.id, 'CHEF')"
+              color="primary"
+              size="xs"
+              icon="i-heroicons-plus"
+              @click="handleAddMember(row.original.id, 'CHEF')"
           >
             Chef
           </UButton>
           <UButton
-            color="primary"
-            size="xs"
-            icon="i-heroicons-plus"
-            @click="handleAddMember(row.original.id, 'COOK')"
+              color="primary"
+              size="xs"
+              icon="i-heroicons-plus"
+              @click="handleAddMember(row.original.id, 'COOK')"
           >
             Kok
           </UButton>
           <UButton
-            color="primary"
-            size="xs"
-            icon="i-heroicons-plus"
-            @click="handleAddMember(row.original.id, 'JUNIORHELPER')"
+              color="primary"
+              size="xs"
+              icon="i-heroicons-plus"
+              @click="handleAddMember(row.original.id, 'JUNIORHELPER')"
           >
             Spire
           </UButton>
         </div>
         <UButton
-          v-else-if="getTeamInfo(row.original).type === 'current'"
-          color="red"
-          variant="ghost"
-          size="sm"
-          icon="i-heroicons-x-mark"
-          @click="handleRemoveMember(getTeamInfo(row.original).assignmentId!)"
+            v-else-if="getTeamInfo(row.original).type === 'current'"
+            color="red"
+            variant="ghost"
+            size="sm"
+            icon="i-heroicons-x-mark"
+            @click="handleRemoveMember(getTeamInfo(row.original).assignmentId!)"
         >
           Fjern
         </UButton>
@@ -225,7 +250,7 @@ const columns = [
 
       <template #empty-state>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-users" class="w-8 h-8 text-gray-400" />
+          <UIcon name="i-heroicons-users" class="w-8 h-8 text-gray-400"/>
           <p class="text-sm text-gray-500">
             {{ searchQuery ? 'Ingen beboere fundet' : 'Ingen beboere tilgængelige' }}
           </p>
@@ -234,7 +259,7 @@ const columns = [
 
       <template #error-state>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-exclamation-triangle" class="w-8 h-8 text-red-400" />
+          <UIcon name="i-heroicons-exclamation-triangle" class="w-8 h-8 text-red-400"/>
           <p class="text-sm text-red-600">Kunne ikke hente beboere. Prøv igen.</p>
         </div>
       </template>

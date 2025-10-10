@@ -243,6 +243,7 @@ const columns = [
     header: 'Medlemmer'
   }
 ]
+
 </script>
 
 <template>
@@ -297,7 +298,7 @@ const columns = [
         <div v-else-if="formMode === FORM_MODES.EDIT" class="p-4 space-y-6">
           <div class="flex flex-col lg:flex-row gap-6">
             <!-- LEFT PANEL: Vertical Team Tabs -->
-            <div class="lg:w-1/5 space-y-3">
+            <div class="lg:w-1/5 space-y-3" data-testid="team-tabs-list">
               <h3 class="text-lg font-semibold mb-4">Madhold</h3>
 
               <UTabs
@@ -381,7 +382,7 @@ const columns = [
           <template #empty-state>
             <div class="flex flex-col items-center justify-center py-6 gap-3">
               <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
-              <p class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle madhold for at komme i gang!</p>
+              <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle madhold for at komme i gang!</p>
               <UButton
                 v-if="!disabledModes.includes(FORM_MODES.CREATE)"
                 name="create-new-team"
@@ -407,16 +408,17 @@ const columns = [
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="primary" @click="handleBatchCreateTeams">
+        <UButton color="secondary" @click="handleBatchCreateTeams">
           Opret madhold
         </UButton>
-        <UButton color="gray" variant="ghost" @click="handleCancel">
+        <UButton color="neutral" variant="ghost" @click="handleCancel">
           Annuller
         </UButton>
       </div>
 
       <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2">
         <UButton
+          data-testid="add-team-button"
           color="secondary"
           icon="i-heroicons-plus-circle"
           @click="handleAddTeam"

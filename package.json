@@ -3,9 +3,9 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "engines" : {
-    "npm" : ">=10.9.0 <11.0.0",
-    "node" : ">=22.0.0 <23.0.0"
+  "engines": {
+    "npm": ">=10.9.0 <11.0.0",
+    "node": ">=22.0.0 <23.0.0"
   },
   "scripts": {
     "build": "nuxt build",
@@ -47,8 +47,11 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251001.0",
     "@iconify-json/fluent-mdl2": "^1.2.1",
+    "@iconify-json/heroicons": "^1.2.3",
+    "@iconify-json/lucide": "^1.2.69",
     "@iconify-json/material-symbols": "^1.2.14",
     "@iconify-json/pajamas": "^1.2.5",
+    "@iconify-json/streamline": "^1.2.5",
     "@nuxt/eslint": "^0.7.5",
     "@nuxt/test-utils": "^3.15.4",
     "@nuxt/vite-builder": "^4.1.2",

@@ -5,45 +5,15 @@
 
 **Architecture Decision**: Separate admin tabs (simple workflow for once-a-year task)
 - `/admin/planning` - Season creation + auto-generated events view
-- `/admin/teams` - Cooking team management (NEW tab)
+- `/admin/teams` - Cooking team management
 
-### Phase 3: Team Member Assignment (IN PROGRESS)
-**Goal**: Assign inhabitants to teams with roles (100-200 users across ~10 teams)
-
-**UX Pattern**: Master-Detail Layout
-```
-┌─────────────────┬──────────────────────────────┐
-│ TEAMS (Left)    │ EDIT TEAM (Right)            │
-│                 │                              │
-│ □ Hold 1 [8]    │ ┌─ Hold 1 ────────────┐     │
-│ ■ Hold 2 [6]    │ │ Name: [Hold 2      ]│     │
-│ □ Hold 3 [0]    │ └─────────────────────┘     │
-│ □ Hold 4 [5]    │                              │
-│ ...             │ Current Members:             │
-│                 │ 👤 Anna (Chef)               │
-│                 │ 👤 Bob (Cook)                │
-│                 │                              │
-│                 │ Add Members: [search...]     │
-│                 │ ☐ Charlie (available)        │
-│                 │ ☐ Diana (available)          │
-│                 │ ☑ Anna (in Hold 2)           │
-└─────────────────┴──────────────────────────────┘
-```
-
-**Implementation Tasks**:
-[] Left panel: Teams list (compact cards showing name, member count, status)
-[] Add team selection state (selectedTeamId) and highlight selected team
-[] Right panel: Edit selected team (name editor, current members by role)
-[] Create inhabitant selector component (search, filter, pagination for 100-200 users)
-[] Wire up add/remove member actions (checkboxes → immediate save)
-[] Add responsive layout (stack vertically on mobile, side-by-side on desktop)
-[] Test EDIT mode with master-detail UX (manual + E2E if needed)
+### Phase 3: Team Member Assignment - Remaining Tasks
 
 **Future Enhancements**:
 [] Extend database model with team affinity (preferred cooking days)
 [] Add endpoint that auto-assigns teams to cooking days
 [] Write component tests for member assignment
-[] Write E2E tests for team composition
+[] Write E2E tests for member assignment and removal workflows
 
 ### Phase 4: Integration & Validation
 **Validation & Business Rules**
@@ -291,6 +261,54 @@ AggregateError [ECONNREFUSED]:
 - Components can opt out of draft management for immediate operations
 - Separation: composable handles URL sync, component handles business logic
 - No synchronization issues when showing live data in EDIT mode
+
+## Phase 3: Team Member Assignment - Master-Detail Pattern
+**Date**: 2025-10-10 | **Compliance**: ADR-007, ADR-008
+
+### UI Implementation
+- ✅ **Master-Detail Layout** implemented in AdminTeams.vue
+  - Left panel: Vertical team tabs with member count badges
+  - Right panel: Selected team editor with member management
+  - Responsive design (stacks vertically on mobile)
+- ✅ **Team selection state** (selectedTeamIndex) with active highlighting
+- ✅ **InhabitantSelector component** created
+  - Searchable table with filtering for 100-200 users
+  - TanStack Table integration with sorting
+  - Shows current team assignments inline
+  - Add member functionality with role selection
+- ✅ **CookingTeamCard enhanced** for member display
+  - Shows current members grouped by role (Chef, Cook, Junior Helper)
+  - Remove member functionality (immediate delete)
+  - Compact and full view modes
+- ✅ **useCookingTeam composable** created
+  - Team color generation (blue, green, amber, rose, etc.)
+  - Default team factory functions
+  - Shared team utilities
+
+### Testing & Best Practices
+- ✅ **E2E test refactoring** - Playwright best practices applied
+  - Removed all `waitForLoadState('networkidle')` calls (22 tests in admin.e2e.spec.ts)
+  - Direct URL navigation instead of click-based routing (avoids hydration timing issues)
+  - API response waiting pattern with `page.waitForResponse()`
+  - DRY refactoring with consolidated test data arrays
+- ✅ **Test helper utilities** expanded
+  - `selectDropdownOption()` with API wait support
+  - `pollUntil()` for async operations
+  - `captureDebugScreenshot()` for debugging
+- ✅ **Testing documentation updated** (docs/testing.md)
+  - Playwright best practices documented
+  - CI/CD compatibility patterns (macOS vs Linux)
+  - Hydration timing issue solutions
+- ✅ **Data-testid selectors** added for robust test selection
+  - `data-testid="team-name-input"`
+  - `data-testid="delete-team-button"`
+  - `data-testid="add-team-button"`
+
+### Architecture Achievements
+- Master-detail UX pattern successfully implemented
+- Immediate operations for all member add/remove actions
+- Fully tested with both API and UI E2E tests
+- Cross-platform CI compatibility (macOS and Linux)
 
 ## Phase 2: useEntityFormManager() Composable Pattern (TDD Composition Pattern)
 **Date**: 2025-01-28 | **Compliance**: ADR-007

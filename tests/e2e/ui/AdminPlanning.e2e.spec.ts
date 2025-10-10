@@ -4,7 +4,7 @@ import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext } = testHelpers
+const { validatedBrowserContext, doScreenshot } = testHelpers
 
 /**
  * UI TEST: AdminPlanning Component
@@ -25,8 +25,8 @@ test.describe('AdminPlanning UI', () => {
     await page.goto(adminPlanningUrl)
     await page.waitForLoadState('networkidle')
 
-    // Capture page state for debugging
-    await page.screenshot({ path: 'docs/screenshots/admin/admin-planning-loaded.png', fullPage: true })
+    // Capture page state for documentation
+    await doScreenshot(page, 'admin/admin-planning-loaded', true)
 
     // Verify data-testid attribute exists in HTML
     const html = await page.content()

@@ -177,6 +177,7 @@ defineExpose({
         <UIcon name="i-fluent-mdl2-team-favorite" class="text-xl" :class="`text-${teamColor}-500`" />
         <UInput
           v-model="editedName"
+          data-testid="team-name-input"
           class="flex-1 max-w-md"
           placeholder="Holdnavn"
           trailing-icon="i-heroicons-pencil"
@@ -185,13 +186,13 @@ defineExpose({
         />
       </div>
       <UButton
-        v-if="mode === 'create'"
-        color="red"
-        variant="ghost"
-        icon="i-heroicons-trash"
+        data-testid="delete-team-button"
+        color="winery"
+        variant="solid"
+        icon="i-healthicons-death-alt"
         @click="handleDelete"
       >
-        Slet
+        Slet {{ teamName }}
       </UButton>
     </div>
 
@@ -245,8 +246,8 @@ defineExpose({
               >
                 {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
                 <UButton
-                  color="red"
-                  variant="ghost"
+                  color="winery"
+                  variant="solid"
                   size="xs"
                   icon="i-heroicons-x-mark"
                   class="ml-1"

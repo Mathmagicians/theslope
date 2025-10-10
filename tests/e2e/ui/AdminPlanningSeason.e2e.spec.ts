@@ -7,7 +7,7 @@ import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromIn
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, selectDropdownOption} = testHelpers
 const {deserializeSeason} = useSeasonValidation()
 
 /**
@@ -214,17 +214,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
         const season = await SeasonFactory.createSeason(context, { holidays: [holidayPeriod] })
         createdSeasonIds.push(season.id!)
 
-        // Navigate and select season
+        // Navigate to planning page
         await page.goto(adminPlanningUrl)
-        await page.waitForLoadState('networkidle')
 
-        // USelect: Click button to open dropdown, then click option
-        await page.getByTestId('season-selector').click()
-        await page.getByRole('option', { name: season.shortName }).click()
+        // Select season FIRST (so it's available when we switch to edit mode)
+        await selectDropdownOption(page, 'season-selector', season.shortName, adminPlanningUrl)
 
-        // Switch to edit mode
+        // THEN switch to edit mode (this will populate the draft with season data)
         await page.locator('button[name="form-mode-edit"]').click()
-        await page.waitForLoadState('networkidle')
+
+        // Wait for edit mode to be active
+        await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+
+        // Wait for form to be visible
+        await expect(page.locator('form#seasonForm')).toBeVisible()
 
         // Verify holiday is shown
         const holidayItem = page.locator('[name^="holidayRangeList-0"]')
