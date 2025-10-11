@@ -27,14 +27,15 @@ const calculateExpectedEventCount = (season: Season): number => {
 /**
  * Generate unique test data for UI form submissions
  * Used when creating seasons via UI (not via factory)
+ * Creates 1-week season (7 days) with Mon/Wed/Fri cooking days = exactly 3 events
  */
 const generateUniqueSeasonDates = () => {
     const date1 = SeasonFactory.generateUniqueDate()
-    const date2 = new Date(date1.getTime() + 90 * 24 * 60 * 60 * 1000) // 90 days later
+    const date2 = new Date(date1.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days later (1 week)
 
-    // Holiday within season range (30 days after start, 5 days duration)
-    const holidayDate1 = new Date(date1.getTime() + 30 * 24 * 60 * 60 * 1000)
-    const holidayDate2 = new Date(holidayDate1.getTime() + 5 * 24 * 60 * 60 * 1000)
+    // Holiday within season range (2 days after start, 2 days duration)
+    const holidayDate1 = new Date(date1.getTime() + 2 * 24 * 60 * 60 * 1000)
+    const holidayDate2 = new Date(holidayDate1.getTime() + 2 * 24 * 60 * 60 * 1000)
 
     // Search pattern based on start date: MM/yy
     const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
