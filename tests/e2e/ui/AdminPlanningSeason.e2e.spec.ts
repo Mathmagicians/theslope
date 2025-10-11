@@ -211,7 +211,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create season with one holiday via API
-        const holidayPeriod = {start: new Date(2025, 11, 24), end: new Date(2026, 0, 2)}
+        // Default season is Jan 1-7, 2025, so holiday must be within that range
+        const holidayPeriod = {start: new Date(2025, 0, 3), end: new Date(2025, 0, 5)} // Jan 3-5, 2025
         const season = await SeasonFactory.createSeason(context, { holidays: [holidayPeriod] })
         createdSeasonIds.push(season.id!)
 
