@@ -13,8 +13,8 @@ const {salt, headers} = testHelpers
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
-    static readonly today = new Date()
-    static readonly ninetyDaysLater = new Date(this.today.getTime() + 90 * 24 * 60 * 60 * 1000)
+    static readonly today = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
+    static readonly oneWeekLater = new Date(2025, 0, 7) // Jan 7, 2025 (Tue) - generates exactly 3 events with Mon/Wed/Fri
     static readonly tomorrow = new Date(this.today.getTime() + 1 * 24 * 60 * 60 * 1000)
 
     /**
@@ -29,16 +29,17 @@ export class SeasonFactory {
     }
 
     // Default season data for tests
+    // Jan 1-7, 2025 with Mon/Wed/Fri = exactly 3 events (Wed Jan 1, Fri Jan 3, Mon Jan 6)
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
             start: this.today,
-            end: this.ninetyDaysLater
+            end: this.oneWeekLater
         },
-        holidayDates: [createDateRange(this.today, this.tomorrow)],
+        holidayDates: [],
         isActive: false,
-        cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
-        holidays: [ createDateRange(this.today, this.tomorrow)],
+        cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
+        holidays: [],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }

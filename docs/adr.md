@@ -1,5 +1,125 @@
 # Architecture Decision Records
 
+**NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
+
+## ADR-009: API Index Endpoint Data Inclusion Strategy
+
+**Status:** Accepted | **Date:** 2025-01-28
+
+### Decision
+
+**Weight-based relation inclusion for index endpoints** - Include relations if ALL criteria met:
+
+1. **Bounded Cardinality** (1:1 or 1:few, max ~20 items)
+2. **Lightweight Data** (scalar fields only, max 1 level)
+3. **Essential Context** (necessary to understand list item)
+4. **Performance Safe** (no degradation at scale)
+
+**Index endpoints** (`GET /api/admin/[entity]`): Display-ready data with lightweight relations
+**Detail endpoints** (`GET /api/admin/[entity]/[id]`): Operation-ready data with comprehensive relations
+
+### Examples
+
+**✅ Household → Inhabitants (basic)**
+```typescript
+// GET /api/admin/household - Returns HouseholdListItem[]
+export type HouseholdListItem = Household & {
+  inhabitants: Pick<Inhabitant, 'id' | 'name' | 'lastName' | 'pictureUrl' | 'birthDate'>[]
+}
+
+fetchHouseholds() {
+    return prisma.household.findMany({
+        include: {
+            inhabitants: {
+                select: { id: true, name: true, lastName: true, pictureUrl: true, birthDate: true }
+            }
+        }
+    })
+}
+```
+Bounded (~5-10), lightweight (scalars), essential (identity), performant (single JOIN)
+
+**❌ Season → DinnerEvents**
+```typescript
+// GET /api/admin/season - Returns Season[]
+fetchSeasons() {
+    return prisma.season.findMany() // No includes
+}
+```
+Unbounded (100+), heavy (nested), not essential, performance risk
+
+### Compliance
+
+1. Use Prisma Payload types: `EntityListItem` vs `EntityDetail`
+2. Use `select` for lightweight fields in included relations
+3. Document criteria decisions in repository comments
+4. Index = display-ready, Detail = operation-ready
+
+---
+
+## ADR-008: useEntityFormManager Composable Pattern
+
+**Status:** Accepted | **Date:** 2025-01-28
+
+### Decision
+
+**`useEntityFormManager` composable extracts common form management logic:**
+- Form mode state (`formMode`)
+- URL query synchronization (`?mode=create|edit|view`)
+- Mode transitions (`onModeChange`)
+- Optional: Draft entity management (`currentModel`)
+
+**Two usage patterns:**
+
+1. **Full usage** - Deferred save (AdminPlanning):
+   - Use `currentModel` for draft management
+   - Explicit save button ("Gem ændringer")
+   - Static default entity generation
+
+2. **Partial usage** - Immediate operations (AdminTeams):
+   - Use only `formMode` + `onModeChange` for URL/mode management
+   - Component owns draft (dynamic generation)
+   - Operations save immediately (no explicit save button)
+
+### Implementation
+
+**Full usage (static defaults, deferred save):**
+```typescript
+const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
+  getDefaultEntity: getDefaultSeason,
+  selectedEntity: computed(() => store.selectedSeason)
+})
+// currentModel used directly in form
+```
+
+**Partial usage (dynamic generation, immediate save):**
+```typescript
+const { formMode, onModeChange } = useEntityFormManager<CookingTeam[]>({
+  getDefaultEntity: () => [],
+  selectedEntity: computed(() => store.teams)
+})
+
+// Component owns draft
+const createDraft = ref<CookingTeam[]>([])
+watch([formMode, teamCount], () => {
+  if (formMode.value === FORM_MODES.CREATE) {
+    createDraft.value = generateTeams(teamCount.value)
+  }
+})
+```
+
+### Compliance
+
+1. MUST use `useEntityFormManager` for URL/mode synchronization in all CRUD forms
+2. MAY skip `currentModel` when component needs custom draft logic
+3. MUST initialize mode synchronously from URL (SSR-safe)
+
+### Related ADRs
+- **ADR-007:** Separation of Concerns (component owns formMode/draft, store owns data)
+- **ADR-006:** URL-Based Navigation (mode in query parameters)
+
+---
+
 ## ADR-007: Separation of Concerns - Store vs Component Responsibilities
 
 **Status:** Accepted | **Date:** 2025-01-28

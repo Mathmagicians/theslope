@@ -1,8 +1,8 @@
 <script setup lang="ts">
 const store = useHouseholdsStore()
 const { households } = storeToRefs(store)
-const {loadData} = useHouseholdsStore()
-await loadData()
+const {loadHouseholds} = store
+await loadHouseholds()
 
 const householdColumns = [
   {accessorKey: 'id', header: 'ID'},

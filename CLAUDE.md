@@ -71,24 +71,33 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - Distinguish between validation errors (H3Error) and server errors
 
 ## Git & Collaboration Guidelines
-### Commit Messages
+
+### CRITICAL: Git Operations
+- **NEVER** create git commits using `git commit` unless explicitly instructed to
+- **NEVER** create pull requests using `gh pr create` unless explicitly instructed to
+- **ONLY** the user creates commits and pull requests
+- You may use `git status`, `git diff`, `git log` for information only
+- You may use `git add` ONLY when explicitly instructed by the user
+
+### Commit Messages (For User Reference)
 - Write clear, concise commit messages
 - **DO NOT** add co-author information for AI assistants
 - **DO NOT** include "Generated with Claude Code" or similar AI attribution
 - Focus on describing the changes and their purpose
 
-### Pull Requests
+### Pull Requests (For User Reference)
 - **DO NOT** mention AI assistants as co-authors in PR descriptions
 - Focus on technical changes and test results
 - Include clear summary of what was updated and why
 
 ### Collaboration Approach
 - **Planning and Strategy**: Discuss features, create a detailed written plan
-- **Implementation**: 
+- **Implementation**:
   - You write the core application code
   - Claude helps with test boilerplate, debugging, and refactoring
 - **Testing**: TDD approach - write tests first to guide implementation
 - **Review**: Claude helps identify issues and suggest optimizations
+- **Committing**: USER creates all git commits and pull requests
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.

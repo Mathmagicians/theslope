@@ -35,6 +35,30 @@ export default defineNuxtConfig({
         "nuxt-auth-utils"
     ],
 
+    ui: {
+        theme: {
+            colors: [
+                // Standard semantic colors
+                'primary',
+                'secondary',
+                'neutral',
+                'info',
+                'success',
+                'warning',
+                'error',
+                // Custom Pantone team colors
+                'mocha',
+                'pink',
+                'orange',
+                'winery',
+                'party',
+                'peach',
+                'bonbon',
+                'caramel'
+            ]
+        }
+    },
+
 
     runtimeConfig: {
         HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable

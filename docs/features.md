@@ -17,11 +17,53 @@ Solve problems with signing up for meals, and paying for them
 ## Functionality
 
 ### Admin
-- Create dinner event
-- Assign chef for dinner event
-- Assign cooking team for dinner event
+
+#### Dining Season Management
+- **Create dining season** with auto-generated dinner events
+  - Define cooking days (weekdays selection)
+  - Set holiday periods (excluded from event generation)
+  - Automatic event generation based on season dates
+  - Calendar visualization of generated events
+- **Manage cooking teams** with master-detail interface
+  - Create multiple teams in batch
+  - Edit team names (immediate save on blur)
+  - Add/remove teams (immediate save)
+  - Assign members to teams with roles (Chef, Cook, Junior Helper)
+  - Visual member count badges
+  - Color-coded team identification
+
+**Team Member Assignment Interface:**
+```
+┌─────────────────┬──────────────────────────────┐
+│ TEAMS (Left)    │ EDIT TEAM (Right)            │
+│                 │                              │
+│ □ Hold 1 [8]    │ ┌─ Hold 1 ────────────┐     │
+│ ■ Hold 2 [6]    │ │ Name: [Hold 2      ]│     │
+│ □ Hold 3 [0]    │ └─────────────────────┘     │
+│ □ Hold 4 [5]    │                              │
+│ ...             │ Current Members:             │
+│                 │ 👤 Anna (Chef)               │
+│                 │ 👤 Bob (Cook)                │
+│                 │                              │
+│                 │ Add Members: [search...]     │
+│                 │ ☐ Charlie (available)        │
+│                 │ ☐ Diana (available)          │
+│                 │ ☑ Anna (in Hold 2)           │
+└─────────────────┴──────────────────────────────┘
+```
+- Left panel: Team tabs with member count
+- Right panel: Selected team editor with searchable inhabitant table
+- Immediate operations pattern (no save button needed)
+
+#### Household Management
+- View all households with inhabitants
+- Compact display with avatar groups
 - Create new household for families that move to Skråningen
 - Disable household for families that have left Skråningen
+
+#### Future Features
+- Assign chef for dinner event
+- Assign cooking team for dinner event
 - Monthly overview of meal tickets sold
 - Monthly report in cvs format for invoicing
 - Send monthly report to pbs system

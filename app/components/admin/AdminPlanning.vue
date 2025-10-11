@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {FORM_MODES, type FormMode} from "~/types/form"
+import {FORM_MODES} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 
@@ -14,12 +14,11 @@ const {
 } = storeToRefs(store)
 const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect} = store
 
-const route = useRoute()
-const router = useRouter()
-
-// UI STATE - Component owns this
-const formMode = ref<FormMode>(FORM_MODES.VIEW)
-const draftSeason = ref<Season | null>(null)
+// FORM MANAGEMENT - Delegated to composable (ADR-007)
+const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
+  getDefaultEntity: getDefaultSeason,
+  selectedEntity: computed(() => selectedSeason.value)
+})
 
 // COMPUTED
 const selectedSeasonId = computed({
@@ -31,38 +30,9 @@ const selectedSeasonId = computed({
   }
 })
 
-const currentModel = computed({
-  get: () => {
-    if (formMode.value === FORM_MODES.VIEW) {
-      return selectedSeason.value
-    }
-    return draftSeason.value
-  },
-  set: (val) => {
-    draftSeason.value = val
-  }
-})
-
 const showAdminSeason = computed(() => {
   return !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
 })
-
-// MODE TRANSITIONS
-const onModeChange = async (mode: FormMode) => {
-  switch (mode) {
-    case FORM_MODES.CREATE:
-      draftSeason.value = getDefaultSeason()
-      break
-    case FORM_MODES.EDIT:
-      draftSeason.value = selectedSeason.value ? {...selectedSeason.value} : null
-      break
-    case FORM_MODES.VIEW:
-      draftSeason.value = null
-      break
-  }
-  formMode.value = mode
-  updateURLQueryFromMode(mode)
-}
 
 // UTILITY
 const showSuccessToast = (title: string, description?: string) => {
@@ -75,7 +45,7 @@ const showSuccessToast = (title: string, description?: string) => {
   })
 }
 
-//HANDLING STATE CHANGE
+// SEASON-SPECIFIC BUSINESS LOGIC
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   try {
     if (formMode.value === FORM_MODES.CREATE) {
@@ -106,32 +76,6 @@ const handleSeasonUpdate = async (updatedSeason: Season) => {
 const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
-
-const updateURLQueryFromMode = (mode: FormMode) => {
-  router.replace({
-    path: route.path,
-    hash: route.hash,
-    query: {
-      ...route.query,
-      mode: mode
-    },
-  }, {preserveState: true})
-}
-
-//INITIALIZATION
-onMounted(async () => {
-  const modeFromQuery = toFormMode(route.query.mode as string)
-  if (modeFromQuery) {
-    await onModeChange(modeFromQuery)
-  }
-})
-
-// Watch for form mode changes and update URL
-watch(formMode, (newMode) => {
-  if (route.query.mode !== newMode && toFormMode(newMode)) {
-    updateURLQueryFromMode(newMode)
-  }
-})
 
 </script>
 

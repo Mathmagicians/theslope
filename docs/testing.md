@@ -10,7 +10,7 @@
 
 ### General Principles
 
-- Prefer assertions over console logs (`expect()` instead of `console.log()`)
+- Always use assertions over console logs (`expect()` instead of `console.log()`)
 - Use meaningful test names that describe the behavior being tested
 - Focus tests on business requirements, not implementation details
 - When testing async behavior, use proper `await` patterns
@@ -220,6 +220,121 @@ const generateUniqueSeasonDates = () => {
 **Examples:**
 - `tests/e2e/ui/AdminPlanning.e2e.spec.ts`
 - `tests/e2e/ui/AdminPlanningSeason.e2e.spec.ts`
+
+#### Test Helper Utilities
+***IMPORTANT*** We want to keep our tests DRY. Whenever we discover repetitive, crosscutting concerns, we extract them to test helper utilities.
+
+**Location:** `/tests/e2e/testHelpers.ts`
+
+**Import pattern:**
+```typescript
+import testHelpers from '../testHelpers'
+const {validatedBrowserContext, pollUntil, selectDropdownOption} = testHelpers
+```
+
+##### `validatedBrowserContext(browser)`
+
+Creates authenticated browser context for API requests in tests.
+
+```typescript
+const context = await validatedBrowserContext(browser)
+const season = await SeasonFactory.createSeason(context)
+```
+
+**Usage:** Required for all factory methods and authenticated API calls in tests.
+
+##### `pollUntil(fetchFn, condition, maxAttempts?, initialDelay?)`
+
+Generic polling function with exponential backoff for async operations.
+
+```typescript
+// Poll until condition is met (default: 5 attempts, 500ms initial delay)
+const teams = await pollUntil(
+  () => SeasonFactory.getCookingTeamsForSeason(context, seasonId),
+  (teams) => teams.length === 3
+)
+expect(teams.length).toBe(3)
+
+// Custom attempts and delay
+const data = await pollUntil(
+  fetchFn,
+  (d) => d.status === 'ready',
+  10,  // max attempts
+  1000 // initial delay (doubles each attempt)
+)
+```
+
+**Usage:** Preferred over `page.waitForTimeout()` for waiting on API operations after UI interactions.
+
+##### `selectDropdownOption(page, dropdownTestId, optionName)`
+
+Selects option from dropdown using test ID, handles strict mode violations on Linux.
+
+```typescript
+// Select season from dropdown
+await selectDropdownOption(page, 'season-selector', 'TestSeason-123')
+
+// Select household from dropdown
+await selectDropdownOption(page, 'household-selector', 'Household A')
+```
+
+**Why?** Dropdowns on Linux show text twice (selected value + menu option), causing strict mode violations with `getByRole('option')`. This utility uses `.first()` internally to avoid the issue.
+
+**Usage:** Always use this for dropdown selection instead of manual `getByTestId().click()` + `getByRole('option').click()` pattern.
+
+##### `doScreenshot(page, name, isDocumentation?)`
+
+Takes screenshots for debugging or documentation.
+
+```typescript
+// Debug screenshot (temporary, with timestamp in test-results/)
+await doScreenshot(page, 'dropdown-timeout')
+// Creates: test-results/dropdown-timeout-1234567890.png
+
+// Documentation screenshot (permanent, no timestamp in docs/screenshots/)
+await doScreenshot(page, 'admin/admin-planning-loaded', true)
+// Creates: docs/screenshots/admin/admin-planning-loaded.png
+```
+
+**Parameters:**
+- `page` - Playwright Page object
+- `name` - Descriptive name (supports subdirectories like 'admin/page-name')
+- `isDocumentation` - Boolean (default: false). If true, saves to docs/screenshots/ without timestamp
+
+**Usage:**
+- Debug screenshots help troubleshoot failing tests (temporary)
+- Documentation screenshots capture UI state for README/docs (permanent)
+
+#### Playwright Best Practices
+
+**❌ AVOID: `waitForLoadState('networkidle')`** - Flaky and slow
+
+**✅ USE: `page.waitForResponse()` for API data loading**
+
+```typescript
+// ✅ Wait for specific API response
+await page.goto('/admin/teams?mode=edit')
+await page.waitForResponse(
+  (response) => response.url().includes('/api/admin/season') && response.status() === 200,
+  { timeout: 10000 }
+)
+await selectDropdownOption(page, 'season-selector', season.shortName)
+```
+
+**✅ USE: URL parameters + explicit waits**
+
+```typescript
+// Navigate directly to desired state
+await page.goto(`/admin/teams?mode=edit`)
+await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+await expect(page.getByTestId('team-tabs').first()).toBeVisible()
+```
+
+**Key principles:**
+- Use `page.waitForResponse()` for SSR apps with client-side data fetching
+- Navigate directly via URL parameters instead of clicking through UI
+- Wait for specific elements with `expect().toBeVisible()`, not networkidle
+- Use `pollUntil()` for API verification after UI actions
 
 ## Common Issues After Framework Upgrades
 

@@ -6,7 +6,7 @@ import {
 import testHelpers from "../testHelpers"
 import {expect, BrowserContext} from "@playwright/test"
 
-const {salt, headers} = testHelpers
+const {salt, headers, pollUntil} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
 
 export class DinnerEventFactory {
@@ -132,26 +132,11 @@ export class DinnerEventFactory {
         maxAttempts: number = 5,
         initialDelayMs: number = 500
     ): Promise<DinnerEvent[]> => {
-        let currentDelay = initialDelayMs
-
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            const events = await this.getDinnerEventsForSeason(context, seasonId)
-
-            if (events.length === expectedCount) {
-                console.info(`✅ Dinner events generated: ${events.length}/${expectedCount} (attempt ${attempt}/${maxAttempts})`)
-                return events
-            }
-
-            if (attempt < maxAttempts) {
-                console.info(`⏳ Waiting for dinner events: ${events.length}/${expectedCount} (attempt ${attempt}/${maxAttempts}, delay ${currentDelay}ms)`)
-                await new Promise(resolve => setTimeout(resolve, currentDelay))
-                currentDelay *= 2 // Exponential backoff
-            }
-        }
-
-        throw new Error(
-            `Timeout waiting for dinner events to be generated. ` +
-            `Expected ${expectedCount} events for season ${seasonId}, but generation did not complete within ${maxAttempts} attempts`
+        return await pollUntil(
+            () => this.getDinnerEventsForSeason(context, seasonId),
+            (events) => events.length === expectedCount,
+            maxAttempts,
+            initialDelayMs
         )
     }
 }
