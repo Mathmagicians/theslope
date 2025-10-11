@@ -1,5 +1,43 @@
 # TODO
 
+## 🚨 CRITICAL: Remove AI Attribution from Git History
+
+**Issue**: 5 commits contain AI co-author attribution violating company policy
+- d6840eb - "Ticket types (#6)"
+- 661d651 - "Fixed CalendarDateRangePicker..."
+- 33e232c + 8356fe2 - SQUASHED commits -  "Fix season update API endpoint..."
+- b60f537 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
+- 79cbd1b - "Implement path-based admin navigation..."
+
+**Violations**:
+- `🤖 Generated with [Claude Code](https://claude.ai/code)`
+- `Co-Authored-By: Claude <noreply@anthropic.com>`
+- `Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>`
+
+**DevOps Recommendation**: Option A - Interactive Rebase (Rewrite Commit Messages Only)
+
+### Approved Solution
+**Preserve all code, remove only AI attribution text from commit messages**
+
+Steps:
+1. Create backup: `git branch backup-before-rewrite`
+2. Interactive rebase: `git rebase -i d6840eb^`
+3. Mark 5 commits as `reword` (not `pick`)
+4. Remove AI attribution lines from each message
+5. Verify: `git log --grep="Claude" --all` (should return nothing)
+6. Force push: `git push origin main --force-with-lease`
+7. Update feature branches: `git checkout create-teams-for-season && git rebase main`
+
+**What's Preserved**: 100% of code changes, commit structure, authors, dates
+**What Changes**: Commit SHAs (due to message hash change), AI attribution removed
+**Risks**: Force push required, GitHub PR links preserved, anyone with local main needs reset
+
+**Alternative Options Rejected**:
+- Option B (Delete commits) - Would lose critical features and break app
+- Option C (Squash) - Loses commit granularity with no benefit
+- Option D (git-filter-repo) - Automated but less control
+
+
 ## 🎯 HIGH PRIORITY: Admin Dining Season Management
 **Milestone**: Admin can create a dining season with cooking teams and corresponding events
 
