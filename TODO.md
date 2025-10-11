@@ -2,6 +2,19 @@
 
 ## 🚨 CRITICAL: Remove AI Attribution from Git History
 
+# 2 round
+1. 4dde61c - "Ticket types (#6)"
+   - Has: Claude + Copilot attribution
+2. ca6ed00 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
+   - Has: Claude attribution
+
+Clean commits:
+- ✅ cee35ba - CalendarDateRangePicker (clean)
+- ✅ 1c95cea - path-based admin (clean)
+- ❌ 33e232c + 8356fe2 - Not in this branch (were squashed in merges)
+
+# 1 round
+
 **Issue**: 5 commits contain AI co-author attribution violating company policy
 - d6840eb - "Ticket types (#6)"
 - 661d651 - "Fixed CalendarDateRangePicker..."
