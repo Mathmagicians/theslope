@@ -101,15 +101,20 @@ test.describe('AdminTeams Form UI', () => {
             await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
         })
 
+        // Helper: Reload page and reselect season (needed after creating teams via API)
+        const reloadAndReselectSeason = async (seasonShortName: string) => {
+            await page.reload()
+            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+            await selectDropdownOption(page, 'season-selector', seasonShortName, adminTeamsUrl)
+        }
+
         test('GIVEN season with teams WHEN user switches to edit mode THEN teams are shown', async () => {
             // GIVEN: Create teams for the season
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team A')
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team B')
 
             // Reload to see the teams
-            await page.reload()
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await reloadAndReselectSeason(season.shortName)
 
             // THEN: Verify we can see 2 team tabs in navigation (master-detail pattern shows 1 input at a time)
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
@@ -122,9 +127,7 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
             // Reload to see the team
-            await page.reload()
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await reloadAndReselectSeason(season.shortName)
 
             // Wait for team input to be visible
             const teamInput = page.getByTestId('team-name-input').first()
@@ -153,9 +156,7 @@ test.describe('AdminTeams Form UI', () => {
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Existing Team')
 
             // Reload to see the team
-            await page.reload()
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await reloadAndReselectSeason(season.shortName)
 
             // Verify initial team count - wait for team tabs to be visible
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
@@ -190,9 +191,7 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
             // Reload to see the team
-            await page.reload()
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await reloadAndReselectSeason(season.shortName)
 
             // Verify team is shown
             const teamInput = page.getByTestId('team-name-input').first()
@@ -225,9 +224,7 @@ test.describe('AdminTeams Form UI', () => {
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
 
             // Reload to see the teams
-            await page.reload()
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await reloadAndReselectSeason(season.shortName)
 
             // Wait for team tabs to load after season selection
             const teamTabs = page.getByTestId('team-tabs-list').locator('button[role="tab"]')
