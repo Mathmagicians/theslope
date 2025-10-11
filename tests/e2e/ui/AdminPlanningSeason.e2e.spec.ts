@@ -7,7 +7,7 @@ import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromIn
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, selectDropdownOption} = testHelpers
 const {deserializeSeason} = useSeasonValidation()
 
 /**
@@ -27,14 +27,15 @@ const calculateExpectedEventCount = (season: Season): number => {
 /**
  * Generate unique test data for UI form submissions
  * Used when creating seasons via UI (not via factory)
+ * Creates 1-week season (7 days) with Mon/Wed/Fri cooking days = exactly 3 events
  */
 const generateUniqueSeasonDates = () => {
     const date1 = SeasonFactory.generateUniqueDate()
-    const date2 = new Date(date1.getTime() + 90 * 24 * 60 * 60 * 1000) // 90 days later
+    const date2 = new Date(date1.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days later (1 week)
 
-    // Holiday within season range (30 days after start, 5 days duration)
-    const holidayDate1 = new Date(date1.getTime() + 30 * 24 * 60 * 60 * 1000)
-    const holidayDate2 = new Date(holidayDate1.getTime() + 5 * 24 * 60 * 60 * 1000)
+    // Holiday within season range (2 days after start, 2 days duration)
+    const holidayDate1 = new Date(date1.getTime() + 2 * 24 * 60 * 60 * 1000)
+    const holidayDate2 = new Date(holidayDate1.getTime() + 2 * 24 * 60 * 60 * 1000)
 
     // Search pattern based on start date: MM/yy
     const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
@@ -210,21 +211,25 @@ test.describe('AdminPlanningSeason Form UI', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create season with one holiday via API
-        const holidayPeriod = {start: new Date(2025, 11, 24), end: new Date(2026, 0, 2)}
+        // Default season is Jan 1-7, 2025, so holiday must be within that range
+        const holidayPeriod = {start: new Date(2025, 0, 3), end: new Date(2025, 0, 5)} // Jan 3-5, 2025
         const season = await SeasonFactory.createSeason(context, { holidays: [holidayPeriod] })
         createdSeasonIds.push(season.id!)
 
-        // Navigate and select season
+        // Navigate to planning page
         await page.goto(adminPlanningUrl)
-        await page.waitForLoadState('networkidle')
 
-        // USelect: Click button to open dropdown, then click option
-        await page.getByTestId('season-selector').click()
-        await page.getByRole('option', { name: season.shortName }).click()
+        // Select season FIRST (so it's available when we switch to edit mode)
+        await selectDropdownOption(page, 'season-selector', season.shortName, adminPlanningUrl)
 
-        // Switch to edit mode
+        // THEN switch to edit mode (this will populate the draft with season data)
         await page.locator('button[name="form-mode-edit"]').click()
-        await page.waitForLoadState('networkidle')
+
+        // Wait for edit mode to be active
+        await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+
+        // Wait for form to be visible
+        await expect(page.locator('form#seasonForm')).toBeVisible()
 
         // Verify holiday is shown
         const holidayItem = page.locator('[name^="holidayRangeList-0"]')

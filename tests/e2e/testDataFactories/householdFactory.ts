@@ -58,10 +58,11 @@ export class HouseholdFactory {
         inhabitantCount: number = 2
     ): Promise<{household: Household, inhabitants: Inhabitant[]}> => {
         const household = await this.createHousehold(context, name)
-        const inhabitants = await Promise.all(
-            Array(inhabitantCount).fill(0)
-                .map((_, i) => this.createInhabitantForHousehold(context, household.id, `Inhabitant ${i}`))
-        )
+        const inhabitants = []
+        for (let i = 0; i < inhabitantCount; i++) {
+            const inhabitant = await this.createInhabitantForHousehold(context, household.id, `Donald${i} Duck`)
+            inhabitants.push(inhabitant)
+        }
         return {household, inhabitants}
     }
 

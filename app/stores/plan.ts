@@ -1,4 +1,5 @@
 import {type Season, type SerializedSeason} from '~/composables/useSeasonValidation'
+import {type CookingTeam} from '~/composables/useCookingTeamValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -120,6 +121,60 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
+        const createTeam = async (team: CookingTeam): Promise<CookingTeam> => {
+            try {
+                const createdTeam = await $fetch<CookingTeam>('/api/admin/team', {
+                    method: 'PUT',
+                    body: team,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(`👥 > PLAN_STORE > Created team "${team.name}" for season ${team.seasonId}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return createdTeam
+            } catch (e: any) {
+                handleApiError(e, 'createTeam')
+                throw e
+            }
+        }
+
+        const updateTeam = async (team: CookingTeam) => {
+            try {
+                await $fetch(`/api/admin/team/${team.id}`, {
+                    method: 'POST',
+                    body: team,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(`👥 > PLAN_STORE > Updated team "${team.name}"`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+            } catch (e: any) {
+                handleApiError(e, 'updateTeam')
+                throw e
+            }
+        }
+
+        const deleteTeam = async (teamId: number) => {
+            try {
+                await $fetch(`/api/admin/team/${teamId}`, {
+                    method: 'DELETE'
+                })
+                console.info(`👥 > PLAN_STORE > Deleted team ${teamId}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+            } catch (e: any) {
+                handleApiError(e, 'deleteTeam')
+                throw e
+            }
+        }
+
         // INITIALIZATION - Component will call init() in onMounted
         const initPlanStore = async () => {
             await autoSelectFirstSeason()
@@ -140,7 +195,10 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             generateDinnerEvents,
-            onSeasonSelect
+            onSeasonSelect,
+            createTeam,
+            updateTeam,
+            deleteTeam
         }
     }
 )

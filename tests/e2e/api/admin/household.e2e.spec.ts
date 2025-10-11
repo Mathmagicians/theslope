@@ -86,6 +86,80 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         })
     })
 
+    test('GET /api/admin/household (index) should return households with lightweight inhabitant data (ADR-009)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: Create household with inhabitants
+        const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            'Household For Index Test',
+            2
+        )
+        testHouseholdIds.push(household.id)
+
+        // WHEN: Fetch all households (index endpoint)
+        const response = await context.request.get('/api/admin/household')
+
+        // THEN: Response includes households with LIGHTWEIGHT inhabitant data
+        expect(response.status()).toBe(200)
+        const households = await response.json()
+        expect(Array.isArray(households)).toBe(true)
+
+        // Find our test household
+        const fetchedHousehold = households.find((h: any) => h.id === household.id)
+        expect(fetchedHousehold).toBeDefined()
+        expect(fetchedHousehold.inhabitants).toBeDefined()
+        expect(Array.isArray(fetchedHousehold.inhabitants)).toBe(true)
+        expect(fetchedHousehold.inhabitants.length).toBe(2)
+
+        // Verify LIGHTWEIGHT inhabitant fields (per ADR-009: id, name, lastName, pictureUrl, birthDate)
+        fetchedHousehold.inhabitants.forEach((inhabitant: any) => {
+            expect(inhabitant.id).toBeDefined()
+            expect(inhabitant.name).toBeDefined()
+            expect(inhabitant.lastName).toBeDefined()
+            expect(inhabitant.pictureUrl).toBeDefined()
+            expect(inhabitant.birthDate).toBeDefined()
+
+            // Verify HEAVY fields are NOT included (allergies, dinnerPreferences, orders)
+            expect(inhabitant.allergies).toBeUndefined()
+            expect(inhabitant.dinnerPreferences).toBeUndefined()
+            expect(inhabitant.orders).toBeUndefined()
+        })
+    })
+
+    test('GET /api/admin/household/[id] (detail) should return household with comprehensive inhabitant data (ADR-009)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: Create household with inhabitants
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            'Household For Detail Test',
+            2
+        )
+        testHouseholdIds.push(household.id)
+
+        // WHEN: Fetch household by ID (detail endpoint)
+        const response = await context.request.get(`/api/admin/household/${household.id}`)
+
+        // THEN: Response includes household with COMPREHENSIVE inhabitants array
+        expect(response.status()).toBe(200)
+        const fetchedHousehold = await response.json()
+
+        expect(fetchedHousehold.id).toBe(household.id)
+        expect(fetchedHousehold.name).toBe('Household For Detail Test')
+        expect(fetchedHousehold.inhabitants).toBeDefined()
+        expect(Array.isArray(fetchedHousehold.inhabitants)).toBe(true)
+        expect(fetchedHousehold.inhabitants.length).toBe(2)
+
+        // Verify basic inhabitant structure (lightweight fields always present)
+        fetchedHousehold.inhabitants.forEach((inhabitant: any) => {
+            expect(inhabitant.id).toBeDefined()
+            expect(inhabitant.householdId).toBe(household.id)
+            expect(inhabitant.name).toBeDefined()
+            expect(inhabitant.lastName).toBeDefined()
+        })
+    })
+
     test('DELETE should cascade delete inhabitants (strong relation)', async ({browser}) => {
         // GIVEN: A household with inhabitants
         const context = await validatedBrowserContext(browser)

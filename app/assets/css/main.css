@@ -28,18 +28,18 @@
     --color-blue-900: #224b57;
     --color-blue-950: #11313b;
 
-    /* Custom pink color palette */
-    --color-pink-50: #fef2f4;
-    --color-pink-100: #fde6ea;
-    --color-pink-200: #fad1d9;
-    --color-pink-300: #f6abba;
-    --color-pink-400: #ee6d8a;
-    --color-pink-500: #e54e74;
-    --color-pink-600: #d12d5e;
-    --color-pink-700: #b0204f;
-    --color-pink-800: #941d48;
-    --color-pink-900: #7e1d43;
-    --color-pink-950: #460b21;
+    /* Custom pink color palette - Pantone pink lemonade #fa7b95 */
+    --color-pink-50: #fef3f6;
+    --color-pink-100: #fde8ef;
+    --color-pink-200: #fcd4e1;
+    --color-pink-300: #fab0c7;
+    --color-pink-400: #f77da1;
+    --color-pink-500: #fa7b95;
+    --color-pink-600: #e8466f;
+    --color-pink-700: #ca2f58;
+    --color-pink-800: #a9284b;
+    --color-pink-900: #8d2643;
+    --color-pink-950: #511022;
 
     /* Custom orange color palette */
     --color-orange-50: #fef5ee;
@@ -92,6 +92,58 @@
     --color-violet-800: #91234d;
     --color-violet-900: #7a2144;
     --color-violet-950: #4a0d24;
+
+    /* Custom winery color palette - Pantone winery #7e212a */
+    --color-winery-50: #fdf3f4;
+    --color-winery-100: #fbe8ea;
+    --color-winery-200: #f7d4d8;
+    --color-winery-300: #f0b1b9;
+    --color-winery-400: #e68494;
+    --color-winery-500: #d65c72;
+    --color-winery-600: #c03d5a;
+    --color-winery-700: #a02f4b;
+    --color-winery-800: #852a43;
+    --color-winery-900: #7e212a;
+    --color-winery-950: #3e1015;
+
+    /* Custom party color palette - Pantone party punch #c4516c */
+    --color-party-50: #fdf3f5;
+    --color-party-100: #fce8ed;
+    --color-party-200: #fad1dd;
+    --color-party-300: #f7aac1;
+    --color-party-400: #f17999;
+    --color-party-500: #e84c76;
+    --color-party-600: #d42f5e;
+    --color-party-700: #c4516c;
+    --color-party-800: #9c1e44;
+    --color-party-900: #851d3d;
+    --color-party-950: #4e0a1f;
+
+    /* Custom peach color palette - Pantone peach cobbler #ffb482 */
+    --color-peach-50: #fff8f0;
+    --color-peach-100: #ffeede;
+    --color-peach-200: #ffd9bb;
+    --color-peach-300: #ffb482;
+    --color-peach-400: #ff9b5e;
+    --color-peach-500: #fe7320;
+    --color-peach-600: #ef5616;
+    --color-peach-700: #c63f14;
+    --color-peach-800: #9d3318;
+    --color-peach-900: #7e2d17;
+    --color-peach-950: #44130a;
+
+    /* Custom caramel color palette - Pantone caramel #ca815a */
+    --color-caramel-50: #f9f5f1;
+    --color-caramel-100: #f1e7dc;
+    --color-caramel-200: #e3cdb7;
+    --color-caramel-300: #d2ac8b;
+    --color-caramel-400: #ca815a;
+    --color-caramel-500: #b76a4a;
+    --color-caramel-600: #a0543f;
+    --color-caramel-700: #854236;
+    --color-caramel-800: #6c3731;
+    --color-caramel-900: #582f2a;
+    --color-caramel-950: #2f1716;
 
     /* Animations */
     --animate-marquee: marquee 90s linear infinite;

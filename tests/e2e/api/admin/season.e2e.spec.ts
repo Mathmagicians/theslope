@@ -61,9 +61,10 @@ test.describe('Season API Tests', () => {
 
             const initialHolidayCount = newSeason.season.holidays?.length
 
-            // Add an extra holiday period to the existing holidays
-            const holidayStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-            const holidayEnd = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000)   // 35 days from now
+            // Add an extra holiday period within the season date range
+            // Default season is Jan 1-7, 2025, so holiday must be within that range
+            const holidayStart = new Date(2025, 0, 3) // Jan 3, 2025
+            const holidayEnd = new Date(2025, 0, 4)   // Jan 4, 2025
 
             const updatedData = {
                 ...newSeason.season,
@@ -71,8 +72,8 @@ test.describe('Season API Tests', () => {
                 holidays: [
                     ...newSeason.season.holidays, // Keep existing holidays
                     {
-                        start: formatDate(holidayStart),
-                        end: formatDate(holidayEnd)
+                        start: holidayStart,
+                        end: holidayEnd
                     }
                 ]
             }
@@ -258,27 +259,45 @@ test.describe('Season API Tests', () => {
     }) // End Season CRUD operations
 
     test.describe('Generate Dinner Events from Season', () => {
+        let context: any
 
-        test("POST /season/[id]/generate-dinner-events should generate events for all cooking days", async ({browser}) => {
-            // GIVEN: A season with Tuesday and Thursday as cooking days
-            const context = await validatedBrowserContext(browser)
+        // Common setup for all generate dinner events tests
+        test.beforeEach(async ({browser}) => {
+            context = await validatedBrowserContext(browser)
+        })
+
+        // Helper: Calculate expected event count from season (used by multiple tests)
+        const getExpectedEventCount = (season: any): number => {
+            const deserializedSeason = deserializeSeason(season)
+            return calculateExpectedEventCount(deserializedSeason)
+        }
+
+        test("POST /season/[id]/generate-dinner-events should generate events for all cooking days", async () => {
+            // GIVEN: A season with Mon, Wed, Fri as cooking days (generates exactly 3 events)
+            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
+            const seasonEnd = new Date(2025, 0, 7)   // Jan 7, 2025 (Tue)
+            // This creates events on: Wed Jan 1, Fri Jan 3, Mon Jan 6 = 3 events
+
             const seasonData = {
                 ...SeasonFactory.defaultSeason().season,
-                cookingDays: createDefaultWeekdayMap([false, true, false, true, false, false, false]) // Tue, Thu
+                seasonDates: {
+                    start: seasonStart,
+                    end: seasonEnd
+                },
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
+                holidays: []
             }
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
-            // Calculate expected event count
-            const deserializedSeason = deserializeSeason(season)
-            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
-
             // WHEN: POST /api/admin/season/[id]/generate-dinner-events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
-            // THEN: Exact number of events created for all Tuesdays and Thursdays
+            // THEN: Exactly 3 events created for Mon, Wed, Fri
+            const expectedEventCount = getExpectedEventCount(season)
+            expect(result.eventCount).toBe(3)
             expect(result.eventCount).toBe(expectedEventCount)
-            expect(result.events.length).toBe(expectedEventCount)
+            expect(result.events.length).toBe(3)
             expect(Array.isArray(result.events)).toBe(true)
 
             // AND: All events have seasonId set
@@ -291,25 +310,26 @@ test.describe('Season API Tests', () => {
                 expect(event.dinnerMode).toBe('NONE')
             })
 
-            // AND: All events are on Tuesday (2) or Thursday (4)
+            // AND: All events are on Monday (1), Wednesday (3), or Friday (5)
             result.events.forEach(event => {
                 const eventDate = new Date(event.date)
                 const dayOfWeek = eventDate.getDay()
-                expect([2, 4]).toContain(dayOfWeek)
+                expect([1, 3, 5]).toContain(dayOfWeek)
             })
         })
 
-        test("POST /season/[id]/generate-dinner-events should exclude holidays", async ({browser}) => {
-            // GIVEN: A season with cooking days and holiday periods defined
-            const context = await validatedBrowserContext(browser)
+        test("POST /season/[id]/generate-dinner-events should exclude holidays", async () => {
+            // GIVEN: A season with cooking days and holiday periods defined (generates exactly 3 events)
 
-            // Create season with Monday-Thursday as cooking days, Jan 1 - Jan 31
-            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025
-            const seasonEnd = new Date(2025, 0, 31)   // Jan 31, 2025
+            // Create season Jan 1-9, 2025 with Mon/Wed/Fri cooking days
+            // This would create 4 events: Wed Jan 1, Fri Jan 3, Mon Jan 6, Wed Jan 8
+            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
+            const seasonEnd = new Date(2025, 0, 9)   // Jan 9, 2025 (Thu)
 
-            // Define holiday period: Jan 15-20 (inclusive)
-            const holidayStart = new Date(2025, 0, 15)
-            const holidayEnd = new Date(2025, 0, 20)
+            // Define holiday period: Jan 8 (excludes Wed Jan 8)
+            // Results in 3 events: Wed Jan 1, Fri Jan 3, Mon Jan 6
+            const holidayStart = new Date(2025, 0, 8)
+            const holidayEnd = new Date(2025, 0, 8)
 
             const seasonData = {
                 ...SeasonFactory.defaultSeason().season,
@@ -317,7 +337,7 @@ test.describe('Season API Tests', () => {
                     start: seasonStart,
                     end: seasonEnd
                 },
-                cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]), // Mon-Thu
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
                 holidays: [{
                     start: holidayStart,
                     end: holidayEnd
@@ -327,14 +347,11 @@ test.describe('Season API Tests', () => {
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
-            // Calculate expected event count (excludes holidays)
-            const deserializedSeason = deserializeSeason(season)
-            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
-
             // WHEN: Generating dinner events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
             // THEN: Exact number of events (excluding holidays)
+            const expectedEventCount = getExpectedEventCount(season)
             expect(result.eventCount).toBe(expectedEventCount)
             expect(result.events.length).toBe(expectedEventCount)
             expect(result.events).toBeDefined()
@@ -349,9 +366,8 @@ test.describe('Season API Tests', () => {
             })
         })
 
-        test("POST /season/[id]/generate-dinner-events should return 404 for non-existent season", async ({browser}) => {
+        test("POST /season/[id]/generate-dinner-events should return 404 for non-existent season", async () => {
             // GIVEN: Invalid season ID
-            const context = await validatedBrowserContext(browser)
             const nonExistentSeasonId = 999999
 
             // WHEN: POST /api/admin/season/999999/generate-dinner-events
@@ -361,9 +377,8 @@ test.describe('Season API Tests', () => {
             expect(response.status()).toBe(404)
         })
 
-        test("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async ({browser}) => {
+        test("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async () => {
             // GIVEN: Attempting to create a season with no cooking days selected (all false)
-            const context = await validatedBrowserContext(browser)
             const seasonData = {
                 ...SeasonFactory.defaultSeason().season,
                 cookingDays: createDefaultWeekdayMap([false, false, false, false, false, false, false]) // All days false
@@ -377,13 +392,13 @@ test.describe('Season API Tests', () => {
             // This is good design - no need to test event generation for invalid data
         })
 
-        test("Generated dinner events should respect season date boundaries", async ({browser}) => {
-            // GIVEN: A season with specific start and end dates
-            const context = await validatedBrowserContext(browser)
+        test("Generated dinner events should respect season date boundaries", async () => {
+            // GIVEN: A season with specific start and end dates (generates exactly 3 events)
 
-            // Create season Feb 10 - Feb 25, 2025 (short period for precise testing)
-            const seasonStart = new Date(2025, 1, 10) // Feb 10, 2025
-            const seasonEnd = new Date(2025, 1, 25)   // Feb 25, 2025
+            // Create season Jan 1-7, 2025 with Mon/Wed/Fri cooking days
+            // This creates events on: Wed Jan 1, Fri Jan 3, Mon Jan 6 = 3 events
+            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
+            const seasonEnd = new Date(2025, 0, 7)   // Jan 7, 2025 (Tue)
 
             const seasonData = {
                 ...SeasonFactory.defaultSeason().season,
@@ -391,21 +406,18 @@ test.describe('Season API Tests', () => {
                     start: seasonStart,
                     end: seasonEnd
                 },
-                cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]), // Mon-Fri
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
                 holidays: []
             }
 
             const season = await SeasonFactory.createSeason(context, seasonData)
             createdSeasonIds.push(season.id as number)
 
-            // Calculate expected event count
-            const deserializedSeason = deserializeSeason(season)
-            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
-
             // WHEN: Generating dinner events
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
 
             // THEN: Exact number of events for the date range
+            const expectedEventCount = getExpectedEventCount(season)
             expect(result.eventCount).toBe(expectedEventCount)
             expect(result.events.length).toBe(expectedEventCount)
             expect(result.events).toBeDefined()
