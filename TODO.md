@@ -1,99 +1,222 @@
 # TODO
+# HIGHEST PRIORITY: Auto-assign cooking teams to dinner events for a season
 
-## 🚨 CRITICAL: Remove AI Attribution from Git History
+## 🎯 HIGH PRIORITY: Team Assignment to Dinner Events
+**Milestone**: Automatic assignment of cooking teams to dinner events with affinity-based round-robin distribution
 
-# 2 round
-1. 4dde61c - "Ticket types (#6)"
-   - Has: Claude + Copilot attribution
-2. ca6ed00 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
-   - Has: Claude attribution
+**Overview**:
+When teams are created for a season, they are automatically assigned to dinner events based on:
+- Round-robin rotation through teams
+- Team affinities (calculated from `consecutiveCookingDays`)
+- Holiday handling (teams get "credit" even when event doesn't exist)
+- Preserves existing assignments (additive, not destructive)
 
-Clean commits:
-- ✅ cee35ba - CalendarDateRangePicker (clean)
-- ✅ 1c95cea - path-based admin (clean)
-- ❌ 33e232c + 8356fe2 - Not in this branch (were squashed in merges)
+---
 
-# 1 round
+### Task 1: Database Schema Changes
 
-**Issue**: 5 commits contain AI co-author attribution violating company policy
-- d6840eb - "Ticket types (#6)"
-- 661d651 - "Fixed CalendarDateRangePicker..."
-- 33e232c + 8356fe2 - SQUASHED commits -  "Fix season update API endpoint..."
-- b60f537 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
-- 79cbd1b - "Implement path-based admin navigation..."
+**Prisma Schema Updates**:
+- [ ] Add `consecutiveCookingDays: Int @default(2)` to Season model
+- [ ] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
+- [ ] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model (0-100 range)
+- [ ] Run migrations: `npm run db:migrate:local` and `npm run db:generate-client`
+- [ ] Add `defaultConsecutiveCookingDays: 2` to `app.config.ts`
+- [ ] Update validation schemas (SeasonSchema, CookingTeamSchema)
+- [ ] Update test factories (SeasonFactory, CookingTeamFactory)
+- [ ] Write API tests verifying fields persist/retrieve correctly
 
-**Violations**:
-- `🤖 Generated with [Claude Code](https://claude.ai/code)`
-- `Co-Authored-By: Claude <noreply@anthropic.com>`
-- `Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>`
+---
 
-**DevOps Recommendation**: Option A - Interactive Rebase (Rewrite Commit Messages Only)
+### Task 2: Season Form + Team Affinity Generation
 
-### Approved Solution
-**Preserve all code, remove only AI attribution text from commit messages**
+**Part A: Season Form** (`/admin/planning`)
+- [ ] Add numeric input for `consecutiveCookingDays` (default from config, validation ≥ 1)
+- [ ] Update AdminPlanning.vue
+- [ ] E2E tests for validation
 
-Steps:
-1. Create backup: `git branch backup-before-rewrite`
-2. Interactive rebase: `git rebase -i d6840eb^`
-3. Mark 5 commits as `reword` (not `pick`)
-4. Remove AI attribution lines from each message
-5. Verify: `git log --grep="Claude" --all` (should return nothing)
-6. Force push: `git push origin main --force-with-lease`
-7. Update feature branches: `git checkout create-teams-for-season && git rebase main`
+**Part B: Team Affinity Calculation** (`/admin/teams`)
+- [ ] Create `calculateTeamAffinities()` utility
+  - Algorithm: Round-robin weekday assignment based on consecutiveCookingDays
+  - Example: 3 teams, 2 consecutive days → Team 1: [Mon, Wed], Team 2: [Fri, Mon], Team 3: [Wed, Fri]
+- [ ] Update AdminTeams.vue to calculate and display affinities when user inputs team count
+- [ ] Update CookingTeamCard.vue to show affinity: "Hold 1 (Mandag, Onsdag)"
+- [ ] Save affinities via PUT /api/admin/team
+- [ ] E2E tests for affinity calculation and display
 
-**What's Preserved**: 100% of code changes, commit structure, authors, dates
-**What Changes**: Commit SHAs (due to message hash change), AI attribution removed
-**Risks**: Force push required, GitHub PR links preserved, anyone with local main needs reset
+**BDD Scenarios**:
+- 3 teams, consecutiveCookingDays=2, cookingDays=[Mon,Wed,Fri] → affinities calculated correctly
+- consecutiveCookingDays > enabled weekdays → affinity wraps with duplicates
+- consecutiveCookingDays=0 → validation error
+- Team count changes → affinities recalculated
 
-**Alternative Options Rejected**:
-- Option B (Delete commits) - Would lose critical features and break app
-- Option C (Squash) - Loses commit granularity with no benefit
-- Option D (git-filter-repo) - Automated but less control
+---
 
+### Task 3: Assignment Endpoint
 
-## 🎯 HIGH PRIORITY: Admin Dining Season Management
-**Milestone**: Admin can create a dining season with cooking teams and corresponding events
+**Endpoint**: `POST /api/admin/season/[id]/assign-teams-to-dinner-events`
 
-**Architecture Decision**: Separate admin tabs (simple workflow for once-a-year task)
-- `/admin/planning` - Season creation + auto-generated events view
-- `/admin/teams` - Cooking team management
+**Algorithm**:
+1. Load all calendar days in season (includes holidays)
+2. Load all dinner events (assigned + unassigned)
+3. Load teams with affinities
+4. Iterate calendar days:
+   - Check if day's weekday matches current team's affinity
+   - If event unassigned: assign to current team
+   - If event assigned OR no event (holiday): skip assignment but increment quota
+   - When quota reaches consecutiveCookingDays: rotate to next team
+5. Return all DinnerEvent[] with updated assignments
 
-### Phase 3: Team Member Assignment - Remaining Tasks
+**Implementation**:
+- [ ] Create `/api/admin/season/[id]/assign-teams-to-dinner-events.post.ts`
+- [ ] Implement assignment algorithm
+- [ ] Validation: Season exists, ≥1 team, consecutiveCookingDays ≥1
+- [ ] Update DinnerEventFactory with assignment helpers
+- [ ] E2E API tests
 
-**Future Enhancements**:
-[] Extend database model with team affinity (preferred cooking days)
-[] Add endpoint that auto-assigns teams to cooking days
-[] Write component tests for member assignment
-[] Write E2E tests for member assignment and removal workflows
+**BDD Scenarios**:
+- Happy path: 6 events, 3 teams → round-robin with affinity enforcement
+- Holiday handling: Team gets credit in quota but no assignment
+- Already assigned events: Treated as "holidays", skipped
+- Edge cases: 0 events (200, empty array), 0 teams (400), more teams than events (some get 0)
+- Validation: Invalid season ID (404)
+
+---
+
+### UI work 
+- [ ] Manual reassignment UI (admin changes team for specific event)
+- [ ] Display team assignment counts in UI ("Hold 1: 12 fællesspisninger")
+- [ ] User-defined team affinity preferences
+- [ ] Use allocationPercentage for team member workload distribution
+- [ ] Auto-reassign when teams added/removed
+- [ ] Warnings for imbalanced distribution
 
 ### Phase 4: Integration & Validation
-**Validation & Business Rules**
-[] Implement overlapping season prevention
-[] Add team size validation rules
-[] Check scheduling conflicts
-[] Add warnings for incomplete teams
-[] Write unit tests for all validation rules
+- [ ] Write integration tests for season-team-event flow
+- [ ] Create API documentation
+- [ ] Update ADR with team/event architecture decisions
 
-**Testing & Documentation**
-[] Write integration tests for season-team-event flow
-[] Add error handling and recovery tests
-[] Create API documentation
-[] Update ADR with team/event architecture decisions
+---
 
-### Technical Implementation Details (Remaining)
 
-**Extend Validation Schemas** (Future - for team member assignment):
-```typescript
-// Add to useCookingTeamValidation.ts or new composable
-const CookingTeamAssignmentSchema = z.object({
-  teamId: z.number(),
-  inhabitantId: z.number(),
-  role: z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
-})
+## 🎯 HIGH PRIORITY: URL-Based Admin Navigation (DRY Season Selection)
+
+### Goal
+Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and eliminating component duplication.
+
+### Architecture Pattern
+**Query parameters as context/filters**:
+- Season context: `?season={shortName}`
+- Team context: `?team={slug}` (future)
+- Mode state: `?mode=edit|create|view` (existing)
+
+**Example URLs**:
+```
+/admin/planning?season=fall-2025&mode=edit
+/admin/teams?season=fall-2025&mode=view
+/admin/teams?season=fall-2025&team=hold-1 (future)
 ```
 
-**Store Extensions** (Future):
-- Add `useEventStore()` for dinner events (currently in plan store)
+### Business Requirements
+
+#### 1. Season Context (Required)
+
+**Default Behavior**:
+- User navigates to `/admin/planning` (no `?season=`)
+- Auto-redirect to `/admin/planning?season={activeSeason.shortName}`
+- Active season = first season in list (temporary - will be database `isActive` field later)
+- Only ONE season can be active at a time (business invariant)
+
+**Invalid Season Handling**:
+- User navigates to `/admin/planning?season=nonexistent`
+- Redirect to `/admin/planning?season={activeSeason.shortName}` (graceful fallback)
+- No error toast - silent recovery
+
+**Empty State** (No Seasons):
+- `isNoSeasons = true` when no seasons exist
+- URL: `/admin/planning` (no redirect, no season param)
+- Show empty state UI: "Ingen sæsoner. Opret en ny sæson."
+- Season-dependent actions disabled (edit mode, team creation)
+
+**Season Persistence**:
+- Season param persists across ALL admin tabs
+- User at `/admin/planning?season=fall-2025` → clicks "Madhold" → `/admin/teams?season=fall-2025`
+- Coexists with mode param: `?season=fall-2025&mode=edit`
+
+#### 2. URL Sync with Store
+
+**Two-way binding**:
+- URL query param `?season=fall-2025` → Store `selectedSeason`
+- Store `selectedSeason` updated → URL reflects change
+- SeasonSelector dropdown updates URL → Store syncs automatically
+
+**Store Integration**:
+- Add `activeSeason` computed property: `seasons.value[0] ?? null`
+- Existing `selectedSeason` ref synced from URL
+- Existing `onSeasonSelect(id)` method remains unchanged
+
+#### 3. Routing Logic Consolidation
+
+**Problem**: Routing logic fragmented across:
+- FormModeSelector component (manages `?mode=`)
+- Admin [tab].vue page (manages `/admin/[tab]`)
+- Duplicated season selection in AdminPlanning + AdminTeams
+
+**Solution**: Create `useAdminNavigation` composable
+- Responsibility: Manage URL query params (season, future: team, filters)
+- Single source of truth for admin context/navigation
+- Separate from `useEntityFormManager` (entity editing state)
+
+**Clear separation** (ADR-007 compliant):
+```
+useAdminNavigation    → URL context (season, team filters)
+useEntityFormManager  → Entity editing (mode, draft entity)
+usePlanStore          → Server data (seasons list, CRUD)
+```
+
+#### 4. Component Extraction (DRY)
+
+**Create SeasonSelector component**:
+- Replaces inline `<USelect>` in AdminPlanning.vue (lines 93-103)
+- Replaces inline `<USelect>` in AdminTeams.vue (lines 257-266)
+- Uses `useAdminNavigation` internally for URL updates
+- Single source of truth for season selection UI
+
+### Implementation Checklist
+
+**New Files**:
+- [ ] `app/composables/useAdminNavigation.ts` - URL query param management
+- [ ] `app/components/admin/SeasonSelector.vue` - Reusable season dropdown
+
+**Modified Files**:
+- [ ] `app/stores/plan.ts` - Add `activeSeason` computed property
+- [ ] `app/components/admin/AdminPlanning.vue` - Use SeasonSelector + useAdminNavigation
+- [ ] `app/components/admin/AdminTeams.vue` - Use SeasonSelector + useAdminNavigation
+
+**Unchanged Files** (respects ADR-007, ADR-008):
+- [ ] `app/composables/useEntityFormManager.ts` - No changes
+- [ ] `app/components/form/FormModeSelector.vue` - No changes
+- [ ] `app/pages/admin/[tab].vue` - No changes
+
+**Testing**:
+- [ ] E2E: Season persists across admin tabs
+- [ ] E2E: Invalid season redirects to active season
+- [ ] E2E: Missing season param redirects to active season
+- [ ] E2E: Dropdown selection updates URL
+- [ ] E2E: Empty state when no seasons exist
+- [ ] E2E: Mode + season params coexist correctly
+- [ ] Unit: useAdminNavigation composable tests
+
+**Documentation**:
+- [ ] Move to `docs/features.md` after implementation
+- [ ] Update URL patterns in README.md (if needed)
+
+### Decision Rationale
+Query parameters chosen over path-based routing because:
+1. Season/team are "context filters" not primary entities
+2. Minimal code changes (no new route files)
+3. Consistent with existing `?mode=` pattern
+4. DRY via extraction (primary goal achieved)
+5. Respects existing ADR-007 and ADR-008 patterns
 
 ---
 
@@ -105,16 +228,6 @@ const CookingTeamAssignmentSchema = z.object({
 - Test: `POST can update existing dinner event with status 200`
 - Status: Intentionally skipped - feature not yet implemented
 - Action: Implement POST /api/admin/dinner-event/[id] endpoint when needed
-
-### Current Status
-- **101 total E2E tests** in 13 files
-- **100 tests passing** ✅
-- **1 test skipped** (POST dinner-event - future feature)
-- All critical user workflows covered
-
-### Future Test Enhancements
-- [ ] Refactor login.vue to use zod validation from api schema
-- [ ] Add POST endpoint for dinner event updates (when required)
 
 ---
 
@@ -163,24 +276,16 @@ AggregateError [ECONNREFUSED]:
 
 ## Major Framework Migrations Plan (Remaining)
 
-### Pinia 3 Migration (MEDIUM PRIORITY)
-**Branch**: `migrate-pinia-3`
-**Current**: 2.3.1 → **Target**: 3.0.3
-**Impact**: MEDIUM - State management changes
-
 ### Zod 4 Migration (MEDIUM PRIORITY)
 **Branch**: `migrate-zod-4`
 **Current**: 3.24.1 → **Target**: 4.1.5
 **Impact**: MEDIUM - Form validation and API schemas
 
-### Migration Principles
-1. **One migration per branch/PR** - Isolate changes
-2. **Comprehensive testing** - Full test suite must pass
-3. **Rollback ready** - Keep fallback options
-
 ---
 
 # ✅ COMPLETED
+
+## Cleanup of ai attributions - replaced with grazing unicorns 🦄
 
 ## Household Management View (Admin Husstande Tab)
 **Date**: 2025-01-28 | **Compliance**: ADR-009

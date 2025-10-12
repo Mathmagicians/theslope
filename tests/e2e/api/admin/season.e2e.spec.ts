@@ -256,17 +256,15 @@ test.describe('Season API Tests', () => {
             createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
         })
 
-    }) // End Season CRUD operations
+    })
 
     test.describe('Generate Dinner Events from Season', () => {
         let context: any
 
-        // Common setup for all generate dinner events tests
         test.beforeEach(async ({browser}) => {
             context = await validatedBrowserContext(browser)
         })
 
-        // Helper: Calculate expected event count from season (used by multiple tests)
         const getExpectedEventCount = (season: any): number => {
             const deserializedSeason = deserializeSeason(season)
             return calculateExpectedEventCount(deserializedSeason)
@@ -359,8 +357,6 @@ test.describe('Season API Tests', () => {
             // AND: Verify by checking all generated event dates against holiday ranges
             result.events.forEach(event => {
                 const eventDate = new Date(event.date)
-
-                // Event should NOT fall within holiday period
                 const isInHoliday = eventDate >= holidayStart && eventDate <= holidayEnd
                 expect(isInHoliday, `Event on ${eventDate.toISOString()} should not be in holiday period ${holidayStart.toISOString()} - ${holidayEnd.toISOString()}`).toBe(false)
             })
@@ -387,9 +383,6 @@ test.describe('Season API Tests', () => {
             // WHEN: Creating the season
             // THEN: Should fail with 400 validation error (fail fast at creation time)
             await SeasonFactory.createSeason(context, seasonData, 400)
-
-            // Validation prevents creating seasons with no cooking days
-            // This is good design - no need to test event generation for invalid data
         })
 
         test("Generated dinner events should respect season date boundaries", async () => {
@@ -451,9 +444,55 @@ test.describe('Season API Tests', () => {
             expect(lastEventDate! <= seasonEnd).toBe(true)
         })
 
-    }) // End Generate Dinner Events
+    })
 
-// Cleanup after all tests
+    test.describe('ConsecutiveCookingDays field', () => {
+
+        test('PUT should create season with consecutiveCookingDays field', async ({ browser }) => {
+            // GIVEN a season with consecutiveCookingDays = 3
+            const context = await validatedBrowserContext(browser)
+            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 3 }
+
+            // WHEN creating the season via PUT
+            const created = await SeasonFactory.createSeason(context, season)
+            createdSeasonIds.push(created.id as number)
+
+            // THEN season is created with consecutiveCookingDays = 3
+            expect(created.consecutiveCookingDays).toBe(3)
+        })
+
+        test('PUT should reject consecutiveCookingDays < 1', async ({ browser }) => {
+            // GIVEN a season with consecutiveCookingDays = 0
+            const context = await validatedBrowserContext(browser)
+            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 0 }
+
+            // WHEN creating the season via PUT
+            // THEN request fails with 400
+            await SeasonFactory.createSeason(context, season, 400)
+        })
+
+        test('POST should update consecutiveCookingDays', async ({ browser }) => {
+            // GIVEN an existing season with consecutiveCookingDays = 2
+            const context = await validatedBrowserContext(browser)
+            const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id as number)
+            expect(season.consecutiveCookingDays).toBe(2)
+
+            // WHEN updating consecutiveCookingDays to 3
+            season.consecutiveCookingDays = 3
+            const response = await context.request.post(`/api/admin/season/${season.id}`, {
+                headers: headers,
+                data: serializeSeason(season)
+            })
+
+            // THEN update succeeds
+            expect(response.status()).toBe(200)
+            const updated = await response.json()
+            expect(updated.consecutiveCookingDays).toBe(3)
+        })
+
+    })
+
     test.afterAll(async ({browser}) => {
         // Only run cleanup if we created a season
         if (createdSeasonIds.length > 0) {
@@ -471,4 +510,4 @@ test.describe('Season API Tests', () => {
         }
     })
 
-}) // End Season API Tests
+})
