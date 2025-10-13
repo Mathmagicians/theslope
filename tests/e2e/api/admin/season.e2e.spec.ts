@@ -258,6 +258,53 @@ test.describe('Season API Tests', () => {
 
     })
 
+    test.describe('DB migration 003 - ConsecutiveCookingDays and Prices', () => {
+
+        test('PUT should create season with consecutiveCookingDays field', async ({ browser }) => {
+            // GIVEN a season with consecutiveCookingDays = 3
+            const context = await validatedBrowserContext(browser)
+            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 3 }
+
+            // WHEN creating the season via PUT
+            const created = await SeasonFactory.createSeason(context, season)
+            createdSeasonIds.push(created.id as number)
+
+            // THEN season is created with consecutiveCookingDays = 3
+            expect(created.consecutiveCookingDays).toBe(3)
+        })
+
+        test('PUT should reject consecutiveCookingDays < 1', async ({ browser }) => {
+            // GIVEN a season with consecutiveCookingDays = 0
+            const context = await validatedBrowserContext(browser)
+            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 0 }
+
+            // WHEN creating the season via PUT
+            // THEN request fails with 400
+            await SeasonFactory.createSeason(context, season, 400)
+        })
+
+        test('POST should update consecutiveCookingDays', async ({ browser }) => {
+            // GIVEN an existing season with consecutiveCookingDays = 2
+            const context = await validatedBrowserContext(browser)
+            const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id as number)
+            expect(season.consecutiveCookingDays).toBe(2)
+
+            // WHEN updating consecutiveCookingDays to 3
+            season.consecutiveCookingDays = 3
+            const response = await context.request.post(`/api/admin/season/${season.id}`, {
+                headers: headers,
+                data: serializeSeason(season)
+            })
+
+            // THEN update succeeds
+            expect(response.status()).toBe(200)
+            const updated = await response.json()
+            expect(updated.consecutiveCookingDays).toBe(3)
+        })
+
+    })
+
     test.describe('Generate Dinner Events from Season', () => {
         let context: any
 
@@ -446,52 +493,6 @@ test.describe('Season API Tests', () => {
 
     })
 
-    test.describe('ConsecutiveCookingDays field', () => {
-
-        test('PUT should create season with consecutiveCookingDays field', async ({ browser }) => {
-            // GIVEN a season with consecutiveCookingDays = 3
-            const context = await validatedBrowserContext(browser)
-            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 3 }
-
-            // WHEN creating the season via PUT
-            const created = await SeasonFactory.createSeason(context, season)
-            createdSeasonIds.push(created.id as number)
-
-            // THEN season is created with consecutiveCookingDays = 3
-            expect(created.consecutiveCookingDays).toBe(3)
-        })
-
-        test('PUT should reject consecutiveCookingDays < 1', async ({ browser }) => {
-            // GIVEN a season with consecutiveCookingDays = 0
-            const context = await validatedBrowserContext(browser)
-            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 0 }
-
-            // WHEN creating the season via PUT
-            // THEN request fails with 400
-            await SeasonFactory.createSeason(context, season, 400)
-        })
-
-        test('POST should update consecutiveCookingDays', async ({ browser }) => {
-            // GIVEN an existing season with consecutiveCookingDays = 2
-            const context = await validatedBrowserContext(browser)
-            const season = await SeasonFactory.createSeason(context)
-            createdSeasonIds.push(season.id as number)
-            expect(season.consecutiveCookingDays).toBe(2)
-
-            // WHEN updating consecutiveCookingDays to 3
-            season.consecutiveCookingDays = 3
-            const response = await context.request.post(`/api/admin/season/${season.id}`, {
-                headers: headers,
-                data: serializeSeason(season)
-            })
-
-            // THEN update succeeds
-            expect(response.status()).toBe(200)
-            const updated = await response.json()
-            expect(updated.consecutiveCookingDays).toBe(3)
-        })
-
-    })
 
     test.afterAll(async ({browser}) => {
         // Only run cleanup if we created a season
