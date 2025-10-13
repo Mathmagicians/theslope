@@ -1,12 +1,12 @@
 import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
-import {createDefaultWeekdayMap, createDateRange, formatDate} from '~/utils/date'
-import type {DateRange} from "~/types/dateTypes"
-import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
+import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 
-// Add testSeason using the factory
-const testSeason = SeasonFactory.defaultSeason().season
+const {TICKET_TYPES} = useTicketPriceValidation()
+const testSeason = SeasonFactory.defaultSeasonData
 
 describe('useSeasonValidation', () => {
   // Get validation utilities
@@ -74,7 +74,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.errors[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
       }
     })
 
@@ -91,7 +91,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.errors[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
       }
     })
   })
@@ -122,12 +122,7 @@ describe('useSeasonValidation', () => {
       expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
     })
 
-    it('should survive JSON stringification cycle', () => {
-      // ...existing code...
-    })
-
     it('should correctly handle the API test season', () => {
-      // Use testSeason from factory
 
       // Verify the test season validates
       const validationResult = SeasonSchema.safeParse(testSeason)
@@ -148,24 +143,14 @@ describe('useSeasonValidation', () => {
       expect(deserialized.shortName).toBe(testSeason.shortName)
 
       // Always parse seasonDates to Date objects before formatting
-      const originalStartDate = testSeason.seasonDates.start instanceof Date
-        ? testSeason.seasonDates.start
-        : new Date(
-            testSeason.seasonDates.start.split('/').reverse().join('-')
-          )
-      const originalEndDate = testSeason.seasonDates.end instanceof Date
-        ? testSeason.seasonDates.end
-        : new Date(
-            testSeason.seasonDates.end.split('/').reverse().join('-')
-          )
+      const originalStartDate = testSeason.seasonDates.start as Date
+      const originalEndDate = testSeason.seasonDates.end as Date
 
       const formatDateStart = formatDate(deserialized.seasonDates.start)
       const formatDateEnd = formatDate(deserialized.seasonDates.end)
 
       expect(formatDateStart).toBe(formatDate(originalStartDate))
       expect(formatDateEnd).toBe(formatDate(originalEndDate))
-
-      // ...existing code...
     })
 
     it('should correctly serialize and deserialize a Season with relations', () => {
@@ -194,7 +179,7 @@ describe('useSeasonValidation', () => {
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
         CookingTeams: [{id: 1, name: 'Team A'}],
-        ticketPrices: [{id: 1, ticketType: 'ADULT', price: 50}]
+        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: 'HUNGRY_BABY', price: 4000}]
       }
 
       // Serialize
@@ -221,12 +206,16 @@ describe('useSeasonValidation', () => {
       // Verify relations are preserved
       const deserializedWithRelations = deserialized 
       expect(deserializedWithRelations.dinnerEvents).toHaveLength(2)
-      expect(deserializedWithRelations.dinnerEvents![0].date).toBeInstanceOf(Date)
-      expect(deserializedWithRelations.dinnerEvents![0].menuTitle).toBe('Pasta Night')
-      expect(deserializedWithRelations.dinnerEvents![1].date).toBeInstanceOf(Date)
-      expect(deserializedWithRelations.dinnerEvents![1].menuTitle).toBe('Taco Tuesday')
+      expect(deserializedWithRelations.dinnerEvents![0]?.date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![0]?.menuTitle).toBe('Pasta Night')
+      expect(deserializedWithRelations.dinnerEvents![1]?.date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![1]?.menuTitle).toBe('Taco Tuesday')
       expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
       expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
+
+      // ticket prices
+        expect(deserializedWithRelations.ticketPrices.length).toBe(1)
+        expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual(['HUNGRY_BABY'])
     })
       
   })

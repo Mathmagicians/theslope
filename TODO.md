@@ -8,7 +8,6 @@
 **Overview**:
 - Add ticket price management (HUNGRY_BABY type + full CRUD UI)
 - Add team assignment fields (consecutiveCookingDays already tested, affinity, allocationPercentage)
-- Fix app.config ticket type definitions (enum names + øre conversion)
 - Expand E2E test suite in existing migration 003 block (season.e2e.spec.ts:261)
 
 ---
@@ -26,43 +25,40 @@
 ### Task 1: Schema Migration 003
 
 **Prisma Schema Updates**:
-- [ ] Add `HUNGRY_BABY` to TicketType enum
-- [ ] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
-- [ ] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
-- [ ] Note: `consecutiveCookingDays` already exists (E2E tests passing)
+- [x] Add `HUNGRY_BABY` to TicketType enum
+- [x] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
+- [x] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
+- [x] Note: `consecutiveCookingDays` already exists (E2E tests passing)
 
 **Create & Apply Migration**:
-- [ ] `make prisma-create-migration name=migration_003_ticket_prices_and_team_fields`
-- [ ] `make d1-migrate-local`
-- [ ] `npx prisma generate`
-- [ ] Verify schema compiles and existing tests pass
+- [x] `make prisma-create-migration name=migration_003_ticket_prices_and_team_fields`
+- [x] `make d1-migrate-local`
+- [x] `npx prisma generate`
+- [x] Verify schema compiles and existing tests pass
 
 ---
 
 ### Task 2: App Config & Defaults
 
 **Fix `app/app.config.ts`**:
-- [ ] Fix enum names: `BARN` → `CHILD`, `VOKSEN` → `ADULT`
-- [ ] Convert prices to Int (øre): `'40'` → `4000`, `'17'` → `1700`, `'0'` → `0`
-- [ ] Add `HUNGRY_BABY: { name: 'Sulten Baby', ageLimit: 2, defaultPrice: 900 }`
-- [ ] Remove old `defaultTicketTypes` array structure
-- [ ] Note: `defaultConsecutiveCookingDays: 2` already exists
+- [x] updated app config
 
 ---
 
 ### Task 3: Validation Layer
 
-**Create `app/composables/useTicketPriceValidation.ts`**:
-- [ ] Create `TicketPriceSchema` with id, seasonId, ticketType, price (0-20000 øre), description
-- [ ] Export type `TicketPrice` from schema
+**Create `app/composables/useTicketPriceValidation.ts` and `app/composables/useTicketPriceValidation.unit.spec.ts`**:
+- [ x] Create `TicketPriceSchema` with id, seasonId, ticketType, price (0-20000 øre), description
+- [ x] Export type `TicketPrice` from schema
+- [x] unit test runs clean
 
 **Update `app/composables/useSeasonValidation.ts`**:
-- [ ] Import TicketPriceSchema from useTicketPriceValidation
-- [ ] Replace `ticketPrices: z.array(z.any()).optional()` with `z.array(TicketPriceSchema).optional()`
-- [ ] Add validation: All 4 ticket types required (ADULT, CHILD, BABY, HUNGRY_BABY)
-- [ ] Add validation: No duplicate ticket types within same season
-- [ ] Update `deserializeSeason` to handle ticketPrices relation
-- [ ] Update composable tests
+- [x ] Import TicketPriceSchema from useTicketPriceValidation
+- [ x] Replace `ticketPrices: z.array(z.any()).optional()` with `z.array(TicketPriceSchema).optional()`
+- [ x] Add validation:at least 1 ticket types required (ADULT, CHILD, BABY, HUNGRY_BABY)
+- [ x] Add validation: No duplicate ticket types within same season
+- [ x] Update `deserializeSeason` to handle ticketPrices relation
+- [ x] Update composable tests
 
 ---
 

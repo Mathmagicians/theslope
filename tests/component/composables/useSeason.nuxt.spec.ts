@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest'
-import {type Season, useSeason} from '~/composables/useSeason'
+import {useSeason} from '~/composables/useSeason'
+import {type Season} from '~/composables/useSeasonValidation'
 import type {DateRange} from "~/types/dateTypes"
 import {createDefaultWeekdayMap} from '~/utils/date'
 
@@ -9,14 +10,18 @@ describe('useSeasonSchema', () => {
         const defaultSeason = getDefaultSeason()
         const result = SeasonSchema.safeParse(defaultSeason)
 
-        expect(result.success).toBe(true)
+        expect(result.success, result.success ? '' : JSON.stringify(result.error.format(), null, 2)).toBe(true)
         if (result.success) {
             const parsed = result.data
             expect(parsed.seasonDates.start).toBeInstanceOf(Date)
             expect(parsed.seasonDates.end).toBeInstanceOf(Date)
             expect(Object.keys(parsed.cookingDays)).toHaveLength(7)
-            expect(parsed.holidays).toEqual([])
+            expect(parsed.holidays.length).toBe(3) // Weeks 8, 42, 52 from app.config
+            expect(parsed.holidays.every(h => h.start instanceof Date && h.end instanceof Date)).toBe(true)
             expect(parsed.isActive).toBe(false)
+            expect(parsed.consecutiveCookingDays).toBe(2)
+            expect(parsed.ticketPrices).toBeDefined()
+            expect(parsed.ticketPrices.length).toBe(4)
         }
     })
 
@@ -113,6 +118,33 @@ describe('getDefaultSeason', () => {
             expect(deserialized).toEqual(defaultSeason)
             expect(defaultSeason.seasonDates.start < defaultSeason.seasonDates.end).toBe(true)
         }
+    })
+
+    it('should generate holidays within season date boundaries', () => {
+        const { getDefaultSeason, holidaysSchema } = useSeason()
+        const defaultSeason = getDefaultSeason()
+
+        // GIVEN: Holidays are validated by schema
+        const holidaysResult = holidaysSchema.safeParse(defaultSeason.holidays)
+        expect(holidaysResult.success, holidaysResult.success ? '' : JSON.stringify(holidaysResult.error.format(), null, 2)).toBe(true)
+
+        // THEN: All holidays must be within season dates
+        defaultSeason.holidays.forEach((holiday, index) => {
+            const holidayStart = holiday.start
+            const holidayEnd = holiday.end
+            const seasonStart = defaultSeason.seasonDates.start
+            const seasonEnd = defaultSeason.seasonDates.end
+
+            expect(
+                holidayStart >= seasonStart && holidayStart <= seasonEnd,
+                `Holiday ${index} start (${holidayStart.toISOString()}) must be within season (${seasonStart.toISOString()} - ${seasonEnd.toISOString()})`
+            ).toBe(true)
+
+            expect(
+                holidayEnd >= seasonStart && holidayEnd <= seasonEnd,
+                `Holiday ${index} end (${holidayEnd.toISOString()}) must be within season (${seasonStart.toISOString()} - ${seasonEnd.toISOString()})`
+            ).toBe(true)
+        })
     })
 })
 

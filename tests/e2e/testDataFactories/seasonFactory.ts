@@ -1,15 +1,17 @@
-import {formatDate, formatDateRange, createDateRange, createDefaultWeekdayMap} from "../../../app/utils/date"
-import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
+import {createDefaultWeekdayMap} from "~/utils/date"
+import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
+import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import {
     type CookingTeam,
     type TeamRole
-} from "../../../app/composables/useCookingTeamValidation"
+} from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
-import {expect, BrowserContext} from "@playwright/test";
-import {HouseholdFactory} from "./householdFactory";
+import {expect, type BrowserContext} from "@playwright/test"
+import {HouseholdFactory} from "./householdFactory"
 
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 const {salt, headers} = testHelpers
+const {createTicketPrice} = useTicketPriceValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -36,10 +38,14 @@ export class SeasonFactory {
             start: this.today,
             end: this.oneWeekLater
         },
-        holidayDates: [],
+        holidays: [],
         isActive: false,
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-        holidays: [],
+        consecutiveCookingDays: 1,
+        ticketPrices: [
+            createTicketPrice('ADULT', 4000),
+            createTicketPrice('CHILD', 1100, undefined, undefined, 10)
+        ],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }
@@ -245,12 +251,12 @@ export class SeasonFactory {
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
         await Promise.all(
             householdWithInhabitants.inhabitants.map((inhabitant: any, index: number) =>
-                this.assignMemberToTeam(context, team.id, inhabitant.id, roles[index % roles.length])
+                this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
             )
         )
 
         // Return team with member assignments and household for cleanup
-        const teamWithAssignments = await this.getCookingTeamById(context, team.id)
+        const teamWithAssignments = await this.getCookingTeamById(context, team.id!)
         return {
             ...teamWithAssignments,
             householdId: householdWithInhabitants.household.id

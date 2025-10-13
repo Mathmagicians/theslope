@@ -32,13 +32,13 @@ export const TransactionScalarFieldEnumSchema = z.enum(['id','orderId','amount',
 
 export const InvoiceScalarFieldEnumSchema = z.enum(['id','cutoffDate','paymentDate','amount','createdAt','householdId']);
 
-export const CookingTeamScalarFieldEnumSchema = z.enum(['id','seasonId','name']);
+export const CookingTeamScalarFieldEnumSchema = z.enum(['id','seasonId','name','affinity']);
 
-export const CookingTeamAssignmentScalarFieldEnumSchema = z.enum(['id','cookingTeamId','inhabitantId','role','createdAt','updatedAt']);
+export const CookingTeamAssignmentScalarFieldEnumSchema = z.enum(['id','cookingTeamId','inhabitantId','role','allocationPercentage','affinity','createdAt','updatedAt']);
 
-export const SeasonScalarFieldEnumSchema = z.enum(['id','shortName','seasonDates','isActive','cookingDays','holidays','ticketIsCancellableDaysBefore','diningModeIsEditableMinutesBefore']);
+export const SeasonScalarFieldEnumSchema = z.enum(['id','shortName','seasonDates','isActive','cookingDays','holidays','ticketIsCancellableDaysBefore','diningModeIsEditableMinutesBefore','consecutiveCookingDays']);
 
-export const TicketPriceScalarFieldEnumSchema = z.enum(['id','seasonId','ticketType','price','description']);
+export const TicketPriceScalarFieldEnumSchema = z.enum(['id','seasonId','ticketType','price','description','maximumAgeLimit']);
 
 export const SortOrderSchema = z.enum(['asc','desc']);
 
@@ -56,7 +56,7 @@ export const WeekdaySchema = z.enum(['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','
 
 export type WeekdayType = `${z.infer<typeof WeekdaySchema>}`
 
-export const TicketTypeSchema = z.enum(['ADULT','CHILD','BABY']);
+export const TicketTypeSchema = z.enum(['ADULT','CHILD','HUNGRY_BABY','BABY']);
 
 export type TicketTypeType = `${z.infer<typeof TicketTypeSchema>}`
 
@@ -227,6 +227,7 @@ export const CookingTeamSchema = z.object({
   id: z.number().int(),
   seasonId: z.number().int(),
   name: z.string(),
+  affinity: z.string().nullable(),
 })
 
 export type CookingTeam = z.infer<typeof CookingTeamSchema>
@@ -240,6 +241,8 @@ export const CookingTeamAssignmentSchema = z.object({
   id: z.number().int(),
   cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
+  allocationPercentage: z.number().int(),
+  affinity: z.string().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 })
@@ -259,6 +262,7 @@ export const SeasonSchema = z.object({
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int(),
 })
 
 export type Season = z.infer<typeof SeasonSchema>
@@ -273,6 +277,7 @@ export const TicketPriceSchema = z.object({
   seasonId: z.number().int(),
   price: z.number().int(),
   description: z.string().nullable(),
+  maximumAgeLimit: z.number().int().nullable(),
 })
 
 export type TicketPrice = z.infer<typeof TicketPriceSchema>
@@ -615,6 +620,7 @@ export const CookingTeamSelectSchema: z.ZodType<Prisma.CookingTeamSelect> = z.ob
   id: z.boolean().optional(),
   seasonId: z.boolean().optional(),
   name: z.boolean().optional(),
+  affinity: z.boolean().optional(),
   season: z.union([z.boolean(),z.lazy(() => SeasonArgsSchema)]).optional(),
   dinners: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
   assignments: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
@@ -639,6 +645,8 @@ export const CookingTeamAssignmentSelectSchema: z.ZodType<Prisma.CookingTeamAssi
   cookingTeamId: z.boolean().optional(),
   inhabitantId: z.boolean().optional(),
   role: z.boolean().optional(),
+  allocationPercentage: z.boolean().optional(),
+  affinity: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
   cookingTeam: z.union([z.boolean(),z.lazy(() => CookingTeamArgsSchema)]).optional(),
@@ -679,6 +687,7 @@ export const SeasonSelectSchema: z.ZodType<Prisma.SeasonSelect> = z.object({
   holidays: z.boolean().optional(),
   ticketIsCancellableDaysBefore: z.boolean().optional(),
   diningModeIsEditableMinutesBefore: z.boolean().optional(),
+  consecutiveCookingDays: z.boolean().optional(),
   CookingTeams: z.union([z.boolean(),z.lazy(() => CookingTeamFindManyArgsSchema)]).optional(),
   ticketPrices: z.union([z.boolean(),z.lazy(() => TicketPriceFindManyArgsSchema)]).optional(),
   dinnerEvents: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
@@ -703,6 +712,7 @@ export const TicketPriceSelectSchema: z.ZodType<Prisma.TicketPriceSelect> = z.ob
   ticketType: z.boolean().optional(),
   price: z.boolean().optional(),
   description: z.boolean().optional(),
+  maximumAgeLimit: z.boolean().optional(),
   season: z.union([z.boolean(),z.lazy(() => SeasonArgsSchema)]).optional(),
 }).strict()
 
@@ -1502,6 +1512,7 @@ export const CookingTeamWhereInputSchema: z.ZodType<Prisma.CookingTeamWhereInput
   id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   seasonId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema), z.lazy(() => SeasonWhereInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
@@ -1511,6 +1522,7 @@ export const CookingTeamOrderByWithRelationInputSchema: z.ZodType<Prisma.Cooking
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   season: z.lazy(() => SeasonOrderByWithRelationInputSchema).optional(),
   dinners: z.lazy(() => DinnerEventOrderByRelationAggregateInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional(),
@@ -1526,6 +1538,7 @@ export const CookingTeamWhereUniqueInputSchema: z.ZodType<Prisma.CookingTeamWher
   NOT: z.union([ z.lazy(() => CookingTeamWhereInputSchema), z.lazy(() => CookingTeamWhereInputSchema).array() ]).optional(),
   seasonId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema), z.lazy(() => SeasonWhereInputSchema) ]).optional(),
   dinners: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
@@ -1535,6 +1548,7 @@ export const CookingTeamOrderByWithAggregationInputSchema: z.ZodType<Prisma.Cook
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => CookingTeamCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => CookingTeamAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => CookingTeamMaxOrderByAggregateInputSchema).optional(),
@@ -1549,6 +1563,7 @@ export const CookingTeamScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.C
   id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   seasonId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   name: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
 }).strict();
 
 export const CookingTeamAssignmentWhereInputSchema: z.ZodType<Prisma.CookingTeamAssignmentWhereInput> = z.object({
@@ -1559,6 +1574,8 @@ export const CookingTeamAssignmentWhereInputSchema: z.ZodType<Prisma.CookingTeam
   cookingTeamId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema), z.lazy(() => RoleSchema) ]).optional(),
+  allocationPercentage: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   cookingTeam: z.union([ z.lazy(() => CookingTeamScalarRelationFilterSchema), z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
@@ -1570,6 +1587,8 @@ export const CookingTeamAssignmentOrderByWithRelationInputSchema: z.ZodType<Pris
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cookingTeam: z.lazy(() => CookingTeamOrderByWithRelationInputSchema).optional(),
@@ -1587,6 +1606,8 @@ export const CookingTeamAssignmentWhereUniqueInputSchema: z.ZodType<Prisma.Cooki
   cookingTeamId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema), z.lazy(() => RoleSchema) ]).optional(),
+  allocationPercentage: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   cookingTeam: z.union([ z.lazy(() => CookingTeamScalarRelationFilterSchema), z.lazy(() => CookingTeamWhereInputSchema) ]).optional(),
@@ -1598,6 +1619,8 @@ export const CookingTeamAssignmentOrderByWithAggregationInputSchema: z.ZodType<P
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => CookingTeamAssignmentCountOrderByAggregateInputSchema).optional(),
@@ -1615,6 +1638,8 @@ export const CookingTeamAssignmentScalarWhereWithAggregatesInputSchema: z.ZodTyp
   cookingTeamId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleWithAggregatesFilterSchema), z.lazy(() => RoleSchema) ]).optional(),
+  allocationPercentage: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
@@ -1631,6 +1656,7 @@ export const SeasonWhereInputSchema: z.ZodType<Prisma.SeasonWhereInput> = z.obje
   holidays: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  consecutiveCookingDays: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamListRelationFilterSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceListRelationFilterSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
@@ -1645,6 +1671,7 @@ export const SeasonOrderByWithRelationInputSchema: z.ZodType<Prisma.SeasonOrderB
   holidays: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
   CookingTeams: z.lazy(() => CookingTeamOrderByRelationAggregateInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceOrderByRelationAggregateInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventOrderByRelationAggregateInputSchema).optional(),
@@ -1665,6 +1692,7 @@ export const SeasonWhereUniqueInputSchema: z.ZodType<Prisma.SeasonWhereUniqueInp
   holidays: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  consecutiveCookingDays: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamListRelationFilterSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceListRelationFilterSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
@@ -1679,6 +1707,7 @@ export const SeasonOrderByWithAggregationInputSchema: z.ZodType<Prisma.SeasonOrd
   holidays: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => SeasonCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => SeasonAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => SeasonMaxOrderByAggregateInputSchema).optional(),
@@ -1698,6 +1727,7 @@ export const SeasonScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Season
   holidays: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  consecutiveCookingDays: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
 }).strict();
 
 export const TicketPriceWhereInputSchema: z.ZodType<Prisma.TicketPriceWhereInput> = z.object({
@@ -1709,6 +1739,7 @@ export const TicketPriceWhereInputSchema: z.ZodType<Prisma.TicketPriceWhereInput
   ticketType: z.union([ z.lazy(() => EnumTicketTypeFilterSchema), z.lazy(() => TicketTypeSchema) ]).optional(),
   price: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   description: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema), z.lazy(() => SeasonWhereInputSchema) ]).optional(),
 }).strict();
 
@@ -1718,6 +1749,7 @@ export const TicketPriceOrderByWithRelationInputSchema: z.ZodType<Prisma.TicketP
   ticketType: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
   description: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  maximumAgeLimit: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   season: z.lazy(() => SeasonOrderByWithRelationInputSchema).optional(),
 }).strict();
 
@@ -1733,6 +1765,7 @@ export const TicketPriceWhereUniqueInputSchema: z.ZodType<Prisma.TicketPriceWher
   ticketType: z.union([ z.lazy(() => EnumTicketTypeFilterSchema), z.lazy(() => TicketTypeSchema) ]).optional(),
   price: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   description: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   season: z.union([ z.lazy(() => SeasonScalarRelationFilterSchema), z.lazy(() => SeasonWhereInputSchema) ]).optional(),
 }).strict());
 
@@ -1742,6 +1775,7 @@ export const TicketPriceOrderByWithAggregationInputSchema: z.ZodType<Prisma.Tick
   ticketType: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
   description: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  maximumAgeLimit: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => TicketPriceCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => TicketPriceAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => TicketPriceMaxOrderByAggregateInputSchema).optional(),
@@ -1758,6 +1792,7 @@ export const TicketPriceScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.T
   ticketType: z.union([ z.lazy(() => EnumTicketTypeWithAggregatesFilterSchema), z.lazy(() => TicketTypeSchema) ]).optional(),
   price: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   description: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
 }).strict();
 
 export const AllergyTypeCreateInputSchema: z.ZodType<Prisma.AllergyTypeCreateInput> = z.object({
@@ -2404,6 +2439,7 @@ export const InvoiceUncheckedUpdateManyInputSchema: z.ZodType<Prisma.InvoiceUnch
 
 export const CookingTeamCreateInputSchema: z.ZodType<Prisma.CookingTeamCreateInput> = z.object({
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
   dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional(),
@@ -2413,12 +2449,14 @@ export const CookingTeamUncheckedCreateInputSchema: z.ZodType<Prisma.CookingTeam
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
 
 export const CookingTeamUpdateInputSchema: z.ZodType<Prisma.CookingTeamUpdateInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
   dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
@@ -2428,6 +2466,7 @@ export const CookingTeamUncheckedUpdateInputSchema: z.ZodType<Prisma.CookingTeam
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
@@ -2436,20 +2475,25 @@ export const CookingTeamCreateManyInputSchema: z.ZodType<Prisma.CookingTeamCreat
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
 }).strict();
 
 export const CookingTeamUpdateManyMutationInputSchema: z.ZodType<Prisma.CookingTeamUpdateManyMutationInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const CookingTeamUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateManyInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const CookingTeamAssignmentCreateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateInput> = z.object({
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutAssignmentsInputSchema),
@@ -2461,12 +2505,16 @@ export const CookingTeamAssignmentUncheckedCreateInputSchema: z.ZodType<Prisma.C
   cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const CookingTeamAssignmentUpdateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cookingTeam: z.lazy(() => CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInputSchema).optional(),
@@ -2478,6 +2526,8 @@ export const CookingTeamAssignmentUncheckedUpdateInputSchema: z.ZodType<Prisma.C
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2487,12 +2537,16 @@ export const CookingTeamAssignmentCreateManyInputSchema: z.ZodType<Prisma.Cookin
   cookingTeamId: z.number().int(),
   inhabitantId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const CookingTeamAssignmentUpdateManyMutationInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateManyMutationInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2502,6 +2556,8 @@ export const CookingTeamAssignmentUncheckedUpdateManyInputSchema: z.ZodType<Pris
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2514,6 +2570,7 @@ export const SeasonCreateInputSchema: z.ZodType<Prisma.SeasonCreateInput> = z.ob
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamCreateNestedManyWithoutSeasonInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventCreateNestedManyWithoutSeasonInputSchema).optional(),
@@ -2528,6 +2585,7 @@ export const SeasonUncheckedCreateInputSchema: z.ZodType<Prisma.SeasonUncheckedC
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
@@ -2541,6 +2599,7 @@ export const SeasonUpdateInputSchema: z.ZodType<Prisma.SeasonUpdateInput> = z.ob
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUpdateManyWithoutSeasonNestedInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUpdateManyWithoutSeasonNestedInputSchema).optional(),
@@ -2555,6 +2614,7 @@ export const SeasonUncheckedUpdateInputSchema: z.ZodType<Prisma.SeasonUncheckedU
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
@@ -2569,6 +2629,7 @@ export const SeasonCreateManyInputSchema: z.ZodType<Prisma.SeasonCreateManyInput
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
 }).strict();
 
 export const SeasonUpdateManyMutationInputSchema: z.ZodType<Prisma.SeasonUpdateManyMutationInput> = z.object({
@@ -2579,6 +2640,7 @@ export const SeasonUpdateManyMutationInputSchema: z.ZodType<Prisma.SeasonUpdateM
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const SeasonUncheckedUpdateManyInputSchema: z.ZodType<Prisma.SeasonUncheckedUpdateManyInput> = z.object({
@@ -2590,12 +2652,14 @@ export const SeasonUncheckedUpdateManyInputSchema: z.ZodType<Prisma.SeasonUnchec
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const TicketPriceCreateInputSchema: z.ZodType<Prisma.TicketPriceCreateInput> = z.object({
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutTicketPricesInputSchema),
 }).strict();
 
@@ -2605,12 +2669,14 @@ export const TicketPriceUncheckedCreateInputSchema: z.ZodType<Prisma.TicketPrice
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
 }).strict();
 
 export const TicketPriceUpdateInputSchema: z.ZodType<Prisma.TicketPriceUpdateInput> = z.object({
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutTicketPricesNestedInputSchema).optional(),
 }).strict();
 
@@ -2620,6 +2686,7 @@ export const TicketPriceUncheckedUpdateInputSchema: z.ZodType<Prisma.TicketPrice
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceCreateManyInputSchema: z.ZodType<Prisma.TicketPriceCreateManyInput> = z.object({
@@ -2628,12 +2695,14 @@ export const TicketPriceCreateManyInputSchema: z.ZodType<Prisma.TicketPriceCreat
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
 }).strict();
 
 export const TicketPriceUpdateManyMutationInputSchema: z.ZodType<Prisma.TicketPriceUpdateManyMutationInput> = z.object({
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceUncheckedUpdateManyInputSchema: z.ZodType<Prisma.TicketPriceUncheckedUpdateManyInput> = z.object({
@@ -2642,6 +2711,7 @@ export const TicketPriceUncheckedUpdateManyInputSchema: z.ZodType<Prisma.TicketP
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const IntFilterSchema: z.ZodType<Prisma.IntFilter> = z.object({
@@ -3416,6 +3486,7 @@ export const CookingTeamCountOrderByAggregateInputSchema: z.ZodType<Prisma.Cooki
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const CookingTeamAvgOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAvgOrderByAggregateInput> = z.object({
@@ -3427,12 +3498,14 @@ export const CookingTeamMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Cooking
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const CookingTeamMinOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamMinOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const CookingTeamSumOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamSumOrderByAggregateInput> = z.object({
@@ -3457,6 +3530,8 @@ export const CookingTeamAssignmentCountOrderByAggregateInputSchema: z.ZodType<Pr
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -3465,6 +3540,7 @@ export const CookingTeamAssignmentAvgOrderByAggregateInputSchema: z.ZodType<Pris
   id: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const CookingTeamAssignmentMaxOrderByAggregateInputSchema: z.ZodType<Prisma.CookingTeamAssignmentMaxOrderByAggregateInput> = z.object({
@@ -3472,6 +3548,8 @@ export const CookingTeamAssignmentMaxOrderByAggregateInputSchema: z.ZodType<Pris
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -3481,6 +3559,8 @@ export const CookingTeamAssignmentMinOrderByAggregateInputSchema: z.ZodType<Pris
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   role: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
+  affinity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -3489,6 +3569,7 @@ export const CookingTeamAssignmentSumOrderByAggregateInputSchema: z.ZodType<Pris
   id: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  allocationPercentage: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const EnumRoleWithAggregatesFilterSchema: z.ZodType<Prisma.EnumRoleWithAggregatesFilter> = z.object({
@@ -3535,12 +3616,14 @@ export const SeasonCountOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonCoun
   holidays: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const SeasonAvgOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonAvgOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const SeasonMaxOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMaxOrderByAggregateInput> = z.object({
@@ -3552,6 +3635,7 @@ export const SeasonMaxOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMaxOrd
   holidays: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const SeasonMinOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMinOrderByAggregateInput> = z.object({
@@ -3563,12 +3647,14 @@ export const SeasonMinOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonMinOrd
   holidays: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const SeasonSumOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonSumOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
+  consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const BoolWithAggregatesFilterSchema: z.ZodType<Prisma.BoolWithAggregatesFilter> = z.object({
@@ -3585,12 +3671,14 @@ export const TicketPriceCountOrderByAggregateInputSchema: z.ZodType<Prisma.Ticke
   ticketType: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
   description: z.lazy(() => SortOrderSchema).optional(),
+  maximumAgeLimit: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const TicketPriceAvgOrderByAggregateInputSchema: z.ZodType<Prisma.TicketPriceAvgOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  maximumAgeLimit: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const TicketPriceMaxOrderByAggregateInputSchema: z.ZodType<Prisma.TicketPriceMaxOrderByAggregateInput> = z.object({
@@ -3599,6 +3687,7 @@ export const TicketPriceMaxOrderByAggregateInputSchema: z.ZodType<Prisma.TicketP
   ticketType: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
   description: z.lazy(() => SortOrderSchema).optional(),
+  maximumAgeLimit: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const TicketPriceMinOrderByAggregateInputSchema: z.ZodType<Prisma.TicketPriceMinOrderByAggregateInput> = z.object({
@@ -3607,12 +3696,14 @@ export const TicketPriceMinOrderByAggregateInputSchema: z.ZodType<Prisma.TicketP
   ticketType: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
   description: z.lazy(() => SortOrderSchema).optional(),
+  maximumAgeLimit: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const TicketPriceSumOrderByAggregateInputSchema: z.ZodType<Prisma.TicketPriceSumOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  maximumAgeLimit: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const AllergyCreateNestedManyWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateNestedManyWithoutAllergyTypeInput> = z.object({
@@ -5358,6 +5449,8 @@ export const OrderCreateManyInhabitantInputEnvelopeSchema: z.ZodType<Prisma.Orde
 
 export const CookingTeamAssignmentCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutInhabitantInput> = z.object({
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutAssignmentsInputSchema),
@@ -5367,6 +5460,8 @@ export const CookingTeamAssignmentUncheckedCreateWithoutInhabitantInputSchema: z
   id: z.number().int().optional(),
   cookingTeamId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -5569,6 +5664,8 @@ export const CookingTeamAssignmentScalarWhereInputSchema: z.ZodType<Prisma.Cooki
   cookingTeamId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   role: z.union([ z.lazy(() => EnumRoleFilterSchema), z.lazy(() => RoleSchema) ]).optional(),
+  allocationPercentage: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
@@ -5731,6 +5828,7 @@ export const InhabitantCreateOrConnectWithoutDinnerEventInputSchema: z.ZodType<P
 
 export const CookingTeamCreateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutDinnersInput> = z.object({
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
   assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
@@ -5739,6 +5837,7 @@ export const CookingTeamUncheckedCreateWithoutDinnersInputSchema: z.ZodType<Pris
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
 
@@ -5781,6 +5880,7 @@ export const SeasonCreateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.Season
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamCreateNestedManyWithoutSeasonInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -5794,6 +5894,7 @@ export const SeasonUncheckedCreateWithoutDinnerEventsInputSchema: z.ZodType<Pris
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -5856,6 +5957,7 @@ export const CookingTeamUpdateToOneWithWhereWithoutDinnersInputSchema: z.ZodType
 
 export const CookingTeamUpdateWithoutDinnersInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutDinnersInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
@@ -5864,6 +5966,7 @@ export const CookingTeamUncheckedUpdateWithoutDinnersInputSchema: z.ZodType<Pris
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
 
@@ -5902,6 +6005,7 @@ export const SeasonUpdateWithoutDinnerEventsInputSchema: z.ZodType<Prisma.Season
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUpdateManyWithoutSeasonNestedInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -5915,6 +6019,7 @@ export const SeasonUncheckedUpdateWithoutDinnerEventsInputSchema: z.ZodType<Pris
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -6320,6 +6425,7 @@ export const SeasonCreateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.Season
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   ticketPrices: z.lazy(() => TicketPriceCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -6333,6 +6439,7 @@ export const SeasonUncheckedCreateWithoutCookingTeamsInputSchema: z.ZodType<Pris
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -6380,6 +6487,8 @@ export const DinnerEventCreateManyCookingTeamInputEnvelopeSchema: z.ZodType<Pris
 
 export const CookingTeamAssignmentCreateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentCreateWithoutCookingTeamInput> = z.object({
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutCookingTeamAssignmentInputSchema),
@@ -6389,6 +6498,8 @@ export const CookingTeamAssignmentUncheckedCreateWithoutCookingTeamInputSchema: 
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -6421,6 +6532,7 @@ export const SeasonUpdateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.Season
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   ticketPrices: z.lazy(() => TicketPriceUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -6434,6 +6546,7 @@ export const SeasonUncheckedUpdateWithoutCookingTeamsInputSchema: z.ZodType<Pris
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   ticketPrices: z.lazy(() => TicketPriceUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -6472,6 +6585,7 @@ export const CookingTeamAssignmentUpdateManyWithWhereWithoutCookingTeamInputSche
 
 export const CookingTeamCreateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutAssignmentsInput> = z.object({
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   season: z.lazy(() => SeasonCreateNestedOneWithoutCookingTeamsInputSchema),
   dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
@@ -6480,6 +6594,7 @@ export const CookingTeamUncheckedCreateWithoutAssignmentsInputSchema: z.ZodType<
   id: z.number().int().optional(),
   seasonId: z.number().int(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
 
@@ -6535,6 +6650,7 @@ export const CookingTeamUpdateToOneWithWhereWithoutAssignmentsInputSchema: z.Zod
 
 export const CookingTeamUpdateWithoutAssignmentsInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutAssignmentsInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   season: z.lazy(() => SeasonUpdateOneRequiredWithoutCookingTeamsNestedInputSchema).optional(),
   dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
@@ -6543,6 +6659,7 @@ export const CookingTeamUncheckedUpdateWithoutAssignmentsInputSchema: z.ZodType<
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   seasonId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
 
@@ -6588,6 +6705,7 @@ export const InhabitantUncheckedUpdateWithoutCookingTeamAssignmentInputSchema: z
 
 export const CookingTeamCreateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamCreateWithoutSeasonInput> = z.object({
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   dinners: z.lazy(() => DinnerEventCreateNestedManyWithoutCookingTeamInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
@@ -6595,6 +6713,7 @@ export const CookingTeamCreateWithoutSeasonInputSchema: z.ZodType<Prisma.Cooking
 export const CookingTeamUncheckedCreateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedCreateWithoutSeasonInput> = z.object({
   id: z.number().int().optional(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutCookingTeamInputSchema).optional(),
 }).strict();
@@ -6612,6 +6731,7 @@ export const TicketPriceCreateWithoutSeasonInputSchema: z.ZodType<Prisma.TicketP
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
 }).strict();
 
 export const TicketPriceUncheckedCreateWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceUncheckedCreateWithoutSeasonInput> = z.object({
@@ -6619,6 +6739,7 @@ export const TicketPriceUncheckedCreateWithoutSeasonInputSchema: z.ZodType<Prism
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
 }).strict();
 
 export const TicketPriceCreateOrConnectWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceCreateOrConnectWithoutSeasonInput> = z.object({
@@ -6689,6 +6810,7 @@ export const CookingTeamScalarWhereInputSchema: z.ZodType<Prisma.CookingTeamScal
   id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   seasonId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  affinity: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceUpsertWithWhereUniqueWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceUpsertWithWhereUniqueWithoutSeasonInput> = z.object({
@@ -6716,6 +6838,7 @@ export const TicketPriceScalarWhereInputSchema: z.ZodType<Prisma.TicketPriceScal
   ticketType: z.union([ z.lazy(() => EnumTicketTypeFilterSchema), z.lazy(() => TicketTypeSchema) ]).optional(),
   price: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   description: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
 }).strict();
 
 export const DinnerEventUpsertWithWhereUniqueWithoutSeasonInputSchema: z.ZodType<Prisma.DinnerEventUpsertWithWhereUniqueWithoutSeasonInput> = z.object({
@@ -6742,6 +6865,7 @@ export const SeasonCreateWithoutTicketPricesInputSchema: z.ZodType<Prisma.Season
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -6755,6 +6879,7 @@ export const SeasonUncheckedCreateWithoutTicketPricesInputSchema: z.ZodType<Pris
   holidays: z.string(),
   ticketIsCancellableDaysBefore: z.number().int(),
   diningModeIsEditableMinutesBefore: z.number().int(),
+  consecutiveCookingDays: z.number().int().optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutSeasonInputSchema).optional(),
 }).strict();
@@ -6783,6 +6908,7 @@ export const SeasonUpdateWithoutTicketPricesInputSchema: z.ZodType<Prisma.Season
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -6796,6 +6922,7 @@ export const SeasonUncheckedUpdateWithoutTicketPricesInputSchema: z.ZodType<Pris
   holidays: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   ticketIsCancellableDaysBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   diningModeIsEditableMinutesBefore: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  consecutiveCookingDays: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   CookingTeams: z.lazy(() => CookingTeamUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
   dinnerEvents: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutSeasonNestedInputSchema).optional(),
 }).strict();
@@ -6855,6 +6982,8 @@ export const CookingTeamAssignmentCreateManyInhabitantInputSchema: z.ZodType<Pri
   id: z.number().int().optional(),
   cookingTeamId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -6957,6 +7086,8 @@ export const OrderUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Pri
 
 export const CookingTeamAssignmentUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutInhabitantInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cookingTeam: z.lazy(() => CookingTeamUpdateOneRequiredWithoutAssignmentsNestedInputSchema).optional(),
@@ -6966,6 +7097,8 @@ export const CookingTeamAssignmentUncheckedUpdateWithoutInhabitantInputSchema: z
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -6974,6 +7107,8 @@ export const CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantInputSchem
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -7137,6 +7272,8 @@ export const CookingTeamAssignmentCreateManyCookingTeamInputSchema: z.ZodType<Pr
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
   role: z.lazy(() => RoleSchema),
+  allocationPercentage: z.number().int().optional(),
+  affinity: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -7183,6 +7320,8 @@ export const DinnerEventUncheckedUpdateManyWithoutCookingTeamInputSchema: z.ZodT
 
 export const CookingTeamAssignmentUpdateWithoutCookingTeamInputSchema: z.ZodType<Prisma.CookingTeamAssignmentUpdateWithoutCookingTeamInput> = z.object({
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutCookingTeamAssignmentNestedInputSchema).optional(),
@@ -7192,6 +7331,8 @@ export const CookingTeamAssignmentUncheckedUpdateWithoutCookingTeamInputSchema: 
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -7200,6 +7341,8 @@ export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamInputSche
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   role: z.union([ z.lazy(() => RoleSchema), z.lazy(() => EnumRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  allocationPercentage: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -7207,6 +7350,7 @@ export const CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamInputSche
 export const CookingTeamCreateManySeasonInputSchema: z.ZodType<Prisma.CookingTeamCreateManySeasonInput> = z.object({
   id: z.number().int().optional(),
   name: z.string(),
+  affinity: z.string().optional().nullable(),
 }).strict();
 
 export const TicketPriceCreateManySeasonInputSchema: z.ZodType<Prisma.TicketPriceCreateManySeasonInput> = z.object({
@@ -7214,6 +7358,7 @@ export const TicketPriceCreateManySeasonInputSchema: z.ZodType<Prisma.TicketPric
   ticketType: z.lazy(() => TicketTypeSchema),
   price: z.number().int(),
   description: z.string().optional().nullable(),
+  maximumAgeLimit: z.number().int().optional().nullable(),
 }).strict();
 
 export const DinnerEventCreateManySeasonInputSchema: z.ZodType<Prisma.DinnerEventCreateManySeasonInput> = z.object({
@@ -7231,6 +7376,7 @@ export const DinnerEventCreateManySeasonInputSchema: z.ZodType<Prisma.DinnerEven
 
 export const CookingTeamUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUpdateWithoutSeasonInput> = z.object({
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   dinners: z.lazy(() => DinnerEventUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
@@ -7238,6 +7384,7 @@ export const CookingTeamUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.Cooking
 export const CookingTeamUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateWithoutSeasonInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   dinners: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
   assignments: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutCookingTeamNestedInputSchema).optional(),
 }).strict();
@@ -7245,12 +7392,14 @@ export const CookingTeamUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prism
 export const CookingTeamUncheckedUpdateManyWithoutSeasonInputSchema: z.ZodType<Prisma.CookingTeamUncheckedUpdateManyWithoutSeasonInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  affinity: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceUpdateWithoutSeasonInput> = z.object({
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceUncheckedUpdateWithoutSeasonInput> = z.object({
@@ -7258,6 +7407,7 @@ export const TicketPriceUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prism
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const TicketPriceUncheckedUpdateManyWithoutSeasonInputSchema: z.ZodType<Prisma.TicketPriceUncheckedUpdateManyWithoutSeasonInput> = z.object({
@@ -7265,6 +7415,7 @@ export const TicketPriceUncheckedUpdateManyWithoutSeasonInputSchema: z.ZodType<P
   ticketType: z.union([ z.lazy(() => TicketTypeSchema), z.lazy(() => EnumTicketTypeFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   description: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  maximumAgeLimit: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const DinnerEventUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.DinnerEventUpdateWithoutSeasonInput> = z.object({

@@ -2,6 +2,7 @@ import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
 import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
+import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {DinnerEventCreate} from './useDinnerEventValidation'
 
 /**
@@ -19,6 +20,7 @@ export const useSeason = () => {
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
+    const {createTicketPrice, TICKET_TYPES} = useTicketPriceValidation()
     
     /**
      * Create a default season based on app configuration
@@ -26,21 +28,36 @@ export const useSeason = () => {
     const getDefaultSeason = () => {
         const thisYear = new Date().getFullYear()
         const defaultCookingDaysArray = WEEKDAYS.map(day =>
-            theslope.defaultCookingDays.includes(day)
+            theslope.defaultSeason.cookingDays.includes(day)
         )
         const dateRange = {
             start: calculateDayFromWeekNumber(0, theslope.defaultSeason.startWeek, thisYear),
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
+        const holidays = theslope.defaultSeason.holidays.map(weekNum => {
+            // Holidays before the season start week are in the next year
+            const holidayYear = weekNum < theslope.defaultSeason.startWeek ? thisYear + 1 : thisYear
+            return {
+                start: calculateDayFromWeekNumber(0, weekNum, holidayYear),
+                end: calculateDayFromWeekNumber(6, weekNum, holidayYear)
+            } satisfies DateRange
+        })
+
+        const ticketPrices = theslope.defaultSeason.ticketPrices?.
+            map( ({ticketType, price, description, maximumAgeLimit}) => createTicketPrice(
+                ticketType, price, undefined, description, maximumAgeLimit )) ??
+            [createTicketPrice('ADULT', 4000)]
         return {
             shortName: createSeasonName(dateRange),
             seasonDates: dateRange,
             isActive: false,
             cookingDays: createDefaultWeekdayMap(defaultCookingDaysArray),
-            holidays: [] as DateRange[],
-            ticketIsCancellableDaysBefore: theslope.ticketIsCancellableDaysBefore,
-            diningModeIsEditableMinutesBefore: theslope.diningModeIsEditableMinutesBefore
+            holidays: holidays,
+            ticketPrices: ticketPrices,
+            ticketIsCancellableDaysBefore: theslope.defaultSeason.ticketIsCancellableDaysBefore,
+            diningModeIsEditableMinutesBefore: theslope.defaultSeason.diningModeIsEditableMinutesBefore,
+            consecutiveCookingDays: theslope.defaultSeason.consecutiveCookingDays ?? 1
         } satisfies Season
     }
 
@@ -67,9 +84,9 @@ export const useSeason = () => {
         return <Season>{
             ...defaultSeason,
             ...season,
-            seasonDates: copyPartialDateRange(season?.seasonDates ?? defaultSeason.seasonDates),
-            cookingDays: {...(season?.cookingDays ?? defaultSeason.cookingDays)},
-            holidays: season?.holidays?.map(copyPartialDateRange) ?? defaultSeason.holidays
+            seasonDates: copyPartialDateRange(season.seasonDates ?? defaultSeason.seasonDates),
+            cookingDays: {...(season.cookingDays ?? defaultSeason.cookingDays)},
+            holidays: season.holidays?.map(copyPartialDateRange) ?? defaultSeason.holidays
         }
     }
 
