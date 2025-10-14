@@ -1,6 +1,6 @@
-import {createDefaultWeekdayMap} from "~/utils/date"
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
-import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
+import {useTicketPriceValidation, type TicketPrice} from "~/composables/useTicketPriceValidation"
+import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {
     type CookingTeam,
     type TeamRole
@@ -12,6 +12,7 @@ import {HouseholdFactory} from "./householdFactory"
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 const {salt, headers} = testHelpers
 const {createTicketPrice} = useTicketPriceValidation()
+const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -50,12 +51,10 @@ export class SeasonFactory {
         diningModeIsEditableMinutesBefore: 90
     }
 
-    // TODO static factory method with updated season with an extra holiday
-
     static readonly defaultSeason = (testSalt: string = Date.now().toString()) => {
         const saltedSeason = {
             ...this.defaultSeasonData,
-            shortName: salt(this.defaultSeasonData.shortName as string, testSalt)
+            shortName: salt(this.defaultSeasonData.shortName, testSalt)
         }
         return {
             season: saltedSeason,

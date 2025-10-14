@@ -1,20 +1,19 @@
 import {z} from 'zod'
-import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
+import {type DateRange} from '~/types/dateTypes'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '~/utils/date'
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 /**
  * Validation schemas and serialization functions for Season objects
  */
 export const useSeasonValidation = () => {
-    // Validation schemas
-    const WeekDayMapSchema = z.object(
-        Object.fromEntries(WEEKDAYS.map(day => [day, z.boolean()]))
-    ).refine((map) => Object.values(map).some(v => v), {
-        message: "Man skal lave mad mindst en dag om ugen"
-    })
+    // Get validation schemas
+    const {WeekDayMapSchemaRequired, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
+    const {DinnerEventDisplaySchema} = useDinnerEventValidation()
+    const {TicketPricesArraySchema} = useTicketPriceValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -22,16 +21,12 @@ export const useSeasonValidation = () => {
             message: "Ferieperioder må ikke overlappe hinanden"
         })
 
-    // Get DinnerEventDisplaySchema for relations
-    const {DinnerEventDisplaySchema} = useDinnerEventValidation()
-    const {TicketPricesArraySchema} = useTicketPriceValidation()
-
     const BaseSeasonSchema = z.object({
         id: z.number().int().positive().optional(),
         shortName: z.string().min(4),
         seasonDates: dateRangeSchema,
         isActive: z.boolean(),
-        cookingDays: WeekDayMapSchema,
+        cookingDays: WeekDayMapSchemaRequired,
         holidays: holidaysSchema,
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
         diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),
@@ -64,7 +59,7 @@ export const useSeasonValidation = () => {
     // Serialization schema for transforming to database format
     const SerializedSeasonSchema = SeasonSchema.transform((season: Season) => ({
         ...season,
-        cookingDays: JSON.stringify(season.cookingDays),
+        cookingDays: serializeWeekDayMap(season.cookingDays),
         holidays: JSON.stringify(season.holidays.map(holiday => ({
             start: formatDate(holiday.start),
             end: formatDate(holiday.end)
@@ -84,7 +79,7 @@ export const useSeasonValidation = () => {
 
         const baseSeason = {
             ...serialized,
-            cookingDays: JSON.parse(serialized.cookingDays),
+            cookingDays: deserializeWeekDayMap(serialized.cookingDays),
             holidays: JSON.parse(serialized.holidays).map((holiday: any) => ({
                 start: parseDate(holiday.start),
                 end: parseDate(holiday.end)
@@ -109,7 +104,6 @@ export const useSeasonValidation = () => {
 
     // Return all schemas and utility functions
     return {
-        WeekDayMapSchema,
         holidaysSchema,
         BaseSeasonSchema,
         SeasonSchema,

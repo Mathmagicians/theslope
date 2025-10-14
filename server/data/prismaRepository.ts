@@ -8,10 +8,12 @@ import type {
     Inhabitant,
     Household,
     CookingTeam,
-    DinnerEvent
+    DinnerEvent,
+    TicketPrice as PrismaTicketPrice
 } from "@prisma/client"
 
 import type {SerializedSeason} from "~/composables/useSeasonValidation"
+import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, HouseholdCreate} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
 import type {CookingTeam as CookingTeamCreate, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
@@ -501,7 +503,7 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
     }
 }
 
-export async function createSeason(d1Client: D1Database, seasonData: SerializedSeason): Promise<Season> {
+export async function createSeason(d1Client: D1Database, seasonData: SerializedSeason): Promise<SeasonWithRelations> {
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
     // Exclude id and read-only relation fields from create
@@ -509,10 +511,18 @@ export async function createSeason(d1Client: D1Database, seasonData: SerializedS
 
     try {
         const newSeason = await prisma.season.create({
-            data: createData
+            data: {
+                ...createData,
+                ticketPrices: ticketPrices ? { create: ticketPrices } : undefined
+            },
+            include: {
+                ticketPrices: true,
+                dinnerEvents: true,
+                CookingTeams: true
+            }
         })
 
-        console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id}`)
+        console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id} and ${newSeason.ticketPrices.length} ticket prices`)
         return newSeason
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating season ${seasonData?.shortName}`, error)
@@ -530,10 +540,21 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 
         const updatedSeason = await prisma.season.update({
             where: {id: seasonData.id},
-            data: updateData
+            data: {
+                ...updateData,
+                // Replace all ticket prices (delete existing, create new)
+                ticketPrices: ticketPrices ? {
+                    deleteMany: {},  // Delete all existing ticket prices for this season
+                    // Strip id and seasonId - Prisma auto-generates id and sets seasonId from relation
+                    create: ticketPrices.map(({id, seasonId, ...price}) => price)
+                } : undefined
+            },
+            include: {
+                ticketPrices: true
+            }
         })
 
-        console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id})`)
+        console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id}) with ${updatedSeason.ticketPrices.length} ticket prices`)
         return updatedSeason
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating season with ID ${id}`, error)

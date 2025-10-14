@@ -66,7 +66,7 @@ const buttonText = computed(() => {
 
 <template>
   <UCard
-      v-if="model"
+      v-show="model"
       class="w-full ring-none ring-0 shadow-none" padding="px-0" >
     <template #header>
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
@@ -121,6 +121,16 @@ const buttonText = computed(() => {
 
             <USeparator/>
 
+            <!-- Ticket prices -->
+            <UFormField label="Billetpriser" name="ticketPricesGroup">
+              <TicketPriceListEditor
+                  name="ticketPrices"
+                  v-model="model.ticketPrices"
+                  :disabled="isViewMode"/>
+            </UFormField>
+
+            <USeparator/>
+
             <!-- Ticket settings -->
             <UFormField
                 label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
@@ -140,6 +150,16 @@ const buttonText = computed(() => {
                   type="number"
                   :disabled="isViewMode"/>
             </UFormField>
+
+            <UFormField label="Hvor mange dage i træk laver madholdene mad?"
+                        name="consecutiveGroup">
+              <UInput
+                  v-model="model.consecutiveCookingDays"
+                  name="consecutiveDays"
+                  type="number"
+                  :disabled="isViewMode"/>
+            </UFormField>
+
           </UForm>
         </div>
 

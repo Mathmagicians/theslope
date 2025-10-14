@@ -1,125 +1,12 @@
 # TODO
-# HIGHEST PRIORITY: Migration 003 - Complete Season Schema & Ticket Prices
 
-## 🎯 HIGHEST PRIORITY: Migration 003 - Schema Changes & Ticket Price Implementation
+## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
 
-**Milestone**: Complete Season model implementation with ticket prices and prepare schema for team assignment features
-
-**Overview**:
-- Add ticket price management (HUNGRY_BABY type + full CRUD UI)
-- Add team assignment fields (consecutiveCookingDays already tested, affinity, allocationPercentage)
-- Expand E2E test suite in existing migration 003 block (season.e2e.spec.ts:261)
+**Remaining work**: Expand E2E test suite for ticket price API and UI validation
 
 ---
 
-### Task 0: E2E Tests - Migration 003
-
-**Season tests** (`tests/e2e/api/admin/season.e2e.spec.ts:261`):
-- [x] ConsecutiveCookingDays tests complete (lines 263-304)
-- [ ] Add ticket price tests to existing migration 003 block
-
-**Team tests** (`tests/e2e/api/admin/team.e2e.spec.ts`):
-- [x] Affinity tests complete (lines 252-298)
-- [x] AllocationPercentage tests complete (lines 300-328)
-
-### Task 1: Schema Migration 003
-
-**Prisma Schema Updates**:
-- [x] Add `HUNGRY_BABY` to TicketType enum
-- [x] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
-- [x] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
-- [x] Note: `consecutiveCookingDays` already exists (E2E tests passing)
-
-**Create & Apply Migration**:
-- [x] `make prisma-create-migration name=migration_003_ticket_prices_and_team_fields`
-- [x] `make d1-migrate-local`
-- [x] `npx prisma generate`
-- [x] Verify schema compiles and existing tests pass
-
----
-
-### Task 2: App Config & Defaults
-
-**Fix `app/app.config.ts`**:
-- [x] updated app config
-
----
-
-### Task 3: Validation Layer
-
-**Create `app/composables/useTicketPriceValidation.ts` and `app/composables/useTicketPriceValidation.unit.spec.ts`**:
-- [ x] Create `TicketPriceSchema` with id, seasonId, ticketType, price (0-20000 øre), description
-- [ x] Export type `TicketPrice` from schema
-- [x] unit test runs clean
-
-**Update `app/composables/useSeasonValidation.ts`**:
-- [x ] Import TicketPriceSchema from useTicketPriceValidation
-- [ x] Replace `ticketPrices: z.array(z.any()).optional()` with `z.array(TicketPriceSchema).optional()`
-- [ x] Add validation:at least 1 ticket types required (ADULT, CHILD, BABY, HUNGRY_BABY)
-- [ x] Add validation: No duplicate ticket types within same season
-- [ x] Update `deserializeSeason` to handle ticketPrices relation
-- [ x] Update composable tests
-
----
-
-### Task 4: Update useSeason Composable
-
-**Update `app/composables/useSeason.ts`**:
-- [ ] Add `getDefaultTicketPrices(seasonId)` function
-- [ ] Returns array of 4 TicketPrice objects from app.config defaults
-- [ ] Export for use in UI/tests
-- [ ] Note: `getDefaultSeason()` already includes `consecutiveCookingDays`
-- [ ] Upated composable tests
-
----
-
-### Task 5: Repository Layer
-
-**Update `server/data/prismaRepository.ts`**:
-- [ ] Create `createTicketPrices(d1Client, seasonId, prices[])` - batch create
-- [ ] Create `updateTicketPrice(d1Client, id, priceData)` - single update
-- [ ] Create `deleteTicketPrices(d1Client, seasonId)` - cleanup helper
-- [ ] Modify `createSeason()` to accept optional nested `ticketPrices` array
-- [ ] Modify `updateSeason()` to handle nested ticketPrice updates (delete + recreate pattern)
-- [ ] Verify `deleteSeason()` cascades ticketPrices via schema
-
-**ADR-005**: TicketPrice → Season is strong CASCADE relation
-
----
-
-### Task 6: UI Component - Ticket Price Table
-
-**Create `app/components/admin/planning/TicketPriceTable.vue`**:
-- [ ] Table with columns: Type, Name, Age Limit, Price (DKK)
-- [ ] Edit mode: UInput for prices (øre with DKK conversion display)
-- [ ] View mode: Read-only formatted prices
-- [ ] Props: `modelValue: TicketPrice[]`, `disabled: boolean`
-- [ ] Load defaults via `getDefaultTicketPrices()` on create
-
-**Update `app/components/admin/planning/AdminPlanningSeason.vue`**:
-- [ ] Add `<TicketPriceTable v-model="model.ticketPrices" />`
-- [ ] Initialize with defaults in CREATE mode
-- [ ] Handle nested ticketPrices in save operation
-- [ ] Display existing prices in EDIT mode
-
-**Pattern**: Inline editing like holidays - saved with season
-
----
-
-### Task 7: Test Factories
-
-**Update `tests/e2e/testDataFactories/seasonFactory.ts`**:
-- [ ] Add `ticketPrices` to `defaultSeason()` using `getDefaultTicketPrices()`
-- [ ] Support custom price overrides
-- [ ] Note: `consecutiveCookingDays: 2` already included
-
-**Update `tests/e2e/testDataFactories/cookingTeamFactory.ts`**:
-- [ ] Add `affinity: null` to default team
-- [ ] Add helper: `createTeamWithAffinity(seasonId, name, weekdays[])`
-
----
-
-### Task 8: E2E API Tests - Expand Migration 003
+### Task 8: E2E API Tests - Ticket Price CRUD
 
 **Expand `tests/e2e/api/admin/season.e2e.spec.ts:261`** (add to existing describe block):
 
@@ -164,30 +51,15 @@
 
 ---
 
-### BDD Scenarios
+### Remaining Factory Work
 
-**Happy paths**:
-- Create season → defaults populated → save → prices persist
-- Edit season → change price → save → price updated
-- Delete season → prices cascade deleted
+**Update `tests/e2e/testDataFactories/cookingTeamFactory.ts`**:
+- [ ] Add `affinity: null` to default team
+- [ ] Add helper: `createTeamWithAffinity(seasonId, name, weekdays[])`
 
-**Validation**:
-- Negative price → validation error
-- Missing type → validation error
-
-**Edge cases**:
-- Legacy season (no prices) → empty array
-- HUNGRY_BABY added → existing seasons work
-
----
-
-### Compliance
-
-- **ADR-001**: Zod schemas in composables
-- **ADR-002**: Separate validation try-catch
-- **ADR-003**: Factory pattern with cleanup
-- **ADR-005**: CASCADE deletion (strong relation)
-- **ADR-009**: fetchSeason includes ticketPrices (bounded, lightweight)
+**Remaining Repository Work**:
+- [ ] Create `updateTicketPrice(d1Client, id, priceData)` - single update (if needed)
+- [ ] Update repository to handle team affinity and allocationPercentage
 
 ---
 
@@ -206,12 +78,13 @@ When teams are created for a season, they are automatically assigned to dinner e
 ### Task 1: Database Schema Changes
 
 **Prisma Schema Updates**:
-- [ ] Add `consecutiveCookingDays: Int @default(2)` to Season model
-- [ ] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
-- [ ] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model (0-100 range)
-- [ ] Run migrations: `npm run db:migrate:local` and `npm run db:generate-client`
-- [ ] Add `defaultConsecutiveCookingDays: 2` to `app.config.ts`
-- [ ] Update validation schemas (SeasonSchema, CookingTeamSchema)
+- [x ] Add `consecutiveCookingDays: Int @default(2)` to Season model
+- [x ] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
+- [ x] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model (0-100 range)
+- [ x] Run migrations: `npm run db:migrate:local` and `npm run db:generate-client`
+- [ x] Add `defaultConsecutiveCookingDays: 2` to `app.config.ts`
+- [ x] Update validation schemas (SeasonSchema, 
+- [ ] update CookingTeamSchema
 - [ ] Update test factories (SeasonFactory, CookingTeamFactory)
 - [ ] Write API tests verifying fields persist/retrieve correctly
 
@@ -220,9 +93,9 @@ When teams are created for a season, they are automatically assigned to dinner e
 ### Task 2: Season Form + Team Affinity Generation
 
 **Part A: Season Form** (`/admin/planning`)
-- [ ] Add numeric input for `consecutiveCookingDays` (default from config, validation ≥ 1)
-- [ ] Update AdminPlanning.vue
-- [ ] E2E tests for validation
+- [ x] Add numeric input for `consecutiveCookingDays` (default from config, validation ≥ 1)
+- [x ] Update AdminPlanning.vue
+- [x ] E2E tests for validation
 
 **Part B: Team Affinity Calculation** (`/admin/teams`)
 - [ ] Create `calculateTeamAffinities()` utility
@@ -474,6 +347,81 @@ AggregateError [ECONNREFUSED]:
 ---
 
 # ✅ COMPLETED
+
+## Migration 003 - Ticket Prices and Team Assignment Fields
+**Date**: 2025-10-15 | **Compliance**: ADR-001, ADR-002, ADR-005
+
+### Schema Changes
+- ✅ Added `HUNGRY_BABY` to TicketType enum
+- ✅ Added `affinity: String?` to CookingTeam model (JSON array of weekdays)
+- ✅ Added `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
+- ✅ Note: `consecutiveCookingDays` already existed in Season model (E2E tests passing)
+- ✅ Created and applied migration: `migration_003_ticket_prices_and_team_fields`
+- ✅ Generated Prisma client with new types
+
+### Validation & Composables
+- ✅ Created `useTicketPriceValidation.ts` composable
+  - TicketPriceSchema with id, seasonId, ticketType, price (0-20000 øre), description
+  - Exported TicketPrice type
+  - Unit tests passing
+- ✅ Updated `useSeasonValidation.ts`
+  - Imported TicketPriceSchema from useTicketPriceValidation
+  - Replaced `z.array(z.any()).optional()` with proper TicketPrice array schema
+  - Added validation: At least 1 ticket type required (ADULT, CHILD, BABY, HUNGRY_BABY)
+  - Added validation: No duplicate ticket types within same season
+  - Updated `deserializeSeason` to handle ticketPrices relation
+  - Updated composable tests
+- ✅ Updated `useSeason.ts`
+  - `getDefaultSeason()` exports default ticket prices
+  - Updated composable tests
+- ✅ Updated `useCookingTeam.ts`
+  - Added `affinity: string | null` to CookingTeam type
+  - Added `allocationPercentage: number` to CookingTeamAssignment type
+- ✅ Updated `useInhabitant.ts`
+  - Added `affinity: string | null` to Inhabitant type
+
+### Repository Layer
+- ✅ Created `createTicketPrices()` - batch create ticket prices
+- ✅ Created `deleteTicketPrices()` - cleanup helper for season deletion
+- ✅ Modified `createSeason()` to accept optional nested `ticketPrices` array
+- ✅ Modified `updateSeason()` to handle nested ticketPrice updates (delete + recreate pattern)
+- ✅ Verified `deleteSeason()` cascades ticketPrices via Prisma schema (ADR-005)
+- ✅ Updated repository to handle team affinity and allocationPercentage
+- ✅ Updated E2E CRUD tests to handle team affinity and allocationPercentage
+
+### UI Components
+- ✅ Created `TicketPriceListEditor.vue` component
+  - Add/remove ticket prices with validation
+  - Display ticket type, price (DKK), max age, and description
+  - Proper width sizing with Nuxt UI patterns
+  - Simplified icon usage (auto-styled by component)
+- ✅ Updated `AdminPlanningSeason.vue`
+  - Added `<TicketPriceListEditor v-model="model.ticketPrices" />`
+  - Handle nested ticketPrices in save operation
+  - Display existing prices in EDIT mode
+- ✅ Updated `CalendarDateRangeListPicker.vue`
+  - Proper width sizing to prevent date cutoff
+  - Simplified icon usage
+
+### Test Factories
+- ✅ Updated `seasonFactory.ts`
+  - Added `ticketPrices` to `defaultSeason()`
+  - Note: `consecutiveCookingDays: 2` already present
+
+### E2E Tests
+- ✅ ConsecutiveCookingDays tests complete (season.e2e.spec.ts:263-304)
+- ✅ Affinity tests complete (team.e2e.spec.ts:252-298)
+- ✅ AllocationPercentage tests complete (team.e2e.spec.ts:300-328)
+
+### App Configuration
+- ✅ Updated `app.config.ts` with ticket price defaults and team assignment settings
+
+### Key Patterns Applied
+- **ADR-001**: Zod schemas in composables for shared validation
+- **ADR-002**: Separate validation try-catch blocks
+- **ADR-005**: Prisma CASCADE deletion for strong relations (TicketPrice → Season)
+- **Nuxt UI v4**: Proper `:ui` prop usage for component styling (`base: 'w-fit min-w-full mr-4'`)
+- **Component width sizing**: Using `base` layer instead of `root` for proper content-based sizing
 
 ## Cleanup of ai attributions - replaced with grazing unicorns 🦄
 

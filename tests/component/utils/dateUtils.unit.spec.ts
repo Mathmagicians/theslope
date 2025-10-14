@@ -2,7 +2,6 @@ import {describe, expect, it} from "vitest"
 import {
     calculateDayFromWeekNumber,
     copyPartialDateRange,
-    createDefaultWeekdayMap,
     eachDayOfManyIntervals,
     getEachDayOfIntervalWithSelectedWeekdays,
     isDateRangeInside,
@@ -12,8 +11,11 @@ import {
     excludeDatesFromInterval,
     areRangesOverlapping
 } from "~/utils/date"
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid} from "date-fns"
 import type {DateRange} from "~/types/dateTypes"
+
+const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 describe('test calculateDayFromWeekNumber', async () => {
 
@@ -51,36 +53,6 @@ describe('test calculateDayFromWeekNumber', async () => {
         })
     })
 
-})
-
-describe('createDefaultWeekdayMap', () => {
-    it('should create map with all days set to true', () => {
-        const result = createDefaultWeekdayMap(true)
-
-        expect(result).toEqual({
-            mandag: true,
-            tirsdag: true,
-            onsdag: true,
-            torsdag: true,
-            fredag: true,
-            lørdag: true,
-            søndag: true
-        })
-    })
-
-    it('should create map with first 4 days true', () => {
-        const result = createDefaultWeekdayMap([true, true, true, true])
-
-        expect(result).toEqual({
-            mandag: true,
-            tirsdag: true,
-            onsdag: true,
-            torsdag: true,
-            fredag: false,
-            lørdag: false,
-            søndag: false
-        })
-    })
 })
 
 describe('getEachDayOfIntervalWithSelectedWeekdays', () => {

@@ -2,7 +2,9 @@ import {describe, it, expect} from 'vitest'
 import {useSeason} from '~/composables/useSeason'
 import {type Season} from '~/composables/useSeasonValidation'
 import type {DateRange} from "~/types/dateTypes"
-import {createDefaultWeekdayMap} from '~/utils/date'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+
+const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {

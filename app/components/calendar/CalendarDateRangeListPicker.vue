@@ -80,13 +80,18 @@ const onAddHolidayRange = () => {
           :id="`holidayRangeList-${index}`"
           :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`">
         <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
-          <UInput
-              :model-value="formatDateRange(dates)"
-              :name="`holidayRangeList-${index}`"
-              disabled
-              placeholder="Ferieperiode"
-          >
-          <template #trailing>
+          <div class="flex items-center gap-2">
+            <UInput
+                :model-value="formatDateRange(dates)"
+                :name="`holidayRangeList-${index}`"
+                disabled
+                placeholder="Ferieperiode"
+                :ui="{ base: 'w-fit min-w-full mr-4' }"
+            >
+            <template #leading>
+              <UIcon name="i-heroicons-sun"/>
+            </template>
+            </UInput>
             <UButton
                 v-if="!props.disabled"
                 @click="model.splice(index, 1)"
@@ -96,9 +101,7 @@ const onAddHolidayRange = () => {
                 size="sm"
                 variant="ghost">
             </UButton>
-            <UIcon v-else name="i-heroicons-sun" class="shrink-0 text-gray-400 dark:text-gray-500 h-5 w-5"/>
-          </template>
-          </UInput>
+          </div>
         </UFormField>
       </li>
     </ul>

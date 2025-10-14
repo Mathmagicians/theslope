@@ -58,20 +58,6 @@ export function getEachDayOfIntervalWithSelectedWeekdays(
         .filter(date => selectedDayIndices.includes(getISODay(date)))
 }
 
-
-export function createDefaultWeekdayMap(value: boolean | boolean[] = false): WeekDayMap {
-    if (Array.isArray(value)) {
-        return WEEKDAYS.reduce((acc, day, index) => ({
-            ...acc,
-            [day]: value[index] ?? false
-        }), {} as WeekDayMap)
-    }
-    return WEEKDAYS.reduce((acc, day) => ({
-        ...acc,
-        [day]: value
-    }), {} as WeekDayMap)
-}
-
 export function eachDayOfManyIntervals(intervals: Array<{ start: Date, end: Date }>): Date[] {
     return intervals.flatMap(range => eachDayOfInterval({start: range.start, end: range.end}))
 }
@@ -103,6 +89,7 @@ export function areRangesOverlapping(ranges: DateRange[]): boolean {
         .reduce((acc, current, index, sorted) => {
             if (index === 0) return acc
             const prev = sorted[index - 1]
+            if (!prev) return acc
             return acc || (
                 areIntervalsOverlapping(prev, current) ||
                 (isSameDay(prev.start, current.start) && isSameDay(prev.end, current.end))
@@ -144,7 +131,7 @@ export function toDate(dateValue: DateValue): Date {
 
 // Translate English weekday abbreviations to Danish
 export function translateToDanish(day: string): string {
-    const mapping = {
+    const mapping: Record<string, string> = {
         'Mon': 'M',
         'Tue': 'T',
         'Wed': 'O',

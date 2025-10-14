@@ -3,7 +3,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
-import { createDefaultWeekdayMap } from '~/utils/date'
+import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
+
+const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import

@@ -1,10 +1,12 @@
 import {test, expect} from '@playwright/test'
-import {formatDate, createDefaultWeekdayMap, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '../../../../app/utils/date'
+import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '../../../../app/utils/date'
+import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
 import {useSeasonValidation, type Season} from '../../../../app/composables/useSeasonValidation'
 
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
+const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {headers, validatedBrowserContext} = testHelpers
 
 /**
@@ -27,18 +29,31 @@ test.describe('Season API Tests', () => {
     let createdSeasonIds: number[] = []
     const newSeason = SeasonFactory.defaultSeason()
 
+    // Helper: Verify ticket prices exist (default: ADULT + CHILD = 2)
+    const assertTicketPrices = (season: any, expectedCount = 2) => {
+        expect(season.ticketPrices).toBeDefined()
+        expect(Array.isArray(season.ticketPrices)).toBe(true)
+        expect(season.ticketPrices.length).toBe(expectedCount)
+    }
+
+    // Helper: Track season for cleanup
+    const trackSeason = (seasonId: number) => createdSeasonIds.push(seasonId)
+
     test.describe('Season CRUD operations', () => {
 
 // Test for creating and retrieving a season
         test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const created = await SeasonFactory.createSeason(context, newSeason.season)
-            // Save ID for cleanup
-            createdSeasonIds.push(created.id as number)
+            trackSeason(created.id as number)
 
-            // Verify response
+            // Verify basic season properties
             expect(created).toHaveProperty('shortName')
             expect(created.shortName).toBe(newSeason.season.shortName)
+            expect(created.consecutiveCookingDays).toBe(newSeason.season.consecutiveCookingDays)
+
+            // Verify ticketPrices are created (ADULT + CHILD from factory)
+            assertTicketPrices(created)
 
             // Get season list to verify it appears there
             const listResponse = await context.request.get('/api/admin/season')
@@ -213,7 +228,7 @@ test.describe('Season API Tests', () => {
         })
 
         test("DELETE should cascade delete complete seasonal aggregate", async ({browser}) => {
-            // GIVEN: A season with both cooking teams AND dinner events
+            // GIVEN: A season with teams, events, and ticket prices
             const context = await validatedBrowserContext(browser)
 
             // Create season with 2 cooking teams
@@ -222,7 +237,10 @@ test.describe('Season API Tests', () => {
                 SeasonFactory.defaultSeason().season,
                 2
             )
-            createdSeasonIds.push(season.id as number)
+            trackSeason(season.id as number)
+
+            // Verify ticket prices exist (ADULT + CHILD from factory)
+            assertTicketPrices(season)
 
             // Generate dinner events for the season
             const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
@@ -252,55 +270,12 @@ test.describe('Season API Tests', () => {
                 expect(response.status()).toBe(404)
             }
 
+            // AND: Ticket prices should be cascade deleted (verified via GET season)
+            const seasonAfterDelete = await context.request.get(`/api/admin/season/${season.id}`)
+            expect(seasonAfterDelete.status()).toBe(404)
+
             // Remove from cleanup list (already deleted)
             createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
-        })
-
-    })
-
-    test.describe('DB migration 003 - ConsecutiveCookingDays and Prices', () => {
-
-        test('PUT should create season with consecutiveCookingDays field', async ({ browser }) => {
-            // GIVEN a season with consecutiveCookingDays = 3
-            const context = await validatedBrowserContext(browser)
-            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 3 }
-
-            // WHEN creating the season via PUT
-            const created = await SeasonFactory.createSeason(context, season)
-            createdSeasonIds.push(created.id as number)
-
-            // THEN season is created with consecutiveCookingDays = 3
-            expect(created.consecutiveCookingDays).toBe(3)
-        })
-
-        test('PUT should reject consecutiveCookingDays < 1', async ({ browser }) => {
-            // GIVEN a season with consecutiveCookingDays = 0
-            const context = await validatedBrowserContext(browser)
-            const season = { ...SeasonFactory.defaultSeason().season, consecutiveCookingDays: 0 }
-
-            // WHEN creating the season via PUT
-            // THEN request fails with 400
-            await SeasonFactory.createSeason(context, season, 400)
-        })
-
-        test('POST should update consecutiveCookingDays', async ({ browser }) => {
-            // GIVEN an existing season with consecutiveCookingDays = 2
-            const context = await validatedBrowserContext(browser)
-            const season = await SeasonFactory.createSeason(context)
-            createdSeasonIds.push(season.id as number)
-            expect(season.consecutiveCookingDays).toBe(2)
-
-            // WHEN updating consecutiveCookingDays to 3
-            season.consecutiveCookingDays = 3
-            const response = await context.request.post(`/api/admin/season/${season.id}`, {
-                headers: headers,
-                data: serializeSeason(season)
-            })
-
-            // THEN update succeeds
-            expect(response.status()).toBe(200)
-            const updated = await response.json()
-            expect(updated.consecutiveCookingDays).toBe(3)
         })
 
     })

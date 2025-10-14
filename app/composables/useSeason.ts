@@ -1,8 +1,9 @@
-import {WEEKDAYS, type DateRange} from '~/types/dateTypes'
-import {calculateDayFromWeekNumber, createDefaultWeekdayMap, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import {type DateRange} from '~/types/dateTypes'
+import {calculateDayFromWeekNumber, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DinnerEventCreate} from './useDinnerEventValidation'
 
 /**
@@ -11,25 +12,23 @@ import type {DinnerEventCreate} from './useDinnerEventValidation'
 export const useSeason = () => {
     // Get validation utilities
     const {
-        holidaysSchema, 
-        SeasonSchema, 
-        serializeSeason, 
+        holidaysSchema,
+        SeasonSchema,
+        serializeSeason,
         deserializeSeason
     } = useSeasonValidation()
-    
+    const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
+
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
-    const {createTicketPrice, TICKET_TYPES} = useTicketPriceValidation()
+    const {createTicketPrice} = useTicketPriceValidation()
     
     /**
      * Create a default season based on app configuration
      */
     const getDefaultSeason = () => {
         const thisYear = new Date().getFullYear()
-        const defaultCookingDaysArray = WEEKDAYS.map(day =>
-            theslope.defaultSeason.cookingDays.includes(day)
-        )
         const dateRange = {
             start: calculateDayFromWeekNumber(0, theslope.defaultSeason.startWeek, thisYear),
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
@@ -52,7 +51,7 @@ export const useSeason = () => {
             shortName: createSeasonName(dateRange),
             seasonDates: dateRange,
             isActive: false,
-            cookingDays: createDefaultWeekdayMap(defaultCookingDaysArray),
+            cookingDays: createWeekDayMapFromSelection(theslope.defaultSeason.cookingDays),
             holidays: holidays,
             ticketPrices: ticketPrices,
             ticketIsCancellableDaysBefore: theslope.defaultSeason.ticketIsCancellableDaysBefore,
