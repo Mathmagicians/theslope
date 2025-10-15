@@ -123,6 +123,36 @@ beforeEach(() => {
 
 Nuxt's `useFetch` caches responses. Without `clearNuxtData()`, cached data from previous tests can leak into subsequent tests.
 
+**Mock endpoint registration order:**
+```typescript
+// ✅ CORRECT: Specific endpoints FIRST, generic endpoints LAST
+registerEndpoint('/api/admin/season/1', { handler: () => mockObject })
+registerEndpoint('/api/admin/season', { handler: () => [] })
+
+// ❌ WRONG: Generic catches specific requests!
+registerEndpoint('/api/admin/season', { handler: () => [] })
+registerEndpoint('/api/admin/season/1', { handler: () => mockObject }) // Never reached
+```
+
+**Why?** Generic patterns match specific URLs. Always register specific before generic.
+
+**Organize tests by mock requirements:**
+```typescript
+describe('with specific mocks', () => {
+  it('test', async () => {
+    registerEndpoint('/api/admin/season/1', { ... })
+    registerEndpoint('/api/admin/season', { ... })
+  })
+})
+
+describe('with shared mocks', () => {
+  beforeEach(() => {
+    registerEndpoint('/api/admin/season', { handler: () => [] })
+  })
+  // Multiple tests share the same mock
+})
+```
+
 ### E2E UI Testing (Playwright)
 
 **Strategy:** Setup → Interact → Verify

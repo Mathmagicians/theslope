@@ -10,12 +10,12 @@ const isoDateSchema = z.string()
         message: 'Invalid ISO date'
     })
 
-// dd/MM/yyyy date schema - for UI form input (e.g., "01/01/2025")
+// dd/MM/yyyy date schema - for UI form input (e.g., "01/01/2025" or "1/1/2025")
 const ddMMyyyyDateSchema = z.string({
     required_error: 'Dato mangler',
     invalid_type_error: `Forkert dato format, brug (${DATE_SETTINGS.USER_MASK})`
 })
-    .regex(/^\d{2}\/\d{2}\/\d{4}$/, `Brug formatet ${DATE_SETTINGS.USER_MASK}`)
+    .regex(/^\d{1,2}\/\d{1,2}\/\d{4}$/, `Brug formatet ${DATE_SETTINGS.USER_MASK}`)
     .describe(`Dato ${DATE_SETTINGS.USER_MASK}`)
     .transform((dateStr): Date => parseDate(dateStr))
     .refine((date) => isValid(date), {

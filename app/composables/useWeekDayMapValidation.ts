@@ -48,7 +48,13 @@ export const useWeekDayMapValidation = () => {
 
     // Serialization for database storage
     const serializeWeekDayMap = (map: WeekDayMap): string => JSON.stringify(map)
-    const deserializeWeekDayMap = (serialized: string): WeekDayMap => JSON.parse(serialized)
+    const deserializeWeekDayMap = (serialized: string): WeekDayMap | null => {
+        // Handle "[]" (empty array string) which represents null affinity
+        if (serialized === "[]") {
+            return null
+        }
+        return JSON.parse(serialized)
+    }
 
     return {
         WeekDayMapSchema,

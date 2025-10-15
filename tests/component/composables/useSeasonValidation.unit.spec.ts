@@ -8,26 +8,30 @@ import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 const {TICKET_TYPES} = useTicketPriceValidation()
 const testSeason = SeasonFactory.defaultSeasonData
 
+// Helper to format validation error messages for assertions
+const getValidationError = (result: any) =>
+  !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
+
 describe('useSeasonValidation', () => {
   // Get validation utilities
-  const { 
-    holidaysSchema, 
-    SeasonSchema, 
-    serializeSeason, 
-    deserializeSeason 
+  const {
+    holidaysSchema,
+    SeasonSchema,
+    serializeSeason,
+    deserializeSeason
   } = useSeasonValidation()
 
   describe('schemas', () => {
     it('should accept valid season data', () => {
-      const validSeason = SeasonFactory.defaultSeason().season
+      const validSeason = SeasonFactory.defaultSeason()
 
       const result = SeasonSchema.safeParse(validSeason)
-      expect(result.success).toBe(true)
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
     it('should accept both Date and string formats for seasonDates and holidays', () => {
       const validSeason = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         seasonDates: {
           start: "01/01/2025",
           end: "31/01/2025"
@@ -45,7 +49,7 @@ describe('useSeasonValidation', () => {
       }
 
       const result = SeasonSchema.safeParse(validSeason)
-      expect(result.success).toBe(true)
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
     it('holiday schema should accept a single holiday', () => {
@@ -63,7 +67,7 @@ describe('useSeasonValidation', () => {
 
     it('should reject overlapping holidays', () => {
       const seasonWithOverlappingHolidays = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         holidays: [
           { start: new Date(2025, 0, 1), end: new Date(2025, 0, 10) },
           { start: new Date(2025, 0, 5), end: new Date(2025, 0, 15) },
@@ -80,7 +84,7 @@ describe('useSeasonValidation', () => {
 
     it('should reject holidays outside season', () => {
       const seasonWithOutsideHolidays = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         holidays: [
           { start: new Date(2024, 11, 25), end: new Date(2025, 0, 5) },
           { start: new Date(2025, 0, 10), end: new Date(2025, 0, 15) },
@@ -98,9 +102,8 @@ describe('useSeasonValidation', () => {
 
   describe('serialization and deserialization', () => {
     it('should correctly serialize and deserialize season', () => {
-      // Use factory and deserialize for originalSeason
-      const originalSeasonSerialized = SeasonFactory.defaultSeason().serializedSeason
-      const originalSeason = deserializeSeason(originalSeasonSerialized)
+      // Get original season from factory
+      const originalSeason = SeasonFactory.defaultSeason()
 
       // Serialize and deserialize
       const serialized = serializeSeason(originalSeason)

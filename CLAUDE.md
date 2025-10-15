@@ -104,3 +104,4 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 ALWAYS GENERATE WITH UTF-8 encoding for all files.
+NEVER celebrate or consider a task complete until functionality is verified correct (run tests, check server, validate output). If not obvious, query user about how to verify.

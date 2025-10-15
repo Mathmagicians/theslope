@@ -16,17 +16,17 @@ export const useCookingTeamValidation = () => {
         id: z.number().int().positive().optional(),
         seasonId: z.number().int().positive(), name: z.string().min(1, "Team navn skal være mindst 1 tegn langt")
             .max(100, "Team navn må ikke være længere end 100 tegn"),
-        affinity: WeekDayMapSchemaOptional.optional()
+        affinity: WeekDayMapSchemaOptional.nullish()
     })
 
-    // Base team assignment schema (includes teamId for API operations)
+    // Base team assignment schema (uses cookingTeamId to match database)
     const CookingTeamAssignmentSchema = z.object({
         id: z.number().int().positive().optional(),
-        teamId: z.number().int().positive(),
+        cookingTeamId: z.number().int().positive(),
         inhabitantId: z.number().int().positive(),
         role: TeamRoleSchema,
         allocationPercentage: z.number().min(1).max(100).default(100),
-        affinity: WeekDayMapSchemaOptional.optional()
+        affinity: WeekDayMapSchemaOptional.nullish()
     })
 
     // Full CookingTeam schema
@@ -46,13 +46,13 @@ export const useCookingTeamValidation = () => {
     // Transform schema for serialization (converts WeekDayMap to JSON string)
     const SerializedCookingTeamAssignmentSchema = CookingTeamAssignmentSchema.transform((assignment) => ({
         ...assignment,
-        affinity: assignment.affinity ? serializeWeekDayMap(assignment.affinity) : undefined
+        affinity: assignment.affinity ? serializeWeekDayMap(assignment.affinity) : null
     }))
 
     const SerializedCookingTeamWithMembersSchema = CookingTeamWithMembersSchema.transform((team) => ({
         ...team,
-        affinity: team.affinity ? serializeWeekDayMap(team.affinity) : undefined,
-        assignments: team.assignments.map(assignment => SerializedCookingTeamAssignmentSchema.parse(assignment))
+        affinity: team.affinity ? serializeWeekDayMap(team.affinity) : null,
+        assignments: team.assignments?.map(assignment => SerializedCookingTeamAssignmentSchema.parse(assignment)) || []
     }))
 
     type SerializedCookingTeam = z.infer<typeof SerializedCookingTeamWithMembersSchema>
@@ -104,6 +104,7 @@ export const useCookingTeamValidation = () => {
         BaseCookingTeamSchema,
         CookingTeamSchema,
         CookingTeamWithMembersSchema,
+        SerializedCookingTeamWithMembersSchema,
         TeamRoleSchema,
         CookingTeamAssignmentSchema,
         validateCookingTeam,
@@ -119,5 +120,6 @@ export const useCookingTeamValidation = () => {
 // Re-export types
 export type CookingTeam = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamSchema']>
 export type CookingTeamWithMembers = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamWithMembersSchema']>
+export type SerializedCookingTeam = z.infer<ReturnType<typeof useCookingTeamValidation>['SerializedCookingTeamWithMembersSchema']>
 export type CookingTeamAssignment = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentSchema']>
 export type TeamRole = z.infer<ReturnType<typeof useCookingTeamValidation>['TeamRoleSchema']>

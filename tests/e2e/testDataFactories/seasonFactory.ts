@@ -227,11 +227,13 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonId: number,
         teamName: string = 'TestTeam',
-        expectedStatus: number = 201
+        expectedStatus: number = 201,
+        overrides: Partial<CookingTeam> = {}
     ): Promise<CookingTeam> => {
         const teamData = {
             name: salt(teamName),
-            seasonId: seasonId
+            seasonId: seasonId,
+            ...overrides
         }
         const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
             headers: headers,
@@ -321,7 +323,7 @@ export class SeasonFactory {
         expectedStatus: number = 201
     ): Promise<any> => {
         const teamAssignmentData = {
-            teamId: teamId,
+            cookingTeamId: teamId,  // Schema expects 'cookingTeamId' not 'teamId'
             inhabitantId: inhabitantId,
             role: role
         }

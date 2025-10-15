@@ -27,8 +27,8 @@ export default defineEventHandler(async (event) => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👥🔗 > ASSIGNMENT > [PUT] Creating assignment for inhabitant ${assignmentData.inhabitantId} to team ${assignmentData.teamId} as ${assignmentData.role}`)
-        const assignment = await createTeamAssignment(d1Client, assignmentData.teamId, assignmentData.inhabitantId, assignmentData.role)
+        console.log(`👥🔗 > ASSIGNMENT > [PUT] Creating assignment for inhabitant ${assignmentData.inhabitantId} to team ${assignmentData.cookingTeamId} as ${assignmentData.role}`)
+        const assignment = await createTeamAssignment(d1Client, assignmentData)
         console.info(`👥🔗 > ASSIGNMENT > [PUT] Successfully created assignment with ID ${assignment.id}`)
         setResponseStatus(event, 201)
         return assignment

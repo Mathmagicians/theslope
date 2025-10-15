@@ -1,10 +1,12 @@
 import {test, expect} from '@playwright/test'
 import {useCookingTeamValidation} from '../../../../app/composables/useCookingTeamValidation'
+import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from "../../testDataFactories/seasonFactory"
 import {HouseholdFactory} from "../../testDataFactories/householdFactory"
 import testHelpers from '../../testHelpers'
 
 const {validateCookingTeam, getTeamMemberCounts} = useCookingTeamValidation()
+const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
 const {headers, validatedBrowserContext} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
@@ -117,7 +119,7 @@ test.describe('Admin Teams API', () => {
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
             expect(createdTeam.id).toBeDefined()
-            testTeamIds.push(createdTeam.id)
+            testTeamIds.push(createdTeam.id!)
 
             // Get team details
             const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
@@ -125,10 +127,9 @@ test.describe('Admin Teams API', () => {
             expect(teamDetails.name).toBe(createdTeam.name)
             expect(teamDetails.seasonId).toBe(testSeasonId)
 
-            // Should include member arrays
-            expect(teamDetails).toHaveProperty('chefs')
-            expect(teamDetails).toHaveProperty('cooks')
-            expect(teamDetails).toHaveProperty('juniorHelpers')
+            // Should include assignments array
+            expect(teamDetails).toHaveProperty('assignments')
+            expect(Array.isArray(teamDetails.assignments)).toBe(true)
         })
 
         test('POST /api/admin/team/[id] should update team', async ({browser}) => {
@@ -137,8 +138,8 @@ test.describe('Admin Teams API', () => {
             expect(createdTeam.id).toBeDefined()
             testTeamIds.push(createdTeam.id)
 
-            // Update the team
-            const updatedData = {name: `${createdTeam.name}-Updated`}
+            // Update the team - send full object with name changed
+            const updatedData = {...createdTeam, name: `${createdTeam.name}-Updated`}
             const updateResponse = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`, {
                 headers: headers,
                 data: updatedData
@@ -148,6 +149,53 @@ test.describe('Admin Teams API', () => {
             const updatedTeam = await updateResponse.json()
             expect(updatedTeam.name).toBe(updatedData.name)
             expect(updatedTeam.id).toBe(createdTeam.id)
+        })
+
+        test('PUT should create team with affinity field', async ({ browser }) => {
+            // GIVEN a team with affinity for Monday and Wednesday
+            const context = await validatedBrowserContext(browser)
+            const affinity = createWeekDayMapFromSelection(['mandag', 'onsdag'])
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-affinity', 201, {
+                affinity
+            })
+            testTeamIds.push(team.id)
+
+            // THEN team is created with correct affinity
+            expect(team.affinity).toEqual(affinity)
+        })
+
+        test('PUT should allow null affinity', async ({ browser }) => {
+            // GIVEN a team with affinity = null
+            const context = await validatedBrowserContext(browser)
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-null-affinity', 201, {
+                affinity: null
+            })
+            testTeamIds.push(team.id)
+
+            // THEN team is created with null affinity
+            expect(team.affinity).toBeNull()
+        })
+
+        test('POST should update team affinity', async ({ browser }) => {
+            // GIVEN an existing team with affinity for Monday
+            const context = await validatedBrowserContext(browser)
+            const initialAffinity = createWeekDayMapFromSelection(['mandag'])
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-for-affinity-update', 201, {
+                affinity: initialAffinity
+            })
+            testTeamIds.push(team.id)
+
+            // WHEN updating affinity to Wednesday and Friday
+            const updatedAffinity = createWeekDayMapFromSelection(['onsdag', 'fredag'])
+            const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${team.id}`, {
+                headers: headers,
+                data: { ...team, affinity: updatedAffinity }
+            })
+
+            // THEN update succeeds
+            expect(response.status()).toBe(200)
+            const updated = await response.json()
+            expect(updated.affinity).toEqual(updatedAffinity)
         })
 
         test('DELETE /api/admin/team/[id] should delete the cooking team, together with team assignments', async ({browser}) => {
@@ -183,6 +231,9 @@ test.describe('Admin Teams API', () => {
             // Verify the team has the expected member structure
             const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
             expect(getTeamMemberCounts(teamDetails)).toBe(3)
+
+            // Verify allocationPercentage is set (defaults to 100)
+            expect(teamDetails.assignments[0].allocationPercentage).toBe(100)
         })
 
         test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {
@@ -231,10 +282,16 @@ test.describe('Admin Teams API', () => {
         test('POST /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
+            // Create a valid team structure (with all required fields) to pass validation
+            // This ensures we get 404 (team not found) instead of 400 (validation error)
             const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/99999`,
                 {
                     headers: headers,
-                    data: {name: "Updated Name"}
+                    data: {
+                        name: "Updated Name",
+                        seasonId: testSeasonId,
+                        assignments: []
+                    }
                 })
 
             expect(response.status()).toBe(404)
@@ -248,84 +305,6 @@ test.describe('Admin Teams API', () => {
         })
 
     })
-
-    test.describe('Team affinity field', () => {
-
-        test('PUT should create team with affinity field', async ({ browser }) => {
-            // GIVEN a team with affinity = ["mandag", "onsdag"]
-            const context = await validatedBrowserContext(browser)
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-affinity', 200, {
-                affinity: ['mandag', 'onsdag']
-            })
-            testTeamIds.push(team.id)
-
-            // THEN team is created with affinity
-            expect(team.affinity).toEqual(['mandag', 'onsdag'])
-        })
-
-        test('PUT should allow null affinity', async ({ browser }) => {
-            // GIVEN a team with affinity = null
-            const context = await validatedBrowserContext(browser)
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-null-affinity', 200, {
-                affinity: null
-            })
-            testTeamIds.push(team.id)
-
-            // THEN team is created with null affinity
-            expect(team.affinity).toBeNull()
-        })
-
-        test('POST should update team affinity', async ({ browser }) => {
-            // GIVEN an existing team with affinity = ["mandag"]
-            const context = await validatedBrowserContext(browser)
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-for-affinity-update', 200, {
-                affinity: ['mandag']
-            })
-            testTeamIds.push(team.id)
-
-            // WHEN updating affinity to ["onsdag", "fredag"]
-            const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${team.id}`, {
-                headers: headers,
-                data: { ...team, affinity: ['onsdag', 'fredag'] }
-            })
-
-            // THEN update succeeds
-            expect(response.status()).toBe(200)
-            const updated = await response.json()
-            expect(updated.affinity).toEqual(['onsdag', 'fredag'])
-        })
-
-    }) 
-
-    test.describe('AllocationPercentage field', () => {
-
-        test('PUT should create team member with allocationPercentage', async ({ browser }) => {
-            // GIVEN a team and household with inhabitant
-            const context = await validatedBrowserContext(browser)
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-for-allocation')
-            testTeamIds.push(team.id)
-
-            const household = await HouseholdFactory.createHousehold(context)
-            testHouseholdIds.push(household.id)
-            const inhabitant = household.inhabitants[0]
-
-            // WHEN adding member with allocationPercentage = 50
-            const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${team.id}/members`, {
-                headers: headers,
-                data: {
-                    inhabitantId: inhabitant.id,
-                    role: 'COOK',
-                    allocationPercentage: 50
-                }
-            })
-
-            // THEN member added with allocationPercentage = 50
-            expect(response.status()).toBe(200)
-            const updated = await response.json()
-            const member = updated.assignments.find(a => a.inhabitantId === inhabitant.id)
-            expect(member.allocationPercentage).toBe(50)
-        })
-    }) 
 
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {

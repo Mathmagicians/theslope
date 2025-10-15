@@ -17,6 +17,7 @@ describe('useDateRangeValidation', () => {
         it.each([
             { format: 'ISO strings', start: '2025-01-01T00:00:00.000Z', end: '2025-01-07T00:00:00.000Z' },
             { format: 'dd/MM/yyyy strings', start: '01/01/2025', end: '07/01/2025' },
+            { format: 'single-digit dates', start: '1/1/2025', end: '7/1/2025' },
             { format: 'Date objects', start: testDate, end: endDate },
             { format: 'mixed ISO and dd/MM/yyyy', start: '2025-01-01T00:00:00.000Z', end: '07/01/2025' },
             { format: 'mixed Date and string', start: testDate, end: '07/01/2025' }
@@ -35,7 +36,6 @@ describe('useDateRangeValidation', () => {
         it.each([
             { format: 'invalid string', start: 'not-a-date', end: '07/01/2025' },
             { format: 'wrong ISO format', start: '2025-01-01', end: '07/01/2025' },
-            { format: 'missing leading zeros', start: '1/1/2025', end: '07/01/2025' },
             { format: 'number', start: 12345, end: endDate },
             { format: 'null', start: null, end: endDate },
             { format: 'undefined', start: undefined, end: endDate }

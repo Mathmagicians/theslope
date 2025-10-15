@@ -165,5 +165,11 @@ describe('useWeekDayMapValidation', () => {
                 expect(validationResult.data).toEqual(original)
             }
         })
+
+        it('should deserialize "[]" (empty array string) to null', () => {
+            // When affinity is null, serialization may produce "[]" string
+            const deserialized = deserializeWeekDayMap("[]")
+            expect(deserialized).toBeNull()
+        })
     })
 })
