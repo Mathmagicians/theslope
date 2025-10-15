@@ -9,7 +9,8 @@ import {
     formatDateRange,
     parseDate,
     excludeDatesFromInterval,
-    areRangesOverlapping
+    areRangesOverlapping,
+    selectWeekNumbersFromListThatFitInsideDateRange
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid} from "date-fns"
@@ -316,5 +317,53 @@ describe('areRangesOverlapping', () => {
             )
         ]
         expect(areRangesOverlapping(ranges)).toBe(true)
+    })
+})
+
+describe('selectWeekNumbersFromListThatFitInsideDateRange', () => {
+    const testCases = [
+        {
+            description: 'full production season (Aug 2025 - Jun 2026)',
+            seasonDates: { start: new Date(2025, 7, 1), end: new Date(2026, 5, 30) },
+            holidayWeeks: [8, 42, 52],
+            expectedCount: 3
+        },
+        {
+            description: 'short test season (7 days)',
+            seasonDates: { start: new Date(2025, 8, 1), end: new Date(2025, 8, 7) },
+            holidayWeeks: [8, 42, 52],
+            expectedCount: 0
+        },
+        {
+            description: 'partial season (Oct 2025 - Jan 2026, excludes week 8)',
+            seasonDates: { start: new Date(2025, 9, 1), end: new Date(2026, 0, 31) },
+            holidayWeeks: [8, 42, 52],
+            expectedCount: 2
+        },
+        {
+            description: 'year boundary (week 8 in next year)',
+            seasonDates: { start: new Date(2025, 11, 1), end: new Date(2026, 2, 31) },
+            holidayWeeks: [8, 52],
+            expectedCount: 2
+        },
+        {
+            description: 'no matching weeks',
+            seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
+            holidayWeeks: [42, 52],
+            expectedCount: 0
+        }
+    ]
+
+    testCases.forEach(({ description, seasonDates, holidayWeeks, expectedCount }) => {
+        it(`should return ${expectedCount} holidays for ${description}`, () => {
+            const result = selectWeekNumbersFromListThatFitInsideDateRange(seasonDates, holidayWeeks)
+            expect(result).toHaveLength(expectedCount)
+
+            // Verify each result is a full week (Monday-Sunday)
+            result.forEach(holiday => {
+                expect(holiday.start.getDay()).toBe(1) // Monday
+                expect(holiday.end.getDay()).toBe(0)   // Sunday
+            })
+        })
     })
 })

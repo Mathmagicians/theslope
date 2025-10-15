@@ -95,7 +95,7 @@ const buttonText = computed(() => {
 
             <!-- Pick weekdays for cooking -->
             <UFormField label="Hvilke ugedage skal der være fællesspisning?"
-                        name="cookingDaysGroup">
+                        name="cookingDays">
               <UCheckbox v-for="day in WEEKDAYS"
                          :key="day"
                          :name="`cookingDay-${day}`"
@@ -108,7 +108,7 @@ const buttonText = computed(() => {
             <!-- Pick holidays -->
             <USeparator/>
             <UFormField label="Hvornår holder fællesspisning fri?"
-                        name="holidaysGroup">
+                        name="holidays">
 
               <CalendarDateRangeListPicker
                   name="holidays"
@@ -122,7 +122,7 @@ const buttonText = computed(() => {
             <USeparator/>
 
             <!-- Ticket prices -->
-            <UFormField label="Billetpriser" name="ticketPricesGroup">
+            <UFormField label="Billetpriser" name="ticketPrices">
               <TicketPriceListEditor
                   name="ticketPrices"
                   v-model="model.ticketPrices"
@@ -134,7 +134,7 @@ const buttonText = computed(() => {
             <!-- Ticket settings -->
             <UFormField
                 label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
-                name="cancellableGroup">
+                name="ticketIsCancellableDaysBefore">
               <UInput
                   v-model="model.ticketIsCancellableDaysBefore"
                   name="cancellableDays"
@@ -143,7 +143,7 @@ const buttonText = computed(() => {
             </UFormField>
 
             <UFormField label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
-                        name="editableGroup">
+                        name="diningModeIsEditableMinutesBefore">
               <UInput
                   v-model="model.diningModeIsEditableMinutesBefore"
                   name="editableMinutes"
@@ -152,7 +152,7 @@ const buttonText = computed(() => {
             </UFormField>
 
             <UFormField label="Hvor mange dage i træk laver madholdene mad?"
-                        name="consecutiveGroup">
+                        name="consecutiveCookingDays">
               <UInput
                   v-model="model.consecutiveCookingDays"
                   name="consecutiveDays"

@@ -15,7 +15,15 @@ export const usePlanStore = defineStore("Plan", () => {
         const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch<Season[]>(
             '/api/admin/season',
             {
-                transform: (data: any[]) => data.map(season => SeasonSchema.parse(season)),
+                transform: (data: any[]) => {
+                    try {
+                        return data.map(season => SeasonSchema.parse(season))
+                    } catch (e) {
+                        console.error('🗓️ > PLAN_STORE > Error parsing seasons:', e)
+                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
+                        throw e
+                    }
+                },
                 onResponseError({ error }) {
                     handleApiError(error, 'loadSeasons')
                 }
@@ -26,7 +34,15 @@ export const usePlanStore = defineStore("Plan", () => {
         const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch<Season>(
             () => `/api/admin/season/${selectedSeasonId.value}`,
             {
-                transform: (data: any) => SeasonSchema.parse(data),
+                transform: (data: any) => {
+                    try {
+                        return SeasonSchema.parse(data)
+                    } catch (e) {
+                        console.error('🗓️ > PLAN_STORE > Error parsing selected season:', e)
+                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
+                        throw e
+                    }
+                },
                 immediate: false,
                 watch: false,
                 onResponseError({ error }) {

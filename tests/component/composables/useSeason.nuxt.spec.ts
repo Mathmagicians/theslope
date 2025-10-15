@@ -18,8 +18,7 @@ describe('useSeasonSchema', () => {
             expect(parsed.seasonDates.start).toBeInstanceOf(Date)
             expect(parsed.seasonDates.end).toBeInstanceOf(Date)
             expect(Object.keys(parsed.cookingDays)).toHaveLength(7)
-            expect(parsed.holidays.length).toBe(3) // Weeks 8, 42, 52 from app.config
-            expect(parsed.holidays.every(h => h.start instanceof Date && h.end instanceof Date)).toBe(true)
+            expect(parsed.holidays.length).toBe(0) // Empty - component calculates reactively
             expect(parsed.isActive).toBe(false)
             expect(parsed.consecutiveCookingDays).toBe(2)
             expect(parsed.ticketPrices).toBeDefined()
@@ -122,31 +121,66 @@ describe('getDefaultSeason', () => {
         }
     })
 
-    it('should generate holidays within season date boundaries', () => {
-        const { getDefaultSeason, holidaysSchema } = useSeason()
+    it('should return empty holidays array', () => {
+        const { getDefaultSeason } = useSeason()
         const defaultSeason = getDefaultSeason()
 
-        // GIVEN: Holidays are validated by schema
-        const holidaysResult = holidaysSchema.safeParse(defaultSeason.holidays)
-        expect(holidaysResult.success, holidaysResult.success ? '' : JSON.stringify(holidaysResult.error.format(), null, 2)).toBe(true)
+        // GIVEN: Default season is created
+        // THEN: Holidays should be empty (component calculates reactively)
+        expect(defaultSeason.holidays).toEqual([])
+    })
+})
 
-        // THEN: All holidays must be within season dates
-        defaultSeason.holidays.forEach((holiday, index) => {
-            const holidayStart = holiday.start
-            const holidayEnd = holiday.end
-            const seasonStart = defaultSeason.seasonDates.start
-            const seasonEnd = defaultSeason.seasonDates.end
+describe('getDefaultHolidays', () => {
+    const { getDefaultHolidays, getDefaultSeason } = useSeason()
 
-            expect(
-                holidayStart >= seasonStart && holidayStart <= seasonEnd,
-                `Holiday ${index} start (${holidayStart.toISOString()}) must be within season (${seasonStart.toISOString()} - ${seasonEnd.toISOString()})`
-            ).toBe(true)
+    it('should calculate holidays within full production season', () => {
+        // GIVEN: A typical production season (Aug - Jun)
+        const seasonDates: DateRange = {
+            start: new Date(2025, 7, 1),  // Aug 1, 2025
+            end: new Date(2026, 5, 30)    // Jun 30, 2026
+        }
 
-            expect(
-                holidayEnd >= seasonStart && holidayEnd <= seasonEnd,
-                `Holiday ${index} end (${holidayEnd.toISOString()}) must be within season (${seasonStart.toISOString()} - ${seasonEnd.toISOString()})`
-            ).toBe(true)
+        // WHEN: Calculating default holidays
+        const holidays = getDefaultHolidays(seasonDates)
+
+        // THEN: Should return 3 holidays (weeks 8, 42, 52 from app config)
+        expect(holidays.length).toBe(3)
+
+        // AND: All holidays are within season boundaries
+        holidays.forEach((holiday) => {
+            expect(holiday.start >= seasonDates.start).toBe(true)
+            expect(holiday.end <= seasonDates.end).toBe(true)
         })
+    })
+
+    it('should return empty array for short season outside holidayw weeks', () => {
+        // GIVEN: A short test season (7 days)
+        const seasonDates: DateRange = {
+            start: new Date(2025, 8, 1),  // Sep 1, 2025
+            end: new Date(2025, 8, 7)     // Sep 7, 2025
+        }
+
+        // WHEN: Calculating default holidays
+        const holidays = getDefaultHolidays(seasonDates)
+
+        // THEN: Should return empty (no holiday weeks fit in 7 days)
+        expect(holidays).toEqual([])
+    })
+
+    it('should filter holidays outside season range', () => {
+        // GIVEN: Season that only contains week 42, not weeks 8 or 52
+        const seasonDates: DateRange = {
+            start: new Date(2025, 9, 1),   // Oct 1, 2025
+            end: new Date(2025, 10, 30)    // Nov 30, 2025
+        }
+
+        // WHEN: Calculating default holidays
+        const holidays = getDefaultHolidays(seasonDates)
+
+        // THEN: Should only return week 42 (October)
+        expect(holidays.length).toBe(1)
+        expect(holidays[0].start.getMonth()).toBe(9) // October (month 9)
     })
 })
 

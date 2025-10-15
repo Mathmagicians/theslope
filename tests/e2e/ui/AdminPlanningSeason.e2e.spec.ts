@@ -7,7 +7,7 @@ import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromIn
 import {type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, selectDropdownOption} = testHelpers
+const {validatedBrowserContext, selectDropdownOption, pollUntil} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season
@@ -107,9 +107,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
         // THEN: Form should switch to view mode (indicating success)
         await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
 
-        // Verify season was created via API (shortName format is MM/yy)
-        const seasons = await SeasonFactory.getAllSeasons(context)
-        const createdSeason = seasons.find(s => s.shortName?.includes(searchPattern))
+        // Verify season was created via API (shortName format is MM/yy - MM/yy)
+        const createdSeason = await pollUntil(
+            () => SeasonFactory.getAllSeasons(context).then(seasons =>
+                seasons.find(s => s.shortName?.includes(searchPattern))
+            ),
+            (season) => season !== undefined
+        )
 
         expect(createdSeason).toBeDefined()
         if (createdSeason) {
@@ -192,9 +196,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.locator('button[name="submit-season"]').click()
         await page.waitForLoadState('networkidle')
 
-        // Verify season was created with holiday via API (shortName format is MM/yy)
-        const seasons = await SeasonFactory.getAllSeasons(context)
-        const createdSeason = seasons.find(s => s.shortName?.includes(searchPattern))
+        // Verify season was created with holiday via API (shortName format is MM/yy - MM/yy)
+        // Poll until season appears in database (async save)
+        const createdSeason = await pollUntil(
+            () => SeasonFactory.getAllSeasons(context).then(seasons =>
+                seasons.find(s => s.shortName?.includes(searchPattern))
+            ),
+            (season) => season !== undefined
+        )
 
         expect(createdSeason).toBeDefined()
         if (createdSeason) {

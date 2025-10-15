@@ -3,7 +3,7 @@ import {FORM_MODES} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 
-const {getDefaultSeason} = useSeason()
+const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const store = usePlanStore()
 const {
   isLoading,
@@ -19,6 +19,17 @@ const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
   getDefaultEntity: getDefaultSeason,
   selectedEntity: computed(() => selectedSeason.value)
 })
+
+// REACTIVE HOLIDAY CALCULATION
+// When season dates change in create mode, auto-calculate holidays
+watch(
+  () => currentModel.value?.seasonDates,
+  (newDates) => {
+    if (!newDates || !currentModel.value || formMode.value !== FORM_MODES.CREATE) return
+    currentModel.value.holidays = getDefaultHolidays(newDates)
+  },
+  { deep: true, immediate: true }
+)
 
 // COMPUTED
 const selectedSeasonId = computed({

@@ -1,5 +1,5 @@
 import {type DateRange} from '~/types/dateTypes'
-import {calculateDayFromWeekNumber, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import {calculateDayFromWeekNumber, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval, selectWeekNumbersFromListThatFitInsideDateRange} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
@@ -25,39 +25,44 @@ export const useSeason = () => {
     const {createTicketPrice} = useTicketPriceValidation()
     
     /**
-     * Create a default season based on app configuration
+     * Create a default season based on app configuration.
+     * Returns empty holidays - component should calculate holidays reactively using getDefaultHolidays()
      */
-    const getDefaultSeason = () => {
+    const getDefaultSeason = (): Season => {
         const thisYear = new Date().getFullYear()
         const dateRange = {
             start: calculateDayFromWeekNumber(0, theslope.defaultSeason.startWeek, thisYear),
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const holidays = theslope.defaultSeason.holidays.map(weekNum => {
-            // Holidays before the season start week are in the next year
-            const holidayYear = weekNum < theslope.defaultSeason.startWeek ? thisYear + 1 : thisYear
-            return {
-                start: calculateDayFromWeekNumber(0, weekNum, holidayYear),
-                end: calculateDayFromWeekNumber(6, weekNum, holidayYear)
-            } satisfies DateRange
-        })
-
         const ticketPrices = theslope.defaultSeason.ticketPrices?.
             map( ({ticketType, price, description, maximumAgeLimit}) => createTicketPrice(
                 ticketType, price, undefined, description, maximumAgeLimit )) ??
             [createTicketPrice('ADULT', 4000)]
+
         return {
             shortName: createSeasonName(dateRange),
             seasonDates: dateRange,
             isActive: false,
             cookingDays: createWeekDayMapFromSelection(theslope.defaultSeason.cookingDays),
-            holidays: holidays,
+            holidays: [], // Empty - component calculates reactively based on seasonDates
             ticketPrices: ticketPrices,
             ticketIsCancellableDaysBefore: theslope.defaultSeason.ticketIsCancellableDaysBefore,
             diningModeIsEditableMinutesBefore: theslope.defaultSeason.diningModeIsEditableMinutesBefore,
             consecutiveCookingDays: theslope.defaultSeason.consecutiveCookingDays ?? 1
-        } satisfies Season
+        }
+    }
+
+    /**
+     * Calculate default holidays for a given date range.
+     * Returns only holidays (from app config) that fit within the date range.
+     * Component should call this reactively when seasonDates changes.
+     */
+    const getDefaultHolidays = (seasonDates: DateRange): DateRange[] => {
+        return selectWeekNumbersFromListThatFitInsideDateRange(
+            seasonDates,
+            theslope.defaultSeason.holidays
+        )
     }
 
     /**
@@ -126,6 +131,7 @@ export const useSeason = () => {
         holidaysSchema,
         SeasonSchema,
         getDefaultSeason,
+        getDefaultHolidays,
         createSeasonName,
         isActive,
         coalesceSeason,

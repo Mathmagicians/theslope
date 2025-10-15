@@ -132,7 +132,7 @@ watch([formMode, teamCount], () => {
 - Server data only (seasons list, selected season)
 - CRUD operations
 - Loading states for async operations
-- Business logic (e.g., which modes are disabled based o
+- Business logic (e.g., which modes are disabled based on data)
 
 #### Component Responsibilities (Vue)
 - UI state (formMode, draftSeason for editing)

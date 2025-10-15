@@ -476,6 +476,9 @@ export async function fetchSeasons(d1Client: D1Database): Promise<DomainSeason[]
 
     try {
         const seasons = await prisma.season.findMany({
+            include: {
+                ticketPrices: true
+            },
             orderBy: {
                 seasonDates: 'desc'
             }

@@ -183,7 +183,7 @@ model CookingTeam {
   name        String
   dinners     DinnerEvent[]
   assignments CookingTeamAssignment[]
-  affinity    String? // JSON stringified map of Weekday to boolean
+  affinity    String?                  // JSON stringified map of Weekday to boolean
 }
 
 model CookingTeamAssignment {
@@ -194,7 +194,7 @@ model CookingTeamAssignment {
   inhabitant           Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   role                 Role
   allocationPercentage Int         @default(100)
-  affinity             String? // JSON stringified map of Weekday to boolean
+  affinity             String?      // JSON stringified map of Weekday to boolean
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 }

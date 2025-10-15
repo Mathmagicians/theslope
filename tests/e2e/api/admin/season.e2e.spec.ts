@@ -65,6 +65,30 @@ test.describe('Season API Tests', () => {
             expect(foundSeason.id).toBe(created.id)
         })
 
+        test("GET /api/admin/season (index) should include ticketPrices", async ({browser}) => {
+            // GIVEN: A season with ticket prices
+            const context = await validatedBrowserContext(browser)
+            const created = await SeasonFactory.createSeason(context, newSeason)
+            trackSeason(created.id as number)
+
+            // Verify season was created with ticket prices
+            assertTicketPrices(created)
+
+            // WHEN: GET all seasons (index endpoint)
+            const listResponse = await context.request.get('/api/admin/season')
+            expect(listResponse.status()).toBe(200)
+
+            const seasons = await listResponse.json()
+            const foundSeason = seasons.find(s => s.id === created.id)
+
+            // THEN: ticketPrices should be included in the list response
+            expect(foundSeason).toBeTruthy()
+            assertTicketPrices(foundSeason)
+
+            // AND: ticketPrices should match the created data
+            expect(foundSeason.ticketPrices).toEqual(created.ticketPrices)
+        })
+
 // Test for updating a season
         test("POST should update an existing season", async ({browser}) => {
             const context = await validatedBrowserContext(browser)

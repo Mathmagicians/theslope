@@ -1,4 +1,14 @@
 # TODO
+## IMMEDIATE BROKEN
+- Hvornår holder fællesspisning fri?
+  Start dato
+  11/08/2025 (season start date has been changed to2026)
+
+Slut dato
+11/08/2025
+
+- ticket is much shorter than its content in create / view
+- when zod forms has an error, and the submit is disabled, an error message should be showm in the footer
 
 ## 🎯 HIGHEST PRIORITY: Refactor Serialization to Repository Layer (Architectural Fix)
 
