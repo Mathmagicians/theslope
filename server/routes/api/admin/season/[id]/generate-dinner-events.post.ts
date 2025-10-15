@@ -1,12 +1,10 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, saveDinnerEvent} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
-import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
 const {h3eFromCatch} = eventHandlerHelper
-const {deserializeSeason} = useSeasonValidation()
 const {generateDinnerEventDataForSeason} = useSeason()
 
 const idSchema = z.object({
@@ -32,16 +30,13 @@ export default defineEventHandler(async (event) => {
     try {
         console.info(`🗓️ > SEASON > [GENERATE_EVENTS] Generating dinner events for season ${seasonId}`)
 
-        // Fetch season from database
-        const serializedSeason = await fetchSeason(d1Client, seasonId)
-        if (!serializedSeason) {
+        // Fetch season from database (repository returns domain object with Date objects)
+        const season = await fetchSeason(d1Client, seasonId)
+        if (!season) {
             const h3e = h3eFromCatch(`🗓️ > SEASON > [GENERATE_EVENTS] Season ${seasonId} not found`, new Error('Not found'))
             h3e.statusCode = 404
             throw h3e
         }
-
-        // Deserialize season to get proper Date objects
-        const season = deserializeSeason(serializedSeason)
 
         // Generate dinner event data using composable
         const dinnerEventDataArray = generateDinnerEventDataForSeason(season)

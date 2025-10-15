@@ -1,5 +1,72 @@
 # TODO
 
+## 🎯 HIGHEST PRIORITY: Refactor Serialization to Repository Layer (Architectural Fix)
+
+**Problem**: Current implementation violates separation of concerns - API endpoints expect serialized data (DB format) instead of domain objects.
+
+**Impact**:
+- API layer leaks DB implementation details (JSON string storage)
+- Client must serialize/deserialize (see `seasonFactory.ts:79`)
+- API contract changes if we migrate from SQLite to PostgreSQL
+- Harder to test and maintain
+
+**Solution**: Move serialization to repository layer where it belongs (DB implementation detail).
+
+**Implementation**:
+- [ ] Refactor Season validation schemas (`app/composables/useSeasonValidation.ts`)
+  - [ ] Remove `SerializedSeasonValidationSchema` (no longer needed - API doesn't validate serialized format)
+  - [ ] Keep `SerializedSeasonSchema` transform (used internally by repository)
+  - [ ] Export only domain types: `Season`, `SerializedSeason` (for repository use)
+- [ ] Refactor Season endpoints (`server/routes/api/admin/season/*.ts`)
+  - [ ] Change `index.put.ts` to accept `SeasonSchema` instead of `SerializedSeasonValidationSchema`
+  - [ ] Change `[id].post.ts` to accept `SeasonSchema` instead of `SerializedSeasonValidationSchema`
+  - [ ] Endpoints accept domain objects (Season type)
+  - [ ] Endpoints return domain objects (Season type) - not serialized format
+- [ ] Refactor Season repository (`server/data/prismaRepository.ts`)
+  - [ ] `createSeason(d1, season: Season): Promise<Season>` - serialize internally before DB, deserialize response
+  - [ ] `updateSeason(d1, id, season: Season): Promise<Season>` - serialize internally before DB, deserialize response
+  - [ ] `fetchSeasons(d1): Promise<Season[]>` - deserialize responses
+  - [ ] `fetchSeason(d1, id): Promise<Season>` - deserialize response
+  - [ ] Repository owns all ser/deser logic
+- [ ] Update E2E test factories (`tests/e2e/testDataFactories/seasonFactory.ts`)
+  - [ ] Remove `serializeSeason()` calls from `createSeason()` (line 79)
+  - [ ] Factory sends domain objects to API
+  - [ ] Remove `deserializeSeason()` calls (API returns domain objects)
+- [ ] Verify all Season E2E tests pass
+- [ ] Apply same pattern to CookingTeam implementation (do it right from the start)
+  - [ ] Don't create `SerializedCookingTeamValidationSchema` in composable
+  - [ ] CookingTeam endpoints accept/return domain objects only
+  - [ ] Repository handles all serialization
+  - [] update ADR005 about serialization/deser responsibility
+
+**Architecture Compliance**:
+- ✅ ADR-001: Clean separation between layers
+- ✅ ADR-005: Repository pattern - data transformation is repository concern
+- ✅ Clean Architecture: Dependency rule - domain shouldn't know about persistence
+
+---
+
+## 🎯 HIGHEST PRIORITY: CookingTeam Serialization (Affinity Field)
+
+**Impact**: CookingTeam.affinity and CookingTeamAssignment.affinity stored as JSON strings in SQLite
+
+**Implementation**:
+- [ ] Update `useCookingTeamValidation.ts` - Add serialize/deserialize functions (follow Season pattern)
+  - [ ] Add `SerializedCookingTeamSchema` (affinity as string)
+  - [ ] Add `serializeCookingTeam()` function
+  - [ ] Add `deserializeCookingTeam()` function
+  - [ ] Add `SerializedCookingTeamAssignmentSchema`
+  - [ ] Add `serializeCookingTeamAssignment()` function
+  - [ ] Add `deserializeCookingTeamAssignment()` function
+- [ ] Update `tests/e2e/testDataFactories/seasonFactory.ts`
+  - [ ] Serialize teams in `createCookingTeamForSeason()` before API call
+  - [ ] Serialize assignments in `assignMemberToTeam()` before API call
+- [ ] Update `server/data/prismaRepository.ts`
+  - [ ] Import `SerializedCookingTeam` type
+  - [ ] Update `createTeam()` signature to accept serialized type
+
+---
+
 ## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
 
 **Remaining work**: Expand E2E test suite for ticket price API and UI validation

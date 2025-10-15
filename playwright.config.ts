@@ -37,12 +37,31 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // Setup project
-    { name: 'setup', testMatch: /.*\.setup\.ts/ },
+    // Setup projects - split API and UI auth
     {
-      name: 'chromium',
+      name: 'setup-api',
+      testMatch: /auth\.setup\.ts/,
+      grep: /Authenticate admin for API/
+    },
+    {
+      name: 'setup-ui',
+      testMatch: /auth\.setup\.ts/,
+      grep: /Authenticate admin for UI/,
+      dependencies: ['setup-api']
+    },
+    // API tests only need API auth
+    {
+      name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['setup'],
+      testMatch: /tests\/e2e\/api\/.*\.spec\.ts/,
+      dependencies: ['setup-api'],
+    },
+    // UI tests need full UI auth
+    {
+      name: 'chromium-ui',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /tests\/e2e\/ui\/.*\.spec\.ts/,
+      dependencies: ['setup-ui'],
     },
 
     /* Test against mobile viewports. */

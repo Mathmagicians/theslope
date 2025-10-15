@@ -3,9 +3,6 @@ import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
-import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-
-const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -18,43 +15,9 @@ import { usePlanStore } from '~/stores/plan'
 
 describe('Plan Store', () => {
     // Use SeasonFactory for consistent test data
-    const season1 = { ...SeasonFactory.defaultSeason('1').serializedSeason, id: 1 }
-    const season2 = { ...SeasonFactory.defaultSeason('2').serializedSeason, id: 2 }
+    const season1 = { ...SeasonFactory.defaultSeason('1'), id: 1 }
+    const season2 = { ...SeasonFactory.defaultSeason('2'), id: 2 }
     const mockSeasons = [season1, season2]
-
-    vi.mock('#imports', () => {
-        const actualPinia = vi.requireActual('pinia')
-        return {
-            defineStore: actualPinia.defineStore,
-            ref: (x) => ({
-                value: x
-            }),
-            watch: vi.fn(),
-            computed: (fn) => fn(),
-            useApiHandler: () => ({
-                handleApiError: vi.fn()
-            }),
-            useSeason: () => ({
-                getDefaultSeason: () => ({
-                    shortName: 'Default Season',
-                    seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
-                    isActive: false,
-                    cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
-                    holidays: [],
-                    ticketIsCancellableDaysBefore: 10,
-                    diningModeIsEditableMinutesBefore: 90
-                }),
-                deserializeSeason: (data) => ({
-                    ...data,
-                    seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
-                    cookingDays: createDefaultWeekdayMap([true, true, true, true, false, false, false]),
-                    holidays: []
-                }),
-                serializeSeason: (season) => season,
-                coalesceSeason: (draft, defaultSeason) => defaultSeason
-            })
-        }
-    })
 
     beforeEach(() => {
         setActivePinia(createPinia())

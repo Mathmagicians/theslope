@@ -45,14 +45,6 @@ export const useSeasonValidation = () => {
         }
     )
 
-
-    // Schema for validating already serialized season data (JSON string fields)
-    const SerializedSeasonValidationSchema = BaseSeasonSchema.extend({
-        seasonDates: z.string(), // JSON string instead of dateRangeSchema
-        cookingDays: z.string(), // JSON string instead of WeekDayMapSchema
-        holidays: z.string()     // JSON string instead of holidaysSchema
-    })
-
     // Type definition
     type Season = z.infer<typeof SeasonSchema>
 
@@ -107,7 +99,6 @@ export const useSeasonValidation = () => {
         holidaysSchema,
         BaseSeasonSchema,
         SeasonSchema,
-        SerializedSeasonValidationSchema,
         SerializedSeasonSchema,
         serializeSeason,
         deserializeSeason

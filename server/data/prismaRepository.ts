@@ -12,7 +12,8 @@ import type {
     TicketPrice as PrismaTicketPrice
 } from "@prisma/client"
 
-import type {SerializedSeason} from "~/composables/useSeasonValidation"
+import type {Season as DomainSeason, SerializedSeason} from "~/composables/useSeasonValidation"
+import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, HouseholdCreate} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
@@ -377,7 +378,10 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
 
 /*** SEASON AGGREGATE ROOT - aggregates team assignments, teams, and dinner events ***/
 
-export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<Season | null> {
+// Get serialization utilities
+const {serializeSeason, deserializeSeason} = useSeasonValidation()
+
+export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<DomainSeason | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season for range ${start} to ${end}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -395,10 +399,11 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id}) for range`)
+            return deserializeSeason(season)
         } else {
             console.info(`🌞 > SEASON > [GET] No season found for range ${start} to ${end}`)
+            return null
         }
-        return season
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching season for range ${start} to ${end}`, error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
@@ -406,7 +411,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
-export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
+export async function fetchCurrentSeason(d1Client: D1Database): Promise<DomainSeason | null> {
     console.info(`🌞 > SEASON > [GET] Fetching current active season`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -419,10 +424,11 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found current active season ${season.shortName} (ID: ${season.id})`)
+            return deserializeSeason(season)
         } else {
             console.info(`🌞 > SEASON > [GET] No active season found`)
+            return null
         }
-        return season
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching current active season', error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
@@ -430,7 +436,7 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
     }
 }
 
-export async function fetchSeason(d1Client: D1Database, id: number): Promise<SeasonWithRelations | null> {
+export async function fetchSeason(d1Client: D1Database, id: number): Promise<DomainSeason | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -452,10 +458,11 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id})`)
+            return deserializeSeason(season)
         } else {
             console.info(`🌞 > SEASON > [GET] No season found with ID ${id}`)
+            return null
         }
-        return season
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching season with ID ${id}`, error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
@@ -463,7 +470,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
     }
 }
 
-export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
+export async function fetchSeasons(d1Client: D1Database): Promise<DomainSeason[]> {
     console.info(`🌞 > SEASON > [GET] Fetching all seasons`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -474,7 +481,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
             }
         })
         console.info(`🌞 > SEASON > [GET] Successfully fetched ${seasons.length} seasons`)
-        return seasons
+        return seasons.map(season => deserializeSeason(season))
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching seasons', error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
@@ -503,11 +510,15 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
     }
 }
 
-export async function createSeason(d1Client: D1Database, seasonData: SerializedSeason): Promise<SeasonWithRelations> {
+export async function createSeason(d1Client: D1Database, seasonData: DomainSeason): Promise<DomainSeason> {
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
+
+    // Serialize domain object to database format
+    const serialized = serializeSeason(seasonData)
+
     // Exclude id and read-only relation fields from create
-    const {id, dinnerEvents, CookingTeams, ticketPrices, ...createData} = seasonData
+    const {id, dinnerEvents, CookingTeams, ticketPrices, ...createData} = serialized
 
     try {
         const newSeason = await prisma.season.create({
@@ -523,7 +534,9 @@ export async function createSeason(d1Client: D1Database, seasonData: SerializedS
         })
 
         console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id} and ${newSeason.ticketPrices.length} ticket prices`)
-        return newSeason
+
+        // Deserialize before returning
+        return deserializeSeason(newSeason)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating season ${seasonData?.shortName}`, error)
         console.error(`🌞 > SEASON > [CREATE] ${h3e.statusMessage}`, error)
@@ -531,11 +544,15 @@ export async function createSeason(d1Client: D1Database, seasonData: SerializedS
     }
 }
 
-export async function updateSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
+export async function updateSeason(d1Client: D1Database, seasonData: DomainSeason): Promise<DomainSeason> {
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+
+    // Serialize domain object to database format
+    const serialized = serializeSeason(seasonData)
+
     // Exclude id and read-only relation fields from update
-    const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = seasonData
+    const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
 
         const updatedSeason = await prisma.season.update({
@@ -555,7 +572,9 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
         })
 
         console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id}) with ${updatedSeason.ticketPrices.length} ticket prices`)
-        return updatedSeason
+
+        // Deserialize before returning
+        return deserializeSeason(updatedSeason)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating season with ID ${id}`, error)
         console.error(`🌞 > SEASON > [UPDATE] ${h3e.message}`, error)

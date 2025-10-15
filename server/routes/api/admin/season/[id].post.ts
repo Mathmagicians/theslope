@@ -7,7 +7,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
-const {SerializedSeasonValidationSchema, serializeSeason} = useSeasonValidation()
+const {SeasonSchema} = useSeasonValidation()
 
 // Schema for route parameters
 const idSchema = z.object({
@@ -16,7 +16,7 @@ const idSchema = z.object({
 
 // Create a function that returns a refined schema for POST operations with ID validation
 const createPostSeasonSchema = (expectedId: number) =>
-    SerializedSeasonValidationSchema
+    SeasonSchema
         .refine(season => season.id, {
             message: 'ID is required when updating an existing season. Use PUT to create a new season.',
             path: ['id']

@@ -1,19 +1,21 @@
-import {type Season, type SerializedSeason} from '~/composables/useSeasonValidation'
+import {type Season} from '~/composables/useSeasonValidation'
 import {type CookingTeam} from '~/composables/useCookingTeamValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
-        const {serializeSeason, deserializeSeason} = useSeason()
+        const {SeasonSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
         // DATA FETCHING - useFetch for SSR compatibility with auth context
-        const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch(
+        // HTTP JSON converts Date objects to ISO strings during transport
+        // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
+        const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch<Season[]>(
             '/api/admin/season',
             {
-                transform: (data: SerializedSeason[]) => data.map(serialized => deserializeSeason(serialized)),
+                transform: (data: any[]) => data.map(season => SeasonSchema.parse(season)),
                 onResponseError({ error }) {
                     handleApiError(error, 'loadSeasons')
                 }
@@ -21,10 +23,10 @@ export const usePlanStore = defineStore("Plan", () => {
         )
 
         const selectedSeasonId = ref<number | null>(null)
-        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch(
+        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch<Season>(
             () => `/api/admin/season/${selectedSeasonId.value}`,
             {
-                transform: (data: SerializedSeason) => deserializeSeason(data),
+                transform: (data: any) => SeasonSchema.parse(data),
                 immediate: false,
                 watch: false,
                 onResponseError({ error }) {
@@ -75,10 +77,10 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const createSeason = async (season: Season): Promise<Season> => {
             try {
-                const serializedSeason = serializeSeason(season)
+                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
                 const createdSeason = await $fetch<Season>('/api/admin/season', {
                     method: 'PUT',
-                    body: serializedSeason,
+                    body: season,
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()
@@ -104,10 +106,10 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const updateSeason = async (season: Season) => {
             try {
-                const serializedSeason = serializeSeason(season)
+                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
                 await $fetch(`/api/admin/season/${season.id}`, {
                     method: 'POST',
-                    body: serializedSeason,
+                    body: season,
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()

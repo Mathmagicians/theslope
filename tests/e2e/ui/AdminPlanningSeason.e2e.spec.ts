@@ -4,11 +4,10 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
-import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
+import {type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, selectDropdownOption} = testHelpers
-const {deserializeSeason} = useSeasonValidation()
 
 /**
  * Calculate expected dinner event count for a season
@@ -117,8 +116,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             createdSeasonIds.push(createdSeason.id!)
 
             // AND: Verify dinner events were auto-generated for the season
-            const deserializedSeason = deserializeSeason(createdSeason)
-            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+           const expectedEventCount = calculateExpectedEventCount(createdSeason)
 
             // Wait for async dinner event generation to complete
             const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
@@ -195,13 +193,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.waitForLoadState('networkidle')
 
         // Verify season was created with holiday via API (shortName format is MM/yy)
-        const serializedSeasons = await SeasonFactory.getAllSeasons(context)
-        const serializedSeason = serializedSeasons.find(s => s.shortName?.includes(searchPattern))
+        const seasons = await SeasonFactory.getAllSeasons(context)
+        const createdSeason = seasons.find(s => s.shortName?.includes(searchPattern))
 
-        expect(serializedSeason).toBeDefined()
-        const createdSeason = deserializeSeason(serializedSeason)
-        expect(createdSeason.holidays.length).toBeGreaterThan(0)
-        createdSeasonIds.push(createdSeason.id!)
+        expect(createdSeason).toBeDefined()
+        if (createdSeason) {
+            expect(createdSeason.holidays.length).toBeGreaterThan(0)
+            createdSeasonIds.push(createdSeason.id!)
+        }
     })
 
     test('GIVEN season with holiday WHEN removing holiday via UI THEN holiday is removed from list', async ({
@@ -248,12 +247,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.waitForLoadState('networkidle')
 
         // Verify holiday was removed via API
-        const serializedSeason = await SeasonFactory.getSeason(context, season.id)
-        const updatedSeason = deserializeSeason(serializedSeason)
+        const updatedSeason = await SeasonFactory.getSeason(context, season.id!)
         expect(updatedSeason.holidays).toHaveLength(0)
     })
 })
-
-/**
- * NOTE: Tests for dinner events and cooking teams creation belong in API tests
- */
