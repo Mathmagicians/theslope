@@ -1,15 +1,6 @@
 # TODO
 ## IMMEDIATE BROKEN
-- Hvornår holder fællesspisning fri?
-  Start dato
-  11/08/2025 (season start date has been changed to2026)
-
-Slut dato
-11/08/2025
-
-- ticket is much shorter than its content in create / view
-- when zod forms has an error, and the submit is disabled, an error message should be showm in the footer
-
+- update adr to document ser/deser responsibility ui -> on the wire -> endpoint -> store -> repo ser , and reverse, together with the elegant schema
 ## 🎯 HIGHEST PRIORITY: Refactor Serialization to Repository Layer (Architectural Fix)
 
 **Problem**: Current implementation violates separation of concerns - API endpoints expect serialized data (DB format) instead of domain objects.
@@ -411,6 +402,37 @@ AggregateError [ECONNREFUSED]:
 - Pinia testing docs: https://pinia.vuejs.org/cookbook/testing.html
 - `@nuxt/test-utils` issue #943: registerEndpoint doesn't expose to $fetch
 - Search results indicate `useFetch` in stores is problematic for testing
+
+---
+
+## Medium priority: Fix UForm error display in AdminPlanningSeason footer
+
+### Issue
+Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't display.
+
+### Current Behavior
+- `app/components/admin/planning/AdminPlanningSeason.vue:175` has error display: `<div v-if="errors.length > 0">`
+- UForm v-slot provides `errors` array which should populate with validation errors
+- Debug output shows: `errors = [], length = 0` even when validation prevents submission
+- Removing `form="seasonForm"` attribute fixed validation blocking (UForm now prevents invalid submission)
+
+### Investigation Done
+- ✅ Confirmed: UForm docs say errors array should populate during input events
+- ✅ Confirmed: `errors.length > 0` is correct syntax per Nuxt UI docs
+- ✅ Fixed: Removed `form` attribute from submit button (was bypassing UForm validation)
+- ❌ Problem: `errors` array remains empty even though validation is active
+
+### Potential Causes
+1. UForm v-slot `errors` may only populate after attempted submit (not during input validation)
+2. May need to use `@error` event instead of v-slot pattern
+3. May need to set `validate-on` prop explicitly
+
+### Action Items
+- [ ] Test clicking submit button to see if errors populate after submission attempt
+- [ ] Check Nuxt UI 4 migration docs for error handling changes
+- [ ] Try `@error` event pattern as alternative to v-slot
+- [ ] Research `validate-on` prop configuration
+- [ ] Check if UForm exposes errors differently in v4
 
 ---
 

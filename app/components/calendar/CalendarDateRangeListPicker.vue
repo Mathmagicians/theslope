@@ -25,6 +25,12 @@ const defaultDate = computed(() => props.seasonDates?.start ?? new Date())
 //  STATE & INITIALIZATION
 const addedRange = ref<DateRange>(createDateRange(defaultDate.value, defaultDate.value))
 
+// WATCHERS
+// Update addedRange when season dates change
+watch(defaultDate, (newDate) => {
+  addedRange.value = createDateRange(newDate, newDate)
+})
+
 // ACTIONS
 const onAddHolidayRange = () => {
   if (addedRange.value.start && addedRange.value.end) {

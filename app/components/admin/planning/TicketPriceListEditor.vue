@@ -160,7 +160,7 @@ const onAddTicketPrice = () => {
                   :model-value="`${formatTicketType(ticket.ticketType)}: ${toDKK(ticket.price)} DKK${ticket.maximumAgeLimit ? ` (max ${ticket.maximumAgeLimit} år)` : ''}`"
                   :name="`ticketPrice-${index}`"
                   disabled
-                  :ui="{ base: 'w-fit min-w-full mr-4' }"
+                  :ui="{ input: 'truncate-none' }"
               >
                 <template #leading>
                   <UIcon name="i-heroicons-ticket"/>
