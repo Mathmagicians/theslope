@@ -1,72 +1,4 @@
 # TODO
-## IMMEDIATE BROKEN
-- update adr to document ser/deser responsibility ui -> on the wire -> endpoint -> store -> repo ser , and reverse, together with the elegant schema
-## 🎯 HIGHEST PRIORITY: Refactor Serialization to Repository Layer (Architectural Fix)
-
-**Problem**: Current implementation violates separation of concerns - API endpoints expect serialized data (DB format) instead of domain objects.
-
-**Impact**:
-- API layer leaks DB implementation details (JSON string storage)
-- Client must serialize/deserialize (see `seasonFactory.ts:79`)
-- API contract changes if we migrate from SQLite to PostgreSQL
-- Harder to test and maintain
-
-**Solution**: Move serialization to repository layer where it belongs (DB implementation detail).
-
-**Implementation**:
-- [ ] Refactor Season validation schemas (`app/composables/useSeasonValidation.ts`)
-  - [ ] Remove `SerializedSeasonValidationSchema` (no longer needed - API doesn't validate serialized format)
-  - [ ] Keep `SerializedSeasonSchema` transform (used internally by repository)
-  - [ ] Export only domain types: `Season`, `SerializedSeason` (for repository use)
-- [ ] Refactor Season endpoints (`server/routes/api/admin/season/*.ts`)
-  - [ ] Change `index.put.ts` to accept `SeasonSchema` instead of `SerializedSeasonValidationSchema`
-  - [ ] Change `[id].post.ts` to accept `SeasonSchema` instead of `SerializedSeasonValidationSchema`
-  - [ ] Endpoints accept domain objects (Season type)
-  - [ ] Endpoints return domain objects (Season type) - not serialized format
-- [ ] Refactor Season repository (`server/data/prismaRepository.ts`)
-  - [ ] `createSeason(d1, season: Season): Promise<Season>` - serialize internally before DB, deserialize response
-  - [ ] `updateSeason(d1, id, season: Season): Promise<Season>` - serialize internally before DB, deserialize response
-  - [ ] `fetchSeasons(d1): Promise<Season[]>` - deserialize responses
-  - [ ] `fetchSeason(d1, id): Promise<Season>` - deserialize response
-  - [ ] Repository owns all ser/deser logic
-- [ ] Update E2E test factories (`tests/e2e/testDataFactories/seasonFactory.ts`)
-  - [ ] Remove `serializeSeason()` calls from `createSeason()` (line 79)
-  - [ ] Factory sends domain objects to API
-  - [ ] Remove `deserializeSeason()` calls (API returns domain objects)
-- [ ] Verify all Season E2E tests pass
-- [ ] Apply same pattern to CookingTeam implementation (do it right from the start)
-  - [ ] Don't create `SerializedCookingTeamValidationSchema` in composable
-  - [ ] CookingTeam endpoints accept/return domain objects only
-  - [ ] Repository handles all serialization
-  - [] update ADR005 about serialization/deser responsibility
-
-**Architecture Compliance**:
-- ✅ ADR-001: Clean separation between layers
-- ✅ ADR-005: Repository pattern - data transformation is repository concern
-- ✅ Clean Architecture: Dependency rule - domain shouldn't know about persistence
-
----
-
-## 🎯 HIGHEST PRIORITY: CookingTeam Serialization (Affinity Field)
-
-**Impact**: CookingTeam.affinity and CookingTeamAssignment.affinity stored as JSON strings in SQLite
-
-**Implementation**:
-- [ ] Update `useCookingTeamValidation.ts` - Add serialize/deserialize functions (follow Season pattern)
-  - [ ] Add `SerializedCookingTeamSchema` (affinity as string)
-  - [ ] Add `serializeCookingTeam()` function
-  - [ ] Add `deserializeCookingTeam()` function
-  - [ ] Add `SerializedCookingTeamAssignmentSchema`
-  - [ ] Add `serializeCookingTeamAssignment()` function
-  - [ ] Add `deserializeCookingTeamAssignment()` function
-- [ ] Update `tests/e2e/testDataFactories/seasonFactory.ts`
-  - [ ] Serialize teams in `createCookingTeamForSeason()` before API call
-  - [ ] Serialize assignments in `assignMemberToTeam()` before API call
-- [ ] Update `server/data/prismaRepository.ts`
-  - [ ] Import `SerializedCookingTeam` type
-  - [ ] Update `createTeam()` signature to accept serialized type
-
----
 
 ## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
 
@@ -86,12 +18,7 @@
 - [ ] DELETE season cascades delete ticketPrices
 - [ ] Validation: Missing ticket type returns 400
 - [ ] Validation: Duplicate types returns 400
-- [ ] Validation: Price out of range returns 400
 - [ ] Edge case: Season without prices returns empty array
-
-**Team schema tests**:
-- [ ] PUT team with affinity JSON persists correctly
-- [ ] PUT assignment with allocationPercentage persists correctly
 
 ---
 
@@ -119,18 +46,6 @@
 
 ---
 
-### Remaining Factory Work
-
-**Update `tests/e2e/testDataFactories/cookingTeamFactory.ts`**:
-- [ ] Add `affinity: null` to default team
-- [ ] Add helper: `createTeamWithAffinity(seasonId, name, weekdays[])`
-
-**Remaining Repository Work**:
-- [ ] Create `updateTicketPrice(d1Client, id, priceData)` - single update (if needed)
-- [ ] Update repository to handle team affinity and allocationPercentage
-
----
-
 ## 🎯 HIGH PRIORITY: Team Assignment to Dinner Events
 **Milestone**: Automatic assignment of cooking teams to dinner events with affinity-based round-robin distribution
 
@@ -152,9 +67,9 @@ When teams are created for a season, they are automatically assigned to dinner e
 - [ x] Run migrations: `npm run db:migrate:local` and `npm run db:generate-client`
 - [ x] Add `defaultConsecutiveCookingDays: 2` to `app.config.ts`
 - [ x] Update validation schemas (SeasonSchema, 
-- [ ] update CookingTeamSchema
-- [ ] Update test factories (SeasonFactory, CookingTeamFactory)
-- [ ] Write API tests verifying fields persist/retrieve correctly
+- [ x] update CookingTeamSchema
+- [ x] Update test factories (SeasonFactory, CookingTeamFactory)
+- [ x] Write API tests verifying fields persist/retrieve correctly
 
 ---
 
@@ -446,6 +361,24 @@ Form validation is working (submit button is disabled when errors exist), but th
 ---
 
 # ✅ COMPLETED
+
+## Season Serialization Refactoring (ADR-010: Domain-Driven Serialization Architecture)
+**Date**: 2025-10-15 | **Compliance**: ADR-010, ADR-001, ADR-005
+
+### Architecture Changes
+- ✅ **Serialization moved to repository layer** - API endpoints work with domain types only
+- ✅ **ADR-010 created** - Domain-Driven Serialization Architecture documented
+- ✅ **Schema pattern established** - Domain schema (SeasonSchema) + Serialized schema (SerializedSeasonSchema) in composables
+- ✅ **Repository transforms** - serialize/deserialize at DB boundary (`createSeason`, `updateSeason`, `fetchSeason`, etc.)
+- ✅ **API cleanup** - Endpoints accept/return Season domain type, not SerializedSeason
+- ✅ **Factory simplification** - SeasonFactory sends domain objects, no manual serialization
+- ✅ **Test regression fixes** - Date regex (single-digit support), factory API usage, mock data DRY (25/25 tests passing)
+
+### Key Benefits
+- Clean separation: DB format is implementation detail, not API contract
+- Type safety: Domain types throughout app, serialization isolated to repository
+- Migration flexibility: Can change DB without touching API/UI
+- Testing simplicity: Factories use domain types
 
 ## Migration 003 - Ticket Prices and Team Assignment Fields
 **Date**: 2025-10-15 | **Compliance**: ADR-001, ADR-002, ADR-005

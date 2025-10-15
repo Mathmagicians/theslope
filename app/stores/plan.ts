@@ -1,5 +1,5 @@
 import {type Season} from '~/composables/useSeasonValidation'
-import {type CookingTeam} from '~/composables/useCookingTeamValidation'
+import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -193,6 +193,42 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
+        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+            try {
+                const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
+                    method: 'PUT',
+                    body: assignment,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(`👥🔗 > PLAN_STORE > Added member ${assignment.inhabitantId} to team ${assignment.cookingTeamId} as ${assignment.role}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return created
+            } catch (e: any) {
+                handleApiError(e, 'addTeamMember')
+                throw e
+            }
+        }
+
+        const removeTeamMember = async (assignmentId: number) => {
+            try {
+                await $fetch(`/api/admin/team/assignment/${assignmentId}`, {
+                    method: 'DELETE'
+                })
+                console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+            } catch (e: any) {
+                handleApiError(e, 'removeTeamMember')
+                throw e
+            }
+        }
+
         // INITIALIZATION - Component will call init() in onMounted
         const initPlanStore = async () => {
             await autoSelectFirstSeason()
@@ -216,7 +252,9 @@ export const usePlanStore = defineStore("Plan", () => {
             onSeasonSelect,
             createTeam,
             updateTeam,
-            deleteTeam
+            deleteTeam,
+            addTeamMember,
+            removeTeamMember
         }
     }
 )

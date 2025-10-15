@@ -23,16 +23,16 @@ const TeamTestFactory = {
     seasonId: 1,
     name: "Team Full",
     assignments: [
-      { teamId: 1, inhabitantId: 1, role: 'CHEF' as const },
-      { teamId: 1, inhabitantId: 2, role: 'COOK' as const },
-      { teamId: 1, inhabitantId: 3, role: 'COOK' as const },
-      { teamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' as const }
+      { cookingTeamId: 1, inhabitantId: 1, role: 'CHEF' as const },
+      { cookingTeamId: 1, inhabitantId: 2, role: 'COOK' as const },
+      { cookingTeamId: 1, inhabitantId: 3, role: 'COOK' as const },
+      { cookingTeamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' as const }
     ],
     ...overrides
   }),
 
   validAssignment: (overrides = {}) => ({
-    teamId: 1,
+    cookingTeamId: 1,
     inhabitantId: 42,
     role: 'CHEF' as const,
     allocationPercentage: 100,
@@ -211,8 +211,8 @@ describe('useCookingTeamValidation', () => {
         team: TeamTestFactory.validTeamWithMembers({
           name: "Team with Member IDs",
           assignments: [
-            { id: 1, teamId: 1, inhabitantId: 10, role: 'CHEF' as const },
-            { id: 2, teamId: 1, inhabitantId: 20, role: 'COOK' as const }
+            { id: 1, cookingTeamId: 1, inhabitantId: 10, role: 'CHEF' as const },
+            { id: 2, cookingTeamId: 1, inhabitantId: 20, role: 'COOK' as const }
           ]
         }),
         expected: { success: true, assignment0Id: 1, assignment1Id: 2 },
@@ -249,7 +249,7 @@ describe('useCookingTeamValidation', () => {
             assignments: [
               {
                 id: 10,
-                teamId: 1,
+                cookingTeamId: 1,
                 inhabitantId: 42,
                 role: 'CHEF' as const,
                 allocationPercentage: 75,
@@ -270,7 +270,7 @@ describe('useCookingTeamValidation', () => {
             assignments: [
               {
                 id: 11,
-                teamId: 2,
+                cookingTeamId: 2,
                 inhabitantId: 99,
                 role: 'COOK' as const,
                 allocationPercentage: 100
@@ -289,7 +289,7 @@ describe('useCookingTeamValidation', () => {
             assignments: [
               {
                 id: 12,
-                teamId: 3,
+                cookingTeamId: 3,
                 inhabitantId: 55,
                 role: 'JUNIORHELPER' as const,
                 allocationPercentage: 50,
@@ -309,7 +309,7 @@ describe('useCookingTeamValidation', () => {
             assignments: [
               {
                 id: 13,
-                teamId: 4,
+                cookingTeamId: 4,
                 inhabitantId: 77,
                 role: 'COOK' as const,
                 allocationPercentage: 100
@@ -329,7 +329,7 @@ describe('useCookingTeamValidation', () => {
             assignments: [
               {
                 id: 14,
-                teamId: 5,
+                cookingTeamId: 5,
                 inhabitantId: 20,
                 role: 'CHEF' as const,
                 allocationPercentage: 100,
@@ -337,7 +337,7 @@ describe('useCookingTeamValidation', () => {
               },
               {
                 id: 15,
-                teamId: 5,
+                cookingTeamId: 5,
                 inhabitantId: 21,
                 role: 'COOK' as const,
                 allocationPercentage: 50
@@ -356,7 +356,7 @@ describe('useCookingTeamValidation', () => {
         if (expectedTeamAffinity) {
           expect(typeof serialized.affinity).toBe('string')
         } else {
-          expect(serialized.affinity).toBeUndefined()
+          expect(serialized.affinity).toBeNull()
         }
 
         // Verify assignments affinity serialization
@@ -365,7 +365,7 @@ describe('useCookingTeamValidation', () => {
             if (team.assignments[index]?.affinity) {
               expect(typeof assignment.affinity).toBe('string')
             } else {
-              expect(assignment.affinity).toBeUndefined()
+              expect(assignment.affinity).toBeNull()
             }
           })
         }
@@ -387,7 +387,7 @@ describe('useCookingTeamValidation', () => {
         deserialized.assignments.forEach((assignment, index) => {
           const originalAssignment = team.assignments[index]!
           expect(assignment.id).toBe(originalAssignment.id)
-          expect(assignment.teamId).toBe(originalAssignment.teamId)
+          expect(assignment.cookingTeamId).toBe(originalAssignment.cookingTeamId)
           expect(assignment.inhabitantId).toBe(originalAssignment.inhabitantId)
           expect(assignment.role).toBe(originalAssignment.role)
           expect(assignment.allocationPercentage).toBe(originalAssignment.allocationPercentage)

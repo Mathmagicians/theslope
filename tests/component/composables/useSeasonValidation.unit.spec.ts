@@ -3,6 +3,7 @@ import {useSeasonValidation, type Season} from '~/composables/useSeasonValidatio
 import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 
 const {TICKET_TYPES} = useTicketPriceValidation()
@@ -181,7 +182,7 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A'}],
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: []}],
         ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: 'HUNGRY_BABY', price: 4000}]
       }
 
@@ -220,6 +221,41 @@ describe('useSeasonValidation', () => {
         expect(deserializedWithRelations.ticketPrices.length).toBe(1)
         expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual(['HUNGRY_BABY'])
     })
-      
+
+    it('should deserialize nested CookingTeam affinity fields from JSON strings', () => {
+      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useWeekDayMapValidation()
+
+      // Create affinity using factory method and serialize it (simulating DB format)
+      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'])
+      const serializedAffinity = serializeWeekDayMap(teamAffinity)
+
+      // Create a season with CookingTeams that have serialized affinity (as from DB)
+      const serializedSeason = {
+        ...serializeSeason(testSeason),
+        id: 1,
+        CookingTeams: [
+          { id: 1, name: 'Team Monday', seasonId: 1, affinity: serializedAffinity, assignments: [] },
+          { id: 2, name: 'Team No Affinity', seasonId: 1, affinity: null, assignments: [] }
+        ]
+      }
+
+      // Deserialize the season
+      const deserialized = deserializeSeason(serializedSeason)
+
+      // Verify CookingTeams affinity is properly deserialized
+      expect(deserialized.CookingTeams).toHaveLength(2)
+
+      const [team1, team2] = deserialized.CookingTeams!
+
+      // Team 1: affinity should be deserialized to WeekDayMap object
+      expect(team1!.affinity).toEqual(teamAffinity)
+      expect(team1!.affinity!.mandag).toBe(true)
+      expect(team1!.affinity!.onsdag).toBe(true)
+      expect(team1!.affinity!.fredag).toBe(true)
+
+      // Team 2: null affinity becomes undefined after deserialization
+      expect(team2!.affinity).toBeUndefined()
+    })
+
   })
 })

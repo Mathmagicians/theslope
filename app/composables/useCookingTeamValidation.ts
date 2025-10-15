@@ -1,5 +1,6 @@
 import {z} from 'zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
 
 /**
  * Validation schemas for CookingTeam objects
@@ -7,6 +8,9 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 export const useCookingTeamValidation = () => {
     // Get WeekDayMap utilities
     const {WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
+
+    // Get Inhabitant display schema for nested relations
+    const {InhabitantDisplaySchema} = useHouseholdValidation()
 
     // Team member role schema
     const TeamRoleSchema = z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
@@ -26,7 +30,8 @@ export const useCookingTeamValidation = () => {
         inhabitantId: z.number().int().positive(),
         role: TeamRoleSchema,
         allocationPercentage: z.number().min(1).max(100).default(100),
-        affinity: WeekDayMapSchemaOptional.nullish()
+        affinity: WeekDayMapSchemaOptional.nullish(),
+        inhabitant: InhabitantDisplaySchema.optional()  // Nested inhabitant from Prisma includes
     })
 
     // Full CookingTeam schema

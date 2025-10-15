@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FormMode } from '~/types/form'
+import type { WeekDayMap } from '~/types/dateTypes'
 
 interface TeamMember {
   id: number
@@ -18,6 +19,7 @@ interface Props {
   teamName: string        // Team name (editable)
   seasonId?: number       // Required for EDIT mode (inhabitant selector)
   assignments?: TeamMember[]
+  affinity?: WeekDayMap | null  // Team's weekday preferences
   compact?: boolean
   mode?: FormMode         // Form mode: view, edit, create
   showMembers?: boolean   // If false, only show count badge in compact mode
@@ -26,12 +28,14 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
   assignments: () => [],
+  affinity: null,
   mode: 'view',
   showMembers: true
 })
 
 const emit = defineEmits<{
   'update:teamName': [name: string]
+  'update:affinity': [affinity: WeekDayMap | null]
   delete: [teamId: number | undefined]
   'add:member': [inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER']
   'remove:member': [assignmentId: number]
@@ -203,81 +207,90 @@ defineExpose({
     </div>
 
     <!-- EDIT MODE: Two-column layout on large screens -->
-    <div v-if="mode === 'edit'" class="flex flex-col lg:flex-row gap-6">
-      <!-- LEFT: Team assignments -->
-      <div class="flex-1 space-y-4">
-        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
-        <div
-          v-for="(members, role) in roleGroups"
-          :key="role"
-          class="space-y-2"
-        >
-          <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
-            {{ roleLabels[role] }}
-          </h5>
+    <div v-if="mode === 'edit'" class="space-y-6">
+      <!-- Team Affinity Section -->
+      <WeekDayMapDisplay
+        :model-value="affinity"
+        label="Holdets madlavningsdage"
+        @update:model-value="(value) => emit('update:affinity', value)"
+      />
 
-          <div v-if="members.length > 0" class="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-            <UAvatarGroup size="md" :max="5">
-              <UTooltip
-                v-for="member in members"
-                :key="member.id"
-                :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-              >
-                <UAvatar
-                  :src="member.inhabitant.pictureUrl"
-                  :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-                  icon="i-heroicons-user"
-                  class="cursor-pointer hover:ring-2 hover:ring-offset-2"
-                  :class="`hover:ring-${teamColor}`"
+      <div class="flex flex-col lg:flex-row gap-6">
+        <!-- LEFT: Team assignments -->
+        <div class="flex-1 space-y-4">
+          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
+          <div
+            v-for="(members, role) in roleGroups"
+            :key="role"
+            class="space-y-2"
+          >
+            <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
+              {{ roleLabels[role] }}
+            </h5>
+
+            <div v-if="members.length > 0" class="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <UAvatarGroup size="md" :max="5">
+                <UTooltip
+                  v-for="member in members"
+                  :key="member.id"
+                  :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                >
+                  <UAvatar
+                    :src="member.inhabitant.pictureUrl"
+                    :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                    icon="i-heroicons-user"
+                    class="cursor-pointer hover:ring-2 hover:ring-offset-2"
+                    :class="`hover:ring-${teamColor}`"
+                    @click="navigateToInhabitant(member.inhabitant.id)"
+                  />
+                </UTooltip>
+              </UAvatarGroup>
+
+              <div class="flex flex-wrap gap-2">
+                <UBadge
+                  v-for="member in members"
+                  :key="member.id"
+                  size="md"
+                  variant="subtle"
+                  :color="teamColor"
+                  class="cursor-pointer hover:opacity-80 transition-opacity"
                   @click="navigateToInhabitant(member.inhabitant.id)"
-                />
-              </UTooltip>
-            </UAvatarGroup>
+                >
+                  {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
+                  <UButton
+                    color="winery"
+                    variant="solid"
+                    size="xs"
+                    icon="i-heroicons-x-mark"
+                    class="ml-1"
+                  />
+                </UBadge>
+              </div>
+            </div>
 
-            <div class="flex flex-wrap gap-2">
-              <UBadge
-                v-for="member in members"
-                :key="member.id"
-                size="md"
-                variant="subtle"
-                :color="teamColor"
-                class="cursor-pointer hover:opacity-80 transition-opacity"
-                @click="navigateToInhabitant(member.inhabitant.id)"
-              >
-                {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
-                <UButton
-                  color="winery"
-                  variant="solid"
-                  size="xs"
-                  icon="i-heroicons-x-mark"
-                  class="ml-1"
-                />
-              </UBadge>
+            <div v-else class="text-sm text-gray-500 italic p-3">
+              Ingen medlemmer tildelt
             </div>
           </div>
-
-          <div v-else class="text-sm text-gray-500 italic p-3">
-            Ingen medlemmer tildelt
-          </div>
         </div>
-      </div>
 
-      <!-- RIGHT: Available inhabitants -->
-      <div class="flex-1 space-y-4">
-        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilgængelige beboere</h4>
-        <InhabitantSelector
-          v-if="teamId && seasonId"
-          :team-id="teamId"
-          :team-name="teamName"
-          :team-number="teamNumber"
-          :team-color="teamColor"
-          :season-id="seasonId"
-          @add:member="(inhabitantId, role) => emit('add:member', inhabitantId, role)"
-          @remove:member="(assignmentId) => emit('remove:member', assignmentId)"
-        />
-        <div v-else class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
-          <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
-          <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
+        <!-- RIGHT: Available inhabitants -->
+        <div class="flex-1 space-y-4">
+          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilgængelige beboere</h4>
+          <InhabitantSelector
+            v-if="teamId && seasonId"
+            :team-id="teamId"
+            :team-name="teamName"
+            :team-number="teamNumber"
+            :team-color="teamColor"
+            :season-id="seasonId"
+            @add:member="(inhabitantId, role) => emit('add:member', inhabitantId, role)"
+            @remove:member="(assignmentId) => emit('remove:member', assignmentId)"
+          />
+          <div v-else class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
+            <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
+            <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
+          </div>
         </div>
       </div>
     </div>

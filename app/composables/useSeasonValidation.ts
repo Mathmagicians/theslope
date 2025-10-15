@@ -5,6 +5,7 @@ import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '~/
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 
 /**
  * Validation schemas and serialization functions for Season objects
@@ -14,6 +15,7 @@ export const useSeasonValidation = () => {
     const {WeekDayMapSchemaRequired, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
     const {DinnerEventDisplaySchema} = useDinnerEventValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
+    const {deserializeCookingTeam} = useCookingTeamValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -87,7 +89,8 @@ export const useSeasonValidation = () => {
             return {
                 ...baseSeason,
                 dinnerEvents: serialized.dinnerEvents,
-                CookingTeams: serialized.CookingTeams,
+                // Deserialize nested CookingTeams (including affinity fields)
+                CookingTeams: serialized.CookingTeams?.map((team: any) => deserializeCookingTeam(team)),
                 ticketPrices: serialized.ticketPrices
             }
         }
