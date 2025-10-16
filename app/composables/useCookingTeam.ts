@@ -1,6 +1,6 @@
 import {useCookingTeamValidation, type CookingTeam} from './useCookingTeamValidation'
 
-const TEAM_COLORS = ['primary', 'neutral', 'secondary', 'info', 'warning', 'error', 'winery', 'party', 'peach', 'caramel'] as const
+const TEAM_COLORS = ['party','secondary', 'neutral', 'info', 'warning', 'error', 'winery', 'primary',  'peach', 'caramel',] as const
 export type TeamColor = typeof TEAM_COLORS[number]
 
 /**

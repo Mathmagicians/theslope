@@ -4,11 +4,13 @@
  *
  * Features:
  * - Search/filter through 100-200 inhabitants
+ * - Pagination for large datasets
  * - Show assignment status with team badges
  * - Direct role action buttons (CHEF, COOK, JUNIORHELPER)
  * - Immediate save on add/remove
  * - UTable for consistent UI
  */
+import { getPaginationRowModel } from '@tanstack/vue-table'
 
 interface Inhabitant {
   id: number
@@ -49,6 +51,10 @@ const {inhabitants: inhabitantsWithAssignments, pending, error, refresh} = await
 defineExpose({
   refresh
 })
+
+// Inject responsive breakpoint from parent
+const isMd = inject<Ref<boolean>>('isMd')
+const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Search and filtering
 const searchQuery = ref('')
@@ -154,25 +160,53 @@ const sorting = ref([
   }
 ])
 
+// Pagination
+const pagination = ref({
+  pageIndex: 0,
+  pageSize: 25
+})
+
+const table = useTemplateRef('table')
+
+
 </script>
 
 <template>
   <div class="space-y-4">
-    <!-- Search -->
-    <UInput
-        v-model="searchQuery"
-        trailing-icon="i-heroicons-magnifying-glass"
-        placeholder="Søg efter navn..."
-    />
+    <!-- Search and Pagination Row -->
+    <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+      <!-- Search -->
+      <UInput
+          v-model="searchQuery"
+          trailing-icon="i-heroicons-magnifying-glass"
+          placeholder="Søg efter navn..."
+          class="flex-1 md:max-w-md"
+      />
+      <!-- Pagination -->
+      <UPagination
+          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
+          :total="table?.tableApi?.getFilteredRowModel().rows.length"
+          :size="getIsMd ? 'md' : 'sm'"
+          :sibling-count="getIsMd ? 2 : 0"
+          @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
+      />
+    </div>
 
     <!-- Table -->
     <UTable
+        ref="table"
         sticky
         :columns="columns"
         :data="filteredInhabitants"
         :loading="pending"
         :ui="{ td: 'py-2' }"
         v-model:sorting="sorting"
+        v-model:pagination="pagination"
+        :pagination-options="{
+          getPaginationRowModel: getPaginationRowModel()
+        }"
+        class="flex-1"
     >
       <!-- Name column with avatar -->
       <template #name-cell="{ row }">
@@ -237,7 +271,7 @@ const sorting = ref([
         </div>
         <UButton
             v-else-if="getTeamInfo(row.original).type === 'current'"
-            color="red"
+            color="error"
             variant="ghost"
             size="sm"
             icon="i-heroicons-x-mark"
@@ -264,5 +298,6 @@ const sorting = ref([
         </div>
       </template>
     </UTable>
+    
   </div>
 </template>
