@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormSubmitEvent} from "#ui/types"
-import {type DateRange, type WeekDayMap, WEEKDAYS} from "~/types/dateTypes"
+import {type DateRange, type WeekDayMap} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
 //COMPONENT DEPENDENCIES
@@ -95,16 +95,12 @@ const buttonText = computed(() => {
                     :disabled="isViewMode"/>
 
                 <!-- Pick weekdays for cooking -->
-                <UFormField label="Hvilke ugedage skal der være fællesspisning?"
-                            name="cookingDays">
-                  <UCheckbox v-for="day in WEEKDAYS"
-                             :key="day"
-                             :name="`cookingDay-${day}`"
-                             v-model="model.cookingDays[day]"
-                             :label="day"
-                             class="capitalize"
-                             :disabled="isViewMode"/>
-                </UFormField>
+                <WeekDayMapDisplay
+                    v-model="model.cookingDays"
+                    name="cookingDays"
+                    label="Hvilke ugedage skal der være fællesspisning?"
+                    :disabled="isViewMode"
+                />
 
                 <!-- Pick holidays -->
                 <USeparator/>

@@ -20,6 +20,7 @@ interface Props {
   seasonId?: number       // Required for EDIT mode (inhabitant selector)
   assignments?: TeamMember[]
   affinity?: WeekDayMap | null  // Team's weekday preferences
+  seasonCookingDays?: WeekDayMap | null  // Season's cooking days (parent restriction)
   compact?: boolean
   mode?: FormMode         // Form mode: view, edit, create
   showMembers?: boolean   // If false, only show count badge in compact mode
@@ -211,6 +212,7 @@ defineExpose({
       <!-- Team Affinity Section -->
       <WeekDayMapDisplay
         :model-value="affinity"
+        :parent-restriction="seasonCookingDays"
         label="Holdets madlavningsdage"
         @update:model-value="(value) => emit('update:affinity', value)"
       />

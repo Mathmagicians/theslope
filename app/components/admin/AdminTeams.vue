@@ -312,6 +312,7 @@ const columns = [
                     :season-id="selectedSeason?.id"
                     :assignments="selectedTeam.assignments || []"
                     :affinity="selectedTeam.affinity"
+                    :season-cooking-days="selectedSeason?.cookingDays"
                     :mode="FORM_MODES.EDIT"
                     @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id!, newName)"
                     @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id!, affinity)"

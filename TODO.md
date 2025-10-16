@@ -718,3 +718,28 @@ Form validation is working (submit button is disabled when errors exist), but th
 
 ### Phase 2: Major Framework Updates ✅
 - ✅ Nuxt 4 + Nuxt UI + Tailwind CSS Migration
+
+## CookingTeam Affinity UI Implementation (2025-10-16)
+**Compliance**: ADR-007, DRY principles
+
+### Implementation
+- ✅ **WeekDayMapDisplay component** enhanced with edit mode
+  - UFormField integration for consistent form UI styling
+  - Checkbox handlers for adding/removing cooking days
+  - Factory method (`createDefaultWeekdayMap`) for null affinity initialization
+  - Type-safe color prop using `BadgeProps['color']` from Nuxt UI (DRY)
+  - Compact mode with color-coded day badges (soft variant)
+  - Full mode with labeled checkboxes for editing
+- ✅ **CookingTeamCard layout** reorganized
+  - Moved team affinity section above members section
+  - Better visual hierarchy in edit mode
+- ✅ **AdminTeams handlers** connected
+  - `handleUpdateTeamAffinity` for immediate save to DB
+  - Store refresh pattern after updates
+  - Toast notifications for user feedback
+
+### Key Achievements
+- Affinity field fully editable in UI with immediate save
+- Type safety maintained using Nuxt UI's own type definitions
+- Component reusability (WeekDayMapDisplay used in both compact and full modes)
+- Consistent form styling across all admin forms
