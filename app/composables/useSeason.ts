@@ -1,10 +1,22 @@
-import {type DateRange} from '~/types/dateTypes'
-import {calculateDayFromWeekNumber, copyPartialDateRange, formatDateRange, DATE_SETTINGS, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval, selectWeekNumbersFromListThatFitInsideDateRange} from '~/utils/date'
+import {type DateRange, type WeekDayMap} from '~/types/dateTypes'
+import {
+    calculateDayFromWeekNumber,
+    copyPartialDateRange,
+    formatDateRange,
+    DATE_SETTINGS,
+    selectWeekNumbersFromListThatFitInsideDateRange, getEachDayOfIntervalWithSelectedWeekdays
+} from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DinnerEventCreate} from './useDinnerEventValidation'
+import {
+    computeAffinitiesForTeams,
+    computeCookingDates,
+    computeTeamAssignmentsForEvents,
+    findFirstCookingDayInDates
+} from "~/utils/season";
 
 /**
  * Business logic for working with seasons
@@ -23,7 +35,7 @@ export const useSeason = () => {
     const appConfig = useAppConfig()
     const {theslope} = appConfig
     const {createTicketPrice} = useTicketPriceValidation()
-    
+
     /**
      * Create a default season based on app configuration.
      * Returns empty holidays - component should calculate holidays reactively using getDefaultHolidays()
@@ -35,9 +47,13 @@ export const useSeason = () => {
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const ticketPrices = theslope.defaultSeason.ticketPrices?.
-            map( ({ticketType, price, description, maximumAgeLimit}) => createTicketPrice(
-                ticketType, price, undefined, description, maximumAgeLimit )) ??
+        const ticketPrices = theslope.defaultSeason.ticketPrices?.map(({
+                                                                           ticketType,
+                                                                           price,
+                                                                           description,
+                                                                           maximumAgeLimit
+                                                                       }) => createTicketPrice(
+                ticketType, price, undefined, description, maximumAgeLimit)) ??
             [createTicketPrice('ADULT', 4000)]
 
         return {
@@ -68,7 +84,7 @@ export const useSeason = () => {
     /**
      * Create a season name from a date range
      */
-    const createSeasonName = (range: DateRange | undefined): string => 
+    const createSeasonName = (range: DateRange | undefined): string =>
         formatDateRange(range, DATE_SETTINGS.SEASON_NAME_MASK)
 
     /**
@@ -94,6 +110,7 @@ export const useSeason = () => {
         }
     }
 
+
     /**
      * Generate dinner event data for a season
      *
@@ -104,18 +121,13 @@ export const useSeason = () => {
      * @returns Array of DinnerEventCreate objects for each valid dinner date
      */
     const generateDinnerEventDataForSeason = (season: Season): DinnerEventCreate[] => {
-        // Step 1: Generate all dates matching cooking days within season range
-        const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
-            season.seasonDates.start,
-            season.seasonDates.end,
-            season.cookingDays
+        if (!SeasonSchema.safeParse(season).success) return []
+        const cookingDates = computeCookingDates(
+            season.cookingDays,
+            season.seasonDates,
+            season.holidays
         )
-
-        // Step 2: Exclude holiday periods
-        const validDates = excludeDatesFromInterval(allCookingDates, season.holidays)
-
-        // Step 3: Create dinner event data for each valid date
-        return validDates.map(date => ({
+        return cookingDates.map(date => ({
             date,
             menuTitle: 'TBD',
             menuDescription: null,
@@ -125,6 +137,41 @@ export const useSeason = () => {
             cookingTeamId: null,
             seasonId: season.id!
         }))
+    }
+
+    const assignAffinitiesToTeams = (season: Season): CookingTeam[] => {
+        // check inputs, and fail early
+        if (!SeasonSchema.safeParse(season).success || !season.CookingTeams) return []
+        const {
+            CookingTeams: teams = [],
+            dinnerEvents = [],
+            consecutiveCookingDays,
+            cookingDays,
+            seasonDates
+        } = season
+        const dates = dinnerEvents.length > 0
+            ? dinnerEvents.map(event => event.date)
+            : getEachDayOfIntervalWithSelectedWeekdays(
+                seasonDates.start,
+                seasonDates.end,
+                cookingDays
+            )
+        const first = findFirstCookingDayInDates(cookingDays, dates)
+        if( !first ) return teams
+        return computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, first)
+    }
+
+    const assignTeamsToEvents = (season: Season): DinnerEvent[] => {
+        // check inputs, and fail early
+        if (!SeasonSchema.safeParse(season).success) return []
+        const {
+            dinnerEvents = [],
+            CookingTeams: teams = [],
+            consecutiveCookingDays,
+            seasonDates,
+            cookingDays
+        } = season
+        return computeTeamAssignmentsForEvents( teams, cookingDays, seasonDates, consecutiveCookingDays, dinnerEvents)
     }
 
     return {
@@ -137,6 +184,8 @@ export const useSeason = () => {
         coalesceSeason,
         serializeSeason,
         deserializeSeason,
-        generateDinnerEventDataForSeason
+        generateDinnerEventDataForSeason,
+        assignAffinitiesToTeams,
+        assignTeamsToEvents
     }
 }

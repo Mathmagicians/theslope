@@ -163,7 +163,7 @@ const sorting = ref([
 // Pagination
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 25
+  pageSize: 15
 })
 
 const table = useTemplateRef('table')

@@ -1,7 +1,8 @@
 import {useCookingTeamValidation, type CookingTeam} from './useCookingTeamValidation'
+import type Badge from '#ui/components/Badge.vue'
 
-const TEAM_COLORS = ['party','secondary', 'neutral', 'info', 'warning', 'error', 'winery', 'primary',  'peach', 'caramel',] as const
-export type TeamColor = typeof TEAM_COLORS[number]
+const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary',  'caramel'] as const
+export type TeamColor = Badge['variants']['color']
 
 /**
  * Business logic for working with cooking teams

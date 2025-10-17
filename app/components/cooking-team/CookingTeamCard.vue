@@ -60,6 +60,13 @@ const teamColor = computed(() => {
   return getTeamColor(props.teamNumber - 1) // teamNumber is 1-based, getTeamColor expects 0-based
 })
 
+// Resolve color alias to actual CSS variable color name
+const appConfig = useAppConfig()
+const resolvedColor = computed(() => {
+  const colorName = teamColor.value as string
+  return appConfig.ui?.colors?.[colorName] ?? 'neutral'
+})
+
 // Group assignments by role
 const roleGroups = computed(() => {
   const groups = {
@@ -181,20 +188,28 @@ defineExpose({
   <!-- FULL VIEW with role sections -->
   <div v-else class="space-y-4">
     <!-- TEAM HEADER (for CREATE/EDIT modes) -->
-    <div v-if="isEditable" class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:p-4 border-y md:border rounded-none md:rounded-lg border-gray-200 dark:border-gray-700">
+    <div
+      v-if="isEditable"
+      class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:p-4 border-y-2 md:border-2 border-dashed rounded-none md:rounded-lg"
+      :class="`border-${teamColor}-400 dark:border-${teamColor}-700`"
+      :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
+    >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="rounded-full">
+        <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="rounded-full p-2 md:p-8">
           <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '48' : '16'" />
         </UBadge>
-        <UInput
-          v-model="editedName"
-          data-testid="team-name-input"
-          class="flex-1 max-w-md"
-          placeholder="Holdnavn"
-          trailing-icon="i-heroicons-pencil"
-          @blur="handleNameUpdate"
-          @keyup.enter="handleNameUpdate"
-        />
+        <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
+          <UInput
+            v-model="editedName"
+            data-testid="team-name-input"
+            placeholder="Holdnavn"
+            trailing-icon="i-heroicons-pencil"
+            class="w-1/2"
+            :ui="{ base: 'pe-11', trailing: 'me-3' }"
+            @blur="handleNameUpdate"
+            @keyup.enter="handleNameUpdate"
+          />
+        </UFormField>
       </div>
       <UButton
         data-testid="delete-team-button"
@@ -214,19 +229,33 @@ defineExpose({
       <h3 class="text-lg font-semibold">{{ teamName }}</h3>
     </div>
 
-    <!-- EDIT MODE: Two-column layout on large screens -->
-    <div v-if="mode === 'edit'" class="space-y-6">
-      <!-- Team Affinity Section -->
-      <WeekDayMapDisplay
-        :model-value="affinity"
-        :parent-restriction="seasonCookingDays"
-        label="Holdets madlavningsdage"
-        @update:model-value="(value) => emit('update:affinity', value)"
-      />
+    <!-- EDIT MODE: Two-row layout -->
+    <div v-if="mode === 'edit'" class="space-y-6 lg:space-y-10">
+      <!-- ROW1: Weekday assignments + Calendar -->
+      <div class="flex flex-col md:flex-row gap-6">
+        <!-- LEFT: Team Affinity -->
+        <div class="w-full md:w-1/2">
+          <WeekDayMapDisplay
+            :model-value="affinity"
+            :parent-restriction="seasonCookingDays"
+            label="Holdets madlavningsdage"
+            @update:model-value="(value) => emit('update:affinity', value)"
+          />
+        </div>
 
-      <div class="flex flex-col lg:flex-row gap-6">
-        <!-- LEFT: Team assignments -->
-        <div class="flex-1 space-y-4">
+        <!-- RIGHT: Calendar placeholder -->
+        <div class="w-full md:w-1/2">
+          <div class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
+            <UIcon name="i-heroicons-calendar" class="text-4xl mb-2" />
+            <p class="text-sm">Kalender med madlavningsdage (kommer snart)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW2: Team members + Inhabitant finder -->
+      <div class="flex flex-col md:flex-row gap-6">
+        <!-- LEFT: Team members -->
+        <div class="w-full md:w-1/2 space-y-4">
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
           <div
             v-for="(members, role) in roleGroups"
@@ -283,8 +312,8 @@ defineExpose({
           </div>
         </div>
 
-        <!-- RIGHT: Available inhabitants -->
-        <div class="flex-1 space-y-4">
+        <!-- RIGHT: Inhabitant finder -->
+        <div class="w-full md:w-1/2 space-y-4">
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilgængelige beboere</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"

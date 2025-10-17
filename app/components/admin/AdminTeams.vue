@@ -33,7 +33,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createTeam, updateTeam, deleteTeam, onSeasonSelect, addTeamMember, removeTeamMember} = store
+const {createTeam, updateTeam, deleteTeam, onSeasonSelect, addTeamMember, removeTeamMember, assignTeamAffinities} = store
 
 // Get teams from selected season - ALWAYS show live data
 const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
@@ -50,13 +50,14 @@ const teamCount = ref(1)
 const createDraft = ref<CookingTeam[]>([])
 
 // Watch component state to regenerate CREATE draft
-watch([formMode, teamCount, selectedSeason], () => {
+watch([formMode, teamCount, selectedSeason, teams], () => {
   if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
+    const existingTeamCount = teams.value.length
     createDraft.value = Array.from({length: teamCount.value}, (_, index) =>
         getDefaultCookingTeam(
             selectedSeason.value.id!,
             selectedSeason.value.shortName ?? '',
-            index + 1
+            existingTeamCount + index + 1  // Start numbering from N+1
         )
     )
   }
@@ -128,25 +129,47 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // CREATE MODE: Batch create teams
 const handleBatchCreateTeams = async () => {
-  if (!createDraft.value.length) return
+  if (!createDraft.value.length || !selectedSeason.value?.id) return
+
+  // Step 1: Create all teams
   for (const team of createDraft.value) {
     await createTeam(team)
   }
-  showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet`)
+
+  // Step 2: Assign affinities to teams
+  try {
+    const result = await assignTeamAffinities(selectedSeason.value.id)
+    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med madlavningsdage`)
+  } catch (affinityError) {
+    // Teams created but affinity assignment failed
+    showSuccessToast('Madhold oprettet', 'Madlavningsdage kunne ikke tildeles automatisk')
+  }
+
   await onModeChange(FORM_MODES.VIEW)
 }
 
 // EDIT MODE: Add new team (IMMEDIATE SAVE)
 const handleAddTeam = async () => {
-  if (!selectedSeason.value) return
+  if (!selectedSeason.value?.id) return
 
   const newTeam = getDefaultCookingTeam(
-      selectedSeason.value.id!,
+      selectedSeason.value.id,
       selectedSeason.value.shortName ?? '',
       teams.value.length + 1
   )
-  await createTeam(newTeam) // Immediate save to DB
-  showSuccessToast('Madhold tilføjet')
+
+  // Step 1: Create the team
+  await createTeam(newTeam)
+
+  // Step 2: Assign affinities to all teams (recalculates rotation)
+  try {
+    await assignTeamAffinities(selectedSeason.value.id)
+    showSuccessToast('Madhold tilføjet', 'Madlavningsdage tildelt automatisk')
+  } catch (affinityError) {
+    // Team created but affinity assignment failed
+    showSuccessToast('Madhold tilføjet', 'Madlavningsdage kunne ikke tildeles automatisk')
+  }
+
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -254,9 +277,12 @@ const columns = [
     <template #default>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
-        <div v-if="formMode === FORM_MODES.CREATE" class="p-4 space-y-4">
+        <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">
           <div class="flex items-center gap-4">
-            <label for="team-count" class="text-lg font-bold">Hvor mange madhold skal vi have?</label>
+            <label for="team-count" class="text-lg font-bold">
+              <span v-if="teams.length > 0">Vi har allerede {{ teams.length }} madhold. Hvor mange nye vil du lave?</span>
+              <span v-else>Hvor mange madhold skal vi have?</span>
+            </label>
             <input
                 id="team-count"
                 v-model.number="teamCount"
@@ -274,7 +300,7 @@ const columns = [
         </div>
 
         <!-- EDIT MODE: Master-Detail Layout -->
-        <div v-else-if="formMode === FORM_MODES.EDIT" class="p-4 space-y-6">
+        <div v-else-if="formMode === FORM_MODES.EDIT" class="px-4 pb-4 space-y-6">
           <div class="flex flex-col lg:flex-row gap-6">
             <!-- LEFT PANEL: Vertical Team Tabs -->
             <div class="lg:w-1/5 space-y-3" data-testid="team-tabs-list">

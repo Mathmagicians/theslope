@@ -58,45 +58,6 @@ When teams are created for a season, they are automatically assigned to dinner e
 
 ---
 
-### Task 1: Database Schema Changes
-
-**Prisma Schema Updates**:
-- [x ] Add `consecutiveCookingDays: Int @default(2)` to Season model
-- [x ] Add `affinity: String?` to CookingTeam model (JSON array of weekdays)
-- [ x] Add `allocationPercentage: Int @default(100)` to CookingTeamAssignment model (0-100 range)
-- [ x] Run migrations: `npm run db:migrate:local` and `npm run db:generate-client`
-- [ x] Add `defaultConsecutiveCookingDays: 2` to `app.config.ts`
-- [ x] Update validation schemas (SeasonSchema, 
-- [ x] update CookingTeamSchema
-- [ x] Update test factories (SeasonFactory, CookingTeamFactory)
-- [ x] Write API tests verifying fields persist/retrieve correctly
-
----
-
-### Task 2: Season Form + Team Affinity Generation
-
-**Part A: Season Form** (`/admin/planning`)
-- [ x] Add numeric input for `consecutiveCookingDays` (default from config, validation ≥ 1)
-- [x ] Update AdminPlanning.vue
-- [x ] E2E tests for validation
-
-**Part B: Team Affinity Calculation** (`/admin/teams`)
-- [ ] Create `calculateTeamAffinities()` utility
-  - Algorithm: Round-robin weekday assignment based on consecutiveCookingDays
-  - Example: 3 teams, 2 consecutive days → Team 1: [Mon, Wed], Team 2: [Fri, Mon], Team 3: [Wed, Fri]
-- [ ] Update AdminTeams.vue to calculate and display affinities when user inputs team count
-- [ ] Update CookingTeamCard.vue to show affinity: "Hold 1 (Mandag, Onsdag)"
-- [ ] Save affinities via PUT /api/admin/team
-- [ ] E2E tests for affinity calculation and display
-
-**BDD Scenarios**:
-- 3 teams, consecutiveCookingDays=2, cookingDays=[Mon,Wed,Fri] → affinities calculated correctly
-- consecutiveCookingDays > enabled weekdays → affinity wraps with duplicates
-- consecutiveCookingDays=0 → validation error
-- Team count changes → affinities recalculated
-
----
-
 ### Task 3: Assignment Endpoint
 
 **Endpoint**: `POST /api/admin/season/[id]/assign-teams-to-dinner-events`
@@ -348,6 +309,31 @@ Form validation is working (submit button is disabled when errors exist), but th
 - [ ] Try `@error` event pattern as alternative to v-slot
 - [ ] Research `validate-on` prop configuration
 - [ ] Check if UForm exposes errors differently in v4
+
+---
+
+## Medium priority: Type-safe deserializeSeason (ADR-010 alignment)
+
+### Issue
+`deserializeSeason(serialized: SerializedSeason | any)` uses `| any` escape hatch, losing compile-time type safety.
+
+### Root Cause
+- **Prisma returns conditional types** based on `include` clause (index vs detail endpoints)
+- **SerializedSeason is transform OUTPUT**, not deserialize INPUT (one-way schema)
+- Function handles multiple input shapes (with/without relations) but lacks proper type
+
+### Options
+1. **Keep `| any`** - Pragmatic, runtime-safe, but loses compile-time safety
+2. **Use Prisma Payload Types** - Type-safe but couples to Prisma, maintenance overhead
+3. **Create SerializedSeasonBase type** ✅ **RECOMMENDED**
+   - Define base serialized type matching database format
+   - Separate from domain Season type (ADR-010 compliant)
+   - Type-safe contract: what repository returns → what deserialize accepts
+
+### Action Items
+- [ ] Create `SerializedSeasonBase` type in `useSeasonValidation.ts`
+- [ ] Update `deserializeSeason(serialized: SerializedSeasonBase): Season`
+- [ ] Document in ADR-010 (serialized types represent DB format, not transform output)
 
 ---
 
@@ -743,3 +729,12 @@ Form validation is working (submit button is disabled when errors exist), but th
 - Type safety maintained using Nuxt UI's own type definitions
 - Component reusability (WeekDayMapDisplay used in both compact and full modes)
 - Consistent form styling across all admin forms
+
+## Team Affinity Auto-Assignment (2025-10-17)
+**Date**: 2025-10-17 | **Files**: `assign-team-affinities.post.ts`, `plan.ts`, `AdminTeams.vue`
+
+- ✅ **API endpoint** `POST /season/[id]/assign-team-affinities` - Calculates and assigns affinities using `computeAffinitiesForTeams` from `app/utils/season.ts`
+- ✅ **Store integration** - `assignTeamAffinities()` method in plan store with refresh
+- ✅ **Automatic flow** - Affinities auto-assigned after batch team creation and single team addition
+- ✅ **E2E test** - `season.e2e.spec.ts:493-533` verifies all cooking days assigned to exactly one team
+- ✅ Pattern follows dinner event generation (create → auto-generate → toast notification)

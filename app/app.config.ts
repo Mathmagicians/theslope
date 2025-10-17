@@ -30,7 +30,8 @@ export default defineAppConfig({
             winery: "winery",
             party: "party",
             peach: "peach",
-            caramel: "caramel"
+            caramel: "caramel",
+            ocean: 'blue'
         }
     }
 })

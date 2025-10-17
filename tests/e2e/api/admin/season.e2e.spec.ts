@@ -490,6 +490,48 @@ test.describe('Season API Tests', () => {
 
     })
 
+    test.describe('Assign Team Affinities', () => {
+        test("POST /season/[id]/assign-team-affinities should assign affinities to all teams", async ({browser}) => {
+            // GIVEN: A short season with cooking days (Mon/Wed/Fri) and 3 teams
+            const context = await validatedBrowserContext(browser)
+
+            const seasonData = {
+                ...SeasonFactory.defaultSeason(),
+                seasonDates: {
+                    start: new Date(2025, 0, 6),   // Monday, Jan 6
+                    end: new Date(2025, 0, 10)     // Friday, Jan 10 (1 week)
+                },
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon/Wed/Fri
+                consecutiveCookingDays: 1
+            }
+            const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
+            createdSeasonIds.push(season.id as number)
+
+            // Generate dinner events (needed for finding first cooking day)
+              await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+
+            // WHEN: POST /api/admin/season/[id]/assign-team-affinities
+            const response = await context.request.post(`/api/admin/season/${season.id}/assign-team-affinities`)
+            expect(response.status()).toBe(200)
+
+            const result = await response.json()
+
+            // THEN: Response should include updated teams with affinities
+            expect(result.seasonId).toBe(season.id)
+            expect(result.teamCount).toBe(3)
+            expect(result.teams.length).toBe(3)
+
+            // AND: All three cooking days (Mon/Wed/Fri) should be assigned to exactly one team each
+            const mondayTeams = result.teams.filter(t => t.affinity.mandag)
+            const wednesdayTeams = result.teams.filter(t => t.affinity.onsdag)
+            const fridayTeams = result.teams.filter(t => t.affinity.fredag)
+
+            expect(mondayTeams.length).toBe(1)
+            expect(wednesdayTeams.length).toBe(1)
+            expect(fridayTeams.length).toBe(1)
+        })
+    })
+
 
     test.afterAll(async ({browser}) => {
         // Only run cleanup if we created a season

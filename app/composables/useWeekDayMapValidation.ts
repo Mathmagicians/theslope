@@ -1,5 +1,11 @@
 import {z} from 'zod'
-import {WEEKDAYS, type WeekDayMap, type WeekDay} from '~/types/dateTypes'
+import {
+    WEEKDAYS,
+    type WeekDayMap,
+    type WeekDay,
+    createWeekDayMapFromSelection,
+    createDefaultWeekdayMap
+} from '~/types/dateTypes'
 
 /**
  * Validation schemas and serialization for WeekDayMap objects
@@ -18,33 +24,6 @@ export const useWeekDayMapValidation = () => {
 
     // No days required (for CookingTeam/Inhabitant affinity)
     const WeekDayMapSchemaOptional = WeekDayMapSchema
-
-    // Create WeekDayMap from array of selected weekdays (with validation)
-    const createWeekDayMapFromSelection = (selectedDays: string[]): WeekDayMap => {
-        // Filter to only valid weekdays
-        const validSelectedDays = selectedDays.filter(day =>
-            WEEKDAYS.includes(day as WeekDay)
-        ) as WeekDay[]
-
-        return WEEKDAYS.reduce((acc, day) => ({
-            ...acc,
-            [day]: validSelectedDays.includes(day)
-        }), {} as WeekDayMap)
-    }
-
-    // Create WeekDayMap with default values (for tests and utilities)
-    const createDefaultWeekdayMap = (value: boolean | boolean[] = false): WeekDayMap => {
-        if (Array.isArray(value)) {
-            return WEEKDAYS.reduce((acc, day, index) => ({
-                ...acc,
-                [day]: value[index] ?? false
-            }), {} as WeekDayMap)
-        }
-        return WEEKDAYS.reduce((acc, day) => ({
-            ...acc,
-            [day]: value
-        }), {} as WeekDayMap)
-    }
 
     // Serialization for database storage
     const serializeWeekDayMap = (map: WeekDayMap): string => JSON.stringify(map)

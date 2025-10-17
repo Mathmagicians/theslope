@@ -120,6 +120,23 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        const assignTeamAffinities = async (seasonId: number) => {
+            try {
+                const result = await $fetch<{seasonId: number, teamCount: number, teams: CookingTeam[]}>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
+                    method: 'POST'
+                })
+                console.info(`👥 > PLAN_STORE > Assigned affinities to ${result.teamCount} teams for season ${seasonId}`)
+                // Refresh selected season to get updated teams with affinities
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return result
+            } catch (e: any) {
+                handleApiError(e, 'assignTeamAffinities')
+                throw e
+            }
+        }
+
         const updateSeason = async (season: Season) => {
             try {
                 // API accepts domain objects (JSON.stringify converts Date to ISO strings)
@@ -249,6 +266,7 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             generateDinnerEvents,
+            assignTeamAffinities,
             onSeasonSelect,
             createTeam,
             updateTeam,

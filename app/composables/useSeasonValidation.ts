@@ -1,5 +1,4 @@
 import {z} from 'zod'
-import {type DateRange} from '~/types/dateTypes'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping} from '~/utils/date'
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
@@ -15,7 +14,7 @@ export const useSeasonValidation = () => {
     const {WeekDayMapSchemaRequired, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
     const {DinnerEventDisplaySchema} = useDinnerEventValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
-    const {deserializeCookingTeam} = useCookingTeamValidation()
+    const {deserializeCookingTeam, CookingTeamWithMembersSchema} = useCookingTeamValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -35,7 +34,7 @@ export const useSeasonValidation = () => {
         consecutiveCookingDays: z.number().int().min(1).max(7).default(1),
         // Optional relations (from server)
         dinnerEvents: z.array(DinnerEventDisplaySchema).optional(),
-        CookingTeams: z.array(z.any()).optional(),
+        CookingTeams:  z.array(CookingTeamWithMembersSchema).optional(),
         ticketPrices: TicketPricesArraySchema
     })
 

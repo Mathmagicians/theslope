@@ -1,7 +1,8 @@
 import {describe, it, expect} from 'vitest'
 import {useSeason} from '~/composables/useSeason'
 import {type Season} from '~/composables/useSeasonValidation'
-import type {DateRange} from "~/types/dateTypes"
+import type {DateRange, WeekDayMap} from "~/types/dateTypes"
+import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
@@ -180,100 +181,29 @@ describe('getDefaultHolidays', () => {
 
         // THEN: Should only return week 42 (October)
         expect(holidays.length).toBe(1)
-        expect(holidays[0].start.getMonth()).toBe(9) // October (month 9)
+        expect(holidays[0]?.start.getMonth()).toBe(9) // October (month 9)
     })
 })
 
 describe('generateDinnerEventDataForSeason', () => {
     const { generateDinnerEventDataForSeason, getDefaultSeason } = useSeason()
 
-    it('should generate events for all cooking days within season dates', () => {
-        // GIVEN: A season with Monday and Wednesday as cooking days
-        const season: Season = {
-            ...getDefaultSeason(),
-            id: 1,
-            seasonDates: {
-                start: new Date(2025, 0, 6),  // Monday, Jan 6, 2025
-                end: new Date(2025, 0, 31)     // Friday, Jan 31, 2025
-            },
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, false, false, false]) // Mon, Wed
-        }
+    it('should return empty array for invalid season', () => {
+        // GIVEN: Invalid season (missing required fields)
+        const invalidSeason = {} as Season
 
         // WHEN: Generating dinner event data
-        const events = generateDinnerEventDataForSeason(season)
+        const events = generateDinnerEventDataForSeason(invalidSeason)
 
-        // THEN: Events are created for all Mondays and Wednesdays
-        expect(events.length).toBeGreaterThan(0)
-
-        // AND: All events have correct properties
-        events.forEach(event => {
-            expect(event.seasonId).toBe(1)
-            expect(event.menuTitle).toBe('TBD')
-            expect(event.dinnerMode).toBe('NONE')
-            expect(event.chefId).toBeNull()
-            expect(event.cookingTeamId).toBeNull()
-
-            // Verify dates are Monday (1) or Wednesday (3)
-            const dayOfWeek = event.date.getDay()
-            expect([1, 3]).toContain(dayOfWeek)
-        })
-    })
-
-    it('should exclude holidays from generated events', () => {
-        // GIVEN: A season with Tuesday as cooking day and a holiday
-        const season: Season = {
-            ...getDefaultSeason(),
-            id: 2,
-            seasonDates: {
-                start: new Date(2025, 0, 1),
-                end: new Date(2025, 0, 31)
-            },
-            cookingDays: createDefaultWeekdayMap([false, true, false, false, false, false, false]), // Tuesday
-            holidays: [
-                {
-                    start: new Date(2025, 0, 14),  // Tuesday, Jan 14
-                    end: new Date(2025, 0, 14)
-                }
-            ]
-        }
-
-        // WHEN: Generating dinner event data
-        const events = generateDinnerEventDataForSeason(season)
-
-        // THEN: No event exists for the holiday date
-        const holidayDate = new Date(2025, 0, 14)
-        const hasHolidayEvent = events.some(event =>
-            event.date.getTime() === holidayDate.getTime()
-        )
-        expect(hasHolidayEvent).toBe(false)
-
-        // AND: Events exist for other Tuesdays
-        expect(events.length).toBeGreaterThan(0)
-        events.forEach(event => {
-            expect(event.date.getDay()).toBe(2) // Tuesday
-        })
-    })
-
-    it('should return empty array when no cooking days are selected', () => {
-        // GIVEN: A season with no cooking days
-        const season: Season = {
-            ...getDefaultSeason(),
-            id: 3,
-            cookingDays: createDefaultWeekdayMap(false) // All false
-        }
-
-        // WHEN: Generating dinner event data
-        const events = generateDinnerEventDataForSeason(season)
-
-        // THEN: No events are generated
+        // THEN: Returns empty array
         expect(events).toEqual([])
     })
 
-    it('should respect season date boundaries', () => {
-        // GIVEN: A short season (one week) with daily cooking
+    it('should create event objects from computed cooking dates', () => {
+        // GIVEN: A valid season with cooking days
         const season: Season = {
             ...getDefaultSeason(),
-            id: 4,
+            id: 1,
             seasonDates: {
                 start: new Date(2025, 0, 6),   // Monday
                 end: new Date(2025, 0, 10)     // Friday
@@ -284,13 +214,148 @@ describe('generateDinnerEventDataForSeason', () => {
         // WHEN: Generating dinner event data
         const events = generateDinnerEventDataForSeason(season)
 
-        // THEN: Exactly 5 events (Mon-Fri)
+        // THEN: Creates event objects with correct properties
         expect(events.length).toBe(5)
-
-        // AND: All events are within season boundaries
         events.forEach(event => {
-            expect(event.date >= season.seasonDates.start).toBe(true)
-            expect(event.date <= season.seasonDates.end).toBe(true)
+            expect(event.seasonId).toBe(1)
+            expect(event.menuTitle).toBe('TBD')
+            expect(event.menuDescription).toBeNull()
+            expect(event.menuPictureUrl).toBeNull()
+            expect(event.dinnerMode).toBe('NONE')
+            expect(event.chefId).toBeNull()
+            expect(event.cookingTeamId).toBeNull()
+            expect(event.date).toBeInstanceOf(Date)
         })
+    })
+})
+
+describe('assignAffinitiesToTeams', () => {
+    const { assignAffinitiesToTeams, getDefaultSeason } = useSeason()
+
+    // Helper to create teams without affinity
+    const createTeam = (id: number, name: string) => ({
+        id,
+        name,
+        seasonId: 1,
+        affinity: null,
+        assignments: []
+    })
+
+    it('should return empty array for invalid season', () => {
+        // GIVEN: Invalid season (missing required fields)
+        const invalidSeason = {} as Season
+
+        // WHEN: Assigning affinities to teams
+        const result = assignAffinitiesToTeams(invalidSeason)
+
+        // THEN: Returns empty array
+        expect(result).toEqual([])
+    })
+
+    it('should return empty array when CookingTeams is missing', () => {
+        // GIVEN: Valid season but no CookingTeams
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 1,
+            CookingTeams: undefined
+        }
+
+        // WHEN: Assigning affinities to teams
+        const result = assignAffinitiesToTeams(season)
+
+        // THEN: Returns empty array
+        expect(result).toEqual([])
+    })
+
+    it('should call computeAffinitiesForTeams with destructured season data', () => {
+        // GIVEN: Valid season with teams
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 1,
+            consecutiveCookingDays: 2,
+            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+            CookingTeams: [
+                createTeam(1, 'Hold 1'),
+                createTeam(2, 'Hold 2'),
+                createTeam(3, 'Hold 3')
+            ]
+        }
+
+        // WHEN: Assigning affinities to teams
+        const result = assignAffinitiesToTeams(season)
+
+        // THEN: Returns teams with computed affinities (WeekDayMap objects)
+        expect(result).toHaveLength(3)
+        result.forEach((team) => {
+            const affinity = team.affinity as WeekDayMap
+            expect(affinity).not.toBeNull()
+            // Verify it has all weekday keys
+            WEEKDAYS.forEach((weekday) => {
+                expect(affinity[weekday]).toEqual(expect.any(Boolean))
+            })
+        })
+    })
+})
+
+describe('assignTeamsToEvents', () => {
+    const { assignTeamsToEvents, getDefaultSeason } = useSeason()
+
+    // Helper to create teams without affinity
+    const createTeam = (id: number, name: string) => ({
+        id,
+        name,
+        seasonId: 1,
+        affinity: null,
+        assignments: []
+    })
+
+    // Helper to create dinner events
+    const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
+        id,
+        date,
+        menuTitle: 'TBD',
+        dinnerMode: 'NONE' as const,
+        cookingTeamId: teamId,
+        seasonId: 1
+    })
+
+    it('should return empty array for invalid season', () => {
+        // GIVEN: Invalid season (missing required fields)
+        const invalidSeason = {} as Season
+
+        // WHEN: Assigning teams to events
+        const result = assignTeamsToEvents(invalidSeason)
+
+        // THEN: Returns empty array
+        expect(result).toEqual([])
+    })
+
+    it('should call computeTeamAssignmentsForEvents with destructured season data', () => {
+        // GIVEN: Valid season with teams and events (simple happy path)
+        const season: Season = {
+            ...getDefaultSeason(),
+            id: 1,
+            consecutiveCookingDays: 2,
+            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+            CookingTeams: [
+                createTeam(1, 'Hold 1'),
+                createTeam(2, 'Hold 2')
+            ],
+            dinnerEvents: [
+                createEvent(1, new Date(2025, 0, 6)),  // Mon
+                createEvent(2, new Date(2025, 0, 8)),  // Wed
+                createEvent(3, new Date(2025, 0, 10)), // Fri
+                createEvent(4, new Date(2025, 0, 13))  // Mon
+            ]
+        }
+
+        // WHEN: Assigning teams to events
+        const result = assignTeamsToEvents(season)
+
+        // THEN: Returns events with team assignments (orchestration works)
+        expect(result).toHaveLength(4)
+        // Verify teams were assigned (not all null)
+        const assignedTeams = result.map(e => e.cookingTeamId).filter(Boolean)
+        expect(assignedTeams.length).toBeGreaterThan(0)
     })
 })
