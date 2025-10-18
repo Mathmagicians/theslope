@@ -1,28 +1,33 @@
 import { describe, it, expect } from 'vitest'
-import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates } from '~/utils/season'
+import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster } from '~/utils/season'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import type { DateRange } from '~/types/dateTypes'
+import type { DateRange, WeekDay, WeekDayMap } from '~/types/dateTypes'
 import type { CookingTeam } from '~/composables/useCookingTeamValidation'
-import type { DinnerEventUpdate } from '~/composables/useDinnerEventValidation'
+import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
+import { createWeekDayMapFromSelection } from '~/types/dateTypes'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
 // Factory functions for test data
-const createTeam = (id: number, name: string, affinity = null): CookingTeam => ({
+const createTeam = (id: number, name: string, affinity: WeekDayMap | null | undefined = null): CookingTeam => ({
     id,
     name,
     seasonId: 1,
-    affinity,
-    assignments: []
+    affinity
 })
 
-const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEventUpdate => ({
+const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEvent => ({
     id,
     date,
     menuTitle: 'TBD',
     dinnerMode: 'NONE',
     cookingTeamId: teamId,
-    seasonId: 1
+    seasonId: 1,
+    menuDescription: null,
+    menuPictureUrl: null,
+    chefId: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
 })
 
 describe('computeCookingDates', () => {
@@ -320,6 +325,153 @@ describe('computeAffinitiesForTeams', () => {
         // THEN: Returns teams unchanged (composable layer is responsible for finding first cooking day)
         expect(result).toEqual(teams)
     })
+
+    it('should preserve existing team affinities and only assign to teams without affinities', () => {
+        // GIVEN: 3 teams, T1 has affinity (Wed), T2 and T3 have no affinity
+        const existingAffinity = createDefaultWeekdayMap([false, false, true, false, false, false, false]) // Wed
+        const teams = [
+            createTeam(1, 'Hold 1', existingAffinity),
+            createTeam(2, 'Hold 2'),
+            createTeam(3, 'Hold 3')
+        ]
+        const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false]) // Mon/Wed/Fri
+        const firstDay = new Date(2025, 0, 6) // Monday, Jan 6
+
+        // WHEN: Computing affinities (first call)
+        const firstResult = computeAffinitiesForTeams(teams, cookingDays, 1, firstDay)
+
+        // THEN: T1 keeps its existing affinity (Wed), T2 gets Mon, T3 gets Fri
+        const t1AfterFirst = firstResult.find(t => t.id === 1)
+        const t2AfterFirst = firstResult.find(t => t.id === 2)
+        const t3AfterFirst = firstResult.find(t => t.id === 3)
+
+        expect(t1AfterFirst?.affinity).toEqual(existingAffinity) // T1 unchanged (Wed)
+        expect(t2AfterFirst?.affinity).toEqual(createDefaultWeekdayMap([true, false, false, false, false, false, false])) // T2 gets Mon (filtered index 0)
+        expect(t3AfterFirst?.affinity).toEqual(createDefaultWeekdayMap([false, false, true, false, false, false, false])) // T3 gets Wed (filtered index 1, same as T1)
+
+        // WHEN: Computing affinities again (second call) with same inputs
+        const secondResult = computeAffinitiesForTeams(firstResult, cookingDays, 1, firstDay)
+
+        // THEN: All teams keep their affinities from first call (idempotent)
+        const t1AfterSecond = secondResult.find(t => t.id === 1)
+        const t2AfterSecond = secondResult.find(t => t.id === 2)
+        const t3AfterSecond = secondResult.find(t => t.id === 3)
+
+        expect(t1AfterSecond?.affinity).toEqual(t1AfterFirst?.affinity)
+        expect(t2AfterSecond?.affinity).toEqual(t2AfterFirst?.affinity)
+        expect(t3AfterSecond?.affinity).toEqual(t3AfterFirst?.affinity)
+    })
+})
+
+describe('compareAffinities', () => {
+    it.each([
+        { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['onsdag'], expected: -1 },
+        { startDay: 'mandag' as WeekDay, aff1: ['onsdag'], aff2: ['mandag'], expected: 1 },
+        { startDay: 'mandag' as WeekDay, aff1: ['søndag'], aff2: ['onsdag'], expected: 1 },
+        { startDay: 'onsdag' as WeekDay, aff1: ['fredag'], aff2: ['mandag'], expected: -1 },
+        { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['mandag'], expected: 0 }
+    ])('startDay=$startDay, aff1=$aff1, aff2=$aff2 => $expected', ({ startDay, aff1, aff2, expected }) => {
+        const compareFn = compareAffinities(startDay)
+        expect(compareFn(createWeekDayMapFromSelection(aff1), createWeekDayMapFromSelection(aff2))).toBe(expected)
+    })
+})
+
+describe('createSortedAffinitiesToTeamsMap', () => {
+    it.each([
+        {
+            scenario: '3 teams, different affinities, default startDay (mandag)',
+            teams: [
+                createTeam(1, 'TeamC', createWeekDayMapFromSelection(['mandag', 'onsdag'])),
+                createTeam(2, 'TeamA', createWeekDayMapFromSelection(['onsdag'])),
+                createTeam(3, 'TeamB', createWeekDayMapFromSelection(['mandag', 'fredag']))
+            ],
+            startDay: undefined,
+            expectedKeys: ['mandag', 'onsdag'],
+            expectedTeams: { mandag: ['TeamB', 'TeamC'], onsdag: ['TeamA'] }
+        },
+        {
+            scenario: '3 teams, different affinities, startDay=onsdag',
+            teams: [
+                createTeam(1, 'TeamC', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(2, 'TeamA', createWeekDayMapFromSelection(['onsdag'])),
+                createTeam(3, 'TeamB', createWeekDayMapFromSelection(['fredag']))
+            ],
+            startDay: 'onsdag' as WeekDay,
+            expectedKeys: ['onsdag', 'fredag', 'mandag'],
+            expectedTeams: { onsdag: ['TeamA'], fredag: ['TeamB'], mandag: ['TeamC'] }
+        },
+        {
+            scenario: 'same first weekday, sorted by name',
+            teams: [
+                createTeam(1, 'C-Team', createWeekDayMapFromSelection(['fredag'])),
+                createTeam(2, 'A-Team', createWeekDayMapFromSelection(['fredag'])),
+                createTeam(3, 'B-Team', createWeekDayMapFromSelection(['fredag']))
+            ],
+            startDay: undefined,
+            expectedKeys: ['fredag'],
+            expectedTeams: { fredag: ['A-Team', 'B-Team', 'C-Team'] }
+        },
+        {
+            scenario: 'empty teams',
+            teams: [],
+            startDay: undefined,
+            expectedKeys: [],
+            expectedTeams: {}
+        }
+    ])('$scenario', ({ teams, startDay, expectedKeys, expectedTeams }) => {
+        const result = startDay
+            ? createSortedAffinitiesToTeamsMap(teams, startDay)
+            : createSortedAffinitiesToTeamsMap(teams)
+
+        // Verify key ordering
+        expect(Array.from(result.keys())).toEqual(expectedKeys)
+
+        // Verify teams within each key
+        expectedKeys.forEach(weekday => {
+            expect(result.get(weekday as WeekDay)?.map(t => t.name)).toEqual(expectedTeams[weekday])
+        })
+    })
+})
+
+describe('createTeamRoster', () => {
+    it.each([
+        {
+            scenario: 'single affinity (3 teams)',
+            startDay: 'mandag' as WeekDay,
+            teams: [
+                createTeam(1, 'Team1', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(2, 'Team2', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(3, 'Team3', createWeekDayMapFromSelection(['mandag']))
+            ],
+            expected: ['Team1', 'Team2', 'Team3']
+        },
+        {
+            scenario: '3 different affinities (1 team each) zigzag',
+            startDay: 'mandag' as WeekDay,
+            teams: [
+                createTeam(1, 'Mon1', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(2, 'Wed1', createWeekDayMapFromSelection(['onsdag'])),
+                createTeam(3, 'Fri1', createWeekDayMapFromSelection(['fredag']))
+            ],
+            expected: ['Mon1', 'Wed1', 'Fri1']
+        },
+        {
+            scenario: 'mixed affinities (varying sizes) zigzag round-robin',
+            startDay: 'mandag' as WeekDay,
+            teams: [
+                createTeam(1, 'Mon1', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(2, 'Mon2', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(3, 'Mon3', createWeekDayMapFromSelection(['mandag'])),
+                createTeam(4, 'Wed1', createWeekDayMapFromSelection(['onsdag'])),
+                createTeam(5, 'Wed2', createWeekDayMapFromSelection(['onsdag'])),
+                createTeam(6, 'Fri1', createWeekDayMapFromSelection(['fredag']))
+            ],
+            expected: ['Mon1', 'Wed1', 'Fri1', 'Mon2', 'Wed2', 'Mon3']
+        },
+        { scenario: 'empty teams', startDay: 'mandag' as WeekDay, teams: [], expected: [] }
+    ])('$scenario', ({ startDay, teams, expected }) => {
+        expect(createTeamRoster(startDay, teams).map(t => t.name)).toEqual(expected)
+    })
 })
 
 describe('computeTeamAssignmentsForEvents', () => {
@@ -409,10 +561,10 @@ describe('computeTeamAssignmentsForEvents', () => {
         const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, 2, events)
 
         // THEN: Already assigned event is skipped but quota increments
-        expect(result[0].cookingTeamId).toBe(1)  // Event 1 → Team 1 (quota=1)
-        expect(result[1].cookingTeamId).toBe(99) // Event 2 → Unchanged (quota=2, rotates)
-        expect(result[2].cookingTeamId).toBe(2)  // Event 3 → Team 2 (new cycle)
-        expect(result[3].cookingTeamId).toBe(2)  // Event 4 → Team 2 (quota=1)
+        expect(result[0]!.cookingTeamId).toBe(1)  // Event 1 → Team 1 (quota=1)
+        expect(result[1]!.cookingTeamId).toBe(99) // Event 2 → Unchanged (quota=2, rotates)
+        expect(result[2]!.cookingTeamId).toBe(2)  // Event 3 → Team 2 (new cycle)
+        expect(result[3]!.cookingTeamId).toBe(2)  // Event 4 → Team 2 (quota=1)
     })
 
     it.each([
@@ -465,9 +617,9 @@ describe('computeTeamAssignmentsForEvents', () => {
         const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, 2, events)
 
         // THEN: Team gets credit for holiday and rotates as if event existed
-        expect(result[0].cookingTeamId).toBe(1) // Mon Jan 6 → Team 1 (quota=1)
+        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 6 → Team 1 (quota=1)
         // Holiday Wed Jan 8 → Team 1 gets credit (quota=2, rotation triggers)
-        expect(result[1].cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
-        expect(result[2].cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
+        expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
+        expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
     })
 })

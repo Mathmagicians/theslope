@@ -1,3 +1,4 @@
+
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, updateTeam} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"

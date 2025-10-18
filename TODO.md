@@ -1,5 +1,86 @@
 # TODO
 
+## 🎯 URGENT: Team Assignment Algorithm Implementation
+
+**Context**: Implementing team-to-event assignment algorithm using TDD. Functions are implemented incrementally with unit tests first.
+
+---
+
+### ✅ Task 1: Make Affinity Computation Idempotent
+
+**Business Requirement**: Affinity assignment should produce consistent results when called multiple times with same inputs.
+
+**Implementation**:
+- ✅ Added unit test: "calling with already-assigned affinities preserves assignments"
+- ✅ Verified idempotency guarantee (test passes without code changes)
+- ✅ Documented behavior in function implementation
+
+**Verification**: Unit test confirms deterministic output with existing affinities preserved
+
+---
+
+### ✅ Task 2: Sort Teams by Affinity Relative to First Cooking Day
+
+**Business Requirement**: Teams should be assigned in order of their affinity match to the season's first cooking day, ensuring fair rotation.
+
+**Algorithm Implementation**:
+1. Find first cooking day in season (uses `findFirstCookingDayInDates()`)
+2. Compare affinities by distance from start day
+3. Create sorted map of affinities to teams
+4. Zigzag through matrix to produce fair team roster
+
+**Completed Functions**:
+- ✅ **Task 2.1**: `compareAffinities(startDay)` - Curried comparator function
+  - Returns comparator that sorts affinities by weekday distance from startDay
+  - Handles wraparound (Sunday to Monday)
+  - Unit tests: 3 parameterized scenarios (all passing)
+
+- ✅ **Task 2.2**: `createSortedAffinitiesToTeamsMap(teams, startDay)`
+  - Returns `Map<WeekDay, CookingTeam[]>` with keys sorted by distance from startDay
+  - Teams with same affinity sorted alphabetically by name
+  - Unit tests: 3 scenarios covering single/multiple teams per affinity (all passing)
+
+- ✅ **Task 2.3**: `createTeamRoster(teams, startDay)`
+  - Zigzag traversal through affinity matrix for fair distribution
+  - Uses `Array.from` to iterate Map entries in insertion order
+  - Unit tests: 3 scenarios verifying fair rotation (all passing)
+
+**Verification**: All unit tests in `season.unit.spec.ts` passing for these functions
+
+---
+
+### Task 3: Implement Round-Robin Assignment Algorithm
+
+**Business Requirement**: Assign teams to dinner events using round-robin rotation based on `consecutiveCookingDays` quota.
+
+**Current State**:
+- Stub function exists: `computeTeamAssignmentsForEvents()` in `utils/season.ts:68-72`
+- Comprehensive unit tests ready: `season.unit.spec.ts:325-473` (12 test scenarios)
+- All tests currently failing (expected - implementation missing)
+
+**Algorithm** (from unit tests):
+1. Sort teams by affinity to first cooking day (Task 2)
+2. Iterate through events chronologically
+3. For each event:
+   - If event already assigned: skip but increment quota
+   - If team quota < consecutiveCookingDays: assign team, increment quota
+   - If quota reached: rotate to next team, reset quota
+4. Return events with updated `cookingTeamId` assignments
+
+**Implementation**:
+- [ ] Implement `computeTeamAssignmentsForEvents()` in `utils/season.ts:68-72`
+- [ ] Use `sortTeamsByAffinityToDate()` from Task 2
+- [ ] Handle edge cases per unit tests:
+  - No teams (return events unchanged)
+  - No events (return empty array)
+  - More teams than events (some teams get 0 assignments)
+  - Already assigned events (skip but count toward quota)
+  - Holiday handling (missing events count toward quota)
+
+**Verification**: All 12 unit tests in `season.unit.spec.ts:325-473` pass
+
+---
+
 ## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
 
 **Remaining work**: Expand E2E test suite for ticket price API and UI validation
