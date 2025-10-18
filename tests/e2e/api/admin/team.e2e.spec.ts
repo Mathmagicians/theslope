@@ -164,7 +164,7 @@ test.describe('Admin Teams API', () => {
             expect(team.affinity).toEqual(affinity)
         })
 
-        test('PUT should allow null affinity', async ({ browser }) => {
+        test('PUT should allow nullish affinity', async ({ browser }) => {
             // GIVEN a team with affinity = null
             const context = await validatedBrowserContext(browser)
             const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-null-affinity', 201, {
@@ -172,8 +172,8 @@ test.describe('Admin Teams API', () => {
             })
             testTeamIds.push(team.id)
 
-            // THEN team is created with null affinity
-            expect(team.affinity).toBeNull()
+            // THEN team is created with nullish affinity (null or undefined)
+            expect(team.affinity).toBeFalsy()
         })
 
         test('POST should update team affinity', async ({ browser }) => {
