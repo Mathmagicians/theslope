@@ -300,12 +300,12 @@ describe('assignAffinitiesToTeams', () => {
 describe('assignTeamsToEvents', () => {
     const { assignTeamsToEvents, getDefaultSeason } = useSeason()
 
-    // Helper to create teams without affinity
-    const createTeam = (id: number, name: string) => ({
+    // Helper to create teams with affinity
+    const createTeam = (id: number, name: string, affinity: WeekDayMap | null = null) => ({
         id,
         name,
         seasonId: 1,
-        affinity: null,
+        affinity: affinity || createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri by default
         assignments: []
     })
 
