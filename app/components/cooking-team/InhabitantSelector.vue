@@ -34,6 +34,7 @@ interface Props {
   seasonId: number
   teamNumber: number  // For color matching
   teamColor: string   // For color matching
+  teams?: Array<{ id: number, name: string }>  // All teams in season for lookup
 }
 
 const props = defineProps<Props>()
@@ -92,10 +93,10 @@ const getTeamInfo = (inhabitant: Inhabitant) => {
     }
   }
 
-  // For other teams, we need to extract team number from name (e.g., "Hold 3" → 3)
-  const teamNameMatch = assignment.cookingTeam.name.match(/Hold (\d+)/)
-  const otherTeamNumber = teamNameMatch ? parseInt(teamNameMatch[1]) : 1
-  const otherTeamColor = getTeamColor(otherTeamNumber - 1)
+  // For other teams, look up by ID to get the correct index (and thus correct number/color)
+  const teamIndex = props.teams?.findIndex(t => t.id === assignment.cookingTeamId) ?? -1
+  const otherTeamNumber = teamIndex >= 0 ? teamIndex + 1 : 1  // 1-based display number
+  const otherTeamColor = teamIndex >= 0 ? getTeamColor(teamIndex) : 'neutral'
 
   return {
     type: 'other' as const,

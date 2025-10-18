@@ -33,7 +33,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createTeam, updateTeam, deleteTeam, onSeasonSelect, addTeamMember, removeTeamMember, assignTeamAffinities} = store
+const {createTeam, updateTeam, deleteTeam, onSeasonSelect, addTeamMember, removeTeamMember, assignTeamAffinitiesAndEvents} = store
 
 // Get teams from selected season - ALWAYS show live data
 const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
@@ -77,6 +77,12 @@ const selectedTeamIndex = ref(0)
 const selectedTeam = computed(() => {
   if (displayedTeams.value.length === 0) return null
   return displayedTeams.value[selectedTeamIndex.value] ?? null
+})
+
+// Filter dinner events to show only the selected team's events
+const selectedTeamDinnerEvents = computed(() => {
+  if (!selectedTeam.value?.id || !selectedSeason.value?.dinnerEvents) return []
+  return selectedSeason.value.dinnerEvents.filter(event => event.cookingTeamId === selectedTeam.value?.id)
 })
 
 // Team tabs for vertical navigation
@@ -136,13 +142,13 @@ const handleBatchCreateTeams = async () => {
     await createTeam(team)
   }
 
-  // Step 2: Assign affinities to teams
+  // Step 2: Assign affinities and teams to events
   try {
-    const result = await assignTeamAffinities(selectedSeason.value.id)
-    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med madlavningsdage`)
-  } catch (affinityError) {
-    // Teams created but affinity assignment failed
-    showSuccessToast('Madhold oprettet', 'Madlavningsdage kunne ikke tildeles automatisk')
+    const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
+    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet - ${result.eventCount} fællesspisninger tildelt`)
+  } catch (assignmentError) {
+    // Teams created but affinity/event assignment failed
+    showSuccessToast('Madhold oprettet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
   }
 
   await onModeChange(FORM_MODES.VIEW)
@@ -161,13 +167,13 @@ const handleAddTeam = async () => {
   // Step 1: Create the team
   await createTeam(newTeam)
 
-  // Step 2: Assign affinities to all teams (recalculates rotation)
+  // Step 2: Assign affinities and teams to events (recalculates rotation)
   try {
-    await assignTeamAffinities(selectedSeason.value.id)
-    showSuccessToast('Madhold tilføjet', 'Madlavningsdage tildelt automatisk')
-  } catch (affinityError) {
-    // Team created but affinity assignment failed
-    showSuccessToast('Madhold tilføjet', 'Madlavningsdage kunne ikke tildeles automatisk')
+    const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
+    showSuccessToast('Madhold tilføjet', `Madlavningsdage tildelt - ${result.eventCount} fællesspisninger opdateret`)
+  } catch (assignmentError) {
+    // Team created but affinity/event assignment failed
+    showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
   }
 
   // teams reactively updates from store refresh - no manual update needed
@@ -339,6 +345,10 @@ const columns = [
                     :assignments="selectedTeam.assignments || []"
                     :affinity="selectedTeam.affinity"
                     :season-cooking-days="selectedSeason?.cookingDays"
+                    :season-dates="selectedSeason?.seasonDates"
+                    :dinner-events="selectedTeamDinnerEvents"
+                    :holidays="selectedSeason?.holidays"
+                    :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
                     :mode="FORM_MODES.EDIT"
                     @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id!, newName)"
                     @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id!, affinity)"
@@ -358,8 +368,8 @@ const columns = [
         </div>
 
         <!-- VIEW MODE: Table with team assignments -->
+        <div v-else class="px-4 pb-4 space-y-6">
         <UTable
-            v-else
             :columns="columns"
             :data="displayedTeams"
             :loading="isLoading"
@@ -369,7 +379,7 @@ const columns = [
           <template #name-cell="{ row }">
             <UBadge
                 :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                variant="soft"
+                variant="solid"
                 size="md"
             >
               {{ row.original.name }}
@@ -415,6 +425,16 @@ const columns = [
             </div>
           </template>
         </UTable>
+
+        <!-- Team calendar view -->
+        <TeamCalendarDisplay
+            v-if="selectedSeason && displayedTeams.length > 0"
+            :season-dates="selectedSeason.seasonDates"
+            :teams="displayedTeams"
+            :dinner-events="selectedSeason.dinnerEvents ?? []"
+            :holidays="selectedSeason.holidays"
+        />
+        </div>
       </div>
 
       <Loader v-else-if="isLoading" text="Madhold"/>

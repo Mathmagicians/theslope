@@ -49,35 +49,26 @@
 
 ---
 
-### Task 3: Implement Round-Robin Assignment Algorithm
+### ✅ Task 3: Implement Round-Robin Assignment Algorithm
 
 **Business Requirement**: Assign teams to dinner events using round-robin rotation based on `consecutiveCookingDays` quota.
 
-**Current State**:
-- Stub function exists: `computeTeamAssignmentsForEvents()` in `utils/season.ts:68-72`
-- Comprehensive unit tests ready: `season.unit.spec.ts:325-473` (12 test scenarios)
-- All tests currently failing (expected - implementation missing)
-
-**Algorithm** (from unit tests):
-1. Sort teams by affinity to first cooking day (Task 2)
-2. Iterate through events chronologically
-3. For each event:
-   - If event already assigned: skip but increment quota
-   - If team quota < consecutiveCookingDays: assign team, increment quota
-   - If quota reached: rotate to next team, reset quota
-4. Return events with updated `cookingTeamId` assignments
-
-**Implementation**:
-- [ ] Implement `computeTeamAssignmentsForEvents()` in `utils/season.ts:68-72`
-- [ ] Use `sortTeamsByAffinityToDate()` from Task 2
-- [ ] Handle edge cases per unit tests:
+**Implementation Complete**:
+- ✅ Implemented `computeTeamAssignmentsForEvents()` in `utils/season.ts:161-204`
+- ✅ Uses `createTeamRoster()` from Task 2 for affinity-based sorting
+- ✅ Handles all edge cases:
   - No teams (return events unchanged)
   - No events (return empty array)
   - More teams than events (some teams get 0 assignments)
-  - Already assigned events (skip but count toward quota)
-  - Holiday handling (missing events count toward quota)
+  - Already assigned events (skip assignment, not included in rotation)
+  - Holiday handling (ghost assignments - team gets credit even when event missing)
 
-**Verification**: All 12 unit tests in `season.unit.spec.ts:325-473` pass
+**Optimizations Applied**:
+- Removed redundant `seasonDates` parameter (use event dates directly)
+- Direct Map creation using flatMap (single pass, no intermediate arrays)
+- Clean functional style with nullish coalescing
+
+**Verification**: All 43 unit tests passing in `season.unit.spec.ts`
 
 ---
 
@@ -127,50 +118,9 @@
 
 ---
 
-## 🎯 HIGH PRIORITY: Team Assignment to Dinner Events
-**Milestone**: Automatic assignment of cooking teams to dinner events with affinity-based round-robin distribution
+## 🎯 HIGH PRIORITY: Team Assignment UI Integration
 
-**Overview**:
-When teams are created for a season, they are automatically assigned to dinner events based on:
-- Round-robin rotation through teams
-- Team affinities (calculated from `consecutiveCookingDays`)
-- Holiday handling (teams get "credit" even when event doesn't exist)
-- Preserves existing assignments (additive, not destructive)
-
----
-
-### Task 3: Assignment Endpoint
-
-**Endpoint**: `POST /api/admin/season/[id]/assign-teams-to-dinner-events`
-
-**Algorithm**:
-1. Load all calendar days in season (includes holidays)
-2. Load all dinner events (assigned + unassigned)
-3. Load teams with affinities
-4. Iterate calendar days:
-   - Check if day's weekday matches current team's affinity
-   - If event unassigned: assign to current team
-   - If event assigned OR no event (holiday): skip assignment but increment quota
-   - When quota reaches consecutiveCookingDays: rotate to next team
-5. Return all DinnerEvent[] with updated assignments
-
-**Implementation**:
-- [ ] Create `/api/admin/season/[id]/assign-teams-to-dinner-events.post.ts`
-- [ ] Implement assignment algorithm
-- [ ] Validation: Season exists, ≥1 team, consecutiveCookingDays ≥1
-- [ ] Update DinnerEventFactory with assignment helpers
-- [ ] E2E API tests
-
-**BDD Scenarios**:
-- Happy path: 6 events, 3 teams → round-robin with affinity enforcement
-- Holiday handling: Team gets credit in quota but no assignment
-- Already assigned events: Treated as "holidays", skipped
-- Edge cases: 0 events (200, empty array), 0 teams (400), more teams than events (some get 0)
-- Validation: Invalid season ID (404)
-
----
-
-### UI work 
+**Remaining UI work**: 
 - [ ] Manual reassignment UI (admin changes team for specific event)
 - [ ] Display team assignment counts in UI ("Hold 1: 12 fællesspisninger")
 - [ ] User-defined team affinity preferences
@@ -428,6 +378,63 @@ Form validation is working (submit button is disabled when errors exist), but th
 ---
 
 # ✅ COMPLETED
+
+## Team Assignment Calendar Visualization & UI Integration (2025-10-19)
+**Date**: 2025-10-19 | **Compliance**: ADR-007, DRY principles
+
+### Store Integration
+- ✅ **assignTeamAffinitiesAndEvents()** orchestration method in plan store
+  - Sequential execution: assign affinities → assign teams to events
+  - Combined toast notification showing both operation counts
+  - Replaces separate function calls with single orchestrated flow
+  - Returns `{teamCount, eventCount}` for UI feedback
+
+### Calendar Visualization
+- ✅ **TeamCalendarDisplay component** created
+  - Shows team cooking assignments with color-coded badges
+  - Tooltips display team names on hover
+  - Holiday support with green chips
+  - Efficient Map-based date lookup for O(1) event access
+  - Hides days from adjacent months (`data-[outside-view]:hidden`)
+  - Responsive: 3 months on desktop, 1 month on mobile
+- ✅ **Integrated into AdminTeams**
+  - VIEW mode: Calendar after table showing all teams
+  - EDIT mode: Calendar in CookingTeamCard showing only selected team's events
+  - Filtered dinner events passed as props to avoid unnecessary data
+
+### UX Improvements
+- ✅ **CookingTeamCard layout reorganized** (3-row layout)
+  - Header: Team icon + name input + compact member view + delete button
+  - Row 1: Affinity selector (1/4 width) + Team calendar (3/4 width)
+  - Row 2: Team members (FULL WIDTH, horizontal role columns)
+  - Row 3: Inhabitant selector (FULL WIDTH)
+  - Compact member view in header (avatar group + count badge)
+  - Better information hierarchy on large screens
+
+### Bug Fixes
+- ✅ **InhabitantSelector team number display bug fixed**
+  - Problem: Regex `/Hold (\d+)/` failed to match "Madhold {n}" team names
+  - All people in other teams showed "Madhold 1" regardless of actual team
+  - Solution: Pass full teams list as prop, lookup by ID instead of regex
+  - Team index determines display number and color (reliable, works with renamed teams)
+  - Type-safe: `teams?: Array<{ id: number, name: string }>`
+
+### Files Modified
+- `app/stores/plan.ts` - assignTeamAffinitiesAndEvents() orchestration
+- `app/components/calendar/TeamCalendarDisplay.vue` - NEW calendar component
+- `app/components/admin/AdminTeams.vue` - Calendar integration, teams prop passing
+- `app/components/cooking-team/CookingTeamCard.vue` - 3-row layout, teams prop
+- `app/components/cooking-team/InhabitantSelector.vue` - ID-based team lookup
+
+### Key Achievements
+- Calendar provides visual confirmation of team assignment algorithm
+- UX improvements make team management more intuitive on large screens
+- Bug fix ensures accurate team status display across all contexts
+- All changes follow established ADR patterns (no new technical debt)
+
+---
+
+# ✅ COMPLETED (EARLIER)
 
 ## Season Serialization Refactoring (ADR-010: Domain-Driven Serialization Architecture)
 **Date**: 2025-10-15 | **Compliance**: ADR-010, ADR-001, ADR-005
@@ -819,3 +826,73 @@ Form validation is working (submit button is disabled when errors exist), but th
 - ✅ **Automatic flow** - Affinities auto-assigned after batch team creation and single team addition
 - ✅ **E2E test** - `season.e2e.spec.ts:493-533` verifies all cooking days assigned to exactly one team
 - ✅ Pattern follows dinner event generation (create → auto-generate → toast notification)
+
+## Team-to-Event Assignment Algorithm (2025-10-18)
+**Date**: 2025-10-18 | **Compliance**: TDD, Functional Programming, ADR-002 | **Status**: READY TO SHIP 🚀
+
+### TDD Implementation (Red-Green-Refactor)
+- ✅ **Task 1**: Idempotent affinity computation
+  - Unit tests written first for affinity preservation
+  - Implementation using functional approach with nullish coalescing
+  - Teams with existing affinities remain unchanged
+
+- ✅ **Task 2**: Affinity-based team sorting (3 functions)
+  - **`compareAffinities(startDay)`**: Curried comparator using circular weekday distance
+  - **`createSortedAffinitiesToTeamsMap(teams, weekDay)`**: Groups teams by affinity, sorted by distance
+  - **`createTeamRoster(startDay, teams)`**: Zigzag matrix traversal for fair distribution
+  - 12 parameterized unit tests (all passing)
+
+- ✅ **Task 3**: Round-robin event assignment
+  - **`computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, events)`**
+  - Handles all edge cases: no teams, no events, pre-assigned events, holidays (ghost assignments)
+  - 12 unit test scenarios covering quota tracking and rotation (all passing)
+
+### Code Quality & Optimizations
+- ✅ **Style improvements applied**
+  - Fixed JSDoc comments and typos
+  - Removed redundant code (`|| []` after filter, extra blank lines)
+  - Better variable naming (`event` → `cookingDate`)
+  - Split long lines for readability
+  - Added comprehensive function documentation
+
+- ✅ **Performance optimizations**
+  - Removed redundant `seasonDates` parameter (use event dates directly)
+  - Direct Map creation with flatMap (single pass, no intermediate arrays)
+  - Functional style with nullish coalescing and type predicates
+  - Fixed Prisma relation name bug (`season` → `Season`)
+
+### API Integration
+- ✅ **Endpoint**: `POST /api/admin/season/[id]/assign-cooking-teams`
+  - Flat try-catch structure (ADR-002 compliance)
+  - Fetches season with teams and events
+  - Uses `assignTeamsToEvents()` composable
+  - Batch updates all dinner events with computed assignments
+  - Returns assignment summary with event count
+
+- ✅ **Store integration**: `assignCookingTeamsToEvents()` method in plan store
+- ✅ **E2E test**: Integrated into existing affinity test (combined workflow)
+  - Creates season with 3 teams, generates 3 events
+  - Assigns affinities, then assigns teams to events
+  - Verifies all events have team assignments (round-robin distribution)
+
+### Test Coverage
+- ✅ **Unit tests**: 43/43 passing (`season.unit.spec.ts`)
+- ✅ **E2E API test**: 1/1 passing (`season.e2e.spec.ts:494-560`)
+- ✅ **All functions tested**: Idempotency, sorting, roster creation, event assignment
+- ✅ **Edge cases covered**: Empty arrays, pre-assigned events, holiday gaps
+
+### Key Technical Achievements
+- Pure functional programming with no side effects
+- Type-safe Map usage instead of Record for proper ordering
+- Zigzag matrix traversal algorithm for fair team distribution
+- Ghost assignment pattern for holiday handling
+- Clean separation: algorithm (utils) → composable → API → store → UI
+
+### Files Modified
+- `app/utils/season.ts` - Core algorithm functions (200 lines, fully documented)
+- `tests/component/utils/season.unit.spec.ts` - Comprehensive unit test suite
+- `server/routes/api/admin/season/[id]/assign-cooking-teams.post.ts` - API endpoint
+- `tests/e2e/api/admin/season.e2e.spec.ts` - E2E integration test
+- `server/data/prismaRepository.ts` - Fixed Prisma relation name bug
+
+**READY TO SHIP** - All tests green, code reviewed, optimized, and fully integrated! 🎉

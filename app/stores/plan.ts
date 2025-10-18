@@ -1,5 +1,6 @@
 import {type Season} from '~/composables/useSeasonValidation'
 import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import {type DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -120,19 +121,30 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const assignTeamAffinities = async (seasonId: number) => {
+        const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
             try {
-                const result = await $fetch<{seasonId: number, teamCount: number, teams: CookingTeam[]}>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
+                // Step 1: Assign affinities to teams
+                const affinityResult = await $fetch<{seasonId: number, teamCount: number, teams: CookingTeam[]}>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
                     method: 'POST'
                 })
-                console.info(`👥 > PLAN_STORE > Assigned affinities to ${result.teamCount} teams for season ${seasonId}`)
-                // Refresh selected season to get updated teams with affinities
+                console.info(`👥 > PLAN_STORE > Assigned affinities to ${affinityResult.teamCount} teams for season ${seasonId}`)
+
+                // Step 2: Assign teams to dinner events
+                const assignmentResult = await $fetch<{seasonId: number, eventCount: number, events: DinnerEvent[]}>(`/api/admin/season/${seasonId}/assign-cooking-teams`, {
+                    method: 'POST'
+                })
+                console.info(`🍽️ > PLAN_STORE > Assigned teams to ${assignmentResult.eventCount} dinner events for season ${seasonId}`)
+
+                // Refresh selected season to get updated teams with affinities and event assignments
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
                 }
-                return result
+                return {
+                    teamCount: affinityResult.teamCount,
+                    eventCount: assignmentResult.eventCount
+                }
             } catch (e: any) {
-                handleApiError(e, 'assignTeamAffinities')
+                handleApiError(e, 'assignTeamAffinitiesAndEvents')
                 throw e
             }
         }
@@ -266,7 +278,7 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             generateDinnerEvents,
-            assignTeamAffinities,
+            assignTeamAffinitiesAndEvents,
             onSeasonSelect,
             createTeam,
             updateTeam,
