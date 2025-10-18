@@ -490,8 +490,8 @@ test.describe('Season API Tests', () => {
 
     })
 
-    test.describe('Assign Team Affinities', () => {
-        test("POST /season/[id]/assign-team-affinities should assign affinities to all teams", async ({browser}) => {
+    test.describe('Assign Team Affinities and Cooking Teams', () => {
+        test("POST /season/[id]/assign-team-affinities should assign affinities AND /assign-cooking-teams should assign teams to events", async ({browser}) => {
             // GIVEN: A short season with cooking days (Mon/Wed/Fri) and 3 teams
             const context = await validatedBrowserContext(browser)
 
@@ -507,28 +507,51 @@ test.describe('Season API Tests', () => {
             const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
             createdSeasonIds.push(season.id as number)
 
-            // Generate dinner events (needed for finding first cooking day)
-              await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+            // Generate dinner events (needed for finding first cooking day and team assignment)
+            const dinnerEventsResult = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
+            expect(dinnerEventsResult.eventCount).toBe(3) // Mon, Wed, Fri
 
             // WHEN: POST /api/admin/season/[id]/assign-team-affinities
-            const response = await context.request.post(`/api/admin/season/${season.id}/assign-team-affinities`)
-            expect(response.status()).toBe(200)
+            const affinityResponse = await context.request.post(`/api/admin/season/${season.id}/assign-team-affinities`)
+            expect(affinityResponse.status()).toBe(200)
 
-            const result = await response.json()
+            const affinityResult = await affinityResponse.json()
 
             // THEN: Response should include updated teams with affinities
-            expect(result.seasonId).toBe(season.id)
-            expect(result.teamCount).toBe(3)
-            expect(result.teams.length).toBe(3)
+            expect(affinityResult.seasonId).toBe(season.id)
+            expect(affinityResult.teamCount).toBe(3)
+            expect(affinityResult.teams.length).toBe(3)
 
             // AND: All three cooking days (Mon/Wed/Fri) should be assigned to exactly one team each
-            const mondayTeams = result.teams.filter(t => t.affinity.mandag)
-            const wednesdayTeams = result.teams.filter(t => t.affinity.onsdag)
-            const fridayTeams = result.teams.filter(t => t.affinity.fredag)
+            const mondayTeams = affinityResult.teams.filter(t => t.affinity.mandag)
+            const wednesdayTeams = affinityResult.teams.filter(t => t.affinity.onsdag)
+            const fridayTeams = affinityResult.teams.filter(t => t.affinity.fredag)
 
             expect(mondayTeams.length).toBe(1)
             expect(wednesdayTeams.length).toBe(1)
             expect(fridayTeams.length).toBe(1)
+
+            // WHEN: POST /api/admin/season/[id]/assign-cooking-teams
+            const assignmentResponse = await context.request.post(`/api/admin/season/${season.id}/assign-cooking-teams`)
+            expect(assignmentResponse.status()).toBe(200)
+
+            const assignmentResult = await assignmentResponse.json()
+
+            // THEN: Response should include updated events with team assignments
+            expect(assignmentResult.seasonId).toBe(season.id)
+            expect(assignmentResult.eventCount).toBe(3)
+            expect(assignmentResult.events.length).toBe(3)
+
+            // AND: All events should have cooking team assigned
+            assignmentResult.events.forEach(event => {
+                expect(event.cookingTeamId).toBeDefined()
+                expect(event.cookingTeamId).not.toBeNull()
+            })
+
+            // AND: Verify each team got exactly one event (round-robin with consecutiveCookingDays=1)
+            const teamIds = assignmentResult.events.map(e => e.cookingTeamId).sort()
+            const uniqueTeamIds = [...new Set(teamIds)]
+            expect(uniqueTeamIds.length).toBe(3) // All 3 teams assigned
         })
     })
 

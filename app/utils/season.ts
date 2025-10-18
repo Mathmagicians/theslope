@@ -1,5 +1,6 @@
 import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval
@@ -34,34 +35,45 @@ export const computeCookingDates = (cookingDays: WeekDayMap, seasonDates: DateRa
     return excludeDatesFromInterval(allCookingDates, excludeIntervals)
 }
 
+function weekDayMapToDays(cookingDays: WeekDayMap) {
+    return Object.entries(cookingDays).filter(([_, isOn]) => isOn).map(([day, _]) => day as WeekDay)
+}
+
+function dateToWeekDay(firstDay: Date) {
+    const firstAsIsoDay = getISODay(firstDay)
+    return WEEKDAYS[firstAsIsoDay - 1]
+}
+
 /**
- * Check if a given date is a cooking day based on the WeekDayMap.
- * If a team already has an affinity, then the affinity is not modified.
- * @param teams
- * @param cookingDays
- * @param consecutiveCookingDays
- * @param firstDay is suppoed to be a cooking day
- * @returns Cooking teams with computed affinities, i.e., preferred cooking weekdays, based on rotation, or unchanged if conditions are not met
+ * Computes affinities (preferred cooking weekdays) for teams based on rotation.
+ * If a team already has an affinity, it is preserved (idempotent).
+ * @param teams - Array of cooking teams
+ * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
+ * @param consecutiveCookingDays - Number of consecutive cooking days per team
+ * @param firstDay - Starting date (should be a cooking day)
+ * @returns Cooking teams with computed affinities, or unchanged if conditions are not met
  */
 export const computeAffinitiesForTeams = (teams: CookingTeam[], cookingDays: WeekDayMap, consecutiveCookingDays: number, firstDay: Date): CookingTeam[] => {
-    const firstAsIsoDay = getISODay(firstDay)
-    const startDay = WEEKDAYS[firstAsIsoDay - 1]
+    const startDay = dateToWeekDay(firstDay)
     if (!startDay) return teams
-    const weekdaysForRotation = Object.entries(cookingDays).filter(([_, isOn]) => isOn).map(([day, _]) => day as WeekDay)
-    const rotationStartIndex = weekdaysForRotation.indexOf(startDay)
-    if (rotationStartIndex === -1) return teams // firstDay is not a cooking day
-
-    const teamsWithoutAffinities = teams.filter(team => !team.affinity) || []
-    if (teamsWithoutAffinities.length === 0) return teams // all teams already have affinities
-
+    const weekdaysForRotation = weekDayMapToDays(cookingDays)
     const wdfCount = weekdaysForRotation.length
     if (wdfCount === 0) return teams
 
-    const affinitiesForTeams = teams.filter(team => !team.affinity && team.id).map(team => team.id!).reduce<Record<number, WeekDay[]>>((acc, teamId, i) => {
-        const rotationIndex = rotationStartIndex + i * consecutiveCookingDays
-        acc[teamId] = Array.from({length: consecutiveCookingDays}, (_, k) => weekdaysForRotation[(rotationIndex + k) % wdfCount]!)
-        return acc
-    }, {})
+    const rotationStartIndex = weekdaysForRotation.indexOf(startDay)
+    if (rotationStartIndex === -1) return teams // firstDay is not a cooking day
+
+    const teamsWithoutAffinities = teams.filter(team => !team.affinity)
+    if (teamsWithoutAffinities.length === 0) return teams // all teams already have affinities
+
+    const affinitiesForTeams = teams
+        .filter(team => !team.affinity && team.id)
+        .map(team => team.id!)
+        .reduce<Record<number, WeekDay[]>>((acc, teamId, i) => {
+            const rotationIndex = rotationStartIndex + i * consecutiveCookingDays
+            acc[teamId] = Array.from({length: consecutiveCookingDays}, (_, k) => weekdaysForRotation[(rotationIndex + k) % wdfCount]!)
+            return acc
+        }, {})
     return teams.map(team => {
         const computedAffinity = team.id && affinitiesForTeams[team.id] ? createWeekDayMapFromSelection(affinitiesForTeams[team.id]!) : undefined
         return {
@@ -110,33 +122,73 @@ export const compareTeams = (startDay: WeekDay) => (team1: CookingTeam, team2: C
 
 
 export const createSortedAffinitiesToTeamsMap = (teams: CookingTeam[], weekDay: WeekDay = WEEKDAYS[0]): Map<WeekDay, CookingTeam[]> => {
-    const sortedKeys: WeekDay[] = teams.map(t => t.affinity)
-        .toSorted(compareAffinities(weekDay)).map(a => getFirstTrueDay(a)).filter((d): d is WeekDay => !!d)
-    const grouped = sortedKeys.reduce<Map<WeekDay, CookingTeam[]>>((acc, key, _) => {
-        if (!key) return acc
-        const teamsWithThisFirstDayAffinity = teams.filter(t => getFirstTrueDay(t.affinity) === key)
+    const sortedKeys: WeekDay[] = teams
+        .map(t => t.affinity)
+        .toSorted(compareAffinities(weekDay))
+        .map(a => getFirstTrueDay(a))
+        .filter((d): d is WeekDay => !!d)
+
+    return sortedKeys.reduce<Map<WeekDay, CookingTeam[]>>((acc, key) => {
+        const teamsWithThisFirstDayAffinity = teams
+            .filter(t => getFirstTrueDay(t.affinity) === key)
             .toSorted((a, b) => a.name.localeCompare(b.name))
         acc.set(key, teamsWithThisFirstDayAffinity)
         return acc
     }, new Map<WeekDay, CookingTeam[]>())
-    return grouped
 }
 
 export const createTeamRoster = (startDay: WeekDay, teams: CookingTeam[]): CookingTeam[] => {
-    const bucketWithTeams = createSortedAffinitiesToTeamsMap(teams.filter(t => t.affinity))
-    const buckets = Array.from( bucketWithTeams.values(bucketWithTeams))
+    const bucketWithTeams = createSortedAffinitiesToTeamsMap(teams.filter(t => t.affinity), startDay)
+    const buckets = Array.from(bucketWithTeams.values())
 
-    const maxRounds = Math.max(...buckets.map(t => t.length)) //we have as many rounds, as the size of the largest bucket
-    const zigzagRoster = Array.from(
+    const maxRounds = Math.max(...buckets.map(t => t.length))
+    // zigzag roster
+    return Array.from(
         {length: maxRounds},
-        (_, i) => buckets.flatMap(bucket => bucket[i] ? [bucket[i]] : []) // for each bucket spit out an array with the ith element if exists, or empty array
-    ).flat() // pluck out these teams from  [t] arrays
-    return zigzagRoster
+        (_, i) => buckets.flatMap(bucket => bucket[i] ? [bucket[i]] : [])
+    ).flat()
 }
 
-/* Returns an array of DinnerEvents, with computed team ids assigned to them */
-export const computeTeamAssignmentsForEvents = (teams: CookingTeam[], cookingDays: WeekDayMap,
-                                                dates: DateRange, consecutiveCookingDays: number, events: DinnerEvent[]): DinnerEvent[] => {
-    if (teams.length === 0 || events.length === 0) return events
-    return events
+/**
+ * Assigns cooking teams to dinner events using round-robin with quota tracking.
+ * Handles pre-assigned events and holidays (ghost assignments for fair distribution).
+ * @param teams - Array of cooking teams with affinities
+ * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
+ * @param consecutiveCookingDays - Number of consecutive cooking days per team
+ * @param events - Array of dinner events to assign teams to
+ * @returns Array of DinnerEvents with computed team IDs assigned
+ */
+export const computeTeamAssignmentsForEvents = (teams: CookingTeam[], cookingDays: WeekDayMap, consecutiveCookingDays: number, events: DinnerEvent[]): DinnerEvent[] => {
+    if (teams.length === 0 || events.length === 0 || consecutiveCookingDays < 1) return events
+
+    const needsAssignment = events
+        .filter(event => !event.cookingTeamId)
+        .toSorted((a, b) => a.date.getTime() - b.date.getTime())
+    if (needsAssignment.length === 0) return events
+
+    const teamsWithAffinity = teams.filter(team => team.affinity)
+    if (teamsWithAffinity.length === 0) return events
+
+    const firstDay = dateToWeekDay(needsAssignment[0]!.date)
+    const roster = createTeamRoster(firstDay!, teamsWithAffinity)
+
+    const wouldBeCookingDays = getEachDayOfIntervalWithSelectedWeekdays(
+        needsAssignment[0]!.date,
+        needsAssignment.at(-1)!.date,
+        cookingDays
+    )
+    const assignmentsMap = new Map<number, number>(
+        wouldBeCookingDays.flatMap((cookingDate, i) => {
+            const rosterIndex = Math.floor(i / consecutiveCookingDays) % roster.length
+            const assignedTeam = roster[rosterIndex]!
+            const isActualEvent = needsAssignment.find(e => e.date.getTime() === cookingDate.getTime())
+            return isActualEvent ? [[isActualEvent.id, assignedTeam.id] as [number, number]] : []
+        })
+    )
+
+    return events.map(event =>
+        event.id && assignmentsMap.has(event.id)
+            ? {...event, cookingTeamId: assignmentsMap.get(event.id)!}
+            : event
+    )
 }

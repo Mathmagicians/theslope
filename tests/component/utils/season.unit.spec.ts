@@ -480,10 +480,6 @@ describe('computeTeamAssignmentsForEvents', () => {
             scenario: '3 teams, 6 events (Mon/Wed/Fri), consecutiveCookingDays=2',
             teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            seasonDates: {
-                start: new Date(2025, 0, 6),  // Monday, Jan 6
-                end: new Date(2025, 0, 31)
-            },
             events: [
                 createEvent(1, new Date(2025, 0, 6)),  // Mon
                 createEvent(2, new Date(2025, 0, 8)),  // Wed
@@ -493,16 +489,13 @@ describe('computeTeamAssignmentsForEvents', () => {
                 createEvent(6, new Date(2025, 0, 17))  // Fri
             ],
             consecutiveCookingDays: 2,
-            expectedAssignments: [1, 1, 2, 2, 3, 3]
+            // T1: Mon+Wed, T2: Fri+Mon, T3: Wed+Fri → roster: [T1(Mon), T3(Wed), T2(Fri)]
+            expectedAssignments: [1, 1, 3, 3, 2, 2]
         },
         {
             scenario: '2 teams, 4 events (Mon/Wed/Fri), consecutiveCookingDays=1',
             teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')],
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            seasonDates: {
-                start: new Date(2025, 0, 6),  // Monday, Jan 6
-                end: new Date(2025, 0, 31)
-            },
             events: [
                 createEvent(1, new Date(2025, 0, 6)),  // Mon
                 createEvent(2, new Date(2025, 0, 8)),  // Wed
@@ -516,10 +509,6 @@ describe('computeTeamAssignmentsForEvents', () => {
             scenario: '3 teams, 9 events (Mon/Wed/Fri), consecutiveCookingDays=3',
             teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            seasonDates: {
-                start: new Date(2025, 0, 6),  // Monday, Jan 6
-                end: new Date(2025, 0, 31)
-            },
             events: [
                 createEvent(1, new Date(2025, 0, 6)),  // Mon
                 createEvent(2, new Date(2025, 0, 8)),  // Wed
@@ -534,9 +523,12 @@ describe('computeTeamAssignmentsForEvents', () => {
             consecutiveCookingDays: 3,
             expectedAssignments: [1, 1, 1, 2, 2, 2, 3, 3, 3]
         }
-    ])('should assign teams in round-robin: $scenario', ({ teams, cookingDays, seasonDates, events, consecutiveCookingDays, expectedAssignments }) => {
+    ])('should assign teams in round-robin: $scenario', ({ teams, cookingDays, events, consecutiveCookingDays, expectedAssignments }) => {
+        // GIVEN: Teams with computed affinities
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, events[0]!.date)
+
         // WHEN: Assigning teams to events
-        const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, consecutiveCookingDays, events)
+        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, consecutiveCookingDays, events)
 
         // THEN: Teams are assigned in round-robin order based on quota
         expect(result.map(e => e.cookingTeamId)).toEqual(expectedAssignments)
@@ -546,19 +538,16 @@ describe('computeTeamAssignmentsForEvents', () => {
         // GIVEN: 4 events with event 2 already assigned to team 99
         const teams = [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')]
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
-        const seasonDates = {
-            start: new Date(2025, 0, 6),  // Monday, Jan 6
-            end: new Date(2025, 0, 31)
-        }
         const events = [
             createEvent(1, new Date(2025, 0, 6)),     // Mon
             createEvent(2, new Date(2025, 0, 8), 99), // Wed - Already assigned
             createEvent(3, new Date(2025, 0, 10)),    // Fri
             createEvent(4, new Date(2025, 0, 13))     // Mon
         ]
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
-        const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, 2, events)
+        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events)
 
         // THEN: Already assigned event is skipped but quota increments
         expect(result[0]!.cookingTeamId).toBe(1)  // Event 1 → Team 1 (quota=1)
@@ -587,13 +576,14 @@ describe('computeTeamAssignmentsForEvents', () => {
             expected: [1]
         }
     ])('should handle edge case: $scenario', ({ teams, events, expected }) => {
-        // WHEN: Assigning teams in edge case scenario
+        // GIVEN: Teams with computed affinities (if any)
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
-        const seasonDates = {
-            start: new Date(2025, 0, 6),  // Monday, Jan 6
-            end: new Date(2025, 0, 31)
-        }
-        const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, 1, events)
+        const teamsWithAffinities = teams.length > 0 && events.length > 0
+            ? computeAffinitiesForTeams(teams, cookingDays, 1, events[0]!.date)
+            : teams
+
+        // WHEN: Assigning teams in edge case scenario
+        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 1, events)
 
         // THEN: Expected assignment behavior
         expect(result.map(e => e.cookingTeamId)).toEqual(expected)
@@ -603,18 +593,15 @@ describe('computeTeamAssignmentsForEvents', () => {
         // GIVEN: 3 events with holiday on Wed Jan 8 (between Mon and Fri)
         const teams = [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')]
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
-        const seasonDates = {
-            start: new Date(2025, 0, 6),  // Monday, Jan 6
-            end: new Date(2025, 0, 31)
-        }
         const events = [
             createEvent(1, new Date(2025, 0, 6)),  // Mon Jan 6
             createEvent(2, new Date(2025, 0, 10)), // Fri Jan 10
             createEvent(3, new Date(2025, 0, 13))  // Mon Jan 13
         ]
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
-        const result = computeTeamAssignmentsForEvents(teams, cookingDays, seasonDates, 2, events)
+        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events)
 
         // THEN: Team gets credit for holiday and rotates as if event existed
         expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 6 → Team 1 (quota=1)

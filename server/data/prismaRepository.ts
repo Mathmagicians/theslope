@@ -935,7 +935,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
             where: {id},
             data: dinnerEventData,
             include: {
-                season: true,
+                Season: true,
                 chef: true,
                 cookingTeam: true
             }
