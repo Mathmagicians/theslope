@@ -37,7 +37,7 @@
     "@prisma/client": "^6.16.2",
     "@vueuse/core": "^13.9.0",
     "date-fns": "^4.1.0",
-    "ical-generator": "^8.1.1",
+    "ical-generator": "^9.0.0",
     "nuxt": "^4.1.2",
     "nuxt-auth-utils": "^0.5.25",
     "pinia": "^3.0.3",
