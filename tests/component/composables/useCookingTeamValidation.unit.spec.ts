@@ -1,5 +1,44 @@
 import { describe, it, expect } from 'vitest'
-import { useCookingTeamValidation, type CookingTeam, type CookingTeamWithMembers } from '~/composables/useCookingTeamValidation'
+import { useCookingTeamValidation, type CookingTeam, type CookingTeamWithMembers, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
+import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
+
+// Test data factory
+const { createDefaultWeekdayMap } = useWeekDayMapValidation()
+
+const TeamTestFactory = {
+  validTeam: (overrides = {}) => ({
+    seasonId: 1,
+    name: "Team Alpha",
+    ...overrides
+  }),
+
+  validTeamWithId: (overrides = {}) => ({
+    id: 42,
+    seasonId: 1,
+    name: "Team Beta",
+    ...overrides
+  }),
+
+  validTeamWithMembers: (overrides = {}) => ({
+    seasonId: 1,
+    name: "Team Full",
+    assignments: [
+      { cookingTeamId: 1, inhabitantId: 1, role: 'CHEF' as const },
+      { cookingTeamId: 1, inhabitantId: 2, role: 'COOK' as const },
+      { cookingTeamId: 1, inhabitantId: 3, role: 'COOK' as const },
+      { cookingTeamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' as const }
+    ],
+    ...overrides
+  }),
+
+  validAssignment: (overrides = {}) => ({
+    cookingTeamId: 1,
+    inhabitantId: 42,
+    role: 'CHEF' as const,
+    allocationPercentage: 100,
+    ...overrides
+  })
+}
 
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
@@ -13,129 +52,90 @@ describe('useCookingTeamValidation', () => {
   } = useCookingTeamValidation()
 
   describe('CookingTeamSchema', () => {
-    it('should accept valid team data', () => {
-      const validTeam = {
-        seasonId: 1,
-        name: "Team Alpha"
+    it.each([
+      {
+        name: 'valid team data',
+        team: TeamTestFactory.validTeam(),
+        expected: { success: true, seasonId: 1, name: "Team Alpha" }
+      },
+      {
+        name: 'team with optional id',
+        team: TeamTestFactory.validTeamWithId(),
+        expected: { success: true, id: 42 }
       }
-
-      const result = CookingTeamSchema.safeParse(validTeam)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.seasonId).toBe(1)
-        expect(result.data.name).toBe("Team Alpha")
+    ])('should accept $name', ({ team, expected }) => {
+      const result = CookingTeamSchema.safeParse(team)
+      expect(result.success).toBe(expected.success)
+      if (result.success && expected.seasonId) {
+        expect(result.data.seasonId).toBe(expected.seasonId)
+        expect(result.data.name).toBe(expected.name)
       }
-    })
-
-    it('should accept team data with optional id', () => {
-      const validTeamWithId = {
-        id: 42,
-        seasonId: 1,
-        name: "Team Beta"
-      }
-
-      const result = CookingTeamSchema.safeParse(validTeamWithId)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.id).toBe(42)
+      if (result.success && expected.id) {
+        expect(result.data.id).toBe(expected.id)
       }
     })
 
-    it('should reject team with missing seasonId', () => {
-      const invalidTeam = {
-        name: "Team Gamma"
+    it.each([
+      {
+        name: 'missing seasonId',
+        team: { name: "Team Gamma" }
+      },
+      {
+        name: 'empty name',
+        team: TeamTestFactory.validTeam({ name: "" })
+      },
+      {
+        name: 'name too long (101 chars)',
+        team: TeamTestFactory.validTeam({ name: "a".repeat(101) })
+      },
+      {
+        name: 'invalid seasonId (negative)',
+        team: TeamTestFactory.validTeam({ seasonId: -1 })
       }
-
-      const result = CookingTeamSchema.safeParse(invalidTeam)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject team with empty name', () => {
-      const invalidTeam = {
-        seasonId: 1,
-        name: ""
-      }
-
-      const result = CookingTeamSchema.safeParse(invalidTeam)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject team with name too long', () => {
-      const invalidTeam = {
-        seasonId: 1,
-        name: "a".repeat(101) // 101 characters, exceeds max of 100
-      }
-
-      const result = CookingTeamSchema.safeParse(invalidTeam)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject team with invalid seasonId', () => {
-      const invalidTeam = {
-        seasonId: -1,
-        name: "Team Delta"
-      }
-
-      const result = CookingTeamSchema.safeParse(invalidTeam)
+    ])('should reject team with $name', ({ team }) => {
+      const result = CookingTeamSchema.safeParse(team)
       expect(result.success).toBe(false)
     })
   })
 
   describe('TeamRoleSchema', () => {
-    it('should accept valid roles', () => {
-      expect(TeamRoleSchema.safeParse('CHEF').success).toBe(true)
-      expect(TeamRoleSchema.safeParse('COOK').success).toBe(true)
-      expect(TeamRoleSchema.safeParse('JUNIORHELPER').success).toBe(true)
-    })
-
-    it('should reject invalid roles', () => {
-      expect(TeamRoleSchema.safeParse('INVALID').success).toBe(false)
-      expect(TeamRoleSchema.safeParse('chef').success).toBe(false) // lowercase
-      expect(TeamRoleSchema.safeParse('').success).toBe(false)
+    it.each([
+      { role: 'CHEF', expected: true },
+      { role: 'COOK', expected: true },
+      { role: 'JUNIORHELPER', expected: true },
+      { role: 'INVALID', expected: false },
+      { role: 'chef', expected: false },
+      { role: '', expected: false }
+    ])('should return $expected for role "$role"', ({ role, expected }) => {
+      expect(TeamRoleSchema.safeParse(role).success).toBe(expected)
     })
   })
 
   describe('CookingTeamWithMembersSchema', () => {
-    it('should accept team with empty member arrays (defaults)', () => {
-      const teamWithoutMembers = {
-        seasonId: 1,
-        name: "Team Empty"
+    it.each([
+      {
+        name: 'team with empty assignments (defaults)',
+        team: TeamTestFactory.validTeam(),
+        expectedAssignments: []
+      },
+      {
+        name: 'team with 4 valid members',
+        team: TeamTestFactory.validTeamWithMembers(),
+        expectedAssignments: 4
       }
-
-      const result = CookingTeamWithMembersSchema.safeParse(teamWithoutMembers)
+    ])('should accept $name', ({ team, expectedAssignments }) => {
+      const result = CookingTeamWithMembersSchema.safeParse(team)
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.assignments).toEqual([])
-      }
-    })
-
-    it('should accept team with valid members', () => {
-      const teamWithMembers = {
-        seasonId: 1,
-        name: "Team Full",
-        assignments: [
-          { teamId: 1, inhabitantId: 1, role: 'CHEF' as const },
-          { teamId: 1, inhabitantId: 2, role: 'COOK' as const },
-          { teamId: 1, inhabitantId: 3, role: 'COOK' as const },
-          { teamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' as const }
-        ]
-      }
-
-      const result = CookingTeamWithMembersSchema.safeParse(teamWithMembers)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.assignments).toHaveLength(4)
+        const expectedLength = typeof expectedAssignments === 'number' ? expectedAssignments : expectedAssignments.length
+        expect(result.data.assignments).toHaveLength(expectedLength)
       }
     })
 
     it('should reject team with invalid member role', () => {
-      const teamWithInvalidRole = {
-        seasonId: 1,
-        name: "Team Invalid",
-        assignments: [
-          { teamId: 1, inhabitantId: 1, role: 'INVALID_ROLE' }
-        ]
-      }
+      const teamWithInvalidRole = TeamTestFactory.validTeamWithMembers({
+        assignments: [TeamTestFactory.validAssignment({ role: 'INVALID_ROLE' as any })]
+      })
 
       const result = CookingTeamWithMembersSchema.safeParse(teamWithInvalidRole)
       expect(result.success).toBe(false)
@@ -143,111 +143,264 @@ describe('useCookingTeamValidation', () => {
   })
 
   describe('validation functions', () => {
-    it('validateCookingTeam should validate basic team data', () => {
-      const validTeam = {
-        seasonId: 1,
-        name: "Test Team"
+    it.each([
+      {
+        name: 'validateCookingTeam with valid data',
+        fn: () => validateCookingTeam(TeamTestFactory.validTeam({ name: "Test Team" })),
+        shouldThrow: false,
+        expected: { seasonId: 1, name: "Test Team" }
+      },
+      {
+        name: 'validateCookingTeam with invalid data',
+        fn: () => validateCookingTeam({ seasonId: "not a number", name: "Test Team" }),
+        shouldThrow: true
+      },
+      {
+        name: 'validateCookingTeamWithMembers with valid data',
+        fn: () => validateCookingTeamWithMembers(TeamTestFactory.validTeam({ assignments: [] })),
+        shouldThrow: false,
+        expected: { assignments: [] }
       }
-
-      expect(() => validateCookingTeam(validTeam)).not.toThrow()
-      const result = validateCookingTeam(validTeam)
-      expect(result.seasonId).toBe(1)
-      expect(result.name).toBe("Test Team")
-    })
-
-    it('validateCookingTeam should throw on invalid data', () => {
-      const invalidTeam = {
-        seasonId: "not a number",
-        name: "Test Team"
+    ])('$name', ({ fn, shouldThrow, expected }) => {
+      if (shouldThrow) {
+        expect(fn).toThrow()
+      } else {
+        expect(fn).not.toThrow()
+        const result = fn()
+        if (expected) {
+          Object.entries(expected).forEach(([key, value]) => {
+            expect((result as any)[key]).toEqual(value)
+          })
+        }
       }
-
-      expect(() => validateCookingTeam(invalidTeam)).toThrow()
-    })
-
-    it('validateCookingTeamWithMembers should validate team with members', () => {
-      const teamWithMembers = {
-        seasonId: 1,
-        name: "Test Team",
-        assignments: []
-      }
-
-      expect(() => validateCookingTeamWithMembers(teamWithMembers)).not.toThrow()
-      const result = validateCookingTeamWithMembers(teamWithMembers)
-      expect(result.assignments).toEqual([])
     })
   })
 
   describe('utility functions', () => {
-    describe('getTeamMemberCounts', () => {
-      it('should count team members correctly', () => {
-        const team: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "Test Team",
-          assignments: [
-            { teamId: 1, inhabitantId: 1, role: 'CHEF' },
-            { teamId: 1, inhabitantId: 2, role: 'COOK' },
-            { teamId: 1, inhabitantId: 3, role: 'COOK' },
-            { teamId: 1, inhabitantId: 4, role: 'JUNIORHELPER' }
-          ]
-        }
-
-        const counts = getTeamMemberCounts(team)
-        expect(counts).toBe(4)
-      })
-
-      it('should handle empty team', () => {
-        const emptyTeam: CookingTeamWithMembers = {
-          seasonId: 1,
-          name: "Empty Team",
-          assignments: []
-        }
-
-        const counts = getTeamMemberCounts(emptyTeam)
-        expect(counts).toBe(0)
-      })
+    it.each([
+      {
+        name: '4 team members',
+        team: TeamTestFactory.validTeamWithMembers(),
+        expected: 4
+      },
+      {
+        name: 'empty team',
+        team: TeamTestFactory.validTeam({ name: "Empty Team", assignments: [] }),
+        expected: 0
+      }
+    ])('getTeamMemberCounts should count $name correctly', ({ team, expected }) => {
+      const counts = getTeamMemberCounts(team as CookingTeamWithMembers)
+      expect(counts).toBe(expected)
     })
   })
 
   describe('edge cases', () => {
-    it('should handle team names with whitespace', () => {
-      const teamWithSpaces = {
-        seasonId: 1,
-        name: "  Team with spaces  "
+    it.each([
+      {
+        name: 'team names with whitespace',
+        team: TeamTestFactory.validTeam({ name: "  Team with spaces  " }),
+        expected: { success: true, name: "  Team with spaces  " }
+      },
+      {
+        name: 'maximum valid name length (100 chars)',
+        team: TeamTestFactory.validTeam({ name: "a".repeat(100) }),
+        expected: { success: true }
+      },
+      {
+        name: 'team members with optional IDs',
+        team: TeamTestFactory.validTeamWithMembers({
+          name: "Team with Member IDs",
+          assignments: [
+            { id: 1, cookingTeamId: 1, inhabitantId: 10, role: 'CHEF' as const },
+            { id: 2, cookingTeamId: 1, inhabitantId: 20, role: 'COOK' as const }
+          ]
+        }),
+        expected: { success: true, assignment0Id: 1, assignment1Id: 2 },
+        useWithMembersSchema: true
       }
-
-      const result = CookingTeamSchema.safeParse(teamWithSpaces)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.name).toBe("  Team with spaces  ")
+    ])('should handle $name', ({ team, expected, useWithMembersSchema }) => {
+      const schema = useWithMembersSchema ? CookingTeamWithMembersSchema : CookingTeamSchema
+      const result = schema.safeParse(team)
+      expect(result.success).toBe(expected.success)
+      if (result.success && expected.name) {
+        expect(result.data.name).toBe(expected.name)
+      }
+      if (result.success && expected.assignment0Id) {
+        const teamResult = result.data as CookingTeamWithMembers
+        expect(teamResult.assignments[0]?.id).toBe(expected.assignment0Id)
+        expect(teamResult.assignments[1]?.id).toBe(expected.assignment1Id)
       }
     })
+  })
 
-    it('should handle maximum valid name length', () => {
-      const maxLengthTeam = {
-        seasonId: 1,
-        name: "a".repeat(100) // exactly 100 characters
-      }
+  describe('serialization and deserialization', () => {
+    const { serializeCookingTeam, deserializeCookingTeam } = useCookingTeamValidation()
+    const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
-      const result = CookingTeamSchema.safeParse(maxLengthTeam)
-      expect(result.success).toBe(true)
-    })
+    describe('CookingTeamWithMembers aggregate root roundtrip', () => {
+      it.each([
+        {
+          name: 'team with affinity + assignment with affinity',
+          team: {
+            id: 1,
+            seasonId: 5,
+            name: "Team Alpha",
+            affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
+            assignments: [
+              {
+                id: 10,
+                cookingTeamId: 1,
+                inhabitantId: 42,
+                role: 'CHEF' as const,
+                allocationPercentage: 75,
+                affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false]) // Tue, Thu
+              }
+            ]
+          } as CookingTeamWithMembers,
+          expectedTeamAffinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+          expectedAssignmentAffinity: createDefaultWeekdayMap([false, true, false, true, false, false, false])
+        },
+        {
+          name: 'team with affinity + assignment without affinity',
+          team: {
+            id: 2,
+            seasonId: 5,
+            name: "Team Beta",
+            affinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]), // Mon, Tue
+            assignments: [
+              {
+                id: 11,
+                cookingTeamId: 2,
+                inhabitantId: 99,
+                role: 'COOK' as const,
+                allocationPercentage: 100
+              }
+            ]
+          } as CookingTeamWithMembers,
+          expectedTeamAffinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]),
+          expectedAssignmentAffinity: undefined
+        },
+        {
+          name: 'team without affinity + assignment with affinity',
+          team: {
+            id: 3,
+            seasonId: 5,
+            name: "Team Gamma",
+            assignments: [
+              {
+                id: 12,
+                cookingTeamId: 3,
+                inhabitantId: 55,
+                role: 'JUNIORHELPER' as const,
+                allocationPercentage: 50,
+                affinity: createDefaultWeekdayMap([false, false, false, false, true, true, false]) // Fri, Sat
+              }
+            ]
+          } as CookingTeamWithMembers,
+          expectedTeamAffinity: undefined,
+          expectedAssignmentAffinity: createDefaultWeekdayMap([false, false, false, false, true, true, false])
+        },
+        {
+          name: 'team without affinity + assignment without affinity',
+          team: {
+            id: 4,
+            seasonId: 5,
+            name: "Team Delta",
+            assignments: [
+              {
+                id: 13,
+                cookingTeamId: 4,
+                inhabitantId: 77,
+                role: 'COOK' as const,
+                allocationPercentage: 100
+              }
+            ]
+          } as CookingTeamWithMembers,
+          expectedTeamAffinity: undefined,
+          expectedAssignmentAffinity: undefined
+        },
+        {
+          name: 'team with multiple assignments (mixed affinities)',
+          team: {
+            id: 5,
+            seasonId: 5,
+            name: "Team Echo",
+            affinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]), // Mon-Fri
+            assignments: [
+              {
+                id: 14,
+                cookingTeamId: 5,
+                inhabitantId: 20,
+                role: 'CHEF' as const,
+                allocationPercentage: 100,
+                affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]) // Mon, Wed, Fri
+              },
+              {
+                id: 15,
+                cookingTeamId: 5,
+                inhabitantId: 21,
+                role: 'COOK' as const,
+                allocationPercentage: 50
+                // No affinity
+              }
+            ]
+          } as CookingTeamWithMembers,
+          expectedTeamAffinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]),
+          expectedAssignmentAffinity: createDefaultWeekdayMap([true, false, true, false, true, false, false])
+        }
+      ])('should serialize and deserialize $name', ({ team, expectedTeamAffinity, expectedAssignmentAffinity }) => {
+        // Serialize aggregate root (team + nested assignments)
+        const serialized = serializeCookingTeam(team)
 
-    it('should handle team members with optional IDs', () => {
-      const teamWithMemberIds = {
-        seasonId: 1,
-        name: "Team with Member IDs",
-        assignments: [
-          { id: 1, teamId: 1, inhabitantId: 10, role: 'CHEF' as const },
-          { id: 2, teamId: 1, inhabitantId: 20, role: 'COOK' as const }
-        ]
-      }
+        // Verify team affinity serialization
+        if (expectedTeamAffinity) {
+          expect(typeof serialized.affinity).toBe('string')
+        } else {
+          expect(serialized.affinity).toBeNull()
+        }
 
-      const result = CookingTeamWithMembersSchema.safeParse(teamWithMemberIds)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.assignments[0].id).toBe(1)
-        expect(result.data.assignments[1].id).toBe(2)
-      }
+        // Verify assignments affinity serialization
+        if (serialized.assignments && serialized.assignments.length > 0) {
+          serialized.assignments.forEach((assignment: any, index: number) => {
+            if (team.assignments[index]?.affinity) {
+              expect(typeof assignment.affinity).toBe('string')
+            } else {
+              expect(assignment.affinity).toBeNull()
+            }
+          })
+        }
+
+        // Deserialize aggregate root
+        const deserialized = deserializeCookingTeam(serialized)
+
+        // Verify team base fields
+        expect(deserialized.id).toBe(team.id)
+        expect(deserialized.seasonId).toBe(team.seasonId)
+        expect(deserialized.name).toBe(team.name)
+
+        // Verify team affinity deserialization
+        expect(deserialized.affinity).toEqual(expectedTeamAffinity)
+
+        // Verify assignments deserialization
+        expect(deserialized.assignments).toHaveLength(team.assignments.length)
+
+        deserialized.assignments.forEach((assignment, index) => {
+          const originalAssignment = team.assignments[index]!
+          expect(assignment.id).toBe(originalAssignment.id)
+          expect(assignment.cookingTeamId).toBe(originalAssignment.cookingTeamId)
+          expect(assignment.inhabitantId).toBe(originalAssignment.inhabitantId)
+          expect(assignment.role).toBe(originalAssignment.role)
+          expect(assignment.allocationPercentage).toBe(originalAssignment.allocationPercentage)
+
+          // Verify assignment affinity
+          if (index === 0) {
+            expect(assignment.affinity).toEqual(expectedAssignmentAffinity)
+          } else {
+            // For additional assignments (index > 0), check against original
+            expect(assignment.affinity).toEqual(originalAssignment.affinity)
+          }
+        })
+      })
     })
   })
 })

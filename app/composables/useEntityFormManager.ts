@@ -126,6 +126,21 @@ export function useEntityFormManager<T>(options: {
     }
   })
 
+  /**
+   * Watch for selectedEntity becoming available when in EDIT mode
+   * Fixes race condition when navigating directly to ?mode=edit before store data loads
+   * Only populates if draftEntity is still null (don't overwrite user edits)
+   */
+  watch(() => options.selectedEntity.value, (newEntity) => {
+    if (formMode.value === FORM_MODES.EDIT && newEntity && !draftEntity.value) {
+      if (Array.isArray(newEntity)) {
+        draftEntity.value = [...newEntity] as T
+      } else {
+        draftEntity.value = { ...newEntity }
+      }
+    }
+  })
+
   return {
     formMode,
     currentModel,

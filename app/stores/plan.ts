@@ -1,19 +1,30 @@
-import {type Season, type SerializedSeason} from '~/composables/useSeasonValidation'
-import {type CookingTeam} from '~/composables/useCookingTeamValidation'
+import {type Season} from '~/composables/useSeasonValidation'
+import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import {type DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
-        const {serializeSeason, deserializeSeason} = useSeason()
+        const {SeasonSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
         // DATA FETCHING - useFetch for SSR compatibility with auth context
-        const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch(
+        // HTTP JSON converts Date objects to ISO strings during transport
+        // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
+        const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch<Season[]>(
             '/api/admin/season',
             {
-                transform: (data: SerializedSeason[]) => data.map(serialized => deserializeSeason(serialized)),
+                transform: (data: any[]) => {
+                    try {
+                        return data.map(season => SeasonSchema.parse(season))
+                    } catch (e) {
+                        console.error('🗓️ > PLAN_STORE > Error parsing seasons:', e)
+                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
+                        throw e
+                    }
+                },
                 onResponseError({ error }) {
                     handleApiError(error, 'loadSeasons')
                 }
@@ -21,10 +32,18 @@ export const usePlanStore = defineStore("Plan", () => {
         )
 
         const selectedSeasonId = ref<number | null>(null)
-        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch(
+        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch<Season>(
             () => `/api/admin/season/${selectedSeasonId.value}`,
             {
-                transform: (data: SerializedSeason) => deserializeSeason(data),
+                transform: (data: any) => {
+                    try {
+                        return SeasonSchema.parse(data)
+                    } catch (e) {
+                        console.error('🗓️ > PLAN_STORE > Error parsing selected season:', e)
+                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
+                        throw e
+                    }
+                },
                 immediate: false,
                 watch: false,
                 onResponseError({ error }) {
@@ -75,10 +94,10 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const createSeason = async (season: Season): Promise<Season> => {
             try {
-                const serializedSeason = serializeSeason(season)
+                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
                 const createdSeason = await $fetch<Season>('/api/admin/season', {
                     method: 'PUT',
-                    body: serializedSeason,
+                    body: season,
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()
@@ -102,12 +121,40 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
+            try {
+                // Step 1: Assign affinities to teams
+                const affinityResult = await $fetch<{seasonId: number, teamCount: number, teams: CookingTeam[]}>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
+                    method: 'POST'
+                })
+                console.info(`👥 > PLAN_STORE > Assigned affinities to ${affinityResult.teamCount} teams for season ${seasonId}`)
+
+                // Step 2: Assign teams to dinner events
+                const assignmentResult = await $fetch<{seasonId: number, eventCount: number, events: DinnerEvent[]}>(`/api/admin/season/${seasonId}/assign-cooking-teams`, {
+                    method: 'POST'
+                })
+                console.info(`🍽️ > PLAN_STORE > Assigned teams to ${assignmentResult.eventCount} dinner events for season ${seasonId}`)
+
+                // Refresh selected season to get updated teams with affinities and event assignments
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return {
+                    teamCount: affinityResult.teamCount,
+                    eventCount: assignmentResult.eventCount
+                }
+            } catch (e: any) {
+                handleApiError(e, 'assignTeamAffinitiesAndEvents')
+                throw e
+            }
+        }
+
         const updateSeason = async (season: Season) => {
             try {
-                const serializedSeason = serializeSeason(season)
+                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
                 await $fetch(`/api/admin/season/${season.id}`, {
                     method: 'POST',
-                    body: serializedSeason,
+                    body: season,
                     headers: {'Content-Type': 'application/json'}
                 })
                 await loadSeasons()
@@ -175,6 +222,42 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
+        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+            try {
+                const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
+                    method: 'PUT',
+                    body: assignment,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(`👥🔗 > PLAN_STORE > Added member ${assignment.inhabitantId} to team ${assignment.cookingTeamId} as ${assignment.role}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return created
+            } catch (e: any) {
+                handleApiError(e, 'addTeamMember')
+                throw e
+            }
+        }
+
+        const removeTeamMember = async (assignmentId: number) => {
+            try {
+                await $fetch(`/api/admin/team/assignment/${assignmentId}`, {
+                    method: 'DELETE'
+                })
+                console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
+                // Refresh selected season to get updated teams
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+            } catch (e: any) {
+                handleApiError(e, 'removeTeamMember')
+                throw e
+            }
+        }
+
         // INITIALIZATION - Component will call init() in onMounted
         const initPlanStore = async () => {
             await autoSelectFirstSeason()
@@ -195,10 +278,13 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             generateDinnerEvents,
+            assignTeamAffinitiesAndEvents,
             onSeasonSelect,
             createTeam,
             updateTeam,
-            deleteTeam
+            deleteTeam,
+            addTeamMember,
+            removeTeamMember
         }
     }
 )

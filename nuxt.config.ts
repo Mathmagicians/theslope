@@ -54,7 +54,8 @@ export default defineNuxtConfig({
                 'party',
                 'peach',
                 'bonbon',
-                'caramel'
+                'caramel',
+                'ocean'
             ]
         }
     },

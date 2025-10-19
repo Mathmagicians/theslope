@@ -1,99 +1,260 @@
 # TODO
 
-## 🚨 CRITICAL: Remove AI Attribution from Git History
+## 🎯 URGENT: Team Assignment Algorithm Implementation
 
-# 2 round
-1. 4dde61c - "Ticket types (#6)"
-   - Has: Claude + Copilot attribution
-2. ca6ed00 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
-   - Has: Claude attribution
+**Context**: Implementing team-to-event assignment algorithm using TDD. Functions are implemented incrementally with unit tests first.
 
-Clean commits:
-- ✅ cee35ba - CalendarDateRangePicker (clean)
-- ✅ 1c95cea - path-based admin (clean)
-- ❌ 33e232c + 8356fe2 - Not in this branch (were squashed in merges)
+---
 
-# 1 round
+### ✅ Task 1: Make Affinity Computation Idempotent
 
-**Issue**: 5 commits contain AI co-author attribution violating company policy
-- d6840eb - "Ticket types (#6)"
-- 661d651 - "Fixed CalendarDateRangePicker..."
-- 33e232c + 8356fe2 - SQUASHED commits -  "Fix season update API endpoint..."
-- b60f537 - "Nuxt UI 3 and Tailwind CSS 4 upgrade..."
-- 79cbd1b - "Implement path-based admin navigation..."
+**Business Requirement**: Affinity assignment should produce consistent results when called multiple times with same inputs.
 
-**Violations**:
-- `🤖 Generated with [Claude Code](https://claude.ai/code)`
-- `Co-Authored-By: Claude <noreply@anthropic.com>`
-- `Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>`
+**Implementation**:
+- ✅ Added unit test: "calling with already-assigned affinities preserves assignments"
+- ✅ Verified idempotency guarantee (test passes without code changes)
+- ✅ Documented behavior in function implementation
 
-**DevOps Recommendation**: Option A - Interactive Rebase (Rewrite Commit Messages Only)
+**Verification**: Unit test confirms deterministic output with existing affinities preserved
 
-### Approved Solution
-**Preserve all code, remove only AI attribution text from commit messages**
+---
 
-Steps:
-1. Create backup: `git branch backup-before-rewrite`
-2. Interactive rebase: `git rebase -i d6840eb^`
-3. Mark 5 commits as `reword` (not `pick`)
-4. Remove AI attribution lines from each message
-5. Verify: `git log --grep="Claude" --all` (should return nothing)
-6. Force push: `git push origin main --force-with-lease`
-7. Update feature branches: `git checkout create-teams-for-season && git rebase main`
+### ✅ Task 2: Sort Teams by Affinity Relative to First Cooking Day
 
-**What's Preserved**: 100% of code changes, commit structure, authors, dates
-**What Changes**: Commit SHAs (due to message hash change), AI attribution removed
-**Risks**: Force push required, GitHub PR links preserved, anyone with local main needs reset
+**Business Requirement**: Teams should be assigned in order of their affinity match to the season's first cooking day, ensuring fair rotation.
 
-**Alternative Options Rejected**:
-- Option B (Delete commits) - Would lose critical features and break app
-- Option C (Squash) - Loses commit granularity with no benefit
-- Option D (git-filter-repo) - Automated but less control
+**Algorithm Implementation**:
+1. Find first cooking day in season (uses `findFirstCookingDayInDates()`)
+2. Compare affinities by distance from start day
+3. Create sorted map of affinities to teams
+4. Zigzag through matrix to produce fair team roster
 
+**Completed Functions**:
+- ✅ **Task 2.1**: `compareAffinities(startDay)` - Curried comparator function
+  - Returns comparator that sorts affinities by weekday distance from startDay
+  - Handles wraparound (Sunday to Monday)
+  - Unit tests: 3 parameterized scenarios (all passing)
 
-## 🎯 HIGH PRIORITY: Admin Dining Season Management
-**Milestone**: Admin can create a dining season with cooking teams and corresponding events
+- ✅ **Task 2.2**: `createSortedAffinitiesToTeamsMap(teams, startDay)`
+  - Returns `Map<WeekDay, CookingTeam[]>` with keys sorted by distance from startDay
+  - Teams with same affinity sorted alphabetically by name
+  - Unit tests: 3 scenarios covering single/multiple teams per affinity (all passing)
 
-**Architecture Decision**: Separate admin tabs (simple workflow for once-a-year task)
-- `/admin/planning` - Season creation + auto-generated events view
-- `/admin/teams` - Cooking team management
+- ✅ **Task 2.3**: `createTeamRoster(teams, startDay)`
+  - Zigzag traversal through affinity matrix for fair distribution
+  - Uses `Array.from` to iterate Map entries in insertion order
+  - Unit tests: 3 scenarios verifying fair rotation (all passing)
 
-### Phase 3: Team Member Assignment - Remaining Tasks
+**Verification**: All unit tests in `season.unit.spec.ts` passing for these functions
 
-**Future Enhancements**:
-[] Extend database model with team affinity (preferred cooking days)
-[] Add endpoint that auto-assigns teams to cooking days
-[] Write component tests for member assignment
-[] Write E2E tests for member assignment and removal workflows
+---
+
+### ✅ Task 3: Implement Round-Robin Assignment Algorithm
+
+**Business Requirement**: Assign teams to dinner events using round-robin rotation based on `consecutiveCookingDays` quota.
+
+**Implementation Complete**:
+- ✅ Implemented `computeTeamAssignmentsForEvents()` in `utils/season.ts:161-204`
+- ✅ Uses `createTeamRoster()` from Task 2 for affinity-based sorting
+- ✅ Handles all edge cases:
+  - No teams (return events unchanged)
+  - No events (return empty array)
+  - More teams than events (some teams get 0 assignments)
+  - Already assigned events (skip assignment, not included in rotation)
+  - Holiday handling (ghost assignments - team gets credit even when event missing)
+
+**Optimizations Applied**:
+- Removed redundant `seasonDates` parameter (use event dates directly)
+- Direct Map creation using flatMap (single pass, no intermediate arrays)
+- Clean functional style with nullish coalescing
+
+**Verification**: All 43 unit tests passing in `season.unit.spec.ts`
+
+---
+
+## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
+
+**Remaining work**: Expand E2E test suite for ticket price API and UI validation
+
+---
+
+### Task 8: E2E API Tests - Ticket Price CRUD
+
+**Expand `tests/e2e/api/admin/season.e2e.spec.ts:261`** (add to existing describe block):
+
+**Ticket price tests**:
+- [ ] PUT season with 4 ticket prices returns 201 with nested prices
+- [ ] PUT season with HUNGRY_BABY (900 øre) persists correctly
+- [ ] GET season includes ticketPrices relation
+- [ ] POST updates season ticketPrices
+- [ ] DELETE season cascades delete ticketPrices
+- [ ] Validation: Missing ticket type returns 400
+- [ ] Validation: Duplicate types returns 400
+- [ ] Edge case: Season without prices returns empty array
+
+---
+
+### Task 9: E2E UI Tests
+
+**Update `tests/e2e/ui/AdminPlanningSeason.e2e.spec.ts`**:
+
+**Create mode**:
+- [ ] Default prices load (4 types visible)
+- [ ] Prices editable (change ADULT 4000→5000)
+- [ ] Season saves with custom prices
+- [ ] Verify via API
+
+**Edit mode**:
+- [ ] Existing prices load
+- [ ] Changes save
+- [ ] Verify via API
+
+**View mode**:
+- [ ] Read-only formatted display
+
+**Validation**:
+- [ ] Cannot save without all 4 types
+- [ ] Price range validation
+
+---
+
+## 🎯 HIGH PRIORITY: Team Assignment UI Integration
+
+**Remaining UI work**: 
+- [ ] Manual reassignment UI (admin changes team for specific event)
+- [ ] Display team assignment counts in UI ("Hold 1: 12 fællesspisninger")
+- [ ] User-defined team affinity preferences
+- [ ] Use allocationPercentage for team member workload distribution
+- [ ] Auto-reassign when teams added/removed
+- [ ] Warnings for imbalanced distribution
 
 ### Phase 4: Integration & Validation
-**Validation & Business Rules**
-[] Implement overlapping season prevention
-[] Add team size validation rules
-[] Check scheduling conflicts
-[] Add warnings for incomplete teams
-[] Write unit tests for all validation rules
+- [ ] Write integration tests for season-team-event flow
+- [ ] Create API documentation
+- [ ] Update ADR with team/event architecture decisions
 
-**Testing & Documentation**
-[] Write integration tests for season-team-event flow
-[] Add error handling and recovery tests
-[] Create API documentation
-[] Update ADR with team/event architecture decisions
+---
 
-### Technical Implementation Details (Remaining)
 
-**Extend Validation Schemas** (Future - for team member assignment):
-```typescript
-// Add to useCookingTeamValidation.ts or new composable
-const CookingTeamAssignmentSchema = z.object({
-  teamId: z.number(),
-  inhabitantId: z.number(),
-  role: z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
-})
+## 🎯 HIGH PRIORITY: URL-Based Admin Navigation (DRY Season Selection)
+
+### Goal
+Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and eliminating component duplication.
+
+### Architecture Pattern
+**Query parameters as context/filters**:
+- Season context: `?season={shortName}`
+- Team context: `?team={slug}` (future)
+- Mode state: `?mode=edit|create|view` (existing)
+
+**Example URLs**:
+```
+/admin/planning?season=fall-2025&mode=edit
+/admin/teams?season=fall-2025&mode=view
+/admin/teams?season=fall-2025&team=hold-1 (future)
 ```
 
-**Store Extensions** (Future):
-- Add `useEventStore()` for dinner events (currently in plan store)
+### Business Requirements
+
+#### 1. Season Context (Required)
+
+**Default Behavior**:
+- User navigates to `/admin/planning` (no `?season=`)
+- Auto-redirect to `/admin/planning?season={activeSeason.shortName}`
+- Active season = first season in list (temporary - will be database `isActive` field later)
+- Only ONE season can be active at a time (business invariant)
+
+**Invalid Season Handling**:
+- User navigates to `/admin/planning?season=nonexistent`
+- Redirect to `/admin/planning?season={activeSeason.shortName}` (graceful fallback)
+- No error toast - silent recovery
+
+**Empty State** (No Seasons):
+- `isNoSeasons = true` when no seasons exist
+- URL: `/admin/planning` (no redirect, no season param)
+- Show empty state UI: "Ingen sæsoner. Opret en ny sæson."
+- Season-dependent actions disabled (edit mode, team creation)
+
+**Season Persistence**:
+- Season param persists across ALL admin tabs
+- User at `/admin/planning?season=fall-2025` → clicks "Madhold" → `/admin/teams?season=fall-2025`
+- Coexists with mode param: `?season=fall-2025&mode=edit`
+
+#### 2. URL Sync with Store
+
+**Two-way binding**:
+- URL query param `?season=fall-2025` → Store `selectedSeason`
+- Store `selectedSeason` updated → URL reflects change
+- SeasonSelector dropdown updates URL → Store syncs automatically
+
+**Store Integration**:
+- Add `activeSeason` computed property: `seasons.value[0] ?? null`
+- Existing `selectedSeason` ref synced from URL
+- Existing `onSeasonSelect(id)` method remains unchanged
+
+#### 3. Routing Logic Consolidation
+
+**Problem**: Routing logic fragmented across:
+- FormModeSelector component (manages `?mode=`)
+- Admin [tab].vue page (manages `/admin/[tab]`)
+- Duplicated season selection in AdminPlanning + AdminTeams
+
+**Solution**: Create `useAdminNavigation` composable
+- Responsibility: Manage URL query params (season, future: team, filters)
+- Single source of truth for admin context/navigation
+- Separate from `useEntityFormManager` (entity editing state)
+
+**Clear separation** (ADR-007 compliant):
+```
+useAdminNavigation    → URL context (season, team filters)
+useEntityFormManager  → Entity editing (mode, draft entity)
+usePlanStore          → Server data (seasons list, CRUD)
+```
+
+#### 4. Component Extraction (DRY)
+
+**Create SeasonSelector component**:
+- Replaces inline `<USelect>` in AdminPlanning.vue (lines 93-103)
+- Replaces inline `<USelect>` in AdminTeams.vue (lines 257-266)
+- Uses `useAdminNavigation` internally for URL updates
+- Single source of truth for season selection UI
+
+### Implementation Checklist
+
+**New Files**:
+- [ ] `app/composables/useAdminNavigation.ts` - URL query param management
+- [ ] `app/components/admin/SeasonSelector.vue` - Reusable season dropdown
+
+**Modified Files**:
+- [ ] `app/stores/plan.ts` - Add `activeSeason` computed property
+- [ ] `app/components/admin/AdminPlanning.vue` - Use SeasonSelector + useAdminNavigation
+- [ ] `app/components/admin/AdminTeams.vue` - Use SeasonSelector + useAdminNavigation
+
+**Unchanged Files** (respects ADR-007, ADR-008):
+- [ ] `app/composables/useEntityFormManager.ts` - No changes
+- [ ] `app/components/form/FormModeSelector.vue` - No changes
+- [ ] `app/pages/admin/[tab].vue` - No changes
+
+**Testing**:
+- [ ] E2E: Season persists across admin tabs
+- [ ] E2E: Invalid season redirects to active season
+- [ ] E2E: Missing season param redirects to active season
+- [ ] E2E: Dropdown selection updates URL
+- [ ] E2E: Empty state when no seasons exist
+- [ ] E2E: Mode + season params coexist correctly
+- [ ] Unit: useAdminNavigation composable tests
+
+**Documentation**:
+- [ ] Move to `docs/features.md` after implementation
+- [ ] Update URL patterns in README.md (if needed)
+
+### Decision Rationale
+Query parameters chosen over path-based routing because:
+1. Season/team are "context filters" not primary entities
+2. Minimal code changes (no new route files)
+3. Consistent with existing `?mode=` pattern
+4. DRY via extraction (primary goal achieved)
+5. Respects existing ADR-007 and ADR-008 patterns
 
 ---
 
@@ -105,16 +266,6 @@ const CookingTeamAssignmentSchema = z.object({
 - Test: `POST can update existing dinner event with status 200`
 - Status: Intentionally skipped - feature not yet implemented
 - Action: Implement POST /api/admin/dinner-event/[id] endpoint when needed
-
-### Current Status
-- **101 total E2E tests** in 13 files
-- **100 tests passing** ✅
-- **1 test skipped** (POST dinner-event - future feature)
-- All critical user workflows covered
-
-### Future Test Enhancements
-- [ ] Refactor login.vue to use zod validation from api schema
-- [ ] Add POST endpoint for dinner event updates (when required)
 
 ---
 
@@ -161,26 +312,224 @@ AggregateError [ECONNREFUSED]:
 
 ---
 
-## Major Framework Migrations Plan (Remaining)
+## Medium priority: Fix UForm error display in AdminPlanningSeason footer
 
-### Pinia 3 Migration (MEDIUM PRIORITY)
-**Branch**: `migrate-pinia-3`
-**Current**: 2.3.1 → **Target**: 3.0.3
-**Impact**: MEDIUM - State management changes
+### Issue
+Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't display.
+
+### Current Behavior
+- `app/components/admin/planning/AdminPlanningSeason.vue:175` has error display: `<div v-if="errors.length > 0">`
+- UForm v-slot provides `errors` array which should populate with validation errors
+- Debug output shows: `errors = [], length = 0` even when validation prevents submission
+- Removing `form="seasonForm"` attribute fixed validation blocking (UForm now prevents invalid submission)
+
+### Investigation Done
+- ✅ Confirmed: UForm docs say errors array should populate during input events
+- ✅ Confirmed: `errors.length > 0` is correct syntax per Nuxt UI docs
+- ✅ Fixed: Removed `form` attribute from submit button (was bypassing UForm validation)
+- ❌ Problem: `errors` array remains empty even though validation is active
+
+### Potential Causes
+1. UForm v-slot `errors` may only populate after attempted submit (not during input validation)
+2. May need to use `@error` event instead of v-slot pattern
+3. May need to set `validate-on` prop explicitly
+
+### Action Items
+- [ ] Test clicking submit button to see if errors populate after submission attempt
+- [ ] Check Nuxt UI 4 migration docs for error handling changes
+- [ ] Try `@error` event pattern as alternative to v-slot
+- [ ] Research `validate-on` prop configuration
+- [ ] Check if UForm exposes errors differently in v4
+
+---
+
+## Medium priority: Type-safe deserializeSeason (ADR-010 alignment)
+
+### Issue
+`deserializeSeason(serialized: SerializedSeason | any)` uses `| any` escape hatch, losing compile-time type safety.
+
+### Root Cause
+- **Prisma returns conditional types** based on `include` clause (index vs detail endpoints)
+- **SerializedSeason is transform OUTPUT**, not deserialize INPUT (one-way schema)
+- Function handles multiple input shapes (with/without relations) but lacks proper type
+
+### Options
+1. **Keep `| any`** - Pragmatic, runtime-safe, but loses compile-time safety
+2. **Use Prisma Payload Types** - Type-safe but couples to Prisma, maintenance overhead
+3. **Create SerializedSeasonBase type** ✅ **RECOMMENDED**
+   - Define base serialized type matching database format
+   - Separate from domain Season type (ADR-010 compliant)
+   - Type-safe contract: what repository returns → what deserialize accepts
+
+### Action Items
+- [ ] Create `SerializedSeasonBase` type in `useSeasonValidation.ts`
+- [ ] Update `deserializeSeason(serialized: SerializedSeasonBase): Season`
+- [ ] Document in ADR-010 (serialized types represent DB format, not transform output)
+
+---
+
+## Major Framework Migrations Plan (Remaining)
 
 ### Zod 4 Migration (MEDIUM PRIORITY)
 **Branch**: `migrate-zod-4`
 **Current**: 3.24.1 → **Target**: 4.1.5
 **Impact**: MEDIUM - Form validation and API schemas
 
-### Migration Principles
-1. **One migration per branch/PR** - Isolate changes
-2. **Comprehensive testing** - Full test suite must pass
-3. **Rollback ready** - Keep fallback options
-
 ---
 
 # ✅ COMPLETED
+
+## Team Assignment Calendar Visualization & UI Integration (2025-10-19)
+**Date**: 2025-10-19 | **Compliance**: ADR-007, DRY principles
+
+### Store Integration
+- ✅ **assignTeamAffinitiesAndEvents()** orchestration method in plan store
+  - Sequential execution: assign affinities → assign teams to events
+  - Combined toast notification showing both operation counts
+  - Replaces separate function calls with single orchestrated flow
+  - Returns `{teamCount, eventCount}` for UI feedback
+
+### Calendar Visualization
+- ✅ **TeamCalendarDisplay component** created
+  - Shows team cooking assignments with color-coded badges
+  - Tooltips display team names on hover
+  - Holiday support with green chips
+  - Efficient Map-based date lookup for O(1) event access
+  - Hides days from adjacent months (`data-[outside-view]:hidden`)
+  - Responsive: 3 months on desktop, 1 month on mobile
+- ✅ **Integrated into AdminTeams**
+  - VIEW mode: Calendar after table showing all teams
+  - EDIT mode: Calendar in CookingTeamCard showing only selected team's events
+  - Filtered dinner events passed as props to avoid unnecessary data
+
+### UX Improvements
+- ✅ **CookingTeamCard layout reorganized** (3-row layout)
+  - Header: Team icon + name input + compact member view + delete button
+  - Row 1: Affinity selector (1/4 width) + Team calendar (3/4 width)
+  - Row 2: Team members (FULL WIDTH, horizontal role columns)
+  - Row 3: Inhabitant selector (FULL WIDTH)
+  - Compact member view in header (avatar group + count badge)
+  - Better information hierarchy on large screens
+
+### Bug Fixes
+- ✅ **InhabitantSelector team number display bug fixed**
+  - Problem: Regex `/Hold (\d+)/` failed to match "Madhold {n}" team names
+  - All people in other teams showed "Madhold 1" regardless of actual team
+  - Solution: Pass full teams list as prop, lookup by ID instead of regex
+  - Team index determines display number and color (reliable, works with renamed teams)
+  - Type-safe: `teams?: Array<{ id: number, name: string }>`
+
+### Files Modified
+- `app/stores/plan.ts` - assignTeamAffinitiesAndEvents() orchestration
+- `app/components/calendar/TeamCalendarDisplay.vue` - NEW calendar component
+- `app/components/admin/AdminTeams.vue` - Calendar integration, teams prop passing
+- `app/components/cooking-team/CookingTeamCard.vue` - 3-row layout, teams prop
+- `app/components/cooking-team/InhabitantSelector.vue` - ID-based team lookup
+
+### Key Achievements
+- Calendar provides visual confirmation of team assignment algorithm
+- UX improvements make team management more intuitive on large screens
+- Bug fix ensures accurate team status display across all contexts
+- All changes follow established ADR patterns (no new technical debt)
+
+---
+
+# ✅ COMPLETED (EARLIER)
+
+## Season Serialization Refactoring (ADR-010: Domain-Driven Serialization Architecture)
+**Date**: 2025-10-15 | **Compliance**: ADR-010, ADR-001, ADR-005
+
+### Architecture Changes
+- ✅ **Serialization moved to repository layer** - API endpoints work with domain types only
+- ✅ **ADR-010 created** - Domain-Driven Serialization Architecture documented
+- ✅ **Schema pattern established** - Domain schema (SeasonSchema) + Serialized schema (SerializedSeasonSchema) in composables
+- ✅ **Repository transforms** - serialize/deserialize at DB boundary (`createSeason`, `updateSeason`, `fetchSeason`, etc.)
+- ✅ **API cleanup** - Endpoints accept/return Season domain type, not SerializedSeason
+- ✅ **Factory simplification** - SeasonFactory sends domain objects, no manual serialization
+- ✅ **Test regression fixes** - Date regex (single-digit support), factory API usage, mock data DRY (25/25 tests passing)
+
+### Key Benefits
+- Clean separation: DB format is implementation detail, not API contract
+- Type safety: Domain types throughout app, serialization isolated to repository
+- Migration flexibility: Can change DB without touching API/UI
+- Testing simplicity: Factories use domain types
+
+## Migration 003 - Ticket Prices and Team Assignment Fields
+**Date**: 2025-10-15 | **Compliance**: ADR-001, ADR-002, ADR-005
+
+### Schema Changes
+- ✅ Added `HUNGRY_BABY` to TicketType enum
+- ✅ Added `affinity: String?` to CookingTeam model (JSON array of weekdays)
+- ✅ Added `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
+- ✅ Note: `consecutiveCookingDays` already existed in Season model (E2E tests passing)
+- ✅ Created and applied migration: `migration_003_ticket_prices_and_team_fields`
+- ✅ Generated Prisma client with new types
+
+### Validation & Composables
+- ✅ Created `useTicketPriceValidation.ts` composable
+  - TicketPriceSchema with id, seasonId, ticketType, price (0-20000 øre), description
+  - Exported TicketPrice type
+  - Unit tests passing
+- ✅ Updated `useSeasonValidation.ts`
+  - Imported TicketPriceSchema from useTicketPriceValidation
+  - Replaced `z.array(z.any()).optional()` with proper TicketPrice array schema
+  - Added validation: At least 1 ticket type required (ADULT, CHILD, BABY, HUNGRY_BABY)
+  - Added validation: No duplicate ticket types within same season
+  - Updated `deserializeSeason` to handle ticketPrices relation
+  - Updated composable tests
+- ✅ Updated `useSeason.ts`
+  - `getDefaultSeason()` exports default ticket prices
+  - Updated composable tests
+- ✅ Updated `useCookingTeam.ts`
+  - Added `affinity: string | null` to CookingTeam type
+  - Added `allocationPercentage: number` to CookingTeamAssignment type
+- ✅ Updated `useInhabitant.ts`
+  - Added `affinity: string | null` to Inhabitant type
+
+### Repository Layer
+- ✅ Created `createTicketPrices()` - batch create ticket prices
+- ✅ Created `deleteTicketPrices()` - cleanup helper for season deletion
+- ✅ Modified `createSeason()` to accept optional nested `ticketPrices` array
+- ✅ Modified `updateSeason()` to handle nested ticketPrice updates (delete + recreate pattern)
+- ✅ Verified `deleteSeason()` cascades ticketPrices via Prisma schema (ADR-005)
+- ✅ Updated repository to handle team affinity and allocationPercentage
+- ✅ Updated E2E CRUD tests to handle team affinity and allocationPercentage
+
+### UI Components
+- ✅ Created `TicketPriceListEditor.vue` component
+  - Add/remove ticket prices with validation
+  - Display ticket type, price (DKK), max age, and description
+  - Proper width sizing with Nuxt UI patterns
+  - Simplified icon usage (auto-styled by component)
+- ✅ Updated `AdminPlanningSeason.vue`
+  - Added `<TicketPriceListEditor v-model="model.ticketPrices" />`
+  - Handle nested ticketPrices in save operation
+  - Display existing prices in EDIT mode
+- ✅ Updated `CalendarDateRangeListPicker.vue`
+  - Proper width sizing to prevent date cutoff
+  - Simplified icon usage
+
+### Test Factories
+- ✅ Updated `seasonFactory.ts`
+  - Added `ticketPrices` to `defaultSeason()`
+  - Note: `consecutiveCookingDays: 2` already present
+
+### E2E Tests
+- ✅ ConsecutiveCookingDays tests complete (season.e2e.spec.ts:263-304)
+- ✅ Affinity tests complete (team.e2e.spec.ts:252-298)
+- ✅ AllocationPercentage tests complete (team.e2e.spec.ts:300-328)
+
+### App Configuration
+- ✅ Updated `app.config.ts` with ticket price defaults and team assignment settings
+
+### Key Patterns Applied
+- **ADR-001**: Zod schemas in composables for shared validation
+- **ADR-002**: Separate validation try-catch blocks
+- **ADR-005**: Prisma CASCADE deletion for strong relations (TicketPrice → Season)
+- **Nuxt UI v4**: Proper `:ui` prop usage for component styling (`base: 'w-fit min-w-full mr-4'`)
+- **Component width sizing**: Using `base` layer instead of `root` for proper content-based sizing
+
+## Cleanup of ai attributions - replaced with grazing unicorns 🦄
 
 ## Household Management View (Admin Husstande Tab)
 **Date**: 2025-01-28 | **Compliance**: ADR-009
@@ -443,3 +792,107 @@ AggregateError [ECONNREFUSED]:
 
 ### Phase 2: Major Framework Updates ✅
 - ✅ Nuxt 4 + Nuxt UI + Tailwind CSS Migration
+
+## CookingTeam Affinity UI Implementation (2025-10-16)
+**Compliance**: ADR-007, DRY principles
+
+### Implementation
+- ✅ **WeekDayMapDisplay component** enhanced with edit mode
+  - UFormField integration for consistent form UI styling
+  - Checkbox handlers for adding/removing cooking days
+  - Factory method (`createDefaultWeekdayMap`) for null affinity initialization
+  - Type-safe color prop using `BadgeProps['color']` from Nuxt UI (DRY)
+  - Compact mode with color-coded day badges (soft variant)
+  - Full mode with labeled checkboxes for editing
+- ✅ **CookingTeamCard layout** reorganized
+  - Moved team affinity section above members section
+  - Better visual hierarchy in edit mode
+- ✅ **AdminTeams handlers** connected
+  - `handleUpdateTeamAffinity` for immediate save to DB
+  - Store refresh pattern after updates
+  - Toast notifications for user feedback
+
+### Key Achievements
+- Affinity field fully editable in UI with immediate save
+- Type safety maintained using Nuxt UI's own type definitions
+- Component reusability (WeekDayMapDisplay used in both compact and full modes)
+- Consistent form styling across all admin forms
+
+## Team Affinity Auto-Assignment (2025-10-17)
+**Date**: 2025-10-17 | **Files**: `assign-team-affinities.post.ts`, `plan.ts`, `AdminTeams.vue`
+
+- ✅ **API endpoint** `POST /season/[id]/assign-team-affinities` - Calculates and assigns affinities using `computeAffinitiesForTeams` from `app/utils/season.ts`
+- ✅ **Store integration** - `assignTeamAffinities()` method in plan store with refresh
+- ✅ **Automatic flow** - Affinities auto-assigned after batch team creation and single team addition
+- ✅ **E2E test** - `season.e2e.spec.ts:493-533` verifies all cooking days assigned to exactly one team
+- ✅ Pattern follows dinner event generation (create → auto-generate → toast notification)
+
+## Team-to-Event Assignment Algorithm (2025-10-18)
+**Date**: 2025-10-18 | **Compliance**: TDD, Functional Programming, ADR-002 | **Status**: READY TO SHIP 🚀
+
+### TDD Implementation (Red-Green-Refactor)
+- ✅ **Task 1**: Idempotent affinity computation
+  - Unit tests written first for affinity preservation
+  - Implementation using functional approach with nullish coalescing
+  - Teams with existing affinities remain unchanged
+
+- ✅ **Task 2**: Affinity-based team sorting (3 functions)
+  - **`compareAffinities(startDay)`**: Curried comparator using circular weekday distance
+  - **`createSortedAffinitiesToTeamsMap(teams, weekDay)`**: Groups teams by affinity, sorted by distance
+  - **`createTeamRoster(startDay, teams)`**: Zigzag matrix traversal for fair distribution
+  - 12 parameterized unit tests (all passing)
+
+- ✅ **Task 3**: Round-robin event assignment
+  - **`computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, events)`**
+  - Handles all edge cases: no teams, no events, pre-assigned events, holidays (ghost assignments)
+  - 12 unit test scenarios covering quota tracking and rotation (all passing)
+
+### Code Quality & Optimizations
+- ✅ **Style improvements applied**
+  - Fixed JSDoc comments and typos
+  - Removed redundant code (`|| []` after filter, extra blank lines)
+  - Better variable naming (`event` → `cookingDate`)
+  - Split long lines for readability
+  - Added comprehensive function documentation
+
+- ✅ **Performance optimizations**
+  - Removed redundant `seasonDates` parameter (use event dates directly)
+  - Direct Map creation with flatMap (single pass, no intermediate arrays)
+  - Functional style with nullish coalescing and type predicates
+  - Fixed Prisma relation name bug (`season` → `Season`)
+
+### API Integration
+- ✅ **Endpoint**: `POST /api/admin/season/[id]/assign-cooking-teams`
+  - Flat try-catch structure (ADR-002 compliance)
+  - Fetches season with teams and events
+  - Uses `assignTeamsToEvents()` composable
+  - Batch updates all dinner events with computed assignments
+  - Returns assignment summary with event count
+
+- ✅ **Store integration**: `assignCookingTeamsToEvents()` method in plan store
+- ✅ **E2E test**: Integrated into existing affinity test (combined workflow)
+  - Creates season with 3 teams, generates 3 events
+  - Assigns affinities, then assigns teams to events
+  - Verifies all events have team assignments (round-robin distribution)
+
+### Test Coverage
+- ✅ **Unit tests**: 43/43 passing (`season.unit.spec.ts`)
+- ✅ **E2E API test**: 1/1 passing (`season.e2e.spec.ts:494-560`)
+- ✅ **All functions tested**: Idempotency, sorting, roster creation, event assignment
+- ✅ **Edge cases covered**: Empty arrays, pre-assigned events, holiday gaps
+
+### Key Technical Achievements
+- Pure functional programming with no side effects
+- Type-safe Map usage instead of Record for proper ordering
+- Zigzag matrix traversal algorithm for fair team distribution
+- Ghost assignment pattern for holiday handling
+- Clean separation: algorithm (utils) → composable → API → store → UI
+
+### Files Modified
+- `app/utils/season.ts` - Core algorithm functions (200 lines, fully documented)
+- `tests/component/utils/season.unit.spec.ts` - Comprehensive unit test suite
+- `server/routes/api/admin/season/[id]/assign-cooking-teams.post.ts` - API endpoint
+- `tests/e2e/api/admin/season.e2e.spec.ts` - E2E integration test
+- `server/data/prismaRepository.ts` - Fixed Prisma relation name bug
+
+**READY TO SHIP** - All tests green, code reviewed, optimized, and fully integrated! 🎉

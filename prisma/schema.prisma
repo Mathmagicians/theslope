@@ -41,6 +41,7 @@ enum Weekday {
 enum TicketType {
   ADULT
   CHILD
+  HUNGRY_BABY
   BABY
 }
 
@@ -182,17 +183,20 @@ model CookingTeam {
   name        String
   dinners     DinnerEvent[]
   assignments CookingTeamAssignment[]
+  affinity    String?                  // JSON stringified map of Weekday to boolean
 }
 
 model CookingTeamAssignment {
-  id            Int         @id @default(autoincrement())
-  cookingTeamId Int
-  cookingTeam   CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
-  inhabitantId  Int
-  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  role          Role
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                   Int         @id @default(autoincrement())
+  cookingTeamId        Int
+  cookingTeam          CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
+  inhabitantId         Int
+  inhabitant           Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  role                 Role
+  allocationPercentage Int         @default(100)
+  affinity             String?      // JSON stringified map of Weekday to boolean
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 }
 
 model Season {
@@ -207,13 +211,15 @@ model Season {
   dinnerEvents                      DinnerEvent[]
   ticketIsCancellableDaysBefore     Int
   diningModeIsEditableMinutesBefore Int
+  consecutiveCookingDays            Int           @default(1)
 }
 
 model TicketPrice {
-  id          Int        @id @default(autoincrement())
-  seasonId    Int
-  season      Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  ticketType  TicketType
-  price       Int
-  description String?
+  id              Int        @id @default(autoincrement())
+  seasonId        Int
+  season          Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  ticketType      TicketType
+  price           Int
+  description     String?
+  maximumAgeLimit Int?
 }

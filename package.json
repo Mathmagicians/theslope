@@ -20,13 +20,13 @@
     "test": "npx vitest --run",
     "test:e2e": "npx playwright test --reporter=html,line",
     "db:seed:local": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --local",
-    "db:seed": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env dev --remote",
+    "db:seed": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env=dev --remote",
+    "db_prod:seed:local": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env=prod --local",
+    "db_prod:seed": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env=prod --remote",
     "db:migrate:local": "npx wrangler d1 migrations apply theslope --local",
-    "db:migrate": "npx wrangler d1 migrations apply theslope --env dev --remote",
-    "db_prod:seed:local": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env prod --local",
-    "db_prod:seed": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env prod --remote",
-    "db_prod:migrate:local": "npx wrangler d1 migrations apply theslope-prod --env prod  --local",
-    "db_prod:migrate": "npx wrangler d1 migrations apply theslope-prod --env prod --remote",
+    "db:migrate": "npx wrangler d1 migrations apply theslope --remote --env=dev",
+    "db_prod:migrate:local": "npx wrangler d1 migrations apply theslope-prod --env=prod  --local",
+    "db_prod:migrate": "npx wrangler d1 migrations apply theslope-prod --env=prod --remote",
     "db:generate-client": "npx prisma generate"
   },
   "dependencies": {
@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251001.0",
+    "@iconify-json/fluent-emoji-high-contrast": "^1.2.5",
     "@iconify-json/fluent-mdl2": "^1.2.1",
     "@iconify-json/heroicons": "^1.2.3",
     "@iconify-json/lucide": "^1.2.69",

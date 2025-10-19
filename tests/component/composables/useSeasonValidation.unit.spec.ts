@@ -1,33 +1,38 @@
 import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
-import {createDefaultWeekdayMap, createDateRange, formatDate} from '~/utils/date'
-import type {DateRange} from "~/types/dateTypes"
-import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
+import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 
-// Add testSeason using the factory
-const testSeason = SeasonFactory.defaultSeason().season
+const {TICKET_TYPES} = useTicketPriceValidation()
+const testSeason = SeasonFactory.defaultSeasonData
+
+// Helper to format validation error messages for assertions
+const getValidationError = (result: any) =>
+  !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useSeasonValidation', () => {
   // Get validation utilities
-  const { 
-    holidaysSchema, 
-    SeasonSchema, 
-    serializeSeason, 
-    deserializeSeason 
+  const {
+    holidaysSchema,
+    SeasonSchema,
+    serializeSeason,
+    deserializeSeason
   } = useSeasonValidation()
 
   describe('schemas', () => {
     it('should accept valid season data', () => {
-      const validSeason = SeasonFactory.defaultSeason().season
+      const validSeason = SeasonFactory.defaultSeason()
 
       const result = SeasonSchema.safeParse(validSeason)
-      expect(result.success).toBe(true)
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
     it('should accept both Date and string formats for seasonDates and holidays', () => {
       const validSeason = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         seasonDates: {
           start: "01/01/2025",
           end: "31/01/2025"
@@ -45,7 +50,7 @@ describe('useSeasonValidation', () => {
       }
 
       const result = SeasonSchema.safeParse(validSeason)
-      expect(result.success).toBe(true)
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
     it('holiday schema should accept a single holiday', () => {
@@ -63,7 +68,7 @@ describe('useSeasonValidation', () => {
 
     it('should reject overlapping holidays', () => {
       const seasonWithOverlappingHolidays = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         holidays: [
           { start: new Date(2025, 0, 1), end: new Date(2025, 0, 10) },
           { start: new Date(2025, 0, 5), end: new Date(2025, 0, 15) },
@@ -74,13 +79,13 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.errors[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
       }
     })
 
     it('should reject holidays outside season', () => {
       const seasonWithOutsideHolidays = {
-        ...SeasonFactory.defaultSeason().season,
+        ...SeasonFactory.defaultSeason(),
         holidays: [
           { start: new Date(2024, 11, 25), end: new Date(2025, 0, 5) },
           { start: new Date(2025, 0, 10), end: new Date(2025, 0, 15) },
@@ -91,16 +96,15 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0].message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.errors[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
       }
     })
   })
 
   describe('serialization and deserialization', () => {
     it('should correctly serialize and deserialize season', () => {
-      // Use factory and deserialize for originalSeason
-      const originalSeasonSerialized = SeasonFactory.defaultSeason().serializedSeason
-      const originalSeason = deserializeSeason(originalSeasonSerialized)
+      // Get original season from factory
+      const originalSeason = SeasonFactory.defaultSeason()
 
       // Serialize and deserialize
       const serialized = serializeSeason(originalSeason)
@@ -122,12 +126,7 @@ describe('useSeasonValidation', () => {
       expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
     })
 
-    it('should survive JSON stringification cycle', () => {
-      // ...existing code...
-    })
-
     it('should correctly handle the API test season', () => {
-      // Use testSeason from factory
 
       // Verify the test season validates
       const validationResult = SeasonSchema.safeParse(testSeason)
@@ -148,24 +147,14 @@ describe('useSeasonValidation', () => {
       expect(deserialized.shortName).toBe(testSeason.shortName)
 
       // Always parse seasonDates to Date objects before formatting
-      const originalStartDate = testSeason.seasonDates.start instanceof Date
-        ? testSeason.seasonDates.start
-        : new Date(
-            testSeason.seasonDates.start.split('/').reverse().join('-')
-          )
-      const originalEndDate = testSeason.seasonDates.end instanceof Date
-        ? testSeason.seasonDates.end
-        : new Date(
-            testSeason.seasonDates.end.split('/').reverse().join('-')
-          )
+      const originalStartDate = testSeason.seasonDates.start as Date
+      const originalEndDate = testSeason.seasonDates.end as Date
 
       const formatDateStart = formatDate(deserialized.seasonDates.start)
       const formatDateEnd = formatDate(deserialized.seasonDates.end)
 
       expect(formatDateStart).toBe(formatDate(originalStartDate))
       expect(formatDateEnd).toBe(formatDate(originalEndDate))
-
-      // ...existing code...
     })
 
     it('should correctly serialize and deserialize a Season with relations', () => {
@@ -193,8 +182,8 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A'}],
-        ticketPrices: [{id: 1, ticketType: 'ADULT', price: 50}]
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: []}],
+        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: 'HUNGRY_BABY', price: 4000}]
       }
 
       // Serialize
@@ -221,13 +210,52 @@ describe('useSeasonValidation', () => {
       // Verify relations are preserved
       const deserializedWithRelations = deserialized 
       expect(deserializedWithRelations.dinnerEvents).toHaveLength(2)
-      expect(deserializedWithRelations.dinnerEvents![0].date).toBeInstanceOf(Date)
-      expect(deserializedWithRelations.dinnerEvents![0].menuTitle).toBe('Pasta Night')
-      expect(deserializedWithRelations.dinnerEvents![1].date).toBeInstanceOf(Date)
-      expect(deserializedWithRelations.dinnerEvents![1].menuTitle).toBe('Taco Tuesday')
+      expect(deserializedWithRelations.dinnerEvents![0]?.date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![0]?.menuTitle).toBe('Pasta Night')
+      expect(deserializedWithRelations.dinnerEvents![1]?.date).toBeInstanceOf(Date)
+      expect(deserializedWithRelations.dinnerEvents![1]?.menuTitle).toBe('Taco Tuesday')
       expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
       expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
+
+      // ticket prices
+        expect(deserializedWithRelations.ticketPrices.length).toBe(1)
+        expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual(['HUNGRY_BABY'])
     })
-      
+
+    it('should deserialize nested CookingTeam affinity fields from JSON strings', () => {
+      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useWeekDayMapValidation()
+
+      // Create affinity using factory method and serialize it (simulating DB format)
+      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'])
+      const serializedAffinity = serializeWeekDayMap(teamAffinity)
+
+      // Create a season with CookingTeams that have serialized affinity (as from DB)
+      const serializedSeason = {
+        ...serializeSeason(testSeason),
+        id: 1,
+        CookingTeams: [
+          { id: 1, name: 'Team Monday', seasonId: 1, affinity: serializedAffinity, assignments: [] },
+          { id: 2, name: 'Team No Affinity', seasonId: 1, affinity: null, assignments: [] }
+        ]
+      }
+
+      // Deserialize the season
+      const deserialized = deserializeSeason(serializedSeason)
+
+      // Verify CookingTeams affinity is properly deserialized
+      expect(deserialized.CookingTeams).toHaveLength(2)
+
+      const [team1, team2] = deserialized.CookingTeams!
+
+      // Team 1: affinity should be deserialized to WeekDayMap object
+      expect(team1!.affinity).toEqual(teamAffinity)
+      expect(team1!.affinity!.mandag).toBe(true)
+      expect(team1!.affinity!.onsdag).toBe(true)
+      expect(team1!.affinity!.fredag).toBe(true)
+
+      // Team 2: null affinity becomes undefined after deserialization
+      expect(team2!.affinity).toBeUndefined()
+    })
+
   })
 })

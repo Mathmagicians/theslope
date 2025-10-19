@@ -4,7 +4,7 @@ import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext, doScreenshot } = testHelpers
+const { validatedBrowserContext, doScreenshot, selectDropdownOption } = testHelpers
 
 /**
  * UI TEST: AdminPlanning Component
@@ -53,8 +53,7 @@ test.describe('AdminPlanning UI', () => {
     await page.waitForLoadState('networkidle')
 
     // WHEN: Select season from dropdown
-    await page.getByTestId('season-selector').click()
-    await page.getByRole('option', { name: season.shortName }).click()
+    await selectDropdownOption(page, 'season-selector', season.shortName)
 
     // THEN: Season should be displayed
     // Verify the selected season is shown (check combobox text or similar)
@@ -72,8 +71,7 @@ test.describe('AdminPlanning UI', () => {
     await page.goto(adminPlanningUrl)
     await page.waitForLoadState('networkidle')
 
-    await page.getByTestId('season-selector').click()
-    await page.getByRole('option', { name: season.shortName }).click()
+    await selectDropdownOption(page, 'season-selector', season.shortName)
 
     // WHEN: Click edit mode button
     await page.locator('button[name="form-mode-edit"]').click()

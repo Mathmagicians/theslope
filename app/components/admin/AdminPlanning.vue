@@ -3,7 +3,7 @@ import {FORM_MODES} from "~/types/form"
 import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 
-const {getDefaultSeason} = useSeason()
+const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const store = usePlanStore()
 const {
   isLoading,
@@ -19,6 +19,17 @@ const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
   getDefaultEntity: getDefaultSeason,
   selectedEntity: computed(() => selectedSeason.value)
 })
+
+// REACTIVE HOLIDAY CALCULATION
+// When season dates change in create mode, auto-calculate holidays
+watch(
+  () => currentModel.value?.seasonDates,
+  (newDates) => {
+    if (!newDates || !currentModel.value || formMode.value !== FORM_MODES.CREATE) return
+    currentModel.value.holidays = getDefaultHolidays(newDates)
+  },
+  { deep: true, immediate: true }
+)
 
 // COMPUTED
 const selectedSeasonId = computed({
@@ -117,7 +128,7 @@ const handleCancel = async () => {
                              @cancel="handleCancel"
         />
       </div>
-      <Loader v-else-if="isLoading" text="Fællesspisning Sæson"/>
+      <Loader v-else-if="isLoading" text="Loader data for fællesspisningssæsonen"/>
       <div v-else-if="isNoSeasons"
            class="flex flex-col items-center justify-center space-y-4">
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>
@@ -129,7 +140,7 @@ const handleCancel = async () => {
         >
           Opret ny sæson
         </UButton>
-        <p>Der er ingen sæsoner at vise. Bed din administrator om at oprette en fællespisningsæson.</p>
+        <p>Der er ingenting at vise. Bed din administrator om at oprette en fællespisningsæson.</p>
       </div>
       <div v-else>
         <h3 class="text-lg font-semibold">Vælg en sæson for at komme i gang</h3>

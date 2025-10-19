@@ -31,7 +31,15 @@ export default defineEventHandler(async (event) => {
     try {
         console.info("🌞 > SEASON > [GET] Fetching season with id:", id)
         const season = await fetchSeason(d1Client, id)
-        console.info(`🌞 > SEASON > Returning season ${season?.shortName}`)
+
+        if (!season) {
+            throw createError({
+                statusCode: 404,
+                message: `Season with id ${id} not found`
+            })
+        }
+
+        console.info(`🌞 > SEASON > Returning season ${season.shortName}`)
         return season
     } catch (error) {
         const h3e = h3eFromCatch(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)

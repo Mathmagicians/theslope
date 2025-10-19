@@ -1,10 +1,8 @@
 import {useCookingTeamValidation, type CookingTeam} from './useCookingTeamValidation'
+import type Badge from '#ui/components/Badge.vue'
 
-/**
- * Team colors for visual distinction (8 colors for up to 8 teams)
- */
-const TEAM_COLORS = ['mocha', 'pink', 'orange', 'winery', 'party', 'peach', 'bonbon', 'caramel'] as const
-export type TeamColor = typeof TEAM_COLORS[number]
+const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary',  'caramel'] as const
+export type TeamColor = Badge['variants']['color']
 
 /**
  * Business logic for working with cooking teams
@@ -12,33 +10,15 @@ export type TeamColor = typeof TEAM_COLORS[number]
 export const useCookingTeam = () => {
     const {CookingTeamSchema} = useCookingTeamValidation()
 
-    /**
-     * Get team color based on index (0-based)
-     * @param index - Team index (0 = first team)
-     * @returns Color name from TEAM_COLORS
-     */
     const getTeamColor = (index: number): TeamColor => {
-        return TEAM_COLORS[index % TEAM_COLORS.length]
+        const colorIndex = index % TEAM_COLORS.length
+        return TEAM_COLORS[colorIndex] ?? 'neutral'
     }
 
-    /**
-     * Create a default team name
-     * @param seasonShortName - Short name of the season (e.g., "Uge 35/24 - Uge 23/25")
-     * @param teamNumber - Sequential team number (1, 2, 3, etc.)
-     * @returns Formatted team name (e.g., "Madhold 1 - Uge 35/24 - Uge 23/25")
-     */
     const createDefaultTeamName = (seasonShortName: string, teamNumber: number): string => {
         return `Madhold ${teamNumber} - ${seasonShortName}`
     }
 
-    /**
-     * Create a default cooking team for a given season
-     * @param seasonId - Required season ID
-     * @param seasonShortName - Season's short name for generating team name
-     * @param teamNumber - Sequential team number (defaults to 1)
-     * @param overrides - Partial team object to override defaults
-     * @returns Default cooking team with generated name
-     */
     const getDefaultCookingTeam = (
         seasonId: number,
         seasonShortName: string,

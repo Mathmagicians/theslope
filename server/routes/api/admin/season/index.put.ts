@@ -6,10 +6,10 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
-const {SerializedSeasonValidationSchema} = useSeasonValidation()
+const {SeasonSchema} = useSeasonValidation()
 
 // Create a refined schema for PUT operations that rejects any season with an ID
-const PutSeasonSchema = SerializedSeasonValidationSchema.refine(
+const PutSeasonSchema = SeasonSchema.refine(
     (season: any) => !season.id,
     {
         message: 'Cannot provide an ID when creating a new season. Use POST to update an existing season.',

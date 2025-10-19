@@ -4,11 +4,10 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
-import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
+import {type Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, selectDropdownOption} = testHelpers
-const {deserializeSeason} = useSeasonValidation()
+const {validatedBrowserContext, selectDropdownOption, pollUntil} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season
@@ -108,17 +107,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
         // THEN: Form should switch to view mode (indicating success)
         await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
 
-        // Verify season was created via API (shortName format is MM/yy)
-        const seasons = await SeasonFactory.getAllSeasons(context)
-        const createdSeason = seasons.find(s => s.shortName?.includes(searchPattern))
+        // Verify season was created via API (shortName format is MM/yy - MM/yy)
+        const createdSeason = await pollUntil(
+            () => SeasonFactory.getAllSeasons(context).then(seasons =>
+                seasons.find(s => s.shortName?.includes(searchPattern))
+            ),
+            (season) => season !== undefined
+        )
 
         expect(createdSeason).toBeDefined()
         if (createdSeason) {
             createdSeasonIds.push(createdSeason.id!)
 
             // AND: Verify dinner events were auto-generated for the season
-            const deserializedSeason = deserializeSeason(createdSeason)
-            const expectedEventCount = calculateExpectedEventCount(deserializedSeason)
+           const expectedEventCount = calculateExpectedEventCount(createdSeason)
 
             // Wait for async dinner event generation to complete
             const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
@@ -194,14 +196,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.locator('button[name="submit-season"]').click()
         await page.waitForLoadState('networkidle')
 
-        // Verify season was created with holiday via API (shortName format is MM/yy)
-        const serializedSeasons = await SeasonFactory.getAllSeasons(context)
-        const serializedSeason = serializedSeasons.find(s => s.shortName?.includes(searchPattern))
+        // Verify season was created with holiday via API (shortName format is MM/yy - MM/yy)
+        // Poll until season appears in database (async save)
+        const createdSeason = await pollUntil(
+            () => SeasonFactory.getAllSeasons(context).then(seasons =>
+                seasons.find(s => s.shortName?.includes(searchPattern))
+            ),
+            (season) => season !== undefined
+        )
 
-        expect(serializedSeason).toBeDefined()
-        const createdSeason = deserializeSeason(serializedSeason)
-        expect(createdSeason.holidays.length).toBeGreaterThan(0)
-        createdSeasonIds.push(createdSeason.id!)
+        expect(createdSeason).toBeDefined()
+        if (createdSeason) {
+            expect(createdSeason.holidays.length).toBeGreaterThan(0)
+            createdSeasonIds.push(createdSeason.id!)
+        }
     })
 
     test('GIVEN season with holiday WHEN removing holiday via UI THEN holiday is removed from list', async ({
@@ -248,12 +256,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await page.waitForLoadState('networkidle')
 
         // Verify holiday was removed via API
-        const serializedSeason = await SeasonFactory.getSeason(context, season.id)
-        const updatedSeason = deserializeSeason(serializedSeason)
+        const updatedSeason = await SeasonFactory.getSeason(context, season.id!)
         expect(updatedSeason.holidays).toHaveLength(0)
     })
 })
-
-/**
- * NOTE: Tests for dinner events and cooking teams creation belong in API tests
- */

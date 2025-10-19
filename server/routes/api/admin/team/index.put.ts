@@ -8,10 +8,10 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 const {h3eFromCatch} = eventHandlerHelper
 
 // Get the validation utilities from our composable
-const {CookingTeamSchema} = useCookingTeamValidation()
+const {CookingTeamWithMembersSchema} = useCookingTeamValidation()
 
 // Create a refined schema for PUT operations that rejects any team with an ID
-const PutTeamSchema = CookingTeamSchema.refine(
+const PutTeamSchema = CookingTeamWithMembersSchema.refine(
     team => !team.id,
     {
         message: 'Cannot provide an ID when creating a new team. Use POST to update an existing team.',

@@ -4,6 +4,7 @@ import { useCookingTeam } from '~/composables/useCookingTeam'
 import { usePlanStore } from '~/stores/plan'
 import { setActivePinia, createPinia } from 'pinia'
 import { clearNuxtData } from '#app'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 describe('useCookingTeam', () => {
   beforeEach(() => {
@@ -41,29 +42,14 @@ describe('useCookingTeam', () => {
   })
 
   describe('useInhabitantsWithAssignments', () => {
-    it('fetches inhabitants and merges with assignments from store', async () => {
-      // Setup mock API response for inhabitants
-      const mockInhabitants = [
-        { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null },
-        { id: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null },
-        { id: 3, name: 'Charlie', lastName: 'Nielsen', pictureUrl: null }
-      ]
-
-      registerEndpoint('/api/admin/household/inhabitants', {
-        method: 'GET',
-        handler: () => mockInhabitants
-      })
-
-      // Setup mock season with assignments
-      const mockSeason = {
+    describe('with store integration', () => {
+      it('fetches inhabitants and merges with assignments from store', async () => {
+        // Setup mock season with assignments - using factory data for DRY
+        const mockSeason = {
+        ...SeasonFactory.defaultSeasonData,
         id: 1,
         shortName: 'Winter 2025',
-        seasonDates: JSON.stringify({ start: '2025-01-01', end: '2025-03-31' }),
         isActive: true,
-        cookingDays: JSON.stringify({ MONDAY: true, TUESDAY: true, WEDNESDAY: true, THURSDAY: true, FRIDAY: false, SATURDAY: false, SUNDAY: false }),
-        holidays: JSON.stringify([]),
-        ticketIsCancellableDaysBefore: 10,
-        diningModeIsEditableMinutesBefore: 90,
         CookingTeams: [
           {
             id: 1,
@@ -96,13 +82,32 @@ describe('useCookingTeam', () => {
         ]
       }
 
-      // Mock the season endpoint
-      registerEndpoint('/api/admin/season/1', {
-        method: 'GET',
-        handler: () => mockSeason
-      })
+        // IMPORTANT: Register specific endpoint FIRST, then generic ones
+        // Mock the season detail endpoint (for onSeasonSelect)
+        registerEndpoint('/api/admin/season/1', {
+          method: 'GET',
+          handler: () => mockSeason
+        })
 
-      // Select the season via store
+        // Mock the seasons list endpoint (prevents console error from store initialization)
+        registerEndpoint('/api/admin/season', {
+          method: 'GET',
+          handler: () => []
+        })
+
+        // Setup mock API response for inhabitants
+        const mockInhabitants = [
+          { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null },
+          { id: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null },
+          { id: 3, name: 'Charlie', lastName: 'Nielsen', pictureUrl: null }
+        ]
+
+        registerEndpoint('/api/admin/household/inhabitants', {
+          method: 'GET',
+          handler: () => mockInhabitants
+        })
+
+        // Select the season via store
       const store = usePlanStore()
       await store.onSeasonSelect(1)
 
@@ -143,38 +148,49 @@ describe('useCookingTeam', () => {
       // Charlie should have no assignment
       const charlie = inhabitants.value?.find(i => i.id === 3)
       expect(charlie?.CookingTeamAssignment).toBeUndefined()
+      })
     })
 
-    it('returns empty array when no season selected', async () => {
-      // Setup mock API response
-      registerEndpoint('/api/admin/household/inhabitants', {
-        method: 'GET',
-        handler: () => []
+    describe('without store integration', () => {
+      beforeEach(() => {
+        // Mock empty seasons list (prevents console error from store initialization)
+        registerEndpoint('/api/admin/season', {
+          method: 'GET',
+          handler: () => []
+        })
       })
 
-      // Store has no selected season (no onSeasonSelect called)
-      const { useInhabitantsWithAssignments } = useCookingTeam()
-      const { inhabitants, pending } = await useInhabitantsWithAssignments()
+      it('returns empty array when no season selected', async () => {
+        // Setup mock API response
+        registerEndpoint('/api/admin/household/inhabitants', {
+          method: 'GET',
+          handler: () => []
+        })
 
-      await vi.waitFor(() => {
-        expect(pending.value).toBe(false)
+        // Store has no selected season (no onSeasonSelect called)
+        const { useInhabitantsWithAssignments } = useCookingTeam()
+        const { inhabitants, pending } = await useInhabitantsWithAssignments()
+
+        await vi.waitFor(() => {
+          expect(pending.value).toBe(false)
+        })
+
+        // Should still return inhabitants, just without assignments
+        expect(inhabitants.value).toEqual([])
       })
 
-      // Should still return inhabitants, just without assignments
-      expect(inhabitants.value).toEqual([])
-    })
+      it('exposes refresh function', async () => {
+        registerEndpoint('/api/admin/household/inhabitants', {
+          method: 'GET',
+          handler: () => []
+        })
 
-    it('exposes refresh function', async () => {
-      registerEndpoint('/api/admin/household/inhabitants', {
-        method: 'GET',
-        handler: () => []
+        const { useInhabitantsWithAssignments } = useCookingTeam()
+        const { refresh } = await useInhabitantsWithAssignments()
+
+        expect(refresh).toBeDefined()
+        expect(typeof refresh).toBe('function')
       })
-
-      const { useInhabitantsWithAssignments } = useCookingTeam()
-      const { refresh } = await useInhabitantsWithAssignments()
-
-      expect(refresh).toBeDefined()
-      expect(typeof refresh).toBe('function')
     })
   })
 })

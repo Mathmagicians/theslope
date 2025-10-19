@@ -32,28 +32,37 @@ Solve problems with signing up for meals, and paying for them
   - Visual member count badges
   - Color-coded team identification
 
-**Team Member Assignment Interface:**
+**Team Management Interface:**
 ```
-┌─────────────────┬──────────────────────────────┐
-│ TEAMS (Left)    │ EDIT TEAM (Right)            │
-│                 │                              │
-│ □ Hold 1 [8]    │ ┌─ Hold 1 ────────────┐     │
-│ ■ Hold 2 [6]    │ │ Name: [Hold 2      ]│     │
-│ □ Hold 3 [0]    │ └─────────────────────┘     │
-│ □ Hold 4 [5]    │                              │
-│ ...             │ Current Members:             │
-│                 │ 👤 Anna (Chef)               │
-│                 │ 👤 Bob (Cook)                │
-│                 │                              │
-│                 │ Add Members: [search...]     │
-│                 │ ☐ Charlie (available)        │
-│                 │ ☐ Diana (available)          │
-│                 │ ☑ Anna (in Hold 2)           │
-└─────────────────┴──────────────────────────────┘
+┌─────────────────┬────────────────────────────────────────────────┐
+│ TEAMS (Left)    │ EDIT TEAM (Right)                              │
+│                 │                                                │
+│ □ Hold 1 [8]    │ 🍳 [Hold 2___________] 👤👤👤 [6 medlemmer]  │
+│ ■ Hold 2 [6]    │                                                │
+│ □ Hold 3 [0]    │ ┌Madlavningsdage─┬─Holdkalender──────────────┐ │
+│ □ Hold 4 [5]    │ │☑ Mon  ☐ Fri    │ Oct  Nov  Dec             │ │
+│ ...             │ │☑ Wed  ☐ Sat    │ 🔵1 🔵8  🔵15 🔵5  🔵12   │ │
+│                 │ │☐ Thu  ☐ Sun    │ 🔵3 🔵10 ...              │ │
+│                 │ └────────────────┴───────────────────────────┘ │
+│                 │                                                │
+│                 │ Holdmedlemmer                                  │
+│                 │ ┌Chefkok────┬Kok─────────┬Kokkespire─────────┐ │
+│                 │ │👤 Anna    │👤 Bob      │👤 Charlie        │ │
+│                 │ │           │👤 Diana    │                   │ │
+│                 │ └───────────┴────────────┴───────────────────┘ │
+│                 │                                                │
+│                 │ Tilføj medlemmer                               │
+│                 │ [Søg...___________]                            │
+│                 │ □ Emma (LEDIG)      [Chef][Kok][Spire]        │
+│                 │ □ Frank (LEDIG)     [Chef][Kok][Spire]        │
+│                 │ ☑ Anna (Madhold 2)  [Fjern]                   │
+└─────────────────┴────────────────────────────────────────────────┘
 ```
-- Left panel: Team tabs with member count
-- Right panel: Selected team editor with searchable inhabitant table
-- Immediate operations pattern (no save button needed)
+- Pick a team from the left, edit it on the right
+- Set which days they prefer to cook - system uses this for fair rotation
+- See the whole season in a color-coded calendar (blue badges = this team's cooking days)
+- Add or remove team members with a quick search
+- Everyone saves automatically - no save buttons needed
 
 #### Household Management
 - View all households with inhabitants
@@ -63,7 +72,6 @@ Solve problems with signing up for meals, and paying for them
 
 #### Future Features
 - Assign chef for dinner event
-- Assign cooking team for dinner event
 - Monthly overview of meal tickets sold
 - Monthly report in cvs format for invoicing
 - Send monthly report to pbs system

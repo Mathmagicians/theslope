@@ -1,6 +1,6 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
-    isValid, parse, format, isWithinInterval, areIntervalsOverlapping
+    isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
@@ -58,20 +58,6 @@ export function getEachDayOfIntervalWithSelectedWeekdays(
         .filter(date => selectedDayIndices.includes(getISODay(date)))
 }
 
-
-export function createDefaultWeekdayMap(value: boolean | boolean[] = false): WeekDayMap {
-    if (Array.isArray(value)) {
-        return WEEKDAYS.reduce((acc, day, index) => ({
-            ...acc,
-            [day]: value[index] ?? false
-        }), {} as WeekDayMap)
-    }
-    return WEEKDAYS.reduce((acc, day) => ({
-        ...acc,
-        [day]: value
-    }), {} as WeekDayMap)
-}
-
 export function eachDayOfManyIntervals(intervals: Array<{ start: Date, end: Date }>): Date[] {
     return intervals.flatMap(range => eachDayOfInterval({start: range.start, end: range.end}))
 }
@@ -103,6 +89,7 @@ export function areRangesOverlapping(ranges: DateRange[]): boolean {
         .reduce((acc, current, index, sorted) => {
             if (index === 0) return acc
             const prev = sorted[index - 1]
+            if (!prev) return acc
             return acc || (
                 areIntervalsOverlapping(prev, current) ||
                 (isSameDay(prev.start, current.start) && isSameDay(prev.end, current.end))
@@ -144,7 +131,7 @@ export function toDate(dateValue: DateValue): Date {
 
 // Translate English weekday abbreviations to Danish
 export function translateToDanish(day: string): string {
-    const mapping = {
+    const mapping: Record<string, string> = {
         'Mon': 'M',
         'Tue': 'T',
         'Wed': 'O',
@@ -154,4 +141,42 @@ export function translateToDanish(day: string): string {
         'Sun': 'S'
     }
     return mapping[day] || day
+}
+
+/**
+ * Calculate time periods based on week numbers within a date range.
+ * Returns only time periods that fall within the date range.
+ *
+ * @param dates - The date range to search within
+ * @param weekNumbers - ISO week numbers to select (e.g., [8, 42, 52])
+ * @returns Array of date ranges (Monday-Sunday) within the period, that match week numbers from list
+ */
+export function selectWeekNumbersFromListThatFitInsideDateRange(
+    dates: DateRange,
+    weekNumbers: number[]
+): DateRange[] {
+    // Get all weeks within the date range as (week, year) tuples
+    const weeksInRange = eachWeekOfInterval(
+        { start: dates.start, end: dates.end },
+        { weekStartsOn: 1 } // Monday (ISO week)
+    ).map(weekStart => ({
+        week: getISOWeek(weekStart),
+        year: weekStart.getFullYear()
+    }))
+
+    // Filter to only weeks that match the week numbers from list
+    const matchingWeeks = weeksInRange.filter(({ week }) =>
+        weekNumbers.includes(week)
+    )
+
+    // Convert (week, year) tuples to DateRange (Monday-Sunday)
+    const weekRanges = matchingWeeks.map(({ week, year }) => ({
+        start: calculateDayFromWeekNumber(0, week, year), // Monday
+        end: calculateDayFromWeekNumber(6, week, year)    // Sunday
+    }))
+
+    // Filter to only weeks fully within date range
+    return weekRanges.filter(weekRange =>
+        isDateRangeInside(dates, weekRange)
+    )
 }

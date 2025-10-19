@@ -1,15 +1,18 @@
-import {formatDate, formatDateRange, createDateRange, createDefaultWeekdayMap} from "../../../app/utils/date"
-import {useSeasonValidation, type Season} from "../../../app/composables/useSeasonValidation"
+import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
+import {useTicketPriceValidation, type TicketPrice} from "~/composables/useTicketPriceValidation"
+import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {
     type CookingTeam,
     type TeamRole
-} from "../../../app/composables/useCookingTeamValidation"
+} from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
-import {expect, BrowserContext} from "@playwright/test";
-import {HouseholdFactory} from "./householdFactory";
+import {expect, type BrowserContext} from "@playwright/test"
+import {HouseholdFactory} from "./householdFactory"
 
-const {serializeSeason, deserializeSeason} = useSeasonValidation()
+// Serialization now handled internally by repository layer
 const {salt, headers} = testHelpers
+const {createTicketPrice} = useTicketPriceValidation()
+const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -36,24 +39,22 @@ export class SeasonFactory {
             start: this.today,
             end: this.oneWeekLater
         },
-        holidayDates: [],
+        holidays: [],
         isActive: false,
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-        holidays: [],
+        consecutiveCookingDays: 1,
+        ticketPrices: [
+            createTicketPrice('ADULT', 4000),
+            createTicketPrice('CHILD', 1100, undefined, undefined, 10)
+        ],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }
 
-    // TODO static factory method with updated season with an extra holiday
-
-    static readonly defaultSeason = (testSalt: string = Date.now().toString()) => {
-        const saltedSeason = {
-            ...this.defaultSeasonData,
-            shortName: salt(this.defaultSeasonData.shortName as string, testSalt)
-        }
+    static readonly defaultSeason = (testSalt: string = Date.now().toString()): Season => {
         return {
-            season: saltedSeason,
-            serializedSeason: serializeSeason(saltedSeason)
+            ...this.defaultSeasonData,
+            shortName: salt(this.defaultSeasonData.shortName, testSalt)
         }
     }
 
@@ -64,14 +65,14 @@ export class SeasonFactory {
     ): Promise<Season> => {
         // Merge partial with defaults to create full Season object
         const fullSeason: Season = {
-            ...this.defaultSeason().season,
+            ...this.defaultSeason(),
             ...aSeason
         }
 
         // For expected failures, send raw data to test server validation
-        // For expected success, use serializeSeason for proper client-side validation
+        // For expected success, send full domain object (repository handles serialization)
         const requestData = expectedStatus === 201
-            ? serializeSeason(fullSeason)
+            ? fullSeason
             : aSeason
 
         const response = await context.request.put('/api/admin/season',
@@ -82,7 +83,7 @@ export class SeasonFactory {
         const status = response.status()
         const responseBody = await response.json()
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
         // Only check for ID on successful creation
         if (expectedStatus === 201) {
@@ -96,9 +97,19 @@ export class SeasonFactory {
         context: BrowserContext,
         expectedStatus: number = 200
     ): Promise<Season[]> => {
+        const {SeasonSchema} = useSeasonValidation()
         const response = await context.request.get('/api/admin/season')
         expect(response.status()).toBe(expectedStatus)
-        return await response.json()
+        const rawData = await response.json()
+
+        // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
+        const parsedSeasons = rawData.map((season: any) => {
+            const result = SeasonSchema.safeParse(season)
+            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            return result.data!
+        })
+
+        return parsedSeasons
     }
 
     static readonly getSeason = async (
@@ -106,9 +117,16 @@ export class SeasonFactory {
         id: number,
         expectedStatus: number = 200
     ): Promise<Season> => {
+        const {SeasonSchema} = useSeasonValidation()
         const response = await context.request.get(`/api/admin/season/${id}`)
         expect(response.status()).toBe(expectedStatus)
-        return await response.json()
+        const rawData = await response.json()
+
+        // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
+        const result = SeasonSchema.safeParse(rawData)
+        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+        return result.data!
     }
 
     static readonly deleteSeason = async (
@@ -150,7 +168,7 @@ export class SeasonFactory {
 
     static readonly createSeasonWithTeams = async (
         context: BrowserContext,
-        seasonData: Partial<Season> = this.defaultSeason().season,
+        seasonData: Partial<Season> = this.defaultSeason(),
         teamCount: number = 2
     ): Promise<{ season: Season, teams: any[] }> => {
         const season = await this.createSeason(context, seasonData)
@@ -209,11 +227,13 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonId: number,
         teamName: string = 'TestTeam',
-        expectedStatus: number = 201
+        expectedStatus: number = 201,
+        overrides: Partial<CookingTeam> = {}
     ): Promise<CookingTeam> => {
         const teamData = {
             name: salt(teamName),
-            seasonId: seasonId
+            seasonId: seasonId,
+            ...overrides
         }
         const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
             headers: headers,
@@ -245,12 +265,12 @@ export class SeasonFactory {
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
         await Promise.all(
             householdWithInhabitants.inhabitants.map((inhabitant: any, index: number) =>
-                this.assignMemberToTeam(context, team.id, inhabitant.id, roles[index % roles.length])
+                this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
             )
         )
 
         // Return team with member assignments and household for cleanup
-        const teamWithAssignments = await this.getCookingTeamById(context, team.id)
+        const teamWithAssignments = await this.getCookingTeamById(context, team.id!)
         return {
             ...teamWithAssignments,
             householdId: householdWithInhabitants.household.id
@@ -303,7 +323,7 @@ export class SeasonFactory {
         expectedStatus: number = 201
     ): Promise<any> => {
         const teamAssignmentData = {
-            teamId: teamId,
+            cookingTeamId: teamId,  // Schema expects 'cookingTeamId' not 'teamId'
             inhabitantId: inhabitantId,
             role: role
         }

@@ -2,6 +2,85 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-010: Domain-Driven Serialization Architecture
+
+**Status:** Accepted | **Date:** 2025-10-15
+
+### Decision
+
+**Repository-layer serialization** - Move database format conversion (JSON strings, SQLite constraints) to repository layer, keeping all other layers working with domain types.
+
+**Data Flow:**
+
+```
+UI/Client ←→ HTTP ←→ API ←→ Store ←→ Repository ⟷ Database
+(Season)     (Season)  (Season) (Season)  (Season ⟷ SerializedSeason)
+```
+
+**Layer responsibilities:**
+- **UI/Client**: Domain types (Season with Date objects, arrays)
+- **HTTP**: Domain types (transparent transport via $fetch auto-serialization)
+- **API**: Domain types (validate with SeasonSchema, accept/return Season)
+- **Store**: Domain types (work with Season directly)
+- **Repository**: Serialize before DB write, deserialize after DB read
+
+**Elegant Schema Pattern** in composables:
+
+```typescript
+// Domain schema
+const SeasonSchema = z.object({
+  cookingDays: z.record(z.enum(WEEKDAYS), z.boolean()),
+  holidays: z.array(DateRangeSchema)
+})
+
+// Serialized schema (database format)
+const SerializedSeasonSchema = z.object({
+  cookingDays: z.string(), // JSON stringified
+  holidays: z.string()     // JSON stringified
+})
+
+// Transform functions
+export function serializeSeason(season: Season): SerializedSeason {
+  return { ...season, cookingDays: JSON.stringify(season.cookingDays) }
+}
+
+export function deserializeSeason(serialized: SerializedSeason): Season {
+  return { ...serialized, cookingDays: JSON.parse(serialized.cookingDays) }
+}
+```
+
+**Repository implementation:**
+
+```typescript
+async function createSeason(d1: D1Database, season: Season): Promise<Season> {
+  const serialized = serializeSeason(season)
+  const created = await prisma.season.create({ data: serialized })
+  return deserializeSeason(created)
+}
+```
+
+### Rationale
+
+1. **Separation of concerns**: DB format is implementation detail, not API contract
+2. **Type safety**: Domain types throughout application code, serialization isolated
+3. **Migration flexibility**: Can change DB from SQLite JSON strings to PostgreSQL JSONB without touching API/UI
+4. **Clean testing**: Factories work with domain types, no serialization in tests
+
+### Compliance
+
+1. API endpoints MUST accept/return domain types (Season, not SerializedSeason)
+2. Validation schemas MUST use domain types (SeasonSchema for API, SerializedSeasonSchema for repository only)
+3. Composables MUST export: domain schema, serialized schema, serialize/deserialize functions
+4. Repository MUST serialize before writes, deserialize after reads
+5. Tests MUST use domain types (no manual serialization in factories)
+
+### Related ADRs
+- **ADR-001:** Zod schemas in composables
+- **ADR-002:** API validation patterns
+- **ADR-005:** Repository pattern
+
+---
+
 ## ADR-009: API Index Endpoint Data Inclusion Strategy
 
 **Status:** Accepted | **Date:** 2025-01-28
