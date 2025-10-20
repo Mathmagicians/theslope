@@ -6,6 +6,7 @@ await loadHouseholds()
 
 const householdColumns = [
   {accessorKey: 'id', header: 'ID'},
+  {accessorKey: 'shortName', header: 'Kort navn'},
   {accessorKey: 'address', header: 'Adresse'}
 ]
 
@@ -24,8 +25,7 @@ useHead({
   <div>
     <h1 class="text-xl">Oversigt over husstande på Skråningen</h1>
     <h2 class= "text-muted">
-      Her ser du en tabel med husstande, og view / edit knapper der leder til /household/[id]
-      man kan se navne, børn/voksen/baby billettype, billeder
+      Klik på kort navn for at se husstandens tilmeldinger og kalender
     </h2>
 
     <!-- show when households are loaded -->
@@ -34,7 +34,17 @@ useHead({
       <UTable
               :columns="householdColumns"
               :data="households ? households : []"
-      />
+      >
+        <!-- Custom shortName cell with link -->
+        <template #shortName-cell="{ row }">
+          <NuxtLink
+            :to="`/household/${row.original.shortName}`"
+            class="text-primary hover:underline font-medium"
+          >
+            {{ row.original.shortName }}
+          </NuxtLink>
+        </template>
+      </UTable>
     </UCard>
     <!-- show when households are not loaded -->
     <UCard class="text-center p-4" v-else>

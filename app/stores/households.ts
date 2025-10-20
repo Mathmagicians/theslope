@@ -7,6 +7,9 @@ import type {HouseholdSummary, HouseholdWithInhabitants} from '~/server/data/pri
  * Following ADR-009: Index endpoint returns HouseholdSummary (lightweight), detail returns HouseholdWithInhabitants (comprehensive)
  */
 export const useHouseholdsStore = defineStore("Households", () => {
+    // DEPENDENCIES
+    const {handleApiError} = useApiHandler()
+
     // STATE - Server data only
     const households = ref<HouseholdSummary[]>([])
     const selectedHousehold = ref<HouseholdWithInhabitants | null>(null)
@@ -15,6 +18,15 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // COMPUTED - Derived state
     const isNoHouseholds = computed(() => households.value.length === 0)
+
+    /**
+     * Get the logged-in user's household (from auth session)
+     * Returns full household object from session, or null if not authenticated
+     */
+    const myHousehold = computed(() => {
+        const authStore = useAuthStore()
+        return authStore.user?.Inhabitant?.household ?? null
+    })
 
     /**
      * Fetch all households from API
@@ -77,10 +89,23 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
-     * Initialize store - load households
+     * Initialize store - load households and optionally select one by shortName
+     * @param shortName - Optional shortName to load specific household
      */
-    const initHouseholdsStore = async () => {
+    const initHouseholdsStore = async (shortName?: string) => {
         await loadHouseholds()
+
+        if (shortName) {
+            const household = households.value.find(h => h.shortName === shortName)
+            if (household) {
+                await loadHousehold(household.id)
+            } else {
+                throw createError({
+                    statusCode: 404,
+                    message: `Husstand med kort navn "${shortName}" blev ikke fundet`
+                })
+            }
+        }
     }
 
     return {
@@ -91,6 +116,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         error,
         // Computed
         isNoHouseholds,
+        myHousehold,
         // Actions
         loadHouseholds,
         loadHousehold,

@@ -5,14 +5,14 @@
  * Shows which team is assigned to cook on each date using colored circles.
  * Each team gets a distinct color, and hovering shows the team name in a tooltip.
  *
- * This component is purpose-built for team assignment visualization and differs from
- * CalendarDisplay which is designed for season planning (showing potential vs actual cooking days).
+ * Uses BaseCalendar for consistent calendar structure and event management.
+ * Domain-specific rendering via slots (badges with tooltips for team assignments).
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
 import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
-import type {DateValue} from "@internationalized/date"
-import {isCalendarDateInDateList, eachDayOfManyIntervals, toCalendarDate, toCalendarDateRange, translateToDanish, formatDate} from "~/utils/date"
+import type {DayEventList} from '~/composables/useCalendarEvents'
+import type {DateValue} from '@internationalized/date'
 
 interface Props {
   seasonDates: DateRange
@@ -23,68 +23,50 @@ interface Props {
 
 const props = defineProps<Props>()
 const {getTeamColor} = useCookingTeam()
+const {createEventList} = useCalendarEvents()
+const {getHolidayDatesFromDateRangeList} = useSeason()
 
-// Map dinner events to dates with team information for efficient lookup
-const eventsByDate = computed(() => {
-  const map = new Map<string, {teamId: number, teamName: string, colorIndex: number}>()
-
-  props.dinnerEvents.forEach(event => {
-    if (!event.cookingTeamId) return
-
-    const team = props.teams.find(t => t.id === event.cookingTeamId)
-    if (!team) return
-
-    const dateKey = formatDate(event.date)
-    const teamIndex = props.teams.findIndex(t => t.id === team.id)
-
-    map.set(dateKey, {
-      teamId: team.id!,
-      teamName: team.name,
-      colorIndex: teamIndex
-    })
-  })
-
-  return map
+// Expand holiday ranges into individual dates
+const holidayDates = computed(() => {
+  if (!props.holidays || props.holidays.length === 0) return []
+  return getHolidayDatesFromDateRangeList(props.holidays)
 })
 
-const getEventForDay = (day: DateValue) => {
-  // Convert CalendarDate to JS Date, then use formatDate for consistency
-  const jsDate = new Date(day.year, day.month - 1, day.day)
-  const dateKey = formatDate(jsDate)
-  return eventsByDate.value.get(dateKey)
-}
+// Transform team assignments into event lists (one per team for color coding)
+const teamEventLists = computed(() => {
+  return props.teams.map((team, teamIndex) => {
+    // Filter events for this team
+    const teamEvents = props.dinnerEvents
+      .filter(event => event.cookingTeamId === team.id)
+      .map(event => event.date)
 
+    return createEventList(teamEvents, `team-${team.id}`, 'badge', {
+      label: team.name,
+      color: teamIndex,
+      metadata: { teamId: team.id, teamName: team.name }
+    })
+  })
+})
+
+// Combine all event lists
+const allEventLists = computed(() => teamEventLists.value)
+
+// Check if a day is a holiday using isCalendarDateInDateList
 const isHoliday = (day: DateValue): boolean => {
-  if (!props.holidays?.length) return false
-  const allHolidays = eachDayOfManyIntervals(props.holidays)
-  return isCalendarDateInDateList(day, allHolidays)
+  return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Custom UI to hide days outside current month
-const calendarUi = {
-  cellTrigger: 'data-[outside-view]:hidden'
+// Helper to find team event list for a day (for rendering logic)
+const getTeamEventList = (eventLists: DayEventList[]) => {
+  return eventLists.find(list => list.listId.startsWith('team-'))
 }
 </script>
 
 <template>
   <div class="space-y-4">
     <h3 class="text-lg font-semibold">Holdkalender</h3>
-    <UCalendar
-        :size="getIsMd ? 'xl': 'sm'"
-        :number-of-months="getIsMd ? 3: 1"
-        :min-value="toCalendarDateRange(seasonDates).start"
-        :max-value="toCalendarDateRange(seasonDates).end"
-        :week-starts-on="1"
-        :fixed-weeks="false"
-        :disable-days-outside-current-view="true"
-        :ui="calendarUi"
-        weekday-format="short"
-        readonly
-    >
-      <template #day="{ day }">
+    <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
+      <template #day="{ day, eventLists }">
         <!-- Holiday takes precedence -->
         <UChip v-if="isHoliday(day)" show size="md" color="success">
           {{ day.day }}
@@ -92,11 +74,11 @@ const calendarUi = {
 
         <!-- Team cooking day with tooltip -->
         <UTooltip
-            v-else-if="getEventForDay(day)"
-            :text="getEventForDay(day)!.teamName"
+            v-else-if="getTeamEventList(eventLists)"
+            :text="getTeamEventList(eventLists)!.events[0]?.label"
         >
           <UBadge
-              :color="getTeamColor(getEventForDay(day)!.colorIndex)"
+              :color="getTeamColor(getTeamEventList(eventLists)!.color as number)"
               variant="solid"
               size="md"
           >
@@ -107,12 +89,6 @@ const calendarUi = {
         <!-- Regular day -->
         <span v-else class="text-sm">{{ day.day }}</span>
       </template>
-
-      <template #week-day="{ day }">
-        <span class="text-sm text-muted uppercase">
-          {{ translateToDanish(day) }}
-        </span>
-      </template>
-    </UCalendar>
+    </BaseCalendar>
   </div>
 </template>

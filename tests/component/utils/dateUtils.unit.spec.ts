@@ -10,11 +10,13 @@ import {
     parseDate,
     excludeDatesFromInterval,
     areRangesOverlapping,
-    selectWeekNumbersFromListThatFitInsideDateRange
+    selectWeekNumbersFromListThatFitInsideDateRange,
+    formatCalendarDate
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid} from "date-fns"
 import type {DateRange} from "~/types/dateTypes"
+import {CalendarDate} from '@internationalized/date'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
@@ -365,5 +367,26 @@ describe('selectWeekNumbersFromListThatFitInsideDateRange', () => {
                 expect(holiday.end.getDay()).toBe(0)   // Sunday
             })
         })
+    })
+})
+
+describe('formatCalendarDate', () => {
+    const testCases = [
+        { day: 5, month: 1, year: 2025, expected: '05/01/2025' },
+        { day: 31, month: 12, year: 2024, expected: '31/12/2024' }
+    ]
+
+    testCases.forEach(({ day, month, year, expected }) => {
+        it(`should format CalendarDate(${year}, ${month}, ${day}) as '${expected}'`, () => {
+            const calendarDate = new CalendarDate(year, month, day)
+            const result = formatCalendarDate(calendarDate)
+            expect(result).toBe(expected)
+        })
+    })
+
+    it('should use DD/MM/YYYY format consistently', () => {
+        const calendarDate = new CalendarDate(2025, 3, 7) // March 7, 2025
+        const result = formatCalendarDate(calendarDate)
+        expect(result).toBe('07/03/2025')
     })
 })

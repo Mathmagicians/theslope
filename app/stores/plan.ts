@@ -60,6 +60,12 @@ export const usePlanStore = defineStore("Plan", () => {
         // COMPUTED STATE
         const isNoSeasons = computed(() => seasons.value?.length === 0)
 
+        /**
+         * Get the active season
+         * FIXME: For now returns selectedSeason. Later implement isActive field in database.
+         */
+        const activeSeason = computed(() => selectedSeason.value)
+
         // HELPER - Auto-select first season
         const autoSelectFirstSeason = async () => {
             if (seasons.value.length > 0 && !selectedSeason.value) {
@@ -270,6 +276,7 @@ export const usePlanStore = defineStore("Plan", () => {
             // computed state
             isLoading,
             isNoSeasons,
+            activeSeason,
             disabledModes,
             error: fetchError,
             // actions

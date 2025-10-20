@@ -4,7 +4,8 @@ import {
     copyPartialDateRange,
     formatDateRange,
     DATE_SETTINGS,
-    selectWeekNumbersFromListThatFitInsideDateRange, getEachDayOfIntervalWithSelectedWeekdays
+    selectWeekNumbersFromListThatFitInsideDateRange, getEachDayOfIntervalWithSelectedWeekdays, eachDayOfManyIntervals,
+    isCalendarDateInDateList
 } from '~/utils/date'
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
@@ -17,6 +18,7 @@ import {
     computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates
 } from "~/utils/season";
+import type {DateValue} from "@internationalized/date";
 
 /**
  * Business logic for working with seasons
@@ -173,6 +175,9 @@ export const useSeason = () => {
         return computeTeamAssignmentsForEvents( teams, cookingDays, consecutiveCookingDays, dinnerEvents)
     }
 
+
+    const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
+    const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
     return {
         holidaysSchema,
         SeasonSchema,
@@ -185,6 +190,9 @@ export const useSeason = () => {
         deserializeSeason,
         generateDinnerEventDataForSeason,
         assignAffinitiesToTeams,
-        assignTeamsToEvents
+        assignTeamsToEvents,
+        getHolidaysForSeason,
+        getHolidayDatesFromDateRangeList,
+        computeCookingDates
     }
 }

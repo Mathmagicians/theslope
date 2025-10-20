@@ -78,10 +78,10 @@ d1-list-tables-local:
 	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
 
 logs-dev:
-	@npx wrangler tail theslope-dev --env dev --format pretty
+	@npx wrangler tail theslope --env dev --format pretty
 
 logs-prod:
-	@npx wrangler tail theslope-prod --env prod --format pretty
+	@npx wrangler tail theslope --env prod --format pretty
 
 .env.example:
 	@cat .env | sed 's/=.*$$/=/g' > .env.examples

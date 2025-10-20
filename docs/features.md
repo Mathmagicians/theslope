@@ -15,7 +15,6 @@ Solve problems with signing up for meals, and paying for them
 - Household - has a pbs number, adress, associated users (skråner), and a list of household members - integrated from Heynabo 🤖
 
 ## Functionality
-
 ### Admin
 
 #### Dining Season Management

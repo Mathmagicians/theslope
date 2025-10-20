@@ -16,6 +16,7 @@ import type {Season as DomainSeason, SerializedSeason} from "~/composables/useSe
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, HouseholdCreate} from '~/composables/useHouseholdValidation'
+import {getHouseholdShortName} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
 import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -314,8 +315,15 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSu
                 }
             }
         })
+
+        // Add computed shortName to each household
+        const householdsWithShortName = households.map(household => ({
+            ...household,
+            shortName: getHouseholdShortName(household.address)
+        }))
+
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
-        return households
+        return householdsWithShortName
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching households', error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)

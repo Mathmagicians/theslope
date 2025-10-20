@@ -14,7 +14,7 @@ const columns = [
     accessorKey: 'inhabitants',
     header: 'Inhabitants',
     cell: ({row}: any) =>
-      h(resolveComponent('HouseholdCard'), {
+      h(resolveComponent('HouseholdHouseholdListItem'), {
         household: row.original,
         compact: true
       })

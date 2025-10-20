@@ -359,3 +359,61 @@ describe('assignTeamsToEvents', () => {
         expect(assignedTeams.length).toBeGreaterThan(0)
     })
 })
+
+describe('getHolidaysForSeason', () => {
+    const { getHolidaysForSeason, getDefaultSeason } = useSeason()
+
+    it.each([
+        {
+            description: 'empty array when season has no holidays',
+            holidays: [],
+            expectedCount: 0
+        },
+        {
+            description: 'single date for single-day holiday',
+            holidays: [{ start: new Date(2025, 0, 15), end: new Date(2025, 0, 15) }],
+            expectedCount: 1
+        },
+        {
+            description: '3 dates for 3-day holiday range',
+            holidays: [{ start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) }],
+            expectedCount: 3
+        },
+        {
+            description: '6 dates for two 3-day holiday ranges',
+            holidays: [
+                { start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) },
+                { start: new Date(2025, 0, 10), end: new Date(2025, 0, 12) }
+            ],
+            expectedCount: 6
+        }
+    ])('should return $expectedCount dates for $description', ({ holidays, expectedCount }) => {
+        // GIVEN: Season with specified holidays
+        const season: Season = {
+            ...getDefaultSeason(),
+            holidays
+        }
+
+        // WHEN: Getting holiday dates
+        const result = getHolidaysForSeason(season)
+
+        // THEN: Returns expected number of individual dates
+        expect(result).toHaveLength(expectedCount)
+    })
+
+    it('should expand holiday ranges into consecutive dates', () => {
+        // GIVEN: Season with 3-day holiday
+        const season: Season = {
+            ...getDefaultSeason(),
+            holidays: [{ start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) }]
+        }
+
+        // WHEN: Getting holiday dates
+        const result = getHolidaysForSeason(season)
+
+        // THEN: Returns all consecutive dates
+        expect(result[0]).toEqual(new Date(2025, 0, 1))
+        expect(result[1]).toEqual(new Date(2025, 0, 2))
+        expect(result[2]).toEqual(new Date(2025, 0, 3))
+    })
+})

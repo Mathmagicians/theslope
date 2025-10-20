@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { useHouseholdValidation } from '~/composables/useHouseholdValidation'
+import { useHouseholdValidation, getHouseholdShortName } from '~/composables/useHouseholdValidation'
 import { HouseholdFactory } from '../../e2e/testDataFactories/householdFactory'
 
 describe('useHouseholdValidation', () => {
@@ -335,5 +335,32 @@ describe('useHouseholdValidation', () => {
         expect(result.data.birthDate).toBeNull()
       }
     })
+  })
+})
+
+describe('getHouseholdShortName', () => {
+  it.each([
+    {
+      address: 'Skråningen 31',
+      expected: 'S_31',
+      description: 'single word + number'
+    },
+    {
+      address: 'Tvethøjvej 43, 1',
+      expected: 'T_43_1',
+      description: 'single word + multiple numbers with comma'
+    },
+    {
+      address: 'Abbey Road 1 th.',
+      expected: 'AR_1_th',
+      description: 'multiple words + number + text suffix'
+    },
+    {
+      address: 'Penny Lane 4, 1 4',
+      expected: 'PL_4_1_4',
+      description: 'multiple words + multiple numbers'
+    }
+  ])('returns $expected for $description ($address)', ({address, expected}) => {
+    expect(getHouseholdShortName(address)).toBe(expected)
   })
 })

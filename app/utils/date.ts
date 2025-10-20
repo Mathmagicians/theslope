@@ -12,7 +12,8 @@ export const DATE_SETTINGS =
         DATE_MASK: 'dd/MM/yyyy',
         locale: da,
         USER_MASK: 'dd/mm/åååå',
-        SEASON_NAME_MASK: 'MM/yy'
+        SEASON_NAME_MASK: 'MM/yy',
+        timezone: 'Europe/Copenhagen'
     }
 
 // Takes an iso week number, and a year in which the week is in, and a weekday number (0-6),
@@ -108,6 +109,11 @@ export function toCalendarDate(date: Date | undefined): CalendarDate | undefined
     )
 }
 
+export function formatCalendarDate( date: DateValue ) : string {
+    const jsDate = toDate(date)
+    return formatDate(jsDate)
+}
+
 // Helper for ranges
 export function toCalendarDateRange(range: DateRange | undefined): { start?: CalendarDate, end?: CalendarDate } {
     if (!range) return { start: undefined, end: undefined }
@@ -120,13 +126,13 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
 
 // Check if a CalendarDate is in a list of Date objects
 export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
-    const dateToCheck = dateValue.toDate('UTC')
+    const dateToCheck = dateValue.toDate(DATE_SETTINGS.timezone)
     return dateList.some(date => isSameDay(date, dateToCheck))
 }
 
 // Convert DateValue to JavaScript Date
 export function toDate(dateValue: DateValue): Date {
-    return dateValue.toDate('UTC')
+    return dateValue.toDate(DATE_SETTINGS.timezone)
 }
 
 // Translate English weekday abbreviations to Danish
