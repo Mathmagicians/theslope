@@ -4,7 +4,7 @@ export interface DateRange {
 }
 export const WEEKDAYS = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag'] as const
 export type WeekDay = typeof WEEKDAYS[number]
-export type WeekDayMap = Record<WeekDay, boolean>
+export type WeekDayMap<T = boolean> = Record<WeekDay, T>
 
 /**
  * Create WeekDayMap from array of selected weekdays (with validation)

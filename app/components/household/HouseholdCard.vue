@@ -124,8 +124,8 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
           </div>
 
           <!-- Detail: Booking management (2/3 on large screens) -->
-          <div class="lg:col-span-2">
-            <h3 class="text-lg font-semibold mb-4">
+          <div class="lg:col-span-2 space-y-4">
+            <h3 class="text-lg font-semibold">
               {{ selectedDate ? formatDate(selectedDate) : 'I dag' }}
             </h3>
 
@@ -138,6 +138,62 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
               <!-- - Quick actions (Tilmeld alle, Tag alle med, Afmeld) -->
               <!-- - Guest ticket button -->
               <!-- - Event details (cooking team, deadline, price) -->
+            </div>
+
+            <!-- Weekly Preferences Section -->
+            <div class="border-t pt-4">
+              <button
+                class="flex items-center justify-between w-full text-left"
+                @click="preferencesExpanded = !preferencesExpanded"
+              >
+                <div class="flex items-center gap-2">
+                  <UIcon name="i-heroicons-cog-6-tooth" class="w-5 h-5" />
+                  <span class="font-semibold">Ugentlige præferencer</span>
+                </div>
+                <UIcon
+                  :name="preferencesExpanded ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+                  class="w-5 h-5"
+                />
+              </button>
+
+              <!-- Compact view (collapsed) -->
+              <div v-if="!preferencesExpanded" class="mt-2 text-sm text-muted">
+                <p>Mandag: Anna📍, Bob📍, Clara📍 • David⊘</p>
+                <!-- TODO: Generate from actual preferences data -->
+              </div>
+
+              <!-- Expanded view -->
+              <div v-else class="mt-4 space-y-4">
+                <p class="text-sm text-muted">
+                  Standard for hver ugedag (opdaterer automatisk fremtidige bookinger)
+                </p>
+
+                <div
+                  v-for="inhabitant in household.inhabitants"
+                  :key="inhabitant.id"
+                  class="space-y-2"
+                >
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-heroicons-user" class="w-4 h-4" />
+                    <span class="font-medium">{{ inhabitant.name }}</span>
+                  </div>
+
+                  <!-- TODO: Wire up to actual inhabitant.dinnerPreferences when available -->
+                  <WeekDayMapDinnerModeDisplay
+                    :model-value="null"
+                    compact
+                    :name="`inhabitant-${inhabitant.id}-preferences`"
+                    @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
+                  />
+                </div>
+
+                <UAlert
+                  icon="i-heroicons-information-circle"
+                  color="primary"
+                  variant="soft"
+                  title="Ændringer opdaterer fremtidige bookinger"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -161,24 +217,40 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
         <div v-else-if="item.key === 'members'" class="space-y-4">
           <h3 class="text-lg font-semibold">Medlemmer af husstanden</h3>
 
-          <div v-if="household.inhabitants && household.inhabitants.length > 0">
-            <div
+          <div v-if="household.inhabitants && household.inhabitants.length > 0" class="space-y-4">
+            <UCard
               v-for="inhabitant in household.inhabitants"
               :key="inhabitant.id"
-              class="flex items-center gap-4 p-4 border-b hover:bg-gray-50 dark:hover:bg-gray-800"
             >
-              <UAvatar
-                size="lg"
-                :alt="inhabitant.name"
-                icon="i-heroicons-user"
-              />
-              <div class="flex-1">
-                <p class="font-medium">{{ inhabitant.name }} {{ inhabitant.lastName }}</p>
+              <template #header>
+                <div class="flex items-center gap-4">
+                  <UAvatar
+                    size="lg"
+                    :alt="inhabitant.name"
+                    icon="i-heroicons-user"
+                  />
+                  <div class="flex-1">
+                    <p class="font-medium">{{ inhabitant.name }} {{ inhabitant.lastName }}</p>
+                  </div>
+                  <UBadge variant="soft" color="primary">
+                    {{ getTicketTypeLabel(inhabitant) }}
+                  </UBadge>
+                </div>
+              </template>
+
+              <div class="space-y-4">
+                <h4 class="text-sm font-semibold">Ugentlige madpræferencer</h4>
+                <p class="text-sm text-muted">Angiv hvordan du foretrækker at spise middag hver dag</p>
+
+                <!-- TODO: Wire up to actual inhabitant.dinnerPreferences when available -->
+                <WeekDayMapDinnerModeDisplay
+                  :model-value="null"
+                  label=""
+                  :name="`inhabitant-${inhabitant.id}-preferences`"
+                  @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
+                />
               </div>
-              <UBadge variant="soft" color="primary">
-                {{ getTicketTypeLabel(inhabitant) }}
-              </UBadge>
-            </div>
+            </UCard>
           </div>
 
           <div v-else class="text-muted italic">

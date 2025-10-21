@@ -1,32 +1,43 @@
 # TODO
+
 ## About this file
-- Tasks we work with are listed with priorities 
+
+- Tasks we work with are listed with priorities
 - As tasks get completed, they are compacted and moved to the "COMPLETED" section at the bottom
 - New tasks are added to the top of the file
 - Once we are ready to ship a task, then
-  1. compacted version of "COMPLETED" is added to the Pull Request summary
-  2. A user friendly version of "COMPLETED" is added to `docs/features.md`
-  3. The task and "COMPLETED" items are removed from this TODO file
-  4. Any left over incompleted items are preserved with "Last finishes for <task title>", Low priority
+    1. compacted version of "COMPLETED" is added to the Pull Request summary
+    2. A user friendly version of "COMPLETED" is added to `docs/features.md`
+    3. The task and "COMPLETED" items are removed from this TODO file
+    4. Any left over incompleted items are preserved with "Last finishes for <task title>", Low priority
 
 ---
+
 ## CRITICAL : Bug in adminTeams
+
 1. After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
-2. Seems that there is an error somewhere in a date conversion, holidays for weeks should start on Monday, not Sunday, week42  holiday has become 12-18, not 13-19 as it should
-3. Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help system
+2. Seems that there is an error somewhere in a date conversion, holidays for weeks should start on Monday, not Sunday,
+   week42 holiday has become 12-18, not 13-19 as it should
+3. Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help
+   system
 4. time to add the tabs as a 2. level menu to the menu component, so it doesnt scroll seperately
 
 ## 🎯🌋 HIGHEST PRIORITY: Household Booking Feature
 
 **Feature Overview:**
-- [x ] **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
-- [ ] **Task 2**: Extend WeekDayMap to support ticket preferences - Members can set weekly DINEIN/TAKEAWAY/NONE per inhabitant
-- [ ] **Task 3**: Build HouseholdCard component - Intuitive calendar showing bookings and team obligations (mobile + desktop)
+
+- ✅ **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
+- [ ] **Task 2**: Extend WeekDayMap to support ticket preferences - Members can set weekly DINEIN/TAKEAWAY/NONE per
+  inhabitant
+- [ ] **Task 3**: Build HouseholdCard component - Intuitive calendar showing bookings and team obligations (mobile +
+  desktop)
 - [ ] **Task 4**: Implement booking management UI - Members can book/cancel tickets for family members and guests
-- [ ] **Task 5**: Auto-generate orders from preferences - Orders created automatically when seasons generate dinner events
+- [ ] **Task 5**: Auto-generate orders from preferences - Orders created automatically when seasons generate dinner
+  events
 
 Household members can view and manage dinner bookings for their family through an intuitive calendar interface.
-Members can book/cancel tickets, set weekly preferences per inhabitant, book guest tickets, and see their team cooking obligations.
+Members can book/cancel tickets, set weekly preferences per inhabitant, book guest tickets, and see their team cooking
+obligations.
 Orders are auto-generated when seasons create dinner events based on stored preferences.
 Accessible from admin view and household-specific URLs.
 Mobile and desktop UX must be intuitive.
@@ -36,6 +47,7 @@ Mobile and desktop UX must be intuitive.
 ### HouseholdCard Component - UX Design
 
 **Design Philosophy:**
+
 - **Single-manager workflow**: One family member manages all bookings
 - **Batch operations**: Plan by week/month, not individual days (matches real-world behavior)
 - **Weekly preferences as power controls**: Live controls that auto-update all future bookings when changed
@@ -50,6 +62,7 @@ Mobile and desktop UX must be intuitive.
 #### HouseholdCard Structure
 
 **Overall Component (Desktop):**
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │ 🏠 Hansen Familie                                                               │
@@ -63,6 +76,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **Overall Component (Mobile):**
+
 ```
 ┌──────────────────────────────────┐
 │ 🏠 Hansen Familie                │
@@ -76,6 +90,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **Tab Structure (Same on Desktop/Mobile):**
+
 1. **Tilmeldinger** - Calendar + booking management + weekly preferences (3 view modes: Dag/Uge/Måned)
 2. **Allergier** - Family allergy management
 3. **Økonomi** - Monthly cost breakdown
@@ -87,6 +102,7 @@ Mobile and desktop UX must be intuitive.
 #### Tab 1: Tilmeldinger - Desktop Layouts
 
 **DAG View (Entry Point - Quick Check):**
+
 ```
 ┌──────────────────────────────┬──────────────────────────────────────────────────┐
 │ KALENDER                     │ DENNE DAG                                        │
@@ -113,6 +129,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **UGE View (Weekly Batch Planning):**
+
 ```
 ┌──────────────────────────────┬──────────────────────────────────────────────────┐
 │ KALENDER                     │ DENNE UGE                                        │
@@ -137,6 +154,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **MÅNED View (Monthly Overview):**
+
 ```
 ┌──────────────────────────────┬──────────────────────────────────────────────────┐
 │ KALENDER                     │ DENNE MÅNED                                      │
@@ -161,6 +179,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **Expanded Preferences (All Views):**
+
 ```
 │ ⚙️ UGENTLIGE PRÆFERENCER                               [▲ Skjul]   │
 │                                                                     │
@@ -186,6 +205,7 @@ Mobile and desktop UX must be intuitive.
 #### Tab 1: Tilmeldinger - Mobile Layouts (Stacked + Scrollable)
 
 **DAG View:**
+
 ```
 ┌──────────────────────────────────┐
 │ KALENDER                         │
@@ -217,6 +237,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **UGE View:**
+
 ```
 ┌──────────────────────────────────┐
 │ KALENDER                         │
@@ -244,6 +265,7 @@ Mobile and desktop UX must be intuitive.
 ```
 
 **Grid Cell Interactions (Week/Month Views):**
+
 - **Checkbox (☑/☐)**: Toggle booking on/off (checked = booking active)
 - **Venue Toggle (📍/📦)**: Click to cycle Spis her ↔ Tag med (only when ☑)
 - **Ticket Type (▾)**: Dropdown for Voksen/Barn/Sulten/Baby (only when ☑)
@@ -320,18 +342,21 @@ Mobile and desktop UX must be intuitive.
 ---
 
 **Mobile Layouts for Allergier & Økonomi:**
+
 - Same content as desktop, stacked vertically, scrollable
 
 **Future Features:**
+
 - Calendar feed export (.ics) for Google/Apple/Outlook
 - Ticket marketplace (buy/sell past deadline) in Tilmeldinger detail panel
 
-
 ### Task 1: DRY Calendar Architecture Refactoring
 
-**Goal**: Eliminate duplication between CalendarDisplay and TeamCalendarDisplay. Create reusable calendar foundation for household booking calendar.
+**Goal**: Eliminate duplication between CalendarDisplay and TeamCalendarDisplay. Create reusable calendar foundation for
+household booking calendar.
 
 **Architecture (3-Layer)**:
+
 1. `useCalendarEvents` composable - Generic event mapping/lookup (CalendarEventList type)
 2. `BaseCalendar` component - Renderless calendar with slots (wraps UCalendar)
 3. Domain composables - Event list creators in `useSeason`, `useCookingTeam`, `useHousehold` (new)
@@ -339,64 +364,101 @@ Mobile and desktop UX must be intuitive.
 
 **Test Plan (TDD - Tests First!)**:
 
-| File | Type | Status | Tests |
-|------|------|--------|-------|
-| `useCalendarEvents.unit.spec.ts` | Unit | ⭐ CREATE | Event mapping, day lookup (multiple lists support) |
-| `useSeason.nuxt.spec.ts` | Nuxt | ✏️ EXTEND | Cooking day event lists, `isHoliday` detection, holiday exclusion |
-| `useCookingTeam.nuxt.spec.ts` | Nuxt | ✏️ EXTEND | Team event lists (with/without teams, color/name data) |
-| `useHousehold.unit.spec.ts` | Unit | ⭐ CREATE | Household booking event lists (aggregation, ticket types) |
-| `BaseCalendar.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Slots, day context, responsive sizing, multi-event lists |
-| `CalendarDisplay.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Smoke tests (renders, BaseCalendar, ring/chip styling) |
-| `TeamCalendarDisplay.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Smoke tests (badge styling, tooltips, team colors) |
-| `HouseholdCalendarDisplay.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Smoke tests (chip bookings, count display, legend) |
+| File                                    | Type | Status   | Tests                                                             |
+|-----------------------------------------|------|----------|-------------------------------------------------------------------|
+| `useCalendarEvents.unit.spec.ts`        | Unit | ✅        | Event mapping, day lookup (multiple lists support)                |
+| `useSeason.nuxt.spec.ts`                | Nuxt | ✅        | Cooking day event lists, `isHoliday` detection, holiday exclusion |
+| `useCookingTeam.nuxt.spec.ts`           | Nuxt | ✅        | Team event lists (with/without teams, color/name data)            |
+| `useHousehold.unit.spec.ts`             | Unit | ✅        | Household booking event lists (aggregation, ticket types)         |
+| `BaseCalendar.nuxt.spec.ts`             | Nuxt | ⭐ CREATE | Slots, day context, responsive sizing, multi-event lists          |
+| `CalendarDisplay.nuxt.spec.ts`          | Nuxt | ⭐ CREATE | Smoke tests (renders, BaseCalendar, ring/chip styling)            |
+| `TeamCalendarDisplay.nuxt.spec.ts`      | Nuxt | ⭐ CREATE | Smoke tests (badge styling, tooltips, team colors)                |
+| `HouseholdCalendarDisplay.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Smoke tests (chip bookings, count display, legend)                |
 
 **Implementation (After Tests!)**:
-- [ ] Phase 1: Foundation - `useCalendarEvents` + `BaseCalendar`
-- [ ] Phase 2: Domain extensions - Update `useSeason`, `useCookingTeam`, create `useHousehold`
-- [ ] Phase 3: Component migration - Refactor existing calendars, create `HouseholdCalendarDisplay`
-- [ ] Phase 4: Cleanup - Verify tests, remove duplication
+
+- ✅ Phase 1: Foundation - `useCalendarEvents` + `BaseCalendar`
+- ✅ Phase 2: Domain extensions - Update `useSeason`, `useCookingTeam`, create `useHousehold`
+- ✅ Phase 3: Component migration - Refactor existing calendars, create `HouseholdCalendarDisplay`
+- ✅Phase 4: Cleanup - Verify tests, remove duplication
 
 **ADR Alignment**: ADR-001 (composables), ADR-007 (separation of concerns), ADR-010 (domain types)
 
 ### Task 2: Ticket Type Preferences (WeekDayMap Extension)
 
-**Goal**: Support per-member weekly ticket preferences (DINEIN, TAKEAWAY, NONE) instead of simple boolean cooking days.
+**Goal**: Store per-inhabitant weekly dinner preferences (DINEIN, TAKEAWAY, NONE) using generic `WeekDayMap<DinnerMode>`
 
-**Requirements**:
-- Extend WeekDayMap type to support generic value types (not just boolean)
-- `WeekDayMap<DinnerMode>` for ticket preferences
-- Default: DINEIN for all members, all cooking days
-- Store preferences per inhabitant
+**Architecture Decision**: Enhance existing `useWeekDayMapValidation()` with optional parameters (Option B)
 
-**Implementation**:
-- [ ] Research WeekDayMap type extension feasibility
-- [ ] Design: `WeekDayMap<T = boolean>` generic type
-- [ ] Update validation composables for typed WeekDayMap
-- [ ] Create inhabitant preference schema (Prisma + Zod)
-- [ ] API endpoints: GET/PUT `/api/inhabitant/[id]/preferences`
+- Zero breaking changes - existing boolean usage unchanged
+- `useWeekDayMapValidation({ valueSchema: DinnerModeSchema, defaultValue: 'NONE' })`
+- Same ser/de functions for all types
+
+```typescript 
+// in useWeekDayMapValidation.ts
+useWeekDayMapValidation<T = boolean>(options ? : {
+    valueSchema? : z.ZodType<T>      // Zod schema for each day's value
+    defaultValue? : T                 // Default value for createDefaultWeekdayMap
+    isRequired? : (map: WeekDayMap<T>) => boolean  // Custom "at least one" validation
+    requiredMessage? : string         // Error message for validation
+})
+```
+
+**TDD Implementation**:
+
+**Phase 1: Type & Validation Foundation**
+
+- [ ] **Test**: Unit test for generic `WeekDayMap<T>` type in `types/dateTypes.ts`
+- [ ] **Impl**: Update `type WeekDayMap<T = boolean> = Record<WeekDay, T>`
+- [ ] **Test**: Unit test for enhanced `useWeekDayMapValidation()` with DinnerMode
+- [ ] **Impl**: Add optional params: `valueSchema`, `defaultValue`, `isRequired`, `requiredMessage`
+- [ ] **Test**: Unit test `createDefaultWeekdayMap<T>(defaultValue: T)`
+- [ ] **Impl**: Make `createDefaultWeekdayMap` generic
+
+**Phase 2: Prisma Schema**
+
+- [ ] **Impl**: Add `dinnerPreferences String?` to `Inhabitant` model (JSON stringified `WeekDayMap<DinnerMode>`)
+- [ ] **Impl**: Deprecate `DinnerPreference` model (add comment, keep for backward compat)
+- [ ] **Impl**: Generate Prisma client + migration
+
+**Phase 3: Domain Validation**
+
+- [ ] **Test**: Unit test `useInhabitantValidation` with `dinnerPreferences` field
+- [ ] **Impl**: Add `dinnerPreferences: WeekDayMapSchema.nullable()` using DinnerMode validation
+- [ ] **Test**: Test ser/de for `dinnerPreferences` in repository
+- [ ] **Impl**: Repository ser/de in `createInhabitant`, `updateInhabitant`
+
+**Phase 4: API & UI**
+
+- [ ] API endpoints: GET/PUT `/api/inhabitant/[id]`  should update the dinnerPreferences
+- [ ] API e2e test case for GET/PUT endpoint
 - [ ] UI: Weekly preference selector component
+- [ ] e2e ui test - changes trigger
 
 ### Task 3: Household Calendar Card Component
 
 **Goal**: Build HouseholdCard component showing family bookings and cooking obligations.
 
 **Requirements**:
+
 - Calendar view with:
-  - Family member bookings (multi-inhabitant display)
-  - Cooking team assignments (via team calendar integration)
-  - Responsive: Intuitive on mobile and desktop
+    - Family member bookings (multi-inhabitant display)
+    - Cooking team assignments (via team calendar integration)
+    - Responsive: Intuitive on mobile and desktop
 - Accessible from:
-  - `/admin/household?household={id}` (admin context - future)
-  - `/household/[shortname]` (household-specific URL - path-based routing)
+    - `/admin/household?household={id}` (admin context - future)
+    - `/household/[shortname]` (household-specific URL - path-based routing)
 
 **URL Pattern Decision**:
+
 - Use path-based routing: `/household/[shortname]` for household detail view
 - Rationale: Consistency with Nuxt 4 file-based routing, REST conventions, and existing patterns
 - Note: Existing `/household/[id].vue` uses address-based IDs (T1, S31) - may need migration/coexistence strategy
 
 **Implementation**:
-- [ ] Create `HouseholdCard.vue` component
-- [ ] Integrate `HouseholdCalendarDisplay` (from Task 1)
+
+- ✅ Create `HouseholdCard.vue` component
+- ✅ Integrate `HouseholdCalendarDisplay` (from Task 1)
 - [ ] Show multiple event lists: bookings per member + team assignments
 - [ ] Responsive layout (mobile: single month, desktop: 3 months)
 - [ ] E2E tests for calendar interactions
@@ -406,12 +468,14 @@ Mobile and desktop UX must be intuitive.
 **Goal**: Members can book/cancel tickets for any family member.
 
 **Requirements**:
+
 - Book/cancel tickets per inhabitant per dinner event
 - Select ticket types (ADULT, CHILD, HUNGRY_BABY, BABY)
 - Guest ticket support (extra ticket for non-member)
 - Validation: Cancellation deadline (`ticketIsCancellableDaysBefore`)
 
 **Implementation**:
+
 - [ ] API: POST/DELETE `/api/household/[id]/order` (create/cancel booking)
 - [ ] UI: Day click → booking modal (select inhabitants + ticket types)
 - [ ] Show existing bookings in calendar (chips with count)
@@ -423,12 +487,14 @@ Mobile and desktop UX must be intuitive.
 **Goal**: When season generates dinner events, auto-create orders based on inhabitant ticket preferences.
 
 **Requirements**:
+
 - During dinner event generation (existing flow)
 - Create orders for each inhabitant matching their weekly preferences
 - Skip if preference is NONE for that weekday
 - Apply correct ticket type based on inhabitant age/preference
 
 **Implementation**:
+
 - [ ] Update `generateDinnerEvents` logic (server-side)
 - [ ] For each event date, check all inhabitants' preferences for that weekday
 - [ ] Bulk create orders matching preferences
@@ -436,6 +502,7 @@ Mobile and desktop UX must be intuitive.
 - [ ] Handle edge cases: Mid-season preference changes
 
 ### Feature Completion Criteria
+
 - [ ] All calendar components use DRY BaseCalendar architecture
 - [ ] Household members can view bookings in calendar
 - [ ] Household members can book/cancel tickets (with deadline validation)
@@ -443,24 +510,28 @@ Mobile and desktop UX must be intuitive.
 - [ ] Ticket preferences stored per inhabitant per weekday
 - [ ] Orders auto-generated when season creates dinner events
 - [ ] Mobile and desktop UX tested and approved
-- [ ] E2E tests cover all booking flows 
-
+- [ ] E2E tests cover all booking flows
 
 ## 🗻 HIGH PRIORITY: Team Assignment UI Integration
 
-**Remaining UI work**: 
+**Remaining UI work**:
+
 - [ ] Manual reassignment UI (admin changes team for specific event)
 - [ ] Display team assignment counts in UI ("Hold 1: 12 fællesspisninger")
 - [ ] User-defined team affinity preferences
 - [ ] Use allocationPercentage for team member workload distribution
 - [ ] Auto-reassign when teams added/removed
 - [ ] Warnings for imbalanced distribution
+
 ---
 
 ## 🎯 HIGH PRIORITY: Feature: /dinner today dinner information page for everyone
+
 When a user navigates to the /dinner page, they should see a master / detail view with a calendar of dinner events
-and a complex information panel about today's dinner event if it exists, or the next upcoming dinner event if today's dinner event does not exist.
+and a complex information panel about today's dinner event if it exists, or the next upcoming dinner event if today's
+dinner event does not exist.
 The information panel should include:
+
 - sell / buy tickets
 - show unsold
 - show hours / minutes deadlines
@@ -471,15 +542,20 @@ The information panel should include:
 ## 🎯 HIGH PRIORITY: URL-Based Admin Navigation (DRY Season Selection)
 
 ### Goal
-Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and eliminating component duplication.
+
+Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and
+eliminating component duplication.
 
 ### Architecture Pattern
+
 **Query parameters as context/filters**:
+
 - Season context: `?season={shortName}`
 - Team context: `?team={slug}` (future)
 - Mode state: `?mode=edit|create|view` (existing)
 
 **Example URLs**:
+
 ```
 /admin/planning?season=fall-2025&mode=edit
 /admin/teams?season=fall-2025&mode=view
@@ -491,23 +567,27 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 1. Season Context (Required)
 
 **Default Behavior**:
+
 - User navigates to `/admin/planning` (no `?season=`)
 - Auto-redirect to `/admin/planning?season={activeSeason.shortName}`
 - Active season = first season in list (temporary - will be database `isActive` field later)
 - Only ONE season can be active at a time (business invariant)
 
 **Invalid Season Handling**:
+
 - User navigates to `/admin/planning?season=nonexistent`
 - Redirect to `/admin/planning?season={activeSeason.shortName}` (graceful fallback)
 - No error toast - silent recovery
 
 **Empty State** (No Seasons):
+
 - `isNoSeasons = true` when no seasons exist
 - URL: `/admin/planning` (no redirect, no season param)
 - Show empty state UI: "Ingen sæsoner. Opret en ny sæson."
 - Season-dependent actions disabled (edit mode, team creation)
 
 **Season Persistence**:
+
 - Season param persists across ALL admin tabs
 - User at `/admin/planning?season=fall-2025` → clicks "Madhold" → `/admin/teams?season=fall-2025`
 - Coexists with mode param: `?season=fall-2025&mode=edit`
@@ -515,11 +595,13 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 2. URL Sync with Store
 
 **Two-way binding**:
+
 - URL query param `?season=fall-2025` → Store `selectedSeason`
 - Store `selectedSeason` updated → URL reflects change
 - SeasonSelector dropdown updates URL → Store syncs automatically
 
 **Store Integration**:
+
 - Add `activeSeason` computed property: `seasons.value[0] ?? null`
 - Existing `selectedSeason` ref synced from URL
 - Existing `onSeasonSelect(id)` method remains unchanged
@@ -527,16 +609,19 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 3. Routing Logic Consolidation
 
 **Problem**: Routing logic fragmented across:
+
 - FormModeSelector component (manages `?mode=`)
 - Admin [tab].vue page (manages `/admin/[tab]`)
 - Duplicated season selection in AdminPlanning + AdminTeams
 
 **Solution**: Create `useAdminNavigation` composable
+
 - Responsibility: Manage URL query params (season, future: team, filters)
 - Single source of truth for admin context/navigation
 - Separate from `useEntityFormManager` (entity editing state)
 
 **Clear separation** (ADR-007 compliant):
+
 ```
 useAdminNavigation    → URL context (season, team filters)
 useEntityFormManager  → Entity editing (mode, draft entity)
@@ -546,6 +631,7 @@ usePlanStore          → Server data (seasons list, CRUD)
 #### 4. Component Extraction (DRY)
 
 **Create SeasonSelector component**:
+
 - Replaces inline `<USelect>` in AdminPlanning.vue (lines 93-103)
 - Replaces inline `<USelect>` in AdminTeams.vue (lines 257-266)
 - Uses `useAdminNavigation` internally for URL updates
@@ -554,20 +640,24 @@ usePlanStore          → Server data (seasons list, CRUD)
 ### Implementation Checklist
 
 **New Files**:
+
 - [ ] `app/composables/useAdminNavigation.ts` - URL query param management
 - [ ] `app/components/admin/SeasonSelector.vue` - Reusable season dropdown
 
 **Modified Files**:
+
 - [ ] `app/stores/plan.ts` - Add `activeSeason` computed property
 - [ ] `app/components/admin/AdminPlanning.vue` - Use SeasonSelector + useAdminNavigation
 - [ ] `app/components/admin/AdminTeams.vue` - Use SeasonSelector + useAdminNavigation
 
 **Unchanged Files** (respects ADR-007, ADR-008):
+
 - [ ] `app/composables/useEntityFormManager.ts` - No changes
 - [ ] `app/components/form/FormModeSelector.vue` - No changes
 - [ ] `app/pages/admin/[tab].vue` - No changes
 
 **Testing**:
+
 - [ ] E2E: Season persists across admin tabs
 - [ ] E2E: Invalid season redirects to active season
 - [ ] E2E: Missing season param redirects to active season
@@ -577,11 +667,14 @@ usePlanStore          → Server data (seasons list, CRUD)
 - [ ] Unit: useAdminNavigation composable tests
 
 **Documentation**:
+
 - [ ] Move to `docs/features.md` after implementation
 - [ ] Update URL patterns in README.md (if needed)
 
 ### Decision Rationale
+
 Query parameters chosen over path-based routing because:
+
 1. Season/team are "context filters" not primary entities
 2. Minimal code changes (no new route files)
 3. Consistent with existing `?mode=` pattern
@@ -595,6 +688,7 @@ Query parameters chosen over path-based routing because:
 ### Skipped E2E Tests (1 test)
 
 **`tests/e2e/api/admin/dinnerEvent.e2e.spec.ts:46`**
+
 - Test: `POST can update existing dinner event with status 200`
 - Status: Intentionally skipped - feature not yet implemented
 - Action: Implement POST /api/admin/dinner-event/[id] endpoint when needed
@@ -604,7 +698,9 @@ Query parameters chosen over path-based routing because:
 ## Medium priority: Fix Vitest ECONNREFUSED error on test cleanup
 
 ### Issue
+
 After all tests pass successfully, the test process throws an unhandled ECONNREFUSED error during cleanup:
+
 ```
 AggregateError [ECONNREFUSED]:
   Error: connect ECONNREFUSED ::1:3000
@@ -612,12 +708,14 @@ AggregateError [ECONNREFUSED]:
 ```
 
 ### Current Status
+
 - **All tests pass**: 125/125 tests passing ✅
 - **Error occurs**: During process teardown after tests complete
 - **Affected**: Only when running all Nuxt tests together (`npm run test`)
 - **Not affected**: Individual test files run without error
 
 ### Investigation Done
+
 - ✅ Confirmed: `plan.ts` uses module-level `useFetch` (Nuxt 4 pattern with `refreshSeasons()`)
 - ✅ Confirmed: Test properly registers mock endpoint before importing store
 - ✅ Confirmed: Other stores use `useFetch` inside actions (users.ts, households.ts)
@@ -625,12 +723,14 @@ AggregateError [ECONNREFUSED]:
 - ✅ Found: `useFetch` designed for components, not stores (but Nuxt 4 allows it)
 
 ### Potential Causes
+
 1. HMR code (`import.meta.hot`) running in test environment
 2. Nuxt/Vite cleanup trying to connect to dev server (port 3000)
 3. Test environment not fully mocking the Nuxt runtime during cleanup
 4. Known issue with `@nuxt/test-utils` and module-level `useFetch`
 
 ### Action Items
+
 - [ ] Check if `import.meta.hot` is active in test environment
 - [ ] Research `@nuxt/test-utils` GitHub issues for similar problems
 - [ ] Consider using MSW (Mock Service Worker) instead of `registerEndpoint`
@@ -638,6 +738,7 @@ AggregateError [ECONNREFUSED]:
 - [ ] Test if issue persists with Pinia 3 migration (scheduled)
 
 ### References
+
 - Pinia testing docs: https://pinia.vuejs.org/cookbook/testing.html
 - `@nuxt/test-utils` issue #943: registerEndpoint doesn't expose to $fetch
 - Search results indicate `useFetch` in stores is problematic for testing
@@ -647,26 +748,32 @@ AggregateError [ECONNREFUSED]:
 ## Medium priority: Fix UForm error display in AdminPlanningSeason footer
 
 ### Issue
-Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't display.
+
+Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't
+display.
 
 ### Current Behavior
+
 - `app/components/admin/planning/AdminPlanningSeason.vue:175` has error display: `<div v-if="errors.length > 0">`
 - UForm v-slot provides `errors` array which should populate with validation errors
 - Debug output shows: `errors = [], length = 0` even when validation prevents submission
 - Removing `form="seasonForm"` attribute fixed validation blocking (UForm now prevents invalid submission)
 
 ### Investigation Done
+
 - ✅ Confirmed: UForm docs say errors array should populate during input events
 - ✅ Confirmed: `errors.length > 0` is correct syntax per Nuxt UI docs
 - ✅ Fixed: Removed `form` attribute from submit button (was bypassing UForm validation)
 - ❌ Problem: `errors` array remains empty even though validation is active
 
 ### Potential Causes
+
 1. UForm v-slot `errors` may only populate after attempted submit (not during input validation)
 2. May need to use `@error` event instead of v-slot pattern
 3. May need to set `validate-on` prop explicitly
 
 ### Action Items
+
 - [ ] Test clicking submit button to see if errors populate after submission attempt
 - [ ] Check Nuxt UI 4 migration docs for error handling changes
 - [ ] Try `@error` event pattern as alternative to v-slot
@@ -678,22 +785,26 @@ Form validation is working (submit button is disabled when errors exist), but th
 ## Medium priority: Type-safe deserializeSeason (ADR-010 alignment)
 
 ### Issue
+
 `deserializeSeason(serialized: SerializedSeason | any)` uses `| any` escape hatch, losing compile-time type safety.
 
 ### Root Cause
+
 - **Prisma returns conditional types** based on `include` clause (index vs detail endpoints)
 - **SerializedSeason is transform OUTPUT**, not deserialize INPUT (one-way schema)
 - Function handles multiple input shapes (with/without relations) but lacks proper type
 
 ### Options
+
 1. **Keep `| any`** - Pragmatic, runtime-safe, but loses compile-time safety
 2. **Use Prisma Payload Types** - Type-safe but couples to Prisma, maintenance overhead
 3. **Create SerializedSeasonBase type** ✅ **RECOMMENDED**
-   - Define base serialized type matching database format
-   - Separate from domain Season type (ADR-010 compliant)
-   - Type-safe contract: what repository returns → what deserialize accepts
+    - Define base serialized type matching database format
+    - Separate from domain Season type (ADR-010 compliant)
+    - Type-safe contract: what repository returns → what deserialize accepts
 
 ### Action Items
+
 - [ ] Create `SerializedSeasonBase` type in `useSeasonValidation.ts`
 - [ ] Update `deserializeSeason(serialized: SerializedSeasonBase): Season`
 - [ ] Document in ADR-010 (serialized types represent DB format, not transform output)
@@ -703,6 +814,7 @@ Form validation is working (submit button is disabled when errors exist), but th
 ## Major Framework Migrations Plan (Remaining)
 
 ### Zod 4 Migration (MEDIUM PRIORITY)
+
 **Branch**: `migrate-zod-4`
 **Current**: 3.24.1 → **Target**: 4.1.5
 **Impact**: MEDIUM - Form validation and API schemas
@@ -710,29 +822,31 @@ Form validation is working (submit button is disabled when errors exist), but th
 ---
 
 # ✅ COMPLETED
+
 ## 🎯🌋 HIGHEST PRIORITY: Household Booking Feature
 
 **Feature Overview:**
-- ✅ 
+
+- ✅
 - **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
 
 1. useCalendarEvents composable (generic calendar logic):
-   - createEventList() - Transform dates into event lists with metadata
-   - createEventMap() - Efficient day lookup via Map
-   - getEventsForDay() - Get events for a specific day
-   - getEventListsForDay() - Get event lists with metadata for a day
-   - Exported types: CalendarEvent, CalendarEventList, DayEventList
+    - createEventList() - Transform dates into event lists with metadata
+    - createEventMap() - Efficient day lookup via Map
+    - getEventsForDay() - Get events for a specific day
+    - getEventListsForDay() - Get event lists with metadata for a day
+    - Exported types: CalendarEvent, CalendarEventList, DayEventList
 2. BaseCalendar component (DRY foundation):
-   - Wraps UCalendar with consistent configuration
-   - Responsive sizing (xl/3 months desktop, sm/1 month mobile)
-   - Consistent UI (hides days outside current view)
-   - Typed slots: #day="{ day, eventLists }" and #week-day="{ day }"
-   - Minimal - delegates to useCalendarEvents composable
+    - Wraps UCalendar with consistent configuration
+    - Responsive sizing (xl/3 months desktop, sm/1 month mobile)
+    - Consistent UI (hides days outside current view)
+    - Typed slots: #day="{ day, eventLists }" and #week-day="{ day }"
+    - Minimal - delegates to useCalendarEvents composable
 3. Domain composables (useSeason):
-   - getHolidayDatesFromDateRangeList() - Expand holiday ranges
-   - computeCookingDates() - Calculate potential cooking days
-   - Domain-specific business logic
+    - getHolidayDatesFromDateRangeList() - Expand holiday ranges
+    - computeCookingDates() - Calculate potential cooking days
+    - Domain-specific business logic
 4. Specific calendar components (thin wrappers):
-   - TeamCalendarDisplay: Team assignments with colored badges + tooltips
-   - CalendarDisplay: Potential (rings) vs actual (filled) cooking days
-   - Each uses BaseCalendar + domain-specific rendering via slots
+    - TeamCalendarDisplay: Team assignments with colored badges + tooltips
+    - CalendarDisplay: Potential (rings) vs actual (filled) cooking days
+    - Each uses BaseCalendar + domain-specific rendering via slots

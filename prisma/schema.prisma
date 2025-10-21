@@ -27,17 +27,6 @@ enum Role {
   COOK
   JUNIORHELPER
 }
-
-enum Weekday {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
-}
-
 enum TicketType {
   ADULT
   CHILD
@@ -79,14 +68,6 @@ model User {
   updatedAt    DateTime    @updatedAt
 }
 
-// Represents the dinner preferences of an inhabitant for a given weekday
-model DinnerPreference {
-  id           Int        @id @default(autoincrement())
-  inhabitantId Int
-  inhabitant   Inhabitant @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  weekday      Weekday
-  dinnerMode   DinnerMode
-}
 
 // Represents a member of a household, that can participate in the dinners and cooking
 // Inhabitant 1-0..1 User
