@@ -10,28 +10,26 @@ import {
 import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
-import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DinnerEventCreate} from './useDinnerEventValidation'
 import {
     computeAffinitiesForTeams,
     computeCookingDates,
     computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates
-} from "~/utils/season";
-import type {DateValue} from "@internationalized/date";
+} from "~/utils/season"
 
 /**
  * Business logic for working with seasons
  */
 export const useSeason = () => {
-    // Get validation utilities
+    // Get validation utilities (including createWeekDayMapFromSelection configured for Season)
     const {
         holidaysSchema,
         SeasonSchema,
         serializeSeason,
-        deserializeSeason
+        deserializeSeason,
+        createWeekDayMapFromSelection
     } = useSeasonValidation()
-    const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
 
     // Get app configuration
     const appConfig = useAppConfig()
@@ -62,7 +60,7 @@ export const useSeason = () => {
             shortName: createSeasonName(dateRange),
             seasonDates: dateRange,
             isActive: false,
-            cookingDays: createWeekDayMapFromSelection(theslope.defaultSeason.cookingDays),
+            cookingDays: createWeekDayMapFromSelection(theslope.defaultSeason.cookingDays, true, false),
             holidays: [], // Empty - component calculates reactively based on seasonDates
             ticketPrices: ticketPrices,
             ticketIsCancellableDaysBefore: theslope.defaultSeason.ticketIsCancellableDaysBefore,

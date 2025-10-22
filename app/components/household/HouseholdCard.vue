@@ -77,6 +77,12 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
   // TODO: Calculate from birthDate when implemented
   return 'Voksen'
 }
+
+// TODO: Import DinnerMode and create test preferences
+// Temporary test data matching the prototype
+const testPreferences = ref<Record<number, any>>({
+  // These IDs should match actual inhabitant IDs when wired up
+})
 </script>
 
 <template>
@@ -156,10 +162,23 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
                 />
               </button>
 
-              <!-- Compact view (collapsed) -->
-              <div v-if="!preferencesExpanded" class="mt-2 text-sm text-muted">
-                <p>Mandag: Anna📍, Bob📍, Clara📍 • David⊘</p>
-                <!-- TODO: Generate from actual preferences data -->
+              <!-- Compact view (collapsed) - Overview of all inhabitants -->
+              <div v-if="!preferencesExpanded" class="mt-4 space-y-3">
+                <div
+                  v-for="inhabitant in household.inhabitants"
+                  :key="inhabitant.id"
+                  class="flex items-start gap-3"
+                >
+                  <div class="flex items-center gap-2 min-w-[120px]">
+                    <UIcon name="i-heroicons-user" class="w-3 h-3 text-gray-400" />
+                    <span class="text-sm font-medium">{{ inhabitant.name }}</span>
+                  </div>
+                  <WeekDayMapDinnerModeDisplay
+                    :model-value="null"
+                    compact
+                    :name="`compact-inhabitant-${inhabitant.id}-preferences`"
+                  />
+                </div>
               </div>
 
               <!-- Expanded view -->
@@ -181,7 +200,6 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
                   <!-- TODO: Wire up to actual inhabitant.dinnerPreferences when available -->
                   <WeekDayMapDinnerModeDisplay
                     :model-value="null"
-                    compact
                     :name="`inhabitant-${inhabitant.id}-preferences`"
                     @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
                   />
@@ -214,43 +232,44 @@ const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
         </div>
 
         <!-- Tab 4: Husstanden (Members) - Mockup from old HouseholdView -->
-        <div v-else-if="item.key === 'members'" class="space-y-4">
+        <div v-else-if="item.key === 'members'" class="space-y-6">
           <h3 class="text-lg font-semibold">Medlemmer af husstanden</h3>
 
+          <!-- Compact View -->
+          <div v-if="household.inhabitants && household.inhabitants.length > 0" class="space-y-3">
+            <div
+              v-for="inhabitant in household.inhabitants"
+              :key="`compact-${inhabitant.id}`"
+              class="flex items-start gap-3"
+            >
+              <div class="flex items-center gap-2 min-w-[120px]">
+                <UIcon name="i-heroicons-user" class="w-3 h-3 text-gray-400" />
+                <span class="text-sm font-medium">{{ inhabitant.name }}</span>
+              </div>
+              <WeekDayMapDinnerModeDisplay
+                :model-value="null"
+                compact
+                :name="`members-compact-inhabitant-${inhabitant.id}-preferences`"
+              />
+            </div>
+          </div>
+
+          <!-- Expanded View (Option 3 style) -->
           <div v-if="household.inhabitants && household.inhabitants.length > 0" class="space-y-4">
-            <UCard
+            <div
               v-for="inhabitant in household.inhabitants"
               :key="inhabitant.id"
             >
-              <template #header>
-                <div class="flex items-center gap-4">
-                  <UAvatar
-                    size="lg"
-                    :alt="inhabitant.name"
-                    icon="i-heroicons-user"
-                  />
-                  <div class="flex-1">
-                    <p class="font-medium">{{ inhabitant.name }} {{ inhabitant.lastName }}</p>
-                  </div>
-                  <UBadge variant="soft" color="primary">
-                    {{ getTicketTypeLabel(inhabitant) }}
-                  </UBadge>
-                </div>
-              </template>
-
-              <div class="space-y-4">
-                <h4 class="text-sm font-semibold">Ugentlige madpræferencer</h4>
-                <p class="text-sm text-muted">Angiv hvordan du foretrækker at spise middag hver dag</p>
-
-                <!-- TODO: Wire up to actual inhabitant.dinnerPreferences when available -->
-                <WeekDayMapDinnerModeDisplay
-                  :model-value="null"
-                  label=""
-                  :name="`inhabitant-${inhabitant.id}-preferences`"
-                  @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
-                />
+              <div class="flex items-center gap-2 mb-2">
+                <UIcon name="i-heroicons-user" class="w-4 h-4" />
+                <span class="font-medium">{{ inhabitant.name }}</span>
               </div>
-            </UCard>
+              <WeekDayMapDinnerModeDisplay
+                :model-value="null"
+                :name="`inhabitant-${inhabitant.id}-preferences`"
+                @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
+              />
+            </div>
           </div>
 
           <div v-else class="text-muted italic">

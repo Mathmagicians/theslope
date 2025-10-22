@@ -49,6 +49,10 @@ const {formMode, onModeChange} = useEntityFormManager<CookingTeam[]>({
 const teamCount = ref(1)
 const createDraft = ref<CookingTeam[]>([])
 
+// LOADING STATES - Component orchestrates multi-step operations
+const isCreatingTeams = ref(false)
+const isAddingTeam = ref(false)
+
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
   if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
@@ -137,46 +141,58 @@ const showSuccessToast = (title: string, description?: string) => {
 const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
-  // Step 1: Create all teams
-  for (const team of createDraft.value) {
-    await createTeam(team)
-  }
-
-  // Step 2: Assign affinities and teams to events
+  isCreatingTeams.value = true
   try {
-    const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet - ${result.eventCount} fællesspisninger tildelt`)
-  } catch (assignmentError) {
-    // Teams created but affinity/event assignment failed
-    showSuccessToast('Madhold oprettet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-  }
+    // Step 1: Create all teams
+    for (const team of createDraft.value) {
+      await createTeam(team)
+    }
 
-  await onModeChange(FORM_MODES.VIEW)
+    // Step 2: Assign affinities and teams to events
+    try {
+      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
+      showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet - ${result.eventCount} fællesspisninger tildelt`)
+    } catch (assignmentError) {
+      // Teams created but affinity/event assignment failed
+      showSuccessToast('Madhold oprettet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
+      console.error(assignmentError)
+    }
+
+    await onModeChange(FORM_MODES.VIEW)
+  } finally {
+    isCreatingTeams.value = false
+  }
 }
 
 // EDIT MODE: Add new team (IMMEDIATE SAVE)
 const handleAddTeam = async () => {
   if (!selectedSeason.value?.id) return
 
-  const newTeam = getDefaultCookingTeam(
-      selectedSeason.value.id,
-      selectedSeason.value.shortName ?? '',
-      teams.value.length + 1
-  )
-
-  // Step 1: Create the team
-  await createTeam(newTeam)
-
-  // Step 2: Assign affinities and teams to events (recalculates rotation)
+  isAddingTeam.value = true
   try {
-    const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-    showSuccessToast('Madhold tilføjet', `Madlavningsdage tildelt - ${result.eventCount} fællesspisninger opdateret`)
-  } catch (assignmentError) {
-    // Team created but affinity/event assignment failed
-    showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-  }
+    const newTeam = getDefaultCookingTeam(
+        selectedSeason.value.id,
+        selectedSeason.value.shortName ?? '',
+        teams.value.length + 1
+    )
 
-  // teams reactively updates from store refresh - no manual update needed
+    // Step 1: Create the team
+    await createTeam(newTeam)
+
+    // Step 2: Assign affinities and teams to events (recalculates rotation)
+    try {
+      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
+      showSuccessToast('Madhold tilføjet', `Madlavningsdage tildelt - ${result.eventCount} fællesspisninger opdateret`)
+    } catch (assignmentError) {
+      // Team created but affinity/event assignment failed
+      showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
+      console.error(assignmentError)
+    }
+
+    // teams reactively updates from store refresh - no manual update needed
+  } finally {
+    isAddingTeam.value = false
+  }
 }
 
 // EDIT MODE: Update team name (IMMEDIATE SAVE)
@@ -447,7 +463,7 @@ const columns = [
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="secondary" @click="handleBatchCreateTeams">
+        <UButton color="secondary" :loading="isCreatingTeams" @click="handleBatchCreateTeams">
           Opret madhold
         </UButton>
         <UButton color="neutral" variant="ghost" @click="handleCancel">
@@ -460,6 +476,7 @@ const columns = [
             data-testid="add-team-button"
             color="secondary"
             icon="i-heroicons-plus-circle"
+            :loading="isAddingTeam"
             @click="handleAddTeam"
         >
           Tilføj madhold

@@ -808,7 +808,11 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
                 assignments: assignments?.length ? {
                     deleteMany: {},  // Delete all existing assignments for this team
                     // Strip id and cookingTeamId - Prisma auto-generates id and sets cookingTeamId from relation
-                    create: assignments.map(({id, cookingTeamId, ...assignment}) => assignment)
+                    // Handle affinity: null using Prisma.skip to omit field entirely
+                    create: assignments.map(({id, cookingTeamId, affinity, ...assignment}) => ({
+                        ...assignment,
+                        affinity: affinity ?? PrismaFromClient.skip
+                    }))
                 } : undefined
             },
             include: {

@@ -158,7 +158,11 @@ test.describe('AdminTeams Form UI', () => {
             // Reload to see the team
             await reloadAndReselectSeason(season.shortName)
 
-            // Verify initial team count - wait for team tabs to be visible
+            // Verify initial state via API (source of truth)
+            const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+            expect(initialTeams.length).toBe(1)
+
+            // Verify UI reflects initial state - wait for team tabs to be visible
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
             await expect(teamTabs.first()).toBeVisible()
             await expect(teamTabs).toHaveCount(1)
@@ -182,7 +186,7 @@ test.describe('AdminTeams Form UI', () => {
             )
             expect(teams.length).toBe(2)
 
-            // Verify 2 team tabs now exist in navigation (master-detail pattern shows 1 input at a time)
+            // Verify UI reflects updated state
             await expect(teamTabs).toHaveCount(2)
         })
 

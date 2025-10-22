@@ -132,13 +132,33 @@ async function selectDropdownOption(
     await option.click()
 }
 
+/**
+ * Wait for season API to load before navigation
+ * Setup promise BEFORE calling page.goto() or page.reload()
+ *
+ * @param page - Playwright Page object
+ * @returns Promise that resolves when API response is received
+ *
+ * @example
+ * const responsePromise = waitForSeasonAPI(page)
+ * await page.goto('/admin/teams?mode=edit')
+ * await responsePromise
+ */
+async function waitForSeasonAPI(page: any): Promise<void> {
+    await page.waitForResponse(
+        (response) => response.url().includes('/api/admin/season') && response.status() === 200,
+        { timeout: 10000 }
+    )
+}
+
 const testHelpers = {
     salt,
     headers,
     validatedBrowserContext,
     pollUntil,
     doScreenshot,
-    selectDropdownOption
+    selectDropdownOption,
+    waitForSeasonAPI
 }
 
 export default testHelpers

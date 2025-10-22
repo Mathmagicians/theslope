@@ -172,8 +172,13 @@ const buttonText = computed(() => {
 
         <template #footer>
           <div v-if="!isViewMode" class="flex justify-between items-center gap-4">
-            <div v-if="errors.length > 0" class="text-red-500 text-sm">
-              Formen indeholder fejl, som skal rettes.
+            <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
+              <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
+              <ul class="list-disc list-inside">
+                <li v-for="error in errors" :key="error.path">
+                  <span class="font-medium">{{ error.path }}:</span> {{ error.message }}
+                </li>
+              </ul>
             </div>
             <div class="flex gap-4 ml-auto">
               <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">

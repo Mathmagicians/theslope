@@ -5,13 +5,24 @@ import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
 
 /**
  * Validation schemas and serialization functions for Season objects
  */
 export const useSeasonValidation = () => {
-    // Get validation schemas
-    const {WeekDayMapSchemaRequired, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
+    // Get validation schemas with explicit boolean options for Season cookingDays
+    const {
+        WeekDayMapSchemaRequired,
+        serializeWeekDayMap,
+        deserializeWeekDayMap,
+        createWeekDayMapFromSelection
+    } = useWeekDayMapValidation<boolean>({
+        valueSchema: z.boolean(),
+        defaultValue: false,
+        isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
+        requiredMessage: "Man skal lave mad mindst en dag om ugen"
+    })
     const {DinnerEventDisplaySchema} = useDinnerEventValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeam, CookingTeamWithMembersSchema} = useCookingTeamValidation()
@@ -103,7 +114,9 @@ export const useSeasonValidation = () => {
         SeasonSchema,
         SerializedSeasonSchema,
         serializeSeason,
-        deserializeSeason
+        deserializeSeason,
+        createWeekDayMapFromSelection,
+        serializeWeekDayMap
     }
 }
 

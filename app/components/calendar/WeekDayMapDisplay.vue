@@ -93,7 +93,7 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
         :key="day"
         :model-value="modelValue?.[day] ?? false"
         :label="day"
-        :disabled="disabled || isRestricted(day)"
+    i soi d    :disabled="disabled || isRestricted(day)"
         :color="color"
         class="capitalize"
         @update:model-value="(value) => updateDay(day, value)"

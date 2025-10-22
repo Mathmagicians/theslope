@@ -14,11 +14,8 @@
 ---
 
 ## CRITICAL : Bug in adminTeams
-
-1. After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
-2. Seems that there is an error somewhere in a date conversion, holidays for weeks should start on Monday, not Sunday,
-   week42 holiday has become 12-18, not 13-19 as it should
-3. Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help
+1After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
+. Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help
    system
 4. time to add the tabs as a 2. level menu to the menu component, so it doesnt scroll seperately
 
@@ -455,13 +452,87 @@ useWeekDayMapValidation<T = boolean>(options ? : {
 - Rationale: Consistency with Nuxt 4 file-based routing, REST conventions, and existing patterns
 - Note: Existing `/household/[id].vue` uses address-based IDs (T1, S31) - may need migration/coexistence strategy
 
-**Implementation**:
+**Architecture**:
 
-- ✅ Create `HouseholdCard.vue` component
-- ✅ Integrate `HouseholdCalendarDisplay` (from Task 1)
-- [ ] Show multiple event lists: bookings per member + team assignments
-- [ ] Responsive layout (mobile: single month, desktop: 3 months)
-- [ ] E2E tests for calendar interactions
+**Tab Navigation Pattern** (ADR-006):
+- URL: `/household/[shortname]/[tab]` (e.g., `/household/AR_1_st/tilmeldinger`)
+- Client-side navigation (no full page reloads)
+- Tabs: Tilmeldinger, Allergier, Økonomi, Medlemmer, Indstillinger
+- Reusable `useTabNavigation` composable (shared with admin pages)
+
+**File Structure**:
+```
+app/pages/household/
+  [shortname]/[tab].vue      # Tab router (like admin/[tab].vue)
+  [shortname].vue             # Redirects to first tab
+
+app/components/household/
+  HouseholdBookings.vue       # Tilmeldinger tab (calendar + booking)
+  HouseholdAllergies.vue      # Allergier tab
+  HouseholdEconomy.vue        # Økonomi tab
+  HouseholdMembers.vue        # Medlemmer tab
+  HouseholdSettings.vue       # Indstillinger tab
+```
+
+**Implementation Phases**:
+
+**Phase 0: Foundation (Composable)**
+- [ ] Create `app/composables/useTabNavigation.ts`
+  - Support simple routes (`/admin/[tab]`)
+  - Support nested routes (`/household/[shortname]/[tab]`)
+  - Type-safe with TypeScript generics
+- [ ] Unit test: `tests/component/composables/useTabNavigation.unit.spec.ts`
+
+**Phase 1: Validate Pattern (Refactor Admin)**
+- [ ] Refactor `app/pages/admin/[tab].vue` to use `useTabNavigation`
+- [ ] Remove duplicate routing logic (~40 lines → composable call)
+- [ ] E2E test: Verify admin tabs still work (no behavior change)
+- [ ] Rationale: Validate composable works before applying to household
+
+**Phase 2: Household Tab Structure**
+- [ ] Create `app/pages/household/[shortname]/[tab].vue`
+  - Use `useTabNavigation` with `additionalParams: ['shortname']`
+  - Setup async component loading
+  - Store initialization (householdStore, planStore)
+- [ ] Update `app/pages/household/[shortname].vue`
+  - Add redirect to `/household/[shortname]/tilmeldinger`
+- [ ] E2E test: URL navigation and tab switching
+
+**Phase 3: Component Extraction** (Can parallelize)
+- [ ] Extract `HouseholdBookings.vue` from HouseholdCard
+  - Master-detail: Calendar (1/3) + Booking panel (2/3)
+  - Props: household, seasonDates, dinnerEvents, orders, holidays
+  - Component test
+- [ ] Extract `HouseholdAllergies.vue`
+  - Component test
+- [ ] Extract `HouseholdEconomy.vue`
+  - Component test
+- [ ] Extract `HouseholdMembers.vue`
+  - Component test
+- [ ] Extract `HouseholdSettings.vue`
+  - Calendar feed, notifications, preferences
+  - Component test
+
+**Phase 4: Integration & Cleanup**
+- [ ] Wire components in `[shortname]/[tab].vue`
+- [ ] Pass props from page to components
+- [ ] Remove/repurpose old `HouseholdCard.vue`
+- [ ] E2E test: All tabs functional with data flow
+
+**Phase 5: Documentation**
+- [ ] Update ADR-006 with tab navigation pattern
+- [ ] Document `useTabNavigation` usage
+- [ ] Add examples for simple and nested routes
+
+**Completion Criteria**:
+- ✅ `HouseholdCard.vue` created (basic structure)
+- ✅ `HouseholdCalendarDisplay` integrated (from Task 1)
+- [ ] Tab navigation working with URL synchronization
+- [ ] All 5 tabs extracted as separate components
+- [ ] Client-side navigation (no full page reloads)
+- [ ] Admin refactored to use same pattern (DRY)
+- [ ] E2E tests for tab navigation and component rendering
+- [ ] ADR-006 updated with pattern documentation
 
 ### Task 4: Booking Management UI
 

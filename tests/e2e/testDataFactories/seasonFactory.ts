@@ -408,4 +408,16 @@ export class SeasonFactory {
         return responseBody
     }
 
+    static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: any[]}> => {
+        const response = await context.request.post(`/api/admin/season/${seasonId}/assign-team-affinities`)
+        expect(response.status()).toBe(200)
+        return response.json()
+    }
+
+    static readonly assignCookingTeams = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, eventCount: number, events: any[]}> => {
+        const response = await context.request.post(`/api/admin/season/${seasonId}/assign-cooking-teams`)
+        expect(response.status()).toBe(200)
+        return response.json()
+    }
+
 }

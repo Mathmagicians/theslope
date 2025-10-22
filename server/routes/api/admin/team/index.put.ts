@@ -32,7 +32,6 @@ export default defineEventHandler(async (event) => {
         console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }
-
     // Database operations try-catch - separate concerns
     try {
         const savedTeam = await createTeam(d1Client, teamData)

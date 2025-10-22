@@ -3,7 +3,7 @@ import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromIn
 import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
-import {type Season} from '../../../../app/composables/useSeasonValidation'
+import {type Season} from '~/composables/useSeasonValidation'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {headers, validatedBrowserContext} = testHelpers
@@ -492,66 +492,57 @@ test.describe('Season API Tests', () => {
 
     test.describe('Assign Team Affinities and Cooking Teams', () => {
         test("POST /season/[id]/assign-team-affinities should assign affinities AND /assign-cooking-teams should assign teams to events", async ({browser}) => {
-            // GIVEN: A short season with cooking days (Mon/Wed/Fri) and 3 teams
             const context = await validatedBrowserContext(browser)
+            const expectEventsHaveTeams = (events: any[]) => {
+                events.forEach(event => {
+                    expect(event.cookingTeamId).toBeDefined()
+                    expect(event.cookingTeamId).not.toBeNull()
+                })
+            }
 
             const seasonData = {
                 ...SeasonFactory.defaultSeason(),
-                seasonDates: {
-                    start: new Date(2025, 0, 6),   // Monday, Jan 6
-                    end: new Date(2025, 0, 10)     // Friday, Jan 10 (1 week)
-                },
-                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon/Wed/Fri
+                seasonDates: {start: new Date(2025, 0, 6), end: new Date(2025, 0, 10)},
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
                 consecutiveCookingDays: 1
             }
             const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
             createdSeasonIds.push(season.id as number)
 
-            // Generate dinner events (needed for finding first cooking day and team assignment)
             const dinnerEventsResult = await SeasonFactory.generateDinnerEventsForSeason(context, season.id as number)
-            expect(dinnerEventsResult.eventCount).toBe(3) // Mon, Wed, Fri
+            expect(dinnerEventsResult.eventCount).toBe(3)
 
-            // WHEN: POST /api/admin/season/[id]/assign-team-affinities
-            const affinityResponse = await context.request.post(`/api/admin/season/${season.id}/assign-team-affinities`)
-            expect(affinityResponse.status()).toBe(200)
-
-            const affinityResult = await affinityResponse.json()
-
-            // THEN: Response should include updated teams with affinities
-            expect(affinityResult.seasonId).toBe(season.id)
+            const affinityResult = await SeasonFactory.assignTeamAffinities(context, season.id)
             expect(affinityResult.teamCount).toBe(3)
-            expect(affinityResult.teams.length).toBe(3)
+            expect(affinityResult.teams.filter(t => t.affinity.mandag).length).toBe(1)
+            expect(affinityResult.teams.filter(t => t.affinity.onsdag).length).toBe(1)
+            expect(affinityResult.teams.filter(t => t.affinity.fredag).length).toBe(1)
 
-            // AND: All three cooking days (Mon/Wed/Fri) should be assigned to exactly one team each
-            const mondayTeams = affinityResult.teams.filter(t => t.affinity.mandag)
-            const wednesdayTeams = affinityResult.teams.filter(t => t.affinity.onsdag)
-            const fridayTeams = affinityResult.teams.filter(t => t.affinity.fredag)
-
-            expect(mondayTeams.length).toBe(1)
-            expect(wednesdayTeams.length).toBe(1)
-            expect(fridayTeams.length).toBe(1)
-
-            // WHEN: POST /api/admin/season/[id]/assign-cooking-teams
-            const assignmentResponse = await context.request.post(`/api/admin/season/${season.id}/assign-cooking-teams`)
-            expect(assignmentResponse.status()).toBe(200)
-
-            const assignmentResult = await assignmentResponse.json()
-
-            // THEN: Response should include updated events with team assignments
-            expect(assignmentResult.seasonId).toBe(season.id)
+            const assignmentResult = await SeasonFactory.assignCookingTeams(context, season.id)
             expect(assignmentResult.eventCount).toBe(3)
-            expect(assignmentResult.events.length).toBe(3)
+            expectEventsHaveTeams(assignmentResult.events)
+            expect([...new Set(assignmentResult.events.map(e => e.cookingTeamId))].length).toBe(3)
 
-            // AND: All events should have cooking team assigned
-            assignmentResult.events.forEach(event => {
-                expect(event.cookingTeamId).toBeDefined()
-                expect(event.cookingTeamId).not.toBeNull()
+            const team4 = await SeasonFactory.createCookingTeamWithMembersForSeason(context, season.id as number, "Team-4-added-later", 2)
+            expect(team4.assignments).toHaveLength(2)
+            expect(team4.assignments[0].inhabitant).toBeDefined()
+
+            const affinityResult2 = await SeasonFactory.assignTeamAffinities(context, season.id)
+            expect(affinityResult2.teamCount).toBe(4)
+
+            const teamsAfter = teams.map(t => affinityResult2.teams.find(at => at.id === t.id))
+            teamsAfter.forEach((teamAfter, i) => {
+                expect(teamAfter).toBeDefined()
+                expect(teamAfter.affinity).toEqual(affinityResult.teams.find(t => t.id === teams[i].id).affinity)
             })
 
-            // AND: Verify each team got exactly one event (round-robin with consecutiveCookingDays=1)
-            const teamIds = assignmentResult.events.map(e => e.cookingTeamId).sort()
-            const uniqueTeamIds = [...new Set(teamIds)]
-            expect(uniqueTeamIds.length).toBe(3) // All 3 teams assigned
+            const team4After = affinityResult2.teams.find(t => t.id === team4.id)
+            expect(team4After).toBeDefined()
+            expect(Object.values(team4After.affinity).some(v => v === true)).toBe(true)
+
+            const assignmentResult2 = await SeasonFactory.assignCookingTeams(context, season.id)
+            expect(assignmentResult2.eventCount).toBe(3)
+            expectEventsHaveTeams(assignmentResult2.events)
         })
     })
 

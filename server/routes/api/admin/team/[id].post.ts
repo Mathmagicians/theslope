@@ -14,10 +14,18 @@ const idSchema = z.object({
 })
 
 // Get the validation utilities from our composable
-const {CookingTeamSchema} = useCookingTeamValidation()
+const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+
+// Create input schema for assignments (omit read-only inhabitant field)
+const InputAssignmentSchema = CookingTeamAssignmentSchema.omit({ inhabitant: true })
+
+// Create input schema for team updates (use input assignments)
+const InputTeamSchema = CookingTeamSchema.extend({
+    assignments: z.array(InputAssignmentSchema).optional()
+})
 
 // Create a schema for POST operations (partial updates)
-const PostTeamSchema = CookingTeamSchema.partial().omit({ id: true })
+const PostTeamSchema = InputTeamSchema.partial().omit({ id: true })
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context

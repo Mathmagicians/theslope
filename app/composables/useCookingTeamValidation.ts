@@ -1,13 +1,22 @@
 import {z} from 'zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
 
 /**
  * Validation schemas for CookingTeam objects
  */
 export const useCookingTeamValidation = () => {
-    // Get WeekDayMap utilities
-    const {WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap} = useWeekDayMapValidation()
+    // Get WeekDayMap utilities with explicit boolean options for affinity 
+    const {
+        WeekDayMapSchemaOptional,
+        serializeWeekDayMap,
+        deserializeWeekDayMap,
+        createWeekDayMapFromSelection
+    } = useWeekDayMapValidation<boolean>({
+        valueSchema: z.boolean(),
+        defaultValue: false
+    })
 
     // Get Inhabitant display schema for nested relations
     const {InhabitantDisplaySchema} = useHouseholdValidation()
@@ -118,7 +127,11 @@ export const useCookingTeamValidation = () => {
         getTeamMemberCounts,
         getAssignmentIdsForRole,
         serializeCookingTeam,
-        deserializeCookingTeam
+        deserializeCookingTeam,
+        // Export configured WeekDayMap functions for team affinity
+        createWeekDayMapFromSelection,
+        serializeWeekDayMap,
+        deserializeWeekDayMap
     }
 }
 

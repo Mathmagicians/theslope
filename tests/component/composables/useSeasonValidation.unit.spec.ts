@@ -223,10 +223,10 @@ describe('useSeasonValidation', () => {
     })
 
     it('should deserialize nested CookingTeam affinity fields from JSON strings', () => {
-      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useWeekDayMapValidation()
+      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useSeasonValidation()
 
       // Create affinity using factory method and serialize it (simulating DB format)
-      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'])
+      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'], true, false)
       const serializedAffinity = serializeWeekDayMap(teamAffinity)
 
       // Create a season with CookingTeams that have serialized affinity (as from DB)
