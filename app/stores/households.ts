@@ -102,7 +102,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             } else {
                 throw createError({
                     statusCode: 404,
-                    message: `Husstand med kort navn "${shortName}" blev ikke fundet`
+                    message: `Husstanden "${shortName}" blev ikke fundet`
                 })
             }
         }

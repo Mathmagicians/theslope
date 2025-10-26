@@ -8,12 +8,12 @@ const { validatedBrowserContext } = testHelpers
 
 /**
  * TEST PURPOSE:
- * Verifies tab-based routing for household pages using useTabNavigation composable:
+ * Verifies tab-based routing for household pages using useTabNavigation.ts composable:
  * - Path pattern: /household/[shortname]/[tab]
  * - Default redirect to first tab (events)
  * - Invalid tabs redirect to default
  * - Query params preserved across tab switches
- * - Shortname param preserved (additionalParams in useTabNavigation)
+ * - Shortname param preserved (additionalParams in useTabNavigation.ts)
  */
 test.describe('Household tab navigation', () => {
   let householdId: number

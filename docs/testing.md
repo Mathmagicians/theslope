@@ -108,6 +108,32 @@ it('adds a holiday period', async () => {
 })
 ```
 
+### Composable Testing (Nuxt Auto-imports)
+
+**Use `mockNuxtImport` for all Nuxt auto-imported functions:**
+
+```typescript
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
+
+const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
+  mockNavigateTo: vi.fn(),
+  mockRouteData: { path: '/simple/tab1', params: { tab: 'tab1' }, query: {}, hash: '' }
+}))
+
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+mockNuxtImport('useRoute', () => () => mockRouteData)  // Composables return functions
+```
+
+**Mutate mock data between tests** (don't replace object references):
+```typescript
+const setupRoute = (params: Record<string, string | undefined>) => {
+  Object.keys(mockRouteData.params).forEach(key => delete mockRouteData.params[key])
+  Object.assign(mockRouteData.params, params)
+}
+```
+
+**Example:** `tests/component/composables/useTabNavigation.nuxt.spec.ts`
+
 ### Store Testing (Pinia + useFetch)
 
 **Clear Nuxt data cache between tests:**

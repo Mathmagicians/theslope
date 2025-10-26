@@ -2,21 +2,76 @@
 /**
  * Household Detail Page - Shows household booking interface with tabs
  *
- * URL: /household/[shortname]
- * Example: /household/hansen-familie
+ * URL: /household/[shortname]/[tab]
+ * Example: /household/AR_1_st/bookings
  *
  * Displays:
- * - Tilmeldinger tab: Calendar + booking management
- * - Allergier tab: Family allergies
- * - Økonomi tab: Cost breakdown
- * - Husstanden tab: Household members
- * - Indstillinger tab: Settings
+ * - Bookings tab: Calendar + booking management
+ * - Allergies tab: Family allergies
+ * - Economy tab: Cost breakdown
+ * - Members tab: Household members
+ * - Settings tab: Settings
  */
+
+// TAB CONFIGURATION
+const tabs = [
+  {
+    key: 'bookings',
+    label: 'Tilmeldinger',
+    icon: 'i-heroicons-calendar',
+    component: 'HouseholdBookings'
+  },
+  {
+    key: 'allergies',
+    label: 'Allergier',
+    icon: 'i-heroicons-exclamation-triangle',
+    component: 'HouseholdAllergies'
+  },
+  {
+    key: 'economy',
+    label: 'Økonomi',
+    icon: 'i-heroicons-currency-dollar',
+    component: 'HouseholdEconomy'
+  },
+  {
+    key: 'members',
+    label: 'Husstanden',
+    icon: 'i-heroicons-users',
+    component: 'HouseholdMembers'
+  },
+  {
+    key: 'settings',
+    label: 'Indstillinger',
+    icon: 'i-heroicons-cog-6-tooth',
+    component: 'HouseholdSettings'
+  }
+]
+
+// Async component mapping
+const asyncComponents = Object.fromEntries(
+  tabs.map(tab => [
+    tab.key,
+    defineAsyncComponent(() => import(`~/components/household/${tab.component}.vue`))
+  ])
+)
 
 const route = useRoute()
 
 // Get shortname from route
 const shortname = computed(() => route.params.shortname as string)
+
+// Tab navigation with URL state
+const { activeTab } = useTabNavigation({
+  tabs: tabs.map(t => t.key),
+  basePath: '/household',
+  additionalParams: ['shortname']
+})
+
+// Tab items for UTabs component
+const tabItems = tabs.map(tab => ({
+  ...tab,
+  value: tab.key
+}))
 
 // Initialize stores
 const householdStore = useHouseholdsStore()
