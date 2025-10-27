@@ -22,18 +22,18 @@
 - User sees empty state, then content pops in after hydration
 
 **Solution**:
-- Make `initStore()` idempotent using existing `useFetch` status ref as singleton
-- Call `initStore()` in page setup (runs during SSR), not `onMounted`
-- `useFetch` handles SSR fetch + cache automatically, no extra refs needed
+✅ Make `initStore()` itialization follow singleton pattern using existing `useFetch` status ref as singleton - adr 07
+✅ Call `initStore()` in page setup (runs during SSR), not `onMounted`
+✅ `useFetch` handles SSR fetch + cache automatically, no extra refs needed
 
   **Implementation Overview**:
-- [ ] Update `usePlanStore.initPlanStore()` to be idempotent (check if already initialized)
-- [ ] Update `useHouseholdsStore.initHouseholdsStore()` to be idempotent
-- [ ] Update household page to call init in setup (not onMounted)
-- [ ] Update admin page to call init in setup
-- [ ] Analyze SSR/hydration implications (see analysis below)
-- [ ] Update ADR-007 with new pattern
-- [ ] Test: No flash of empty state on SSR pages
+- ✅ Update `usePlanStore.initPlanStore()` to be idempotent (check if already initialized)
+- ✅ Update `useHouseholdsStore.initHouseholdsStore()` to be idempotent
+- ✅ Update household page to call init in setup (not onMounted)
+- ✅ Update admin page to call init in setup
+- ✅ Analyze SSR/hydration implications (see analysis below)
+- ✅ Update ADR-007 with new pattern
+- ✅ Test: No flash of empty state on SSR pages
 **Key Insight**: `useFetch` `status` ref IS the singleton state. No need for separate `initialized` flags.
 
 ---
@@ -69,7 +69,7 @@
 
 #### Phase 1: Make Stores Idempotent ⚙️
 
-- [ ] **Store: `usePlanStore`** - Make `initPlanStore()` idempotent
+- ✅  **Store: `usePlanStore`** - Make `initPlanStore()` idempotent
   - ✅ Already exposes `status` via computed: `isLoading = computed(() => status.value === 'pending')`
   - Check `status.value === 'success'` to skip re-fetch
   - Test: Multiple calls don't re-fetch
@@ -84,41 +84,14 @@
   }
   ```
 
-- [ ] **Store: `useHouseholdsStore`** - Expose `status` & make `initHouseholdsStore()` idempotent
+-✅  **Store: `useHouseholdsStore`** - Expose `status` & make `initHouseholdsStore()` idempotent
   - **NEW**: Expose `status` from `useFetch` (currently not exposed at L35)
   - Update destructuring: `const { data, error: fetchError, status, refresh } = useFetch(...)`
   - Consider: Replace manual `isLoading` with `computed(() => status.value === 'pending')` OR keep both
   - Return `status` in store exports for UI consumption
   - Check `status.value === 'success'` to skip re-fetch (unless specific shortName requested)
   - Test: Multiple calls don't re-fetch
-  - File: `app/stores/households.ts:35-109`
-  ```typescript
-  // Expose status from useFetch
-  const { data, error: fetchError, status, refresh: refreshHouseholds } = useFetch(...)
-
-  // Idempotency check
-  const initHouseholdsStore = async (shortName?: string) => {
-    if (status.value === 'success' && !shortName) {
-      console.info('🏠 > HOUSEHOLDS_STORE > Already initialized, skipping')
-      return
-    }
-    await loadHouseholds()
-    // ...
-  }
-
-  // Return status for UI
-  return {
-    // ... existing
-    status, // NEW: Enables 4-state UI (loading/error/empty/data)
-  }
-  ```
-
-**Why `status.value === 'success'`?**
-- useFetch statuses: `"idle" | "pending" | "success" | "error"`
-- Checking `success` means: fetch completed successfully, data is cached
-- Allows retry on `error`, waits for completion on `pending`
-- Enables UI to distinguish: loading (`pending`) / error (`error`) / empty (`success && length===0`) / data (`success && length>0`)
-
+  - File: `app/stores/households.ts
 ---
 
 #### Phase 1.5: Audit & Fix Page UI State Handling 🎨
@@ -157,127 +130,49 @@
 
 **Tasks:**
 
-- [ ] **Page: `admin/[tab].vue`** - Already good (empty handled by child components)
+- ✅**Page: `admin/[tab].vue`** - Already good (empty handled by child components)
   - ✅ Loading: Shows `<Loader v-if="isLoading"/>`
   - ✅ Error: Shows `<ViewError v-else-if="error".../>`
   - ✅ Empty: AdminPlanning/AdminTeams components handle `isNoSeasons` internally
   - ✅ Data: Shows tabs with content
   - **Action**: No changes needed (components already handle empty state correctly)
 
-- [ ] **Page: `household/[shortname]/[tab].vue`** - Fix incomplete empty state checks
+- ✅ **Page: `household/[shortname]/[tab].vue`** - Fix incomplete empty state checks
   - ✅ Loading: Shows loading card
   - ✅ Error: Shows error card
   - ⚠️ Empty: Only checks `!activeSeason`, missing `!selectedHousehold` case
   - **Action**: Add final `v-else` to catch "household not found" case
-  - File: `app/pages/household/[shortname]/[tab].vue:122-151`
-  ```vue
-  <!-- Loading state -->
-  <UCard v-if="householdLoading" class="text-center p-4">...</UCard>
 
-  <!-- Error state -->
-  <UCard v-else-if="householdError" class="text-center p-4">...</UCard>
 
-  <!-- No active season -->
-  <UCard v-else-if="!activeSeason" class="text-center p-4">...</UCard>
+- ✅ **Page: `household/index.vue`** - **CRITICAL** - Completely rewrite state handling
+    ✅ **Action**: Rewrite to use proper 4-state pattern with `status` from store (requires Phase 1 completed first)
+  - File: `app/pages/household/index.vue
 
-  <!-- Household card with tabs -->
-  <HouseholdCard v-else-if="selectedHousehold" .../>
-
-  <!-- NEW: No household found -->
-  <UCard v-else class="text-center p-4">
-    <UIcon name="i-heroicons-home" class="text-red-500" />
-    <p class="text-red-700">Husstand ikke fundet</p>
-  </UCard>
-  ```
-
-- [ ] **Page: `household/index.vue`** - **CRITICAL** - Completely rewrite state handling
-  - ❌ Current: Conflates loading/empty/error with single ternary `households ? households.length > 0 : false`
-  - ❌ No proper loading spinner (just shows "Loading households..." text)
-  - ❌ No error state at all
-  - **Action**: Rewrite to use proper 4-state pattern with `status` from store (requires Phase 1 completed first)
-  - File: `app/pages/household/index.vue:24-54`
-  ```vue
-  <script setup>
-  const store = useHouseholdsStore()
-  const { households, status, error } = storeToRefs(store) // NEW: Get status & error
-  await store.loadHouseholds()
-  </script>
-
-  <template>
-    <div>
-      <h1 class="text-xl">Oversigt over husstande på Skråningen</h1>
-      <h2 class="text-muted">Klik på kort navn for at se husstandens tilmeldinger og kalender</h2>
-
-      <!-- 1. LOADING -->
-      <UCard v-if="status === 'pending'" class="text-center p-4">
-        <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
-        <p class="text-muted">Indlæser husstande...</p>
-      </UCard>
-
-      <!-- 2. ERROR -->
-      <UCard v-else-if="status === 'error'" class="text-center p-4">
-        <UIcon name="i-heroicons-exclamation-triangle" class="text-red-500" />
-        <p class="text-red-700">{{ error }}</p>
-      </UCard>
-
-      <!-- 3. EMPTY -->
-      <UCard v-else-if="status === 'success' && households.length === 0" class="text-center p-4">
-        <UIcon name="i-heroicons-home" class="text-gray-400" />
-        <p class="text-gray-600">Ingen husstande fundet</p>
-      </UCard>
-
-      <!-- 4. DATA -->
-      <UCard v-else-if="status === 'success' && households.length > 0">
-        <UTable :columns="householdColumns" :data="households">
-          <template #shortName-cell="{ row }">
-            <NuxtLink :to="`/household/${row.original.shortName}`" class="text-primary hover:underline font-medium">
-              {{ row.original.shortName }}
-            </NuxtLink>
-          </template>
-        </UTable>
-      </UCard>
-    </div>
-  </template>
-  ```
-
----
 
 #### Phase 2: Update Pages to Call Init in Setup 📄
 
-- [ ] **Page: `admin/[tab].vue`** - Move init from onMounted to setup
+- ✅ **Page: `admin/[tab].vue`** - Move init from onMounted to setup
   - Remove `onMounted` block (L118-120)
   - Add top-level `await initPlanStore()` in setup
   - Test: Admin tabs load without flash
   - File: `app/pages/admin/[tab].vue`
 
-- [ ] **Page: `household/[shortname]/[tab].vue`** - Move inits from onMounted to setup
+- ✅ **Page: `household/[shortname]/[tab].vue`** - Move inits from onMounted to setup
   - Remove `onMounted` block (L84-87)
   - Add top-level await for both stores
   - Test: Household pages load without flash
   - File: `app/pages/household/[shortname]/[tab].vue`
 
-#### Phase 3: Testing & Verification ✅
+#### Phase 3: Testing & Verification 
 
-- [ ] **E2E Test: Admin pages** - Verify no SSR flash
-  - Navigate to `/admin/planning`
-  - Check: Seasons visible in initial HTML (view source)
-  - Check: No loading state flash on hydration
-  - Check: Network shows only 1 fetch per store
-
-- [ ] **E2E Test: Household pages** - Verify no SSR flash
-  - Navigate to `/household/{shortname}/bookings`
-  - Check: Household data visible in initial HTML
-  - Check: No loading state flash on hydration
-  - Check: Network shows only 1 fetch per store
-
-- [ ] **Regression Test: Existing SSR pages** - Ensure no breakage
+- ✅ **Regression Test: Existing SSR pages** - Ensure no breakage
   - Test `/household` (already SSR-safe)
   - Test `/admin/range` (test page, already SSR-safe)
   - Verify behavior unchanged
 
 #### Phase 4: Documentation 📝
 
-- [ ] **Update ADR-007** - Document new SSR-compatible pattern
+- [ ] **Update ADR-007** - Document new SSR-compatible patternno
   - Add section: "Store Initialization for SSR"
   - Pattern: Idempotent init + top-level await
   - Example code for both store and page
@@ -287,34 +182,7 @@
   - Stores: Comment explaining idempotency check
   - Pages: Comment explaining SSR initialization
 
----
 
-### Implementation Pattern
-
-**Store (Idempotent Init):**
-```typescript
-// app/stores/plan.ts
-const initPlanStore = async () => {
-  // Idempotency: Check if already loaded using useFetch status
-  if (status.value !== 'idle' && seasonsData.value?.length > 0) {
-    console.info('🗓️ > PLAN_STORE > Already initialized, skipping')
-    return
-  }
-  await autoSelectFirstSeason()
-}
-```
-
-**Page (SSR-Compatible Call):**
-```typescript
-// app/pages/admin/[tab].vue (setup)
-const store = usePlanStore()
-const {initPlanStore} = store
-
-// SSR-compatible: Top-level await runs during server render
-await initPlanStore()
-
-// ❌ OLD: onMounted(async () => { await initPlanStore() })
-```
 
 ---
 

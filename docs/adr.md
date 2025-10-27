@@ -199,123 +199,117 @@ watch([formMode, teamCount], () => {
 
 ---
 
-## ADR-007: Separation of Concerns - Store vs Component Responsibilities
+## ADR-007: SSR-Friendly Store Pattern with useFetch
 
 **Status:** Accepted | **Date:** 2025-01-28
-**Updated:** 2025-01-27 (SSR-friendly store initialization pattern)
+**Updated:** 2025-10-27 (component-driven initialization for dynamic tabs)
 
 ### Decision
 
-**Clear separation between data management (store) and UI state management (component)**
+**Stores use `useFetch` singleton pattern with status-derived state. Components own UI state. For dynamic tabs with varying dependencies, components initialize their own stores.**
 
-#### Store Responsibilities (Pinia)
-- Initialization using singleton pattern supported by useFetch
-- Server data only (seasons list, selected season)
-- CRUD operations
-- Loading states for async operations
-- Business logic (e.g., which modes are disabled based on data)
+### Store Pattern
 
-#### Component Responsibilities (Vue)
-- UI state (formMode, draftSeason for editing)
-- Mode transitions (create/edit/view)
-- URL synchronization
-- User interactions
-
-#### Parent Page Responsibilities (`app/pages/admin/[tab].vue`)
-- Store initialization (client-side on creation). Dont use onMounted, it gives data flashes
-- Loading/error UI display (using store's `isLoading` and `isErrored` state)
-- Client-only toast notifications
-- SSR-compatible data fetching (delegated to store via `useFetch`)
-
-### Implementation
-
-**Store** (`app/stores/plan.ts`):
 ```typescript
-// STATE - Data only
-const selectedSeason = ref<Season | null>(null)
-const seasons = ref<Season[]>([])
-const isLoading = ref(false)
-
-// COMPUTED - Derived from data
-const isNoSeasons = computed(() => seasons.value?.length === 0)
-const disabledModes = computed(() => {
-    // Business logic based on data state
-    const disabled = []
-    if (isNoSeasons.value) disabled.push('edit')
-    if (!isAdmin.value) disabled.push('create', 'edit')
-    return disabled
+// List fetch - static URL
+const {
+    data: seasons, status: seasonsStatus,
+    error: seasonsError, refresh: refreshSeasons
+} = useFetch<Season[]>('/api/admin/season', {
+    immediate: false,
+    watch: false,      // ⚠️ CRITICAL: Prevents auto-refetch on reactive deps
+    default: () => []
 })
 
-// ACTIONS - CRUD only
-const loadSeasons = async () => { /* ... */ }
-const createSeason = async (season: Season) => { /* ... */ }
-const updateSeason = async (season: Season) => { /* ... */ }
-```
+// Detail fetch - reactive URL
+const selectedSeasonId = ref<number | null>(null)
+const {
+    data: selectedSeason, status: selectedSeasonStatus,
+    error: selectedSeasonError, refresh: refreshSelectedSeason
+} = useFetch<Season>(
+    () => `/api/admin/season/${selectedSeasonId.value}`,
+    { immediate: false, watch: false }  // ⚠️ CRITICAL: watch: false required!
+)
 
-**Component** (`app/components/admin/AdminPlanning.vue`):
-```typescript
-// UI STATE - Owned by component
-const formMode = ref<FormMode>(FORM_MODES.VIEW)
-const draftSeason = ref<Season | null>(null)
+// Status-derived computed (4-state UI)
+const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
+const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
+const isSeasonsInitialized = computed(() => seasonsStatus.value === 'success')
+const isNoSeasons = computed(() => isSeasonsInitialized.value && seasons.value.length === 0)
 
-// MODE TRANSITIONS - Component logic
-const onModeChange = async (mode: FormMode) => {
-    switch (mode) {
-        case FORM_MODES.CREATE:
-            draftSeason.value = getDefaultSeason()
-            break
-        case FORM_MODES.EDIT:
-            draftSeason.value = {...selectedSeason.value}
-            break
-        case FORM_MODES.VIEW:
-            draftSeason.value = null
-            break
-    }
-    formMode.value = mode
-    updateURLQueryFromMode(mode)
-}
-```
+// Idempotent init
+const initStore = async (shortName?: string) => {
+    if (!isSeasonsInitialized.value || isSeasonsErrored.value) await refreshSeasons()
 
-### Rationale
-
-1. **Clarity:** It's immediately clear where to find data vs UI state
-2. **Testability:** Store tests focus on data operations, component tests focus on UI behavior
-3. **Maintainability:** Changes to UI flows don't affect data layer and vice versa
-4. **Standards Compliance:** Aligns with ADR-006 (URL-based navigation) - formMode belongs with URL logic in component
-
-### SSR-Friendly Store Initialization Pattern
-
-**Store exposes useFetch status via computed properties:**
-
-```typescript
-// From app/stores/households.ts:45-52
-const isHouseholdsLoading = computed(() => householdsStatus.value === 'pending')
-const isHouseholdsErrored = computed(() => householdsStatus.value === 'error')
-const isHouseholdsInitialized = computed(() => householdsStatus.value === 'success')
-const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
-```
-
-**Idempotent init method checks status before loading:**
-
-```typescript
-// From app/stores/households.ts:100-112
-const initHouseholdsStore = async (shortName?: string) => {
-    if (!isHouseholdsInitialized.value || isHouseholdsErrored.value) await loadHouseholds()
-
-    if (shortName) {
-        const household = households.value.find(h => h.shortName === shortName)
-        if (!household) throw createError({ statusCode: 404, message: `Not found` })
-        if (household.id !== selectedHouseholdId.value) await loadHousehold(household.id)
+    const season = shortName ? seasons.value.find(s => s.shortName === shortName) : seasons.value[0]
+    if (season && season.id !== selectedSeasonId.value) {
+        selectedSeasonId.value = season.id
+        await refreshSelectedSeason()
     }
 }
+```
+
+### Responsibilities
+
+**Store:** Server data, CRUD actions, business logic computed (disabledModes)
+**Component:** UI state (formMode, draft), URL sync, mode transitions, **initialize own store dependencies**
+**Page:** Call `await initStore()` at top-level for shared data only
+
+### Dynamic Tab Pattern
+
+For pages with dynamic tabs and varying data dependencies:
+
+**Parent page** (e.g., `/household/[shortname]/[tab]`):
+```typescript
+// Initialize only core shared data
+const householdStore = useHouseholdsStore()
+await householdStore.initHouseholdsStore(shortname.value)
+
+// Pass minimal props
+<component :is="asyncComponents[tab]" :household="selectedHousehold"/>
+```
+
+**Tab component** (e.g., `HouseholdBookings.vue`):
+```typescript
+interface Props { household: HouseholdWithInhabitants }
+const props = defineProps<Props>()
+
+// Component initializes its own dependencies
+const planStore = usePlanStore()
+const { activeSeason, isSelectedSeasonLoading, isSelectedSeasonInitialized } = storeToRefs(planStore)
+await planStore.initPlanStore()
+
+<template>
+  <Loader v-if="isSelectedSeasonLoading" text="Loading..."/>
+  <Content v-else-if="isSelectedSeasonInitialized" :data="activeSeason"/>
+</template>
+```
+
+**Benefits:**
+- Performance: Only load data when tab viewed
+- Separation: Parent manages navigation, tabs manage data needs
+- Scalability: Add tabs without modifying parent
+- SSR-compatible: Idempotent init prevents duplicate requests
+
+### Error Handling
+
+Error type is `FetchError` with `statusCode`:
+```typescript
+// Store exposes raw error
+seasonsError  // Ref<FetchError | undefined>
+
+// Component accesses
+<ViewError :error="seasonsError?.statusCode" :cause="seasonsError" />
 ```
 
 ### Compliance
 
-1. Store MUST NOT contain UI state (formMode, draftSeason, modal visibility, etc.)
-2. Stores MUST expose status-derived computed properties for 4-state UI
-3. Init methods MUST be idempotent using `!isInitialized || isErrored` check
-4. Pages call init at top-level (not onMounted) for SSR compatibility
+1. MUST use `immediate: false, watch: false` for all useFetch in stores
+2. MUST expose 4 status computeds: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`
+3. MUST expose raw error ref for statusCode access
+4. Init MUST be idempotent: `!isInitialized || isErrored`
+5. Components MUST NOT contain server data state
+6. **Dynamic tabs:** Components initialize their own stores, handle loading/error states
 
 ---
 

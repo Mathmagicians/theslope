@@ -36,7 +36,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         error: selectedHouseholdError,
         refresh: refreshSelectedHousehold
     } = useFetch<HouseholdWithInhabitants>(() => `/api/admin/household/${selectedHouseholdId.value}`, {
-        immediate: false
+        immediate: false,
+        watch: false  // ⚠️ CRITICAL: Prevents auto-refetch on reactive deps (ADR-007)
     })
 
     // ========================================
@@ -63,26 +64,25 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // Store Actions
     // ========================================
     const loadHouseholds = async () => {
-        try {
-            await refreshHouseholds()
-            console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
-        } catch (e: any) {
-            handleApiError(e, 'loadHouseholds')
+        await refreshHouseholds()
+        if (householdsError.value) {
+            console.error(`🏠 > HOUSEHOLDS_STORE > Error loading households:`, householdsError.value)
+            throw householdsError.value
         }
-
+        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
     }
 
     /**
      * Fetch single household with inhabitants
      */
     const loadHousehold = async (id: number) => {
-        try {
-            selectedHouseholdId.value = id
-            await refreshSelectedHousehold()
-            console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
-        } catch (e: any) {
-            handleApiError(e, 'loadHousehold')
+        selectedHouseholdId.value = id
+        await refreshSelectedHousehold()
+        if (selectedHouseholdError.value) {
+            console.error(`🏠 > HOUSEHOLDS_STORE > Error loading household:`, selectedHouseholdError.value)
+            throw selectedHouseholdError.value
         }
+        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
     }
 
 

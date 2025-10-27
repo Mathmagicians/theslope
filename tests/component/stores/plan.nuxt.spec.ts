@@ -85,7 +85,8 @@ describe('Plan Store', () => {
         })
         const store = usePlanStore()
 
-        await store.loadSeasons()
+        // With SSR pattern, errors propagate up - component/page handles display
+        await expect(store.loadSeasons()).rejects.toThrow()
 
         expect(store.isSeasonsErrored).toBe(true)
         expect(store.seasonsError).toBeTruthy()
@@ -130,7 +131,8 @@ describe('Plan Store', () => {
         })
         const store = usePlanStore()
 
-        await store.initPlanStore()  // Tries to load list + auto-select (which will fail)
+        // With SSR pattern, errors propagate up - component/page handles display
+        await expect(store.initPlanStore()).rejects.toThrow()
 
         expect(store.isSelectedSeasonErrored).toBe(true)
         expect(store.selectedSeasonError).toBeTruthy()

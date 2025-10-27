@@ -37,9 +37,6 @@ export const usePlanStore = defineStore("Plan", () => {
                         console.error('🗓️ > PLAN_STORE > Raw data:', data)
                         throw e
                     }
-                },
-                onResponseError({error}) {
-                    handleApiError(error, 'loadSeasons')
                 }
             }
         )
@@ -60,10 +57,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     }
                 },
                 immediate: false,
-                watch: false,
-                onResponseError({error}) {
-                    handleApiError(error, 'fetchSeason')
-                }
+                watch: false
             }
         )
 
@@ -103,22 +97,22 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // ACTIONS - CRUD operations only
         const loadSeasons = async () => {
-            try {
-                await refreshSeasons()
-                console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
-            } catch (e: any) {
-                handleApiError(e, 'loadSeasons')
+            await refreshSeasons()
+            if (seasonsError.value) {
+                console.error(`🗓️ > PLAN_STORE > Error loading seasons:`, seasonsError.value)
+                throw seasonsError.value
             }
+            console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
         }
 
         const loadSeason = async (id: number) => {
-            try {
-                selectedSeasonId.value = id
-                await refreshSelectedSeason()
-                console.info(`🗓️ > PLAN_STORE > Loaded season ${selectedSeason.value?.shortName} (ID: ${id})`)
-            } catch (e: any) {
-                handleApiError(e, 'loadSeason')
+            selectedSeasonId.value = id
+            await refreshSelectedSeason()
+            if (selectedSeasonError.value) {
+                console.error(`🗓️ > PLAN_STORE > Error loading season:`, selectedSeasonError.value)
+                throw selectedSeasonError.value
             }
+            console.info(`🗓️ > PLAN_STORE > Loaded season ${selectedSeason.value?.shortName} (ID: ${id})`)
         }
 
         const onSeasonSelect = async (id: number) => {

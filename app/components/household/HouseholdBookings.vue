@@ -36,19 +36,29 @@ interface Order {
 
 interface Props {
   household: Household
-  seasonDates: DateRange
-  dinnerEvents: DinnerEvent[]
-  orders: Order[]
-  holidays?: DateRange[]
 }
 
 const props = defineProps<Props>()
 
+// Component needs to handle its own data needs for non core data elements
+const planStore = usePlanStore()
+const {activeSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
+await planStore.initPlanStore()
+
+// Derive needed data from store
+const seasonDates = computed(() => activeSeason.value?.seasonDates)
+const dinnerEvents = computed(() => activeSeason.value?.dinnerEvents ?? [])
+const holidays = computed(() => activeSeason.value?.holidays ?? [])
+const orders = computed(() => activeSeason.value?.orders ?? [])
+
+// UI state
 // Selected day for detail panel (null = show today or next event)
 const selectedDate = ref<Date | null>(null)
 </script>
 
 <template>
+  <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
+  <ViewError v-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <!-- Check if season exists and is loaded -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Master: Calendar (1/3 on large screens) -->

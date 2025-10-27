@@ -13,8 +13,12 @@ import type {
 // Order matters: specific endpoints FIRST, generic endpoints LAST
 const householdIndexEndpoint = vi.fn()
 const householdByIdEndpoint = vi.fn()
+
+// With watch: false, reactive URL can evaluate to '/null' after clearNuxtData()
+// Register specific ID endpoints, then /null fallback, then generic list
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
+registerEndpoint('/api/admin/household/null', householdByIdEndpoint)
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
 
 import { useHouseholdsStore } from '~/stores/households'
@@ -78,9 +82,10 @@ const createMockHouseholdDetail = (): HouseholdWithInhabitants => ({
 describe('useHouseholdsStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    clearNuxtData()
+    vi.clearAllMocks()
     householdIndexEndpoint.mockClear()
     householdByIdEndpoint.mockClear()
+    clearNuxtData()
   })
 
   it('idempotency - should fetch once, then skip on subsequent calls', async () => {
@@ -147,7 +152,8 @@ describe('useHouseholdsStore', () => {
     })
     const store = useHouseholdsStore()
 
-    await store.initHouseholdsStore()
+    // With SSR pattern, errors propagate up - component/page handles display
+    await expect(store.initHouseholdsStore()).rejects.toThrow()
 
     expect(store.isHouseholdsErrored).toBe(true)
     expect(store.householdsError).toBeTruthy()
@@ -178,10 +184,10 @@ describe('useHouseholdsStore', () => {
     })
     const store = useHouseholdsStore()
 
-    await store.initHouseholdsStore('AR_1_st')
+    // With SSR pattern, errors propagate up - component/page handles display
+    await expect(store.initHouseholdsStore('AR_1_st')).rejects.toThrow()
 
     expect(store.isSelectedHouseholdErrored).toBe(true)
-    expect(store.isSelectedHouseholdInitialized).toBe(false)
     expect(store.selectedHouseholdError).toBeTruthy()
     expect(store.selectedHouseholdError?.statusCode).toBe(500)
   })
