@@ -1,11 +1,14 @@
 // GET /api/admin/household - List all households
+// Returns HouseholdSummary[] (lightweight list with InhabitantDisplay)
 
 import {defineEventHandler} from "h3"
 import {fetchHouseholds} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import type {HouseholdSummary} from "~/composables/useHouseholdValidation"
 
 const {h3eFromCatch} = eventHandlerHelper
-export default defineEventHandler(async (event) => {
+
+export default defineEventHandler<Promise<HouseholdSummary[]>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

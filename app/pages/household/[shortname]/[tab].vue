@@ -49,19 +49,18 @@ const tabs = [
 
 // Async component mapping
 const asyncComponents = Object.fromEntries(
-  tabs.map(tab => [
-    tab.key,
-    defineAsyncComponent(() => import(`~/components/household/${tab.component}.vue`))
-  ])
+    tabs.map(tab => [
+      tab.key,
+      defineAsyncComponent(() => import(`~/components/household/${tab.component}.vue`))
+    ])
 )
 
 const route = useRoute()
-
 // Get shortname from route
 const shortname = computed(() => route.params.shortname as string)
 
 // Tab navigation with URL state
-const { activeTab } = useTabNavigation({
+const {activeTab} = useTabNavigation({
   tabs: tabs.map(t => t.key),
   basePath: '/household',
   additionalParams: ['shortname']
@@ -75,45 +74,18 @@ const tabItems = tabs.map(tab => ({
 
 // Initialize stores
 const householdStore = useHouseholdsStore()
-const {selectedHousehold, isLoading: householdLoading, error: householdError} = storeToRefs(householdStore)
-
-const planStore = usePlanStore()
-const {activeSeason} = storeToRefs(planStore)
-
-// Initialize stores on client-side (ADR-007: stores initialized in onMounted)
-onMounted(async () => {
-  await householdStore.initHouseholdsStore(shortname.value)
-  await planStore.initPlanStore()
-})
-
-// Season dates for calendar
-const seasonDates = computed(() => {
-  if (!activeSeason.value) {
-    return {start: new Date(), end: new Date()}
-  }
-  return activeSeason.value.seasonDates
-})
-
-// Holidays from active season
-const holidays = computed(() => {
-  if (!activeSeason.value) return []
-  return activeSeason.value.holidays
-})
-
-// TODO: Load dinner events for active season
-// Endpoint: GET /api/admin/dinner-event?seasonId={id}
-const dinnerEvents = ref([])
-
-// TODO: Load orders for household inhabitants
-// No endpoint exists yet - needs implementation
-const orders = ref([])
+const {
+  selectedHousehold, isSelectedHouseholdLoading, isSelectedHouseholdErrored,
+  isSelectedHouseholdInitialized, selectedHouseholdError
+} = storeToRefs(householdStore)
+await householdStore.initHouseholdsStore(shortname.value)
 
 useHead({
-  title: `🏠 ${selectedHousehold.value?.name || shortname.value}`,
+  title: `🏠 ${shortname.value}`,
   meta: [
     {
       name: "Husstand",
-      content: `Tilmeldinger for husstanden ${selectedHousehold.value?.name || shortname.value}`,
+      content: `Tilmeldinger for husstanden ${shortname.value}`,
     },
   ],
 })
@@ -121,32 +93,21 @@ useHead({
 
 <template>
   <div>
-    <!-- Loading state -->
-    <UCard v-if="householdLoading" class="text-center p-4">
-      <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
-      <p class="text-muted">Indlæser husstand...</p>
+    <Loader v-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
+    <ViewError v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
+               :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
+    <UCard v-else-if="isSelectedHouseholdInitialized" class="w-full px-0">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-home" class="text-2xl" />
+          <h2 class="text-xl font-semibold">{{ selectedHousehold!.name }}</h2>
+        </div>
+      </template>
+      <UTabs v-model="activeTab" :items="tabItems" class="mb-4">
+        <template #content="{ item }">
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold"/>
+        </template>
+      </UTabs>
     </UCard>
-
-    <!-- Error state -->
-    <UCard v-else-if="householdError" class="text-center p-4">
-      <UIcon name="i-heroicons-exclamation-triangle" class="text-red-500" />
-      <p class="text-red-700">{{ householdError }}</p>
-    </UCard>
-
-    <!-- No active season -->
-    <UCard v-else-if="!activeSeason" class="text-center p-4">
-      <UIcon name="i-heroicons-calendar-days" class="text-yellow-500" />
-      <p class="text-yellow-700">Ingen aktiv sæson fundet. Kontakt administratoren.</p>
-    </UCard>
-
-    <!-- Household card with tabs -->
-    <HouseholdCard
-      v-else-if="selectedHousehold"
-      :household="selectedHousehold"
-      :season-dates="seasonDates"
-      :dinner-events="dinnerEvents"
-      :orders="orders"
-      :holidays="holidays"
-    />
   </div>
 </template>

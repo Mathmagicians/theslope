@@ -202,12 +202,14 @@ watch([formMode, teamCount], () => {
 ## ADR-007: Separation of Concerns - Store vs Component Responsibilities
 
 **Status:** Accepted | **Date:** 2025-01-28
+**Updated:** 2025-01-27 (SSR-friendly store initialization pattern)
 
 ### Decision
 
 **Clear separation between data management (store) and UI state management (component)**
 
 #### Store Responsibilities (Pinia)
+- Initialization using singleton pattern supported by useFetch
 - Server data only (seasons list, selected season)
 - CRUD operations
 - Loading states for async operations
@@ -220,8 +222,8 @@ watch([formMode, teamCount], () => {
 - User interactions
 
 #### Parent Page Responsibilities (`app/pages/admin/[tab].vue`)
-- Store initialization (client-side in `onMounted`)
-- Loading/error UI display (using store's `isLoading` and `error` state)
+- Store initialization (client-side on creation). Dont use onMounted, it gives data flashes
+- Loading/error UI display (using store's `isLoading` and `isErrored` state)
 - Client-only toast notifications
 - SSR-compatible data fetching (delegated to store via `useFetch`)
 
@@ -281,15 +283,39 @@ const onModeChange = async (mode: FormMode) => {
 3. **Maintainability:** Changes to UI flows don't affect data layer and vice versa
 4. **Standards Compliance:** Aligns with ADR-006 (URL-based navigation) - formMode belongs with URL logic in component
 
+### SSR-Friendly Store Initialization Pattern
+
+**Store exposes useFetch status via computed properties:**
+
+```typescript
+// From app/stores/households.ts:45-52
+const isHouseholdsLoading = computed(() => householdsStatus.value === 'pending')
+const isHouseholdsErrored = computed(() => householdsStatus.value === 'error')
+const isHouseholdsInitialized = computed(() => householdsStatus.value === 'success')
+const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
+```
+
+**Idempotent init method checks status before loading:**
+
+```typescript
+// From app/stores/households.ts:100-112
+const initHouseholdsStore = async (shortName?: string) => {
+    if (!isHouseholdsInitialized.value || isHouseholdsErrored.value) await loadHouseholds()
+
+    if (shortName) {
+        const household = households.value.find(h => h.shortName === shortName)
+        if (!household) throw createError({ statusCode: 404, message: `Not found` })
+        if (household.id !== selectedHouseholdId.value) await loadHousehold(household.id)
+    }
+}
+```
+
 ### Compliance
 
 1. Store MUST NOT contain UI state (formMode, draftSeason, modal visibility, etc.)
-2. Components MUST NOT duplicate data that belongs in the store
-3. Mode transitions MUST be handled in the component that owns formMode
-4. Store actions MUST throw errors for component to handle (no redundant try-catch)
-5. Parent pages MUST initialize stores client-side (`onMounted`), never during SSR setup
-6. Store uses `useFetch` for SSR-compatible data fetching with auth context
-7. Parent pages display loading/error UI using store's `isLoading` and `error` state
+2. Stores MUST expose status-derived computed properties for 4-state UI
+3. Init methods MUST be idempotent using `!isInitialized || isErrored` check
+4. Pages call init at top-level (not onMounted) for SSR compatibility
 
 ---
 

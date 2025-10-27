@@ -49,6 +49,7 @@ const selectedDate = ref<Date | null>(null)
 </script>
 
 <template>
+  <!-- Check if season exists and is loaded -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Master: Calendar (1/3 on large screens) -->
     <div class="lg:col-span-1">

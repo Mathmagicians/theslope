@@ -6,7 +6,8 @@ import type {Season} from "~/composables/useSeasonValidation"
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const store = usePlanStore()
 const {
-  isLoading,
+  isSeasonsLoading,
+  isSelectedSeasonLoading,
   isNoSeasons,
   selectedSeason,
   seasons,
@@ -42,7 +43,7 @@ const selectedSeasonId = computed({
 })
 
 const showAdminSeason = computed(() => {
-  return !isLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
+  return !isSelectedSeasonLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
 })
 
 // UTILITY
@@ -106,10 +107,11 @@ const handleCancel = async () => {
               data-testid="season-selector"
               v-model="selectedSeasonId"
               color="warning"
-              :loading="isLoading"
+              :loading="isSeasonsLoading"
               :placeholder="seasons?.length > 0 ? 'Vælg sæson' : 'Ingen sæsoner'"
-              :items="seasons?.map(s => ({ ...s, label: s.shortName }))"
-              value-key="id"
+              :items="seasons"
+              labelKey="shortName"
+              valueKey="id"
           >
           </USelect>
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
@@ -128,7 +130,7 @@ const handleCancel = async () => {
                              @cancel="handleCancel"
         />
       </div>
-      <Loader v-else-if="isLoading" text="Loader data for fællesspisningssæsonen"/>
+      <Loader v-else-if="isSelectedSeasonLoading" text="Loader data for fællesspisningssæsonen"/>
       <div v-else-if="isNoSeasons"
            class="flex flex-col items-center justify-center space-y-4">
         <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>

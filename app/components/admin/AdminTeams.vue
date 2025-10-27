@@ -27,7 +27,7 @@ import type {CookingTeam} from "~/composables/useCookingTeamValidation"
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
 const {
-  isLoading,
+  isSelectedSeasonLoading,
   isNoSeasons,
   selectedSeason,
   seasons,
@@ -121,7 +121,7 @@ const selectedSeasonId = computed({
 })
 
 const showAdminTeams = computed(() => {
-  return !isLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
+  return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
 })
 
 // UTILITY
@@ -283,7 +283,7 @@ const columns = [
               data-testid="season-selector"
               v-model="selectedSeasonId"
               color="warning"
-              :loading="isLoading"
+              :loading="isSelectedSeasonLoading"
               :placeholder="seasons?.length > 0 ? 'Vælg sæson' : 'Ingen sæsoner'"
               :items="seasons?.map(s => ({ ...s, label: s.shortName }))"
               value-key="id"
@@ -388,7 +388,7 @@ const columns = [
         <UTable
             :columns="columns"
             :data="displayedTeams"
-            :loading="isLoading"
+            :loading="isSelectedSeasonLoading"
             :ui="{ td: 'py-2' }"
         >
           <!-- Team name column with colored badge -->
@@ -453,7 +453,7 @@ const columns = [
         </div>
       </div>
 
-      <Loader v-else-if="isLoading" text="Madhold"/>
+      <Loader v-else-if="isSelectedSeasonLoading" text="Madhold"/>
       <div v-else-if="isNoSeasons"
            class="flex flex-col items-center justify-center space-y-4 p-8">
         <h3 class="text-lg font-semibold">Ingen sæson valgt</h3>

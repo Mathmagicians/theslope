@@ -47,27 +47,8 @@ export type CookingTeamAssignmentWithRelations = PrismaFromClient.CookingTeamAss
     }
 }>
 
-// ADR-009: Lightweight type for list display (index endpoint)
-export type HouseholdSummary = PrismaFromClient.HouseholdGetPayload<{
-    include: {
-        inhabitants: {
-            select: {
-                id: true
-                name: true
-                lastName: true
-                pictureUrl: true
-                birthDate: true
-            }
-        }
-    }
-}>
-
-// ADR-009: Comprehensive type for detail operations (detail endpoint)
-export type HouseholdWithInhabitants = PrismaFromClient.HouseholdGetPayload<{
-    include: {
-        inhabitants: true
-    }
-}>
+// ADR-010: Use domain types from composables, not Prisma types
+// Repository transforms Prisma results to domain types before returning
 
 const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
 
@@ -296,9 +277,9 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
     }
 }
 
-// ADR-009: Index endpoint returns lightweight inhabitant data
-export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSummary[]> {
-    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with basic inhabitant data`)
+// ADR-009 & ADR-010: Returns HouseholdSummary (all scalar fields + lightweight inhabitant relation)
+export async function fetchHouseholds(d1Client: D1Database): Promise<import('~/composables/useHouseholdValidation').HouseholdSummary[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -316,7 +297,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSu
             }
         })
 
-        // Add computed shortName to each household
+        // Add computed shortName (domain logic)
         const householdsWithShortName = households.map(household => ({
             ...household,
             shortName: getHouseholdShortName(household.address)

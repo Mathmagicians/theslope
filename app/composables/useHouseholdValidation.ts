@@ -113,16 +113,44 @@ export const useHouseholdValidation = () => {
     })
 
     // Minimal inhabitant info for frontend display (team assignments, etc.)
+    // Includes birthDate to distinguish children vs adults
     const InhabitantDisplaySchema = z.object({
         id: z.number().int().positive(),
         name: z.string(),
         lastName: z.string(),
-        pictureUrl: z.string().optional().nullable()
+        pictureUrl: z.string().optional().nullable(),
+        birthDate: z.coerce.date().optional().nullable()
     })
 
     // Household with nested inhabitants for creation (used by repository)
     const HouseholdCreateWithInhabitantsSchema = HouseholdCreateSchema.extend({
         inhabitants: z.array(InhabitantCreateSchema.omit({ householdId: true })).optional()
+    })
+
+    // ADR-009: Index endpoint - full household scalars + lightweight inhabitant relation
+    // "Lightweight" means minimal inhabitant fields (InhabitantDisplay), not fewer household fields
+    const HouseholdSummarySchema = BaseHouseholdSchema.required({
+        id: true,
+        heynaboId: true,
+        pbsId: true,
+        name: true,
+        address: true,
+        movedInDate: true
+    }).extend({
+        shortName: z.string().min(1), // Required computed field
+        inhabitants: z.array(InhabitantDisplaySchema) // Lightweight relation
+    })
+
+    // ADR-009: Detail endpoint - full household with complete inhabitant data
+    const HouseholdWithInhabitantsSchema = BaseHouseholdSchema.required({
+        id: true,
+        heynaboId: true,
+        pbsId: true,
+        name: true,
+        address: true,
+        movedInDate: true
+    }).extend({
+        inhabitants: z.array(InhabitantResponseSchema)
     })
 
     return {
@@ -131,6 +159,8 @@ export const useHouseholdValidation = () => {
         HouseholdUpdateSchema,
         HouseholdResponseSchema,
         HouseholdCreateWithInhabitantsSchema,
+        HouseholdSummarySchema,
+        HouseholdWithInhabitantsSchema,
         BaseInhabitantSchema,
         InhabitantCreateSchema,
         InhabitantUpdateSchema,
@@ -151,3 +181,7 @@ export type InhabitantCreate = z.infer<ReturnType<typeof useHouseholdValidation>
 export type InhabitantUpdate = z.infer<ReturnType<typeof useHouseholdValidation>['InhabitantUpdateSchema']>
 export type InhabitantResponse = z.infer<ReturnType<typeof useHouseholdValidation>['InhabitantResponseSchema']>
 export type InhabitantDisplay = z.infer<ReturnType<typeof useHouseholdValidation>['InhabitantDisplaySchema']>
+
+// ADR-009: Index vs Detail endpoint types
+export type HouseholdSummary = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdSummarySchema']>
+export type HouseholdWithInhabitants = z.infer<ReturnType<typeof useHouseholdValidation>['HouseholdWithInhabitantsSchema']>

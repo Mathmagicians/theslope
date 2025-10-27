@@ -10,10 +10,11 @@
 
 ### General Principles
 
-- Always use assertions over console logs (`expect()` instead of `console.log()`)
+- **NEVER use console.log() in tests** - ALWAYS use assertions (`expect()`) to verify behavior
 - Use meaningful test names that describe the behavior being tested
 - Focus tests on business requirements, not implementation details
 - When testing async behavior, use proper `await` patterns
+- Use `vi.fn()` spies to track function calls instead of manual counters
 
 ### Component Testing (Nuxt UI v4+)
 

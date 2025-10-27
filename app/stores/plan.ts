@@ -10,12 +10,25 @@ export const usePlanStore = defineStore("Plan", () => {
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
+        // STATE - Server data only
+        const selectedSeasonId = ref<number | null>(null)
+
+
+        // ========================================
+        // State - useFetch with status exposed internally
+        // ========================================
         // DATA FETCHING - useFetch for SSR compatibility with auth context
         // HTTP JSON converts Date objects to ISO strings during transport
         // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
-        const { data: seasonsData, status, error: fetchError, refresh: refreshSeasons } = useFetch<Season[]>(
+        const {
+            data: seasons, status: seasonsStatus,
+            error: seasonsError, refresh: refreshSeasons
+        } = useFetch<Season[]>(
             '/api/admin/season',
             {
+                immediate: false,
+                watch: false,
+                default: () => [],
                 transform: (data: any[]) => {
                     try {
                         return data.map(season => SeasonSchema.parse(season))
@@ -25,14 +38,16 @@ export const usePlanStore = defineStore("Plan", () => {
                         throw e
                     }
                 },
-                onResponseError({ error }) {
+                onResponseError({error}) {
                     handleApiError(error, 'loadSeasons')
                 }
             }
         )
 
-        const selectedSeasonId = ref<number | null>(null)
-        const { data: selectedSeasonData, refresh: refreshSelectedSeason } = useFetch<Season>(
+        const {
+            data: selectedSeason, status: selectedSeasonStatus,
+            error: selectedSeasonError, refresh: refreshSelectedSeason
+        } = useFetch<Season>(
             () => `/api/admin/season/${selectedSeasonId.value}`,
             {
                 transform: (data: any) => {
@@ -46,33 +61,24 @@ export const usePlanStore = defineStore("Plan", () => {
                 },
                 immediate: false,
                 watch: false,
-                onResponseError({ error }) {
+                onResponseError({error}) {
                     handleApiError(error, 'fetchSeason')
                 }
             }
         )
 
-        // STATE - Data only
-        const selectedSeason = computed(() => selectedSeasonData.value ?? null)
-        const seasons = computed(() => seasonsData.value ?? [])
-        const isLoading = computed(() => status.value === 'pending')
 
-        // COMPUTED STATE
-        const isNoSeasons = computed(() => seasons.value?.length === 0)
+        // ========================================
+        // Computed - Public API (derived from status)
+        // ========================================
+        const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
+        const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
+        const isSeasonsInitialized = computed(() => seasonsStatus.value === 'success')
+        const isNoSeasons = computed(() => isSeasonsInitialized.value && seasons.value.length === 0)
 
-        /**
-         * Get the active season
-         * FIXME: For now returns selectedSeason. Later implement isActive field in database.
-         */
-        const activeSeason = computed(() => selectedSeason.value)
-
-        // HELPER - Auto-select first season
-        const autoSelectFirstSeason = async () => {
-            if (seasons.value.length > 0 && !selectedSeason.value) {
-                await onSeasonSelect(seasons.value.at(0)?.id ?? -1)
-            }
-        }
-
+        const isSelectedSeasonLoading = computed(() => selectedSeasonStatus.value === 'pending')
+        const isSelectedSeasonErrored = computed(() => selectedSeasonStatus.value === 'error')
+        const isSelectedSeasonInitialized = computed(() => selectedSeasonStatus.value === 'success')
         const disabledModes = computed(() => {
             const disabledSet: Set<FormMode> = new Set()
             if (isNoSeasons.value) {
@@ -85,17 +91,38 @@ export const usePlanStore = defineStore("Plan", () => {
             return [...disabledSet]
         })
 
+        const activeSeason = computed(() => selectedSeason.value)
+
+        // HELPER - Auto-select active season
+        /**
+         * Get the active season
+         * FIXME: For now returns selectedSeason. Later implement isActive field in database.
+         */
+        const autoSelectActiveSeason = (): Season | null => seasons.value.at(0) ?? null
+
+
         // ACTIONS - CRUD operations only
         const loadSeasons = async () => {
-            await refreshSeasons()
-            await autoSelectFirstSeason()
+            try {
+                await refreshSeasons()
+                console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
+            } catch (e: any) {
+                handleApiError(e, 'loadSeasons')
+            }
+        }
+
+        const loadSeason = async (id: number) => {
+            try {
+                selectedSeasonId.value = id
+                await refreshSelectedSeason()
+                console.info(`🗓️ > PLAN_STORE > Loaded season ${selectedSeason.value?.shortName} (ID: ${id})`)
+            } catch (e: any) {
+                handleApiError(e, 'loadSeason')
+            }
         }
 
         const onSeasonSelect = async (id: number) => {
-            if (id >= 0) {
-                selectedSeasonId.value = id
-                await refreshSelectedSeason()
-            }
+            await loadSeason( id )
         }
 
         const createSeason = async (season: Season): Promise<Season> => {
@@ -116,7 +143,11 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const generateDinnerEvents = async (seasonId: number) => {
             try {
-                const result = await $fetch<{seasonId: number, eventCount: number, events: any[]}>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
+                const result = await $fetch<{
+                    seasonId: number,
+                    eventCount: number,
+                    events: any[]
+                }>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
                     method: 'POST'
                 })
                 console.info(`🗓️ > PLAN_STORE > Generated ${result.eventCount} dinner events for season ${seasonId}`)
@@ -130,13 +161,21 @@ export const usePlanStore = defineStore("Plan", () => {
         const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
             try {
                 // Step 1: Assign affinities to teams
-                const affinityResult = await $fetch<{seasonId: number, teamCount: number, teams: CookingTeam[]}>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
+                const affinityResult = await $fetch<{
+                    seasonId: number,
+                    teamCount: number,
+                    teams: CookingTeam[]
+                }>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
                     method: 'POST'
                 })
                 console.info(`👥 > PLAN_STORE > Assigned affinities to ${affinityResult.teamCount} teams for season ${seasonId}`)
 
                 // Step 2: Assign teams to dinner events
-                const assignmentResult = await $fetch<{seasonId: number, eventCount: number, events: DinnerEvent[]}>(`/api/admin/season/${seasonId}/assign-cooking-teams`, {
+                const assignmentResult = await $fetch<{
+                    seasonId: number,
+                    eventCount: number,
+                    events: DinnerEvent[]
+                }>(`/api/admin/season/${seasonId}/assign-cooking-teams`, {
                     method: 'POST'
                 })
                 console.info(`🍽️ > PLAN_STORE > Assigned teams to ${assignmentResult.eventCount} dinner events for season ${seasonId}`)
@@ -264,9 +303,20 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        // INITIALIZATION - Component will call init() in onMounted
-        const initPlanStore = async () => {
-            await autoSelectFirstSeason()
+        // INITIALIZATION - SSR-safe initialization
+        const initPlanStore = async (shortName?: string) => {
+            if (!isSeasonsInitialized.value || isSeasonsErrored.value) await loadSeasons()
+
+            const season = shortName
+                ? seasons.value.find(s => s.shortName === shortName)
+                : autoSelectActiveSeason()
+
+            if (!isNoSeasons.value && !season) throw createError({
+                statusCode: 404,
+                message: `Sæsonen "${shortName}" blev ikke fundet`
+            })
+
+            if (season && season.id != selectedSeasonId.value) await loadSeason(season.id)
         }
 
         return {
@@ -274,19 +324,25 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeason,
             seasons,
             // computed state
-            isLoading,
+            isSeasonsLoading,
             isNoSeasons,
+            isSeasonsErrored,
+            isSeasonsInitialized,
+            seasonsError,
+            isSelectedSeasonLoading,
+            isSelectedSeasonErrored,
+            isSelectedSeasonInitialized,
+            selectedSeasonError,
             activeSeason,
             disabledModes,
-            error: fetchError,
             // actions
             initPlanStore,
             loadSeasons,
+            onSeasonSelect,
             createSeason,
             updateSeason,
             generateDinnerEvents,
             assignTeamAffinitiesAndEvents,
-            onSeasonSelect,
             createTeam,
             updateTeam,
             deleteTeam,

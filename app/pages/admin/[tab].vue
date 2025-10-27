@@ -4,7 +4,7 @@
 const toast = useToast()
 const store = usePlanStore()
 const {initPlanStore} = store
-const {isLoading, error} = storeToRefs(store)
+const {isSeasonsLoading, isSeasonsErrored, seasonsError} = storeToRefs(store)
 const route = useRoute()
 
 // UI - ITEMS
@@ -114,10 +114,9 @@ const updateRouteParamFromTab = async (tab: string) => {
   console.info('🔗 > Admin > updateRouteParamFromTab > updated route:', route.path, 'requested tab:', tab)
 }
 
-// INITIALIZATION
-onMounted(async () => {
-  await initPlanStore()
-})
+// INITIALIZATION ON CREATION
+await initPlanStore()
+console.info('🔗 > Admin > initialized parent page')
 
 // UI - CONTINUED
 
@@ -136,8 +135,8 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="isLoading"/>
-    <ViewError v-else-if="error" :error="500" message="Kunne ikke loade data for admin siden" :cause="error"/>
+    <Loader v-if="isSeasonsLoading" :text="activeTab" />
+    <ViewError v-else-if="isSeasonsErrored" :error="seasonsError?.statusCode" message="Kunne ikke loade data for admin siden" :cause="seasonsError"/>
     <div v-else class="relative py-1 md:py-2 lg:p-4 min-h-screen">
       <!-- Scroll anchor for current tab -->
       <a :id="activeTab" class="absolute w-0 h-0 -top-24 opacity-0 pointer-events-none" href="#">⚓︎</a>

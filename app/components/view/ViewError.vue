@@ -64,7 +64,7 @@ function getRotationClass(i: number) {
       <UPopover v-if="props.cause">
         <template #trigger>
           <UButton
-              color="red"
+              color="error"
               size="sm"
               variant="ghost"
               icon="i-heroicons-exclamation-triangle"

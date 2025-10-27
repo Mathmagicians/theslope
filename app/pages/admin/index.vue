@@ -3,5 +3,5 @@ await navigateTo('/admin/planning', {replace: true})
 </script>
 
 <template>
-  <div></div>
+  <div>Loading</div>
 </template>

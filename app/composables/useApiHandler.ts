@@ -1,6 +1,6 @@
 export const useApiHandler = () => {
     const handleApiError = (error: any, action: string): string => {
-        console.warn(`API Error in ${action}:`, error)
+        console.error(`API Error in ${action}:`, error)
         let message: string
 
         switch (error.statusCode) {
