@@ -14,11 +14,10 @@ import type {
 const householdIndexEndpoint = vi.fn()
 const householdByIdEndpoint = vi.fn()
 
-// With watch: false, reactive URL can evaluate to '/null' after clearNuxtData()
-// Register specific ID endpoints, then /null fallback, then generic list
+// Register specific ID endpoints, then generic list
+// useAsyncData doesn't auto-execute so /null endpoint not needed
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
-registerEndpoint('/api/admin/household/null', householdByIdEndpoint)
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
 
 import { useHouseholdsStore } from '~/stores/households'

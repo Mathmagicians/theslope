@@ -44,7 +44,7 @@ useHead({
         <!-- Custom shortName cell with link -->
         <template #shortName-cell="{ row }">
           <NuxtLink
-              :to="`/household/${row.original.shortName}`"
+              :to="`/household/${encodeURIComponent(row.original.shortName)}`"
               class="text-primary hover:underline font-medium"
           >
             {{ row.original.shortName }}

@@ -7,8 +7,18 @@ import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
 // Order matters: specific endpoints FIRST, generic endpoints LAST
-const seasonIndexEndpoint = vi.fn()
-const seasonByIdEndpoint = vi.fn()
+
+// Prepare default mock data before store import
+const season1 = { ...SeasonFactory.defaultSeason('1'), id: 1 }
+const season2 = { ...SeasonFactory.defaultSeason('2'), id: 2 }
+const mockSeasons = [season1, season2]
+
+// Register with default return values for auto-loading store
+const seasonIndexEndpoint = vi.fn(() => mockSeasons)
+const seasonByIdEndpoint = vi.fn(() => season1)
+const activeSeasonIdEndpoint = vi.fn(() => season1.id)
+
+registerEndpoint('/api/admin/season/activeId', activeSeasonIdEndpoint)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
@@ -19,20 +29,24 @@ describe('Plan Store', () => {
     // ========================================
     // Test Helpers
     // ========================================
-    const season1 = { ...SeasonFactory.defaultSeason('1'), id: 1 }
-    const season2 = { ...SeasonFactory.defaultSeason('2'), id: 2 }
-    const mockSeasons = [season1, season2]
-
     const setupMocks = (seasons = mockSeasons, seasonDetail = season1) => {
         seasonIndexEndpoint.mockReturnValue(seasons)
         seasonByIdEndpoint.mockReturnValue(seasonDetail)
+        activeSeasonIdEndpoint.mockReturnValue(seasons.length > 0 ? seasons[0].id : undefined)
     }
 
-    beforeEach(() => {
+    beforeEach(async () => {
         setActivePinia(createPinia())
         vi.clearAllMocks()
         seasonIndexEndpoint.mockClear()
         seasonByIdEndpoint.mockClear()
+        activeSeasonIdEndpoint.mockClear()
+
+        // Reset mock return values to defaults for next test
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+
         clearNuxtData()
     })
 

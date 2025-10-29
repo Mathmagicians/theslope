@@ -2,6 +2,7 @@ import {type Season} from '~/composables/useSeasonValidation'
 import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import {type DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {SeasonSchema} from "~~/prisma/generated/zod";
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
@@ -9,26 +10,29 @@ export const usePlanStore = defineStore("Plan", () => {
         const {SeasonSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
-
-        // STATE - Server data only
-        const selectedSeasonId = ref<number | null>(null)
-
-
+    
         // ========================================
         // State - useFetch with status exposed internally
         // ========================================
         // DATA FETCHING - useFetch for SSR compatibility with auth context
         // HTTP JSON converts Date objects to ISO strings during transport
         // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
+
+        // Fetch active season ID (static endpoint - no reactive URL issues)
+        const { data: activeSeasonId , refresh: refreshActiveSeasonId} = useFetch<number | undefined>(
+            '/api/admin/season/activeId',
+            {
+                default: () => undefined
+            }
+        )
+
+      
         const {
             data: seasons, status: seasonsStatus,
             error: seasonsError, refresh: refreshSeasons
         } = useFetch<Season[]>(
             '/api/admin/season',
-            {
-                immediate: false,
-                watch: false,
-                default: () => [],
+            { default: () => [],
                 transform: (data: any[]) => {
                     try {
                         return data.map(season => SeasonSchema.parse(season))
@@ -41,23 +45,22 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
+        // Use useAsyncData for detail endpoint - allows manual execute() without context issues
+        const selectedSeasonId = ref<number | null>(null)
+        const selectedSeasonKey = computed(() =>  `/api/admin/season/${selectedSeasonId.value || 'null' }`)
+
         const {
             data: selectedSeason, status: selectedSeasonStatus,
             error: selectedSeasonError, refresh: refreshSelectedSeason
-        } = useFetch<Season>(
-            () => `/api/admin/season/${selectedSeasonId.value}`,
+        } = useAsyncData<Season | null>(
+            selectedSeasonKey,
+            () => {
+                if (!selectedSeasonId.value) return Promise.resolve(null)
+                return $fetch(`/api/admin/season/${selectedSeasonId.value}`)
+            },
             {
-                transform: (data: any) => {
-                    try {
-                        return SeasonSchema.parse(data)
-                    } catch (e) {
-                        console.error('🗓️ > PLAN_STORE > Error parsing selected season:', e)
-                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
-                        throw e
-                    }
-                },
-                immediate: false,
-                watch: false
+                default: () => null,
+                transform: (data: any) => data ? SeasonSchema.parse(data) : null
             }
         )
 
@@ -105,18 +108,17 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
         }
 
-        const loadSeason = async (id: number) => {
+        const loadSeason = (id: number) => {
             selectedSeasonId.value = id
-            await refreshSelectedSeason()
+
             if (selectedSeasonError.value) {
                 console.error(`🗓️ > PLAN_STORE > Error loading season:`, selectedSeasonError.value)
-                throw selectedSeasonError.value
             }
             console.info(`🗓️ > PLAN_STORE > Loaded season ${selectedSeason.value?.shortName} (ID: ${id})`)
         }
 
-        const onSeasonSelect = async (id: number) => {
-            await loadSeason( id )
+        const onSeasonSelect = (id: number) => {
+            loadSeason(id)
         }
 
         const createSeason = async (season: Season): Promise<Season> => {
@@ -299,19 +301,18 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // INITIALIZATION - SSR-safe initialization
         const initPlanStore = async (shortName?: string) => {
-            if (!isSeasonsInitialized.value || isSeasonsErrored.value) await loadSeasons()
+           // seasons autoload when store is created
+            console.info('🗓️ > PLAN_STORE > Initializing plan store, seasons loaded:', seasons.value.length)
+            await refreshActiveSeasonId()
+            const seasonId = shortName
+                ? seasons.value.find(s => s.shortName === shortName)?.id
+                : activeSeasonId.value
+            console.info('🗓️ > PLAN_STORE > requested short name', shortName ?? 'none',
+                'id :', seasonId)
 
-            const season = shortName
-                ? seasons.value.find(s => s.shortName === shortName)
-                : autoSelectActiveSeason()
-
-            if (!isNoSeasons.value && !season) throw createError({
-                statusCode: 404,
-                message: `Sæsonen "${shortName}" blev ikke fundet`
-            })
-
-            if (season && season.id != selectedSeasonId.value) await loadSeason(season.id)
+            if (seasonId && seasonId != selectedSeasonId.value) await loadSeason(seasonId)
         }
+
 
         return {
             // state

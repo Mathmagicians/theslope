@@ -11,7 +11,7 @@ import type {DateRange} from '~/types/dateTypes'
 interface Inhabitant {
   id: number
   name: string
-  lastName: string
+  lastName: stringtra
 }
 
 interface Household {

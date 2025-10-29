@@ -9,8 +9,6 @@ import type {
  * Following ADR-009: Index endpoint returns HouseholdSummary (lightweight), detail returns HouseholdWithInhabitants (comprehensive)
  */
 export const useHouseholdsStore = defineStore("Households", () => {
-    // DEPENDENCIES
-    const {handleApiError} = useApiHandler()
 
     // STATE - Server data only
     const selectedHouseholdId = ref<number | null>(null)
@@ -24,21 +22,29 @@ export const useHouseholdsStore = defineStore("Households", () => {
         error: householdsError,
         refresh: refreshHouseholds
     } = useFetch<HouseholdSummary[]>('/api/admin/household', {
-        immediate: false,
+        immediate: true,
         watch: false,
         default: () => []
-
     })
+
+    // Use useAsyncData for detail endpoint - allows manual execute() without context issues
+    const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
 
     const {
         data: selectedHousehold,
         status: selectedHouseholdStatus,
         error: selectedHouseholdError,
-        refresh: refreshSelectedHousehold
-    } = useFetch<HouseholdWithInhabitants>(() => `/api/admin/household/${selectedHouseholdId.value}`, {
-        immediate: false,
-        watch: false  // ⚠️ CRITICAL: Prevents auto-refetch on reactive deps (ADR-007)
-    })
+     //   execute: refreshSelectedHousehold
+    } = useAsyncData<HouseholdWithInhabitants | null>(
+        selectedHouseholdKey,
+        () => {
+            if (!selectedHouseholdId.value) return Promise.resolve(null)
+            return $fetch(`/api/admin/household/${selectedHouseholdId.value}`)
+        },
+        {
+            default: () => null,
+        }
+    )
 
     // ========================================
     // Computed - Public API (derived from status)
@@ -51,13 +57,15 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const isSelectedHouseholdLoading = computed(() => selectedHouseholdStatus.value === 'pending')
     const isSelectedHouseholdErrored = computed(() => selectedHouseholdStatus.value === 'error')
     const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success')
+    // DEPENDENCIES - access auth store
+    const authStore = useAuthStore()
+
     /**
      * Get the logged-in user's household (from auth session)
      * Returns full household object from session, or null if not authenticated
      */
     const myHousehold = computed(() => {
-        const authStore = useAuthStore()
-        return authStore.user?.Inhabitant?.household ?? null //TODO fix type
+        return authStore.user?.Inhabitant?.household ?? null
     })
 
     // ========================================
@@ -77,10 +85,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const loadHousehold = async (id: number) => {
         selectedHouseholdId.value = id
-        await refreshSelectedHousehold()
+
         if (selectedHouseholdError.value) {
             console.error(`🏠 > HOUSEHOLDS_STORE > Error loading household:`, selectedHouseholdError.value)
-            throw selectedHouseholdError.value
         }
         console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
     }
@@ -88,21 +95,22 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Initialize store - load households and optionally select one by shortName
+     * If no shortName provided, auto-selects logged-in user's household
      * @param shortName - Optional shortName to load specific household
      */
-    const initHouseholdsStore = async (shortName?: string) => {
-        if (!isHouseholdsInitialized.value || isHouseholdsErrored.value) await loadHouseholds()
-        // TODO autoselct my household if shortName not provided
-        if (shortName) {
-            const household = households.value.find(h => h.shortName === shortName)
-            if (!household) throw createError({
-                statusCode: 404,
-                message: `Husstanden "${shortName}" blev ikke fundet`
-            })
+    const initHouseholdsStore = (shortName?: string) => {
+       // households are autoloaded on creation if (!isHouseholdsInitialized.value || isHouseholdsErrored.value) await loadHouseholds()
 
-            if (household.id !== selectedHouseholdId.value) await loadHousehold(household.id)
-        }
+        const householdId = shortName
+            ? households.value.find(h => h.shortName === shortName)?.id
+            : myHousehold.value?.id
+
+        console.info('🏠 > HOUSEHOLDS_STORE > requested short name', shortName ?? 'none',
+            'id:', householdId)
+
+        if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }
+
 
     return {
         // State

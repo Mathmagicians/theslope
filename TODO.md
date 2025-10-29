@@ -183,7 +183,6 @@
   - Pages: Comment explaining SSR initialization
 
 
-
 ---
 
 ## CRITICAL : Bug in adminTeams

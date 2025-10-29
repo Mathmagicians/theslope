@@ -1,62 +1,27 @@
 <script setup lang="ts">
+import type {FormSubmitEvent} from '#ui/types'
+import type {LoginCredentials} from '~/composables/useUserValidation'
 
-const {loggedIn} = storeToRefs(useAuthStore())
-const {greeting} = storeToRefs(useAuthStore())
-const {avatar} = storeToRefs(useAuthStore())
-const {email} = storeToRefs(useAuthStore())
-const {phone} = storeToRefs(useAuthStore())
-const {address} = storeToRefs(useAuthStore())
-const {signIn, clear} = useAuthStore()
+const authStore = useAuthStore()
+const {loggedIn, greeting, name, lastName, avatar, email, phone, address} = storeToRefs(authStore)
+const {signIn, clear} = authStore
+const {LoginSchema} = useUserValidation()
 
-const formEmail = ref('')
-const password = ref('')
-const emailError = ref('')
-const passwordError = ref('')
+const fullName = computed(() => `${name.value} ${lastName.value}`.trim())
+const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
+
+const state = reactive<LoginCredentials>({
+  email: '',
+  password: ''
+})
+
 const isLoading = ref(false)
 
-const validateEmail = () => {
-  emailError.value = ''
-  if (!formEmail.value) {
-    emailError.value = 'Brug den email som du er registreret med i Heynabo'
-    return false
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail.value)) {
-    emailError.value = 'Indtast venligst en gyldig email'
-    return false
-  }
-  return true
-}
-
-const validatePassword = () => {
-  passwordError.value = ''
-  if (!password.value) {
-    passwordError.value = 'Indtast din Heynabo adgangskode'
-    return false
-  }
-  if (password.value.length < 1) {
-    passwordError.value = 'Du skal bruge din Heynabo adgangskode'
-    return false
-  }
-  return true
-}
-
-const handleSubmit = async () => {
-  emailError.value = ''
-  passwordError.value = ''
-
-  const isEmailValid = validateEmail()
-  const isPasswordValid = validatePassword()
-
-  if (!isEmailValid || !isPasswordValid) {
-    return
-  }
-
+const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
   try {
     isLoading.value = true
-    const response = signIn(formEmail.value, password.value)
-
-    console.log('🔑> Login >lykkedes', response)
-
+    await signIn(event.data.email, event.data.password)
+    console.log('🔑> Login >lykkedes')
   } catch (error: any) {
     console.error('🔑 Login mislykkedes:', error)
   } finally {
@@ -69,31 +34,27 @@ const handleSubmit = async () => {
   <div class="flex items-center justify-center bg-pink-50">
     <!-- Show login component if user is not logged in -->
     <div v-if="!loggedIn" class="max-w-md w-full p-6 ">
-      <UForm :state="{ email: formEmail, password: password }" @submit="handleSubmit" class="space-y-6">
+      <UForm :state="state" :schema="LoginSchema" @submit="handleSubmit" class="space-y-6">
         <UCard >
           <template #header>
             <h2 class="text-xl font-bold">Log ind</h2>
           </template>
 
           <div class="space-y-4 ">
-            <UFormField label="Email">
+            <UFormField label="Email" name="email">
               <UInput
-                  v-model="formEmail"
+                  v-model="state.email"
                   type="email"
                   placeholder="Indtast den email, du er oprettet i Heynabo med"
-                  :error="emailError"
-                  @blur="validateEmail"
               />
             </UFormField>
 
-            <UFormField label="Adgangskode">
+            <UFormField label="Adgangskode" name="password">
               <UInput
-                  v-model="password"
+                  v-model="state.password"
                   color="secondary"
                   type="password"
                   placeholder="Indtast din Heynabo adgangskode"
-                  :error="passwordError"
-                  @blur="validatePassword"
               />
             </UFormField>
           </div>
@@ -120,17 +81,33 @@ const handleSubmit = async () => {
         </template>
 
         <div class="space-y-4 ">
-          <UAvatar
-              :src="avatar"
-              class="border-2 border-pink-200 ring-2 ring-pink-300"
-              size="lg"
-              :alt="greeting"
-              icon="i-material-symbols-person-celebrate-rounded"
-          />
-          <p class="flex items-center"><UIcon name="i-guidance-mail" class="mr-2 "/> <span class="mx-2 text-muted">{{ email }}</span> </p>
-          <p class="flex items-center"><UIcon name="i-guidance-phone" class="mr-2"/> <span class="mx-2 text-muted">{{ phone }}</span> </p>
-          <p class="flex items-center"><UIcon name="i-guidance-home-2" class="mr-2"/> <span class="mx-2 text-muted">{{ address }}</span> </p>
-
+          <div class="flex items-center gap-4">
+            <UAvatar
+                :src="avatar"
+                class="border-2 border-pink-200 ring-2 ring-pink-300"
+                size="lg"
+                :alt="fullName"
+                icon="i-material-symbols-person-celebrate-rounded"
+            />
+            <span class="font-medium">{{ fullName }}</span>
+          </div>
+          <p class="flex items-center">
+            <UIcon name="i-guidance-mail" class="mr-2 "/>
+            <span class="mx-2 text-muted">{{ email }}</span>
+          </p>
+          <p class="flex items-center">
+            <UIcon name="i-guidance-phone" class="mr-2"/>
+            <span class="mx-2 text-muted">{{ phone }}</span>
+          </p>
+          <p class="flex items-center">
+            <UIcon name="i-guidance-home-2" class="mr-2"/>
+            <NuxtLink
+              :to="`/household/${encodeURIComponent(householdShortName || '')}`"
+              class="mx-2 text-primary hover:underline"
+            >
+              {{ householdShortName }}
+            </NuxtLink>
+          </p>
         </div>
 
         <template #footer>

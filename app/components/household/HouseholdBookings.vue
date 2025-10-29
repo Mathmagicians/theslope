@@ -43,7 +43,8 @@ const props = defineProps<Props>()
 // Component needs to handle its own data needs for non core data elements
 const planStore = usePlanStore()
 const {activeSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
-await planStore.initPlanStore()
+// Initialize without await for SSR hydration consistency
+planStore.initPlanStore()
 
 // Derive needed data from store
 const seasonDates = computed(() => activeSeason.value?.seasonDates)
@@ -58,9 +59,8 @@ const selectedDate = ref<Date | null>(null)
 
 <template>
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
-  <ViewError v-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
-  <!-- Check if season exists and is loaded -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
+  <div v-else-if="isSelectedSeasonInitialized && activeSeason" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Master: Calendar (1/3 on large screens) -->
     <div class="lg:col-span-1">
       <h3 class="text-lg font-semibold mb-4">Kalender</h3>

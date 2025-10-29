@@ -1,13 +1,9 @@
 import {defineEventHandler, readValidatedBody, createError} from "h3"
 import {loginUserIntoHeynabo} from "~~/server/integration/heynabo"
 import {fetchUser} from "~~/server/data/prismaRepository"
-import { z } from 'zod'
+import {useUserValidation} from '~/composables/useUserValidation'
 
-const loginSchema = z.object({
-    email: z.string().email(),
-    password: z.string().nonempty(),
-
-})
+const {LoginSchema, UserWithInhabitantSchema} = useUserValidation()
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
@@ -16,7 +12,7 @@ export default defineEventHandler(async (event) => {
     // Input validation  FAIL EARLY
     let loginData
     try {
-        loginData = await readValidatedBody(event, loginSchema.parse)
+        loginData = await readValidatedBody(event, LoginSchema.parse)
     } catch (error) {
         console.error("🔐 > LOGIN > Input validation error:", error)
         throw createError({
@@ -49,13 +45,16 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 404, statusMessage: '🔐 > LOGIN > UNKNOWN USER' })
         }
 
-        theSlopeUser.passwordHash = heynaboLoggedIn.token
+        // Validate response structure (ADR-009: User includes Inhabitant with household)
+        const validatedUser = UserWithInhabitantSchema.parse(theSlopeUser)
+
+        validatedUser.passwordHash = heynaboLoggedIn.token
         await setUserSession(event, {
-            user: theSlopeUser,
+            user: validatedUser,
             loggedInAt: new Date(),
         })
 
-        return theSlopeUser
+        return validatedUser
     } catch (error) {
         console.error("🔐 > LOGIN > error setting userSession:", error)
         throw createError({

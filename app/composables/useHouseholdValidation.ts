@@ -60,7 +60,7 @@ export const useHouseholdValidation = () => {
         moveOutDate: z.coerce.date().optional().nullable(),
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         address: z.string().min(1, "Adresse skal være mindst 1 karakter").max(200, "Adresse må ikke være længere end 200 karakterer"),
-        shortName: z.string().optional() // Computed from address via getHouseholdShortName()
+        shortName: z.string().min(1).optional() // Computed server-side from address via getHouseholdShortName()
     })
 
     // Base Inhabitant schema for API operations
@@ -148,7 +148,8 @@ export const useHouseholdValidation = () => {
         pbsId: true,
         name: true,
         address: true,
-        movedInDate: true
+        movedInDate: true,
+        shortName: true
     }).extend({
         inhabitants: z.array(InhabitantResponseSchema)
     })

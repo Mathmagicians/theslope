@@ -2,8 +2,8 @@
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError, isNoHouseholds} = storeToRefs(householdsStore)
 
-// Top-level await - SSR compatible
-await householdsStore.initHouseholdsStore()
+// Initialize without await for SSR hydration consistency
+householdsStore.initHouseholdsStore()
 
 const columns = [
   {

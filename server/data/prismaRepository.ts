@@ -23,7 +23,11 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {UserCreate} from '~/composables/useUserValidation'
 
 export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
-    include: { Inhabitant: true }
+    include: {
+        Inhabitant: {
+            include: { household: true }
+        }
+    }
 }>
 
 export type SeasonWithRelations = PrismaFromClient.SeasonGetPayload<{
@@ -119,10 +123,18 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
     try {
         const user = await prisma.user.findUnique({
             where: {email},
-            include: {Inhabitant: true}
+            include: {
+                Inhabitant: {
+                    include: { household: true }
+                }
+            }
         })
 
         if (user) {
+            // Add computed shortName to household if inhabitant exists
+            if (user.Inhabitant?.household) {
+                user.Inhabitant.household.shortName = getHouseholdShortName(user.Inhabitant.household.address)
+            }
             console.info(`👨‍💻 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
         } else {
             console.info(`👨‍💻 > USER > [GET] No user found for email ${email}`)
@@ -322,8 +334,17 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
                 inhabitants: true
             }
         })
-        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household?.name} with ${household?.inhabitants?.length ?? 0} inhabitants`)
-        return household ?? null
+
+        if (!household) return null
+
+        // Add computed shortName (domain logic)
+        const householdWithShortName = {
+            ...household,
+            shortName: getHouseholdShortName(household.address)
+        }
+
+        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
+        return householdWithShortName
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)

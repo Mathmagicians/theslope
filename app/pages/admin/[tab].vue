@@ -4,7 +4,7 @@
 const toast = useToast()
 const store = usePlanStore()
 const {initPlanStore} = store
-const {isSeasonsLoading, isSeasonsErrored, seasonsError} = storeToRefs(store)
+const {isSelectedSeasonInitialized, isSeasonsInitialized, isSeasonsLoading, isSelectedSeasonLoading, isSeasonsErrored, seasonsError} = storeToRefs(store)
 const route = useRoute()
 
 // UI - ITEMS
@@ -135,7 +135,7 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="isSeasonsLoading" :text="activeTab" />
+    <Loader v-if="!isSeasonsInitialized || ! isSelectedSeasonInitialized" :text="activeTab" />
     <ViewError v-else-if="isSeasonsErrored" :error="seasonsError?.statusCode" message="Kunne ikke loade data for admin siden" :cause="seasonsError"/>
     <div v-else class="relative py-1 md:py-2 lg:p-4 min-h-screen">
       <!-- Scroll anchor for current tab -->
