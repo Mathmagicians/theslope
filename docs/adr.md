@@ -202,11 +202,11 @@ watch([formMode, teamCount], () => {
 ## ADR-007: SSR-Friendly Store Pattern with useFetch
 
 **Status:** Accepted | **Date:** 2025-01-28
-**Updated:** 2025-10-27 (component-driven initialization for dynamic tabs)
+**Updated:** 2025-10-29 (reactive initialization with internal watchers)
 
 ### Decision
 
-**Stores use `useFetch` singleton pattern with status-derived state. Components own UI state. For dynamic tabs with varying dependencies, components initialize their own stores.**
+**Stores use `useFetch` singleton pattern with status-derived state. Components own UI state. Stores handle initialization timing internally via watchers - NO AWAITS anywhere.**
 
 ### Store Pattern
 
@@ -251,19 +251,64 @@ const initStore = async (shortName?: string) => {
 
 ### Responsibilities
 
-**Store:** Server data, CRUD actions, business logic computed (disabledModes)
-**Component:** UI state (formMode, draft), URL sync, mode transitions, **initialize own store dependencies**
-**Page:** Call `await initStore()` at top-level for shared data only
+**Store:** Server data, CRUD actions, business logic computed (disabledModes), **initialization timing**
+**Component:** UI state (formMode, draft), URL sync, mode transitions, **show loaders reactively**
+**Page:** Call `initStore()` (synchronous) - no await
+
+### Reactive Initialization Pattern
+
+**NO AWAITS** - Store initialization is fully reactive:
+
+**Store (plan.ts:305-323):**
+```typescript
+const initPlanStore = (shortName?: string) => {
+    // Synchronous - just sets reactive IDs
+    const seasonId = shortName
+        ? seasons.value.find(s => s.shortName === shortName)?.id
+        : activeSeasonId.value
+    if (seasonId && seasonId !== selectedSeasonId.value) loadSeason(seasonId)
+}
+
+// Internal watcher handles timing automatically
+watch([isSeasonsInitialized, activeSeasonId], () => {
+    if (!isSeasonsInitialized.value) return
+    if (selectedSeasonId.value !== null) return // Already selected
+    initPlanStore() // Auto-call when data ready
+})
+
+// Convenience computed for components
+const isPlanStoreReady = computed(() =>
+    isSeasonsInitialized.value && isSelectedSeasonInitialized.value
+)
+```
+
+**Component/Page:**
+```typescript
+// Call init immediately (synchronous)
+planStore.initPlanStore()
+
+// Show reactive loaders
+<template>
+  <Loader v-if="!isPlanStoreReady" text="Loading..."/>
+  <Content v-else :data="selectedSeason"/>
+</template>
+```
+
+**Why This Works:**
+- `useFetch` auto-loads lists (immediate: true by default)
+- `useAsyncData` loads details when ID changes (reactive key)
+- Store watcher auto-calls init when data arrives
+- Components show loaders while data loads
+- No SSR hydration mismatch
 
 ### Dynamic Tab Pattern
 
-For pages with dynamic tabs and varying data dependencies:
+For pages with dynamic tabs:
 
 **Parent page** (e.g., `/household/[shortname]/[tab]`):
 ```typescript
-// Initialize only core shared data
 const householdStore = useHouseholdsStore()
-await householdStore.initHouseholdsStore(shortname.value)
+householdStore.initHouseholdsStore(shortname.value) // Synchronous
 
 // Pass minimal props
 <component :is="asyncComponents[tab]" :household="selectedHousehold"/>
@@ -271,25 +316,21 @@ await householdStore.initHouseholdsStore(shortname.value)
 
 **Tab component** (e.g., `HouseholdBookings.vue`):
 ```typescript
-interface Props { household: HouseholdWithInhabitants }
-const props = defineProps<Props>()
-
-// Component initializes its own dependencies
 const planStore = usePlanStore()
-const { activeSeason, isSelectedSeasonLoading, isSelectedSeasonInitialized } = storeToRefs(planStore)
-await planStore.initPlanStore()
+const { isPlanStoreReady } = storeToRefs(planStore)
+planStore.initPlanStore() // Synchronous
 
 <template>
-  <Loader v-if="isSelectedSeasonLoading" text="Loading..."/>
-  <Content v-else-if="isSelectedSeasonInitialized" :data="activeSeason"/>
+  <Loader v-if="!isPlanStoreReady" text="Loading..."/>
+  <Content v-else :data="activeSeason"/>
 </template>
 ```
 
 **Benefits:**
 - Performance: Only load data when tab viewed
 - Separation: Parent manages navigation, tabs manage data needs
-- Scalability: Add tabs without modifying parent
-- SSR-compatible: Idempotent init prevents duplicate requests
+- No hydration errors: Consistent server/client rendering
+- Reactive: Loaders automatically show/hide based on status
 
 ### Error Handling
 
@@ -304,12 +345,28 @@ seasonsError  // Ref<FetchError | undefined>
 
 ### Compliance
 
-1. MUST use `immediate: false, watch: false` for all useFetch in stores
+1. MUST use `watch: false` for all useFetch/useAsyncData in stores
 2. MUST expose 4 status computeds: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`
-3. MUST expose raw error ref for statusCode access
-4. Init MUST be idempotent: `!isInitialized || isErrored`
-5. Components MUST NOT contain server data state
-6. **Dynamic tabs:** Components initialize their own stores, handle loading/error states
+3. `isInitialized` MUST check actual data exists (not just status='success')
+4. MUST expose convenience `isStoreReady` computed combining all initialization checks
+5. MUST expose raw error ref for statusCode access
+6. Init methods MUST be synchronous (no async/await)
+7. Stores MAY use internal watchers to auto-call init when data arrives
+8. Components MUST NOT contain server data state
+9. Components MUST show loaders based on `isStoreReady` flag
+
+### Critical Pattern: Data Presence Check
+
+When using `useAsyncData` with nullable returns, status alone is insufficient:
+
+```typescript
+// ✅ CORRECT - check actual data exists
+const isInitialized = computed(() =>
+    status.value === 'success' && data.value !== null
+)
+```
+
+**Why:** `Promise.resolve(null)` returns status='success', causing premature "ready" state. This creates hydration mismatches where server shows nothing (null → not ready) but client shows content (success → ready).
 
 ---
 

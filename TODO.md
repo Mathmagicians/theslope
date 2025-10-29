@@ -13,174 +13,175 @@
 
 ---
 
-## 🔥 CRITICAL: Store Initialization Pattern (ADR-007 Revision)
+## 🔥 CRITICAL: Store Initialization Pattern (ADR-007 Refactoring) - NOT COMPLETED
 
-**Goal**: Fix SSR flash by using `useFetch` status as singleton instead of `onMounted` pattern
+**Goal**: Fix SSR flash by using reactive `useFetch` + `useAsyncData` pattern with **NO AWAITS** - pure reactive loading
 
-**Current Problem**:
-- Stores initialized in `onMounted` → client-only, causes flash of "no data" during SSR
-- User sees empty state, then content pops in after hydration
+**Current Status**: ⚠️ **80% COMPLETE** - Core pattern implemented but **3 critical await issues remain**
 
-**Solution**:
-✅ Make `initStore()` itialization follow singleton pattern using existing `useFetch` status ref as singleton - adr 07
-✅ Call `initStore()` in page setup (runs during SSR), not `onMounted`
-✅ `useFetch` handles SSR fetch + cache automatically, no extra refs needed
+**What Was Done** ✅:
+- ✅ Stores use **hybrid pattern**: `useFetch` for lists + `useAsyncData` for details
+- ✅ Stores expose status-derived computed: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`
+- ✅ Most components show proper 4-state UI (loading/error/empty/data)
+- ✅ All tests updated with `clearNuxtData()` to prevent cache pollution
+- ✅ `useHouseholdsStore` is perfect - fully reactive, no awaits
 
-  **Implementation Overview**:
-- ✅ Update `usePlanStore.initPlanStore()` to be idempotent (check if already initialized)
-- ✅ Update `useHouseholdsStore.initHouseholdsStore()` to be idempotent
-- ✅ Update household page to call init in setup (not onMounted)
-- ✅ Update admin page to call init in setup
-- ✅ Analyze SSR/hydration implications (see analysis below)
-- ✅ Update ADR-007 with new pattern
-- ✅ Test: No flash of empty state on SSR pages
-**Key Insight**: `useFetch` `status` ref IS the singleton state. No need for separate `initialized` flags.
+**What's BROKEN** ⚠️:
+- ❌ `usePlanStore.initPlanStore()` has internal `await` calls (lines 306, 313)
+- ❌ `admin/[tab].vue` uses `await initPlanStore()` (line 118)
+- ❌ `household/index.vue` uses useless `await initHouseholdsStore()` (line 5 - function is not async!)
 
----
+**Target Pattern** (NO AWAITS ANYWHERE):
+- **ALL stores**: Synchronous `initStore()` methods - just set IDs, reactive loading handles the rest
+- **ALL pages/components**: Call `initStore()` WITHOUT await, show loaders reactively
+- **Rationale**: `useFetch` and `useAsyncData` are reactive - setting IDs triggers automatic loads, status updates trigger UI re-renders
 
-### Store Analysis
+**Store Architecture** (Hybrid Pattern):
+```typescript
+// INDEX: useFetch auto-loads on store creation
+const { data: seasons, status, error } = useFetch('/api/admin/season', {
+  default: () => []
+})
 
-| Store | Has Init Method | Uses useFetch | Idempotent | SSR-Safe | Status |
-|-------|----------------|---------------|------------|----------|---------|
-| `usePlanStore` | ✅ `initPlanStore()` | ✅ Module-level | ❌ No | ⚠️ Partial | **Needs fix** |
-| `useHouseholdsStore` | ✅ `initHouseholdsStore()` | ✅ `immediate: false` | ❌ No | ❌ No | **Needs fix** |
-| `useUsersStore` | ❌ No | ✅ Inside action | - | - | Not used in SSR |
-| `useAuthStore` | - | - (`useUserSession`) | ✅ Yes | ✅ Yes | ✅ OK |
-| `useEventStore` | - | - | - | - | Empty file |
-| `useTicketsStore` | - | - | - | - | Empty file |
+// DETAIL: useAsyncData with reactive key - loads when ID changes
+const selectedSeasonId = ref<number | null>(null)
+const selectedSeasonKey = computed(() => `/api/admin/season/${selectedSeasonId.value}`)
+const { data: selectedSeason, status: detailStatus } = useAsyncData(
+  selectedSeasonKey,
+  () => selectedSeasonId.value ? $fetch(`/api/admin/season/${selectedSeasonId.value}`) : null,
+  { default: () => null }
+)
+```
 
-### Page Initialization Matrix
-
-| Page | Stores Used | Current Pattern | SSR-Safe | Status |
-|------|-------------|-----------------|----------|---------|
-| `admin/[tab].vue` | `usePlanStore` | ❌ `onMounted` (L118-120) | ❌ No | **Flash issue** |
-| `household/[shortname]/[tab].vue` | `usePlanStore`, `useHouseholdsStore` | ❌ `onMounted` (L84-87) | ❌ No | **Flash issue** |
-| `household/index.vue` | `useHouseholdsStore` | ✅ Top-level `await` (L5) | ✅ Yes | ✅ OK |
-| `admin/range.vue` | `usePlanStore` | ✅ `useAsyncData` (L20-29) | ✅ Yes | ✅ OK (test page) |
-| `index.vue` | None | - | ✅ Yes | ✅ OK |
-| `login.vue` | None | - | ✅ Yes | ✅ OK |
-| `dinner/index.vue` | None | - | ✅ Yes | ✅ OK |
-| `chef/index.vue` | None | - | ✅ Yes | ✅ OK |
-| `household/mytickets.vue` | None | - | ✅ Yes | ✅ OK |
+**Why This Pattern?**
+- `useFetch`: Auto-loads index/list data (SSR-compatible, cached)
+- `useAsyncData`: Loads detail when reactive key changes (selectedSeasonId)
+- Both expose `status` for reactive UI (no manual loading flags needed)
 
 ---
 
-### Implementation Tasks
+### Current Store Status
 
-#### Phase 1: Make Stores Idempotent ⚙️
+| Store                  | List Pattern                          | Detail Pattern                        | Init Method             | Uses Await? | Status        |
+|------------------------|---------------------------------------|---------------------------------------|-------------------------|-------------|---------------|
+| `usePlanStore`         | `useFetch` (seasons)                  | `useAsyncData` (selectedSeason)       | `initPlanStore()`       | ⚠️ **YES** (lines 306, 313) | **Needs Fix** |
+| `useHouseholdsStore`   | `useFetch` (households, immediate)    | `useAsyncData` (selectedHousehold)    | `initHouseholdsStore()` | ✅ No       | ✅ **Perfect** |
+| `useAuthStore`         | `useUserSession`                      | -                                     | -                       | ✅ No       | ✅ OK         |
+| `useUsersStore`        | Inside action                         | -                                     | -                       | -           | Not used in SSR |
 
-- ✅  **Store: `usePlanStore`** - Make `initPlanStore()` idempotent
-  - ✅ Already exposes `status` via computed: `isLoading = computed(() => status.value === 'pending')`
-  - Check `status.value === 'success'` to skip re-fetch
-  - Test: Multiple calls don't re-fetch
-  - File: `app/stores/plan.ts:268-270`
+**⚠️ Issues Found:**
+- `usePlanStore.initPlanStore()` uses `await refreshActiveSeasonId()` (line 306) and `await loadSeason()` (line 313)
+- These awaits should be removed - let reactive loading handle it
+
+---
+
+### Current Pages & Components Status
+
+| File                               | Type      | Init Pattern                          | Uses Await? | Loaders | Status        |
+|------------------------------------|-----------|---------------------------------------|-------------|---------|---------------|
+| `admin/[tab].vue`                  | Page      | `initPlanStore()` (line 118)          | ⚠️ **YES**  | ✅ Yes  | **Needs Fix** |
+| `household/index.vue`              | Page      | `initHouseholdsStore()` (line 5)      | ⚠️ **YES** (useless) | ✅ Yes  | **Needs Fix** |
+| `household/[shortname]/[tab].vue`  | Page      | `initHouseholdsStore()` (line 84)     | ✅ No       | ✅ Yes  | ✅ **Perfect** |
+| `AdminPlanning.vue`                | Component | Uses store reactively                 | ✅ No       | ✅ Yes  | ✅ **Perfect** |
+| `AdminTeams.vue`                   | Component | Uses store reactively                 | ✅ No       | ✅ Yes  | ✅ **Perfect** |
+| `AdminHouseholds.vue`              | Component | `initHouseholdsStore()` (line 6)      | ✅ No       | ✅ Yes  | ✅ **Perfect** |
+| `HouseholdBookings.vue`            | Component | `initPlanStore()` (line 47)           | ✅ No       | ✅ Yes  | ✅ **Reference** |
+
+**⚠️ Issues Found:**
+1. **`admin/[tab].vue:118`** - `await initPlanStore()` should be removed, use sync init + loaders
+2. **`household/index.vue:5`** - `await initHouseholdsStore()` is useless (function is not async), should be removed
+3. **`usePlanStore.initPlanStore()`** - Remove internal awaits, make it synchronous like `initHouseholdsStore()`
+
+---
+
+### 🔥 CRITICAL TASKS - Fix Awaits (Must Do First!)
+
+**Goal**: Remove ALL awaits - complete transition to pure reactive pattern
+
+#### 1. Remove Awaits from usePlanStore (10 min) 🔥 **HIGHEST PRIORITY**
+- [ ] **File**: `app/stores/plan.ts` (lines 303-314)
+- [ ] **Current Code**:
   ```typescript
-  const initPlanStore = async () => {
-    if (status.value === 'success') {
-      console.info('🗓️ > PLAN_STORE > Already initialized, skipping')
-      return
-    }
-    await autoSelectFirstSeason()
+  const initPlanStore = async (shortName?: string) => {  // ❌ async
+    await refreshActiveSeasonId()  // ❌ line 306
+    if (seasonId && seasonId != selectedSeasonId.value) await loadSeason(seasonId)  // ❌ line 313
+  }
+  ```
+- [ ] **Change To**:
+  ```typescript
+  const initPlanStore = (shortName?: string) => {  // ✅ No async
+    refreshActiveSeasonId()  // ✅ Trigger reactive load
+    if (seasonId && seasonId != selectedSeasonId.value) loadSeason(seasonId)  // ✅ Just set ID
   }
   ```
 
--✅  **Store: `useHouseholdsStore`** - Expose `status` & make `initHouseholdsStore()` idempotent
-  - **NEW**: Expose `status` from `useFetch` (currently not exposed at L35)
-  - Update destructuring: `const { data, error: fetchError, status, refresh } = useFetch(...)`
-  - Consider: Replace manual `isLoading` with `computed(() => status.value === 'pending')` OR keep both
-  - Return `status` in store exports for UI consumption
-  - Check `status.value === 'success'` to skip re-fetch (unless specific shortName requested)
-  - Test: Multiple calls don't re-fetch
-  - File: `app/stores/households.ts
+#### 2. Remove Await from admin/[tab].vue (2 min) 🔥
+- [ ] **File**: `app/pages/admin/[tab].vue` (line 118)
+- [ ] **Current**: `await initPlanStore()` ❌
+- [ ] **Change To**: `initPlanStore()` ✅
+- [ ] **Loaders**: Already exist (lines 138-139)
+
+#### 3. Remove Useless Await from household/index.vue (2 min) 🔥
+- [ ] **File**: `app/pages/household/index.vue` (line 5)
+- [ ] **Current**: `await initHouseholdsStore()` ❌ (function is NOT async!)
+- [ ] **Change To**: `initHouseholdsStore()` ✅
+- [ ] **Loaders**: Already exist (line 26)
+
 ---
 
-#### Phase 1.5: Audit & Fix Page UI State Handling 🎨
+### 🔥 Remaining Critical Tasks
 
-**Goal**: Ensure all pages properly distinguish between 4 states: loading / error / empty / data
+**Goal**: Finish refactoring polish - code cleanup and test improvements
 
-### Page State Audit
+#### 1. Refactor Admin Tab Navigation (20 min)
+- [ ] **File**: `app/pages/admin/[tab].vue` (lines 74-115)
+- [ ] **Issue**: Custom TAB_PREFIX routing logic (~40 lines)
+- [ ] **Action**: Replace with `useTabNavigation` composable (5 lines, like household pages)
+- [ ] **Benefit**: DRY - consistent pattern across all tab-based pages
 
-| Page | Loading State | Error State | Empty State | Data State | Status | Needs Fix |
-|------|---------------|-------------|-------------|------------|---------|-----------|
-| `admin/[tab].vue` | ✅ `isLoading` | ✅ `error` | ⚠️ Delegated to components | ✅ Shows tabs | **Partial** | Minor |
-| `household/[shortname]/[tab].vue` | ✅ `householdLoading` | ✅ `householdError` | ⚠️ Only checks `!activeSeason` | ⚠️ Missing `!selectedHousehold` case | **Partial** | Yes |
-| `household/index.vue` | ❌ Conflated with empty | ❌ No error handling | ❌ Conflated with loading | ⚠️ Weak check | **Bad** | **Yes** |
-| Other pages | N/A | N/A | N/A | N/A | ✅ OK | No |
+#### 2. Replace E2E Test Anti-Pattern (60 min)
+- [ ] **Files**: 3 E2E test files, 17 occurrences total
+  - `AdminPlanningSeason.e2e.spec.ts` (8×)
+  - `AdminHouseholds.e2e.spec.ts` (4×)
+  - `AdminPlanning.e2e.spec.ts` (5×)
+- [ ] **Issue**: `waitForLoadState('networkidle')` - slow, flaky
+- [ ] **Action**: Replace with `page.waitForResponse()` pattern
+- [ ] **Template**: `AdminTeams.e2e.spec.ts` already uses correct pattern
 
-**UI State Pattern:**
-```vue
-<template>
-  <!-- 1. LOADING: status === 'pending' -->
-  <Loader v-if="status === 'pending'" />
+#### 3. Update ADR-007 Documentation (15 min)
+- [ ] **File**: `docs/adr.md`
+- [ ] **Action**: Document reactive store pattern
+  - When to use `await` (pages with shared data)
+  - When to use sync + loaders (dynamic tab components)
+  - Why this pattern avoids SSR flash
+- [ ] **Include**: Code examples from `HouseholdBookings.vue` (has excellent comments!)
 
-  <!-- 2. ERROR: status === 'error' -->
-  <ViewError v-else-if="status === 'error'" :error="error" />
+#### 4. Run Full Test Suite (5 min)
+- [ ] **Command**: `npm run test && npm run test:e2e`
+- [ ] **Goal**: Verify no regressions after changes
+- [ ] **Expected**: All tests pass
 
-  <!-- 3. EMPTY: status === 'success' && data.length === 0 -->
-  <UCard v-else-if="status === 'success' && data.length === 0">
-    <p>Ingen data fundet.</p>
-  </UCard>
+---
 
-  <!-- 4. DATA: status === 'success' && data.length > 0 -->
-  <div v-else-if="status === 'success'">
-    <!-- Show data -->
-  </div>
-</template>
+### Reference Implementation
+
+**Best example**: `app/components/household/HouseholdBookings.vue:46-47`
+
+```typescript
+// Initialize without await for SSR hydration consistency
+planStore.initPlanStore()
+
+// Template handles reactive loading
+<Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
+<ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
+<div v-else-if="isSelectedSeasonInitialized && activeSeason">
 ```
 
-**Tasks:**
-
-- ✅**Page: `admin/[tab].vue`** - Already good (empty handled by child components)
-  - ✅ Loading: Shows `<Loader v-if="isLoading"/>`
-  - ✅ Error: Shows `<ViewError v-else-if="error".../>`
-  - ✅ Empty: AdminPlanning/AdminTeams components handle `isNoSeasons` internally
-  - ✅ Data: Shows tabs with content
-  - **Action**: No changes needed (components already handle empty state correctly)
-
-- ✅ **Page: `household/[shortname]/[tab].vue`** - Fix incomplete empty state checks
-  - ✅ Loading: Shows loading card
-  - ✅ Error: Shows error card
-  - ⚠️ Empty: Only checks `!activeSeason`, missing `!selectedHousehold` case
-  - **Action**: Add final `v-else` to catch "household not found" case
-
-
-- ✅ **Page: `household/index.vue`** - **CRITICAL** - Completely rewrite state handling
-    ✅ **Action**: Rewrite to use proper 4-state pattern with `status` from store (requires Phase 1 completed first)
-  - File: `app/pages/household/index.vue
-
-
-#### Phase 2: Update Pages to Call Init in Setup 📄
-
-- ✅ **Page: `admin/[tab].vue`** - Move init from onMounted to setup
-  - Remove `onMounted` block (L118-120)
-  - Add top-level `await initPlanStore()` in setup
-  - Test: Admin tabs load without flash
-  - File: `app/pages/admin/[tab].vue`
-
-- ✅ **Page: `household/[shortname]/[tab].vue`** - Move inits from onMounted to setup
-  - Remove `onMounted` block (L84-87)
-  - Add top-level await for both stores
-  - Test: Household pages load without flash
-  - File: `app/pages/household/[shortname]/[tab].vue`
-
-#### Phase 3: Testing & Verification 
-
-- ✅ **Regression Test: Existing SSR pages** - Ensure no breakage
-  - Test `/household` (already SSR-safe)
-  - Test `/admin/range` (test page, already SSR-safe)
-  - Verify behavior unchanged
-
-#### Phase 4: Documentation 📝
-
-- [ ] **Update ADR-007** - Document new SSR-compatible patternno
-  - Add section: "Store Initialization for SSR"
-  - Pattern: Idempotent init + top-level await
-  - Example code for both store and page
-  - File: `docs/adr.md`
-
-- [ ] **Add code comments** - Document pattern in modified files
-  - Stores: Comment explaining idempotency check
-  - Pages: Comment explaining SSR initialization
+**Why this works**:
+- `useFetch` is reactive - status updates trigger component re-renders
+- No `await` needed - template shows loaders while data loads
+- Component owns its loading state, parent doesn't block
+- Performance: Only loads data when tab is viewed
 
 
 ---

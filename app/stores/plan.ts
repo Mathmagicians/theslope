@@ -22,6 +22,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const { data: activeSeasonId , refresh: refreshActiveSeasonId} = useFetch<number | undefined>(
             '/api/admin/season/activeId',
             {
+                watch: false,
                 default: () => undefined
             }
         )
@@ -32,7 +33,9 @@ export const usePlanStore = defineStore("Plan", () => {
             error: seasonsError, refresh: refreshSeasons
         } = useFetch<Season[]>(
             '/api/admin/season',
-            { default: () => [],
+            {
+                watch: false,
+                default: () => [],
                 transform: (data: any[]) => {
                     try {
                         return data.map(season => SeasonSchema.parse(season))
@@ -75,7 +78,19 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const isSelectedSeasonLoading = computed(() => selectedSeasonStatus.value === 'pending')
         const isSelectedSeasonErrored = computed(() => selectedSeasonStatus.value === 'error')
-        const isSelectedSeasonInitialized = computed(() => selectedSeasonStatus.value === 'success')
+        const isSelectedSeasonInitialized = computed(() =>
+            selectedSeasonStatus.value === 'success' && selectedSeason.value !== null
+        )
+
+        // Convenience computed for components - true when store is fully initialized and ready to use
+        const isPlanStoreReady = computed(() => isSeasonsInitialized.value && isSelectedSeasonInitialized.value)
+
+        // Active season - the community's currently active season (by activeSeasonId)
+        const activeSeason = computed(() => {
+            if (!activeSeasonId.value) return null
+            return seasons.value.find(s => s.id === activeSeasonId.value) ?? null
+        })
+
         const disabledModes = computed(() => {
             const disabledSet: Set<FormMode> = new Set()
             if (isNoSeasons.value) {
@@ -87,16 +102,6 @@ export const usePlanStore = defineStore("Plan", () => {
             }
             return [...disabledSet]
         })
-
-        const activeSeason = computed(() => selectedSeason.value)
-
-        // HELPER - Auto-select active season
-        /**
-         * Get the active season
-         * FIXME: For now returns selectedSeason. Later implement isActive field in database.
-         */
-        const autoSelectActiveSeason = (): Season | null => seasons.value.at(0) ?? null
-
 
         // ACTIONS - CRUD operations only
         const loadSeasons = async () => {
@@ -110,11 +115,9 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const loadSeason = (id: number) => {
             selectedSeasonId.value = id
-
-            if (selectedSeasonError.value) {
-                console.error(`🗓️ > PLAN_STORE > Error loading season:`, selectedSeasonError.value)
-            }
-            console.info(`🗓️ > PLAN_STORE > Loaded season ${selectedSeason.value?.shortName} (ID: ${id})`)
+            // Setting selectedSeasonId triggers reactive useAsyncData fetch
+            // Logging happens immediately but data may still be loading
+            console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
         }
 
         const onSeasonSelect = (id: number) => {
@@ -299,19 +302,25 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        // INITIALIZATION - SSR-safe initialization
-        const initPlanStore = async (shortName?: string) => {
-           // seasons autoload when store is created
-            console.info('🗓️ > PLAN_STORE > Initializing plan store, seasons loaded:', seasons.value.length)
-            await refreshActiveSeasonId()
+        const initPlanStore = (shortName?: string) => {
+            // seasons and activeSeasonId autoload when store is created (immediate: true)
             const seasonId = shortName
                 ? seasons.value.find(s => s.shortName === shortName)?.id
                 : activeSeasonId.value
             console.info('🗓️ > PLAN_STORE > requested short name', shortName ?? 'none',
-                'id :', seasonId)
+                'id:', seasonId, 'seasons loaded:', seasons.value.length)
 
-            if (seasonId && seasonId != selectedSeasonId.value) await loadSeason(seasonId)
+            if (seasonId && seasonId !== selectedSeasonId.value) loadSeason(seasonId)
         }
+
+        // AUTO-INITIALIZATION - Watch for seasons to load, then auto-select active season
+        watch([isSeasonsInitialized, activeSeasonId], () => {
+            if (!isSeasonsInitialized.value) return
+            if (selectedSeasonId.value !== null) return // Already selected
+
+            console.info('🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')
+            initPlanStore()
+        })
 
 
         return {
@@ -328,6 +337,7 @@ export const usePlanStore = defineStore("Plan", () => {
             isSelectedSeasonErrored,
             isSelectedSeasonInitialized,
             selectedSeasonError,
+            isPlanStoreReady,
             activeSeason,
             disabledModes,
             // actions
