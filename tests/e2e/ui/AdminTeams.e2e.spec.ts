@@ -28,7 +28,12 @@ test.describe('AdminTeams Form UI', () => {
     test('Can load admin teams page', async ({page}) => {
         await page.goto(adminTeamsUrl)
 
-        // Wait for page to be interactive - verify form mode buttons are visible
+        // Wait for page to be interactive - verify form mode buttons are visible (poll for store init)
+        await pollUntil(
+            async () => await page.locator('button[name="form-mode-view"]').isVisible(),
+            (isVisible) => isVisible === true,
+            10
+        )
         await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
         await expect(page.locator('button[name="form-mode-edit"]')).toBeVisible()
         await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
@@ -47,11 +52,16 @@ test.describe('AdminTeams Form UI', () => {
                 const url = `${adminTeamsUrl}?mode=create`
                 await page.goto(url)
 
-                // Wait for create mode to be active
+                // Wait for create mode to be active (poll for store init)
+                await pollUntil(
+                    async () => await page.locator('button[name="form-mode-create"]').isVisible(),
+                    (isVisible) => isVisible === true,
+                    10
+                )
                 await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
 
-                // Select the season (wait for API data to load)
-                await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+                // Select the season
+                await selectDropdownOption(page, 'season-selector', season.shortName)
 
                 // WHEN: Enter team count
                 const teamCountInput = page.locator('input#team-count')
@@ -97,15 +107,25 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate to edit mode and select season
             await page.goto(`${adminTeamsUrl}?mode=edit`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible === true,
+                10
+            )
             await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName, adminTeamsUrl)
+            await selectDropdownOption(page, 'season-selector', season.shortName)
         })
 
         // Helper: Reload page and reselect season (needed after creating teams via API)
         const reloadAndReselectSeason = async (seasonShortName: string) => {
             await page.reload()
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible === true,
+                10
+            )
             await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', seasonShortName, adminTeamsUrl)
+            await selectDropdownOption(page, 'season-selector', seasonShortName)
         }
 
         test('GIVEN season with teams WHEN user switches to edit mode THEN teams are shown', async () => {

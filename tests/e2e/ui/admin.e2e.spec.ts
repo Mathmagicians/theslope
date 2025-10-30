@@ -4,7 +4,7 @@ import testHelpers from '../testHelpers'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext } = testHelpers
+const { validatedBrowserContext, pollUntil } = testHelpers
 
 /**
  * TEST PURPOSE:
@@ -39,59 +39,74 @@ test.describe('Admin page path-based navigation', () => {
   // Use authenticated admin user for all tests
   test.use({ storageState: adminUIFile })
 
-  test('Load /admin redirects to /admin/planning by default', async ({ page }) => {
-    // Navigate to admin page
-    const response = await page.goto(adminUrl)
+  // Parametrized test for redirects to /admin/planning
+  const redirectScenarios = [
+    { path: '', description: 'Load /admin redirects to /admin/planning by default' },
+    { path: '/unicorn', description: 'Invalid URL path /admin/unicorn redirects to /admin/planning' }
+  ]
 
-    // Verify successful response or redirect
-    expect([200, 302]).toContain(response?.status())
+  for (const scenario of redirectScenarios) {
+    test(scenario.description, async ({ page }) => {
+      await page.goto(`${adminUrl}${scenario.path}`)
 
-    // Verify URL redirects to /admin/planning (explicit wait)
-    await expect(page).toHaveURL(/.*\/admin\/planning$/)
+      // Verify URL redirects to /admin/planning
+      await expect(page).toHaveURL(/.*\/admin\/planning$/)
 
-    // Verify the AdminPlanning component is visible
-    await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
-  })
+      // Poll until AdminPlanning component is visible (store loads reactively)
+      await pollUntil(
+        async () => await page.locator('button[name="form-mode-view"]').isVisible(),
+        (isVisible) => isVisible === true,
+        10
+      )
+
+      await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
+    })
+  }
 
   // Parametrized test for all tabs
   for (const tab of tabs) {
     test(`Tab "${tab.name}" can be loaded with path /admin/${tab.path}`, async ({ page }) => {
-      // Navigate directly to the tab's URL (Playwright best practice)
+      // Navigate directly to the tab's URL
       await page.goto(`${adminUrl}/${tab.path}`)
 
       // Verify URL contains the expected path
       await expect(page).toHaveURL(new RegExp(`.*\/admin\/${tab.path}$`))
 
-      // Verify the tab content is visible (explicit wait)
-      const contentLocator = page.locator(tab.selector)
-      await expect(contentLocator).toBeVisible({ timeout: 5000 })
+      // Poll until tab content becomes visible (store loads reactively)
+      await pollUntil(
+        async () => await page.locator(tab.selector).isVisible(),
+        (isVisible) => isVisible === true,
+        10  // Increased for concurrent test execution (500ms, 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s)
+      )
+
+      // Final verification that tab is visible
+      await expect(page.locator(tab.selector)).toBeVisible()
     })
   }
-
-  test('Invalid URL path /admin/unicorn redirects to /admin/planning', async ({ page }) => {
-    // Navigate to admin page with invalid path
-    await page.goto(`${adminUrl}/unicorn`)
-
-    // Verify URL is corrected to /admin/planning (explicit wait)
-    await expect(page).toHaveURL(/.*\/admin\/planning$/)
-
-    // Verify the AdminPlanning component is visible
-    await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
-  })
 
   test('URL path is preserved during page refresh', async ({ page }) => {
     // Navigate to a specific tab
     await page.goto(`${adminUrl}/users`)
 
-    // Verify we're on the right tab (explicit wait)
+    // Verify we're on the right tab
     await expect(page).toHaveURL(/.*\/admin\/users$/)
+    await pollUntil(
+      async () => await page.locator('[data-test-id="admin-users"]').isVisible(),
+      (isVisible) => isVisible,
+      10
+    )
     await expect(page.locator('[data-test-id="admin-users"]')).toBeVisible()
 
     // Refresh the page
     await page.reload()
 
-    // Verify URL path is preserved (explicit wait)
+    // Verify URL path is preserved
     await expect(page).toHaveURL(/.*\/admin\/users$/)
+    await pollUntil(
+      async () => await page.locator('[data-test-id="admin-users"]').isVisible(),
+      (isVisible) => isVisible,
+      10
+    )
     await expect(page.locator('[data-test-id="admin-users"]')).toBeVisible()
   })
 
@@ -107,7 +122,12 @@ test.describe('Admin page path-based navigation', () => {
       // Verify URL updated
       await expect(page).toHaveURL(new RegExp(`.*\/admin\/${tab.path}$`))
 
-      // Verify tab content is visible
+      // Poll until tab content becomes visible
+      await pollUntil(
+        async () => await page.locator(tab.selector).isVisible(),
+        (isVisible) => isVisible === true,
+        10
+      )
       await expect(page.locator(tab.selector)).toBeVisible()
 
       // Verify the tab is marked as active in navigation
@@ -123,7 +143,14 @@ test.describe('Admin page path-based navigation', () => {
         // Navigate to tab with form mode in URL query (Playwright best practice)
         await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
 
-        // Verify we're in the correct mode by checking the button has active class (explicit wait)
+        // Poll until button is visible
+        await pollUntil(
+          async () => await page.locator(`button[name="${formMode.buttonName}"]`).isVisible(),
+          (isVisible) => isVisible === true,
+          10
+        )
+
+        // Verify we're in the correct mode by checking the button has active class
         await expect(page.locator(`button[name="${formMode.buttonName}"]`)).toHaveClass(/ring-2/)
 
         // Verify URL maintains the mode parameter with path
@@ -146,6 +173,13 @@ test.describe('Admin page path-based navigation', () => {
 
           // Verify URL updated with mode parameter
           await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=${formMode.mode}$`))
+
+          // Poll until button is visible
+          await pollUntil(
+            async () => await page.locator(`button[name="${formMode.buttonName}"]`).isVisible(),
+            (isVisible) => isVisible === true,
+            10
+          )
 
           // Verify the mode button is marked as active
           const activeButton = page.locator(`button[name="${formMode.buttonName}"]`)

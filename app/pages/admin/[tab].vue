@@ -55,8 +55,7 @@ const baseItems = [
     label: 'Indstillinger',
     icon: 'i-heroicons-cog-6-tooth',
     content: 'Se systemindstillinger. Ændre systemindstillinger.',
-    component: 'AdminSettings'
-  }
+    component: 'AdminSettings'}
 ]
 
 const items = baseItems.map(item => ({
@@ -135,10 +134,7 @@ useHead({
 
 
 <template>
-  <div>
-    <Loader v-if="!isPlanStoreReady" :text="activeTab" />
-    <ViewError v-else-if="isSeasonsErrored" :error="seasonsError?.statusCode" message="Kunne ikke loade data for admin siden" :cause="seasonsError"/>
-    <div v-else class="relative py-1 md:py-2 lg:p-4 min-h-screen">
+    <div class="relative py-1 md:py-2 lg:p-4 min-h-screen">
       <!-- Scroll anchor for current tab -->
       <a :id="activeTab" class="absolute w-0 h-0 -top-24 opacity-0 pointer-events-none" href="#">⚓︎</a>
       <UTabs
@@ -148,12 +144,13 @@ useHead({
           color="primary"
       >
         <template #content="{ item }">
-          <div class="flex flex-col gap-2 md:gap-4 overflow-hidden">
+          <ViewError v-if="isSeasonsErrored" :error="seasonsError?.statusCode" :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`" :cause="seasonsError"/>
+          <Loader v-else-if="!isPlanStoreReady" :text="activeTab" />
+          <div v-else class="flex flex-col gap-2 md:gap-4 overflow-hidden">
             <Ticker class="py-1" :words="item.content.split('.')"/>
             <component :is="asyncComponents[item.value]"/>
           </div>
         </template>
       </UTabs>
     </div>
-  </div>
 </template>

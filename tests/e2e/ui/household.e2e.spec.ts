@@ -4,7 +4,7 @@ import testHelpers from '../testHelpers'
 import { HouseholdFactory } from '../testDataFactories/householdFactory'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext } = testHelpers
+const { validatedBrowserContext, pollUntil } = testHelpers
 
 /**
  * TEST PURPOSE:
@@ -37,7 +37,12 @@ test.describe('Household tab navigation', () => {
   const navigateToTab = async (page: any, tab: typeof tabs[0]) => {
     await page.goto(buildUrl(tab.path))
     await expect(page).toHaveURL(new RegExp(`${buildUrl(tab.path)}$`))
-    await expect(page.locator(tab.selector)).toBeVisible({ timeout: 5000 })
+    await pollUntil(
+      async () => await page.locator(tab.selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
+    await expect(page.locator(tab.selector)).toBeVisible()
   }
 
   test.use({ storageState: adminUIFile })
@@ -59,12 +64,22 @@ test.describe('Household tab navigation', () => {
   test('Base URL redirects to default tab', async ({ page }) => {
     await page.goto(`/household/${shortName}`)
     await expect(page).toHaveURL(new RegExp(`${buildUrl(defaultTab.path)}$`))
+    await pollUntil(
+      async () => await page.locator(defaultTab.selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
     await expect(page.locator(defaultTab.selector)).toBeVisible()
   })
 
   test('Invalid tab redirects to default tab', async ({ page }) => {
     await page.goto(buildUrl('unicorn'))
     await expect(page).toHaveURL(new RegExp(`${buildUrl(defaultTab.path)}$`))
+    await pollUntil(
+      async () => await page.locator(defaultTab.selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
     await expect(page.locator(defaultTab.selector)).toBeVisible()
   })
 
@@ -73,6 +88,11 @@ test.describe('Household tab navigation', () => {
     await navigateToTab(page, testTab)
     await page.reload()
     await expect(page).toHaveURL(new RegExp(`${buildUrl(testTab.path)}$`))
+    await pollUntil(
+      async () => await page.locator(testTab.selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
     await expect(page.locator(testTab.selector)).toBeVisible()
   })
 
@@ -80,10 +100,20 @@ test.describe('Household tab navigation', () => {
     const query = 'date=2025-01-15'
     await page.goto(buildUrl(tabs[0].path, query))
     await expect(page).toHaveURL(new RegExp(`${buildUrl(tabs[0].path, query)}$`))
+    await pollUntil(
+      async () => await page.locator(tabs[0].selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
 
     // Switch to another tab with same query
     await page.goto(buildUrl(tabs[1].path, query))
     await expect(page).toHaveURL(new RegExp(`${buildUrl(tabs[1].path, query)}$`))
+    await pollUntil(
+      async () => await page.locator(tabs[1].selector).isVisible(),
+      (isVisible) => isVisible === true,
+      10
+    )
   })
 
   test('Shortname preserved across all tab switches', async ({ page }) => {

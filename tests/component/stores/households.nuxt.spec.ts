@@ -1,7 +1,6 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { clearNuxtData } from '#app'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import type {
   HouseholdSummary,
@@ -14,8 +13,6 @@ import type {
 const householdIndexEndpoint = vi.fn()
 const householdByIdEndpoint = vi.fn()
 
-// Register specific ID endpoints, then generic list
-// useAsyncData doesn't auto-execute so /null endpoint not needed
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
@@ -74,120 +71,61 @@ const createMockHouseholdDetail = (): HouseholdWithInhabitants => ({
   ]
 })
 
+const setupStore = async () => {
+  const store = useHouseholdsStore()
+  await store.loadHouseholds()
+  return store
+}
+
 // ========================================
 // Tests
 // ========================================
 
-describe('useHouseholdsStore', () => {
-  beforeEach(() => {
+describe('Households Store', () => {
+  beforeAll(() => {
     setActivePinia(createPinia())
+  })
+
+  beforeEach(() => {
     vi.clearAllMocks()
     householdIndexEndpoint.mockClear()
     householdByIdEndpoint.mockClear()
-    clearNuxtData()
-  })
 
-  it('idempotency - should fetch once, then skip on subsequent calls', async () => {
     householdIndexEndpoint.mockReturnValue(createMockHouseholds())
     householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
-    const store = useHouseholdsStore()
-
-    await store.initHouseholdsStore()
-    await store.initHouseholdsStore()
-    await store.initHouseholdsStore()
-
-    expect(householdIndexEndpoint).toHaveBeenCalledTimes(1)
-    expect(store.households.length).toBe(2)
   })
 
-  it('should skip list re-fetch when shortName parameter is provided', async () => {
-    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
-    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
-    const store = useHouseholdsStore()
+  it('initializes with 2 households', async () => {
+    const store = await setupStore()
 
-    // First call - should fetch list
-    expect(store.isHouseholdsInitialized).toBe(false)
-    await store.initHouseholdsStore()
     expect(store.isHouseholdsInitialized).toBe(true)
-    expect(householdIndexEndpoint).toHaveBeenCalledTimes(1)
-
-    // Second call with shortName - should skip list fetch
-    await store.initHouseholdsStore('AR_1_st')
-    expect(householdIndexEndpoint).toHaveBeenCalledTimes(1)  // Still 1, not 2
-    expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
-    expect(store.selectedHousehold?.shortName).toBe('AR_1_st')
+    expect(store.households).toHaveLength(2)
   })
 
-  it('should expose correct state after successful fetch', async () => {
-    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
-    const store = useHouseholdsStore()
-
-    await store.initHouseholdsStore()
-
-    expect(store.isHouseholdsLoading).toBe(false)
-    expect(store.isHouseholdsErrored).toBe(false)
-    expect(store.isNoHouseholds).toBe(false)
-    expect(store.householdsError).toBeUndefined()
-  })
-
-  it.each([
-    { data: [], isNoHouseholds: true, description: 'empty array' },
-    { data: createMockHouseholds(), isNoHouseholds: false, description: 'with data' }
-  ])('should detect empty state: $description', async ({ data, isNoHouseholds }) => {
-    householdIndexEndpoint.mockReturnValue(data)
-    const store = useHouseholdsStore()
-
-    await store.initHouseholdsStore()
-
-    expect(store.isNoHouseholds).toBe(isNoHouseholds)
-  })
-
-  it('should detect error state', async () => {
+  it('exposes households error when fetch fails', async () => {
     householdIndexEndpoint.mockImplementation(() => {
       throw createError({
         statusCode: 500,
         statusMessage: 'Network error'
       })
     })
-    const store = useHouseholdsStore()
 
-    // With SSR pattern, errors propagate up - component/page handles display
-    await expect(store.initHouseholdsStore()).rejects.toThrow()
+    const store = useHouseholdsStore()
+    await expect(store.loadHouseholds()).rejects.toThrow()
 
     expect(store.isHouseholdsErrored).toBe(true)
-    expect(store.householdsError).toBeTruthy()
+    expect(store.householdsError?.statusCode).toBe(500)
   })
 
-  it('should expose correct state after successful household load', async () => {
-    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
-    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
-    const store = useHouseholdsStore()
+  it.each([
+    { data: [], expected: true, description: 'empty array' },
+    { data: createMockHouseholds(), expected: false, description: 'with data' }
+  ])('isNoHouseholds detects $description', async ({ data, expected }) => {
+    householdIndexEndpoint.mockReturnValue(data)
 
-    await store.initHouseholdsStore('AR_1_st')
+    const store = await setupStore()
 
-    expect(store.isSelectedHouseholdLoading).toBe(false)
-    expect(store.isSelectedHouseholdErrored).toBe(false)
-    expect(store.isSelectedHouseholdInitialized).toBe(true)
-    expect(store.selectedHouseholdError).toBeUndefined()
-    expect(store.selectedHousehold?.id).toBe(1)
-    expect(store.selectedHousehold?.shortName).toBe('AR_1_st')
-  })
-
-  it('should detect error state when household load fails', async () => {
-    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
-    householdByIdEndpoint.mockImplementation(() => {
-      throw createError({
-        statusCode: 500,
-        statusMessage: 'Server error'
-      })
-    })
-    const store = useHouseholdsStore()
-
-    // With SSR pattern, errors propagate up - component/page handles display
-    await expect(store.initHouseholdsStore('AR_1_st')).rejects.toThrow()
-
-    expect(store.isSelectedHouseholdErrored).toBe(true)
-    expect(store.selectedHouseholdError).toBeTruthy()
-    expect(store.selectedHouseholdError?.statusCode).toBe(500)
+    expect(store.isNoHouseholds).toBe(expected)
+    expect(store.households).toHaveLength(data.length)
   })
 })

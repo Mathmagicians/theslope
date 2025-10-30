@@ -82,44 +82,24 @@ async function doScreenshot(page: any, name: string, isDocumentation: boolean = 
 /**
  * Select an option from a dropdown by test ID
  * Uses .first() to avoid strict mode violations on Linux where dropdown shows text twice
+ * With reactive stores (useFetch immediate:true by default), dropdown data loads automatically on page load
  *
  * @param page - Playwright Page object
  * @param dropdownTestId - Test ID of the dropdown/selector element
  * @param optionName - Name/text of the option to select
- * @param navigationUrl - Optional. If provided, waits for dropdown API data to load using pollUntil
  *
  * @example
- * // Simple dropdown (no API wait)
  * await selectDropdownOption(page, 'season-selector', 'TestSeason-123')
- *
- * // Dropdown after navigation (waits for API data)
- * await page.goto('/admin/teams?mode=edit')
- * await selectDropdownOption(page, 'season-selector', 'TestSeason-123', '/admin/teams?mode=edit')
  */
 async function selectDropdownOption(
     page: any,
     dropdownTestId: string,
-    optionName: string,
-    navigationUrl?: string
+    optionName: string
 ): Promise<void> {
     const dropdown = page.getByTestId(dropdownTestId)
 
     // Wait for dropdown to be visible
     await dropdown.waitFor({ state: 'visible', timeout: 10000 })
-
-    // If URL provided, wait for API response to load dropdown data (Playwright best practice)
-    if (navigationUrl) {
-        try {
-            // Wait for the API response that loads seasons data
-            await page.waitForResponse(
-                (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-                { timeout: 10000 }
-            )
-        } catch (error) {
-            await doScreenshot(page, 'dropdown-timeout')
-            throw error
-        }
-    }
 
     // Click dropdown to open it
     await dropdown.click()
