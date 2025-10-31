@@ -52,8 +52,11 @@ model Allergy {
   id            Int         @id @default(autoincrement())
   inhabitantId  Int
   inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  inhabitantComment String?
   allergyTypeId Int
   allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles

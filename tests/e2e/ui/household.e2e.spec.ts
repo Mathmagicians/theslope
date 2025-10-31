@@ -10,7 +10,7 @@ const { validatedBrowserContext, pollUntil } = testHelpers
  * TEST PURPOSE:
  * Verifies tab-based routing for household pages using useTabNavigation.ts composable:
  * - Path pattern: /household/[shortname]/[tab]
- * - Default redirect to first tab (events)
+ * - Default redirect to first tab 
  * - Invalid tabs redirect to default
  * - Query params preserved across tab switches
  * - Shortname param preserved (additionalParams in useTabNavigation.ts)
@@ -20,18 +20,18 @@ test.describe('Household tab navigation', () => {
   let shortName: string
 
   const tabs = [
-    { name: 'Events', path: 'events', selector: '[data-test-id="household-events"]' },
-    { name: 'Members', path: 'members', selector: '[data-test-id="household-members"]' },
+    { name: 'Bookings', path: 'bookings', selector: '[data-test-id="household-bookings"]' },
     { name: 'Allergies', path: 'allergies', selector: '[data-test-id="household-allergies"]' },
     { name: 'Economy', path: 'economy', selector: '[data-test-id="household-economy"]' },
+    { name: 'Members', path: 'members', selector: '[data-test-id="household-members"]' },
     { name: 'Settings', path: 'settings', selector: '[data-test-id="household-settings"]' }
   ]
 
   const defaultTab = tabs[0]
 
-  // Helper: Build household URL
+  // Helper: Build household URL (encode shortName for URL)
   const buildUrl = (tabPath: string, query?: string) =>
-    `/household/${shortName}/${tabPath}${query ? `?${query}` : ''}`
+    `/household/${encodeURIComponent(shortName)}/${tabPath}${query ? `?${query}` : ''}`
 
   // Helper: Navigate and verify tab is active
   const navigateToTab = async (page: any, tab: typeof tabs[0]) => {
@@ -62,7 +62,7 @@ test.describe('Household tab navigation', () => {
   })
 
   test('Base URL redirects to default tab', async ({ page }) => {
-    await page.goto(`/household/${shortName}`)
+    await page.goto(`/household/${encodeURIComponent(shortName)}`)
     await expect(page).toHaveURL(new RegExp(`${buildUrl(defaultTab.path)}$`))
     await pollUntil(
       async () => await page.locator(defaultTab.selector).isVisible(),

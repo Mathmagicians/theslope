@@ -281,7 +281,10 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
 
-        return newHousehold
+        return {
+            ...newHousehold,
+            shortName: getHouseholdShortName(newHousehold.address)
+        }
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving household at ${household?.address}`, error)
         console.error(`🏠 > HOUSEHOLD > [SAVE] ${h3e.statusMessage}`, error)

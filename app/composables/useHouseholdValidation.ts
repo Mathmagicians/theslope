@@ -43,7 +43,9 @@ export const getHouseholdShortName = (address: string): string => {
     // Join numeric parts (in case there are multiple)
     const numbers = numericParts.join('_')
 
-    return letters && numbers ? `${letters}_${numbers}` : address
+    // Build result and remove all whitespace in final step (replace with underscores)
+    const result = letters && numbers ? `${letters}_${numbers}` : address
+    return result.replace(/\s+/g, '_')
 }
 
 /**

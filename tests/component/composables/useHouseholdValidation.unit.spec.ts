@@ -359,6 +359,11 @@ describe('getHouseholdShortName', () => {
       address: 'Penny Lane 4, 1 4',
       expected: 'PL_4_1_4',
       description: 'multiple words + multiple numbers'
+    },
+    {
+      address: ' Andeby Vej 2 ',
+      expected: 'AV_2',
+      description: 'number with space + word (should replace spaces with underscores)'
     }
   ])('returns $expected for $description ($address)', ({address, expected}) => {
     expect(getHouseholdShortName(address)).toBe(expected)
