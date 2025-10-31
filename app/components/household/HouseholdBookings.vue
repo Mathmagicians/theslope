@@ -60,7 +60,7 @@ const selectedDate = ref<Date | null>(null)
 <template>
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
-  <div v-else-if="isSelectedSeasonInitialized && activeSeason" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div v-else-if="isSelectedSeasonInitialized && activeSeason" data-test-id="household-bookings" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Master: Calendar (1/3 on large screens) -->
     <div class="lg:col-span-1">
       <h3 class="text-lg font-semibold mb-4">Kalender</h3>

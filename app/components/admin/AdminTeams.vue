@@ -21,7 +21,6 @@
  * └─────────────────┴──────────────────────────────┘
  */
 import {FORM_MODES} from "~/types/form"
-import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {CookingTeam} from "~/composables/useCookingTeamValidation"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
@@ -289,9 +288,6 @@ const columns = [
               value-key="id"
           />
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
-        </div>
-        <div class="w-full md:w-auto md:ml-auto">
-          <HelpButton :text="ADMIN_HELP_TEXTS.planning.teams"/>
         </div>
       </div>
     </template>

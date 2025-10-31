@@ -171,7 +171,12 @@ test.describe('Admin page path-based navigation', () => {
           // Navigate to mode URL (tests routing works)
           await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
 
-          // Verify URL updated with mode parameter
+          // Poll for URL to update with mode parameter
+          await pollUntil(
+            async () => new URL(page.url()).search,
+            (search) => search === `?mode=${formMode.mode}`,
+            10
+          )
           await expect(page).toHaveURL(new RegExp(`.*\\/admin\\/${tab.path}\\?mode=${formMode.mode}$`))
 
           // Poll until button is visible

@@ -83,34 +83,38 @@ export const useHouseholdsStore = defineStore("Households", () => {
     /**
      * Fetch single household with inhabitants
      */
-    const loadHousehold = async (id: number) => {
+    const loadHousehold = (id: number) => {
         selectedHouseholdId.value = id
-
-        if (selectedHouseholdError.value) {
-            console.error(`🏠 > HOUSEHOLDS_STORE > Error loading household:`, selectedHouseholdError.value)
-        }
         console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
     }
 
 
     /**
      * Initialize store - load households and optionally select one by shortName
-     * If no shortName provided, auto-selects logged-in user's household
+     * If no shortName provided, keeps current selection or falls back to user's household
      * @param shortName - Optional shortName to load specific household
      */
     const initHouseholdsStore = (shortName?: string) => {
-       // households are autoloaded on creation if (!isHouseholdsInitialized.value || isHouseholdsErrored.value) await loadHouseholds()
-
+        // households autoload when store is created (immediate: true)
+        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
         const householdId = shortName
             ? households.value.find(h => h.shortName === shortName)?.id
-            : myHousehold.value?.id
+            : (selectedHouseholdId.value ?? myHousehold.value?.id)
 
-        console.info('🏠 > HOUSEHOLDS_STORE > requested short name', shortName ?? 'none',
-            'id:', householdId)
+        console.info('🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName:', shortName ?? 'none',
+            'current:', selectedHouseholdId.value, 'resolved:', householdId)
 
         if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }
 
+    // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
+    watch(isHouseholdsInitialized, () => {
+        if (!isHouseholdsInitialized.value) return
+        if (selectedHouseholdId.value) return // Already selected
+
+        console.info('🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
+        initHouseholdsStore()
+    })
 
     return {
         // State

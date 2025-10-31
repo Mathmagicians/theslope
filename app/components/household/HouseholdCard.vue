@@ -65,7 +65,7 @@ const testPreferences = ref<Record<number, any>>({
 
 <template>
   <!-- Weekly Preferences Section -->
-  <div class="border-t pt-4">
+  <div data-test-id="household-members" class="border-t pt-4">
     <button
         class="flex items-center justify-between w-full text-left"
         @click="preferencesExpanded = !preferencesExpanded"

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {FORM_MODES} from "~/types/form"
-import {ADMIN_HELP_TEXTS} from "~/config/help-texts"
 import type {Season} from "~/composables/useSeasonValidation"
 
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
@@ -16,7 +15,7 @@ const {
 const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
-const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
+const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
   getDefaultEntity: getDefaultSeason,
   selectedEntity: computed(() => selectedSeason.value)
 })
@@ -24,12 +23,12 @@ const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
 // REACTIVE HOLIDAY CALCULATION
 // When season dates change in create mode, auto-calculate holidays
 watch(
-  () => currentModel.value?.seasonDates,
-  (newDates) => {
-    if (!newDates || !currentModel.value || formMode.value !== FORM_MODES.CREATE) return
-    currentModel.value.holidays = getDefaultHolidays(newDates)
-  },
-  { deep: true, immediate: true }
+    () => currentModel.value?.seasonDates,
+    (newDates) => {
+      if (!newDates || !currentModel.value || formMode.value !== FORM_MODES.CREATE) return
+      currentModel.value.holidays = getDefaultHolidays(newDates)
+    },
+    {deep: true, immediate: true}
 )
 
 // COMPUTED
@@ -59,30 +58,26 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // SEASON-SPECIFIC BUSINESS LOGIC
 const handleSeasonUpdate = async (updatedSeason: Season) => {
-  try {
-    if (formMode.value === FORM_MODES.CREATE) {
-      // Step 1: Create season
-      const createdSeason = await createSeason(updatedSeason)
+  if (formMode.value === FORM_MODES.CREATE) {
+    // Step 1: Create season
+    const createdSeason = await createSeason(updatedSeason)
 
-      // Step 2: Generate dinner events for the new season
-      if (createdSeason.id) {
-        try {
-          const eventResult = await generateDinnerEvents(createdSeason.id)
-          showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
-        } catch (eventError) {
-          // Season created but event generation failed
-          showSuccessToast('Sæson oprettet', 'Fællesspisninger kunne ikke genereres automatisk')
-        }
+    // Step 2: Generate dinner events for the new season
+    if (createdSeason.id) {
+      try {
+        const eventResult = await generateDinnerEvents(createdSeason.id)
+        showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
+      } catch (eventError) {
+        // Season created but event generation failed
+        showSuccessToast('Sæson oprettet', 'Fællesspisninger kunne ikke genereres automatisk')
       }
-    } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
-      await updateSeason(updatedSeason)
-      showSuccessToast('Sæson opdateret')
     }
-    await onModeChange(FORM_MODES.VIEW)
-  } catch (error) {
-    // Season creation or update failed - stay in current mode
-    // Error toast already shown by handleApiError
+  } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
+    await updateSeason(updatedSeason)
+    showSuccessToast('Sæson opdateret')
   }
+  await onModeChange(FORM_MODES.VIEW)
+
 }
 
 const handleCancel = async () => {
@@ -98,8 +93,7 @@ const handleCancel = async () => {
       class="w-full px-0"
   >
     <template #header>
-      <div class=" flex flex-col md:flex-row items-center justify-between w-full gap-4
-  ">
+      <div class=" flex flex-col md:flex-row items-center justify-between w-full gap-4">
         <!-- Left aligned on mobile, spread across on desktop -->
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
           <USelect
@@ -115,9 +109,6 @@ const handleCancel = async () => {
           >
           </USelect>
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
-        </div>
-        <div class="w-full md:w-auto md:ml-auto">
-          <HelpButton :text="ADMIN_HELP_TEXTS.planning.calendar"/>
         </div>
       </div>
     </template>

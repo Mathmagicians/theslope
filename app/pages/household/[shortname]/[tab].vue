@@ -22,6 +22,12 @@ const tabs = [
     component: 'HouseholdBookings'
   },
   {
+    key: 'members',
+    label: 'Husstanden',
+    icon: 'i-heroicons-users',
+    component: 'HouseholdCard'
+  },
+  {
     key: 'allergies',
     label: 'Allergier',
     icon: 'i-heroicons-exclamation-triangle',
@@ -32,12 +38,6 @@ const tabs = [
     label: 'Økonomi',
     icon: 'i-heroicons-currency-dollar',
     component: 'HouseholdEconomy'
-  },
-  {
-    key: 'members',
-    label: 'Husstanden',
-    icon: 'i-heroicons-users',
-    component: 'HouseholdMembers'
   },
   {
     key: 'settings',
@@ -76,12 +76,12 @@ const tabItems = tabs.map(tab => ({
 const householdStore = useHouseholdsStore()
 const {
   selectedHousehold, isSelectedHouseholdLoading, isSelectedHouseholdErrored,
-  isSelectedHouseholdInitialized, selectedHouseholdError
+  isSelectedHouseholdInitialized, selectedHouseholdError, isHouseholdsInitialized
 } = storeToRefs(householdStore)
 
-// Initialize without await for SSR hydration consistency
-// Template will show loader while data loads reactively
-householdStore.initHouseholdsStore(shortname.value)
+const {initHouseholdsStore} = householdStore
+
+initHouseholdsStore(shortname.value)
 
 useHead({
   title: `🏠 ${shortname.value}`,
@@ -96,19 +96,25 @@ useHead({
 
 <template>
   <div>
-    <Loader v-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
-    <ViewError v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
-               :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
-    <UCard v-else-if="isSelectedHouseholdInitialized && selectedHousehold" class="w-full px-0">
+    <UCard v-if="isSelectedHouseholdInitialized && selectedHousehold" class="w-full px-0 rounded-none md:rounded-lg">
       <template #header>
         <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-home" class="text-2xl" />
+          <UIcon name="i-heroicons-home" class="text-2xl"/>
           <h2 class="text-xl font-semibold">{{ selectedHousehold.name }}</h2>
         </div>
       </template>
-      <UTabs v-model="activeTab" :items="tabItems" class="mb-4">
+      <UTabs
+          v-model="activeTab"
+          :items="tabItems"
+          class="mb-1 md:mb-4"
+          :ui="{ label: 'hidden md:inline' }"
+          color="primary"
+      >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold"/>
+          <ViewError v-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
+                     :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
+          <Loader v-else-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
+          <component v-else :is="asyncComponents[item.value]" :household="selectedHousehold"/>
         </template>
       </UTabs>
     </UCard>

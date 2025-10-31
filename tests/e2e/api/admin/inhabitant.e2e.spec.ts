@@ -5,7 +5,7 @@ import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
 
 const {InhabitantResponseSchema} = useHouseholdValidation()
-const {headers, validatedBrowserContext} = testHelpers
+const {headers, validatedBrowserContext, pollUntil} = testHelpers
 
 // Variables to store IDs for cleanup
 let testHouseholdId: number
@@ -152,7 +152,15 @@ test.describe('Admin Inhabitant API', () => {
             // THEN: Inhabitant should be deleted
             await HouseholdFactory.getInhabitantById(context, inhabitantId, 404)
 
-            // AND: Cooking team assignment should be cascade deleted
+            // AND: Cooking team assignment should be cascade deleted (poll for DB cascade)
+            await pollUntil(
+                async () => {
+                    const response = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
+                    return response.status()
+                },
+                (status) => status === 404,
+                10
+            )
             const assignmentAfterDelete = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
             expect(assignmentAfterDelete.status()).toBe(404)
 

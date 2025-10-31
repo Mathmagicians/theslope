@@ -7,6 +7,10 @@ householdsStore.initHouseholdsStore()
 
 const columns = [
   {
+    accessorKey: 'shortName',
+    header: 'Forkortelse'
+  },
+  {
     accessorKey: 'address',
     header: 'Address'
   },
@@ -42,6 +46,16 @@ const columns = [
         :loading="isHouseholdsLoading"
         :ui="{ td: 'py-2' }"
     >
+      <!-- Custom shortName cell with link -->
+      <template #shortName-cell="{ row }">
+        <NuxtLink
+            :to="`/household/${encodeURIComponent(row.original.shortName)}`"
+            class="text-primary hover:underline font-medium"
+        >
+          {{ row.original.shortName }}
+        </NuxtLink>
+      </template>
+
       <template #empty-state>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
           <UIcon name="i-heroicons-home" class="w-8 h-8 text-gray-400"/>

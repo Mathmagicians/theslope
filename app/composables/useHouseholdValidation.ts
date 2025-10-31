@@ -21,8 +21,8 @@ export const getHouseholdShortName = (address: string): string => {
     let foundFirstNumber = false
 
     for (const word of words) {
-        // Remove trailing punctuation (commas, periods)
-        const cleaned = word.replace(/[,.;:]+$/g, '')
+        // Remove all non-word characters (keep letters, digits, underscore)
+        const cleaned = word.replace(/\W/g, '')
 
         // If word starts with a digit, it's part of the numeric section
         if (/^\d/.test(cleaned)) {
@@ -40,12 +40,8 @@ export const getHouseholdShortName = (address: string): string => {
     // Get first letter of each text word (uppercase)
     const letters = textWords.map(word => word[0]?.toUpperCase() || '').join('')
 
-    // Join numeric parts (in case there are multiple)
-    const numbers = numericParts.join('_')
+    return [letters,  ...numericParts].filter( p => p.length >0 ).join('_')
 
-    // Build result and remove all whitespace in final step (replace with underscores)
-    const result = letters && numbers ? `${letters}_${numbers}` : address
-    return result.replace(/\s+/g, '_')
 }
 
 /**
