@@ -20,7 +20,7 @@ export class HouseholdFactory {
             heynaboId: timestamp,
             pbsId: timestamp , 
             name: salt('Test Household Hurlumhej', testSalt),
-            address: salt('123 Andeby', testSalt),
+            address: salt('Andeby 123 ', testSalt),
             movedInDate: now
         }
     }

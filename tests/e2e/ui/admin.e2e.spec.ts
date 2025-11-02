@@ -201,3 +201,73 @@ test.describe('Admin page path-based navigation', () => {
     })
   }
 })
+
+test.describe('Admin season URL persistence', () => {
+  test.use({ storageState: adminUIFile })
+
+  test.each([
+    { fromTab: 'planning', toTab: 'teams' },
+    { fromTab: 'teams', toTab: 'chefs' }
+  ])('Season persists from $fromTab to $toTab tab', async ({ page, browser, fromTab, toTab }) => {
+    const context = await validatedBrowserContext(browser)
+    const season = await SeasonFactory.createSeason(context)
+
+    try {
+      await page.goto(`/admin/${fromTab}?season=${season.shortName}`)
+
+      expect(page.url()).toContain(`season=${season.shortName}`)
+
+      // Click to navigate to next tab
+      await page.click(`button[role="tab"]`).nth(1)
+
+      await pollUntil(
+        async () => page.url(),
+        (url) => url.includes(toTab) && url.includes(`season=${season.shortName}`),
+        10
+      )
+
+      expect(page.url()).toContain(toTab)
+      expect(page.url()).toContain(`season=${season.shortName}`)
+    } finally {
+      if (season.id) {
+        await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
+      }
+    }
+  })
+
+  test('Season and mode params coexist', async ({ page, browser }) => {
+    const context = await validatedBrowserContext(browser)
+    const season = await SeasonFactory.createSeason(context)
+
+    try {
+      await page.goto(`/admin/planning?season=${season.shortName}&mode=edit`)
+
+      expect(page.url()).toContain(`season=${season.shortName}`)
+      expect(page.url()).toContain('mode=edit')
+
+      await pollUntil(
+        async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+        (isVisible) => isVisible === true,
+        10
+      )
+      await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+    } finally {
+      if (season.id) {
+        await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
+      }
+    }
+  })
+
+  test('Invalid season redirects to active season', async ({ page }) => {
+    await page.goto('/admin/planning?season=invalid-123')
+
+    await pollUntil(
+      async () => page.url(),
+      (url) => url.includes('season=') && !url.includes('invalid-123'),
+      10
+    )
+
+    expect(page.url()).toContain('season=')
+    expect(page.url()).not.toContain('invalid-123')
+  })
+})

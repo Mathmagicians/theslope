@@ -90,7 +90,7 @@ model Inhabitant {
   lastName              String
   birthDate             DateTime?
   allergies             Allergy[]
-  dinnerPreferences     DinnerPreference[]
+  dinnerPreferences     String // JSON stringified map of Weekday to DINNERMODE
   DinnerEvent           DinnerEvent[]
   Order                 Order[]
   CookingTeamAssignment CookingTeamAssignment[]

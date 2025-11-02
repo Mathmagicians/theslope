@@ -9,6 +9,7 @@ const {
   isSelectedSeasonLoading,
   isNoSeasons,
   selectedSeason,
+  activeSeason,
   seasons,
   disabledModes
 } = storeToRefs(store)
@@ -19,6 +20,21 @@ const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
   getDefaultEntity: getDefaultSeason,
   selectedEntity: computed(() => selectedSeason.value)
 })
+
+// SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
+const selectedSeasonId = computed(() => selectedSeason.value?.id)
+const {onSeasonChange, season} = useSeasonSelector({
+  seasons: computed(() => seasons.value),
+  selectedSeasonId,
+  onSeasonSelect: store.onSeasonSelect
+})
+
+const handleSeasonChange = (id: number) => {
+  const seasonObject = seasons.value.find(s => s.id === id)
+  if (seasonObject) {
+    season.value = seasonObject.shortName
+  }
+}
 
 // REACTIVE HOLIDAY CALCULATION
 // When season dates change in create mode, auto-calculate holidays
@@ -31,15 +47,6 @@ watch(
     {deep: true, immediate: true}
 )
 
-// COMPUTED
-const selectedSeasonId = computed({
-  get: () => selectedSeason.value?.id ?? undefined,
-  set: (id: number | undefined) => {
-    if (id) {
-      onSeasonSelect(id)
-    }
-  }
-})
 
 const showAdminSeason = computed(() => {
   return !isSelectedSeasonLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
@@ -96,19 +103,15 @@ const handleCancel = async () => {
       <div class=" flex flex-col md:flex-row items-center justify-between w-full gap-4">
         <!-- Left aligned on mobile, spread across on desktop -->
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
-          <USelect
-              arrow
-              data-testid="season-selector"
-              v-model="selectedSeasonId"
-              color="warning"
+          <SeasonSelector
+              :model-value="selectedSeasonId"
+              @update:model-value="handleSeasonChange"
+              :seasons="seasons"
               :loading="isSeasonsLoading"
-              :placeholder="seasons?.length > 0 ? 'Vælg sæson' : 'Ingen sæsoner'"
-              :items="seasons"
-              labelKey="shortName"
-              valueKey="id"
-          >
-          </USelect>
-          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
+              class="w-full md:w-auto"
+              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+          />
+          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes"/>
         </div>
       </div>
     </template>
