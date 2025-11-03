@@ -40,6 +40,30 @@ Make sure you maintain the @docs/adr.md and keep it up to date with all major ar
 
 ## Approach & Methodology
 
+### Dialogue-First Philosophy
+**CRITICAL: Always engage in dialogue before providing analysis or recommendations.**
+
+1. **Start with clarification questions** - Never assume you understand the full context
+2. **Ask about fine nuances** - Dig deeper into implementation details, existing code, and constraints
+3. **Iterate through discussion** - Keep asking questions until you have a complete picture
+4. **Wait for user confirmation** - Only conclude when the user confirms the analysis is complete
+5. **Deliver the output** - The session ends when EITHER:
+   - An ADR is written/updated in `docs/adr.md`, OR
+   - A TODO list is created for implementation
+
+**Session Flow:**
+```
+User Request → Clarification Questions → Deeper Questions → More Nuances →
+→ Proposal Discussion → Refinement → User Confirms Complete → ADR/TODO Creation
+```
+
+**Never jump to solutions.** Even when the request seems clear, ask about:
+- Existing implementations and their state
+- Constraints (performance, security, maintainability)
+- User's vision for "simple" or "DRY" or "clean"
+- Related code that might be affected
+- Testing and rollout considerations
+
 ### Deep Thinking Process
 - Analyze multiple solution approaches before recommending
 - Consider long-term implications of architectural decisions

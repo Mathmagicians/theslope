@@ -15,8 +15,8 @@ import type {
 import type {Season as DomainSeason, SerializedSeason} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
-import type {InhabitantCreate, HouseholdCreate} from '~/composables/useHouseholdValidation'
-import {getHouseholdShortName} from '~/composables/useHouseholdValidation'
+import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate} from '~/composables/useHouseholdValidation'
+import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
 import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -228,6 +228,39 @@ export async function fetchInhabitant(d1Client: D1Database, id: number): Promise
     }
 }
 
+
+export async function updateInhabitant(d1Client: D1Database, id: number, inhabitantData: Partial<InhabitantUpdate>): Promise<Inhabitant> {
+    console.info(`👩‍🏠 > INHABITANT > [UPDATE] Updating inhabitant with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const {serializeWeekDayMap, deserializeWeekDayMap} = useHouseholdValidation()
+
+        const updateData: any = {...inhabitantData}
+
+        if (inhabitantData.dinnerPreferences !== undefined) {
+            updateData.dinnerPreferences = inhabitantData.dinnerPreferences
+                ? serializeWeekDayMap(inhabitantData.dinnerPreferences)
+                : null
+        }
+
+        const updatedInhabitant = await prisma.inhabitant.update({
+            where: {id},
+            data: updateData
+        })
+
+        if (updatedInhabitant.dinnerPreferences) {
+            updatedInhabitant.dinnerPreferences = deserializeWeekDayMap(updatedInhabitant.dinnerPreferences)
+        }
+
+        console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName} with ID ${id}`)
+        return updatedInhabitant
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error updating inhabitant with ID ${id}`, error)
+        console.error(`👩‍🏠 > INHABITANT > [UPDATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
 
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)

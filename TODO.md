@@ -13,179 +13,6 @@
 
 ---
 
-## 🔥 CRITICAL: Store Initialization Pattern (ADR-007 Refactoring) - NOT COMPLETED
-
-**Goal**: Fix SSR flash by using reactive `useFetch` + `useAsyncData` pattern with **NO AWAITS** - pure reactive loading
-
-**Current Status**: ⚠️ **80% COMPLETE** - Core pattern implemented but **3 critical await issues remain**
-
-**What Was Done** ✅:
-- ✅ Stores use **hybrid pattern**: `useFetch` for lists + `useAsyncData` for details
-- ✅ Stores expose status-derived computed: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`
-- ✅ Most components show proper 4-state UI (loading/error/empty/data)
-- ✅ All tests updated with `clearNuxtData()` to prevent cache pollution
-- ✅ `useHouseholdsStore` is perfect - fully reactive, no awaits
-
-**What's BROKEN** ⚠️:
-- ❌ `usePlanStore.initPlanStore()` has internal `await` calls (lines 306, 313)
-- ❌ `admin/[tab].vue` uses `await initPlanStore()` (line 118)
-- ❌ `household/index.vue` uses useless `await initHouseholdsStore()` (line 5 - function is not async!)
-
-**Target Pattern** (NO AWAITS ANYWHERE):
-- **ALL stores**: Synchronous `initStore()` methods - just set IDs, reactive loading handles the rest
-- **ALL pages/components**: Call `initStore()` WITHOUT await, show loaders reactively
-- **Rationale**: `useFetch` and `useAsyncData` are reactive - setting IDs triggers automatic loads, status updates trigger UI re-renders
-
-**Store Architecture** (Hybrid Pattern):
-```typescript
-// INDEX: useFetch auto-loads on store creation
-const { data: seasons, status, error } = useFetch('/api/admin/season', {
-  default: () => []
-})
-
-// DETAIL: useAsyncData with reactive key - loads when ID changes
-const selectedSeasonId = ref<number | null>(null)
-const selectedSeasonKey = computed(() => `/api/admin/season/${selectedSeasonId.value}`)
-const { data: selectedSeason, status: detailStatus } = useAsyncData(
-  selectedSeasonKey,
-  () => selectedSeasonId.value ? $fetch(`/api/admin/season/${selectedSeasonId.value}`) : null,
-  { default: () => null }
-)
-```
-
-**Why This Pattern?**
-- `useFetch`: Auto-loads index/list data (SSR-compatible, cached)
-- `useAsyncData`: Loads detail when reactive key changes (selectedSeasonId)
-- Both expose `status` for reactive UI (no manual loading flags needed)
-
----
-
-### Current Store Status
-
-| Store                  | List Pattern                          | Detail Pattern                        | Init Method             | Uses Await? | Status        |
-|------------------------|---------------------------------------|---------------------------------------|-------------------------|-------------|---------------|
-| `usePlanStore`         | `useFetch` (seasons)                  | `useAsyncData` (selectedSeason)       | `initPlanStore()`       | ⚠️ **YES** (lines 306, 313) | **Needs Fix** |
-| `useHouseholdsStore`   | `useFetch` (households, immediate)    | `useAsyncData` (selectedHousehold)    | `initHouseholdsStore()` | ✅ No       | ✅ **Perfect** |
-| `useAuthStore`         | `useUserSession`                      | -                                     | -                       | ✅ No       | ✅ OK         |
-| `useUsersStore`        | Inside action                         | -                                     | -                       | -           | Not used in SSR |
-
-**⚠️ Issues Found:**
-- `usePlanStore.initPlanStore()` uses `await refreshActiveSeasonId()` (line 306) and `await loadSeason()` (line 313)
-- These awaits should be removed - let reactive loading handle it
-
----
-
-### Current Pages & Components Status
-
-| File                               | Type      | Init Pattern                          | Uses Await? | Loaders | Status        |
-|------------------------------------|-----------|---------------------------------------|-------------|---------|---------------|
-| `admin/[tab].vue`                  | Page      | `initPlanStore()` (line 118)          | ⚠️ **YES**  | ✅ Yes  | **Needs Fix** |
-| `household/index.vue`              | Page      | `initHouseholdsStore()` (line 5)      | ⚠️ **YES** (useless) | ✅ Yes  | **Needs Fix** |
-| `household/[shortname]/[tab].vue`  | Page      | `initHouseholdsStore()` (line 84)     | ✅ No       | ✅ Yes  | ✅ **Perfect** |
-| `AdminPlanning.vue`                | Component | Uses store reactively                 | ✅ No       | ✅ Yes  | ✅ **Perfect** |
-| `AdminTeams.vue`                   | Component | Uses store reactively                 | ✅ No       | ✅ Yes  | ✅ **Perfect** |
-| `AdminHouseholds.vue`              | Component | `initHouseholdsStore()` (line 6)      | ✅ No       | ✅ Yes  | ✅ **Perfect** |
-| `HouseholdBookings.vue`            | Component | `initPlanStore()` (line 47)           | ✅ No       | ✅ Yes  | ✅ **Reference** |
-
-**⚠️ Issues Found:**
-1. **`admin/[tab].vue:118`** - `await initPlanStore()` should be removed, use sync init + loaders
-2. **`household/index.vue:5`** - `await initHouseholdsStore()` is useless (function is not async), should be removed
-3. **`usePlanStore.initPlanStore()`** - Remove internal awaits, make it synchronous like `initHouseholdsStore()`
-
----
-
-### 🔥 CRITICAL TASKS - Fix Awaits (Must Do First!)
-
-**Goal**: Remove ALL awaits - complete transition to pure reactive pattern
-
-#### 1. Remove Awaits from usePlanStore (10 min) 🔥 **HIGHEST PRIORITY**
-- [ ] **File**: `app/stores/plan.ts` (lines 303-314)
-- [ ] **Current Code**:
-  ```typescript
-  const initPlanStore = async (shortName?: string) => {  // ❌ async
-    await refreshActiveSeasonId()  // ❌ line 306
-    if (seasonId && seasonId != selectedSeasonId.value) await loadSeason(seasonId)  // ❌ line 313
-  }
-  ```
-- [ ] **Change To**:
-  ```typescript
-  const initPlanStore = (shortName?: string) => {  // ✅ No async
-    refreshActiveSeasonId()  // ✅ Trigger reactive load
-    if (seasonId && seasonId != selectedSeasonId.value) loadSeason(seasonId)  // ✅ Just set ID
-  }
-  ```
-
-#### 2. Remove Await from admin/[tab].vue (2 min) 🔥
-- [ ] **File**: `app/pages/admin/[tab].vue` (line 118)
-- [ ] **Current**: `await initPlanStore()` ❌
-- [ ] **Change To**: `initPlanStore()` ✅
-- [ ] **Loaders**: Already exist (lines 138-139)
-
-#### 3. Remove Useless Await from household/index.vue (2 min) 🔥
-- [ ] **File**: `app/pages/household/index.vue` (line 5)
-- [ ] **Current**: `await initHouseholdsStore()` ❌ (function is NOT async!)
-- [ ] **Change To**: `initHouseholdsStore()` ✅
-- [ ] **Loaders**: Already exist (line 26)
-
----
-
-### 🔥 Remaining Critical Tasks
-
-**Goal**: Finish refactoring polish - code cleanup and test improvements
-
-#### 1. Refactor Admin Tab Navigation (20 min)
-- [ ] **File**: `app/pages/admin/[tab].vue` (lines 74-115)
-- [ ] **Issue**: Custom TAB_PREFIX routing logic (~40 lines)
-- [ ] **Action**: Replace with `useTabNavigation` composable (5 lines, like household pages)
-- [ ] **Benefit**: DRY - consistent pattern across all tab-based pages
-
-#### 2. Replace E2E Test Anti-Pattern (60 min)
-- [ ] **Files**: 3 E2E test files, 17 occurrences total
-  - `AdminPlanningSeason.e2e.spec.ts` (8×)
-  - `AdminHouseholds.e2e.spec.ts` (4×)
-  - `AdminPlanning.e2e.spec.ts` (5×)
-- [ ] **Issue**: `waitForLoadState('networkidle')` - slow, flaky
-- [ ] **Action**: Replace with `page.waitForResponse()` pattern
-- [ ] **Template**: `AdminTeams.e2e.spec.ts` already uses correct pattern
-
-#### 3. Update ADR-007 Documentation (15 min)
-- [ ] **File**: `docs/adr.md`
-- [ ] **Action**: Document reactive store pattern
-  - When to use `await` (pages with shared data)
-  - When to use sync + loaders (dynamic tab components)
-  - Why this pattern avoids SSR flash
-- [ ] **Include**: Code examples from `HouseholdBookings.vue` (has excellent comments!)
-
-#### 4. Run Full Test Suite (5 min)
-- [ ] **Command**: `npm run test && npm run test:e2e`
-- [ ] **Goal**: Verify no regressions after changes
-- [ ] **Expected**: All tests pass
-
----
-
-### Reference Implementation
-
-**Best example**: `app/components/household/HouseholdBookings.vue:46-47`
-
-```typescript
-// Initialize without await for SSR hydration consistency
-planStore.initPlanStore()
-
-// Template handles reactive loading
-<Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
-<ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
-<div v-else-if="isSelectedSeasonInitialized && activeSeason">
-```
-
-**Why this works**:
-- `useFetch` is reactive - status updates trigger component re-renders
-- No `await` needed - template shows loaders while data loads
-- Component owns its loading state, parent doesn't block
-- Performance: Only loads data when tab is viewed
-
-
----
-
 ## CRITICAL : Bug in adminTeams
 1After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
 . Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help
@@ -584,21 +411,25 @@ useWeekDayMapValidation<T = boolean>(options ? : {
 
 **Phase 2: Prisma Schema**
 
-- [ ] **Impl**: Add `dinnerPreferences String?` to `Inhabitant` model (JSON stringified `WeekDayMap<DinnerMode>`)
-- [ ] **Impl**: Deprecate `DinnerPreference` model (add comment, keep for backward compat)
-- [ ] **Impl**: Generate Prisma client + migration
+- ✅ **Impl**: Add `dinnerPreferences String?` to `Inhabitant` model (JSON stringified `WeekDayMap<DinnerMode>`)
+- ✅ **Impl**: Generate Prisma client + migration (if needed)
 
 **Phase 3: Domain Validation**
 
-- [ ] **Test**: Unit test `useInhabitantValidation` with `dinnerPreferences` field
-- [ ] **Impl**: Add `dinnerPreferences: WeekDayMapSchema.nullable()` using DinnerMode validation
-- [ ] **Test**: Test ser/de for `dinnerPreferences` in repository
-- [ ] **Impl**: Repository ser/de in `createInhabitant`, `updateInhabitant`
+- ✅ **Impl**: Added `dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()` to `InhabitantCreateSchema` in `useHouseholdValidation`
+- ✅ **Test**: Unit tests for WeekDayMap validation (valid, optional/null, invalid data, serialization)
+- ✅ **Impl**: Exported `createDefaultWeekdayMap`, `serializeWeekDayMap`, `deserializeWeekDayMap` from `useHouseholdValidation`
 
-**Phase 4: API & UI**
+**Phase 4: API Implementation**
 
-- [ ] API endpoints: GET/PUT `/api/inhabitant/[id]`  should update the dinnerPreferences
-- [ ] API e2e test case for GET/PUT endpoint
+- ✅ **Test**: E2E test for `POST /api/admin/household/inhabitants/[id]` with dinnerPreferences update (PASSING)
+- [ ] Run migration
+- ✅ **Impl**: Update `POST /api/admin/household/inhabitants/[id].post.ts` endpoint to handle dinnerPreferences serialization
+- ✅ **Impl**: Update `updateInhabitant()` in `prismaRepository.ts` with ser/de for dinnerPreferences
+- ✅ **Verify**: Full E2E test passes with actual database updates
+
+**Phase 5: UI** (Future)
+
 - [ ] UI: Weekly preference selector component
 - [ ] e2e ui test - changes trigger
 
@@ -1062,32 +893,51 @@ display.
 
 ---
 
-# ✅ COMPLETED
+# ✅ COMPLETED (For Current PR)
 
-## 🎯🌋 HIGHEST PRIORITY: Household Booking Feature
+## Store Initialization Pattern (ADR-007 Refactoring)
+- Reactive `useFetch` + `useAsyncData` pattern with NO AWAITS
+- Stores expose `isLoading`, `isErrored`, `isInitialized`, `isEmpty`, `isStoreReady` computed
+- Synchronous init methods with internal watchers for timing
+- Critical fix: `isInitialized` checks actual data exists (not just status='success')
+- 4-state UI pattern (loading/error/empty/data) in all components
+- Test infrastructure: `clearNuxtData()` to prevent cache pollution
+- No SSR hydration errors - consistent server/client rendering
 
-**Feature Overview:**
+## DRY Calendar Architecture (3-Layer Pattern)
+- `useCalendarEvents` composable: Generic event mapping/lookup, supports multiple event lists per day
+- `BaseCalendar` component: Wraps UCalendar with typed slots (#day, #week-day), responsive sizing
+- Domain composables: Event list creators in `useSeason`, `useCookingTeam`, `useHousehold`
+- Specific calendars: `TeamCalendarDisplay`, `CalendarDisplay`, `HouseholdCalendarDisplay` as thin wrappers
 
-- ✅
-- **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
+## Generic WeekDayMap Type Extension
+- Extended `WeekDayMap<T = boolean>` to support any value type (dinner preferences, cooking days, etc.)
+- Enhanced `useWeekDayMapValidation()` with optional parameters: `valueSchema`, `defaultValue`, `isRequired`, `requiredMessage`
+- Zero breaking changes - existing boolean usage unchanged
+- Same serialization/deserialization functions for all types
 
-1. useCalendarEvents composable (generic calendar logic):
-    - createEventList() - Transform dates into event lists with metadata
-    - createEventMap() - Efficient day lookup via Map
-    - getEventsForDay() - Get events for a specific day
-    - getEventListsForDay() - Get event lists with metadata for a day
-    - Exported types: CalendarEvent, CalendarEventList, DayEventList
-2. BaseCalendar component (DRY foundation):
-    - Wraps UCalendar with consistent configuration
-    - Responsive sizing (xl/3 months desktop, sm/1 month mobile)
-    - Consistent UI (hides days outside current view)
-    - Typed slots: #day="{ day, eventLists }" and #week-day="{ day }"
-    - Minimal - delegates to useCalendarEvents composable
-3. Domain composables (useSeason):
-    - getHolidayDatesFromDateRangeList() - Expand holiday ranges
-    - computeCookingDates() - Calculate potential cooking days
-    - Domain-specific business logic
-4. Specific calendar components (thin wrappers):
-    - TeamCalendarDisplay: Team assignments with colored badges + tooltips
-    - CalendarDisplay: Potential (rings) vs actual (filled) cooking days
-    - Each uses BaseCalendar + domain-specific rendering via slots
+## URL-Based Tab Navigation
+- Created `useTabNavigation` composable for reusable tab routing patterns
+- Supports simple routes (`/admin/[tab]`) and nested routes (`/household/[shortname]/[tab]`)
+- SSR-friendly synchronous initialization from URL
+- Refactored admin pages to use composable (~40 lines of duplicate code eliminated)
+
+## Household Page Structure
+- Path-based routing: `/household/[shortname]/[tab]` (bookings, allergies, economy, settings)
+- Tab components extracted: `HouseholdBookings`, `HouseholdAllergies`, `HouseholdEconomy`, `HouseholdSettings`
+- Household-specific calendar display using `HouseholdCalendarDisplay`
+- Store initialization: `householdsStore` + `planStore` for data needs
+
+## Test Infrastructure Improvements
+- Test helper utilities in `/tests/e2e/testHelpers.ts` for DRY tests
+- `doScreenshot()` for debug and documentation screenshots
+- `selectDropdownOption()` for cross-platform dropdown selection
+- `pollUntil()` for async operations (replaces fixed timeouts)
+- `validatedBrowserContext()` for authenticated API requests
+- Component tests: Fixed cache pollution with `clearNuxtData()`
+- E2E tests: Platform-specific fixes for Linux CI (dropdown strict mode violations)
+
+## ADR Updates
+- ADR-007: Added reactive initialization pattern with internal watchers
+- ADR-008: Documented `useEntityFormManager` partial usage pattern
+- ADR-009: API index endpoint data inclusion strategy

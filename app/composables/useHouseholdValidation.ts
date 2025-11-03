@@ -1,5 +1,8 @@
 import {z} from 'zod'
 import {useUserValidation} from './useUserValidation'
+import {useWeekDayMapValidation} from './useWeekDayMapValidation'
+import type {WeekDayMap} from "~/types/dateTypes"
+import {DinnerMode} from "@prisma/client"
 
 /**
  * Generate shortName from household address
@@ -49,6 +52,16 @@ export const getHouseholdShortName = (address: string): string => {
  */
 export const useHouseholdValidation = () => {
     const {UserCreateSchema} = useUserValidation()
+    const {
+        WeekDayMapSchemaOptional,
+        serializeWeekDayMap,
+        deserializeWeekDayMap,
+        createWeekDayMapFromSelection,
+        createDefaultWeekdayMap
+    } = useWeekDayMapValidation<DinnerMode>({
+        valueSchema: z.nativeEnum(DinnerMode),
+        defaultValue: DinnerMode.DINEIN
+    })
     // Base Household schema for API operations
     const BaseHouseholdSchema = z.object({
         id: z.number().int().positive().optional(),
@@ -70,7 +83,8 @@ export const useHouseholdValidation = () => {
         pictureUrl: z.string().url().optional().nullable(),
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
-        birthDate: z.coerce.date().optional().nullable()
+        birthDate: z.coerce.date().optional().nullable(),
+        dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
 
     // Household schemas
@@ -107,7 +121,8 @@ export const useHouseholdValidation = () => {
         heynaboId: true,
         householdId: true,
         name: true,
-        lastName: true
+        lastName: true,
+        dinnerPreferences: true
     })
 
     // Minimal inhabitant info for frontend display (team assignments, etc.)
@@ -164,7 +179,10 @@ export const useHouseholdValidation = () => {
         InhabitantCreateSchema,
         InhabitantUpdateSchema,
         InhabitantResponseSchema,
-        InhabitantDisplaySchema
+        InhabitantDisplaySchema,
+        serializeWeekDayMap,
+        deserializeWeekDayMap,
+        createDefaultWeekdayMap
     }
 }
 

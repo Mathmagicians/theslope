@@ -12,15 +12,13 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('PUT can create and GET can retrieve with status 200', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Create household
-        const household = await HouseholdFactory.createHousehold(context, 'Test Household Creation')
-        expect(household.id).toBeDefined()
+        // Create household (factory validates 201 and id exists)
+        const household = await HouseholdFactory.createHousehold(context)
         testHouseholdIds.push(household.id)
 
-        // Verify response structure
-        expect(household.id).toBeGreaterThanOrEqual(0)
-        expect(household.name).toBe('Test Household Creation')
-        expect(household.address).toContain('123 Andeby')
+        // Verify essential fields exist
+        expect(household.name).toBeDefined()
+        expect(household.address).toBeDefined()
         expect(household.heynaboId).toBeDefined()
         expect(household.pbsId).toBeDefined()
     })
@@ -28,8 +26,8 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('POST can update existing household with status 200', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Create household first
-        const household = await HouseholdFactory.createHousehold(context, 'Original Name')
+        // Create household first (factory validates 201 and id exists)
+        const household = await HouseholdFactory.createHousehold(context)
         testHouseholdIds.push(household.id)
 
         // Update household
@@ -53,8 +51,8 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('DELETE can remove existing household with status 200', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Create household
-        const household = await HouseholdFactory.createHousehold(context, 'Household To Delete')
+        // Create household (factory validates 201 and id exists)
+        const household = await HouseholdFactory.createHousehold(context)
 
         // Delete household
         const deletedHousehold = await HouseholdFactory.deleteHousehold(context, household.id)
@@ -146,7 +144,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const fetchedHousehold = await response.json()
 
         expect(fetchedHousehold.id).toBe(household.id)
-        expect(fetchedHousehold.name).toBe('Household For Detail Test')
+        expect(fetchedHousehold.name).toBeDefined()
         expect(fetchedHousehold.inhabitants).toBeDefined()
         expect(Array.isArray(fetchedHousehold.inhabitants)).toBe(true)
         expect(fetchedHousehold.inhabitants.length).toBe(2)

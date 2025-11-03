@@ -4,15 +4,16 @@ import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
-const {InhabitantCreateSchema} = useHouseholdValidation()
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let inhabitantData, householdId
+    let inhabitantData
+    let householdId:number
     try {
+        const {InhabitantCreateSchema} = useHouseholdValidation()
         inhabitantData = await readValidatedBody(event, InhabitantCreateSchema.parse)
         householdId = inhabitantData.householdId
     } catch (error) {

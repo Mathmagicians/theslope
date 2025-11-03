@@ -26,9 +26,11 @@ import type {CookingTeam} from "~/composables/useCookingTeamValidation"
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
 const {
+  isSeasonsLoading,
   isSelectedSeasonLoading,
   isNoSeasons,
   selectedSeason,
+  activeSeason,
   seasons,
   disabledModes
 } = storeToRefs(store)
@@ -43,6 +45,22 @@ const {formMode, onModeChange} = useEntityFormManager<CookingTeam[]>({
   getDefaultEntity: () => [], // Not used - component manages CREATE draft
   selectedEntity: computed(() => teams.value)
 })
+
+// SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
+const selectedSeasonId = computed(() => selectedSeason.value?.id)
+const {onSeasonChange, season} = useSeasonSelector({
+  seasons: computed(() => seasons.value),
+  selectedSeasonId,
+  activeSeason: computed(() => activeSeason.value),
+  onSeasonSelect: store.onSeasonSelect
+})
+
+const handleSeasonChange = (id: number) => {
+  const seasonObject = seasons.value.find(s => s.id === id)
+  if (seasonObject) {
+    season.value = seasonObject.shortName
+  }
+}
 
 // CREATE MODE - Component owns draft (dynamic generation based on teamCount)
 const teamCount = ref(1)
@@ -108,16 +126,6 @@ watch([formMode, displayedTeams], () => {
     }
   }
 }, {immediate: true})
-
-// COMPUTED
-const selectedSeasonId = computed({
-  get: () => selectedSeason.value?.id ?? undefined,
-  set: (id: number | undefined) => {
-    if (id) {
-      onSeasonSelect(id)
-    }
-  }
-})
 
 const showAdminTeams = computed(() => {
   return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
@@ -277,15 +285,13 @@ const columns = [
     <template #header>
       <div class="flex flex-col md:flex-row items-center justify-between w-full gap-4">
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
-          <USelect
-              arrow
-              data-testid="season-selector"
-              v-model="selectedSeasonId"
-              color="warning"
-              :loading="isSelectedSeasonLoading"
-              :placeholder="seasons?.length > 0 ? 'Vælg sæson' : 'Ingen sæsoner'"
-              :items="seasons?.map(s => ({ ...s, label: s.shortName }))"
-              value-key="id"
+          <SeasonSelector
+              :model-value="selectedSeasonId"
+              @update:model-value="handleSeasonChange"
+              :seasons="seasons"
+              :loading="isSeasonsLoading"
+              class="w-full md:w-auto"
+              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
           />
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>

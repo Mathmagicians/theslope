@@ -27,12 +27,13 @@ export class HouseholdFactory {
 
     static readonly createHousehold = async (
         context: BrowserContext,
-        householdName: string,
+        householdName?: string,
         expectedStatus: number = 201
     ): Promise<any> => {
+        const defaultData = this.defaultHouseholdData()
         const householdData = {
-            ...this.defaultHouseholdData(),
-            name: householdName
+            ...defaultData,
+            name: salt(householdName || defaultData.name)
         }
 
         const response = await context.request.put(HOUSEHOLD_ENDPOINT, {

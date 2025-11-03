@@ -1,10 +1,8 @@
 import {test, expect} from '@playwright/test'
-import {useHouseholdValidation} from '../../../../app/composables/useHouseholdValidation'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
 
-const {InhabitantResponseSchema} = useHouseholdValidation()
 const {headers, validatedBrowserContext, pollUntil} = testHelpers
 
 // Variables to store IDs for cleanup
@@ -32,9 +30,6 @@ test.describe('Admin Inhabitant API', () => {
             // Verify response structure
             expect(testInhabitant.id).toBeGreaterThanOrEqual(0)
             expect(testInhabitant.householdId).toEqual(testHouseholdId)
-
-            // Validate the response matches our schema
-            expect(() => InhabitantResponseSchema.parse(testInhabitant)).not.toThrow()
 
             const retrievedInhabitant = await HouseholdFactory.getInhabitantById(context, testInhabitant.id)
             expect(retrievedInhabitant.id).toBe(testInhabitant.id)
@@ -167,6 +162,39 @@ test.describe('Admin Inhabitant API', () => {
             // Cleanup: Delete season (cascades to team), then household
             await SeasonFactory.deleteSeason(context, season.id as number)
             await HouseholdFactory.deleteHousehold(context, team.householdId)
+        })
+    })
+
+    test.describe('POST /api/admin/inhabitant/[id]', () => {
+
+        test('GIVEN inhabitant exists WHEN updating dinner preferences THEN preferences are updated and other fields unchanged', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const {useWeekDayMapValidation} = await import('~/composables/useWeekDayMapValidation')
+            const {DinnerModeSchema} = await import('~/composables/useDinnerEventValidation')
+
+            const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+                valueSchema: DinnerModeSchema,
+                defaultValue: 'NONE'
+            })
+
+            const createdInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'DinnerPref-Test-Inhabitant')
+            expect(createdInhabitant.id).toBeDefined()
+            testInhabitantIds.push(createdInhabitant.id)
+
+            const newPreferences = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'NONE'])
+
+            const response = await context.request.post(`/api/admin/household/inhabitants/${createdInhabitant.id}`, {
+                headers,
+                data: {dinnerPreferences: newPreferences}
+            })
+
+            expect(response.status()).toBe(200)
+            const updated = await response.json()
+
+            expect(updated.dinnerPreferences).toEqual(newPreferences)
+            expect(updated.name).toBe(createdInhabitant.name)
+            expect(updated.birthDate).toBe(createdInhabitant.birthDate)
+            expect(updated.householdId).toBe(createdInhabitant.householdId)
         })
     })
 

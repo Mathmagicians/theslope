@@ -1,19 +1,12 @@
-import {test, expect, BrowserContext} from '@playwright/test'
+import {test, expect, type BrowserContext} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, selectDropdownOption} = testHelpers
+const {validatedBrowserContext, pollUntil} = testHelpers
 
-/**
- * UI TEST STRATEGY:
- * - Focus on UI interaction (clicking, filling forms, navigation)
- * - Use API (SeasonFactory) for setup and verification
- * - Keep tests simple and focused on user workflow
- * - Data integrity verification belongs in API tests (team.e2e.spec.ts)
- */
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
     let createdSeasonIds: number[] = []
@@ -25,13 +18,17 @@ test.describe('AdminTeams Form UI', () => {
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
-    test('Can load admin teams page', async ({page}) => {
-        await page.goto(adminTeamsUrl)
+    test('Can load admin teams page', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const season = await SeasonFactory.createSeason(context, {holidays: []})
+        createdSeasonIds.push(season.id!)
+
+        await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
 
         // Wait for page to be interactive - verify form mode buttons are visible (poll for store init)
         await pollUntil(
             async () => await page.locator('button[name="form-mode-view"]').isVisible(),
-            (isVisible) => isVisible === true,
+            (isVisible) => isVisible,
             10
         )
         await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
@@ -44,50 +41,37 @@ test.describe('AdminTeams Form UI', () => {
             async ({page, browser}) => {
                 const context = await validatedBrowserContext(browser)
 
-                // GIVEN: Create a season to add teams to
+                // GIVEN: Fresh season with NO teams
                 const season = await SeasonFactory.createSeason(context, {holidays: []})
                 createdSeasonIds.push(season.id!)
 
-                // Navigate to teams page in create mode
-                const url = `${adminTeamsUrl}?mode=create`
-                await page.goto(url)
+                const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+                expect(initialTeams.length).toBe(0)
 
-                // Wait for create mode to be active (poll for store init)
-                await pollUntil(
-                    async () => await page.locator('button[name="form-mode-create"]').isVisible(),
-                    (isVisible) => isVisible === true,
-                    10
+                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await page.waitForResponse(
+                    (response) => response.url().includes('/api/admin/season') && response.status() === 200,
+                    {timeout: 10000}
                 )
-                await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
 
-                // Select the season
-                await selectDropdownOption(page, 'season-selector', season.shortName)
+                // WHEN: Create 2 teams
+                await page.locator('input#team-count').fill('2')
+                await page.getByRole('button', {name: /Opret madhold/i}).click()
 
-                // WHEN: Enter team count
-                const teamCountInput = page.locator('input#team-count')
-                await expect(teamCountInput).toBeVisible()
-                await teamCountInput.fill('3')
-
-                // Submit form
-                const submitButton = page.getByRole('button', {name: /Opret madhold/i})
-                await expect(submitButton).toBeVisible()
-                await submitButton.click()
-
-                // THEN: Form should switch to view mode (indicating success)
-                await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
-
-                // Verify teams were created via API (with polling for async creation)
-                const teams = await pollUntil(
-                    () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
-                    (teams) => teams.length === 3
+                const affinityResponse = await page.waitForResponse(
+                    (response) => response.url().includes('/assign-team-affinities') && response.status() === 200,
+                    {timeout: 10000}
                 )
-                expect(teams.length).toBe(3)
+                const affinityResult = await affinityResponse.json()
+                expect(affinityResult.teamCount).toBe(2)
 
-                // Verify team names follow pattern "Madhold X - season name"
+                // THEN: Verify teams created
+                const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+                expect(teams.length).toBe(2)
                 expect(teams[0].name).toContain('Madhold 1')
                 expect(teams[0].name).toContain(season.shortName)
                 expect(teams[1].name).toContain('Madhold 2')
-                expect(teams[2].name).toContain('Madhold 3')
+                expect(teams[1].name).toContain(season.shortName)
             })
     })
 
@@ -105,36 +89,27 @@ test.describe('AdminTeams Form UI', () => {
             season = await SeasonFactory.createSeason(context, {holidays: []})
             createdSeasonIds.push(season.id!)
 
-            // Navigate to edit mode and select season
-            await page.goto(`${adminTeamsUrl}?mode=edit`)
+            // Navigate to edit mode with season in URL
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
                 async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
                 (isVisible) => isVisible === true,
                 10
             )
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', season.shortName)
         })
-
-        // Helper: Reload page and reselect season (needed after creating teams via API)
-        const reloadAndReselectSeason = async (seasonShortName: string) => {
-            await page.reload()
-            await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
-                (isVisible) => isVisible === true,
-                10
-            )
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
-            await selectDropdownOption(page, 'season-selector', seasonShortName)
-        }
 
         test('GIVEN season with teams WHEN user switches to edit mode THEN teams are shown', async () => {
             // GIVEN: Create teams for the season
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team A')
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team B')
 
-            // Reload to see the teams
-            await reloadAndReselectSeason(season.shortName)
+            // Navigate to see the teams
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
             // THEN: Verify we can see 2 team tabs in navigation (master-detail pattern shows 1 input at a time)
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
@@ -146,8 +121,13 @@ test.describe('AdminTeams Form UI', () => {
             // GIVEN: Create one team
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
-            // Reload to see the team
-            await reloadAndReselectSeason(season.shortName)
+            // Navigate to see the team
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
             // Wait for team input to be visible
             const teamInput = page.getByTestId('team-name-input').first()
@@ -160,14 +140,14 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
+                (response: any) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
                 { timeout: 5000 }
             )
             await teamInput.blur() // Trigger save on blur
             await responsePromise
 
             // THEN: Team name should be updated immediately via API
-            const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id)
+            const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id!)
             expect(updatedTeam.name).toContain('Q')
         })
 
@@ -175,8 +155,13 @@ test.describe('AdminTeams Form UI', () => {
             // GIVEN: Create one team
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Existing Team')
 
-            // Reload to see the team
-            await reloadAndReselectSeason(season.shortName)
+            // Navigate to see the team
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
             // Verify initial state via API (source of truth)
             const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
@@ -193,7 +178,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response) => response.url().includes('/api/admin/team') && response.request().method() === 'PUT',
+                (response: any) => response.url().includes('/api/admin/team') && response.request().method() === 'PUT',
                 { timeout: 5000 }
             )
             await addButton.click()
@@ -212,10 +197,15 @@ test.describe('AdminTeams Form UI', () => {
 
         test('GIVEN season with team WHEN deleting team via UI THEN team is removed', async () => {
             // GIVEN: Create one team
-            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
+            const _ = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
-            // Reload to see the team
-            await reloadAndReselectSeason(season.shortName)
+            // Navigate to see the team
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
             // Verify team is shown
             const teamInput = page.getByTestId('team-name-input').first()
@@ -227,7 +217,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
+                (response: any) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
                 { timeout: 5000 }
             )
             await deleteButton.click()
@@ -247,10 +237,15 @@ test.describe('AdminTeams Form UI', () => {
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Beta')
             await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
 
-            // Reload to see the teams
-            await reloadAndReselectSeason(season.shortName)
+            // Navigate to see the teams
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await pollUntil(
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
-            // Wait for team tabs to load after season selection
+            // Wait for team tabs to load
             const teamTabs = page.getByTestId('team-tabs-list').locator('button[role="tab"]')
             await expect(teamTabs.first()).toBeVisible()
             await expect(teamTabs).toHaveCount(3)

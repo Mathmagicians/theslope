@@ -6,7 +6,8 @@ describe('useHouseholdValidation', () => {
     const {
         HouseholdCreateSchema,
         HouseholdCreateWithInhabitantsSchema,
-        InhabitantCreateSchema
+        InhabitantCreateSchema,
+        createDefaultWeekdayMap
     } = useHouseholdValidation()
 
     describe('HouseholdCreateSchema', () => {
@@ -169,6 +170,81 @@ describe('useHouseholdValidation', () => {
 
             const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
             expect(result.success).toBe(false)
+        })
+
+        it('should accept inhabitant with valid dinnerPreferences WeekDayMap', () => {
+            const inhabitant = {
+                ...HouseholdFactory.defaultInhabitantData(),
+                householdId: 1,
+                dinnerPreferences: createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+            }
+
+            const result = InhabitantCreateSchema.safeParse(inhabitant)
+            expect(result.success).toBe(true)
+            if (result.success) {
+                expect(result.data.dinnerPreferences?.mandag).toBe('DINEIN')
+                expect(result.data.dinnerPreferences?.tirsdag).toBe('TAKEAWAY')
+            }
+        })
+
+        it.each([
+            {value: undefined, description: 'without dinnerPreferences (optional)'},
+            {value: null, description: 'with null dinnerPreferences'}
+        ])('should accept inhabitant $description', ({value}) => {
+            const inhabitant = {
+                ...HouseholdFactory.defaultInhabitantData(),
+                householdId: 1,
+                dinnerPreferences: value
+            }
+
+            const result = InhabitantCreateSchema.safeParse(inhabitant)
+            expect(result.success).toBe(true)
+            if (result.success) {
+                expect(result.data.dinnerPreferences).toBe(value)
+            }
+        })
+
+        it.each([
+            {
+                getData: () => {
+                    const map = createDefaultWeekdayMap(['DINEIN', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN'])
+                    map.mandag = 'INVALID_MODE' as any
+                    return map
+                },
+                description: 'invalid DinnerMode value'
+            },
+            {
+                getData: () => {
+                    const map = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN'])
+                    delete map.onsdag
+                    delete map.torsdag
+                    return map
+                },
+                description: 'incomplete WeekDayMap (missing days)'
+            }
+        ])('should reject inhabitant with $description in dinnerPreferences', ({getData, description}) => {
+            const invalidInhabitant = {
+                ...HouseholdFactory.defaultInhabitantData(),
+                householdId: 1,
+                dinnerPreferences: getData()
+            }
+
+            const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
+            expect(result.success).toBe(false)
+        })
+    })
+
+    describe('WeekDayMap Serialization', () => {
+        const {serializeWeekDayMap, deserializeWeekDayMap, createDefaultWeekdayMap} = useHouseholdValidation()
+
+        it('should serialize and deserialize WeekDayMap correctly', () => {
+            const weekDayMap = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+
+            const serialized = serializeWeekDayMap(weekDayMap)
+            expect(typeof serialized).toBe('string')
+
+            const deserialized = deserializeWeekDayMap(serialized)
+            expect(deserialized).toEqual(weekDayMap)
         })
     })
 

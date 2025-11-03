@@ -32,7 +32,7 @@ const mockSeasons: Season[] = [
 
 describe('useSeasonSelector', () => {
   let mockSeasonsRef: any
-  let mockActiveSeasonRef: any
+  let mockSelectedSeasonIdRef: any
   let mockOnSeasonSelect: any
 
   beforeEach(() => {
@@ -41,27 +41,24 @@ describe('useSeasonSelector', () => {
 
     // Setup mock dependencies as refs (simulating what store would provide)
     mockSeasonsRef = ref(mockSeasons)
-    mockActiveSeasonRef = ref(mockSeasons[0])
+    mockSelectedSeasonIdRef = ref(mockSeasons[0].id)
     mockOnSeasonSelect = vi.fn((id: number) => {
-      // Simulate store behavior: update activeSeason when season is selected
-      const selected = mockSeasons.find(s => s.id === id)
-      if (selected) {
-        mockActiveSeasonRef.value = selected
-      }
+      // Simulate store behavior: update selectedSeasonId when season is selected
+      mockSelectedSeasonIdRef.value = id
     })
   })
 
   it.each([
-    { queryParam: undefined, expected: 'fall-2025', desc: 'returns active season when no query param' },
+    { queryParam: undefined, expected: 'fall-2025', desc: 'returns selected season when no query param' },
     { queryParam: 'spring-2026', expected: 'spring-2026', desc: 'returns season from valid query param' },
-    { queryParam: 'invalid', expected: 'fall-2025', desc: 'returns active season for invalid query param' }
+    { queryParam: 'invalid', expected: 'fall-2025', desc: 'returns selected season for invalid query param' }
   ])('$desc', async ({ queryParam, expected }) => {
     mockRouteData.query = queryParam ? { season: queryParam } : {}
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { season } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
-      activeSeason: computed(() => mockActiveSeasonRef.value),
+      selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -79,7 +76,7 @@ describe('useSeasonSelector', () => {
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
-      activeSeason: computed(() => mockActiveSeasonRef.value),
+      selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -97,7 +94,7 @@ describe('useSeasonSelector', () => {
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
-      activeSeason: computed(() => mockActiveSeasonRef.value),
+      selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -107,15 +104,15 @@ describe('useSeasonSelector', () => {
   })
 
   it.each([
-    { queryParam: undefined, desc: 'redirects to active season when no query param' },
-    { queryParam: 'invalid', desc: 'redirects to active season when invalid query param' }
+    { queryParam: undefined, desc: 'redirects to selected season when no query param' },
+    { queryParam: 'invalid', desc: 'redirects to selected season when invalid query param' }
   ])('$desc', async ({ queryParam }) => {
     mockRouteData.query = queryParam ? { season: queryParam } : {}
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
-      activeSeason: computed(() => mockActiveSeasonRef.value),
+      selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -133,11 +130,11 @@ describe('useSeasonSelector', () => {
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
-      activeSeason: computed(() => mockActiveSeasonRef.value),
+      selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
-    // Try to select the already active season (which also matches URL)
+    // Try to select the already selected season (which also matches URL)
     await onSeasonChange('fall-2025')
 
     // Should not navigate (already in sync) and not call onSeasonSelect (already selected)

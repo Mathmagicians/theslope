@@ -4,12 +4,6 @@ import {H3Error} from "h3"
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown): H3Error => {
-
-    //TODO remove diagnostic logs
-    console.log("error type", typeof error, ", error: ", error, "error instanceof ZodError", (error instanceof ZodError) ? "true" : "false", ", error instanceof Prisma.PrismaClientKnownRequestError", (error instanceof Prisma.PrismaClientKnownRequestError) ? "true" : "false", ", error instanceof Error", (error instanceof Error), "error instance of H3Error", (error instanceof H3Error) )
-    console.log("error code", error?.code)
-    console.log("error cause", error?.cause)
-    console.log("error cause type", typeof error?.cause)
     // If error is already an H3Error, just re-throw it (pass through from repository layer)
     if (error instanceof H3Error) {
         throw error

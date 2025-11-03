@@ -41,7 +41,7 @@ export const formatDate = (date: Date | undefined, mask: string = DATE_SETTINGS.
 export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
 
 export function formatDateRange(range: DateRange | undefined, mask: string = DATE_SETTINGS.DATE_MASK): string {
-    return !range ? '?->?' : `${formatDate(range?.start, mask)} - ${formatDate(range?.end, mask)}`
+    return !range ? '?->?' : `${formatDate(range?.start, mask)}-${formatDate(range?.end, mask)}`
 }
 
 export function getEachDayOfIntervalWithSelectedWeekdays(

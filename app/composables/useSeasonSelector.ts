@@ -4,18 +4,20 @@ import type { Season } from '~/composables/useSeasonValidation'
 export interface SeasonSelectorOptions {
   seasons: ComputedRef<Season[]>
   selectedSeasonId: ComputedRef<number | undefined>
+  activeSeason: ComputedRef<Season | undefined>
   onSeasonSelect: (id: number) => void
 }
 
 export function useSeasonSelector(options: SeasonSelectorOptions) {
-  const { seasons, selectedSeasonId, onSeasonSelect } = options
+  const { seasons, selectedSeasonId, activeSeason, onSeasonSelect } = options
 
   const route = useRoute()
   const seasonQuery = computed(() => route.query.season as string | undefined)
 
   const isValidSeason = (shortName?: string) => shortName && seasons.value.some(s => s.shortName === shortName)
   const getSelectedSeasonShortName = () => seasons.value.find(s => s.id === selectedSeasonId.value)?.shortName
-  const safeSeason = (shortName?: string) => isValidSeason(shortName) ? shortName : getSelectedSeasonShortName()
+  const getActiveSeasonShortName = () => activeSeason.value?.shortName
+  const safeSeason = (shortName?: string) => isValidSeason(shortName) ? shortName : (getSelectedSeasonShortName() ?? getActiveSeasonShortName())
 
   const season = computed({
     get() {
@@ -35,7 +37,7 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
       delete query.season
     }
     await navigateTo({ path: route.path, query }, { replace: true })
-    console.info(`🔗 > Navigated to season ${shortName ? shortName : 'default'} in URL`)
+    console.info(`${LOG_CTX} 🔗 > Navigated to season ${shortName ? shortName : 'default'} in URL`)
   }
 
   // exposed to handle season selection from dropdown
@@ -48,21 +50,29 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
     }
 
     await updateURLQueryFromSeason(safeSeasonName)
-    console.info(`🌱 > SEASON_SELECTOR > Season changed to ${safeSeasonName}, requested was ${shortName}`)
+    console.info(`${LOG_CTX} 🌱 > SEASON_SELECTOR > Season changed to ${safeSeasonName}, requested was ${shortName}`)
   }
 
   // signal - should url query be fixed
   const shouldSyncSeason = computed(() => seasonQuery.value !== safeSeason(seasonQuery.value))
 
-  // autosync when signal is true, ie route query is out of sync, or invalid, then set to safe tab (it normalizes invalids)
+  // NAVIGATION GUARD: autosync when URL query is invalid - normalizes to valid season
+  // Wait for data to load before attempting correction (activeSeason.value may be null if no active season)
   watchPostEffect(() => {
+    if (seasons.value.length === 0) return // Wait for seasons to load
+    if (selectedSeasonId.value === null) return // Wait for initial season selection
+
     if (shouldSyncSeason.value) {
-      season.value = safeSeason(seasonQuery.value) ?? ''
+      const validSeason = safeSeason(seasonQuery.value)
+      if (validSeason) {
+        season.value = validSeason
+      }
     }
   })
 
   return {
     season,
-    onSeasonChange
+    onSeasonChange,
+    safeSeason
   }
 }

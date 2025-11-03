@@ -85,9 +85,11 @@ const {activeTab} = useTabNavigation({
   basePath: '/admin'
 })
 
-// INITIALIZATION
-initPlanStore()
-console.info('🔗 > Admin > initialized parent page')
+// INITIALIZATION - Read season from URL (invalid seasons handled by child components via useSeasonSelector)
+const route = useRoute()
+const seasonFromUrl = route.query.season as string | undefined
+initPlanStore(seasonFromUrl)
+console.info(LOG_CTX, '🔗 > Admin > initialized page with season:', seasonFromUrl ?? 'default')
 
 // UI - CONTINUED
 

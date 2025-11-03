@@ -27,6 +27,7 @@ enum Role {
   COOK
   JUNIORHELPER
 }
+
 enum TicketType {
   ADULT
   CHILD
@@ -49,14 +50,14 @@ model AllergyType {
 }
 
 model Allergy {
-  id            Int         @id @default(autoincrement())
-  inhabitantId  Int
-  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  id                Int         @id @default(autoincrement())
+  inhabitantId      Int
+  inhabitant        Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   inhabitantComment String?
-  allergyTypeId Int
-  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  allergyTypeId     Int
+  allergyType       AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles
@@ -70,7 +71,6 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }
-
 
 // Represents a member of a household, that can participate in the dinners and cooking
 // Inhabitant 1-0..1 User
@@ -90,7 +90,7 @@ model Inhabitant {
   lastName              String
   birthDate             DateTime?
   allergies             Allergy[]
-  dinnerPreferences     String // JSON stringified map of Weekday to DINNERMODE
+  dinnerPreferences     String? // JSON stringified map of Weekday to DINNERMODE
   DinnerEvent           DinnerEvent[]
   Order                 Order[]
   CookingTeamAssignment CookingTeamAssignment[]
@@ -167,7 +167,7 @@ model CookingTeam {
   name        String
   dinners     DinnerEvent[]
   assignments CookingTeamAssignment[]
-  affinity    String?                  // JSON stringified map of Weekday to boolean
+  affinity    String? // JSON stringified map of Weekday to boolean
 }
 
 model CookingTeamAssignment {
@@ -178,7 +178,7 @@ model CookingTeamAssignment {
   inhabitant           Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   role                 Role
   allocationPercentage Int         @default(100)
-  affinity             String?      // JSON stringified map of Weekday to boolean
+  affinity             String? // JSON stringified map of Weekday to boolean
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 }

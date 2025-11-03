@@ -14,13 +14,11 @@ export const TransactionIsolationLevelSchema = z.enum(['Serializable']);
 
 export const AllergyTypeScalarFieldEnumSchema = z.enum(['id','name','description','icon']);
 
-export const AllergyScalarFieldEnumSchema = z.enum(['id','inhabitantId','allergyTypeId']);
+export const AllergyScalarFieldEnumSchema = z.enum(['id','inhabitantId','inhabitantComment','allergyTypeId','createdAt','updatedAt']);
 
 export const UserScalarFieldEnumSchema = z.enum(['id','email','phone','passwordHash','systemRole','createdAt','updatedAt']);
 
-export const DinnerPreferenceScalarFieldEnumSchema = z.enum(['id','inhabitantId','weekday','dinnerMode']);
-
-export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId','householdId','pictureUrl','name','lastName','birthDate']);
+export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId','householdId','pictureUrl','name','lastName','birthDate','dinnerPreferences']);
 
 export const HouseholdScalarFieldEnumSchema = z.enum(['id','heynaboId','pbsId','movedInDate','moveOutDate','name','address']);
 
@@ -51,10 +49,6 @@ export type SystemRoleType = `${z.infer<typeof SystemRoleSchema>}`
 export const RoleSchema = z.enum(['CHEF','COOK','JUNIORHELPER']);
 
 export type RoleType = `${z.infer<typeof RoleSchema>}`
-
-export const WeekdaySchema = z.enum(['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY']);
-
-export type WeekdayType = `${z.infer<typeof WeekdaySchema>}`
 
 export const TicketTypeSchema = z.enum(['ADULT','CHILD','HUNGRY_BABY','BABY']);
 
@@ -88,7 +82,10 @@ export type AllergyType = z.infer<typeof AllergyTypeSchema>
 export const AllergySchema = z.object({
   id: z.number().int(),
   inhabitantId: z.number().int(),
+  inhabitantComment: z.string().nullable(),
   allergyTypeId: z.number().int(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 })
 
 export type Allergy = z.infer<typeof AllergySchema>
@@ -110,19 +107,6 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>
 
 /////////////////////////////////////////
-// DINNER PREFERENCE SCHEMA
-/////////////////////////////////////////
-
-export const DinnerPreferenceSchema = z.object({
-  weekday: WeekdaySchema,
-  dinnerMode: DinnerModeSchema,
-  id: z.number().int(),
-  inhabitantId: z.number().int(),
-})
-
-export type DinnerPreference = z.infer<typeof DinnerPreferenceSchema>
-
-/////////////////////////////////////////
 // INHABITANT SCHEMA
 /////////////////////////////////////////
 
@@ -135,6 +119,7 @@ export const InhabitantSchema = z.object({
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().nullable(),
+  dinnerPreferences: z.string().nullable(),
 })
 
 export type Inhabitant = z.infer<typeof InhabitantSchema>
@@ -332,7 +317,10 @@ export const AllergyArgsSchema: z.ZodType<Prisma.AllergyDefaultArgs> = z.object(
 export const AllergySelectSchema: z.ZodType<Prisma.AllergySelect> = z.object({
   id: z.boolean().optional(),
   inhabitantId: z.boolean().optional(),
+  inhabitantComment: z.boolean().optional(),
   allergyTypeId: z.boolean().optional(),
+  createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
   inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
   allergyType: z.union([z.boolean(),z.lazy(() => AllergyTypeArgsSchema)]).optional(),
 }).strict()
@@ -360,26 +348,6 @@ export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
   Inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
 }).strict()
 
-// DINNER PREFERENCE
-//------------------------------------------------------
-
-export const DinnerPreferenceIncludeSchema: z.ZodType<Prisma.DinnerPreferenceInclude> = z.object({
-  inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
-}).strict();
-
-export const DinnerPreferenceArgsSchema: z.ZodType<Prisma.DinnerPreferenceDefaultArgs> = z.object({
-  select: z.lazy(() => DinnerPreferenceSelectSchema).optional(),
-  include: z.lazy(() => DinnerPreferenceIncludeSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceSelectSchema: z.ZodType<Prisma.DinnerPreferenceSelect> = z.object({
-  id: z.boolean().optional(),
-  inhabitantId: z.boolean().optional(),
-  weekday: z.boolean().optional(),
-  dinnerMode: z.boolean().optional(),
-  inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
-}).strict()
-
 // INHABITANT
 //------------------------------------------------------
 
@@ -387,7 +355,6 @@ export const InhabitantIncludeSchema: z.ZodType<Prisma.InhabitantInclude> = z.ob
   user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
   household: z.union([z.boolean(),z.lazy(() => HouseholdArgsSchema)]).optional(),
   allergies: z.union([z.boolean(),z.lazy(() => AllergyFindManyArgsSchema)]).optional(),
-  dinnerPreferences: z.union([z.boolean(),z.lazy(() => DinnerPreferenceFindManyArgsSchema)]).optional(),
   DinnerEvent: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
   Order: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
   CookingTeamAssignment: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
@@ -405,7 +372,6 @@ export const InhabitantCountOutputTypeArgsSchema: z.ZodType<Prisma.InhabitantCou
 
 export const InhabitantCountOutputTypeSelectSchema: z.ZodType<Prisma.InhabitantCountOutputTypeSelect> = z.object({
   allergies: z.boolean().optional(),
-  dinnerPreferences: z.boolean().optional(),
   DinnerEvent: z.boolean().optional(),
   Order: z.boolean().optional(),
   CookingTeamAssignment: z.boolean().optional(),
@@ -420,10 +386,10 @@ export const InhabitantSelectSchema: z.ZodType<Prisma.InhabitantSelect> = z.obje
   name: z.boolean().optional(),
   lastName: z.boolean().optional(),
   birthDate: z.boolean().optional(),
+  dinnerPreferences: z.boolean().optional(),
   user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
   household: z.union([z.boolean(),z.lazy(() => HouseholdArgsSchema)]).optional(),
   allergies: z.union([z.boolean(),z.lazy(() => AllergyFindManyArgsSchema)]).optional(),
-  dinnerPreferences: z.union([z.boolean(),z.lazy(() => DinnerPreferenceFindManyArgsSchema)]).optional(),
   DinnerEvent: z.union([z.boolean(),z.lazy(() => DinnerEventFindManyArgsSchema)]).optional(),
   Order: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
   CookingTeamAssignment: z.union([z.boolean(),z.lazy(() => CookingTeamAssignmentFindManyArgsSchema)]).optional(),
@@ -782,7 +748,10 @@ export const AllergyWhereInputSchema: z.ZodType<Prisma.AllergyWhereInput> = z.ob
   NOT: z.union([ z.lazy(() => AllergyWhereInputSchema), z.lazy(() => AllergyWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  inhabitantComment: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   allergyTypeId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
   allergyType: z.union([ z.lazy(() => AllergyTypeScalarRelationFilterSchema), z.lazy(() => AllergyTypeWhereInputSchema) ]).optional(),
 }).strict();
@@ -790,7 +759,10 @@ export const AllergyWhereInputSchema: z.ZodType<Prisma.AllergyWhereInput> = z.ob
 export const AllergyOrderByWithRelationInputSchema: z.ZodType<Prisma.AllergyOrderByWithRelationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  inhabitantComment: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   inhabitant: z.lazy(() => InhabitantOrderByWithRelationInputSchema).optional(),
   allergyType: z.lazy(() => AllergyTypeOrderByWithRelationInputSchema).optional(),
 }).strict();
@@ -804,7 +776,10 @@ export const AllergyWhereUniqueInputSchema: z.ZodType<Prisma.AllergyWhereUniqueI
   OR: z.lazy(() => AllergyWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => AllergyWhereInputSchema), z.lazy(() => AllergyWhereInputSchema).array() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  inhabitantComment: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   allergyTypeId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
   allergyType: z.union([ z.lazy(() => AllergyTypeScalarRelationFilterSchema), z.lazy(() => AllergyTypeWhereInputSchema) ]).optional(),
 }).strict());
@@ -812,7 +787,10 @@ export const AllergyWhereUniqueInputSchema: z.ZodType<Prisma.AllergyWhereUniqueI
 export const AllergyOrderByWithAggregationInputSchema: z.ZodType<Prisma.AllergyOrderByWithAggregationInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  inhabitantComment: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => AllergyCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => AllergyAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => AllergyMaxOrderByAggregateInputSchema).optional(),
@@ -826,7 +804,10 @@ export const AllergyScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Aller
   NOT: z.union([ z.lazy(() => AllergyScalarWhereWithAggregatesInputSchema), z.lazy(() => AllergyScalarWhereWithAggregatesInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  inhabitantComment: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   allergyTypeId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
 
 export const UserWhereInputSchema: z.ZodType<Prisma.UserWhereInput> = z.object({
@@ -908,61 +889,6 @@ export const UserScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.UserScal
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
 
-export const DinnerPreferenceWhereInputSchema: z.ZodType<Prisma.DinnerPreferenceWhereInput> = z.object({
-  AND: z.union([ z.lazy(() => DinnerPreferenceWhereInputSchema), z.lazy(() => DinnerPreferenceWhereInputSchema).array() ]).optional(),
-  OR: z.lazy(() => DinnerPreferenceWhereInputSchema).array().optional(),
-  NOT: z.union([ z.lazy(() => DinnerPreferenceWhereInputSchema), z.lazy(() => DinnerPreferenceWhereInputSchema).array() ]).optional(),
-  id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
-  inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
-  weekday: z.union([ z.lazy(() => EnumWeekdayFilterSchema), z.lazy(() => WeekdaySchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
-  inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceOrderByWithRelationInputSchema: z.ZodType<Prisma.DinnerPreferenceOrderByWithRelationInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  weekday: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
-  inhabitant: z.lazy(() => InhabitantOrderByWithRelationInputSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceWhereUniqueInputSchema: z.ZodType<Prisma.DinnerPreferenceWhereUniqueInput> = z.object({
-  id: z.number().int(),
-})
-.and(z.object({
-  id: z.number().int().optional(),
-  AND: z.union([ z.lazy(() => DinnerPreferenceWhereInputSchema), z.lazy(() => DinnerPreferenceWhereInputSchema).array() ]).optional(),
-  OR: z.lazy(() => DinnerPreferenceWhereInputSchema).array().optional(),
-  NOT: z.union([ z.lazy(() => DinnerPreferenceWhereInputSchema), z.lazy(() => DinnerPreferenceWhereInputSchema).array() ]).optional(),
-  inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
-  weekday: z.union([ z.lazy(() => EnumWeekdayFilterSchema), z.lazy(() => WeekdaySchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
-  inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
-}).strict());
-
-export const DinnerPreferenceOrderByWithAggregationInputSchema: z.ZodType<Prisma.DinnerPreferenceOrderByWithAggregationInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  weekday: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
-  _count: z.lazy(() => DinnerPreferenceCountOrderByAggregateInputSchema).optional(),
-  _avg: z.lazy(() => DinnerPreferenceAvgOrderByAggregateInputSchema).optional(),
-  _max: z.lazy(() => DinnerPreferenceMaxOrderByAggregateInputSchema).optional(),
-  _min: z.lazy(() => DinnerPreferenceMinOrderByAggregateInputSchema).optional(),
-  _sum: z.lazy(() => DinnerPreferenceSumOrderByAggregateInputSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.DinnerPreferenceScalarWhereWithAggregatesInput> = z.object({
-  AND: z.union([ z.lazy(() => DinnerPreferenceScalarWhereWithAggregatesInputSchema), z.lazy(() => DinnerPreferenceScalarWhereWithAggregatesInputSchema).array() ]).optional(),
-  OR: z.lazy(() => DinnerPreferenceScalarWhereWithAggregatesInputSchema).array().optional(),
-  NOT: z.union([ z.lazy(() => DinnerPreferenceScalarWhereWithAggregatesInputSchema), z.lazy(() => DinnerPreferenceScalarWhereWithAggregatesInputSchema).array() ]).optional(),
-  id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
-  inhabitantId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
-  weekday: z.union([ z.lazy(() => EnumWeekdayWithAggregatesFilterSchema), z.lazy(() => WeekdaySchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeWithAggregatesFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
-}).strict();
-
 export const InhabitantWhereInputSchema: z.ZodType<Prisma.InhabitantWhereInput> = z.object({
   AND: z.union([ z.lazy(() => InhabitantWhereInputSchema), z.lazy(() => InhabitantWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => InhabitantWhereInputSchema).array().optional(),
@@ -975,10 +901,10 @@ export const InhabitantWhereInputSchema: z.ZodType<Prisma.InhabitantWhereInput> 
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   lastName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   birthDate: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
   household: z.union([ z.lazy(() => HouseholdScalarRelationFilterSchema), z.lazy(() => HouseholdWhereInputSchema) ]).optional(),
   allergies: z.lazy(() => AllergyListRelationFilterSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceListRelationFilterSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
   Order: z.lazy(() => OrderListRelationFilterSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
@@ -993,10 +919,10 @@ export const InhabitantOrderByWithRelationInputSchema: z.ZodType<Prisma.Inhabita
   name: z.lazy(() => SortOrderSchema).optional(),
   lastName: z.lazy(() => SortOrderSchema).optional(),
   birthDate: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  dinnerPreferences: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   user: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
   household: z.lazy(() => HouseholdOrderByWithRelationInputSchema).optional(),
   allergies: z.lazy(() => AllergyOrderByRelationAggregateInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceOrderByRelationAggregateInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventOrderByRelationAggregateInputSchema).optional(),
   Order: z.lazy(() => OrderOrderByRelationAggregateInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentOrderByRelationAggregateInputSchema).optional(),
@@ -1042,10 +968,10 @@ export const InhabitantWhereUniqueInputSchema: z.ZodType<Prisma.InhabitantWhereU
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   lastName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   birthDate: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
   household: z.union([ z.lazy(() => HouseholdScalarRelationFilterSchema), z.lazy(() => HouseholdWhereInputSchema) ]).optional(),
   allergies: z.lazy(() => AllergyListRelationFilterSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceListRelationFilterSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventListRelationFilterSchema).optional(),
   Order: z.lazy(() => OrderListRelationFilterSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentListRelationFilterSchema).optional(),
@@ -1060,6 +986,7 @@ export const InhabitantOrderByWithAggregationInputSchema: z.ZodType<Prisma.Inhab
   name: z.lazy(() => SortOrderSchema).optional(),
   lastName: z.lazy(() => SortOrderSchema).optional(),
   birthDate: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  dinnerPreferences: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => InhabitantCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => InhabitantAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => InhabitantMaxOrderByAggregateInputSchema).optional(),
@@ -1079,6 +1006,7 @@ export const InhabitantScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.In
   name: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   lastName: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   birthDate: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
 }).strict();
 
 export const HouseholdWhereInputSchema: z.ZodType<Prisma.HouseholdWhereInput> = z.object({
@@ -1846,6 +1774,9 @@ export const AllergyTypeUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Allergy
 }).strict();
 
 export const AllergyCreateInputSchema: z.ZodType<Prisma.AllergyCreateInput> = z.object({
+  inhabitantComment: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutAllergiesInputSchema),
   allergyType: z.lazy(() => AllergyTypeCreateNestedOneWithoutAllergyInputSchema),
 }).strict();
@@ -1853,10 +1784,16 @@ export const AllergyCreateInputSchema: z.ZodType<Prisma.AllergyCreateInput> = z.
 export const AllergyUncheckedCreateInputSchema: z.ZodType<Prisma.AllergyUncheckedCreateInput> = z.object({
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
+  inhabitantComment: z.string().optional().nullable(),
   allergyTypeId: z.number().int(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const AllergyUpdateInputSchema: z.ZodType<Prisma.AllergyUpdateInput> = z.object({
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutAllergiesNestedInputSchema).optional(),
   allergyType: z.lazy(() => AllergyTypeUpdateOneRequiredWithoutAllergyNestedInputSchema).optional(),
 }).strict();
@@ -1864,22 +1801,34 @@ export const AllergyUpdateInputSchema: z.ZodType<Prisma.AllergyUpdateInput> = z.
 export const AllergyUncheckedUpdateInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergyTypeId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const AllergyCreateManyInputSchema: z.ZodType<Prisma.AllergyCreateManyInput> = z.object({
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
+  inhabitantComment: z.string().optional().nullable(),
   allergyTypeId: z.number().int(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const AllergyUpdateManyMutationInputSchema: z.ZodType<Prisma.AllergyUpdateManyMutationInput> = z.object({
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const AllergyUncheckedUpdateManyInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateManyInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergyTypeId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.object({
@@ -1953,61 +1902,16 @@ export const UserUncheckedUpdateManyInputSchema: z.ZodType<Prisma.UserUncheckedU
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
-export const DinnerPreferenceCreateInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateInput> = z.object({
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
-  inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutDinnerPreferencesInputSchema),
-}).strict();
-
-export const DinnerPreferenceUncheckedCreateInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedCreateInput> = z.object({
-  id: z.number().int().optional(),
-  inhabitantId: z.number().int(),
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
-}).strict();
-
-export const DinnerPreferenceUpdateInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateInput> = z.object({
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-  inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutDinnerPreferencesNestedInputSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedUpdateInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedUpdateInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceCreateManyInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateManyInput> = z.object({
-  id: z.number().int().optional(),
-  inhabitantId: z.number().int(),
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
-}).strict();
-
-export const DinnerPreferenceUpdateManyMutationInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateManyMutationInput> = z.object({
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedUpdateManyInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedUpdateManyInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
 export const InhabitantCreateInputSchema: z.ZodType<Prisma.InhabitantCreateInput> = z.object({
   heynaboId: z.number().int(),
   pictureUrl: z.string().optional().nullable(),
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -2022,8 +1926,8 @@ export const InhabitantUncheckedCreateInputSchema: z.ZodType<Prisma.InhabitantUn
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -2035,10 +1939,10 @@ export const InhabitantUpdateInputSchema: z.ZodType<Prisma.InhabitantUpdateInput
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -2053,8 +1957,8 @@ export const InhabitantUncheckedUpdateInputSchema: z.ZodType<Prisma.InhabitantUn
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -2069,6 +1973,7 @@ export const InhabitantCreateManyInputSchema: z.ZodType<Prisma.InhabitantCreateM
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
 }).strict();
 
 export const InhabitantUpdateManyMutationInputSchema: z.ZodType<Prisma.InhabitantUpdateManyMutationInput> = z.object({
@@ -2077,6 +1982,7 @@ export const InhabitantUpdateManyMutationInputSchema: z.ZodType<Prisma.Inhabitan
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const InhabitantUncheckedUpdateManyInputSchema: z.ZodType<Prisma.InhabitantUncheckedUpdateManyInput> = z.object({
@@ -2088,6 +1994,7 @@ export const InhabitantUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Inhabita
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const HouseholdCreateInputSchema: z.ZodType<Prisma.HouseholdCreateInput> = z.object({
@@ -2847,6 +2754,17 @@ export const StringNullableWithAggregatesFilterSchema: z.ZodType<Prisma.StringNu
   _max: z.lazy(() => NestedStringNullableFilterSchema).optional(),
 }).strict();
 
+export const DateTimeFilterSchema: z.ZodType<Prisma.DateTimeFilter> = z.object({
+  equals: z.coerce.date().optional(),
+  in: z.coerce.date().array().optional(),
+  notIn: z.coerce.date().array().optional(),
+  lt: z.coerce.date().optional(),
+  lte: z.coerce.date().optional(),
+  gt: z.coerce.date().optional(),
+  gte: z.coerce.date().optional(),
+  not: z.union([ z.coerce.date(),z.lazy(() => NestedDateTimeFilterSchema) ]).optional(),
+}).strict();
+
 export const InhabitantScalarRelationFilterSchema: z.ZodType<Prisma.InhabitantScalarRelationFilter> = z.object({
   is: z.lazy(() => InhabitantWhereInputSchema).optional(),
   isNot: z.lazy(() => InhabitantWhereInputSchema).optional(),
@@ -2860,7 +2778,10 @@ export const AllergyTypeScalarRelationFilterSchema: z.ZodType<Prisma.AllergyType
 export const AllergyCountOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyCountOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  inhabitantComment: z.lazy(() => SortOrderSchema).optional(),
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const AllergyAvgOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyAvgOrderByAggregateInput> = z.object({
@@ -2872,13 +2793,19 @@ export const AllergyAvgOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyAvgO
 export const AllergyMaxOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyMaxOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  inhabitantComment: z.lazy(() => SortOrderSchema).optional(),
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const AllergyMinOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyMinOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
+  inhabitantComment: z.lazy(() => SortOrderSchema).optional(),
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const AllergySumOrderByAggregateInputSchema: z.ZodType<Prisma.AllergySumOrderByAggregateInput> = z.object({
@@ -2887,14 +2814,7 @@ export const AllergySumOrderByAggregateInputSchema: z.ZodType<Prisma.AllergySumO
   allergyTypeId: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
-export const EnumSystemRoleFilterSchema: z.ZodType<Prisma.EnumSystemRoleFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
-}).strict();
-
-export const DateTimeFilterSchema: z.ZodType<Prisma.DateTimeFilter> = z.object({
+export const DateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.DateTimeWithAggregatesFilter> = z.object({
   equals: z.coerce.date().optional(),
   in: z.coerce.date().array().optional(),
   notIn: z.coerce.date().array().optional(),
@@ -2902,7 +2822,17 @@ export const DateTimeFilterSchema: z.ZodType<Prisma.DateTimeFilter> = z.object({
   lte: z.coerce.date().optional(),
   gt: z.coerce.date().optional(),
   gte: z.coerce.date().optional(),
-  not: z.union([ z.coerce.date(),z.lazy(() => NestedDateTimeFilterSchema) ]).optional(),
+  not: z.union([ z.coerce.date(),z.lazy(() => NestedDateTimeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedDateTimeFilterSchema).optional(),
+  _max: z.lazy(() => NestedDateTimeFilterSchema).optional(),
+}).strict();
+
+export const EnumSystemRoleFilterSchema: z.ZodType<Prisma.EnumSystemRoleFilter> = z.object({
+  equals: z.lazy(() => SystemRoleSchema).optional(),
+  in: z.lazy(() => SystemRoleSchema).array().optional(),
+  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
+  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
 }).strict();
 
 export const InhabitantNullableScalarRelationFilterSchema: z.ZodType<Prisma.InhabitantNullableScalarRelationFilter> = z.object({
@@ -2958,85 +2888,6 @@ export const EnumSystemRoleWithAggregatesFilterSchema: z.ZodType<Prisma.EnumSyst
   _max: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
 }).strict();
 
-export const DateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.DateTimeWithAggregatesFilter> = z.object({
-  equals: z.coerce.date().optional(),
-  in: z.coerce.date().array().optional(),
-  notIn: z.coerce.date().array().optional(),
-  lt: z.coerce.date().optional(),
-  lte: z.coerce.date().optional(),
-  gt: z.coerce.date().optional(),
-  gte: z.coerce.date().optional(),
-  not: z.union([ z.coerce.date(),z.lazy(() => NestedDateTimeWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedDateTimeFilterSchema).optional(),
-  _max: z.lazy(() => NestedDateTimeFilterSchema).optional(),
-}).strict();
-
-export const EnumWeekdayFilterSchema: z.ZodType<Prisma.EnumWeekdayFilter> = z.object({
-  equals: z.lazy(() => WeekdaySchema).optional(),
-  in: z.lazy(() => WeekdaySchema).array().optional(),
-  notIn: z.lazy(() => WeekdaySchema).array().optional(),
-  not: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => NestedEnumWeekdayFilterSchema) ]).optional(),
-}).strict();
-
-export const EnumDinnerModeFilterSchema: z.ZodType<Prisma.EnumDinnerModeFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceCountOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceCountOrderByAggregateInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  weekday: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceAvgOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceAvgOrderByAggregateInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceMaxOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceMaxOrderByAggregateInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  weekday: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceMinOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceMinOrderByAggregateInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-  weekday: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceSumOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceSumOrderByAggregateInput> = z.object({
-  id: z.lazy(() => SortOrderSchema).optional(),
-  inhabitantId: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const EnumWeekdayWithAggregatesFilterSchema: z.ZodType<Prisma.EnumWeekdayWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => WeekdaySchema).optional(),
-  in: z.lazy(() => WeekdaySchema).array().optional(),
-  notIn: z.lazy(() => WeekdaySchema).array().optional(),
-  not: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => NestedEnumWeekdayWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumWeekdayFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumWeekdayFilterSchema).optional(),
-}).strict();
-
-export const EnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDinnerModeWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
-}).strict();
-
 export const IntNullableFilterSchema: z.ZodType<Prisma.IntNullableFilter> = z.object({
   equals: z.number().optional().nullable(),
   in: z.number().array().optional().nullable(),
@@ -3069,12 +2920,6 @@ export const HouseholdScalarRelationFilterSchema: z.ZodType<Prisma.HouseholdScal
   isNot: z.lazy(() => HouseholdWhereInputSchema).optional(),
 }).strict();
 
-export const DinnerPreferenceListRelationFilterSchema: z.ZodType<Prisma.DinnerPreferenceListRelationFilter> = z.object({
-  every: z.lazy(() => DinnerPreferenceWhereInputSchema).optional(),
-  some: z.lazy(() => DinnerPreferenceWhereInputSchema).optional(),
-  none: z.lazy(() => DinnerPreferenceWhereInputSchema).optional(),
-}).strict();
-
 export const DinnerEventListRelationFilterSchema: z.ZodType<Prisma.DinnerEventListRelationFilter> = z.object({
   every: z.lazy(() => DinnerEventWhereInputSchema).optional(),
   some: z.lazy(() => DinnerEventWhereInputSchema).optional(),
@@ -3091,10 +2936,6 @@ export const CookingTeamAssignmentListRelationFilterSchema: z.ZodType<Prisma.Coo
   every: z.lazy(() => CookingTeamAssignmentWhereInputSchema).optional(),
   some: z.lazy(() => CookingTeamAssignmentWhereInputSchema).optional(),
   none: z.lazy(() => CookingTeamAssignmentWhereInputSchema).optional(),
-}).strict();
-
-export const DinnerPreferenceOrderByRelationAggregateInputSchema: z.ZodType<Prisma.DinnerPreferenceOrderByRelationAggregateInput> = z.object({
-  _count: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const DinnerEventOrderByRelationAggregateInputSchema: z.ZodType<Prisma.DinnerEventOrderByRelationAggregateInput> = z.object({
@@ -3118,6 +2959,7 @@ export const InhabitantCountOrderByAggregateInputSchema: z.ZodType<Prisma.Inhabi
   name: z.lazy(() => SortOrderSchema).optional(),
   lastName: z.lazy(() => SortOrderSchema).optional(),
   birthDate: z.lazy(() => SortOrderSchema).optional(),
+  dinnerPreferences: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const InhabitantAvgOrderByAggregateInputSchema: z.ZodType<Prisma.InhabitantAvgOrderByAggregateInput> = z.object({
@@ -3136,6 +2978,7 @@ export const InhabitantMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Inhabita
   name: z.lazy(() => SortOrderSchema).optional(),
   lastName: z.lazy(() => SortOrderSchema).optional(),
   birthDate: z.lazy(() => SortOrderSchema).optional(),
+  dinnerPreferences: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const InhabitantMinOrderByAggregateInputSchema: z.ZodType<Prisma.InhabitantMinOrderByAggregateInput> = z.object({
@@ -3147,6 +2990,7 @@ export const InhabitantMinOrderByAggregateInputSchema: z.ZodType<Prisma.Inhabita
   name: z.lazy(() => SortOrderSchema).optional(),
   lastName: z.lazy(() => SortOrderSchema).optional(),
   birthDate: z.lazy(() => SortOrderSchema).optional(),
+  dinnerPreferences: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const InhabitantSumOrderByAggregateInputSchema: z.ZodType<Prisma.InhabitantSumOrderByAggregateInput> = z.object({
@@ -3248,6 +3092,13 @@ export const HouseholdSumOrderByAggregateInputSchema: z.ZodType<Prisma.Household
   pbsId: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
+export const EnumDinnerModeFilterSchema: z.ZodType<Prisma.EnumDinnerModeFilter> = z.object({
+  equals: z.lazy(() => DinnerModeSchema).optional(),
+  in: z.lazy(() => DinnerModeSchema).array().optional(),
+  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
+}).strict();
+
 export const CookingTeamNullableScalarRelationFilterSchema: z.ZodType<Prisma.CookingTeamNullableScalarRelationFilter> = z.object({
   is: z.lazy(() => CookingTeamWhereInputSchema).optional().nullable(),
   isNot: z.lazy(() => CookingTeamWhereInputSchema).optional().nullable(),
@@ -3312,6 +3163,16 @@ export const DinnerEventSumOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerE
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const EnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDinnerModeWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DinnerModeSchema).optional(),
+  in: z.lazy(() => DinnerModeSchema).array().optional(),
+  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
 }).strict();
 
 export const EnumTicketTypeFilterSchema: z.ZodType<Prisma.EnumTicketTypeFilter> = z.object({
@@ -3776,6 +3637,10 @@ export const AllergyTypeCreateNestedOneWithoutAllergyInputSchema: z.ZodType<Pris
   connect: z.lazy(() => AllergyTypeWhereUniqueInputSchema).optional(),
 }).strict();
 
+export const DateTimeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.DateTimeFieldUpdateOperationsInput> = z.object({
+  set: z.coerce.date().optional(),
+}).strict();
+
 export const InhabitantUpdateOneRequiredWithoutAllergiesNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneRequiredWithoutAllergiesNestedInput> = z.object({
   create: z.union([ z.lazy(() => InhabitantCreateWithoutAllergiesInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutAllergiesInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => InhabitantCreateOrConnectWithoutAllergiesInputSchema).optional(),
@@ -3808,10 +3673,6 @@ export const EnumSystemRoleFieldUpdateOperationsInputSchema: z.ZodType<Prisma.En
   set: z.lazy(() => SystemRoleSchema).optional(),
 }).strict();
 
-export const DateTimeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.DateTimeFieldUpdateOperationsInput> = z.object({
-  set: z.coerce.date().optional(),
-}).strict();
-
 export const InhabitantUpdateOneWithoutUserNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneWithoutUserNestedInput> = z.object({
   create: z.union([ z.lazy(() => InhabitantCreateWithoutUserInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutUserInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => InhabitantCreateOrConnectWithoutUserInputSchema).optional(),
@@ -3832,28 +3693,6 @@ export const InhabitantUncheckedUpdateOneWithoutUserNestedInputSchema: z.ZodType
   update: z.union([ z.lazy(() => InhabitantUpdateToOneWithWhereWithoutUserInputSchema), z.lazy(() => InhabitantUpdateWithoutUserInputSchema), z.lazy(() => InhabitantUncheckedUpdateWithoutUserInputSchema) ]).optional(),
 }).strict();
 
-export const InhabitantCreateNestedOneWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantCreateNestedOneWithoutDinnerPreferencesInput> = z.object({
-  create: z.union([ z.lazy(() => InhabitantCreateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutDinnerPreferencesInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => InhabitantCreateOrConnectWithoutDinnerPreferencesInputSchema).optional(),
-  connect: z.lazy(() => InhabitantWhereUniqueInputSchema).optional(),
-}).strict();
-
-export const EnumWeekdayFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumWeekdayFieldUpdateOperationsInput> = z.object({
-  set: z.lazy(() => WeekdaySchema).optional(),
-}).strict();
-
-export const EnumDinnerModeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDinnerModeFieldUpdateOperationsInput> = z.object({
-  set: z.lazy(() => DinnerModeSchema).optional(),
-}).strict();
-
-export const InhabitantUpdateOneRequiredWithoutDinnerPreferencesNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneRequiredWithoutDinnerPreferencesNestedInput> = z.object({
-  create: z.union([ z.lazy(() => InhabitantCreateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutDinnerPreferencesInputSchema) ]).optional(),
-  connectOrCreate: z.lazy(() => InhabitantCreateOrConnectWithoutDinnerPreferencesInputSchema).optional(),
-  upsert: z.lazy(() => InhabitantUpsertWithoutDinnerPreferencesInputSchema).optional(),
-  connect: z.lazy(() => InhabitantWhereUniqueInputSchema).optional(),
-  update: z.union([ z.lazy(() => InhabitantUpdateToOneWithWhereWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUpdateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedUpdateWithoutDinnerPreferencesInputSchema) ]).optional(),
-}).strict();
-
 export const UserCreateNestedOneWithoutInhabitantInputSchema: z.ZodType<Prisma.UserCreateNestedOneWithoutInhabitantInput> = z.object({
   create: z.union([ z.lazy(() => UserCreateWithoutInhabitantInputSchema), z.lazy(() => UserUncheckedCreateWithoutInhabitantInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutInhabitantInputSchema).optional(),
@@ -3871,13 +3710,6 @@ export const AllergyCreateNestedManyWithoutInhabitantInputSchema: z.ZodType<Pris
   connectOrCreate: z.union([ z.lazy(() => AllergyCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => AllergyCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
   createMany: z.lazy(() => AllergyCreateManyInhabitantInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => AllergyWhereUniqueInputSchema), z.lazy(() => AllergyWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateNestedManyWithoutInhabitantInput> = z.object({
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema).array(), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => DinnerPreferenceCreateManyInhabitantInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
 export const DinnerEventCreateNestedManyWithoutChefInputSchema: z.ZodType<Prisma.DinnerEventCreateNestedManyWithoutChefInput> = z.object({
@@ -3906,13 +3738,6 @@ export const AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema: z.Zod
   connectOrCreate: z.union([ z.lazy(() => AllergyCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => AllergyCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
   createMany: z.lazy(() => AllergyCreateManyInhabitantInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => AllergyWhereUniqueInputSchema), z.lazy(() => AllergyWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInput> = z.object({
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema).array(), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => DinnerPreferenceCreateManyInhabitantInputEnvelopeSchema).optional(),
-  connect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
 export const DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema: z.ZodType<Prisma.DinnerEventUncheckedCreateNestedManyWithoutChefInput> = z.object({
@@ -3970,20 +3795,6 @@ export const AllergyUpdateManyWithoutInhabitantNestedInputSchema: z.ZodType<Pris
   update: z.union([ z.lazy(() => AllergyUpdateWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => AllergyUpdateWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => AllergyUpdateManyWithWhereWithoutInhabitantInputSchema), z.lazy(() => AllergyUpdateManyWithWhereWithoutInhabitantInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => AllergyScalarWhereInputSchema), z.lazy(() => AllergyScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateManyWithoutInhabitantNestedInput> = z.object({
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema).array(), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => DinnerPreferenceCreateManyInhabitantInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => DinnerPreferenceScalarWhereInputSchema), z.lazy(() => DinnerPreferenceScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
 export const DinnerEventUpdateManyWithoutChefNestedInputSchema: z.ZodType<Prisma.DinnerEventUpdateManyWithoutChefNestedInput> = z.object({
@@ -4048,20 +3859,6 @@ export const AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema: z.Zod
   update: z.union([ z.lazy(() => AllergyUpdateWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => AllergyUpdateWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => AllergyUpdateManyWithWhereWithoutInhabitantInputSchema), z.lazy(() => AllergyUpdateManyWithWhereWithoutInhabitantInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => AllergyScalarWhereInputSchema), z.lazy(() => AllergyScalarWhereInputSchema).array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInput> = z.object({
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema).array(), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema).array() ]).optional(),
-  connectOrCreate: z.union([ z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema).array() ]).optional(),
-  upsert: z.union([ z.lazy(() => DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
-  createMany: z.lazy(() => DinnerPreferenceCreateManyInhabitantInputEnvelopeSchema).optional(),
-  set: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  disconnect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  delete: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  connect: z.union([ z.lazy(() => DinnerPreferenceWhereUniqueInputSchema), z.lazy(() => DinnerPreferenceWhereUniqueInputSchema).array() ]).optional(),
-  update: z.union([ z.lazy(() => DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInputSchema).array() ]).optional(),
-  updateMany: z.union([ z.lazy(() => DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInputSchema).array() ]).optional(),
-  deleteMany: z.union([ z.lazy(() => DinnerPreferenceScalarWhereInputSchema), z.lazy(() => DinnerPreferenceScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
 export const DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema: z.ZodType<Prisma.DinnerEventUncheckedUpdateManyWithoutChefNestedInput> = z.object({
@@ -4220,6 +4017,10 @@ export const OrderUncheckedCreateNestedManyWithoutDinnerEventInputSchema: z.ZodT
   connectOrCreate: z.union([ z.lazy(() => OrderCreateOrConnectWithoutDinnerEventInputSchema), z.lazy(() => OrderCreateOrConnectWithoutDinnerEventInputSchema).array() ]).optional(),
   createMany: z.lazy(() => OrderCreateManyDinnerEventInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+}).strict();
+
+export const EnumDinnerModeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDinnerModeFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => DinnerModeSchema).optional(),
 }).strict();
 
 export const InhabitantUpdateOneWithoutDinnerEventNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneWithoutDinnerEventNestedInput> = z.object({
@@ -4815,13 +4616,6 @@ export const NestedIntNullableFilterSchema: z.ZodType<Prisma.NestedIntNullableFi
   not: z.union([ z.number(),z.lazy(() => NestedIntNullableFilterSchema) ]).optional().nullable(),
 }).strict();
 
-export const NestedEnumSystemRoleFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
-}).strict();
-
 export const NestedDateTimeFilterSchema: z.ZodType<Prisma.NestedDateTimeFilter> = z.object({
   equals: z.coerce.date().optional(),
   in: z.coerce.date().array().optional(),
@@ -4831,16 +4625,6 @@ export const NestedDateTimeFilterSchema: z.ZodType<Prisma.NestedDateTimeFilter> 
   gt: z.coerce.date().optional(),
   gte: z.coerce.date().optional(),
   not: z.union([ z.coerce.date(),z.lazy(() => NestedDateTimeFilterSchema) ]).optional(),
-}).strict();
-
-export const NestedEnumSystemRoleWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
 }).strict();
 
 export const NestedDateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedDateTimeWithAggregatesFilter> = z.object({
@@ -4857,38 +4641,21 @@ export const NestedDateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedDa
   _max: z.lazy(() => NestedDateTimeFilterSchema).optional(),
 }).strict();
 
-export const NestedEnumWeekdayFilterSchema: z.ZodType<Prisma.NestedEnumWeekdayFilter> = z.object({
-  equals: z.lazy(() => WeekdaySchema).optional(),
-  in: z.lazy(() => WeekdaySchema).array().optional(),
-  notIn: z.lazy(() => WeekdaySchema).array().optional(),
-  not: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => NestedEnumWeekdayFilterSchema) ]).optional(),
+export const NestedEnumSystemRoleFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleFilter> = z.object({
+  equals: z.lazy(() => SystemRoleSchema).optional(),
+  in: z.lazy(() => SystemRoleSchema).array().optional(),
+  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
+  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
 }).strict();
 
-export const NestedEnumDinnerModeFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
-}).strict();
-
-export const NestedEnumWeekdayWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumWeekdayWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => WeekdaySchema).optional(),
-  in: z.lazy(() => WeekdaySchema).array().optional(),
-  notIn: z.lazy(() => WeekdaySchema).array().optional(),
-  not: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => NestedEnumWeekdayWithAggregatesFilterSchema) ]).optional(),
+export const NestedEnumSystemRoleWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => SystemRoleSchema).optional(),
+  in: z.lazy(() => SystemRoleSchema).array().optional(),
+  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
+  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleWithAggregatesFilterSchema) ]).optional(),
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumWeekdayFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumWeekdayFilterSchema).optional(),
-}).strict();
-
-export const NestedEnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
 }).strict();
 
 export const NestedDateTimeNullableFilterSchema: z.ZodType<Prisma.NestedDateTimeNullableFilter> = z.object({
@@ -4943,6 +4710,23 @@ export const NestedDateTimeNullableWithAggregatesFilterSchema: z.ZodType<Prisma.
   _max: z.lazy(() => NestedDateTimeNullableFilterSchema).optional(),
 }).strict();
 
+export const NestedEnumDinnerModeFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeFilter> = z.object({
+  equals: z.lazy(() => DinnerModeSchema).optional(),
+  in: z.lazy(() => DinnerModeSchema).array().optional(),
+  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
+}).strict();
+
+export const NestedEnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DinnerModeSchema).optional(),
+  in: z.lazy(() => DinnerModeSchema).array().optional(),
+  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+}).strict();
+
 export const NestedEnumTicketTypeFilterSchema: z.ZodType<Prisma.NestedEnumTicketTypeFilter> = z.object({
   equals: z.lazy(() => TicketTypeSchema).optional(),
   in: z.lazy(() => TicketTypeSchema).array().optional(),
@@ -4991,12 +4775,18 @@ export const NestedBoolWithAggregatesFilterSchema: z.ZodType<Prisma.NestedBoolWi
 }).strict();
 
 export const AllergyCreateWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateWithoutAllergyTypeInput> = z.object({
+  inhabitantComment: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutAllergiesInputSchema),
 }).strict();
 
 export const AllergyUncheckedCreateWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyUncheckedCreateWithoutAllergyTypeInput> = z.object({
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
+  inhabitantComment: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const AllergyCreateOrConnectWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateOrConnectWithoutAllergyTypeInput> = z.object({
@@ -5030,7 +4820,10 @@ export const AllergyScalarWhereInputSchema: z.ZodType<Prisma.AllergyScalarWhereI
   NOT: z.union([ z.lazy(() => AllergyScalarWhereInputSchema), z.lazy(() => AllergyScalarWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  inhabitantComment: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   allergyTypeId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
 
 export const InhabitantCreateWithoutAllergiesInputSchema: z.ZodType<Prisma.InhabitantCreateWithoutAllergiesInput> = z.object({
@@ -5039,9 +4832,9 @@ export const InhabitantCreateWithoutAllergiesInputSchema: z.ZodType<Prisma.Inhab
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5056,7 +4849,7 @@ export const InhabitantUncheckedCreateWithoutAllergiesInputSchema: z.ZodType<Pri
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
+  dinnerPreferences: z.string().optional().nullable(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5102,9 +4895,9 @@ export const InhabitantUpdateWithoutAllergiesInputSchema: z.ZodType<Prisma.Inhab
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -5119,7 +4912,7 @@ export const InhabitantUncheckedUpdateWithoutAllergiesInputSchema: z.ZodType<Pri
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -5155,9 +4948,9 @@ export const InhabitantCreateWithoutUserInputSchema: z.ZodType<Prisma.Inhabitant
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5171,8 +4964,8 @@ export const InhabitantUncheckedCreateWithoutUserInputSchema: z.ZodType<Prisma.I
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5200,9 +4993,9 @@ export const InhabitantUpdateWithoutUserInputSchema: z.ZodType<Prisma.Inhabitant
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -5216,81 +5009,7 @@ export const InhabitantUncheckedUpdateWithoutUserInputSchema: z.ZodType<Prisma.I
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
-  Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-}).strict();
-
-export const InhabitantCreateWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantCreateWithoutDinnerPreferencesInput> = z.object({
-  heynaboId: z.number().int(),
-  pictureUrl: z.string().optional().nullable(),
-  name: z.string(),
-  lastName: z.string(),
-  birthDate: z.coerce.date().optional().nullable(),
-  user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
-  household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
-  allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
-  Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
-}).strict();
-
-export const InhabitantUncheckedCreateWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantUncheckedCreateWithoutDinnerPreferencesInput> = z.object({
-  id: z.number().int().optional(),
-  heynaboId: z.number().int(),
-  userId: z.number().int().optional().nullable(),
-  householdId: z.number().int(),
-  pictureUrl: z.string().optional().nullable(),
-  name: z.string(),
-  lastName: z.string(),
-  birthDate: z.coerce.date().optional().nullable(),
-  allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
-  Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-}).strict();
-
-export const InhabitantCreateOrConnectWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantCreateOrConnectWithoutDinnerPreferencesInput> = z.object({
-  where: z.lazy(() => InhabitantWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => InhabitantCreateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutDinnerPreferencesInputSchema) ]),
-}).strict();
-
-export const InhabitantUpsertWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantUpsertWithoutDinnerPreferencesInput> = z.object({
-  update: z.union([ z.lazy(() => InhabitantUpdateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedUpdateWithoutDinnerPreferencesInputSchema) ]),
-  create: z.union([ z.lazy(() => InhabitantCreateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutDinnerPreferencesInputSchema) ]),
-  where: z.lazy(() => InhabitantWhereInputSchema).optional(),
-}).strict();
-
-export const InhabitantUpdateToOneWithWhereWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantUpdateToOneWithWhereWithoutDinnerPreferencesInput> = z.object({
-  where: z.lazy(() => InhabitantWhereInputSchema).optional(),
-  data: z.union([ z.lazy(() => InhabitantUpdateWithoutDinnerPreferencesInputSchema), z.lazy(() => InhabitantUncheckedUpdateWithoutDinnerPreferencesInputSchema) ]),
-}).strict();
-
-export const InhabitantUpdateWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantUpdateWithoutDinnerPreferencesInput> = z.object({
-  heynaboId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  pictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
-  household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
-  allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
-  Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-}).strict();
-
-export const InhabitantUncheckedUpdateWithoutDinnerPreferencesInputSchema: z.ZodType<Prisma.InhabitantUncheckedUpdateWithoutDinnerPreferencesInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  heynaboId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  userId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  householdId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  pictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -5348,12 +5067,18 @@ export const HouseholdCreateOrConnectWithoutInhabitantsInputSchema: z.ZodType<Pr
 }).strict();
 
 export const AllergyCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyCreateWithoutInhabitantInput> = z.object({
+  inhabitantComment: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   allergyType: z.lazy(() => AllergyTypeCreateNestedOneWithoutAllergyInputSchema),
 }).strict();
 
 export const AllergyUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyUncheckedCreateWithoutInhabitantInput> = z.object({
   id: z.number().int().optional(),
+  inhabitantComment: z.string().optional().nullable(),
   allergyTypeId: z.number().int(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const AllergyCreateOrConnectWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyCreateOrConnectWithoutInhabitantInput> = z.object({
@@ -5363,26 +5088,6 @@ export const AllergyCreateOrConnectWithoutInhabitantInputSchema: z.ZodType<Prism
 
 export const AllergyCreateManyInhabitantInputEnvelopeSchema: z.ZodType<Prisma.AllergyCreateManyInhabitantInputEnvelope> = z.object({
   data: z.union([ z.lazy(() => AllergyCreateManyInhabitantInputSchema), z.lazy(() => AllergyCreateManyInhabitantInputSchema).array() ]),
-}).strict();
-
-export const DinnerPreferenceCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateWithoutInhabitantInput> = z.object({
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
-}).strict();
-
-export const DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedCreateWithoutInhabitantInput> = z.object({
-  id: z.number().int().optional(),
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
-}).strict();
-
-export const DinnerPreferenceCreateOrConnectWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateOrConnectWithoutInhabitantInput> = z.object({
-  where: z.lazy(() => DinnerPreferenceWhereUniqueInputSchema),
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema) ]),
-}).strict();
-
-export const DinnerPreferenceCreateManyInhabitantInputEnvelopeSchema: z.ZodType<Prisma.DinnerPreferenceCreateManyInhabitantInputEnvelope> = z.object({
-  data: z.union([ z.lazy(() => DinnerPreferenceCreateManyInhabitantInputSchema), z.lazy(() => DinnerPreferenceCreateManyInhabitantInputSchema).array() ]),
 }).strict();
 
 export const DinnerEventCreateWithoutChefInputSchema: z.ZodType<Prisma.DinnerEventCreateWithoutChefInput> = z.object({
@@ -5553,32 +5258,6 @@ export const AllergyUpdateManyWithWhereWithoutInhabitantInputSchema: z.ZodType<P
   data: z.union([ z.lazy(() => AllergyUpdateManyMutationInputSchema), z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantInputSchema) ]),
 }).strict();
 
-export const DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUpsertWithWhereUniqueWithoutInhabitantInput> = z.object({
-  where: z.lazy(() => DinnerPreferenceWhereUniqueInputSchema),
-  update: z.union([ z.lazy(() => DinnerPreferenceUpdateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedUpdateWithoutInhabitantInputSchema) ]),
-  create: z.union([ z.lazy(() => DinnerPreferenceCreateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedCreateWithoutInhabitantInputSchema) ]),
-}).strict();
-
-export const DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateWithWhereUniqueWithoutInhabitantInput> = z.object({
-  where: z.lazy(() => DinnerPreferenceWhereUniqueInputSchema),
-  data: z.union([ z.lazy(() => DinnerPreferenceUpdateWithoutInhabitantInputSchema), z.lazy(() => DinnerPreferenceUncheckedUpdateWithoutInhabitantInputSchema) ]),
-}).strict();
-
-export const DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateManyWithWhereWithoutInhabitantInput> = z.object({
-  where: z.lazy(() => DinnerPreferenceScalarWhereInputSchema),
-  data: z.union([ z.lazy(() => DinnerPreferenceUpdateManyMutationInputSchema), z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantInputSchema) ]),
-}).strict();
-
-export const DinnerPreferenceScalarWhereInputSchema: z.ZodType<Prisma.DinnerPreferenceScalarWhereInput> = z.object({
-  AND: z.union([ z.lazy(() => DinnerPreferenceScalarWhereInputSchema), z.lazy(() => DinnerPreferenceScalarWhereInputSchema).array() ]).optional(),
-  OR: z.lazy(() => DinnerPreferenceScalarWhereInputSchema).array().optional(),
-  NOT: z.union([ z.lazy(() => DinnerPreferenceScalarWhereInputSchema), z.lazy(() => DinnerPreferenceScalarWhereInputSchema).array() ]).optional(),
-  id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
-  inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
-  weekday: z.union([ z.lazy(() => EnumWeekdayFilterSchema), z.lazy(() => WeekdaySchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
-}).strict();
-
 export const DinnerEventUpsertWithWhereUniqueWithoutChefInputSchema: z.ZodType<Prisma.DinnerEventUpsertWithWhereUniqueWithoutChefInput> = z.object({
   where: z.lazy(() => DinnerEventWhereUniqueInputSchema),
   update: z.union([ z.lazy(() => DinnerEventUpdateWithoutChefInputSchema), z.lazy(() => DinnerEventUncheckedUpdateWithoutChefInputSchema) ]),
@@ -5676,9 +5355,9 @@ export const InhabitantCreateWithoutHouseholdInputSchema: z.ZodType<Prisma.Inhab
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5692,8 +5371,8 @@ export const InhabitantUncheckedCreateWithoutHouseholdInputSchema: z.ZodType<Pri
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
@@ -5762,6 +5441,7 @@ export const InhabitantScalarWhereInputSchema: z.ZodType<Prisma.InhabitantScalar
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   lastName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   birthDate: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
 }).strict();
 
 export const InvoiceUpsertWithWhereUniqueWithoutHouseHoldInputSchema: z.ZodType<Prisma.InvoiceUpsertWithWhereUniqueWithoutHouseHoldInput> = z.object({
@@ -5798,10 +5478,10 @@ export const InhabitantCreateWithoutDinnerEventInputSchema: z.ZodType<Prisma.Inh
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -5815,8 +5495,8 @@ export const InhabitantUncheckedCreateWithoutDinnerEventInputSchema: z.ZodType<P
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -5921,10 +5601,10 @@ export const InhabitantUpdateWithoutDinnerEventInputSchema: z.ZodType<Prisma.Inh
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -5938,8 +5618,8 @@ export const InhabitantUncheckedUpdateWithoutDinnerEventInputSchema: z.ZodType<P
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -6062,10 +5742,10 @@ export const InhabitantCreateWithoutOrderInputSchema: z.ZodType<Prisma.Inhabitan
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -6079,8 +5759,8 @@ export const InhabitantUncheckedCreateWithoutOrderInputSchema: z.ZodType<Prisma.
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -6163,10 +5843,10 @@ export const InhabitantUpdateWithoutOrderInputSchema: z.ZodType<Prisma.Inhabitan
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -6180,8 +5860,8 @@ export const InhabitantUncheckedUpdateWithoutOrderInputSchema: z.ZodType<Prisma.
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -6609,10 +6289,10 @@ export const InhabitantCreateWithoutCookingTeamAssignmentInputSchema: z.ZodType<
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutInhabitantInputSchema).optional(),
   household: z.lazy(() => HouseholdCreateNestedOneWithoutInhabitantsInputSchema),
   allergies: z.lazy(() => AllergyCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -6626,8 +6306,8 @@ export const InhabitantUncheckedCreateWithoutCookingTeamAssignmentInputSchema: z
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedCreateNestedManyWithoutChefInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedCreateNestedManyWithoutInhabitantInputSchema).optional(),
 }).strict();
@@ -6680,10 +6360,10 @@ export const InhabitantUpdateWithoutCookingTeamAssignmentInputSchema: z.ZodType<
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   household: z.lazy(() => HouseholdUpdateOneRequiredWithoutInhabitantsNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -6697,8 +6377,8 @@ export const InhabitantUncheckedUpdateWithoutCookingTeamAssignmentInputSchema: z
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
 }).strict();
@@ -6930,31 +6610,40 @@ export const SeasonUncheckedUpdateWithoutTicketPricesInputSchema: z.ZodType<Pris
 export const AllergyCreateManyAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateManyAllergyTypeInput> = z.object({
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
+  inhabitantComment: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const AllergyUpdateWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyUpdateWithoutAllergyTypeInput> = z.object({
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutAllergiesNestedInputSchema).optional(),
 }).strict();
 
 export const AllergyUncheckedUpdateWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateWithoutAllergyTypeInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const AllergyUncheckedUpdateManyWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateManyWithoutAllergyTypeInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const AllergyCreateManyInhabitantInputSchema: z.ZodType<Prisma.AllergyCreateManyInhabitantInput> = z.object({
   id: z.number().int().optional(),
+  inhabitantComment: z.string().optional().nullable(),
   allergyTypeId: z.number().int(),
-}).strict();
-
-export const DinnerPreferenceCreateManyInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceCreateManyInhabitantInput> = z.object({
-  id: z.number().int().optional(),
-  weekday: z.lazy(() => WeekdaySchema),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 }).strict();
 
 export const DinnerEventCreateManyChefInputSchema: z.ZodType<Prisma.DinnerEventCreateManyChefInput> = z.object({
@@ -6989,34 +6678,26 @@ export const CookingTeamAssignmentCreateManyInhabitantInputSchema: z.ZodType<Pri
 }).strict();
 
 export const AllergyUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyUpdateWithoutInhabitantInput> = z.object({
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   allergyType: z.lazy(() => AllergyTypeUpdateOneRequiredWithoutAllergyNestedInputSchema).optional(),
 }).strict();
 
 export const AllergyUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateWithoutInhabitantInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergyTypeId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const AllergyUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Prisma.AllergyUncheckedUpdateManyWithoutInhabitantInput> = z.object({
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  inhabitantComment: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergyTypeId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUpdateWithoutInhabitantInput> = z.object({
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedUpdateWithoutInhabitantInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
-}).strict();
-
-export const DinnerPreferenceUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Prisma.DinnerPreferenceUncheckedUpdateManyWithoutInhabitantInput> = z.object({
-  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  weekday: z.union([ z.lazy(() => WeekdaySchema), z.lazy(() => EnumWeekdayFieldUpdateOperationsInputSchema) ]).optional(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const DinnerEventUpdateWithoutChefInputSchema: z.ZodType<Prisma.DinnerEventUpdateWithoutChefInput> = z.object({
@@ -7121,6 +6802,7 @@ export const InhabitantCreateManyHouseholdInputSchema: z.ZodType<Prisma.Inhabita
   name: z.string(),
   lastName: z.string(),
   birthDate: z.coerce.date().optional().nullable(),
+  dinnerPreferences: z.string().optional().nullable(),
 }).strict();
 
 export const InvoiceCreateManyHouseHoldInputSchema: z.ZodType<Prisma.InvoiceCreateManyHouseHoldInput> = z.object({
@@ -7137,9 +6819,9 @@ export const InhabitantUpdateWithoutHouseholdInputSchema: z.ZodType<Prisma.Inhab
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneWithoutInhabitantNestedInputSchema).optional(),
   allergies: z.lazy(() => AllergyUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -7153,8 +6835,8 @@ export const InhabitantUncheckedUpdateWithoutHouseholdInputSchema: z.ZodType<Pri
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   allergies: z.lazy(() => AllergyUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
-  dinnerPreferences: z.lazy(() => DinnerPreferenceUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   DinnerEvent: z.lazy(() => DinnerEventUncheckedUpdateManyWithoutChefNestedInputSchema).optional(),
   Order: z.lazy(() => OrderUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
   CookingTeamAssignment: z.lazy(() => CookingTeamAssignmentUncheckedUpdateManyWithoutInhabitantNestedInputSchema).optional(),
@@ -7168,6 +6850,7 @@ export const InhabitantUncheckedUpdateManyWithoutHouseholdInputSchema: z.ZodType
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   lastName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   birthDate: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dinnerPreferences: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 }).strict();
 
 export const InvoiceUpdateWithoutHouseHoldInputSchema: z.ZodType<Prisma.InvoiceUpdateWithoutHouseHoldInput> = z.object({
@@ -7646,68 +7329,6 @@ export const UserFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.UserFindUniqueOrT
   select: UserSelectSchema.optional(),
   include: UserIncludeSchema.optional(),
   where: UserWhereUniqueInputSchema, 
-}).strict();
-
-export const DinnerPreferenceFindFirstArgsSchema: z.ZodType<Prisma.DinnerPreferenceFindFirstArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  orderBy: z.union([ DinnerPreferenceOrderByWithRelationInputSchema.array(), DinnerPreferenceOrderByWithRelationInputSchema ]).optional(),
-  cursor: DinnerPreferenceWhereUniqueInputSchema.optional(), 
-  take: z.number().optional(),
-  skip: z.number().optional(),
-  distinct: z.union([ DinnerPreferenceScalarFieldEnumSchema, DinnerPreferenceScalarFieldEnumSchema.array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceFindFirstOrThrowArgsSchema: z.ZodType<Prisma.DinnerPreferenceFindFirstOrThrowArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  orderBy: z.union([ DinnerPreferenceOrderByWithRelationInputSchema.array(), DinnerPreferenceOrderByWithRelationInputSchema ]).optional(),
-  cursor: DinnerPreferenceWhereUniqueInputSchema.optional(), 
-  take: z.number().optional(),
-  skip: z.number().optional(),
-  distinct: z.union([ DinnerPreferenceScalarFieldEnumSchema, DinnerPreferenceScalarFieldEnumSchema.array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceFindManyArgsSchema: z.ZodType<Prisma.DinnerPreferenceFindManyArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  orderBy: z.union([ DinnerPreferenceOrderByWithRelationInputSchema.array(), DinnerPreferenceOrderByWithRelationInputSchema ]).optional(),
-  cursor: DinnerPreferenceWhereUniqueInputSchema.optional(), 
-  take: z.number().optional(),
-  skip: z.number().optional(),
-  distinct: z.union([ DinnerPreferenceScalarFieldEnumSchema, DinnerPreferenceScalarFieldEnumSchema.array() ]).optional(),
-}).strict();
-
-export const DinnerPreferenceAggregateArgsSchema: z.ZodType<Prisma.DinnerPreferenceAggregateArgs> = z.object({
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  orderBy: z.union([ DinnerPreferenceOrderByWithRelationInputSchema.array(), DinnerPreferenceOrderByWithRelationInputSchema ]).optional(),
-  cursor: DinnerPreferenceWhereUniqueInputSchema.optional(), 
-  take: z.number().optional(),
-  skip: z.number().optional(),
-}).strict();
-
-export const DinnerPreferenceGroupByArgsSchema: z.ZodType<Prisma.DinnerPreferenceGroupByArgs> = z.object({
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  orderBy: z.union([ DinnerPreferenceOrderByWithAggregationInputSchema.array(), DinnerPreferenceOrderByWithAggregationInputSchema ]).optional(),
-  by: DinnerPreferenceScalarFieldEnumSchema.array(), 
-  having: DinnerPreferenceScalarWhereWithAggregatesInputSchema.optional(), 
-  take: z.number().optional(),
-  skip: z.number().optional(),
-}).strict();
-
-export const DinnerPreferenceFindUniqueArgsSchema: z.ZodType<Prisma.DinnerPreferenceFindUniqueArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereUniqueInputSchema, 
-}).strict();
-
-export const DinnerPreferenceFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.DinnerPreferenceFindUniqueOrThrowArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereUniqueInputSchema, 
 }).strict();
 
 export const InhabitantFindFirstArgsSchema: z.ZodType<Prisma.InhabitantFindFirstArgs> = z.object({
@@ -8483,58 +8104,6 @@ export const UserUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.UserUpdateManyA
 
 export const UserDeleteManyArgsSchema: z.ZodType<Prisma.UserDeleteManyArgs> = z.object({
   where: UserWhereInputSchema.optional(), 
-  limit: z.number().optional(),
-}).strict();
-
-export const DinnerPreferenceCreateArgsSchema: z.ZodType<Prisma.DinnerPreferenceCreateArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  data: z.union([ DinnerPreferenceCreateInputSchema, DinnerPreferenceUncheckedCreateInputSchema ]),
-}).strict();
-
-export const DinnerPreferenceUpsertArgsSchema: z.ZodType<Prisma.DinnerPreferenceUpsertArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereUniqueInputSchema, 
-  create: z.union([ DinnerPreferenceCreateInputSchema, DinnerPreferenceUncheckedCreateInputSchema ]),
-  update: z.union([ DinnerPreferenceUpdateInputSchema, DinnerPreferenceUncheckedUpdateInputSchema ]),
-}).strict();
-
-export const DinnerPreferenceCreateManyArgsSchema: z.ZodType<Prisma.DinnerPreferenceCreateManyArgs> = z.object({
-  data: z.union([ DinnerPreferenceCreateManyInputSchema, DinnerPreferenceCreateManyInputSchema.array() ]),
-}).strict();
-
-export const DinnerPreferenceCreateManyAndReturnArgsSchema: z.ZodType<Prisma.DinnerPreferenceCreateManyAndReturnArgs> = z.object({
-  data: z.union([ DinnerPreferenceCreateManyInputSchema, DinnerPreferenceCreateManyInputSchema.array() ]),
-}).strict();
-
-export const DinnerPreferenceDeleteArgsSchema: z.ZodType<Prisma.DinnerPreferenceDeleteArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  where: DinnerPreferenceWhereUniqueInputSchema, 
-}).strict();
-
-export const DinnerPreferenceUpdateArgsSchema: z.ZodType<Prisma.DinnerPreferenceUpdateArgs> = z.object({
-  select: DinnerPreferenceSelectSchema.optional(),
-  include: DinnerPreferenceIncludeSchema.optional(),
-  data: z.union([ DinnerPreferenceUpdateInputSchema, DinnerPreferenceUncheckedUpdateInputSchema ]),
-  where: DinnerPreferenceWhereUniqueInputSchema, 
-}).strict();
-
-export const DinnerPreferenceUpdateManyArgsSchema: z.ZodType<Prisma.DinnerPreferenceUpdateManyArgs> = z.object({
-  data: z.union([ DinnerPreferenceUpdateManyMutationInputSchema, DinnerPreferenceUncheckedUpdateManyInputSchema ]),
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  limit: z.number().optional(),
-}).strict();
-
-export const DinnerPreferenceUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.DinnerPreferenceUpdateManyAndReturnArgs> = z.object({
-  data: z.union([ DinnerPreferenceUpdateManyMutationInputSchema, DinnerPreferenceUncheckedUpdateManyInputSchema ]),
-  where: DinnerPreferenceWhereInputSchema.optional(), 
-  limit: z.number().optional(),
-}).strict();
-
-export const DinnerPreferenceDeleteManyArgsSchema: z.ZodType<Prisma.DinnerPreferenceDeleteManyArgs> = z.object({
-  where: DinnerPreferenceWhereInputSchema.optional(), 
   limit: z.number().optional(),
 }).strict();
 

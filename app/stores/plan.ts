@@ -126,6 +126,14 @@ export const usePlanStore = defineStore("Plan", () => {
             loadSeason(id)
         }
 
+        // Get safeSeason from composable to reuse fallback logic (after onSeasonSelect is defined)
+        const {safeSeason} = useSeasonSelector({
+            seasons: computed(() => seasons.value),
+            selectedSeasonId: computed(() => selectedSeasonId.value),
+            activeSeason: computed(() => activeSeason.value),
+            onSeasonSelect
+        })
+
         const createSeason = async (season: Season): Promise<Season> => {
             try {
                 // API accepts domain objects (JSON.stringify converts Date to ISO strings)
@@ -305,13 +313,11 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const initPlanStore = (shortName?: string) => {
-            // seasons and activeSeasonId autoload when store is created (immediate: true)
-            // If shortName provided: use that. Otherwise: keep current selection, or fall back to active
-            const seasonId = shortName
-                ? seasons.value.find(s => s.shortName === shortName)?.id
-                : (selectedSeasonId.value ?? activeSeasonId.value)
-            console.info('🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName ?? 'none',
-                'current:', selectedSeasonId.value, 'resolved:', seasonId)
+            // Use safeSeason to validate and get safe shortName with fallbacks
+            const safeShortName = safeSeason(shortName)
+            const seasonId = seasons.value.find(s => s.shortName === safeShortName)?.id
+            console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName ?? 'none',
+                'safe:', safeShortName ?? 'none', 'current:', selectedSeasonId.value, 'resolved:', seasonId)
 
             if (seasonId && seasonId !== selectedSeasonId.value) loadSeason(seasonId)
         }
@@ -322,7 +328,7 @@ export const usePlanStore = defineStore("Plan", () => {
             if (activeSeasonId.value === undefined) return // Wait for activeSeasonId to load
             if (selectedSeasonId.value !== null) return // Already selected
 
-            console.info('🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')
+            console.info(LOG_CTX, '🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')
             initPlanStore()
         })
 
