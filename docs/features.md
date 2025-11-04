@@ -63,6 +63,12 @@ Solve problems with signing up for meals, and paying for them
 - Add or remove team members with a quick search
 - Everyone saves automatically - no save buttons needed
 
+#### Navigation & URL Management
+- **Clean, bookmarkable URLs** for all admin sections (`/admin/planning`, `/admin/users`, etc.)
+- **Form modes in URL** (view/edit/create) - share links to specific admin states
+- **Browser navigation works** - use back/forward buttons to navigate between forms
+- **Auto-save without page reload** - changes save immediately without losing your place
+
 #### Household Management
 - View all households with inhabitants
 - Compact display with avatar groups
