@@ -33,6 +33,7 @@ const mockSeasons: Season[] = [
 describe('useSeasonSelector', () => {
   let mockSeasonsRef: any
   let mockSelectedSeasonIdRef: any
+  let mockActiveSeasonRef: any
   let mockOnSeasonSelect: any
 
   beforeEach(() => {
@@ -42,6 +43,7 @@ describe('useSeasonSelector', () => {
     // Setup mock dependencies as refs (simulating what store would provide)
     mockSeasonsRef = ref(mockSeasons)
     mockSelectedSeasonIdRef = ref(mockSeasons[0].id)
+    mockActiveSeasonRef = ref(mockSeasons.find(s => s.isActive))
     mockOnSeasonSelect = vi.fn((id: number) => {
       // Simulate store behavior: update selectedSeasonId when season is selected
       mockSelectedSeasonIdRef.value = id
@@ -59,6 +61,7 @@ describe('useSeasonSelector', () => {
     const { season } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
       selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
+      activeSeason: computed(() => mockActiveSeasonRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -77,6 +80,7 @@ describe('useSeasonSelector', () => {
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
       selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
+      activeSeason: computed(() => mockActiveSeasonRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -95,6 +99,7 @@ describe('useSeasonSelector', () => {
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
       selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
+      activeSeason: computed(() => mockActiveSeasonRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -113,6 +118,7 @@ describe('useSeasonSelector', () => {
     useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
       selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
+      activeSeason: computed(() => mockActiveSeasonRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 
@@ -131,6 +137,7 @@ describe('useSeasonSelector', () => {
     const { onSeasonChange } = useSeasonSelector({
       seasons: computed(() => mockSeasonsRef.value),
       selectedSeasonId: computed(() => mockSelectedSeasonIdRef.value),
+      activeSeason: computed(() => mockActiveSeasonRef.value),
       onSeasonSelect: mockOnSeasonSelect
     })
 

@@ -447,7 +447,7 @@ describe('getHouseholdShortName', () => {
             description: 'non alphanumeric characters in words'
         },
         {
-            address: '123',
+            address: ' 123 ',
             expected: '123',
             description: 'number with space + word (should replace spaces with underscores)'
         }

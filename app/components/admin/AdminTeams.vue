@@ -47,7 +47,7 @@ const {formMode, onModeChange} = useEntityFormManager<CookingTeam[]>({
 })
 
 // SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
-const selectedSeasonId = computed(() => selectedSeason.value?.id)
+const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {onSeasonChange, season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,

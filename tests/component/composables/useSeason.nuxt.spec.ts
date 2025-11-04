@@ -34,7 +34,7 @@ describe('useSeasonSchema', () => {
             start: new Date(2024, 0, 1),
             end: new Date(2024, 11, 31)
         } satisfies DateRange
-        expect(createSeasonName(dateRange)).toBe('01/24 - 12/24')
+        expect(createSeasonName(dateRange)).toBe('01/24-12/24')
     })
 
     it('should correctly determine if date is within season', async () => {

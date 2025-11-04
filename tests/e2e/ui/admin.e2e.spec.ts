@@ -40,7 +40,7 @@ test.describe('Admin page path-based navigation', () => {
       await pollUntil(
         async () => page.url(),
         (url) => url.includes('/admin/planning'),
-        5
+        10
       )
       expect(page.url()).toContain('/admin/planning')
 

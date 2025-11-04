@@ -1,6 +1,7 @@
 import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
 import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval

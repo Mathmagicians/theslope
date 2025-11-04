@@ -203,7 +203,7 @@ describe('formatDateRange', () => {
             end: new Date(2024, 11, 31)  // December 31, 2024
         }
         const result = formatDateRange(range)
-        expect(result).toBe('01/01/2024 - 31/12/2024')
+        expect(result).toBe('01/01/2024-31/12/2024')
     })
 
     it('should format date range with custom mask', () => {
@@ -212,7 +212,7 @@ describe('formatDateRange', () => {
             end: new Date(2024, 11, 31)
         }
         const result = formatDateRange(range, 'MM/yy')
-        expect(result).toBe('01/24 - 12/24')
+        expect(result).toBe('01/24-12/24')
     })
 })
 

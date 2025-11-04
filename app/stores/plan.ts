@@ -2,7 +2,6 @@ import {type Season} from '~/composables/useSeasonValidation'
 import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import {type DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import {SeasonSchema} from "~~/prisma/generated/zod";
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
@@ -10,7 +9,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const {SeasonSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
-    
+
         // ========================================
         // State - useFetch with status exposed internally
         // ========================================
@@ -19,7 +18,7 @@ export const usePlanStore = defineStore("Plan", () => {
         // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
 
         // Fetch active season ID (static endpoint - no reactive URL issues)
-        const { data: activeSeasonId , refresh: refreshActiveSeasonId} = useFetch<number | undefined>(
+        const {data: activeSeasonId, refresh: refreshActiveSeasonId} = useFetch<number | undefined>(
             '/api/admin/season/activeId',
             {
                 key: 'plan-store-active-season-id',
@@ -28,7 +27,7 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
-      
+
         const {
             data: seasons, status: seasonsStatus,
             error: seasonsError, refresh: refreshSeasons
@@ -52,7 +51,7 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // Use useAsyncData for detail endpoint - allows manual execute() without context issues
         const selectedSeasonId = ref<number | null>(null)
-        const selectedSeasonKey = computed(() =>  `/api/admin/season/${selectedSeasonId.value || 'null' }`)
+        const selectedSeasonKey = computed(() => `/api/admin/season/${selectedSeasonId.value || 'null'}`)
 
         const {
             data: selectedSeason, status: selectedSeasonStatus,
@@ -105,7 +104,7 @@ export const usePlanStore = defineStore("Plan", () => {
             return [...disabledSet]
         })
 
-        // ACTIONS - CRUD operations only
+        // ACTIONS
         const loadSeasons = async () => {
             await refreshSeasons()
             if (seasonsError.value) {
@@ -122,17 +121,18 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
         }
 
+        const loadSeasonByShortName = (shortName: string) => {
+            const season = seasons.value.find(s => s.shortName === shortName)
+            if (season) {
+                loadSeason(season.id)
+            } else {
+                console.warn(`🗓️ > PLAN_STORE > No season found with shortName "${shortName}"`)
+            }
+        }
+
         const onSeasonSelect = (id: number) => {
             loadSeason(id)
         }
-
-        // Get safeSeason from composable to reuse fallback logic (after onSeasonSelect is defined)
-        const {safeSeason} = useSeasonSelector({
-            seasons: computed(() => seasons.value),
-            selectedSeasonId: computed(() => selectedSeasonId.value),
-            activeSeason: computed(() => activeSeason.value),
-            onSeasonSelect
-        })
 
         const createSeason = async (season: Season): Promise<Season> => {
             try {
@@ -313,13 +313,13 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const initPlanStore = (shortName?: string) => {
-            // Use safeSeason to validate and get safe shortName with fallbacks
-            const safeShortName = safeSeason(shortName)
-            const seasonId = seasons.value.find(s => s.shortName === safeShortName)?.id
-            console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName ?? 'none',
-                'safe:', safeShortName ?? 'none', 'current:', selectedSeasonId.value, 'resolved:', seasonId)
-
-            if (seasonId && seasonId !== selectedSeasonId.value) loadSeason(seasonId)
+            console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName,
+                'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
+            if (shortName) {
+                loadSeasonByShortName(shortName!)
+            } else if (activeSeasonId.value) {
+                loadSeason(activeSeasonId.value)
+            }
         }
 
         // AUTO-INITIALIZATION - Watch for seasons to load, then auto-select active season
@@ -331,6 +331,8 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(LOG_CTX, '🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')
             initPlanStore()
         })
+
+        initPlanStore()
 
 
         return {

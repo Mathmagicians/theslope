@@ -96,7 +96,10 @@ useHead({
 
 <template>
   <div>
-    <UCard v-if="isSelectedHouseholdInitialized && selectedHousehold" class="w-full px-0 rounded-none md:rounded-lg">
+    <ViewError v-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
+               :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
+    <Loader v-else-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
+    <UCard v-else-if="isSelectedHouseholdInitialized && selectedHousehold" class="w-full px-0 rounded-none md:rounded-lg">
       <template #header>
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-home" class="text-2xl"/>
@@ -111,10 +114,7 @@ useHead({
           color="primary"
       >
         <template #content="{ item }">
-          <ViewError v-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
-                     :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
-          <Loader v-else-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
-          <component v-else :is="asyncComponents[item.value]" :household="selectedHousehold"/>
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold"/>
         </template>
       </UTabs>
     </UCard>

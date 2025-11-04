@@ -50,6 +50,7 @@ test.describe('Household tab navigation', () => {
         }
     })
 
+
     test('Base URL redirects to default tab', async ({page}) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}`)
 
