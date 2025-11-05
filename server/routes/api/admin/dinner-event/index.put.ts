@@ -15,21 +15,21 @@ export default defineEventHandler(async (event) => {
     try {
         dinnerEventData = await readValidatedBody(event, DinnerEventCreateSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('<} > DINNER_EVENT > [PUT] Input validation error', error)
-        console.error(`<} > DINNER_EVENT > [PUT] ${h3e.statusMessage}`, error)
+        const h3e = h3eFromCatch('️️🍽️> DINNER_EVENT > [PUT] Input validation error', error)
+        console.error(`🍽️ > DINNER_EVENT > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`<} > DINNER_EVENT > [PUT] Creating dinner event ${dinnerEventData.menuTitle}`)
+        console.log(`🍽️ > DINNER_EVENT > [PUT] Creating dinner event ${dinnerEventData.menuTitle}`)
         const savedDinnerEvent = await saveDinnerEvent(d1Client, dinnerEventData)
-        console.info(`<} > DINNER_EVENT > [PUT] Successfully created dinner event ${savedDinnerEvent.menuTitle}`)
+        console.info(`🍽️> DINNER_EVENT > [PUT] Successfully created dinner event ${savedDinnerEvent.menuTitle}`)
         setResponseStatus(event, 201)
         return savedDinnerEvent
     } catch (error) {
-        const h3e = h3eFromCatch(`<} > DINNER_EVENT > [PUT] Error creating dinner event`, error)
-        console.error(`<} > DINNER_EVENT > [PUT] ${h3e.statusMessage}`, error)
+        const h3e = h3eFromCatch(`🍽️ > DINNER_EVENT > [PUT] Error creating dinner event`, error)
+        console.error(`🍽️ > DINNER_EVENT > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }
 })

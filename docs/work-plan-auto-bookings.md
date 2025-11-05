@@ -60,28 +60,37 @@ Implement automatic creation of default dining preferences for inhabitants and a
 
 ### Where to Implement
 
-1. **Order Validation** → New composable: `app/composables/useOrderValidation.ts`
-   - Following ADR-001 pattern for shared validation
-   - Domain types with serialization support
+**Following established pattern from `useSeason` + `generate-dinner-events.post.ts`:**
 
-2. **Repository Methods** → Extend `server/data/prismaRepository.ts`
+1. **Order Domain Logic** → New composable: `app/composables/useOrder.ts`
+   - Pure domain logic for order generation (client/server shared)
+   - `generateOrdersFromPreferences()` - converts preferences → OrderCreate[]
+   - `determineTicketType()` - age-based ticket selection
+   - `calculateAgeOnDate()` - utility for age calculation
+   - `isInAgeLimit()` - validation helper
+
+2. **Inhabitant Preferences** → Extend `app/composables/useHouseholdValidation.ts`
+   - `generateDefaultPreferences()` - creates default WeekDayMap<DinnerMode>
+   - Already has preference validation schemas
+
+3. **Order Validation** → Extend `app/composables/useOrderValidation.ts` (if exists) or create it
+   - Zod schemas: `OrderSchema`, `OrderCreateSchema`, `OrderBulkCreateSchema`
+   - Serialization if needed (dates, etc.)
+
+4. **Repository Methods** → Extend `server/data/prismaRepository.ts`
    - `createOrders()` for bulk creation
    - `fetchOrdersForDinnerEvent()`, `fetchOrdersForInhabitant()`
    - `deleteOrder()`, `updateOrder()`
 
-3. **Preference Generation** → New utility: `server/utils/preferenceGenerator.ts`
-   - `generateDefaultPreferences()` - creates sensible defaults
-   - `shouldHavePreferences()` - determines who needs preferences
+5. **API Integration** → Extend `server/routes/api/admin/season/[id]/generate-dinner-events.post.ts`
+   - Import composables: `useOrder()`, `useHouseholdValidation()`
+   - Add query parameter: `?withBookings=true`
+   - After saving dinner events, generate and save bookings
+   - Return booking counts in response
 
-4. **Booking Generation** → New utility: `server/utils/bookingGenerator.ts`
-   - `generateOrdersFromPreferences()` - main conversion logic
-   - `determineTicketType()` - age-based ticket selection
-   - `calculateAge()` - utility for age calculation
-
-5. **Integration** → Extend existing endpoint
-   - Create `POST /api/admin/season/[id]/generate-dinner-bookings`
-   - Add optional `?generateBookings=true` query parameter
-   - Call preference and booking generation after dinner events
+6. **Store Orchestration** → Extend `app/stores/plan.ts` (optional)
+   - Add method to call API with bookings flag
+   - Handle loading states for booking generation
 
 ### Data Flow
 
@@ -119,56 +128,121 @@ Season Creation → Generate Dinner Events → Generate Default Preferences → 
    - E2E tests in `tests/e2e/api/admin/order.e2e.spec.ts`
    - Unit tests for validation schemas
 
-### Phase 2: Preference Generation
+### Phase 2: Preference Generation (Composable)
 
-1. **Create preference generator utility**
+1. **Extend `useHouseholdValidation` composable**
    ```typescript
-   interface PreferenceConfig {
-     defaultAdultMode: DinnerMode // Default: DINEIN
-     defaultChildMode: DinnerMode // Default: DINEIN
-     childAgeThreshold: number    // Default: 15
-   }
+   // app/composables/useHouseholdValidation.ts
 
-   generateDefaultPreferences(inhabitants: Inhabitant[], config?: PreferenceConfig)
+   const generateDefaultPreferences = (
+     inhabitants: Inhabitant[],
+     defaultMode: DinnerMode = 'DINEIN'
+   ): Map<number, WeekDayMap<DinnerMode>> => {
+     const preferences = new Map()
+
+     inhabitants
+       .filter(i => !i.dinnerPreferences) // Only for those without preferences
+       .forEach(inhabitant => {
+         const defaultMap = createDefaultWeekdayMap(defaultMode)
+         preferences.set(inhabitant.id, defaultMap)
+       })
+
+     return preferences
+   }
    ```
 
 2. **Add repository method for bulk preference updates**
    ```typescript
-   updateInhabitantPreferences(d1Client, updates: {id: number, preferences: WeekDayMap<DinnerMode>}[])
+   updateInhabitantPreferences(
+     d1Client,
+     updates: {id: number, preferences: WeekDayMap<DinnerMode>}[]
+   )
    ```
 
 3. **Write tests**
-   - Unit tests for preference generation logic
-   - E2E test for preference creation
+   - Unit tests: `useHouseholdValidation.unit.spec.ts`
+   - E2E test: preference generation via API
 
-### Phase 3: Booking Generation
+### Phase 3: Booking Generation (Composable)
 
-1. **Create booking generator utility**
+1. **Create `useOrder` composable**
    ```typescript
-   interface BookingConfig {
-     skipNonePreferences: boolean  // Default: true
-     includeGuests: boolean        // Default: false (future feature)
+   // app/composables/useOrder.ts
+
+   export const useOrder = () => {
+     const calculateAgeOnDate = (birthDate: Date, targetDate: Date): number => {
+       const years = targetDate.getFullYear() - birthDate.getFullYear()
+       const monthDiff = targetDate.getMonth() - birthDate.getMonth()
+       const dayDiff = targetDate.getDate() - birthDate.getDate()
+
+       if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+         return years - 1
+       }
+       return years
+     }
+
+     const determineTicketType = (
+       birthDate: Date | null,
+       eventDate: Date,
+       ticketPrices: TicketPrice[]
+     ): TicketType => {
+       if (!birthDate) return 'ADULT'
+
+       const age = calculateAgeOnDate(birthDate, eventDate)
+       const sorted = [...ticketPrices]
+         .filter(tp => tp.maximumAgeLimit !== null)
+         .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
+
+       for (const price of sorted) {
+         if (age <= price.maximumAgeLimit!) return price.ticketType
+       }
+       return 'ADULT'
+     }
+
+     const generateOrdersFromPreferences = (
+       dinnerEvents: DinnerEvent[],
+       inhabitants: InhabitantWithPreferences[],
+       ticketPrices: TicketPrice[]
+     ): OrderCreate[] => {
+       const orders: OrderCreate[] = []
+
+       for (const event of dinnerEvents) {
+         const weekday = getWeekdayFromDate(event.date)
+
+         for (const inhabitant of inhabitants) {
+           const preference = inhabitant.dinnerPreferences?.[weekday]
+           if (!preference || preference === 'NONE') continue
+
+           const ticketType = determineTicketType(
+             inhabitant.birthDate,
+             event.date,
+             ticketPrices
+           )
+
+           orders.push({
+             dinnerEventId: event.id!,
+             inhabitantId: inhabitant.id!,
+             ticketType
+           })
+         }
+       }
+
+       return orders
+     }
+
+     return {
+       calculateAgeOnDate,
+       determineTicketType,
+       generateOrdersFromPreferences
+     }
    }
-
-   generateOrdersFromPreferences(
-     dinnerEvents: DinnerEvent[],
-     inhabitants: InhabitantWithPreferences[],
-     ticketPrices: TicketPrice[],
-     config?: BookingConfig
-   ): OrderCreate[]
-
-   determineTicketType(inhabitant: Inhabitant, eventDate: Date, ticketPrices: TicketPrice[]): TicketType
    ```
 
-2. **Age calculation utility**
-   ```typescript
-   calculateAgeOnDate(birthDate: Date, targetDate: Date): number
-   ```
-
-3. **Write tests**
-   - Unit tests for ticket type determination
-   - Unit tests for order generation logic
-   - Edge cases: no birthdate, exact age boundaries
+2. **Write tests**
+   - Unit tests: `useOrder.unit.spec.ts`
+   - Test ticket type determination with age boundaries
+   - Test order generation from preferences
+   - Edge cases: no birthdate, NONE preferences, birthday on event date
 
 ### Phase 4: Integration
 
@@ -260,8 +334,8 @@ Season Creation → Generate Dinner Events → Generate Default Preferences → 
 4. `calculateAge.unit.spec.ts` - Age calculation edge cases
 
 ### E2E Tests
-1. `order.e2e.spec.ts` - CRUD operations
-2. `generate-dinner-events-with-bookings.e2e.spec.ts` - Full flow
+1. `order.e2e.spec.ts` - CRUD operations test suite 
+2. `generate-orders.e2e.spec.ts` - Full flow
 
 ### Test Scenarios
 - Inhabitants with/without birthdate
@@ -313,19 +387,8 @@ Season Creation → Generate Dinner Events → Generate Default Preferences → 
 6. ✅ Comprehensive test coverage
 7. ✅ Performance acceptable for 100 households × 7 inhabitants × 200 events
 
-## Future Enhancements (Out of Scope)
-
-1. UI to trigger regeneration of bookings
-2. Guest ticket support
-3. Preference templates (e.g., "School days only")
-4. Bulk preference editing UI
-5. Notification system for auto-generated bookings
-6. Undo/rollback mechanism
-7. Preference history tracking
 
 ## Notes
 
 - Initial implementation focuses on backend logic only
 - UI integration will be handled in Task 4 of the household booking feature
-- Consider making auto-generation opt-in initially for testing
-- May need to add a flag to track auto-generated vs manual orders for future features

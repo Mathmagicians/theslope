@@ -1,6 +1,6 @@
 import {defineEventHandler, createError, getQuery, getValidatedQuery} from "h3"
 import z from 'zod'
-import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository";
+import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper

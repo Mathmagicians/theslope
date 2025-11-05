@@ -1,7 +1,6 @@
 import {z} from 'zod'
 import {useUserValidation} from './useUserValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
-import type {WeekDayMap} from "~/types/dateTypes"
 import {DinnerMode} from "@prisma/client"
 
 /**

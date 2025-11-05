@@ -21,19 +21,19 @@ export default defineEventHandler(async (event): Promise<DinnerEvent[]> => {
         seasonId = query.seasonId
     } catch (error) {
         const h3e = h3eFromCatch('Input validation error', error)
-        console.warn("<} > DINNER_EVENT > [GET] ", h3e.message)
+        console.warn("🍽️ > DINNER_EVENT > [GET] ", h3e.message)
         throw h3e
     }
 
     // Business logic try-catch - separate concerns
     try {
         const dinnerEvents = await fetchDinnerEvents(d1Client, seasonId)
-        console.info(`<} > DINNER_EVENT > [GET] Retrieved ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
+        console.info(`🍽️ > DINNER_EVENT > [GET] Retrieved ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
         setResponseStatus(event, 200)
         return dinnerEvents
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching dinner events', error)
-        console.error("<} > DINNER_EVENT > [GET] ", h3e.message)
+        console.error("🍽️   > DINNER_EVENT > [GET] ", h3e.message)
         throw h3e
     }
 })

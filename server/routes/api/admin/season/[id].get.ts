@@ -1,15 +1,16 @@
-import {defineEventHandler, createError, getValidatedRouterParams} from "h3";
+import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
+import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import z from "zod"
 
 const {h3eFromCatch} = eventHandlerHelper
 
 const idSchema = z.object({
-    id: z.number({ coerce: true }).positive().int(),
-});
+    id: z.number({ coerce: true }).positive().int()
+})
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

@@ -9,7 +9,10 @@ import type {
     Household,
     CookingTeam,
     DinnerEvent,
-    TicketPrice as PrismaTicketPrice
+    Order,
+    TicketPrice as PrismaTicketPrice,
+    AllergyType,
+    Allergy
 } from "@prisma/client"
 
 import type {Season as DomainSeason, SerializedSeason} from "~/composables/useSeasonValidation"
@@ -18,9 +21,11 @@ import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate} from '~/composables/useHouseholdValidation'
 import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
+import type {OrderCreate} from '~/composables/useOrderValidation'
 import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {UserCreate} from '~/composables/useUserValidation'
+import type {AllergyTypeCreate, AllergyTypeUpdate, AllergyCreate, AllergyUpdate} from '~/composables/useAllergyValidation'
 
 export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
     include: {
@@ -280,6 +285,272 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting inhabitant with ID ${id}`, error)
         console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+/*** ALLERGY TYPES ***/
+
+export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyType[]> {
+    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergyTypes = await prisma.allergyType.findMany()
+        console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${allergyTypes.length} allergy types`)
+        return allergyTypes
+    } catch (error) {
+        const h3e = h3eFromCatch('Error fetching allergy types', error)
+        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyType | null> {
+    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergyType = await prisma.allergyType.findFirst({
+            where: {id}
+        })
+
+        if (allergyType) {
+            console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type ${allergyType.name} (ID: ${allergyType.id})`)
+            return allergyType
+        } else {
+            console.info(`🏥 > ALLERGY_TYPE > [GET] No allergy type found with ID ${id}`)
+            return null
+        }
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching allergy type with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyType> {
+    console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const newAllergyType = await prisma.allergyType.create({
+            data: allergyTypeData
+        })
+
+        console.info(`🏥 > ALLERGY_TYPE > [CREATE] Successfully created allergy type ${newAllergyType.name} with ID ${newAllergyType.id}`)
+        return newAllergyType
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error creating allergy type ${allergyTypeData.name}`, error)
+        console.error(`🏥 > ALLERGY_TYPE > [CREATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyType> {
+    console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const {id, ...updateData} = allergyTypeData
+
+    try {
+        const updatedAllergyType = await prisma.allergyType.update({
+            where: {id},
+            data: updateData
+        })
+
+        console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Successfully updated allergy type ${updatedAllergyType.name}`)
+        return updatedAllergyType
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error updating allergy type with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY_TYPE > [UPDATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyType> {
+    console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // ADR-005: Single atomic delete - Prisma handles CASCADE deletion of related allergies
+        const deletedAllergyType = await prisma.allergyType.delete({
+            where: {id}
+        })
+
+        console.info(`🏥 > ALLERGY_TYPE > [DELETE] Successfully deleted allergy type ${deletedAllergyType.name}`)
+        return deletedAllergyType
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error deleting allergy type with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+/*** ALLERGIES ***/
+
+export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<Allergy[]> {
+    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergies = await prisma.allergy.findMany({
+            where: {inhabitantId},
+            include: {
+                allergyType: true,
+                inhabitant: true
+            }
+        })
+
+        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for inhabitant ${inhabitantId}`)
+        return allergies
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching allergies for inhabitant ${inhabitantId}`, error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<Allergy[]> {
+    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergies = await prisma.allergy.findMany({
+            where: {
+                inhabitant: {
+                    householdId
+                }
+            },
+            include: {
+                allergyType: true,
+                inhabitant: true
+            }
+        })
+
+        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for household ${householdId}`)
+        return allergies
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching allergies for household ${householdId}`, error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<Allergy[]> {
+    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergies = await prisma.allergy.findMany({
+            where: {allergyTypeId},
+            include: {
+                allergyType: true,
+                inhabitant: {
+                    include: {
+                        household: true
+                    }
+                }
+            }
+        })
+
+        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for allergy type ${allergyTypeId}`)
+        return allergies
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching allergies for allergy type ${allergyTypeId}`, error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Allergy | null> {
+    console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const allergy = await prisma.allergy.findFirst({
+            where: {id},
+            include: {
+                allergyType: true,
+                inhabitant: true
+            }
+        })
+
+        if (allergy) {
+            console.info(`🏥 > ALLERGY > [GET] Found allergy (ID: ${allergy.id})`)
+            return allergy
+        } else {
+            console.info(`🏥 > ALLERGY > [GET] No allergy found with ID ${id}`)
+            return null
+        }
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching allergy with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<Allergy> {
+    console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const newAllergy = await prisma.allergy.create({
+            data: allergyData,
+            include: {
+                allergyType: true,
+                inhabitant: true
+            }
+        })
+
+        console.info(`🏥 > ALLERGY > [CREATE] Successfully created allergy with ID ${newAllergy.id}`)
+        return newAllergy
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
+        console.error(`🏥 > ALLERGY > [CREATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<Allergy> {
+    console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const {id, ...updateData} = allergyData
+
+    try {
+        const updatedAllergy = await prisma.allergy.update({
+            where: {id},
+            data: updateData,
+            include: {
+                allergyType: true,
+                inhabitant: true
+            }
+        })
+
+        console.info(`🏥 > ALLERGY > [UPDATE] Successfully updated allergy with ID ${updatedAllergy.id}`)
+        return updatedAllergy
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error updating allergy with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY > [UPDATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function deleteAllergy(d1Client: D1Database, id: number): Promise<Allergy> {
+    console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const deletedAllergy = await prisma.allergy.delete({
+            where: {id}
+        })
+
+        console.info(`🏥 > ALLERGY > [DELETE] Successfully deleted allergy with ID ${deletedAllergy.id}`)
+        return deletedAllergy
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error deleting allergy with ID ${id}`, error)
+        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -1014,6 +1285,93 @@ export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promi
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting dinner event with ID ${id}`, error)
         console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.message}`, error)
+        throw h3e
+    }
+}
+
+/*** ORDERS ***/
+
+// ADR-005: Order relationships:
+// - Strong to DinnerEvent (order cannot exist without dinner event)
+// - Strong to Inhabitant (order cannot exist without inhabitant)
+// - Weak to Transaction (order can exist without transaction)
+
+export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<Order> {
+    console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const newOrder = await prisma.order.create({
+            data: orderData
+        })
+
+        console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
+        return newOrder
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
+        console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchOrder(d1Client: D1Database, id: number): Promise<Order | null> {
+    console.info(`🎟️ > ORDER > [GET] Fetching order with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const order = await prisma.order.findFirst({
+            where: {id}
+        })
+
+        if (order) {
+            console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
+        } else {
+            console.info(`🎟️ > ORDER > [GET] No order found with ID ${id}`)
+        }
+        return order
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
+        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function deleteOrder(d1Client: D1Database, id: number): Promise<Order> {
+    console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Delete order - cascade handles strong associations (Transaction) automatically
+        const deletedOrder = await prisma.order.delete({
+            where: {id}
+        })
+
+        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order with ID ${deletedOrder.id}`)
+        return deletedOrder
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error deleting order with ID ${id}`, error)
+        console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<Order[]> {
+    console.info(`🎟️ > ORDER > [GET] Fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const orders = await prisma.order.findMany({
+            where: dinnerEventId ? {dinnerEventId} : undefined,
+            orderBy: {
+                createdAt: 'asc'
+            }
+        })
+
+        console.info(`🎟️ > ORDER > [GET] Successfully fetched ${orders.length} orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
+        return orders
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`, error)
+        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }

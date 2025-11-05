@@ -12,10 +12,11 @@ const {headers, validatedBrowserContext} = testHelpers
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 // Variables to store IDs for cleanup
+// Only track root entities - CASCADE will delete children:
+// Season → CookingTeam → CookingTeamAssignment
+// Household → Inhabitant
 let testSeasonId: number
 let testHouseholdIds: number[] = []
-let testDinnerIds: number[] = []
-let testTeamIds: number[] = []
 
 test.describe('Admin Teams API', () => {
 
@@ -30,7 +31,6 @@ test.describe('Admin Teams API', () => {
         test('PUT /api/admin/team should create a new team and GET should retrieve it', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId)
-            testTeamIds.push(testTeam.id)
 
             expect(testTeam.id).toBeGreaterThanOrEqual(0)
             expect(testTeam.seasonId).toEqual(testSeasonId)
@@ -71,7 +71,6 @@ test.describe('Admin Teams API', () => {
             const context = await validatedBrowserContext(browser)
             const testTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "List-All-Teams")
             expect(testTeam.id).toBeDefined()
-            testTeamIds.push(testTeam.id)
 
             const teams = await SeasonFactory.getAllCookingTeams(context)
             expect(Array.isArray(teams)).toBe(true)
@@ -91,8 +90,6 @@ test.describe('Admin Teams API', () => {
             const otherSeason = await SeasonFactory.createSeason(context)
             const team2 = await SeasonFactory.createCookingTeamForSeason(context, otherSeason.id as number, "Other-Season-Team")
 
-            testTeamIds.push(team1.id, team2.id)
-
             // Filter teams by first season
             const filteredTeams = await SeasonFactory.getCookingTeamsForSeason(context, testSeasonId)
             const team1Found = filteredTeams.find(t => t.id === team1.id)
@@ -109,7 +106,6 @@ test.describe('Admin Teams API', () => {
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
             expect(createdTeam.id).toBeDefined()
-            testTeamIds.push(createdTeam.id!)
 
             // Get team details
             const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
@@ -123,7 +119,6 @@ test.describe('Admin Teams API', () => {
         test('POST /api/admin/team/[id] should update team', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
-            testTeamIds.push(createdTeam.id)
 
             const updatedData = {...createdTeam, name: `${createdTeam.name}-Updated`}
             const updateResponse = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`, {
@@ -148,7 +143,6 @@ test.describe('Admin Teams API', () => {
             )
             expect(teamWithMembers.id).toBeDefined()
             expect(teamWithMembers.assignments).toHaveLength(2)
-            testTeamIds.push(teamWithMembers.id)
             testHouseholdIds.push(teamWithMembers.householdId)
 
             // WHEN: GET the full team (includes assignments with inhabitant relation populated)
@@ -187,7 +181,6 @@ test.describe('Admin Teams API', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-affinity', 201, {
                 affinity
             })
-            testTeamIds.push(team.id)
 
             // THEN team is created with correct affinity
             expect(team.affinity).toEqual(affinity)
@@ -199,7 +192,6 @@ test.describe('Admin Teams API', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-with-null-affinity', 201, {
                 affinity: null
             })
-            testTeamIds.push(team.id)
 
             // THEN team is created with nullish affinity (null or undefined)
             expect(team.affinity).toBeFalsy()
@@ -212,7 +204,6 @@ test.describe('Admin Teams API', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, 'Team-for-affinity-update', 201, {
                 affinity: initialAffinity
             })
-            testTeamIds.push(team.id)
 
             // WHEN updating affinity to Wednesday and Friday
             const updatedAffinity = createWeekDayMapFromSelection(['onsdag', 'fredag'], true, false)
@@ -254,7 +245,6 @@ test.describe('Admin Teams API', () => {
 
             // Create team with members using factory
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-with-assignments", 3)
-            testTeamIds.push(createdTeam.id)
             testHouseholdIds.push(createdTeam.householdId)
 
             // Verify the team has the expected member structure
@@ -270,7 +260,6 @@ test.describe('Admin Teams API', () => {
 
             // Create team with members using factory
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 3)
-            testTeamIds.push(createdTeam.id)
             testHouseholdIds.push(createdTeam.householdId)
 
             // Verify assignments exist
@@ -339,19 +328,9 @@ test.describe('Admin Teams API', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up all created teams
-        await Promise.all(testTeamIds.map(id => SeasonFactory.deleteCookingTeam(context, id).catch(error => {
-            // Ignore cleanup errors
-            console.warn(`Failed to cleanup team ${id}: `, error.statusMessage || '')
-        })))
-
-        // Clean up all created households
-        await Promise.all(testHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(error => {
-            // Ignore cleanup errors
-            console.warn(`Failed to cleanup household ${id}:`, error)
-        })))
-
-        // Clean up the test season
+        // Only need to delete root entities - CASCADE will handle the rest
+        // Deleting Season cascades to CookingTeam → CookingTeamAssignment
+        // Deleting Household cascades to Inhabitants
         if (testSeasonId) {
             try {
                 await SeasonFactory.deleteSeason(context, testSeasonId)
@@ -359,5 +338,11 @@ test.describe('Admin Teams API', () => {
                 console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
             }
         }
+
+        // Clean up all created households
+        await Promise.all(testHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(error => {
+            // Ignore cleanup errors
+            console.warn(`Failed to cleanup household ${id}:`, error)
+        })))
     })
 })

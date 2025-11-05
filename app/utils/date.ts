@@ -150,6 +150,15 @@ export function translateToDanish(day: string): string {
 }
 
 /**
+ * Format Danish weekday to compact 3-letter form
+ * @param day - Full Danish weekday name (e.g., 'mandag')
+ * @returns First 3 letters capitalized (e.g., 'Man')
+ */
+export function formatWeekdayCompact(day: WeekDay): string {
+    return day.substring(0, 3)
+}
+
+/**
  * Calculate time periods based on week numbers within a date range.
  * Returns only time periods that fall within the date range.
  *

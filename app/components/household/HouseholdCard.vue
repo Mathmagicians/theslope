@@ -1,84 +1,54 @@
 <script setup lang="ts">
 /**
- * HouseholdCard - members and their settings - especially weekly dinner preferencesid
+ * HouseholdCard - members and their settings - especially weekly dinner preferences
  *
- * UX: Master-detail pattern for Tilmeldinger tab
- * - Master (Calendar): 1/3 width on large screens, shows 1 month
- * - Detail (Booking panel): 2/3 width, shows selected day details
+ * Displays household members with their weekly dinner preferences
+ * - Collapsed view: Compact icons showing preferences at a glance
+ * - Expanded view: Interactive controls to edit preferences
  */
-import type {DateRange} from '~/types/dateTypes'
-
-interface Inhabitant {
-  id: number
-  name: string
-  lastName: stringtra
-}
-
-interface Household {
-  id: number
-  name: string
-  shortName: string
-  inhabitants: Inhabitant[]
-}
-
-interface DinnerEvent {
-  id: number
-  date: Date
-  cookingTeamId: number | null
-}
-
-interface Order {
-  id: number
-  dinnerEventId: number
-  inhabitantId: number
-}
+import {FORM_MODES} from '~/types/form'
+import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
+import type {DinnerMode} from '~/composables/useDinnerEventValidation'
 
 interface Props {
-  household: Household
-  seasonDates: DateRange
-  dinnerEvents: DinnerEvent[]
-  orders: Order[]
-  holidays?: DateRange[]
+  household: HouseholdWithInhabitants
 }
 
 const props = defineProps<Props>()
 
-// Selected day for detail panel (null = show today or next event)
-const selectedDate = ref<Date | null>(null)
-
-// Mockup: Weekly preferences expanded/collapsed state
+// UI state: Weekly preferences expanded/collapsed
 const preferencesExpanded = ref(false)
 
-
-// Mockup: Determine inhabitant ticket type based on age (placeholder)
-const getTicketTypeLabel = (inhabitant: Inhabitant): string => {
-  // TODO: Calculate from birthDate when implemented
-  return 'Voksen'
+// Update inhabitant preferences
+const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>) => {
+  console.info('Updating preferences for inhabitant', inhabitantId, preferences)
+  // TODO: Call API to update inhabitant preferences
+  // await $fetch(`/api/admin/household/inhabitants/${inhabitantId}`, {
+  //   method: 'POST',
+  //   body: { dinnerPreferences: preferences }
+  // })
 }
-
-// TODO: Import DinnerMode and create test preferences
-// Temporary test data matching the prototype
-const testPreferences = ref<Record<number, any>>({
-  // These IDs should match actual inhabitant IDs when wired up
-})
 </script>
 
 <template>
   <!-- Weekly Preferences Section -->
-  <div data-test-id="household-members" class="border-t pt-4">
-    <button
-        class="flex items-center justify-between w-full text-left"
-        @click="preferencesExpanded = !preferencesExpanded"
-    >
-      <div class="flex items-center gap-2">
-        <UIcon name="i-heroicons-cog-6-tooth" class="w-5 h-5"/>
-        <span class="font-semibold">Ugentlige præferencer</span>
-      </div>
-      <UIcon
-          :name="preferencesExpanded ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
-          class="w-5 h-5"
-      />
-    </button>
+  <UCard data-test-id="household-members">
+    <template #header>
+      <UButton
+          variant="ghost"
+          color="neutral"
+          block
+          class="justify-between"
+          @click="preferencesExpanded = !preferencesExpanded"
+      >
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-cog-6-tooth"/>
+          <span class="font-semibold">Husstandens ugentlige booking præferencer</span>
+        </div>
+        <UIcon :name="preferencesExpanded ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"/>
+      </UButton>
+    </template>
 
     <!-- Compact view (collapsed) - Overview of all inhabitants -->
     <div v-if="!preferencesExpanded" class="mt-4 space-y-3">
@@ -92,14 +62,14 @@ const testPreferences = ref<Record<number, any>>({
           <span class="text-sm font-medium">{{ inhabitant.name }}</span>
         </div>
         <WeekDayMapDinnerModeDisplay
-            :model-value="null"
-            compact
+            :model-value="inhabitant.dinnerPreferences"
+            :form-mode="FORM_MODES.VIEW"
             :name="`compact-inhabitant-${inhabitant.id}-preferences`"
         />
       </div>
     </div>
 
-    <!-- Expanded view -->
+    <!-- Expanded view - Edit mode -->
     <div v-else class="mt-4 space-y-4">
       <p class="text-sm text-muted">
         Standard for hver ugedag (opdaterer automatisk fremtidige bookinger)
@@ -115,11 +85,11 @@ const testPreferences = ref<Record<number, any>>({
           <span class="font-medium">{{ inhabitant.name }}</span>
         </div>
 
-        <!-- TODO: Wire up to actual inhabitant.dinnerPreferences when available -->
         <WeekDayMapDinnerModeDisplay
-            :model-value="null"
+            :model-value="inhabitant.dinnerPreferences"
+            :form-mode="FORM_MODES.EDIT"
             :name="`inhabitant-${inhabitant.id}-preferences`"
-            @update:model-value="(value) => console.log('Update preferences for', inhabitant.id, value)"
+            @update:model-value="(value) => updatePreferences(inhabitant.id, value)"
         />
       </div>
 
@@ -130,6 +100,5 @@ const testPreferences = ref<Record<number, any>>({
           title="Ændringer opdaterer fremtidige bookinger"
       />
     </div>
-  </div>
-
+  </UCard>
 </template>

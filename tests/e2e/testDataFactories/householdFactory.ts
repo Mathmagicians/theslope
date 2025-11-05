@@ -4,7 +4,7 @@ import {expect, BrowserContext} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import {Household, Inhabitant} from "../../../app/composables/useHouseholdValidation";
 
-const {salt, headers} = testHelpers
+const {salt, saltedId, headers} = testHelpers
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
 const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
 
@@ -15,10 +15,9 @@ export class HouseholdFactory {
 
     static readonly defaultHouseholdData = (testSalt: string = Date.now().toString()) => {
         const now = new Date()
-        const timestamp = Date.now()
         return {
-            heynaboId: timestamp,
-            pbsId: timestamp , 
+            heynaboId: saltedId(testSalt),
+            pbsId: saltedId(testSalt + '-pbs'), // Add suffix to ensure different ID
             name: salt('Test Household Hurlumhej', testSalt),
             address: salt('Andeby 123 ', testSalt),
             movedInDate: now
@@ -88,7 +87,7 @@ export class HouseholdFactory {
 
     static readonly defaultInhabitantData = (testSalt: string = Date.now().toString()):Inhabitant => {
         return {
-            heynaboId: Date.now(),
+            heynaboId: saltedId(testSalt),
             name: salt('Anders', testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,

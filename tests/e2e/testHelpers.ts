@@ -4,6 +4,21 @@ import {authFiles} from './config'
 const { adminFile } = authFiles
 
 const salt = (base: string, testSalt: string = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`):string => base === '' ? base : `${base}-${testSalt}`
+
+/**
+ * Generate a unique numeric ID from a test salt
+ * Combines timestamp with a hash of the salt string to ensure uniqueness across parallel tests
+ *
+ * @param testSalt - The salt string to derive the ID from
+ * @returns A unique numeric ID
+ */
+const saltedId = (testSalt: string = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`): number => {
+    const baseTimestamp = Date.now()
+    // Hash the salt string to create a numeric offset
+    const saltHash = testSalt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return baseTimestamp + (saltHash % 100000) // Modulo to keep numbers reasonable
+}
+
 const headers = {'Content-Type': 'application/json'}
 const validatedBrowserContext = async (browser:Browser) => {
     return await browser.newContext({
@@ -115,6 +130,7 @@ async function selectDropdownOption(
 
 const testHelpers = {
     salt,
+    saltedId,
     headers,
     validatedBrowserContext,
     pollUntil,

@@ -1,6 +1,6 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createSeason} from "~~/server/data/prismaRepository"
-import {useSeasonValidation} from "~/composables/useSeasonValidation"
+import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
@@ -17,7 +17,7 @@ const PutSeasonSchema = SeasonSchema.refine(
     }
 )
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
