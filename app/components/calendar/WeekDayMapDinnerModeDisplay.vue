@@ -21,12 +21,16 @@ interface Props {
   disabled?: boolean
   label?: string
   name?: string
+  parentRestriction?: WeekDayMap | null // Filter which weekdays to display (e.g., season cooking days)
+  showLabels?: boolean // Whether to show weekday labels (default true for standalone, false for table)
 }
 
 const props = withDefaults(defineProps<Props>(), {
   formMode: FORM_MODES.VIEW,
   disabled: false,
-  label: ''
+  label: '',
+  parentRestriction: null,
+  showLabels: true
 })
 
 const emit = defineEmits<{
@@ -46,7 +50,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
 // Dinner mode display config
 const dinnerModeConfig: Record<DinnerMode, {label: string, icon: string, color: string}> = {
   [DinnerMode.DINEIN]: {label: 'Fællesspisning', icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining', color: 'success'},
-  [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'primary'},
+  [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'success'},
   [DinnerMode.NONE]: {label: 'Ingen fællesmad', icon: 'i-heroicons-x-circle', color: 'neutral'}
 }
 
@@ -85,62 +89,59 @@ const getModeIcon = (mode: DinnerMode): string => {
 const getModeColor = (mode: DinnerMode): string => {
   return dinnerModeConfig[mode].color
 }
+
+// Filter weekdays based on parent restriction (e.g., season cooking days)
+const visibleDays = computed(() => {
+  if (!props.parentRestriction) return WEEKDAYS
+  return WEEKDAYS.filter(day => props.parentRestriction![day])
+})
 </script>
 
 <template>
-  <!-- VIEW MODE: Compact icons (read-only) -->
-  <div v-if="formMode === FORM_MODES.VIEW" class="flex gap-0.5">
-    <div v-for="day in WEEKDAYS" :key="day" class="flex flex-col items-center">
-      <span class="text-[10px] text-gray-500 uppercase">{{ formatWeekdayCompact(day) }}</span>
-      <UIcon
-        :name="dinnerModeConfig[modelValue?.[day] ?? DinnerMode.DINEIN].icon"
-        class="w-4 h-4"
-        :class="{
-          'text-green-600': modelValue?.[day] === DinnerMode.DINEIN,
-          'text-blue-600': modelValue?.[day] === DinnerMode.TAKEAWAY,
-          'text-gray-300': modelValue?.[day] === DinnerMode.NONE || !modelValue?.[day]
-        }"
-      />
+  <!-- VIEW MODE: Horizontal compact display with badges - filtered weekdays only -->
+  <div v-if="formMode === FORM_MODES.VIEW" class="flex gap-1">
+    <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-1">
+      <span v-if="showLabels" class="text-xs text-gray-500 capitalize">{{ formatWeekdayCompact(day) }}</span>
+      <UBadge
+        :color="getModeColor(modelValue?.[day] ?? DinnerMode.DINEIN)"
+        variant="solid"
+        size="xs"
+      >
+        <UIcon
+          :name="getModeIcon(modelValue?.[day] ?? DinnerMode.DINEIN)"
+          class="w-4 h-4"
+        />
+      </UBadge>
     </div>
   </div>
 
-  <!-- EDIT MODE: Interactive controls (responsive: cycling on mobile, button group on desktop) -->
-  <div v-else-if="formMode === FORM_MODES.EDIT" class="flex flex-col gap-2">
-    <div v-for="day in WEEKDAYS" :key="day" class="flex items-center gap-2">
-      <span class="text-sm font-medium capitalize w-20">{{ day }}</span>
-
-      <!-- Mobile: Single cycling button (< md) -->
-      <UButton
-        size="sm"
-        class="md:hidden"
-        :icon="getModeIcon(modelValue?.[day] ?? DinnerMode.DINEIN)"
-        :color="getModeColor(modelValue?.[day] ?? DinnerMode.DINEIN)"
-        :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.NONE ? 'ghost' : 'soft'"
-        :disabled="disabled"
-        @click="cycleDayMode(day)"
-      />
-
-      <!-- Desktop: Button group (md+) -->
-      <UFieldGroup size="sm" orientation="horizontal" class="hidden md:flex">
+  <!-- EDIT MODE: Horizontal display with button groups - filtered weekdays only -->
+  <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2 flex-wrap">
+    <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-1">
+      <span v-if="showLabels" class="text-xs text-gray-600 capitalize">{{ formatWeekdayCompact(day) }}</span>
+      <UFieldGroup size="xs" orientation="horizontal">
         <UButton
           icon="i-streamline:food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining"
           :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.DINEIN ? 'success' : 'neutral'"
           :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.DINEIN ? 'solid' : 'ghost'"
           :disabled="disabled"
+          size="xs"
           @click="updateDay(day, DinnerMode.DINEIN)"
         />
         <UButton
           icon="i-heroicons-shopping-bag"
-          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'success' : 'neutral'"
+          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'primary' : 'neutral'"
           :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'solid' : 'ghost'"
           :disabled="disabled"
+          size="xs"
           @click="updateDay(day, DinnerMode.TAKEAWAY)"
         />
         <UButton
           icon="i-heroicons-x-circle"
           color="neutral"
-          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.NONE ? 'subtle' : 'ghost'"
+          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.NONE ? 'solid' : 'ghost'"
           :disabled="disabled"
+          size="xs"
           @click="updateDay(day, DinnerMode.NONE)"
         />
       </UFieldGroup>

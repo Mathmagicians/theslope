@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {useUserValidation} from './useUserValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
-import {DinnerMode} from "@prisma/client"
+import {useDinnerEventValidation} from './useDinnerEventValidation'
 
 /**
  * Generate shortName from household address
@@ -51,14 +51,19 @@ export const getHouseholdShortName = (address: string): string => {
  */
 export const useHouseholdValidation = () => {
     const {UserCreateSchema} = useUserValidation()
+    const {DinnerModeSchema} = useDinnerEventValidation()
+
+    // Extract enum constants from Zod schema
+    const DinnerMode = DinnerModeSchema.enum
+
     const {
         WeekDayMapSchemaOptional,
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection,
         createDefaultWeekdayMap
-    } = useWeekDayMapValidation<DinnerMode>({
-        valueSchema: z.nativeEnum(DinnerMode),
+    } = useWeekDayMapValidation({
+        valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
     })
     // Base Household schema for API operations

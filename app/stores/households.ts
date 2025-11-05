@@ -107,6 +107,36 @@ export const useHouseholdsStore = defineStore("Households", () => {
         if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }
 
+    /**
+     * Update inhabitant dinner preferences
+     * @param inhabitantId - ID of the inhabitant to update
+     * @param preferences - WeekDayMap of DinnerMode preferences
+     */
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: any) => {
+        const {handleApiError} = useApiHandler()
+        const {serializeWeekDayMap} = useHouseholdValidation()
+
+        try {
+            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
+            const serializedPreferences = serializeWeekDayMap(preferences)
+
+            await $fetch(`/api/admin/household/inhabitants/${inhabitantId}`, {
+                method: 'POST',
+                body: { dinnerPreferences: serializedPreferences }
+            })
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated preferences for inhabitant ${inhabitantId}`)
+
+            // Refresh the selected household to get updated data
+            if (selectedHouseholdId.value) {
+                selectedHouseholdId.value = selectedHouseholdId.value // Trigger reactive update
+            }
+        } catch (e: any) {
+            handleApiError(e, 'updateInhabitantPreferences')
+            throw e
+        }
+    }
+
     // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
     watch(isHouseholdsInitialized, () => {
         if (!isHouseholdsInitialized.value) return
@@ -134,7 +164,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Actions
         loadHouseholds,
         loadHousehold,
-        initHouseholdsStore
+        initHouseholdsStore,
+        updateInhabitantPreferences
     }
 })
 
