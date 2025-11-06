@@ -12,10 +12,13 @@ import {
     areRangesOverlapping,
     selectWeekNumbersFromListThatFitInsideDateRange,
     formatCalendarDate,
-    calculateAgeOnDate
+    calculateAgeOnDate,
+    toCalendarDate,
+    toDate,
+    DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {isValid} from "date-fns"
+import {isValid, isSameDay} from "date-fns"
 import type {DateRange} from "~/types/dateTypes"
 import {CalendarDate} from '@internationalized/date'
 
@@ -372,23 +375,26 @@ describe('selectWeekNumbersFromListThatFitInsideDateRange', () => {
 })
 
 describe('formatCalendarDate', () => {
-    const testCases = [
-        { day: 5, month: 1, year: 2025, expected: '05/01/2025' },
-        { day: 31, month: 12, year: 2024, expected: '31/12/2024' }
-    ]
+    describe('timezone-agnostic behavior (CI=UTC, local=Copenhagen)', () => {
+        const testCases = [
+            { day: 5, month: 1, year: 2025, expected: '05/01/2025' },
+            { day: 31, month: 12, year: 2024, expected: '31/12/2024' },
+            { day: 7, month: 3, year: 2025, expected: '07/03/2025' }
+        ]
 
-    testCases.forEach(({ day, month, year, expected }) => {
-        it(`should format CalendarDate(${year}, ${month}, ${day}) as '${expected}'`, () => {
-            const calendarDate = new CalendarDate(year, month, day)
-            const result = formatCalendarDate(calendarDate)
-            expect(result).toBe(expected)
+        testCases.forEach(({ day, month, year, expected }) => {
+            it(`GIVEN Date created in UTC (CI server) ${year}-${month}-${day} WHEN formatting via CalendarDate THEN returns '${expected}'`, () => {
+                // Simulate CI server: create Date in UTC timezone
+                const utcDate = new Date(Date.UTC(year, month - 1, day))
+
+                // Convert to CalendarDate and format
+                const calendarDate = toCalendarDate(utcDate)!
+                const result = formatCalendarDate(calendarDate)
+
+                // Must match expected regardless of server timezone
+                expect(result).toBe(expected)
+            })
         })
-    })
-
-    it('should use DD/MM/YYYY format consistently', () => {
-        const calendarDate = new CalendarDate(2025, 3, 7) // March 7, 2025
-        const result = formatCalendarDate(calendarDate)
-        expect(result).toBe('07/03/2025')
     })
 })
 
@@ -466,6 +472,139 @@ describe('calculateAgeOnDate', () => {
         it(`should calculate age correctly when ${description}`, () => {
             const age = calculateAgeOnDate(birthDate, eventDate)
             expect(age).toBe(expectedAge)
+        })
+    })
+})
+
+describe('toCalendarDate roundtrip conversions', () => {
+    // Shared test dates for DRY - each entry has both representations
+    const sharedTestDates = [
+        { description: 'first day of month', date: new Date(2025, 0, 1), year: 2025, month: 1, day: 1 },
+        { description: 'last day of month (31 days)', date: new Date(2025, 11, 31), year: 2025, month: 12, day: 31 },
+        { description: 'February non-leap year', date: new Date(2025, 1, 28), year: 2025, month: 2, day: 28 },
+        { description: 'February leap year', date: new Date(2024, 1, 29), year: 2024, month: 2, day: 29 },
+        { description: 'year boundary - first day', date: new Date(2025, 0, 1), year: 2025, month: 1, day: 1 },
+        { description: 'year boundary - last day', date: new Date(2025, 11, 31), year: 2025, month: 12, day: 31 }
+    ]
+
+    describe('Date → CalendarDate → Date roundtrip', () => {
+        sharedTestDates.forEach(({ description, date }) => {
+            it(`GIVEN ${description} WHEN converting Date→CalendarDate→Date THEN dates match using isSameDay`, () => {
+                const calendarDate = toCalendarDate(date)
+                expect(calendarDate).toBeDefined()
+
+                const roundtripDate = toDate(calendarDate!)
+
+                expect(isSameDay(date, roundtripDate)).toBe(true)
+            })
+        })
+    })
+
+    describe('CalendarDate → Date → CalendarDate roundtrip', () => {
+        sharedTestDates.forEach(({ description, year, month, day }) => {
+            it(`GIVEN ${description} WHEN converting CalendarDate→Date→CalendarDate THEN CalendarDates match`, () => {
+                const originalCalendarDate = new CalendarDate(year, month, day)
+                const date = toDate(originalCalendarDate)
+                const roundtripCalendarDate = toCalendarDate(date)
+
+                expect(roundtripCalendarDate).toBeDefined()
+                expect(roundtripCalendarDate!.year).toBe(originalCalendarDate.year)
+                expect(roundtripCalendarDate!.month).toBe(originalCalendarDate.month)
+                expect(roundtripCalendarDate!.day).toBe(originalCalendarDate.day)
+            })
+        })
+    })
+
+    describe('timezone-agnostic behavior (CI=UTC, local=Copenhagen)', () => {
+        const timezoneTestCases = [
+            { description: 'summer date', year: 2025, month: 6, day: 15 },
+            { description: 'year boundary Dec 31', year: 2025, month: 12, day: 31 },
+            { description: 'year boundary Jan 1', year: 2025, month: 1, day: 1 }
+        ]
+
+        timezoneTestCases.forEach(({ description, year, month, day }) => {
+            it(`GIVEN CalendarDate ${description} WHEN converting via toDate THEN Date extracts correctly in both UTC and Copenhagen`, () => {
+                const calendarDate = new CalendarDate(year, month, day)
+                const date = toDate(calendarDate)
+
+                // Extract in Copenhagen timezone (what we configured)
+                const partsInCopenhagen = new Intl.DateTimeFormat('en-US', {
+                    timeZone: DATE_SETTINGS.timezone,
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric'
+                }).formatToParts(date)
+
+                const copenhagenYear = Number(partsInCopenhagen.find(p => p.type === 'year')!.value)
+                const copenhagenMonth = Number(partsInCopenhagen.find(p => p.type === 'month')!.value)
+                const copenhagenDay = Number(partsInCopenhagen.find(p => p.type === 'day')!.value)
+
+                // Must match the CalendarDate we started with
+                expect(copenhagenYear).toBe(year)
+                expect(copenhagenMonth).toBe(month)
+                expect(copenhagenDay).toBe(day)
+
+                // Extract in UTC timezone
+                const partsInUTC = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'UTC',
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric'
+                }).formatToParts(date)
+
+                const utcYear = Number(partsInUTC.find(p => p.type === 'year')!.value)
+                const utcMonth = Number(partsInUTC.find(p => p.type === 'month')!.value)
+                const utcDay = Number(partsInUTC.find(p => p.type === 'day')!.value)
+
+                // Should ALSO match because toDate sets noon Copenhagen, which never crosses UTC day boundary
+                expect(utcYear).toBe(year)
+                expect(utcMonth).toBe(month)
+                expect(utcDay).toBe(day)
+            })
+        })
+
+        it('GIVEN Date created in local timezone WHEN doing roundtrip THEN isSameDay returns true', () => {
+            const localDate = new Date(2025, 5, 15)
+            const calendarDate = toCalendarDate(localDate)
+            const roundtripDate = toDate(calendarDate!)
+
+            expect(isSameDay(localDate, roundtripDate)).toBe(true)
+        })
+    })
+
+    describe('edge cases', () => {
+        it('GIVEN undefined date WHEN converting to CalendarDate THEN returns undefined', () => {
+            const result = toCalendarDate(undefined)
+            expect(result).toBeUndefined()
+        })
+
+        it('GIVEN invalid date WHEN converting to CalendarDate THEN returns undefined', () => {
+            const invalidDate = new Date('invalid')
+            const result = toCalendarDate(invalidDate)
+            expect(result).toBeUndefined()
+        })
+    })
+
+    describe('month index conversion', () => {
+        const monthTestCases = [
+            { description: 'January', jsMonth: 0, calendarMonth: 1 },
+            { description: 'December', jsMonth: 11, calendarMonth: 12 }
+        ]
+
+        monthTestCases.forEach(({ description, jsMonth, calendarMonth }) => {
+            it(`GIVEN ${description} (JS month ${jsMonth}) WHEN converting to CalendarDate THEN month is ${calendarMonth}`, () => {
+                const date = new Date(2025, jsMonth, 15)
+                const calendarDate = toCalendarDate(date)
+
+                expect(calendarDate!.month).toBe(calendarMonth)
+            })
+
+            it(`GIVEN CalendarDate month ${calendarMonth} WHEN converting to Date THEN JS month is ${jsMonth}`, () => {
+                const calendarDate = new CalendarDate(2025, calendarMonth, 15)
+                const date = toDate(calendarDate)
+
+                expect(date.getMonth()).toBe(jsMonth)
+            })
         })
     })
 })

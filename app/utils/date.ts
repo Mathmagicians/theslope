@@ -1,6 +1,6 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
-    isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek
+    isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
@@ -99,6 +99,11 @@ export function areRangesOverlapping(ranges: DateRange[]): boolean {
 
 }
 
+// Convert DateValue to JavaScript Date (DK/CPH timezone) CalendarDates are used by UCalendar components
+export function toDate(dateValue: DateValue): Date {
+    return dateValue.toDate('UTC')
+}
+
 export function toCalendarDate(date: Date | undefined): CalendarDate | undefined {
     if (!date || !isValid(date)) return undefined
 
@@ -110,7 +115,7 @@ export function toCalendarDate(date: Date | undefined): CalendarDate | undefined
 }
 
 export function formatCalendarDate( date: DateValue ) : string {
-    const jsDate = toDate(date)
+    const jsDate = parseISO(date.toString())
     return formatDate(jsDate)
 }
 
@@ -128,11 +133,6 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
 export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
     const dateToCheck = dateValue.toDate(DATE_SETTINGS.timezone)
     return dateList.some(date => isSameDay(date, dateToCheck))
-}
-
-// Convert DateValue to JavaScript Date
-export function toDate(dateValue: DateValue): Date {
-    return dateValue.toDate(DATE_SETTINGS.timezone)
 }
 
 // Translate English weekday abbreviations to Danish
