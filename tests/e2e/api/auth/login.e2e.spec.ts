@@ -18,7 +18,7 @@ test.describe('POST /api/auth/login - UserWithInhabitant schema (ADR-009)', () =
         // Verify User base structure (always present)
         expect(user.id).toBeDefined()
         expect(user.email).toBe(userName)
-        expect(user.systemRole).toBeDefined()
+        expect(user.systemRoles).toBeDefined()
 
         // Inhabitant is nullable per Prisma schema (User.Inhabitant?)
         // Test user from env has Inhabitant

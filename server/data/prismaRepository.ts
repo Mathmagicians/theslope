@@ -798,8 +798,17 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
             where: {id},
             data: householdData
         })
+
+        // Add computed shortName field + deserialize dates
+        const householdWithShortName = {
+            ...updatedHousehold,
+            movedInDate: new Date(updatedHousehold.movedInDate),
+            moveOutDate: updatedHousehold.moveOutDate ? new Date(updatedHousehold.moveOutDate) : null,
+            shortName: getHouseholdShortName(updatedHousehold.address)
+        }
+
         console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${updatedHousehold.name} with ID ${id}`)
-        return updatedHousehold
+        return householdWithShortName
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}`, error)

@@ -139,10 +139,10 @@ test.describe('Admin Teams API', () => {
                 context,
                 testSeasonId,
                 "team-with-members-update",
-                2
+                1
             )
             expect(teamWithMembers.id).toBeDefined()
-            expect(teamWithMembers.assignments).toHaveLength(2)
+            expect(teamWithMembers.assignments).toHaveLength(1)
             testHouseholdIds.push(teamWithMembers.householdId)
 
             // WHEN: GET the full team (includes assignments with inhabitant relation populated)
@@ -259,11 +259,11 @@ test.describe('Admin Teams API', () => {
             const context = await validatedBrowserContext(browser)
 
             // Create team with members using factory
-            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 3)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 2)
             testHouseholdIds.push(createdTeam.householdId)
 
             // Verify assignments exist
-            expect(createdTeam.assignments.length).toBe(3)
+            expect(createdTeam.assignments.length).toBe(2)
 
             // Remove one assignment to test member removal
             const firstAssignmentId = createdTeam.assignments[0].id

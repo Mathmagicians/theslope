@@ -215,7 +215,7 @@ describe('useHouseholdValidation', () => {
             },
             {
                 getData: () => {
-                    const map = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN'])
+                    const map = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'DINEIN', 'DINEIN', 'DINEIN']) as any
                     delete map.onsdag
                     delete map.torsdag
                     return map
@@ -284,8 +284,8 @@ describe('useHouseholdValidation', () => {
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.inhabitants).toHaveLength(1)
-                expect(result.data.inhabitants![0].name).toBeDefined()
-                expect(result.data.inhabitants![0].lastName).toBeDefined()
+                expect(result.data.inhabitants![0]?.name).toBeDefined()
+                expect(result.data.inhabitants![0]?.lastName).toBeDefined()
             }
         })
 
@@ -353,8 +353,8 @@ describe('useHouseholdValidation', () => {
             const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
             expect(result.success).toBe(true)
             if (result.success) {
-                expect(result.data.inhabitants![0].user).toBeDefined()
-                expect(result.data.inhabitants![0].user?.email).toBe("john@example.com")
+                expect(result.data.inhabitants![0]?.user).toBeDefined()
+                expect(result.data.inhabitants![0]?.user?.email).toBe("john@example.com")
             }
         })
     })

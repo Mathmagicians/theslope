@@ -204,14 +204,14 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
 
             // Try to create inhabitant without householdId - should fail
-            await HouseholdFactory.createInhabitantForHousehold(context, 0, 'Invalid-Test-Inhabitant', 400)
+            await HouseholdFactory.createInhabitantForHousehold(context, 0, 'Invalid-Test-Inhabitant', null, 400)
         })
 
         test('PUT /api/admin/inhabitant should reject empty name', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
             // Try to create inhabitant with empty name - should fail
-            await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, '', 400)
+            await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, '', null, 400)
         })
 
         test('GET /api/admin/inhabitant/[id] should return 404 for non-existent inhabitant', async ({browser}) => {

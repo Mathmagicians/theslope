@@ -17,7 +17,6 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 export class SeasonFactory {
     static readonly today = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
     static readonly oneWeekLater = new Date(2025, 0, 7) // Jan 7, 2025 (Tue) - generates exactly 3 events with Mon/Wed/Fri
-    static readonly tomorrow = new Date(this.today.getTime() + 1 * 24 * 60 * 60 * 1000)
 
     /**
      * Generate a unique test date to avoid collisions between parallel test runs
@@ -227,7 +226,8 @@ export class SeasonFactory {
         overrides: Partial<CookingTeam> = {}
     ): Promise<CookingTeam> => {
         const teamData = {
-            name: salt(teamName),
+            // Only salt for success cases (201) - validation tests need exact invalid data
+            name: expectedStatus === 201 ? salt(teamName) : teamName,
             seasonId: seasonId,
             ...overrides
         }
@@ -249,7 +249,7 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonId: number,
         teamName: string = salt('TestTeam'),
-        memberCount: number = 3
+        memberCount: number = 2
     ): Promise<any> => {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)

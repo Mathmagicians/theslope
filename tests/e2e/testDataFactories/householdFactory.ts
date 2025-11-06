@@ -121,11 +121,16 @@ export class HouseholdFactory {
         birthDate?: Date | null,
         expectedStatus: number = 201
     ): Promise<any> => {
-        const [name, ...lastName] = inhabitantName.split(' ')
+        // Split name into first and last
+        const nameParts = inhabitantName.split(' ')
+        // Only use defaults for success cases (201) - validation tests need exact invalid data
+        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
+        const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
+
         const inhabitantData = {
             ...this.defaultInhabitantData(),
-            name: inhabitantName ? (name || 'Pluto') : '',
-            lastName: inhabitantName ? (lastName.join(' ') || 'Hund') : '',
+            name: firstName,
+            lastName: lastName,
             birthDate: birthDate !== undefined ? birthDate : null,
             householdId: householdId
         }
