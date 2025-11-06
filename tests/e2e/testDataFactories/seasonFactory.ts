@@ -1,5 +1,4 @@
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
-import {useTicketPriceValidation, type TicketPrice} from "~/composables/useTicketPriceValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {
     type CookingTeam,
@@ -8,10 +7,10 @@ import {
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
+import {TicketFactory} from "./ticketFactory"
 
 // Serialization now handled internally by repository layer
-const {salt, headers} = testHelpers
-const {createTicketPrice} = useTicketPriceValidation()
+const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -43,17 +42,12 @@ export class SeasonFactory {
         isActive: false,
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
-        ticketPrices: [
-            createTicketPrice('BABY', 0, undefined, undefined, 1),
-            createTicketPrice('HUNGRY_BABY', 500, undefined, undefined, 3),
-            createTicketPrice('CHILD', 1100, undefined, undefined, 10),
-            createTicketPrice('ADULT', 4000)
-        ],
+        ticketPrices: TicketFactory.defaultTicketPrices(),
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90
     }
 
-    static readonly defaultSeason = (testSalt: string = Date.now().toString()): Season => {
+    static readonly defaultSeason = (testSalt: string = temporaryAndRandom()): Season => {
         return {
             ...this.defaultSeasonData,
             shortName: salt(this.defaultSeasonData.shortName, testSalt)

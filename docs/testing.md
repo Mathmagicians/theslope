@@ -16,6 +16,92 @@
 - When testing async behavior, use proper `await` patterns
 - Use `vi.fn()` spies to track function calls instead of manual counters
 
+### DRY Principles: No Boilerplate in Tests
+
+**CRITICAL**: Every test must be DRY (Don't Repeat Yourself). If you find yourself copying code between tests:
+
+1. **STOP** - Do not write duplicate code
+2. **EXTRACT** - Move to helper function (testHelpers.ts) or factory (testDataFactories/)
+3. **REUSE** - Import and use the helper/factory
+
+**Techniques to eliminate boilerplate:**
+
+- **Test parametrization**: Use `describe.each()` or `it.each()` for similar test cases with different data
+  ```typescript
+  describe.each([
+    { input: 'value1', expected: 'result1' },
+    { input: 'value2', expected: 'result2' }
+  ])('function with $input', ({ input, expected }) => {
+    it('returns $expected', () => {
+      expect(myFunction(input)).toBe(expected)
+    })
+  })
+  ```
+
+- **Helper functions**: Extract repeated setup/interaction patterns to testHelpers.ts
+  ```typescript
+  // testHelpers.ts
+  export const clickButton = async (page, name) => {
+    await page.locator(`[name="${name}"]`).click()
+    await page.waitForResponse(...)
+  }
+  ```
+
+- **Factories**: Use factory pattern for test data creation (E2E only)
+  ```typescript
+  const season = await SeasonFactory.createSeason(context, { holidays: [] })
+  ```
+
+### Parallel Execution: Test Isolation
+
+**CRITICAL**: All tests run in parallel. Tests MUST be isolated to prevent race conditions and flaky failures.
+
+#### Parallel Execution Requirements
+
+1. **Use `testSalt` for unique data**: Every E2E factory method accepts optional `testSalt` parameter
+   ```typescript
+   const season = SeasonFactory.defaultSeason(testSalt)  // Creates unique data per test
+   ```
+
+2. **Generate unique values**: Use factory helpers for dates, names, IDs
+   ```typescript
+   const uniqueDate = SeasonFactory.generateUniqueDate()  // Random year/month
+   const uniqueName = `TestSeason-${Date.now()}`         // Timestamp-based
+   ```
+
+3. **Import and use testHelpers**: Located at `/tests/e2e/testHelpers.ts`
+   ```typescript
+   import testHelpers from '../testHelpers'
+   const {validatedBrowserContext, pollUntil, selectDropdownOption} = testHelpers
+   ```
+
+4. **ALWAYS verify E2E with parallel workers**: Test with at least 4 parallel workers
+   ```bash
+   npx playwright test --workers=4  # Minimum for isolation verification
+   npx playwright test tests/e2e/ui/MyTest.e2e.spec.ts --workers=4
+   ```
+
+**Why This Matters:**
+- Tests creating "Season 2025" will conflict if run simultaneously
+- Salting ensures `Season-2025-abc123` vs `Season-2025-xyz789` (unique per test run)
+- Parallel execution catches race conditions and data conflicts early
+- CI/CD runs tests in parallel - local testing must match
+
+**Example: Proper Test Isolation**
+```typescript
+test('GIVEN unique season WHEN creating THEN succeeds', async ({ page, browser }) => {
+  const testSalt = Date.now().toString()
+  const context = await validatedBrowserContext(browser)
+
+  // ✅ GOOD: Unique data per test execution
+  const season = SeasonFactory.defaultSeason(testSalt)
+  const created = await SeasonFactory.createSeason(context, season)
+
+  // Cleanup with unique ID
+  await SeasonFactory.cleanupSeasons(context, [created.id])
+})
+```
+
 ### Component Testing (Nuxt UI v4+)
 
 After the Nuxt 3→4 and Nuxt UI 2→4 migration, specific patterns are required for reliable component testing:

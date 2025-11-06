@@ -13,19 +13,13 @@ import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidatio
 import type {WeekDayMap} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useDinnerEventValidation'
-import {formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
-import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {useOrderValidation} from '~/composables/useOrderValidation'
+import {formatWeekdayCompact} from '~/utils/date'
 
 interface Props {
   household: HouseholdWithInhabitants
 }
 
 const props = defineProps<Props>()
-
-// Extract ticket type enum constants from Zod schema
-const {TicketTypesSchema} = useOrderValidation()
-const TicketType = TicketTypesSchema.enum
 
 // UI state: Form mode (VIEW or EDIT)
 const formMode = ref<FormMode>(FORM_MODES.VIEW)
@@ -35,10 +29,13 @@ const householdsStore = useHouseholdsStore()
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
+// Ticket business logic
+const {getTicketTypeConfig} = useTicket()
+
 // Get visible weekdays from active season cooking days
 const visibleDays = computed(() => {
   if (!activeSeason.value?.cookingDays) return WEEKDAYS
-  return WEEKDAYS.filter(day => activeSeason.value.cookingDays[day])
+  return WEEKDAYS.filter(day => activeSeason.value!.cookingDays[day])
 })
 
 // Toggle between VIEW and EDIT modes
@@ -55,29 +52,13 @@ const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<D
   }
 }
 
-// Determine ticket type based on age and season ticket prices
-const determineTicketType = (birthDate: Date | null) => {
-  if (!birthDate) return TicketType.ADULT
-  if (!activeSeason.value?.ticketPrices) return TicketType.ADULT
-
-  const age = calculateAgeOnDate(birthDate, new Date())
-  const sorted = [...activeSeason.value.ticketPrices]
-    .filter(tp => tp.maximumAgeLimit !== null)
-    .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
-
-  for (const price of sorted) {
-    if (age <= price.maximumAgeLimit!) return price.ticketType
-  }
-  return TicketType.ADULT
-}
-
-// Ticket type display config
-const ticketTypeConfig = {
-  [TicketType.ADULT]: {label: 'Voksen', color: 'primary'},
-  [TicketType.CHILD]: {label: 'Barn', color: 'success'},
-  [TicketType.HUNGRY_BABY]: {label: 'Sulten baby', color: 'warning'},
-  [TicketType.BABY]: {label: 'Baby', color: 'neutral'}
-} as const
+// Inhabitants with computed ticket type config (avoids duplicate calls in template)
+const inhabitantsWithTicketType = computed(() =>
+  props.household.inhabitants.map(inhabitant => ({
+    ...inhabitant,
+    ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices)
+  }))
+)
 </script>
 
 <template>
@@ -128,18 +109,18 @@ const ticketTypeConfig = {
 
         <!-- Data rows: one per inhabitant -->
         <div
-          v-for="inhabitant in household.inhabitants"
+          v-for="inhabitant in inhabitantsWithTicketType"
           :key="inhabitant.id"
           class="flex items-center gap-4"
         >
           <!-- Ticket type badge -->
           <div class="min-w-[100px]" :data-test-id="`ticket-type-${inhabitant.id}`">
             <UBadge
-              :color="ticketTypeConfig[determineTicketType(inhabitant.birthDate)]?.color ?? 'neutral'"
+              :color="inhabitant.ticketConfig.color"
               variant="subtle"
               size="sm"
             >
-              {{ ticketTypeConfig[determineTicketType(inhabitant.birthDate)]?.label ?? 'Ukendt' }}
+              {{ inhabitant.ticketConfig.label }}
             </UBadge>
           </div>
 

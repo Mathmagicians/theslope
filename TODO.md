@@ -24,10 +24,10 @@
 **Feature Overview:**
 
 - ✅ **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
-- ✅  **Task 2**: Extend WeekDayMap to support ticket preferences - Members can set weekly DINEIN/TAKEAWAY/NONE per
+- ✅ **Task 2**: Extend WeekDayMap to support ticket preferences - Members can set weekly DINEIN/TAKEAWAY/NONE per
   inhabitant
-- [ ] **Task 3**: Build HouseholdCard component - Intuitive calendar showing bookings and team obligations (mobile +
-  desktop)
+- ✅ **Task 3.1**: Build HouseholdCard component foundation - Inhabitant display with ticket types and weekly preferences editing (VIEW/EDIT modes, DRY architecture)
+- [ ] **Task 3.2**: Build booking calendar UI - Intuitive calendar showing bookings and team obligations (mobile + desktop)
 - [ ] **Task 4**: Implement booking management UI - Members can book/cancel tickets for family members and guests
 - [ ] **Task 5**: Auto-generate orders from preferences - Orders created automatically when seasons generate dinner
   events
@@ -894,6 +894,33 @@ display.
 ---
 
 # ✅ COMPLETED (For Current PR)
+
+## Household Ticket Management Foundation (Task 3.1)
+**Component**: `HouseholdCard.vue` + `WeekDayMapDinnerModeDisplay.vue`
+- Displays household members with age-based ticket types (BABY/HUNGRY_BABY/CHILD/ADULT)
+- Weekly dinner preferences editing (DINEIN/TAKEAWAY/NONE per weekday per inhabitant)
+- VIEW/EDIT mode toggle with inline editing
+- Responsive design (mobile + desktop ready)
+- **DRY Architecture**: `useTicket` composable for ticket logic (age→type calculation, UI config)
+- **Factory Pattern**: `TicketFactory` with spread pattern for test data consistency
+- **Parallel Test Safety**: Fixed `saltedId()` collision issue - now accepts `testSalt` parameter
+- **Test Coverage**: 41 tests passing (16 unit + 25 E2E, verified with 4 parallel workers)
+- **ADR Compliance**: Follows ADR-001 (composables), ADR-007 (separation), ADR-010 (serialization)
+- Files: `app/composables/useTicket.ts`, `tests/e2e/testDataFactories/ticketFactory.ts`, 16 parametrized unit tests
+
+## Factory Pattern Consistency
+- All factories use `temporaryAndRandom()` default (not `Date.now().toString()`)
+- `SeasonFactory` now uses `TicketFactory.defaultTicketPrices()` (DRY)
+- `saltedId()` accepts optional `testSalt` to prevent parallel collision
+- `temporaryAndRandom()` exported from testHelpers
+- Distinct numeric ID bases (1000, 2000, 3000) for households/inhabitants
+
+## Testing Infrastructure
+- **DRY Test Principles**: Added to `docs/testing.md` with parametrization examples
+- **Parallel Execution Requirements**: `testSalt` usage documented, 4-worker verification mandate
+- All E2E tests pass with 4 parallel workers (no collisions)
+
+# ✅ COMPLETED (Previous PRs)
 
 ## Store Initialization Pattern (ADR-007 Refactoring)
 - Reactive `useFetch` + `useAsyncData` pattern with NO AWAITS

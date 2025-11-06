@@ -14,6 +14,6 @@ export default defineEventHandler( async(event) => {
         console.log("🔒 > GUARD > Protected route: ", pathname)
         // ensure user is logged in before getting a response
         const session = await requireUserSession(event)
-        console.log(`🔒 > GUARD > Available User session data: token - ${maskPassword(session.user.passwordHash)}, mail - ${session.user.email}, role - ${session.user.systemRole}`)
+        console.log(`🔒 > GUARD > Available User session data: token - ${maskPassword(session.user.passwordHash)}, mail - ${session.user.email}, roles - ${session.user.systemRoles}`)
     }
 })

@@ -28,8 +28,8 @@ test.describe('Season API Tests', () => {
     let createdSeasonIds: number[] = []
     const newSeason = SeasonFactory.defaultSeason()
 
-    // Helper: Verify ticket prices exist (default: ADULT + CHILD = 2)
-    const assertTicketPrices = (season: any, expectedCount = 2) => {
+    // Helper: Verify ticket prices exist 
+    const assertTicketPrices = (season: any, expectedCount = 4) => {
         expect(season.ticketPrices).toBeDefined()
         expect(Array.isArray(season.ticketPrices)).toBe(true)
         expect(season.ticketPrices.length).toBe(expectedCount)
@@ -50,11 +50,8 @@ test.describe('Season API Tests', () => {
             expect(created).toHaveProperty('shortName')
             expect(created.shortName).toBe(newSeason.shortName)
             expect(created.consecutiveCookingDays).toBe(newSeason.consecutiveCookingDays)
-
-            // Verify ticketPrices are created (ADULT + CHILD from factory)
             assertTicketPrices(created)
-
-            // Get season list to verify it appears there
+           
             const listResponse = await context.request.get('/api/admin/season')
             expect(listResponse.status()).toBe(200)
 

@@ -4,7 +4,7 @@ import {expect, BrowserContext} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import {Household, Inhabitant} from "../../../app/composables/useHouseholdValidation";
 
-const {salt, saltedId, headers} = testHelpers
+const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
 const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
 
@@ -13,13 +13,13 @@ export class HouseholdFactory {
 
     // === HOUSEHOLD METHODS ===
 
-    static readonly defaultHouseholdData = (testSalt: string = Date.now().toString()) => {
+    static readonly defaultHouseholdData = (testSalt: string = temporaryAndRandom()) => {
         const now = new Date()
         return {
-            heynaboId: saltedId(testSalt),
-            pbsId: saltedId(testSalt + '-pbs'), // Add suffix to ensure different ID
+            heynaboId: saltedId(1000, testSalt),  // Base 1000 for household heynabo IDs
+            pbsId: saltedId(2000, testSalt),      // Base 2000 for household PBS IDs
             name: salt('Test Household Hurlumhej', testSalt),
-            address: salt('Andeby 123 ', testSalt),
+            address: salt('Andeby 123', testSalt),
             movedInDate: now
         }
     }
@@ -101,9 +101,9 @@ export class HouseholdFactory {
 
     // === INHABITANT METHODS ===
 
-    static readonly defaultInhabitantData = (testSalt: string = Date.now().toString()):Inhabitant => {
+    static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): Inhabitant => {
         return {
-            heynaboId: saltedId(testSalt),
+            heynaboId: saltedId(3000, testSalt),  // Base 3000 for inhabitant heynabo IDs
             name: salt('Anders', testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,

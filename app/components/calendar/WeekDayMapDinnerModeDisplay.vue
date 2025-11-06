@@ -51,7 +51,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
 const dinnerModeConfig: Record<DinnerMode, {label: string, icon: string, color: string}> = {
   [DinnerMode.DINEIN]: {label: 'Fællesspisning', icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining', color: 'success'},
   [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'success'},
-  [DinnerMode.NONE]: {label: 'Ingen fællesmad', icon: 'i-heroicons-x-circle', color: 'neutral'}
+  [DinnerMode.NONE]: {label: 'Ingen spisning', icon: 'i-heroicons-x-circle', color: 'neutral'}
 }
 
 // Update local model value

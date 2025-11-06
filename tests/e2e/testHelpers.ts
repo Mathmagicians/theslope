@@ -3,20 +3,29 @@ import {expect} from "@playwright/test"
 import {authFiles} from './config'
 const { adminFile } = authFiles
 
-const salt = (base: string, testSalt: string = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`):string => base === '' ? base : `${base}-${testSalt}`
+const temporaryAndRandom = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+const salt = (base: string, testSalt: string = temporaryAndRandom()):string => base === '' ? testSalt : `${base}-${testSalt}`
 
 /**
  * Generate a unique numeric ID from a test salt
- * Combines timestamp with a hash of the salt string to ensure uniqueness across parallel tests
+ * Combines base number with a hash of the salt string to ensure uniqueness across parallel tests
  *
- * @param testSalt - The salt string to derive the ID from
+ * @param base - Base number to add to the hash (e.g., 1000, 2000, 3000)
+ * @param testSalt - Optional salt string. If not provided, generates a new random one
  * @returns A unique numeric ID
+ *
+ * @example
+ * // Generate IDs for same test entity using same salt (prevents collisions)
+ * const testSalt = temporaryAndRandom()
+ * const heynaboId = saltedId(1000, testSalt)
+ * const pbsId = saltedId(2000, testSalt)
  */
-const saltedId = (testSalt: string = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`): number => {
-    const baseTimestamp = Date.now()
+const saltedId = (base: number = 0, testSalt?: string): number => {
+    const salt = testSalt || temporaryAndRandom()
     // Hash the salt string to create a numeric offset
-    const saltHash = testSalt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    return baseTimestamp + (saltHash % 100000) // Modulo to keep numbers reasonable
+    const saltHash = salt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return (base + saltHash) % 100000 // Modulo to keep numbers reasonable
 }
 
 const headers = {'Content-Type': 'application/json'}
@@ -131,6 +140,7 @@ async function selectDropdownOption(
 const testHelpers = {
     salt,
     saltedId,
+    temporaryAndRandom,
     headers,
     validatedBrowserContext,
     pollUntil,

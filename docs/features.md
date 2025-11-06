@@ -98,7 +98,45 @@ Solve problems with signing up for meals, and paying for them
 - see allergies 
 
 ### Skråner
-- Buy meal tickets (monthly view of household members and all dinner events) 
+
+#### Weekly Dinner Preferences
+- **Set weekly preferences** for each household member
+  - Choose DINE IN, TAKEAWAY, or NONE for each weekday
+  - Auto-calculated ticket types based on age (Baby, Hungry Baby, Child, Adult)
+  - Toggle between VIEW/EDIT mode with pencil icon
+  - Changes save immediately without page reload
+
+**VIEW Mode:**
+- Compact icon badges show current preference for each day
+- Read-only display - click pencil icon to edit
+
+**EDIT Mode:**
+- Button groups for each day with all 3 options visible
+- Click any button to select that preference
+- Active selection highlighted with color
+- Changes save instantly
+
+**Interface (ASCII):**
+```
+┌─ 🏠 Hansen Familie ──────────────────────────────────────────┐
+│ Husstandens ugentlige booking præferencer         [✏️ Edit] │
+├──────────────────────────────────────────────────────────────┤
+│ Billettype │ Navn  │ Man Tir Ons Tor Fre                    │
+├────────────┼───────┼────────────────────────────────────────┤
+│ Voksen     │ Anna  │ 🍽️  🍽️  🍽️  🍽️  🛍️                 │
+│ Voksen     │ Bob   │ 🍽️  🍽️  ⊘   🍽️  🛍️                 │
+│ Barn       │ Clara │ 🍽️  🍽️  🍽️  🍽️  🛍️                 │
+│ Baby       │ David │ ⊘   ⊘   ⊘   ⊘   ⊘                   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Actual Interface:**
+
+![Weekly Preferences Interface](screenshots/household/household-members-view-mode.png)
+*Screenshot: VIEW mode showing household members with ticket types and weekly preferences. Click the pencil icon to switch to EDIT mode where each day shows a button group with all 3 dining options.*
+
+#### Meal Booking (Coming Soon)
+- Buy meal tickets (monthly view of household members and all dinner events)
 - See meal cost for invoice period (this and previous period)
 - Buy extra tickets for guests
 - Sell dinner tickets to other skråner safter deadline (if you can't make it)

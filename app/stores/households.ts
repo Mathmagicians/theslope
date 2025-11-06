@@ -145,15 +145,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const updateInhabitantPreferences = async (inhabitantId: number, preferences: any) => {
         const {handleApiError} = useApiHandler()
-        const {serializeWeekDayMap} = useHouseholdValidation()
 
         try {
             console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
-            const serializedPreferences = serializeWeekDayMap(preferences)
 
             await $fetch(`/api/admin/household/inhabitants/${inhabitantId}`, {
                 method: 'POST',
-                body: { dinnerPreferences: serializedPreferences }
+                body: { dinnerPreferences: preferences }
             })
 
             console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated preferences for inhabitant ${inhabitantId}`)

@@ -3,6 +3,7 @@ import {useCalendarEvents} from '~/composables/useCalendarEvents'
 import type {CalendarEventList} from '~/composables/useCalendarEvents'
 import {CalendarDate, type DateValue} from '@internationalized/date'
 import {toCalendarDate, toDate, formatDate} from "~/utils/date"
+import {isSameDay} from 'date-fns'
 
 // Test factories
 const createTestDate = (day: number, month = 0, year = 2025) => new Date(year, month, day)
@@ -201,7 +202,32 @@ describe('useCalendarEvents', () => {
             const {createEventList, createEventMap, getEventsForDay} = useCalendarEvents()
             const jsDate = createTestDate(day, month, year)
             const calendarDate = toCalendarDate(jsDate)!
-            expect(toDate(calendarDate)).toEqual(jsDate)
+
+            // Debug: Understand the conversion behavior
+            console.log(`\nTest case: day=${day}, month=${month}, year=${year}`)
+            console.log('jsDate ISO:', jsDate.toISOString())
+            console.log('jsDate local components:', {
+                day: jsDate.getDate(),
+                month: jsDate.getMonth() + 1,
+                year: jsDate.getFullYear()
+            })
+            console.log('CalendarDate:', { year: calendarDate.year, month: calendarDate.month, day: calendarDate.day })
+
+            const roundTripDate = toDate(calendarDate)
+            console.log('roundTripDate ISO:', roundTripDate.toISOString())
+            console.log('roundTripDate local components:', {
+                day: roundTripDate.getDate(),
+                month: roundTripDate.getMonth() + 1,
+                year: roundTripDate.getFullYear()
+            })
+
+            // Verify round-trip preserves date (timezone-independent checks)
+            expect(isSameDay(roundTripDate, jsDate)).toBe(true)
+            expect(formatDate(roundTripDate)).toEqual(formatDate(jsDate))
+            expect(roundTripDate.getDate()).toEqual(jsDate.getDate())
+            expect(roundTripDate.getMonth()).toEqual(jsDate.getMonth())
+            expect(roundTripDate.getFullYear()).toEqual(jsDate.getFullYear())
+
             const eventList = createEventList([jsDate], 'test-list', 'badge')
             const eventMap = createEventMap([eventList])
 
