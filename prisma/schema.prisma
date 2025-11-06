@@ -19,7 +19,6 @@ datasource db {
 
 enum SystemRole {
   ADMIN
-  USER
   ALLERGYMANAGER
 }
 
@@ -67,7 +66,7 @@ model User {
   email        String      @unique
   phone        String?
   passwordHash String
-  systemRole   SystemRole  @default(USER)
+  systemRoles  String      @default("[]") // JSON stringified array of SystemRole
   Inhabitant   Inhabitant?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt

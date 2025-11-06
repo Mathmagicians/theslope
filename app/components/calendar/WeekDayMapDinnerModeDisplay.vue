@@ -100,7 +100,7 @@ const visibleDays = computed(() => {
 <template>
   <!-- VIEW MODE: Horizontal compact display with badges - filtered weekdays only -->
   <div v-if="formMode === FORM_MODES.VIEW" class="flex gap-1">
-    <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-1">
+    <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-1 min-w-[32px]">
       <span v-if="showLabels" class="text-xs text-gray-500 capitalize">{{ formatWeekdayCompact(day) }}</span>
       <UBadge
         :color="getModeColor(modelValue?.[day] ?? DinnerMode.DINEIN)"
@@ -126,6 +126,7 @@ const visibleDays = computed(() => {
           :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.DINEIN ? 'solid' : 'ghost'"
           :disabled="disabled"
           size="xs"
+          :name="`${name}-${day}-DINEIN`"
           @click="updateDay(day, DinnerMode.DINEIN)"
         />
         <UButton
@@ -134,6 +135,7 @@ const visibleDays = computed(() => {
           :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'solid' : 'ghost'"
           :disabled="disabled"
           size="xs"
+          :name="`${name}-${day}-TAKEAWAY`"
           @click="updateDay(day, DinnerMode.TAKEAWAY)"
         />
         <UButton
@@ -142,6 +144,7 @@ const visibleDays = computed(() => {
           :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.NONE ? 'solid' : 'ghost'"
           :disabled="disabled"
           size="xs"
+          :name="`${name}-${day}-NONE`"
           @click="updateDay(day, DinnerMode.NONE)"
         />
       </UFieldGroup>

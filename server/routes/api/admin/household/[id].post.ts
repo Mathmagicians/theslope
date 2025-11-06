@@ -1,7 +1,9 @@
 // POST /api/admin/household/[id] - Update household
 
-import {defineEventHandler, readBody, getValidatedRouterParams} from "h3"
+import {defineEventHandler, readValidatedBody, getValidatedRouterParams} from "h3"
 import {updateHousehold} from "~~/server/data/prismaRepository"
+import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
+import type {Household, HouseholdUpdate} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -12,26 +14,20 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Household ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<Household>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id: number
+    let householdData: Partial<HouseholdUpdate>
     try {
+        const {HouseholdUpdateSchema} = useHouseholdValidation()
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        householdData = await readValidatedBody(event, HouseholdUpdateSchema.partial().omit({id: true}).parse)
     } catch (error) {
         const h3e = h3eFromCatch('🏠 > HOUSEHOLD > [POST] Input validation error', error)
         console.warn(`🏠 > HOUSEHOLD > [POST] ${h3e.statusMessage}`)
-        throw h3e
-    }
-
-    let householdData
-    try {
-        householdData = await readBody(event)
-    } catch (error) {
-        const h3e = h3eFromCatch('🏠 > HOUSEHOLD > [POST] Error reading body', error)
-        console.error(`🏠 > HOUSEHOLD > [POST] ${h3e.statusMessage}`, error)
         throw h3e
     }
 

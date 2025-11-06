@@ -13,13 +13,19 @@ import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidatio
 import type {WeekDayMap} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useDinnerEventValidation'
-import {formatWeekdayCompact} from '~/utils/date'
+import {formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useOrderValidation} from '~/composables/useOrderValidation'
 
 interface Props {
   household: HouseholdWithInhabitants
 }
 
 const props = defineProps<Props>()
+
+// Extract ticket type enum constants from Zod schema
+const {TicketTypesSchema} = useOrderValidation()
+const TicketType = TicketTypesSchema.enum
 
 // UI state: Form mode (VIEW or EDIT)
 const formMode = ref<FormMode>(FORM_MODES.VIEW)
@@ -48,6 +54,30 @@ const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<D
     console.error('Failed to update preferences:', error)
   }
 }
+
+// Determine ticket type based on age and season ticket prices
+const determineTicketType = (birthDate: Date | null) => {
+  if (!birthDate) return TicketType.ADULT
+  if (!activeSeason.value?.ticketPrices) return TicketType.ADULT
+
+  const age = calculateAgeOnDate(birthDate, new Date())
+  const sorted = [...activeSeason.value.ticketPrices]
+    .filter(tp => tp.maximumAgeLimit !== null)
+    .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
+
+  for (const price of sorted) {
+    if (age <= price.maximumAgeLimit!) return price.ticketType
+  }
+  return TicketType.ADULT
+}
+
+// Ticket type display config
+const ticketTypeConfig = {
+  [TicketType.ADULT]: {label: 'Voksen', color: 'primary'},
+  [TicketType.CHILD]: {label: 'Barn', color: 'success'},
+  [TicketType.HUNGRY_BABY]: {label: 'Sulten baby', color: 'warning'},
+  [TicketType.BABY]: {label: 'Baby', color: 'neutral'}
+} as const
 </script>
 
 <template>
@@ -64,6 +94,7 @@ const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<D
           :color="formMode === FORM_MODES.EDIT ? 'success' : 'neutral'"
           variant="ghost"
           size="sm"
+          data-test-id="household-members-edit-toggle"
           @click="toggleEditMode"
         />
       </div>
@@ -76,9 +107,14 @@ const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<D
 
       <!-- Table-like layout: header + rows -->
       <div class="space-y-2">
-        <!-- Header row: weekday labels (shown once) -->
+        <!-- Header row: labels (shown once) -->
         <div class="flex items-center gap-4">
-          <div class="min-w-[140px]"></div> <!-- Empty space for name column -->
+          <div class="min-w-[100px]">
+            <span class="text-xs text-gray-500 font-semibold">Billettype</span>
+          </div>
+          <div class="min-w-[140px]">
+            <span class="text-xs text-gray-500 font-semibold">Navn</span>
+          </div>
           <div class="flex gap-1">
             <div
               v-for="day in visibleDays"
@@ -96,11 +132,24 @@ const updatePreferences = async (inhabitantId: number, preferences: WeekDayMap<D
           :key="inhabitant.id"
           class="flex items-center gap-4"
         >
+          <!-- Ticket type badge -->
+          <div class="min-w-[100px]" :data-test-id="`ticket-type-${inhabitant.id}`">
+            <UBadge
+              :color="ticketTypeConfig[determineTicketType(inhabitant.birthDate)]?.color ?? 'neutral'"
+              variant="subtle"
+              size="sm"
+            >
+              {{ ticketTypeConfig[determineTicketType(inhabitant.birthDate)]?.label ?? 'Ukendt' }}
+            </UBadge>
+          </div>
+
+          <!-- Name -->
           <div class="flex items-center gap-2 min-w-[140px]">
             <UIcon name="i-heroicons-user" class="w-4 h-4 text-gray-400"/>
             <span class="font-medium">{{ inhabitant.name }}</span>
           </div>
 
+          <!-- Weekly preferences -->
           <WeekDayMapDinnerModeDisplay
             :model-value="inhabitant.dinnerPreferences"
             :form-mode="formMode"

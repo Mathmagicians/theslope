@@ -5,28 +5,21 @@ const {formattedUsers} = storeToRefs(store)
 const {importing} = storeToRefs(store)
 const {loadData, importHeynaboData} = store
 loadData()
-const UBadge = resolveComponent('UBadge')
-const classForSystemRole = (role: string) => role === 'ADMIN' ? 'red' : 'green'
 
-/*
-    cell: ({row}) => {
-      const color = classForSystemRole(row.getValue('systemRole'))
-      return h(UBadge,
-          {class: 'capitalize', variant: 'subtle', color},
-          () => row.getValue('systemRole')
-      )
-    }
- */
+const colorForSystemRole = (role: string) => {
+  switch (role) {
+    case 'ADMIN': return 'error'
+    case 'ALLERGYMANAGER': return 'warning'
+    default: return 'neutral'
+  }
+}
 
 const userColumns = [
   {accessorKey: 'id', header: '#'},
   {accessorKey: 'email', header: 'Mail'},
   {accessorKey: 'phone', header: 'Telefon'},
-  {
-    accessorKey: 'systemRole',
-    header: 'Systemrolle'
-  },
-  {accessorKey: 'updatedAt', header: 'Sidst opdateret', cell: ({ row }) => `for #${row.getValue('updatedAt')} siden`},
+  {accessorKey: 'systemRoles', header: 'Systemroller'},
+  {accessorKey: 'updatedAt', header: 'Sidst opdateret'},
 ]
 
 </script>
@@ -49,6 +42,23 @@ const userColumns = [
         caption="Brugere - importeret fra Heynabo"
         class="w-full"
     >
+      <template #systemRoles-cell="{ row }">
+        <div v-if="row.original.systemRoles && row.original.systemRoles.length > 0" class="flex gap-1 flex-wrap">
+          <UBadge
+              v-for="role in row.original.systemRoles"
+              :key="role"
+              :color="colorForSystemRole(role)"
+              variant="soft"
+              size="md"
+          >
+            {{ role === 'ALLERGYMANAGER' ? 'ALLERGIER' : role }}
+          </UBadge>
+        </div>
+      </template>
+
+      <template #updatedAt-cell="{ row }">
+        {{ row.original.updatedAt }} siden
+      </template>
     </UTable>
   </UCard>
 </template>

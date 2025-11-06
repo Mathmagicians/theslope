@@ -1,5 +1,6 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
+import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import {updateInhabitant} from "~~/server/data/prismaRepository"
 import {z} from 'zod'
 
@@ -9,7 +10,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive()
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

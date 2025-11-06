@@ -1,16 +1,17 @@
 import type {BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {User, UserCreate} from "../../../app/composables/useUserValidation"
+import type {User, UserCreate} from "~/composables/useUserValidation"
 
 const {salt, headers} = testHelpers
 
 export class UserFactory {
+
     static readonly defaultUserData: UserCreate = {
         email: 'minnie-admin-users@andeby.dk',
         phone: '+4512345678',
         passwordHash: 'caramba',
-        systemRole: 'USER'
+        systemRoles: [] // Regular user has empty roles array
     }
 
     static readonly defaultUser = (testSalt: string = Date.now().toString()): UserCreate => {
@@ -22,14 +23,10 @@ export class UserFactory {
     }
 
     static readonly createUser = async (context: BrowserContext, aUser: UserCreate = this.defaultUser() ): Promise<User> => {
-        // Users API uses query parameters, not request body
+        // Users API uses request body (ADR-002 pattern)
         const response = await context.request.put('/api/admin/users', {
             headers: headers,
-            params: {
-                email: aUser.email as string,
-                phone: aUser.phone as string,
-                systemRole: aUser.systemRole as string
-            }
+            data: aUser
         })
 
         const status = response.status()
@@ -53,14 +50,28 @@ export class UserFactory {
     static readonly createAdmin = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),
-            systemRole: 'ADMIN' as const
+            systemRoles: ['ADMIN'] as const
+        }
+    }
+
+    static readonly createAllergyManager = (testSalt: string = Date.now().toString()) => {
+        return {
+            ...this.defaultUser(testSalt),
+            systemRoles: ['ALLERGYMANAGER'] as const
+        }
+    }
+
+    static readonly createAdminAndAllergyManager = (testSalt: string = Date.now().toString()) => {
+        return {
+            ...this.defaultUser(testSalt),
+            systemRoles: ['ADMIN', 'ALLERGYMANAGER'] as const
         }
     }
 
     static readonly createChef = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),
-            systemRole: 'USER' as const // Chefs are typically users with inhabitant roles
+            systemRoles: [] as const // Chefs are regular users with inhabitant roles
         }
     }
 }

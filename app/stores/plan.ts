@@ -77,14 +77,20 @@ export const usePlanStore = defineStore("Plan", () => {
         const isSeasonsInitialized = computed(() => seasonsStatus.value === 'success')
         const isNoSeasons = computed(() => isSeasonsInitialized.value && seasons.value.length === 0)
 
-        const isSelectedSeasonLoading = computed(() => selectedSeasonStatus.value === 'pending')
+        const isSelectedSeasonLoading = computed(() => {
+            // When there are no seasons, nothing to load
+            if (isNoSeasons.value) return false
+            return selectedSeasonStatus.value === 'pending'
+        })
         const isSelectedSeasonErrored = computed(() => selectedSeasonStatus.value === 'error')
-        const isSelectedSeasonInitialized = computed(() =>
-            selectedSeasonStatus.value === 'success' && selectedSeason.value !== null
-        )
+        const isSelectedSeasonInitialized = computed(() => {
+            // When there are no seasons, consider it initialized (nothing to select)
+            if (isNoSeasons.value) return true
+            return selectedSeasonStatus.value === 'success' && selectedSeason.value !== null
+        })
 
         // Convenience computed for components - true when store is fully initialized and ready to use
-        const isPlanStoreReady = computed(() => isSeasonsInitialized.value && isSelectedSeasonInitialized.value)
+        const isPlanStoreReady = computed(() => isSeasonsInitialized.value && (isNoSeasons.value || isSelectedSeasonInitialized.value))
 
         // Active season - the community's currently active season (by activeSeasonId)
         const activeSeason = computed(() => {

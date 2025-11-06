@@ -5,9 +5,9 @@ import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 import dotenv from 'dotenv';
 import {z} from 'zod'
 import InhabitantCreateInput = Prisma.InhabitantCreateInput;
-import UserCreateInput = Prisma.UserCreateInput;
 import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
 import {maskPassword} from "~/utils/utils";
+import type {UserCreate} from "~/composables/useUserValidation";
 
 dotenv.config();
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
@@ -185,6 +185,7 @@ type HeyNaboRoles = 'admin' | 'full' | 'limited'
 
 function inhabitantFromMember(locationId: number, member: HeynaboMember): InhabitantCreateInput {
     console.log(`>>>> 👩‍ Found inhabitant ${member.firstName} ${member.lastName} with role ${member.role} for location ${locationId}`)
+
     const inhabitant = {
         heynaboId: member.id,
         pictureUrl: member.avatar,
@@ -195,13 +196,14 @@ function inhabitantFromMember(locationId: number, member: HeynaboMember): Inhabi
     } satisfies InhabitantCreateInput
 
     if (member.email && member.role  !== 'limited') {
-        const user: UserCreateInput = {
+        // Domain format - saveUser in repository will serialize (ADR-010 pattern)
+        const userDomain: UserCreate = {
             email: member.email,
             phone: member.phone,
             passwordHash: 'removeme',
-            systemRole: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? 'ADMIN' : 'USER'
+            systemRoles: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? ['ADMIN'] : []
         }
-        inhabitant.user = user
+        inhabitant.user = userDomain
     }
 
 

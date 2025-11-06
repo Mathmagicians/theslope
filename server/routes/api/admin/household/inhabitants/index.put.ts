@@ -1,11 +1,12 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {saveInhabitant} from "~~/server/data/prismaRepository"
 import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
+import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

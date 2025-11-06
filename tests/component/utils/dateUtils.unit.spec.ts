@@ -11,7 +11,8 @@ import {
     excludeDatesFromInterval,
     areRangesOverlapping,
     selectWeekNumbersFromListThatFitInsideDateRange,
-    formatCalendarDate
+    formatCalendarDate,
+    calculateAgeOnDate
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid} from "date-fns"
@@ -388,5 +389,83 @@ describe('formatCalendarDate', () => {
         const calendarDate = new CalendarDate(2025, 3, 7) // March 7, 2025
         const result = formatCalendarDate(calendarDate)
         expect(result).toBe('07/03/2025')
+    })
+})
+
+describe('calculateAgeOnDate', () => {
+    const testCases = [
+        {
+            description: 'birthday has not occurred yet this year',
+            birthDate: new Date(2010, 2, 15), // March 15, 2010
+            eventDate: new Date(2025, 0, 1),  // January 1, 2025
+            expectedAge: 14
+        },
+        {
+            description: 'birthday has already occurred this year',
+            birthDate: new Date(2010, 2, 15), // March 15, 2010
+            eventDate: new Date(2025, 11, 31), // December 31, 2025
+            expectedAge: 15
+        },
+        {
+            description: 'on exact birthday',
+            birthDate: new Date(2010, 2, 15), // March 15, 2010
+            eventDate: new Date(2025, 2, 15), // March 15, 2025
+            expectedAge: 15
+        },
+        {
+            description: 'newborn (age 0)',
+            birthDate: new Date(2025, 0, 1),  // January 1, 2025
+            eventDate: new Date(2025, 0, 15), // January 15, 2025
+            expectedAge: 0
+        },
+        {
+            description: 'leap year birthday in non-leap year',
+            birthDate: new Date(2020, 1, 29), // February 29, 2020
+            eventDate: new Date(2025, 2, 1),  // March 1, 2025
+            expectedAge: 5
+        },
+        {
+            description: 'adult before birthday',
+            birthDate: new Date(1985, 4, 20), // May 20, 1985
+            eventDate: new Date(2025, 0, 1),  // January 1, 2025
+            expectedAge: 39
+        },
+        {
+            description: 'same date (age 0)',
+            birthDate: new Date(2025, 5, 15),
+            eventDate: new Date(2025, 5, 15),
+            expectedAge: 0
+        },
+        {
+            description: '2-year-old boundary: day before birthday (still 1)',
+            birthDate: new Date(2023, 0, 1),  // January 1, 2023
+            eventDate: new Date(2024, 11, 31), // December 31, 2024
+            expectedAge: 1
+        },
+        {
+            description: '2-year-old boundary: on birthday (turns 2)',
+            birthDate: new Date(2023, 0, 1),  // January 1, 2023
+            eventDate: new Date(2025, 0, 1),  // January 1, 2025
+            expectedAge: 2
+        },
+        {
+            description: '12-year-old boundary: day before birthday (still 11)',
+            birthDate: new Date(2013, 5, 15), // June 15, 2013
+            eventDate: new Date(2025, 5, 14), // June 14, 2025
+            expectedAge: 11
+        },
+        {
+            description: '12-year-old boundary: on birthday (turns 12)',
+            birthDate: new Date(2013, 5, 15), // June 15, 2013
+            eventDate: new Date(2025, 5, 15), // June 15, 2025
+            expectedAge: 12
+        }
+    ]
+
+    testCases.forEach(({ description, birthDate, eventDate, expectedAge }) => {
+        it(`should calculate age correctly when ${description}`, () => {
+            const age = calculateAgeOnDate(birthDate, eventDate)
+            expect(age).toBe(expectedAge)
+        })
     })
 })

@@ -18,11 +18,23 @@ export const useAuthStore = defineStore("Auth", () => {
     const email = computed(() => user?.value?.email)
     const phone = computed(() => user?.value?.phone)
     const birthDate = computed(() => user?.value?.Inhabitant?.birthDate)
-    const systemRole = computed(() => user?.value?.systemRole)
-    const isAdmin = computed(() => user?.value?.systemRole === 'ADMIN')
+    const systemRoles = computed(() => {
+        const roles = user?.value?.systemRoles
+        // Parse JSON string from database to array
+        if (typeof roles === 'string') {
+            try {
+                return JSON.parse(roles)
+            } catch {
+                return []
+            }
+        }
+        return roles || []
+    })
+    const isAdmin = computed(() => systemRoles.value.includes('ADMIN'))
+    const isAllergyManager = computed(() => systemRoles.value.includes('ALLERGYMANAGER'))
     const address = computed(() => user?.value?.Inhabitant?.household?.address)
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRole, isAdmin, address, loggedIn, user, session, clear, fetch}
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, address, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {

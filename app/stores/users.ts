@@ -1,13 +1,28 @@
 import type { InternalApi } from 'nitropack'
 import {formatDistanceToNow} from "date-fns"
 import {da} from "date-fns/locale"
+import type {UserDisplay} from '~/composables/useUserValidation'
 
 type UsersApiResponse = InternalApi['/api/admin/users']['get']
 
 export const useUsersStore = defineStore("Users", () => {
-    // Create state for holding users
     const users = ref<UsersApiResponse | null>(null)
     const importing = ref(false)
+
+    const {
+        data: allergyManagers,
+        status: allergyManagersStatus,
+        error: allergyManagersError
+    } = useAsyncData<UserDisplay[]>(
+        'allergyManagers',
+        () => $fetch('/api/admin/users/by-role/ALLERGYMANAGER'),
+        {
+            default: () => []
+        }
+    )
+
+    const isAllergyManagersLoading = computed(() => allergyManagersStatus.value === 'pending')
+    const isAllergyManagersErrored = computed(() => allergyManagersStatus.value === 'error')
 
     /** Function to load user data */
     const loadData = async () => {
@@ -39,7 +54,8 @@ export const useUsersStore = defineStore("Users", () => {
         try {
             importing.value = true
             console.log("🍍 > PINA > USERS > Importing Heynabo data")
-            users.value = await $fetch("/api/admin/heynabo/import")
+            await $fetch("/api/admin/heynabo/import")
+            await loadData()
         } catch (error: any) {
             console.error("🍍 > PINA > USERS > Error importing Heynabo data:", error)
             createError({
@@ -57,7 +73,11 @@ export const useUsersStore = defineStore("Users", () => {
         formattedUsers,
         loadData,
         importHeynaboData,
-        importing
+        importing,
+        allergyManagers,
+        isAllergyManagersLoading,
+        isAllergyManagersErrored,
+        allergyManagersError
     };
 });
 

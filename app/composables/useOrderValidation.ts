@@ -20,7 +20,7 @@ export const useOrderValidation = () => {
         updatedAt: true
     })
 
-    return {OrderSchema, OrderCreateSchema}
+    return {OrderSchema, OrderCreateSchema, TicketTypesSchema}
 }
 
 // Export types inferred from schemas (ADR-001)

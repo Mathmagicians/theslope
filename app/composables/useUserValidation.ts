@@ -1,11 +1,15 @@
 import {z} from 'zod'
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
+// Re-export SystemRole type
+export type SystemRole = z.infer<typeof SystemRoleSchema>
+
 /**
  * Validation schemas and serialization functions for User objects
+ * Following ADR-010: Domain-Driven Serialization Architecture
  */
 export const useUserValidation = () => {
-    // Base User schema for API operations
+    // Domain schema - systemRoles as array
     const BaseUserSchema = z.object({
         id: z.number().int().positive().optional(),
         email: z.string().email('Email-adressen er ikke gyldig'),
@@ -14,9 +18,14 @@ export const useUserValidation = () => {
             .nullable()
             .optional(),
         passwordHash: z.string().default('caramba'),
-        systemRole: SystemRoleSchema.default('USER'),
+        systemRoles: z.array(SystemRoleSchema).default([]), // Array of roles
         createdAt: z.coerce.date().optional(),
         updatedAt: z.coerce.date().optional()
+    })
+
+    // Serialized schema - systemRoles as JSON string (database format)
+    const SerializedUserSchema = BaseUserSchema.extend({
+        systemRoles: z.string().default('[]') // JSON stringified array
     })
 
     // User schema for creation (API input validation)
@@ -35,15 +44,20 @@ export const useUserValidation = () => {
     const UserResponseSchema = BaseUserSchema.required({
         id: true,
         email: true,
-        systemRole: true
+        systemRoles: true
     })
 
-    // Minimal user info for frontend display
+    // Minimal user info for frontend display (allergy managers with avatar)
     const UserDisplaySchema = z.object({
         id: z.number().int().positive(),
         email: z.string().email(),
-        systemRole: SystemRoleSchema,
-        phone: z.string().optional()
+        systemRoles: z.array(SystemRoleSchema),
+        phone: z.string().optional(),
+        Inhabitant: z.object({
+            name: z.string(),
+            lastName: z.string(),
+            pictureUrl: z.string().nullable()
+        }).nullable().optional()
     })
 
     // Login schema for authentication
@@ -57,14 +71,14 @@ export const useUserValidation = () => {
     const UserWithInhabitantSchema = BaseUserSchema.required({
         id: true,
         email: true,
-        systemRole: true
+        systemRoles: true
     }).extend({
         Inhabitant: z.object({
             id: z.number().int().positive(),
             heynaboId: z.number().int().positive(),
             userId: z.number().int().positive().nullable(),
             householdId: z.number().int().positive(),
-            pictureUrl: z.string().url().nullable(),
+            pictureUrl: z.string().url().or(z.literal('')).nullable(),
             name: z.string(),
             lastName: z.string(),
             birthDate: z.coerce.date().nullable(),
@@ -83,6 +97,7 @@ export const useUserValidation = () => {
 
     // Type definitions
     type User = z.infer<typeof BaseUserSchema>
+    type SerializedUser = z.infer<typeof SerializedUserSchema>
     type UserCreate = z.infer<typeof UserCreateSchema>
     type UserUpdate = z.infer<typeof UserUpdateSchema>
     type UserResponse = z.infer<typeof UserResponseSchema>
@@ -90,19 +105,57 @@ export const useUserValidation = () => {
     type UserWithInhabitant = z.infer<typeof UserWithInhabitantSchema>
     type LoginCredentials = z.infer<typeof LoginSchema>
 
+    // Serialization functions (database ⟷ domain)
+    const serializeUser = (user: User): SerializedUser => {
+        return {
+            ...user,
+            systemRoles: JSON.stringify(user.systemRoles)
+        }
+    }
+
+    const deserializeUser = (serialized: SerializedUser): User => {
+        return {
+            ...serialized,
+            systemRoles: JSON.parse(serialized.systemRoles)
+        }
+    }
+
+    /**
+     * Merge new user data with existing user, preserving and combining systemRoles
+     * Used during Heynabo import to prevent overwriting manually assigned roles
+     *
+     * @param existing - Existing user from database (domain format)
+     * @param incoming - New user data (domain format)
+     * @returns Merged user with union of roles
+     */
+    const mergeUserRoles = (existing: User, incoming: UserCreate): UserCreate => {
+        // Merge roles: union of existing + new (no duplicates)
+        const mergedRoles = Array.from(new Set([...existing.systemRoles, ...incoming.systemRoles]))
+
+        return {
+            ...incoming,
+            systemRoles: mergedRoles
+        }
+    }
+
     return {
         BaseUserSchema,
+        SerializedUserSchema,
         UserCreateSchema,
         UserUpdateSchema,
         UserResponseSchema,
         UserDisplaySchema,
         UserWithInhabitantSchema,
-        LoginSchema
+        LoginSchema,
+        serializeUser,
+        deserializeUser,
+        mergeUserRoles
     }
 }
 
 // Re-export types
 export type User = z.infer<ReturnType<typeof useUserValidation>['BaseUserSchema']>
+export type SerializedUser = z.infer<ReturnType<typeof useUserValidation>['SerializedUserSchema']>
 export type UserCreate = z.infer<ReturnType<typeof useUserValidation>['UserCreateSchema']>
 export type UserUpdate = z.infer<ReturnType<typeof useUserValidation>['UserUpdateSchema']>
 export type UserResponse = z.infer<ReturnType<typeof useUserValidation>['UserResponseSchema']>

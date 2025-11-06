@@ -195,3 +195,21 @@ export function selectWeekNumbersFromListThatFitInsideDateRange(
         isDateRangeInside(dates, weekRange)
     )
 }
+
+/**
+ * Calculate age in years on a specific date
+ * @param birthDate - Date of birth
+ * @param eventDate - Date to calculate age on
+ * @returns Age in complete years
+ */
+export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
+    let age = eventDate.getFullYear() - birthDate.getFullYear()
+    const monthDiff = eventDate.getMonth() - birthDate.getMonth()
+
+    // If birthday hasn't occurred yet this year, subtract 1
+    if (monthDiff < 0 || (monthDiff === 0 && eventDate.getDate() < birthDate.getDate())) {
+        age--
+    }
+
+    return age
+}

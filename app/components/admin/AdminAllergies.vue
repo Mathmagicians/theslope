@@ -131,17 +131,20 @@ const columns = [
         class="w-full px-0"
     >
       <template #header>
-        <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div class="text-lg font-semibold">Allergi Katalog</div>
-          <UButton
-              v-if="formMode === 'view'"
-              icon="i-heroicons-plus-circle"
-              color="primary"
-              @click="startCreate"
-              name="create-allergy-type"
-          >
-            Tilføj allergi
-          </UButton>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="text-lg font-semibold">Allergi Katalog</div>
+            <UButton
+                v-if="formMode === 'view'"
+                icon="i-heroicons-plus-circle"
+                color="primary"
+                @click="startCreate"
+                name="create-allergy-type"
+            >
+              Tilføj allergi
+            </UButton>
+          </div>
+          <AllergyManagersList />
         </div>
       </template>
 
@@ -204,13 +207,10 @@ const columns = [
           :loading="isAllergyTypesLoading"
           :ui="{ td: 'py-3' }"
       >
-        <!-- Icon cell with forbidden ring -->
+        <!-- Icon cell with red circle -->
         <template #icon-cell="{ row }">
           <div class="relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12">
-            <div class="absolute inset-0 rounded-full border-4 md:border-[5px] border-red-600"></div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="w-full h-1 md:h-1.5 bg-red-600 rotate-45"></div>
-            </div>
+            <div class="absolute inset-0 rounded-full border-4 md:border-[5px] border-red-700"></div>
             <span class="relative text-xl md:text-2xl z-10">
               {{ row.original.icon || '🏷️' }}
             </span>

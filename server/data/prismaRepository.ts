@@ -24,7 +24,8 @@ import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
 import type {OrderCreate} from '~/composables/useOrderValidation'
 import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import type {UserCreate} from '~/composables/useUserValidation'
+import type {UserCreate, UserDisplay, SystemRole} from '~/composables/useUserValidation'
+import {useUserValidation} from '~/composables/useUserValidation'
 import type {AllergyTypeCreate, AllergyTypeUpdate, AllergyCreate, AllergyUpdate} from '~/composables/useAllergyValidation'
 
 export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
@@ -70,18 +71,38 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
 
 /*** USERS ***/
 
+// Get serialization utilities
+const {serializeUser, deserializeUser, mergeUserRoles} = useUserValidation()
+
 export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
     console.info(`👨‍💻 > USER > [SAVE] Saving user ${user.email}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Check if user exists to merge roles
+        const existingUser = await prisma.user.findUnique({
+            where: {email: user.email}
+        })
+
+        let userToSave = user
+
+        // If user exists, merge systemRoles instead of overwriting
+        if (existingUser) {
+            const existingDomain = deserializeUser(existingUser)
+            userToSave = mergeUserRoles(existingDomain, user)
+            console.info(`👨‍💻 > USER > [SAVE] Merging roles for existing user ${user.email}: [${existingDomain.systemRoles}] + [${user.systemRoles}] = [${userToSave.systemRoles}]`)
+        }
+
+        // Serialize before writing to DB (ADR-010 pattern)
+        const serializedUser = serializeUser(userToSave)
         const newUser = await prisma.user.upsert({
             where: {email: user.email},
-            create: user,
-            update: user
+            create: serializedUser,
+            update: serializedUser
         })
         console.info(`👨‍💻 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
-        return newUser
+        // Deserialize before returning
+        return deserializeUser(newUser)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving user ${user.email}`, error)
         console.error(`👨‍💻 > USER > [SAVE] ${h3e.statusMessage}`, error)
@@ -96,7 +117,8 @@ export async function fetchUsers(d1Client: D1Database): Promise<User[]> {
     try {
         const users = await prisma.user.findMany()
         console.info(`👨‍💻 > USER > [GET] Successfully fetched ${users.length} users`)
-        return users
+        // Deserialize before returning (ADR-010 pattern)
+        return users.map(user => deserializeUser(user))
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching users', error)
         console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
@@ -136,17 +158,80 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         })
 
         if (user) {
+            // Deserialize systemRoles (ADR-010 pattern)
+            const deserializedRoles = JSON.parse(user.systemRoles)
+
             // Add computed shortName to household if inhabitant exists
             if (user.Inhabitant?.household) {
                 user.Inhabitant.household.shortName = getHouseholdShortName(user.Inhabitant.household.address)
             }
+
             console.info(`👨‍💻 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
+
+            // Return with deserialized roles
+            return {
+                ...user,
+                systemRoles: deserializedRoles
+            }
         } else {
             console.info(`👨‍💻 > USER > [GET] No user found for email ${email}`)
         }
-        return user
+        return null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching user for email ${email}`, error)
+        console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemRole): Promise<UserDisplay[]> {
+    console.info(`👨‍💻 > USER > [GET] Fetching users with role ${systemRole}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Query users where systemRoles JSON array contains the specified role
+        const users = await prisma.user.findMany({
+            where: {
+                systemRoles: {
+                    contains: systemRole
+                }
+            },
+            select: {
+                id: true,
+                email: true,
+                phone: true,
+                systemRoles: true,
+                Inhabitant: {
+                    select: {
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true
+                    }
+                }
+            }
+        })
+
+        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
+        const deserializedUsers = users.map(user => {
+            const deserialized = deserializeUser({
+                ...user,
+                passwordHash: '', // Not needed for display
+                systemRoles: user.systemRoles
+            })
+
+            return {
+                id: deserialized.id!,
+                email: deserialized.email,
+                phone: deserialized.phone,
+                systemRoles: deserialized.systemRoles,
+                Inhabitant: user.Inhabitant
+            } as UserDisplay
+        })
+
+        console.info(`👨‍💻 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)
+        return deserializedUsers
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching users with role ${systemRole}`, error)
         console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
@@ -205,11 +290,22 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
 export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant[]> {
     console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeWeekDayMap} = useHouseholdValidation()
 
     try {
         const inhabitants = await prisma.inhabitant.findMany()
+
+        // ADR-010: Deserialize database format to domain format
+        const deserializedInhabitants = inhabitants.map(inhabitant => ({
+            ...inhabitant,
+            birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+            dinnerPreferences: inhabitant.dinnerPreferences
+                ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                : null
+        }))
+
         console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched ${inhabitants.length} inhabitants`)
-        return inhabitants
+        return deserializedInhabitants
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching inhabitants', error)
         console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
@@ -220,12 +316,26 @@ export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant
 export async function fetchInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant | null> {
     console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeWeekDayMap} = useHouseholdValidation()
+
     try {
         const inhabitant = await prisma.inhabitant.findFirst({
             where: {id}
         })
-        console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched inhabitant ${inhabitant?.name} with ID ${id}`)
-        return inhabitant
+
+        if (!inhabitant) return null
+
+        // ADR-010: Deserialize database format to domain format
+        const deserializedInhabitant = {
+            ...inhabitant,
+            birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+            dinnerPreferences: inhabitant.dinnerPreferences
+                ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                : null
+        }
+
+        console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched inhabitant ${inhabitant.name} with ID ${id}`)
+        return deserializedInhabitant
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching inhabitant with ID ${id}`, error)
         console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
@@ -616,10 +726,16 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<import('~/c
             }
         })
 
-        // Add computed shortName (domain logic)
+        // ADR-010: Deserialize database format to domain format + add computed shortName
         const householdsWithShortName = households.map(household => ({
             ...household,
-            shortName: getHouseholdShortName(household.address)
+            movedInDate: new Date(household.movedInDate),
+            moveOutDate: household.moveOutDate ? new Date(household.moveOutDate) : null,
+            shortName: getHouseholdShortName(household.address),
+            inhabitants: household.inhabitants.map(inhabitant => ({
+                ...inhabitant,
+                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null
+            }))
         }))
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
@@ -634,6 +750,8 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<import('~/c
 export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdWithInhabitants | null> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeWeekDayMap} = useHouseholdValidation()
+
     try {
         const household = await prisma.household.findFirst({
             where: {id},
@@ -644,10 +762,22 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
 
         if (!household) return null
 
+        // ADR-010: Deserialize database format to domain format
+        const inhabitantsWithDeserializedData = household.inhabitants.map(inhabitant => ({
+            ...inhabitant,
+            birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+            dinnerPreferences: inhabitant.dinnerPreferences
+                ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                : null
+        }))
+
         // Add computed shortName (domain logic)
         const householdWithShortName = {
             ...household,
-            shortName: getHouseholdShortName(household.address)
+            movedInDate: new Date(household.movedInDate),
+            moveOutDate: household.moveOutDate ? new Date(household.moveOutDate) : null,
+            shortName: getHouseholdShortName(household.address),
+            inhabitants: inhabitantsWithDeserializedData
         }
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)

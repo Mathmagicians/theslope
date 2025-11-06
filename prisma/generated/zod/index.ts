@@ -16,7 +16,7 @@ export const AllergyTypeScalarFieldEnumSchema = z.enum(['id','name','description
 
 export const AllergyScalarFieldEnumSchema = z.enum(['id','inhabitantId','inhabitantComment','allergyTypeId','createdAt','updatedAt']);
 
-export const UserScalarFieldEnumSchema = z.enum(['id','email','phone','passwordHash','systemRole','createdAt','updatedAt']);
+export const UserScalarFieldEnumSchema = z.enum(['id','email','phone','passwordHash','systemRoles','createdAt','updatedAt']);
 
 export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId','householdId','pictureUrl','name','lastName','birthDate','dinnerPreferences']);
 
@@ -42,7 +42,7 @@ export const SortOrderSchema = z.enum(['asc','desc']);
 
 export const NullsOrderSchema = z.enum(['first','last']);
 
-export const SystemRoleSchema = z.enum(['ADMIN','USER']);
+export const SystemRoleSchema = z.enum(['ADMIN','ALLERGYMANAGER']);
 
 export type SystemRoleType = `${z.infer<typeof SystemRoleSchema>}`
 
@@ -95,11 +95,11 @@ export type Allergy = z.infer<typeof AllergySchema>
 /////////////////////////////////////////
 
 export const UserSchema = z.object({
-  systemRole: SystemRoleSchema,
   id: z.number().int(),
   email: z.string(),
   phone: z.string().nullable(),
   passwordHash: z.string(),
+  systemRoles: z.string(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 })
@@ -342,7 +342,7 @@ export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
   email: z.boolean().optional(),
   phone: z.boolean().optional(),
   passwordHash: z.boolean().optional(),
-  systemRole: z.boolean().optional(),
+  systemRoles: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
   Inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
@@ -818,7 +818,7 @@ export const UserWhereInputSchema: z.ZodType<Prisma.UserWhereInput> = z.object({
   email: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   phone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
-  systemRole: z.union([ z.lazy(() => EnumSystemRoleFilterSchema), z.lazy(() => SystemRoleSchema) ]).optional(),
+  systemRoles: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   Inhabitant: z.union([ z.lazy(() => InhabitantNullableScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional().nullable(),
@@ -829,7 +829,7 @@ export const UserOrderByWithRelationInputSchema: z.ZodType<Prisma.UserOrderByWit
   email: z.lazy(() => SortOrderSchema).optional(),
   phone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
-  systemRole: z.lazy(() => SortOrderSchema).optional(),
+  systemRoles: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   Inhabitant: z.lazy(() => InhabitantOrderByWithRelationInputSchema).optional(),
@@ -855,7 +855,7 @@ export const UserWhereUniqueInputSchema: z.ZodType<Prisma.UserWhereUniqueInput> 
   NOT: z.union([ z.lazy(() => UserWhereInputSchema), z.lazy(() => UserWhereInputSchema).array() ]).optional(),
   phone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
-  systemRole: z.union([ z.lazy(() => EnumSystemRoleFilterSchema), z.lazy(() => SystemRoleSchema) ]).optional(),
+  systemRoles: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   Inhabitant: z.union([ z.lazy(() => InhabitantNullableScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional().nullable(),
@@ -866,7 +866,7 @@ export const UserOrderByWithAggregationInputSchema: z.ZodType<Prisma.UserOrderBy
   email: z.lazy(() => SortOrderSchema).optional(),
   phone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
-  systemRole: z.lazy(() => SortOrderSchema).optional(),
+  systemRoles: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => UserCountOrderByAggregateInputSchema).optional(),
@@ -884,7 +884,7 @@ export const UserScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.UserScal
   email: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   phone: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
-  systemRole: z.union([ z.lazy(() => EnumSystemRoleWithAggregatesFilterSchema), z.lazy(() => SystemRoleSchema) ]).optional(),
+  systemRoles: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
@@ -1835,7 +1835,7 @@ export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.object
   email: z.string(),
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
-  systemRole: z.lazy(() => SystemRoleSchema).optional(),
+  systemRoles: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutUserInputSchema).optional(),
@@ -1846,7 +1846,7 @@ export const UserUncheckedCreateInputSchema: z.ZodType<Prisma.UserUncheckedCreat
   email: z.string(),
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
-  systemRole: z.lazy(() => SystemRoleSchema).optional(),
+  systemRoles: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -1856,7 +1856,7 @@ export const UserUpdateInputSchema: z.ZodType<Prisma.UserUpdateInput> = z.object
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -1867,7 +1867,7 @@ export const UserUncheckedUpdateInputSchema: z.ZodType<Prisma.UserUncheckedUpdat
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -1878,7 +1878,7 @@ export const UserCreateManyInputSchema: z.ZodType<Prisma.UserCreateManyInput> = 
   email: z.string(),
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
-  systemRole: z.lazy(() => SystemRoleSchema).optional(),
+  systemRoles: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -1887,7 +1887,7 @@ export const UserUpdateManyMutationInputSchema: z.ZodType<Prisma.UserUpdateManyM
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -1897,7 +1897,7 @@ export const UserUncheckedUpdateManyInputSchema: z.ZodType<Prisma.UserUncheckedU
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2828,13 +2828,6 @@ export const DateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.DateTimeWithAg
   _max: z.lazy(() => NestedDateTimeFilterSchema).optional(),
 }).strict();
 
-export const EnumSystemRoleFilterSchema: z.ZodType<Prisma.EnumSystemRoleFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
-}).strict();
-
 export const InhabitantNullableScalarRelationFilterSchema: z.ZodType<Prisma.InhabitantNullableScalarRelationFilter> = z.object({
   is: z.lazy(() => InhabitantWhereInputSchema).optional().nullable(),
   isNot: z.lazy(() => InhabitantWhereInputSchema).optional().nullable(),
@@ -2845,7 +2838,7 @@ export const UserCountOrderByAggregateInputSchema: z.ZodType<Prisma.UserCountOrd
   email: z.lazy(() => SortOrderSchema).optional(),
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
-  systemRole: z.lazy(() => SortOrderSchema).optional(),
+  systemRoles: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -2859,7 +2852,7 @@ export const UserMaxOrderByAggregateInputSchema: z.ZodType<Prisma.UserMaxOrderBy
   email: z.lazy(() => SortOrderSchema).optional(),
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
-  systemRole: z.lazy(() => SortOrderSchema).optional(),
+  systemRoles: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -2869,23 +2862,13 @@ export const UserMinOrderByAggregateInputSchema: z.ZodType<Prisma.UserMinOrderBy
   email: z.lazy(() => SortOrderSchema).optional(),
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
-  systemRole: z.lazy(() => SortOrderSchema).optional(),
+  systemRoles: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const UserSumOrderByAggregateInputSchema: z.ZodType<Prisma.UserSumOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const EnumSystemRoleWithAggregatesFilterSchema: z.ZodType<Prisma.EnumSystemRoleWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
 }).strict();
 
 export const IntNullableFilterSchema: z.ZodType<Prisma.IntNullableFilter> = z.object({
@@ -3667,10 +3650,6 @@ export const InhabitantUncheckedCreateNestedOneWithoutUserInputSchema: z.ZodType
   create: z.union([ z.lazy(() => InhabitantCreateWithoutUserInputSchema), z.lazy(() => InhabitantUncheckedCreateWithoutUserInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => InhabitantCreateOrConnectWithoutUserInputSchema).optional(),
   connect: z.lazy(() => InhabitantWhereUniqueInputSchema).optional(),
-}).strict();
-
-export const EnumSystemRoleFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumSystemRoleFieldUpdateOperationsInput> = z.object({
-  set: z.lazy(() => SystemRoleSchema).optional(),
 }).strict();
 
 export const InhabitantUpdateOneWithoutUserNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneWithoutUserNestedInput> = z.object({
@@ -4641,23 +4620,6 @@ export const NestedDateTimeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedDa
   _max: z.lazy(() => NestedDateTimeFilterSchema).optional(),
 }).strict();
 
-export const NestedEnumSystemRoleFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleFilterSchema) ]).optional(),
-}).strict();
-
-export const NestedEnumSystemRoleWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumSystemRoleWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => SystemRoleSchema).optional(),
-  in: z.lazy(() => SystemRoleSchema).array().optional(),
-  notIn: z.lazy(() => SystemRoleSchema).array().optional(),
-  not: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => NestedEnumSystemRoleWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumSystemRoleFilterSchema).optional(),
-}).strict();
-
 export const NestedDateTimeNullableFilterSchema: z.ZodType<Prisma.NestedDateTimeNullableFilter> = z.object({
   equals: z.coerce.date().optional().nullable(),
   in: z.coerce.date().array().optional().nullable(),
@@ -5020,7 +4982,7 @@ export const UserCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.UserCreate
   email: z.string(),
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
-  systemRole: z.lazy(() => SystemRoleSchema).optional(),
+  systemRoles: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -5030,7 +4992,7 @@ export const UserUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.U
   email: z.string(),
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
-  systemRole: z.lazy(() => SystemRoleSchema).optional(),
+  systemRoles: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -5195,7 +5157,7 @@ export const UserUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.UserUpdate
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -5205,7 +5167,7 @@ export const UserUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.U
   email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
-  systemRole: z.union([ z.lazy(() => SystemRoleSchema), z.lazy(() => EnumSystemRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();

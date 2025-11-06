@@ -67,6 +67,22 @@ export class HouseholdFactory {
     }
 
 
+    static readonly getHouseholdById = async (
+        context: BrowserContext,
+        householdId: number,
+        expectedStatus: number = 200
+    ): Promise<any> => {
+        const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
+
+        const status = response.status()
+        expect(status, 'Unexpected status').toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return await response.json()
+        }
+        return null
+    }
+
     static readonly deleteHousehold = async (
         context: BrowserContext,
         householdId: number,
@@ -102,6 +118,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         householdId: number,
         inhabitantName: string = "Pluto Hund",
+        birthDate?: Date | null,
         expectedStatus: number = 201
     ): Promise<any> => {
         const [name, ...lastName] = inhabitantName.split(' ')
@@ -109,6 +126,7 @@ export class HouseholdFactory {
             ...this.defaultInhabitantData(),
             name: inhabitantName ? (name || 'Pluto') : '',
             lastName: inhabitantName ? (lastName.join(' ') || 'Hund') : '',
+            birthDate: birthDate !== undefined ? birthDate : null,
             householdId: householdId
         }
 

@@ -14,9 +14,9 @@ export default defineEventHandler(async (event) => {
     console.info("👨‍💻 > USER > [PUT] Processing user creation request")
 
     // Validate input - fail early on invalid data
-    let userFromQuery: UserCreate
+    let userFromBody: UserCreate
     try {
-        userFromQuery = await getValidatedQuery(event, UserCreateSchema.parse)
+        userFromBody = await readValidatedBody(event, UserCreateSchema.parse)
     } catch (error) {
         const h3e = h3eFromCatch('👨‍💻 > USER > [PUT] Input validation error', error)
         console.error(`👨‍💻 > USER > [PUT] ${h3e.statusMessage}`, error)
@@ -25,13 +25,13 @@ export default defineEventHandler(async (event) => {
 
     // Save user to database
     try {
-        console.info(`👨‍💻 > USER > Adding user ${userFromQuery.email} to db`)
-        const newUser = await saveUser(d1Client, userFromQuery)
+        console.info(`👨‍💻 > USER > Adding user ${userFromBody.email} to db`)
+        const newUser = await saveUser(d1Client, userFromBody)
         console.info(`👨‍💻 > USER > Added user ${newUser.email} to db`)
         setResponseStatus(event, 201)
         return newUser
     } catch (error) {
-        const h3e = h3eFromCatch(`👨‍💻 > USER > [PUT] Error saving user ${userFromQuery.email}`, error)
+        const h3e = h3eFromCatch(`👨‍💻 > USER > [PUT] Error saving user ${userFromBody.email}`, error)
         console.error(`👨‍💻 > USER > [PUT] ${h3e.statusMessage}`, error)
         throw h3e
     }

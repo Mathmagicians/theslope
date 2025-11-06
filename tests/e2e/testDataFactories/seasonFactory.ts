@@ -44,8 +44,10 @@ export class SeasonFactory {
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
         ticketPrices: [
-            createTicketPrice('ADULT', 4000),
-            createTicketPrice('CHILD', 1100, undefined, undefined, 10)
+            createTicketPrice('BABY', 0, undefined, undefined, 1),
+            createTicketPrice('HUNGRY_BABY', 500, undefined, undefined, 3),
+            createTicketPrice('CHILD', 1100, undefined, undefined, 10),
+            createTicketPrice('ADULT', 4000)
         ],
         ticketIsCancellableDaysBefore: 10,
         diningModeIsEditableMinutesBefore: 90

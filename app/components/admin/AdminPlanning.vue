@@ -137,7 +137,7 @@ const handleCancel = async () => {
         >
           Opret ny sæson
         </UButton>
-        <p>DDin administrator om at oprette en fællespisningsæson.</p>
+        <p>Bed din administrator om at oprette en fællespisningssæson.</p>
       </div>
       <div v-else>
         <h3 class="text-lg font-semibold">Vælg en sæson for at komme i gang</h3>

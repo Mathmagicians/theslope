@@ -2,11 +2,12 @@
 
 import {defineEventHandler} from "h3"
 import {fetchInhabitants} from "~~/server/data/prismaRepository"
+import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<Inhabitant[]>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

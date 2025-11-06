@@ -30,6 +30,18 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // Use useAsyncData for detail endpoint - allows manual execute() without context issues
     const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
 
+    const {deserializeWeekDayMap} = useHouseholdValidation()
+
+    // Type for API response (dates are ISO strings from JSON)
+    type SerializedHouseholdWithInhabitants = Omit<HouseholdWithInhabitants, 'movedInDate' | 'moveOutDate' | 'inhabitants'> & {
+        movedInDate: string
+        moveOutDate: string | null
+        inhabitants: Array<Omit<HouseholdWithInhabitants['inhabitants'][number], 'birthDate' | 'dinnerPreferences'> & {
+            birthDate: string | null
+            dinnerPreferences: string | null
+        }>
+    }
+
     const {
         data: selectedHousehold,
         status: selectedHouseholdStatus,
@@ -37,9 +49,28 @@ export const useHouseholdsStore = defineStore("Households", () => {
      //   execute: refreshSelectedHousehold
     } = useAsyncData<HouseholdWithInhabitants | null>(
         selectedHouseholdKey,
-        () => {
+        async () => {
             if (!selectedHouseholdId.value) return Promise.resolve(null)
-            return $fetch(`/api/admin/household/${selectedHouseholdId.value}`)
+
+            // Fetch as serialized type (strings for dates)
+            const serialized = await $fetch<SerializedHouseholdWithInhabitants>(`/api/admin/household/${selectedHouseholdId.value}`)
+
+            // ADR-010: Client-side deserialization of Date fields from HTTP JSON
+            if (serialized) {
+                return {
+                    ...serialized,
+                    movedInDate: new Date(serialized.movedInDate),
+                    moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
+                    inhabitants: serialized.inhabitants.map(inhabitant => ({
+                        ...inhabitant,
+                        birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+                        dinnerPreferences: inhabitant.dinnerPreferences
+                            ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                            : null
+                    }))
+                } as HouseholdWithInhabitants
+            }
+            return null
         },
         {
             default: () => null,

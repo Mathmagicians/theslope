@@ -1,5 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, createError} from "h3"
 import {fetchInhabitant} from "~~/server/data/prismaRepository"
+import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -10,7 +11,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Inhabitant ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

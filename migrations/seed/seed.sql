@@ -1,8 +1,10 @@
 PRAGMA defer_foreign_keys=TRUE;
 
--- Seed Admin User
-INSERT OR IGNORE INTO User (id, email, phone, passwordHash, systemRole, createdAt, updatedAt)
-VALUES(1, 'agata@mathmagicians.dk', '12345678', 'removeme', 'ADMIN', datetime('now'), datetime('now'));
+-- Seed Admin User with ADMIN and ALLERGYMANAGER roles (idempotent - updates if exists)
+INSERT OR REPLACE INTO User (id, email, phone, passwordHash, systemRoles, createdAt, updatedAt)
+VALUES(1, 'agata@mathmagicians.dk', '12345678', 'removeme', json('["ADMIN","ALLERGYMANAGER"]'),
+  COALESCE((SELECT createdAt FROM User WHERE id = 1), datetime('now')),
+  datetime('now'));
 
 -- Seed Allergy Types (from allergiliste_062025.pdf)
 INSERT OR IGNORE INTO AllergyType (id, name, description, icon)
