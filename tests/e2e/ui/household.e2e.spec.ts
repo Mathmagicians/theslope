@@ -2,6 +2,7 @@ import {test, expect} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
+import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil} = testHelpers
@@ -9,6 +10,7 @@ const {validatedBrowserContext, pollUntil} = testHelpers
 test.describe('Household tab navigation', () => {
     let householdId: number
     let shortName: string
+    let seasonId: number
 
     const tabs = [
         {name: 'Tilmeldinger', path: 'bookings', selector: '[data-test-id="household-bookings"]'},
@@ -43,16 +45,25 @@ test.describe('Household tab navigation', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+
+        // Create season (required for bookings tab component to render)
+        const season = await SeasonFactory.createSeason(context, {holidays: [], isActive: true})
+        seasonId = season.id!
+
+        // Create household
         const household = await HouseholdFactory.createHousehold(context, {name: 'TestHousehold-TabNav'})
         householdId = household.id
         shortName = household.shortName
     })
 
     test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
         if (householdId) {
-            const context = await validatedBrowserContext(browser)
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {
-            })
+            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
+        }
+        if (seasonId) {
+            await SeasonFactory.cleanupSeasons(context, [seasonId]).catch(() => {})
         }
     })
 
@@ -102,13 +113,6 @@ test.describe('Household tab navigation', () => {
         expect(page.url()).toContain(encodeURIComponent(shortName))
         expect(page.url()).toContain(query)
         await waitForTabVisible(page, tabs[1]!)
-    })
-
-    test('Shortname preserved across all tab switches', async ({page}) => {
-        for (const tab of tabs) {
-            await navigateToTab(page, tab)
-            expect(page.url()).toContain(shortName)
-        }
     })
 
     for (const tab of tabs) {

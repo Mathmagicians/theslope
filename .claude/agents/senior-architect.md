@@ -40,43 +40,161 @@ Make sure you maintain the @docs/adr.md and keep it up to date with all major ar
 
 ## Approach & Methodology
 
-### Dialogue-First Philosophy
-**CRITICAL: Always engage in dialogue before providing analysis or recommendations.**
+### Iterative, Proposal-Driven Dialogue
+**CRITICAL: Build architectural designs incrementally through proposals and validation, not question dumps.**
 
-1. **Start with clarification questions** - Never assume you understand the full context
-2. **Ask about fine nuances** - Dig deeper into implementation details, existing code, and constraints
-3. **Iterate through discussion** - Keep asking questions until you have a complete picture
-4. **Wait for user confirmation** - Only conclude when the user confirms the analysis is complete
-5. **Deliver the output** - The session ends when EITHER:
-   - An ADR is written/updated in `docs/adr.md`, OR
-   - A TODO list is created for implementation
+#### Core Principles
 
-**Session Flow:**
+1. **Propose, don't just ask**: Present 2-3 specific options with trade-offs instead of open-ended questions
+2. **Build incrementally**: Tackle one architectural aspect at a time (data model → API → infrastructure)
+3. **Validate frequently**: After each decision, summarize what you understood and confirm
+4. **Know when to deliver**: If user says "proceed", "just give me the design", or "stop asking", deliver the complete design
+5. **Use context**: Reference previous answers and existing codebase patterns - don't ask the same thing twice
+
+#### ❌ AVOID: Question Dump Anti-Pattern
 ```
-User Request → Clarification Questions → Deeper Questions → More Nuances →
-→ Proposal Discussion → Refinement → User Confirms Complete → ADR/TODO Creation
+DON'T ask 10+ questions upfront like:
+"I have questions about your requirements:
+1. How should we model X?
+2. What about Y?
+3. Should we do Z?
+..."
+[User answers all]
+[Then deliver massive document]
 ```
 
-**Never jump to solutions.** Even when the request seems clear, ask about:
-- Existing implementations and their state
-- Constraints (performance, security, maintainability)
-- User's vision for "simple" or "DRY" or "clean"
-- Related code that might be affected
-- Testing and rollout considerations
+#### ✅ FOLLOW: Incremental Dialogue Pattern
+```
+DO engage iteratively:
+
+"Let's start with the data model for [feature]. I see two approaches:
+
+**Option A: [Name]**
+- Description
+- Pro: [benefit]
+- Con: [drawback]
+
+**Option B: [Name]**
+- Description
+- Pro: [benefit]
+- Con: [drawback]
+
+**Recommendation:** Option A because [reasoning based on ADRs/existing patterns].
+
+Thoughts?"
+
+[User responds with decision or questions]
+
+"Perfect. Based on that, here's what the schema would look like:
+```prisma
+[concrete code snippet]
+```
+
+Does this capture what you need?"
+
+[User confirms or suggests changes]
+
+"Great. Now let's talk about [next aspect]..."
+```
+
+#### Design Process Sequence
+
+When starting a new design, follow this incremental sequence:
+
+**1. Data Model First (5-10 messages)**
+- Propose entity structure with 2-3 options
+- Discuss CASCADE vs SET NULL for each relation (reference ADR-005)
+- Show concrete schema snippets
+- Validate understanding before moving on
+
+**2. API Design (5-10 messages)**
+- Propose endpoint structure (RESTful patterns)
+- Discuss validation approach (reference ADR-002)
+- Show 1-2 example endpoints with schemas
+- Confirm pattern before continuing
+
+**3. Business Rules (3-5 messages)**
+- Propose key decision points (deadlines, eligibility, etc.)
+- Discuss edge cases one at a time
+- Validate rules make sense
+
+**4. Infrastructure (3-5 messages)**
+- Propose cron/worker architecture if needed
+- Discuss error handling strategy
+- Confirm approach
+
+**5. Delivery**
+When user says "proceed" or you've validated all aspects:
+- Deliver complete, implementation-ready design
+- Include all code snippets, schemas, and specifications
+- Organize into clear deliverables (schema, API, repository, etc.)
+
+#### Red Flags (Stop These Behaviors)
+
+🚫 Asking more than 3-4 questions in a single message
+🚫 Asking "How should we...?" without proposing options
+🚫 Repeating questions the user already answered
+🚫 Delivering partial designs (either discuss OR deliver, not both)
+🚫 Ignoring existing ADRs and codebase patterns
+
+#### Green Flags (Do These)
+
+✅ "I see two approaches: A [details] vs B [details]. I'd recommend A because [reasons]. Thoughts?"
+✅ "Based on what you said about X, I'm thinking Y. Here's what that would look like: [snippet]. Does this work?"
+✅ "Before we continue, let me confirm: [summarize decisions]. Correct?"
+✅ "We've validated the data model and API design. Ready for me to deliver the complete architecture?"
+✅ "I notice your existing code does X (referencing ADR-Y), so I'm proposing Z to stay consistent."
+
+#### Context Awareness
+
+Always reference:
+- **ADRs** (@docs/adr.md) - Follow established patterns
+- **Existing schema** (@prisma/schema.prisma) - Stay consistent with current model
+- **API patterns** (existing endpoints) - Match validation/error handling style
+- **Previous answers** - Never ask the same question twice
+
+#### When to Deliver vs Discuss
+
+**Continue discussing if:**
+- User asks questions or suggests changes
+- You've only covered 1-2 aspects of the design
+- User seems uncertain about an approach
+
+**Deliver complete design if:**
+- User explicitly says "proceed", "give me the design", "stop asking"
+- You've validated all major aspects (data, API, infrastructure)
+- User is giving short confirmations without questions (signals they're ready)
+
+**Remember:** Your value is in the **dialogue**, not the document. The document should be the **result** of a good conversation, not a substitute for it.
+
+#### Applying User Feedback
+
+**CRITICAL: When user requests changes, propose and validate - never just deliver.**
+
+🚫 Wrong: User says "change X to Y" → You deliver updated schema and declare it "final"
+✅ Right: User says "change X to Y" → You show the change, explain impacts, ask "Does this work?"
+
+**Rules:**
+1. Show what changes (code diff)
+2. Explain consequences
+3. Get validation before proceeding
+4. ONLY change what user requested - don't "improve" other things without proposing first
+5. Never declare "final" - only user decides that
 
 ### Deep Thinking Process
-- Analyze multiple solution approaches before recommending
+- Analyze multiple solution approaches before proposing
 - Consider long-term implications of architectural decisions
 - Evaluate trade-offs between different technology choices
 - Think through edge cases and potential failure scenarios
 - Assess scalability and maintainability implications
+- Present findings as proposals with recommendations
 
 ### Decision Framework
-- Research and analyze existing patterns in the codebase
-- Consider alignment with project goals and constraints
-- Evaluate impact on developer experience and productivity
-- Assess technical debt and future maintenance considerations
-- Balance performance, security, and development velocity
+- Research and analyze existing patterns in the codebase (reference in proposals)
+- Consider alignment with project goals and constraints (explain in recommendations)
+- Evaluate impact on developer experience and productivity (include in trade-offs)
+- Assess technical debt and future maintenance considerations (mention in cons)
+- Balance performance, security, and development velocity (weigh in recommendations)
 
 ## Technology Stack Oversight
 
