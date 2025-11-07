@@ -222,19 +222,28 @@ test.describe('Admin season URL persistence', () => {
     }
   })
 
-  test('Invalid season redirects to active season', async ({ page }) => {
-    await page.goto('/admin/planning?season=invalid-123')
+  test('Invalid season redirects to active season', async ({ page, browser }) => {
+    const context = await validatedBrowserContext(browser)
+    const season = await SeasonFactory.createSeason(context)
 
-    // Wait for child component to detect invalid season and update URL (may take several seconds for store + watcher to run)
-    await pollUntil(
-      async () => page.url(),
-      (url) => url.includes('season=') && !url.includes('invalid-123'),
-      10,  // Standardized to 10 attempts (255.5s) for CI resilience
-      500
-    )
+    try {
+      await page.goto('/admin/planning?season=invalid-123')
 
-    expect(page.url()).toContain('season=')
-    expect(page.url()).not.toContain('invalid-123')
+      // Wait for child component to detect invalid season and update URL (may take several seconds for store + watcher to run)
+      await pollUntil(
+        async () => page.url(),
+        (url) => url.includes('season=') && !url.includes('invalid-123'),
+        10,  // Standardized to 10 attempts (255.5s) for CI resilience
+        500
+      )
+
+      expect(page.url()).toContain('season=')
+      expect(page.url()).not.toContain('invalid-123')
+    } finally {
+      if (season.id) {
+        await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
+      }
+    }
   })
 
 })

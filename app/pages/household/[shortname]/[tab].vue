@@ -75,8 +75,8 @@ const tabItems = tabs.map(tab => ({
 // Initialize stores
 const householdStore = useHouseholdsStore()
 const {
-  selectedHousehold, isSelectedHouseholdLoading, isSelectedHouseholdErrored,
-  isSelectedHouseholdInitialized, selectedHouseholdError, isHouseholdsInitialized
+  selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
+  householdsError, isHouseholdsErrored, isHouseholdsStoreReady
 } = storeToRefs(householdStore)
 
 const {initHouseholdsStore} = householdStore
@@ -96,10 +96,12 @@ useHead({
 
 <template>
   <div>
-    <ViewError v-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
+    <ViewError v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
+               :message="`Kunne ikke hente husstande`" :cause="householdsError"/>
+    <ViewError v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
-    <Loader v-else-if="isSelectedHouseholdLoading" :text="`Henter husstanden ${shortname}`"/>
-    <UCard v-else-if="isSelectedHouseholdInitialized && selectedHousehold" class="w-full px-0 rounded-none md:rounded-lg">
+    <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
+    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg">
       <template #header>
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-home" class="text-2xl"/>

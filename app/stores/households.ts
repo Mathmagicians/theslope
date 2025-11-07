@@ -87,7 +87,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     const isSelectedHouseholdLoading = computed(() => selectedHouseholdStatus.value === 'pending')
     const isSelectedHouseholdErrored = computed(() => selectedHouseholdStatus.value === 'error')
-    const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success')
+    const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success' && selectedHousehold.value !== null)
+
+    // Convenience computed for components - true when store is fully initialized and ready to use
+    const isHouseholdsStoreReady = computed(() =>
+        isHouseholdsInitialized.value && (isNoHouseholds.value || isSelectedHouseholdInitialized.value)
+    )
+
     // DEPENDENCIES - access auth store
     const authStore = useAuthStore()
 
@@ -116,27 +122,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const loadHousehold = (id: number) => {
         selectedHouseholdId.value = id
-        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
+        console.info(LOG_CTX, `🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
     }
 
-
-    /**
-     * Initialize store - load households and optionally select one by shortName
-     * If no shortName provided, keeps current selection or falls back to user's household
-     * @param shortName - Optional shortName to load specific household
-     */
-    const initHouseholdsStore = (shortName?: string) => {
-        // households autoload when store is created (immediate: true)
-        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
-        const householdId = shortName
-            ? households.value.find(h => h.shortName === shortName)?.id
-            : (selectedHouseholdId.value ?? myHousehold.value?.id)
-
-        console.info('🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName:', shortName ?? 'none',
-            'current:', selectedHouseholdId.value, 'resolved:', householdId)
-
-        if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
-    }
 
     /**
      * Update inhabitant dinner preferences
@@ -166,12 +154,30 @@ export const useHouseholdsStore = defineStore("Households", () => {
         }
     }
 
+    /**
+     * Initialize store - load households and optionally select one by shortName
+     * If no shortName provided, keeps current selection or falls back to user's household
+     * @param shortName - Optional shortName to load specific household
+     */
+    const initHouseholdsStore = (shortName?: string) => {
+        // households autoload when store is created (immediate: true)
+        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
+        const householdId = shortName
+            ? households.value.find(h => h.shortName === shortName)?.id
+            : (selectedHouseholdId.value ?? myHousehold.value?.id)
+
+        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName:', shortName ?? 'none',
+            'current:', selectedHouseholdId.value, 'resolved:', householdId)
+
+        if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
+    }
+
     // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
-    watch(isHouseholdsInitialized, () => {
+    watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
         if (!isHouseholdsInitialized.value) return
         if (selectedHouseholdId.value) return // Already selected
 
-        console.info('🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
+        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
         initHouseholdsStore()
     })
 
@@ -189,6 +195,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         isSelectedHouseholdLoading,
         isSelectedHouseholdErrored,
         isSelectedHouseholdInitialized,
+        isHouseholdsStoreReady,
         selectedHouseholdError,
         // Actions
         loadHouseholds,

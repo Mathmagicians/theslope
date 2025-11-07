@@ -322,7 +322,7 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName,
                 'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
             if (shortName) {
-                loadSeasonByShortName(shortName!)
+                loadSeasonByShortName(shortName)
             } else if (activeSeasonId.value) {
                 loadSeason(activeSeasonId.value)
             }
