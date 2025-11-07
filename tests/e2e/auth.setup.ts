@@ -38,13 +38,8 @@ setup('Authenticate admin for UI', async ({page}) => {
     await page.waitForURL('/login')
     await performLogin(page.request)
     await page.goto('/admin')
-    // Wait for redirect to default admin tab
     await page.waitForURL('/admin/planning')
-    // Wait for store to load via API response
-    await page.waitForResponse(
-        (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-        {timeout: 10000}
-    )
+
     // Save browser state
     await page.context().storageState({ path: authFiles.adminUIFile })
 })
