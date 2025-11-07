@@ -58,8 +58,6 @@ test.describe('Household tab navigation', () => {
 
 
     test('Base URL redirects to default tab', async ({page}) => {
-        test.setTimeout(60000) // Increased for CI: reactive store init + redirect chain takes 15-20s
-
         await page.goto(`/household/${encodeURIComponent(shortName)}`)
 
         await pollUntil(
@@ -72,8 +70,6 @@ test.describe('Household tab navigation', () => {
     })
 
     test('Invalid tab redirects to default tab', async ({page}) => {
-        test.setTimeout(60000) // Increased for CI: reactive store init + redirect chain takes 15-20s
-
         await page.goto(buildUrl('unicorn'))
 
         await pollUntil(
