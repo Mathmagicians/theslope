@@ -255,7 +255,7 @@ export class SeasonFactory {
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
         // Create household with inhabitants
-        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(context, `House-of-${teamName}`, memberCount)
+        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: `House-of-${teamName}`}, memberCount)
 
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']

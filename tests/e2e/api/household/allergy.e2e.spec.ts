@@ -16,7 +16,7 @@ test.describe('Allergy API - CRUD Operations', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create household with inhabitant and allergy type
-        const household = await HouseholdFactory.createHousehold(context, 'Test Household Allergy')
+        const household = await HouseholdFactory.createHousehold(context, {name: 'Test Household Allergy'})
         createdHouseholdIds.push(household.id)
 
         const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Anna Hansen')
@@ -120,7 +120,7 @@ test.describe('Allergy API - CRUD Operations', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create household with multiple inhabitants having allergies
-        const household = await HouseholdFactory.createHousehold(context, 'Multi-Allergy Household')
+        const household = await HouseholdFactory.createHousehold(context, {name: 'Multi-Allergy Household'})
         createdHouseholdIds.push(household.id)
 
         const inhabitant1 = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Person One')

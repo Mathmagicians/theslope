@@ -26,18 +26,23 @@ export class HouseholdFactory {
 
     static readonly createHousehold = async (
         context: BrowserContext,
-        householdName?: string,
+        partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         expectedStatus: number = 201
     ): Promise<any> => {
-        const defaultData = this.defaultHouseholdData()
+        // Merge partial with defaults to create full Household object
         const householdData = {
-            ...defaultData,
-            name: salt(householdName || defaultData.name)
+            ...this.defaultHouseholdData(),  // Auto-generates unique salt
+            ...partialHousehold  // Can override with specific values
         }
+
+        // For expected failures, send only partial data to test server validation
+        const requestData = expectedStatus === 201
+            ? householdData
+            : partialHousehold
 
         const response = await context.request.put(HOUSEHOLD_ENDPOINT, {
             headers: headers,
-            data: householdData
+            data: requestData
         })
 
         const status = response.status()
@@ -54,10 +59,10 @@ export class HouseholdFactory {
 
     static readonly createHouseholdWithInhabitants = async (
         context: BrowserContext,
-        name: string = 'Test Household',
+        partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         inhabitantCount: number = 2
     ): Promise<{household: Household, inhabitants: Inhabitant[]}> => {
-        const household = await this.createHousehold(context, name)
+        const household = await this.createHousehold(context, partialHousehold)
         const inhabitants = []
         for (let i = 0; i < inhabitantCount; i++) {
             const inhabitant = await this.createInhabitantForHousehold(context, household.id, `Donald${i} Duck`)

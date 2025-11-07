@@ -103,7 +103,7 @@ test.describe('AdminHouseholds View', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create household without inhabitants
-        const household = await HouseholdFactory.createHousehold(context, 'Empty Household')
+        const household = await HouseholdFactory.createHousehold(context, {name: 'Empty Household'})
         createdHouseholdIds.push(household.id)
 
         // WHEN: Navigate to households page

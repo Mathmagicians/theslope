@@ -14,7 +14,7 @@ test.describe('Admin Inhabitant API', () => {
     // Setup test household before all tests
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const created = await HouseholdFactory.createHousehold(context, 'Test-Household-for-Inhabitant-Tests')
+        const created = await HouseholdFactory.createHousehold(context, {name: 'Test-Household-for-Inhabitant-Tests'})
         testHouseholdId = created.id as number
         console.info(`Created test household ${created.name} with ID ${testHouseholdId}`)
     })

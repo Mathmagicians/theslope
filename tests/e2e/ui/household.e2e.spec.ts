@@ -43,7 +43,7 @@ test.describe('Household tab navigation', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const household = await HouseholdFactory.createHousehold(context, 'TestHousehold-TabNav')
+        const household = await HouseholdFactory.createHousehold(context, {name: 'TestHousehold-TabNav'})
         householdId = household.id
         shortName = household.shortName
     })

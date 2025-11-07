@@ -8,6 +8,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
 const {h3eFromCatch} = eventHandlerHelper
+const {HouseholdUpdateSchema} = useHouseholdValidation()
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -22,7 +23,6 @@ export default defineEventHandler<Promise<Household>>(async (event) => {
     let id: number
     let householdData: Partial<HouseholdUpdate>
     try {
-        const {HouseholdUpdateSchema} = useHouseholdValidation()
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
         householdData = await readValidatedBody(event, HouseholdUpdateSchema.partial().omit({id: true}).parse)
     } catch (error) {

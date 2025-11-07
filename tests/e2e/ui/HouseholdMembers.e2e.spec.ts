@@ -27,7 +27,7 @@ test.describe('Household members display', () => {
         })
         seasonId = season.id!
 
-        const household = await HouseholdFactory.createHousehold(context, 'MembersTest')
+        const household = await HouseholdFactory.createHousehold(context, {name: 'MembersTest'})
         householdId = household.id
         shortName = household.shortName
 

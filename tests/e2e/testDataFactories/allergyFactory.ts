@@ -19,18 +19,23 @@ export class AllergyFactory {
 
     static readonly createAllergyType = async (
         context: BrowserContext,
-        allergyTypeData?: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>>,
+        partialAllergyType: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>> = {},
         expectedStatus: number = 201
     ): Promise<any> => {
-        const defaultData = this.defaultAllergyTypeData()
-        const data = {
-            ...defaultData,
-            ...allergyTypeData
+        // Merge partial with defaults to create full AllergyType object
+        const allergyTypeData = {
+            ...this.defaultAllergyTypeData(),  // Auto-generates unique salt
+            ...partialAllergyType  // Can override with specific values
         }
+
+        // For expected failures, send only partial data to test server validation
+        const requestData = expectedStatus === 201
+            ? allergyTypeData
+            : partialAllergyType
 
         const response = await context.request.put(ALLERGY_TYPE_ENDPOINT, {
             headers: headers,
-            data: data
+            data: requestData
         })
 
         const status = response.status()
