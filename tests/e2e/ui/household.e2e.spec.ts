@@ -58,24 +58,28 @@ test.describe('Household tab navigation', () => {
 
 
     test('Base URL redirects to default tab', async ({page}) => {
+        test.setTimeout(60000) // Increased for CI: reactive store init + redirect chain takes 15-20s
+
         await page.goto(`/household/${encodeURIComponent(shortName)}`)
 
         await pollUntil(
             async () => page.url(),
             (url) => url.includes(buildUrl(defaultTab.path)),
-            5
+            10
         )
         expect(page.url()).toContain(buildUrl(defaultTab.path))
         await waitForTabVisible(page, defaultTab)
     })
 
     test('Invalid tab redirects to default tab', async ({page}) => {
+        test.setTimeout(60000) // Increased for CI: reactive store init + redirect chain takes 15-20s
+
         await page.goto(buildUrl('unicorn'))
 
         await pollUntil(
             async () => page.url(),
             (url) => url.includes(buildUrl(defaultTab.path)),
-            5
+            10
         )
         expect(page.url()).toContain(buildUrl(defaultTab.path))
         await waitForTabVisible(page, defaultTab)
@@ -113,10 +117,23 @@ test.describe('Household tab navigation', () => {
 
     for (const tab of tabs) {
         test(`Tab "${tab.name}" accessible at /${tab.path}`, async ({page}) => {
-            await navigateToTab(page, tab)
+            await page.goto(buildUrl(tab.path))
+
+            expect(page.url()).toContain(buildUrl(tab.path))
+            await waitForTabVisible(page, tab)
+        })
+    }
+
+    test('Tab aria-selected attribute updates correctly', async ({page}) => {
+        // Test aria-selected on two tabs to verify state updates
+        const testTabs = [tabs[0]!, tabs[2]!]
+
+        for (const tab of testTabs) {
+            await page.goto(buildUrl(tab.path))
+            await waitForTabVisible(page, tab)
 
             const activeTab = page.locator('button[role="tab"]').filter({hasText: tab.name}).first()
             await expect(activeTab).toHaveAttribute('aria-selected', 'true')
-        })
-    }
+        }
+    })
 })

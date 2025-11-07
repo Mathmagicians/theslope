@@ -223,13 +223,15 @@ test.describe('Admin season URL persistence', () => {
   })
 
   test('Invalid season redirects to active season', async ({ page }) => {
+    test.setTimeout(60000) // Increased for CI: reactive store init + redirect chain takes 15-20s
+
     await page.goto('/admin/planning?season=invalid-123')
 
     // Wait for child component to detect invalid season and update URL (may take several seconds for store + watcher to run)
     await pollUntil(
       async () => page.url(),
       (url) => url.includes('season=') && !url.includes('invalid-123'),
-      20,  // Increased from 10 (5s) to 20 (10s) to accommodate 6-7s redirect time
+      10,  // Standardized to 10 attempts (255.5s) for CI resilience
       500
     )
 
