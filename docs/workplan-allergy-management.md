@@ -15,6 +15,345 @@ Implement admin-managed allergy types and household-scoped allergy assignments f
 
 ---
 
+## Implementation Status Overview
+
+| Layer / Feature | Component | Status | Notes |
+|----------------|-----------|--------|-------|
+| **📊 BACKEND** | | | |
+| Database Schema | AllergyType, Allergy models | ✅ **DONE** | CASCADE delete configured |
+| Validation | useAllergyValidation composable | ✅ **DONE** | Zod schemas with types exported |
+| Repository | CRUD functions in prismaRepository.ts | ✅ **DONE** | All methods implemented |
+| API - Admin | `/api/admin/allergy-type/*` | ✅ **DONE** | GET/PUT/POST/DELETE all routes |
+| API - Household | `/api/household/allergy/*` | ✅ **DONE** | Query params: ?householdId OR ?inhabitantId |
+| API Logging | ADR-004 compliance | ✅ **DONE** | Emoji prefixes, h3eFromCatch |
+| **🎨 FRONTEND** | | | |
+| Store | allergies.ts (Pinia) | ✅ **DONE** | ADR-007 pattern, useFetch with status |
+| Admin Component | AdminAllergies.vue | ✅ **DONE** | Master-detail CRUD interface |
+| Household Component | HouseholdAllergies.vue | ⚠️ **STUB** | Only shows AllergyManagersList (9 lines) |
+| Allergy Managers | AllergyManagersList.vue | ✅ **DONE** | Displays users with ALLERGYMANAGER role |
+| Admin Integration | Part of /admin page | ✅ **DONE** | Integrated into existing admin interface |
+| Household Integration | Part of /household/[shortname] page | ✅ **DONE** | Integrated as household tab |
+| **🧪 TESTING** | | | |
+| Test Factories | AllergyTypeFactory, AllergyFactory | ✅ **DONE** | CRUD helpers + cleanup methods |
+| API E2E Tests | AllergyType and Allergy routes | ✅ **DONE** | Full endpoint coverage |
+| UI E2E - Admin | AdminAllergies.e2e.spec.ts | ❌ **TODO** | Test file not created |
+| UI E2E - Household | HouseholdAllergies.e2e.spec.ts | ❌ **TODO** | Test file not created |
+| **👥 USER PERSONAS** | | | |
+| Family Manager | Household allergy management | 🟡 **PARTIAL** | Backend done, frontend stub only |
+| Allergy Manager | Admin allergy type catalog | ✅ **DONE** | Backend + component + page integration |
+| Chef | Multi-allergen filtering | ❌ **NOT PLANNED** | No implementation exists |
+| **📄 ADVANCED FEATURES** | | | |
+| Kitchen PDF Export | Generate printable PDF | ❌ **NOT PLANNED** | Button in mockup, not implemented |
+| Notifications | Allergy change tracking | ❌ **NOT PLANNED** | Future enhancement |
+| Multi-allergen Filter | Chef interface for planning | ❌ **NOT PLANNED** | New requirement |
+
+### Summary
+
+**✅ Complete (75%):**
+- Backend API fully functional (all routes, validation, repository)
+- Admin component, store, and page integration complete
+- Test factories and API tests complete
+- Allergy manager persona fully implemented
+
+**🟡 Partial (15%):**
+- Household component is stub (needs full implementation)
+- Family manager persona incomplete
+
+**❌ Missing (10%):**
+- UI E2E tests
+- Chef features for menu planning
+- Kitchen PDF export
+- Notification system
+
+**Note:** Authorization/security is handled by separate feature (not part of allergy management scope)
+
+### Critical Path to MVP
+
+1. **HOUSEHOLD UI** - Implement full HouseholdAllergies.vue component
+2. **TESTS** - Write UI E2E tests for both admin and household flows
+
+**Estimated Effort:** 1-2 days for MVP completion
+
+---
+
+## Business Requirements
+
+This system supports three distinct user personas, each with specific needs and workflows:
+
+### 1. Busy Family Manager (Household Member)
+**Context:** Parent or household member who needs to quickly manage allergy information for their family.
+
+**Needs:**
+- Friendly, intuitive interface to view and update household member allergies
+- Quick overview of what is registered for the household
+- Clear contact information for the allergy manager when help is needed
+- Minimal clicks to add/edit/remove allergies for household members
+
+**Key Features:**
+- View all household members and their registered allergies at a glance
+- Add new allergies to household members (select from predefined types)
+- Edit comments on existing allergies (e.g., severity notes, special instructions)
+- Remove allergies when no longer applicable
+- See contact information for allergy manager(s)
+
+**User Journey:**
+1. Navigate to household allergies tab
+2. See all household members with their current allergies
+3. Click to add/edit allergies for a specific member
+4. Save changes immediately
+5. Contact allergy manager if custom allergy type is needed
+
+### 2. Chef (Cooking Team Member)
+**Context:** Person planning or cooking a menu who needs to ensure meals are safe for all inhabitants.
+
+**Needs:**
+- Select one or more allergens to check impact
+- See how many inhabitants are affected by selected allergen(s)
+- Quick filtering to identify affected individuals
+- Clear visual indicators of allergen presence
+
+**Key Features:**
+- Multi-select allergen filter (checkboxes for common allergens)
+- Real-time count of affected inhabitants per allergen
+- Combined view showing inhabitants affected by ANY selected allergen
+- Detailed inhabitant list with allergy comments
+- Export/print capability for kitchen reference
+
+**User Journey:**
+1. Navigate to menu planning or cooking interface
+2. Select relevant allergens (e.g., "Gluten", "Dairy", "Nuts")
+3. See count: "12 inhabitants affected by selected allergens"
+4. View detailed list with household info and comments
+5. Plan menu accordingly or print reference list
+
+### 3. Allergy Manager (System Administrator)
+**Context:** Designated person(s) responsible for allergy system governance and kitchen communication.
+
+**Needs:**
+- Create and manage global allergy type catalog
+- View all inhabitants with specific allergies
+- Receive notifications when inhabitants update their allergies
+- Generate printable PDF document for kitchen display
+- Ensure data quality and completeness
+
+**Key Features:**
+- CRUD operations for allergy types (name, description, icon)
+- View inhabitants per allergy type with household context
+- Notification system for allergy changes (future enhancement)
+- Generate "Kitchen PDF" - comprehensive allergy list for physical display
+- See list of all allergy managers (contact info)
+
+**User Journey:**
+1. Navigate to admin allergies section
+2. Review allergy types and inhabitant counts
+3. Create new allergy type if requested by household
+4. Review inhabitant details and comments for specific allergen
+5. Generate and print PDF for kitchen wall
+6. Respond to household questions about allergies
+
+---
+
+## Implementation Status
+
+### Status Overview
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Backend - API** | ✅ **COMPLETE** | All endpoints implemented and tested |
+| - Admin AllergyType CRUD | ✅ DONE | `/api/admin/allergy-type/*` |
+| - Household Allergy CRUD | ✅ DONE | `/api/household/allergy/*` |
+| - Authorization | ⚠️ TODO | Household-scoped access checks commented out |
+| **Backend - Data Layer** | ✅ **COMPLETE** | Repository functions fully implemented |
+| **Backend - Validation** | ✅ **COMPLETE** | Composables with Zod schemas |
+| **Frontend - Store** | ✅ **COMPLETE** | Pinia store with ADR-007 pattern |
+| **Frontend - Components** | 🟡 **PARTIAL** | Admin component done, household stub only |
+| - AdminAllergies.vue | ✅ DONE | Master-detail CRUD interface |
+| - HouseholdAllergies.vue | ⚠️ STUB | Only displays AllergyManagersList |
+| - AllergyManagersList.vue | ✅ DONE | Shows allergy manager contacts |
+| **Frontend - Pages/Routes** | ❌ **NOT DONE** | No dedicated pages created |
+| - /admin/allergies | ❌ TODO | Admin page for allergy management |
+| - /household/[shortname]/allergies | ❌ TODO | Household allergy tab |
+| **Testing - E2E** | ❌ **NOT DONE** | Test files planned but not created |
+| - API tests | ✅ DONE | AllergyType and Allergy API tested |
+| - UI tests (Admin) | ❌ TODO | AdminAllergies.e2e.spec.ts |
+| - UI tests (Household) | ❌ TODO | HouseholdAllergies.e2e.spec.ts |
+| **Testing - Factories** | ✅ **COMPLETE** | AllergyTypeFactory, AllergyFactory |
+| **Chef Features** | ❌ **NOT PLANNED** | Multi-allergen filtering not in current plan |
+| **Kitchen PDF Export** | ❌ **NOT PLANNED** | PDF generation not in current plan |
+| **Notifications** | ❌ **NOT PLANNED** | Allergy change notifications not planned |
+
+### Detailed Status
+
+#### ✅ Completed (Backend)
+1. **Prisma Schema** - AllergyType and Allergy models with CASCADE
+2. **Validation Composables** - `useAllergyValidation.ts` with Zod schemas
+3. **Repository Functions** - Full CRUD in `prismaRepository.ts`
+4. **API Routes** - All admin and household endpoints
+5. **Test Factories** - AllergyTypeFactory, AllergyFactory with CRUD helpers
+6. **API E2E Tests** - Full coverage of endpoints
+
+#### 🟡 Partially Complete (Frontend)
+1. **Store** - `allergies.ts` store following ADR-007
+2. **AdminAllergies Component** - Master-detail UI with create/edit/delete
+3. **AllergyManagersList Component** - Displays managers with ALLERGYMANAGER role
+
+#### ❌ Not Started
+1. **Pages/Routes** - No dedicated pages for admin or household
+2. **HouseholdAllergies Component** - Needs full implementation (currently stub)
+3. **UI E2E Tests** - Planned but not created
+4. **Authorization** - Backend has TODO comments, not enforced
+5. **Chef Features** - Multi-allergen selection and filtering
+6. **Kitchen PDF** - Export functionality for printing
+7. **Notifications** - Allergy change tracking
+
+---
+
+## Changes Required Based on New Requirements
+
+### 1. Chef Features - Multi-Allergen Filtering
+**Current State:** Not implemented. No chef-specific interface exists.
+
+**Required Changes:**
+- **New Component:** `ChefAllergenFilter.vue`
+  - Multi-select checkboxes for allergen types
+  - Real-time count of affected inhabitants
+  - Inhabitant list with allergy details and comments
+  - Filter logic: Show inhabitants with ANY selected allergen
+
+- **Store Enhancement:** Add computed properties for chef view
+  ```typescript
+  // In allergies.ts store
+  const getInhabitantsAffectedByAllergens = (allergenTypeIds: number[]) => {
+    // Filter inhabitants who have allergies matching any selected type
+  }
+  ```
+
+- **API Enhancement:** Consider new endpoint for efficient multi-allergen queries
+  ```typescript
+  // GET /api/admin/allergy-type/inhabitants?ids=1,2,3
+  // Returns all inhabitants with any of the specified allergy types
+  ```
+
+- **Integration Point:** Add to `/admin/planning` or menu planning workflow
+
+### 2. Kitchen PDF Export
+**Current State:** Button placeholder in mockup, no implementation.
+
+**Required Changes:**
+- **New Composable:** `usePdfExport.ts`
+  - Generate PDF from allergy data
+  - Options: All allergens or specific types
+  - Include: Inhabitant names, households, allergen types, comments
+
+- **Library Dependency:** Add PDF generation library (consider `jsPDF` or server-side solution)
+
+- **New API Endpoint:** `/api/admin/allergy-type/export-pdf`
+  - Server-side PDF generation (recommended for Cloudflare Workers compatibility)
+  - Returns PDF blob for download
+
+- **UI Enhancement:** Wire up "📄 Køkken-PDF" button in AdminAllergies.vue
+
+### 3. Household View Enhancement
+**Current State:** HouseholdAllergies.vue is a stub (9 lines).
+
+**Required Changes:**
+- **Implement Full Component:**
+  - List all household inhabitants
+  - Show each inhabitant's allergies (grouped by inhabitant)
+  - Add allergy to inhabitant (select from types)
+  - Edit inhabitant comment on existing allergy
+  - Remove allergy from inhabitant
+  - Display AllergyManagersList for help/contact
+
+- **Store Integration:** Use existing `allergies.ts` store
+  - Set `filterHouseholdId` from household context
+  - Use `allergies` computed property (already implemented)
+
+- **Page Integration:** Create `/app/pages/household/[shortname]/allergies.vue` tab
+
+### 4. Notifications System
+**Current State:** Not planned.
+
+**Required Changes:**
+- **Architecture Decision Needed:** How to implement notifications?
+  - Email notifications to allergy managers?
+  - In-app notification badge?
+  - Webhook to external system?
+
+- **Data Model:** Add `AllergyChangeLog` or use existing audit pattern?
+
+- **Trigger Points:** When household creates/updates/deletes allergy
+
+- **Recommendation:** Defer to Phase 2 (post-MVP)
+
+### 5. Authorization Enforcement
+**Current State:** Backend routes have TODO comments for auth checks.
+
+**Required Changes:**
+- **Implement Auth Helpers:**
+  ```typescript
+  // server/utils/authHelpers.ts
+  export async function verifyHouseholdAccess(event: H3Event, householdId: number)
+  export async function verifyInhabitantAccess(event: H3Event, inhabitantId: number)
+  ```
+
+- **Update API Routes:** Replace TODO comments with actual auth calls
+
+- **Priority:** HIGH - should be done before household features are accessible
+
+### 6. Admin Page Creation
+**Current State:** AdminAllergies.vue component exists but no page route.
+
+**Required Changes:**
+- **Create:** `/app/pages/admin/allergies.vue`
+  - Import and render AdminAllergies component
+  - Add to admin navigation/tabs
+
+- **Navigation:** Update admin layout to include allergies tab
+
+---
+
+## Recommended Implementation Priorities
+
+### Phase 1: Complete MVP (Household & Admin Basic CRUD)
+**Priority:** HIGH - Core functionality
+1. ✅ Create `/app/pages/admin/allergies.vue` page
+2. ✅ Implement `HouseholdAllergies.vue` full component
+3. ✅ Create `/app/pages/household/[shortname]/allergies.vue` tab
+4. ✅ Implement authorization checks in API routes
+5. ✅ Write UI E2E tests for admin and household flows
+
+**Estimated Effort:** 2-3 days
+
+### Phase 2: Chef Features
+**Priority:** MEDIUM - Important for menu planning safety
+1. Create `ChefAllergenFilter.vue` component
+2. Add multi-allergen query API endpoint
+3. Integrate into menu planning workflow
+4. Write E2E tests for chef filtering
+
+**Estimated Effort:** 1-2 days
+
+### Phase 3: Kitchen PDF Export
+**Priority:** MEDIUM - Quality of life for kitchen staff
+1. Research PDF generation approach (server-side recommended)
+2. Implement `/api/admin/allergy-type/export-pdf` endpoint
+3. Wire up button in AdminAllergies.vue
+4. Test PDF output with real data
+
+**Estimated Effort:** 1 day
+
+### Phase 4: Notifications (Future Enhancement)
+**Priority:** LOW - Nice to have
+1. Design notification architecture
+2. Implement change tracking
+3. Build notification delivery system
+4. Add UI for notification preferences
+
+**Estimated Effort:** 2-3 days
+
+---
+
 ## UX Design - ASCII Mockups (NuxtUI Card Layout)
 
 ### Admin Allergy Type Management (/admin/allergies)
@@ -494,916 +833,126 @@ Implement admin-managed allergy types and household-scoped allergy assignments f
 
 ## Phase 1: Foundation - Composables
 
-### File: `app/composables/useAllergyValidation.ts`
-
-Create validation schemas following the pattern from `useHouseholdValidation.ts`.
-
-**Structure:**
-
-```typescript
-import {z} from 'zod'
-
-export const useAllergyValidation = () => {
-    // Base AllergyType schema
-    const BaseAllergyTypeSchema = z.object({
-        id: z.number().int().positive().optional(),
-        name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100),
-        description: z.string().min(1).max(500),
-        icon: z.string().max(50).optional().nullable() // Emoji or icon class
-    })
-
-    // Base Allergy schema
-    const BaseAllergySchema = z.object({
-        id: z.number().int().positive().optional(),
-        inhabitantId: z.number().int().positive(),
-        allergyTypeId: z.number().int().positive(),
-        inhabitantComment: z.string().max(500).optional().nullable(),
-        createdAt: z.coerce.date().optional(),
-        updatedAt: z.coerce.date().optional()
-    })
-
-    // AllergyType CRUD schemas
-    const AllergyTypeCreateSchema = BaseAllergyTypeSchema.omit({ id: true })
-    const AllergyTypeUpdateSchema = BaseAllergyTypeSchema.partial().extend({
-        id: z.number().int().positive()
-    })
-    const AllergyTypeResponseSchema = BaseAllergyTypeSchema.required({
-        id: true,
-        name: true,
-        description: true
-    })
-
-    // AllergyType with inhabitants (for admin view)
-    // Uses InhabitantDisplay from useHouseholdValidation
-    const AllergyTypeWithInhabitantsSchema = AllergyTypeResponseSchema.extend({
-        inhabitants: z.array(z.lazy(() => {
-            const {InhabitantDisplaySchema} = useHouseholdValidation()
-            return InhabitantDisplaySchema
-        }))
-    })
-
-    // Allergy CRUD schemas
-    const AllergyCreateSchema = BaseAllergySchema.omit({ id: true, createdAt: true, updatedAt: true })
-    const AllergyUpdateSchema = BaseAllergySchema.partial().extend({
-        id: z.number().int().positive()
-    })
-    const AllergyResponseSchema = BaseAllergySchema.required({
-        id: true,
-        inhabitantId: true,
-        allergyTypeId: true
-    })
-
-    // Allergy with relations (for household view - nested by inhabitant)
-    const AllergyWithTypeSchema = AllergyResponseSchema.extend({
-        allergyType: AllergyTypeResponseSchema
-    })
-
-    // Inhabitant with allergies (for grouping)
-    const InhabitantWithAllergiesSchema = z.lazy(() => {
-        const {InhabitantDisplaySchema} = useHouseholdValidation()
-        return InhabitantDisplaySchema.extend({
-            allergies: z.array(AllergyWithTypeSchema)
-        })
-    })
-
-    return {
-        BaseAllergyTypeSchema,
-        AllergyTypeCreateSchema,
-        AllergyTypeUpdateSchema,
-        AllergyTypeResponseSchema,
-        AllergyTypeWithInhabitantsSchema,
-        BaseAllergySchema,
-        AllergyCreateSchema,
-        AllergyUpdateSchema,
-        AllergyResponseSchema,
-        AllergyWithTypeSchema,
-        InhabitantWithAllergiesSchema
-    }
-}
-
-// Type exports
-export type AllergyType = z.infer<ReturnType<typeof useAllergyValidation>['BaseAllergyTypeSchema']>
-export type AllergyTypeCreate = z.infer<ReturnType<typeof useAllergyValidation>['AllergyTypeCreateSchema']>
-export type AllergyTypeUpdate = z.infer<ReturnType<typeof useAllergyValidation>['AllergyTypeUpdateSchema']>
-export type AllergyTypeResponse = z.infer<ReturnType<typeof useAllergyValidation>['AllergyTypeResponseSchema']>
-export type AllergyTypeWithInhabitants = z.infer<ReturnType<typeof useAllergyValidation>['AllergyTypeWithInhabitantsSchema']>
-
-export type Allergy = z.infer<ReturnType<typeof useAllergyValidation>['BaseAllergySchema']>
-export type AllergyCreate = z.infer<ReturnType<typeof useAllergyValidation>['AllergyCreateSchema']>
-export type AllergyUpdate = z.infer<ReturnType<typeof useAllergyValidation>['AllergyUpdateSchema']>
-export type AllergyResponse = z.infer<ReturnType<typeof useAllergyValidation>['AllergyResponseSchema']>
-export type AllergyWithType = z.infer<ReturnType<typeof useAllergyValidation>['AllergyWithTypeSchema']>
-export type InhabitantWithAllergies = z.infer<ReturnType<typeof useAllergyValidation>['InhabitantWithAllergiesSchema']>
-```
-
-**Key Points:**
-- Follow existing pattern from `useHouseholdValidation.ts`
-- Use `z.lazy()` for cross-composable references (InhabitantDisplay)
-- Separate index (with inhabitants) and detail schemas
-- Validate icon as string (emoji or class name)
-
----
+### ✅File: `app/composables/useAllergyValidation.ts`
 
 ## Phase 2: Repository Functions
 
-### File: `server/data/prismaRepository.ts`
+### ✅ File: `server/data/prismaRepository.ts`
 
-Add functions following the pattern from household functions (lines 329-378).
+## ✅Phase 3: API Routes
 
-### AllergyType Functions
+**Status:** ✅ Fully implemented | ⚠️ Missing authorization
 
-```typescript
-/**
- * Fetch all allergy types with inhabitants who have each allergy
- * ADR-009: Index endpoint - includes lightweight inhabitant data
- */
-export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeWithInhabitants[]> {
-    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy types with inhabitants`)
-    const prisma = await getPrismaClientConnection(d1Client)
+### ✅ Admin AllergyType Routes
 
-    try {
-        const allergyTypes = await prisma.allergyType.findMany({
-            include: {
-                Allergy: {
-                    include: {
-                        inhabitant: {
-                            select: {
-                                id: true,
-                                name: true,
-                                lastName: true,
-                                pictureUrl: true,
-                                birthDate: true
-                            }
-                        }
-                    }
-                }
-            }
-        })
+**Base Path:** `/api/admin/allergy-type`
 
-        // Transform: flatten to include inhabitants directly (not nested allergies)
-        const result = allergyTypes.map(at => ({
-            id: at.id,
-            name: at.name,
-            description: at.description,
-            icon: at.icon,
-            inhabitants: at.Allergy.map(a => a.inhabitant)
-        }))
+**Implemented Routes:**
+- `GET /api/admin/allergy-type` - List all allergy types with inhabitant counts
+  - Returns: `AllergyTypeWithInhabitants[]`
+  - No validation required (public list)
 
-        console.info(`🏥 > ALLERGY_TYPE > [GET] Fetched ${result.length} allergy types`)
-        return result
-    } catch (error) {
-        const h3e = h3eFromCatch('Error fetching allergy types', error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
+- `GET /api/admin/allergy-type/[id]` - Get single allergy type with inhabitant details
+  - Validates: Route param `id` as positive integer
+  - Returns: `AllergyTypeResponse` or 404 if not found
 
-export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse | null> {
-    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+- `PUT /api/admin/allergy-type` - Create new allergy type
+  - Validates: Request body with `AllergyTypeCreateSchema`
+  - Returns: Created allergy type with 201 status
 
-    try {
-        const allergyType = await prisma.allergyType.findFirst({ where: { id } })
-        if (!allergyType) return null
+- `POST /api/admin/allergy-type/[id]` - Update existing allergy type
+  - Validates: Route param `id` and request body with `AllergyTypeUpdateSchema`
+  - Returns: Updated allergy type with 200 status
 
-        console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type: ${allergyType.name}`)
-        return allergyType
-    } catch (error) {
-        const h3e = h3eFromCatch('Error fetching allergy type', error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
+- `DELETE /api/admin/allergy-type/[id]` - Delete allergy type (CASCADE)
+  - Validates: Route param `id` as positive integer
+  - Behavior: CASCADE deletes all related Allergy records
+  - Returns: Deleted allergy type with 200 status
 
-export async function createAllergyType(d1Client: D1Database, data: AllergyTypeCreate): Promise<AllergyTypeResponse> {
-    console.info(`🏥 > ALLERGY_TYPE > [PUT] Creating allergy type: ${data.name}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const allergyType = await prisma.allergyType.create({ data })
-        console.info(`🏥 > ALLERGY_TYPE > [PUT] Created allergy type with ID ${allergyType.id}`)
-        return allergyType
-    } catch (error) {
-        const h3e = h3eFromCatch('Error creating allergy type', error)
-        console.error(`🏥 > ALLERGY_TYPE > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function updateAllergyType(d1Client: D1Database, id: number, data: Partial<AllergyTypeUpdate>): Promise<AllergyTypeResponse> {
-    console.info(`🏥 > ALLERGY_TYPE > [PATCH] Updating allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const allergyType = await prisma.allergyType.update({
-            where: { id },
-            data
-        })
-        console.info(`🏥 > ALLERGY_TYPE > [PATCH] Updated allergy type: ${allergyType.name}`)
-        return allergyType
-    } catch (error) {
-        const h3e = h3eFromCatch('Error updating allergy type', error)
-        console.error(`🏥 > ALLERGY_TYPE > [PATCH] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse> {
-    console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        // Prisma will CASCADE delete all related Allergy records (schema onDelete: Cascade)
-        const allergyType = await prisma.allergyType.delete({ where: { id } })
-        console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleted allergy type: ${allergyType.name}`)
-        return allergyType
-    } catch (error) {
-        const h3e = h3eFromCatch('Error deleting allergy type', error)
-        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-```
-
-### Allergy Functions
-
-```typescript
-/**
- * Fetch allergies for a household, grouped by inhabitant
- */
-export async function fetchAllergiesByHousehold(d1Client: D1Database, householdId: number): Promise<InhabitantWithAllergies[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ${householdId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const inhabitants = await prisma.inhabitant.findMany({
-            where: { householdId },
-            select: {
-                id: true,
-                name: true,
-                lastName: true,
-                pictureUrl: true,
-                birthDate: true,
-                allergies: {
-                    include: {
-                        allergyType: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Fetched allergies for ${inhabitants.length} inhabitants`)
-        return inhabitants
-    } catch (error) {
-        const h3e = h3eFromCatch('Error fetching household allergies', error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function createAllergy(d1Client: D1Database, data: AllergyCreate): Promise<AllergyResponse> {
-    console.info(`🏥 > ALLERGY > [PUT] Creating allergy for inhabitant ${data.inhabitantId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const allergy = await prisma.allergy.create({ data })
-        console.info(`🏥 > ALLERGY > [PUT] Created allergy with ID ${allergy.id}`)
-        return allergy
-    } catch (error) {
-        const h3e = h3eFromCatch('Error creating allergy', error)
-        console.error(`🏥 > ALLERGY > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function updateAllergy(d1Client: D1Database, id: number, data: Partial<AllergyUpdate>): Promise<AllergyResponse> {
-    console.info(`🏥 > ALLERGY > [PATCH] Updating allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const allergy = await prisma.allergy.update({
-            where: { id },
-            data
-        })
-        console.info(`🏥 > ALLERGY > [PATCH] Updated allergy`)
-        return allergy
-    } catch (error) {
-        const h3e = h3eFromCatch('Error updating allergy', error)
-        console.error(`🏥 > ALLERGY > [PATCH] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyResponse> {
-    console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const allergy = await prisma.allergy.delete({ where: { id } })
-        console.info(`🏥 > ALLERGY > [DELETE] Deleted allergy`)
-        return allergy
-    } catch (error) {
-        const h3e = h3eFromCatch('Error deleting allergy', error)
-        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-```
-
-**Key Points:**
-- `fetchAllergyTypes`: Include lightweight inhabitant data (name, avatar)
-- `fetchAllergiesByHousehold`: Group by inhabitant, include allergyType
-- Follow ADR-004 logging standards
-- Use h3eFromCatch for error handling
-
----
-
-## Phase 3: API Routes
-
-### Admin AllergyType Routes
-
-#### File: `server/routes/api/admin/allergy-type/index.get.ts`
-
-```typescript
-import {fetchAllergyTypes} from "~/server/data/prismaRepository"
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-
-    try {
-        const allergyTypes = await fetchAllergyTypes(d1Client)
-        setResponseStatus(event, 200)
-        return allergyTypes
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-#### File: `server/routes/api/admin/allergy-type/index.put.ts`
-
-```typescript
-import {createAllergyType} from "~/server/data/prismaRepository"
-import {useAllergyValidation} from "~/composables/useAllergyValidation"
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-    const {AllergyTypeCreateSchema} = useAllergyValidation()
-
-    // Validation
-    let requestData
-    try {
-        requestData = await readValidatedBody(event, AllergyTypeCreateSchema.parse)
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // Business logic
-    try {
-        const allergyType = await createAllergyType(d1Client, requestData)
-        setResponseStatus(event, 201)
-        return allergyType
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-#### File: `server/routes/api/admin/allergy-type/[id].get.ts`
-
-```typescript
-import {fetchAllergyType} from "~/server/data/prismaRepository"
-import {z} from "zod"
-
-const idSchema = z.object({
-    id: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-
-    // Validation
-    let id
-    try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        id = params.id
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // Business logic
-    try {
-        const allergyType = await fetchAllergyType(d1Client, id)
-        if (!allergyType) {
-            throw createError({statusCode: 404, message: 'AllergyType not found'})
-        }
-        setResponseStatus(event, 200)
-        return allergyType
-    } catch (error) {
-        if (error.statusCode) throw error
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-#### File: `server/routes/api/admin/allergy-type/[id].patch.ts`
-
-```typescript
-import {updateAllergyType} from "~/server/data/prismaRepository"
-import {useAllergyValidation} from "~/composables/useAllergyValidation"
-import {z} from "zod"
-
-const idSchema = z.object({
-    id: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-    const {AllergyTypeUpdateSchema} = useAllergyValidation()
-
-    // Validation
-    let id, requestData
-    try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        id = params.id
-        requestData = await readValidatedBody(event, AllergyTypeUpdateSchema.partial().parse)
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // Business logic
-    try {
-        const allergyType = await updateAllergyType(d1Client, id, requestData)
-        setResponseStatus(event, 200)
-        return allergyType
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-#### File: `server/routes/api/admin/allergy-type/[id].delete.ts`
-
-```typescript
-import {deleteAllergyType} from "~/server/data/prismaRepository"
-import {z} from "zod"
-
-const idSchema = z.object({
-    id: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-
-    // Validation
-    let id
-    try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        id = params.id
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // Business logic
-    try {
-        const allergyType = await deleteAllergyType(d1Client, id)
-        setResponseStatus(event, 200)
-        return allergyType
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
+**Compliance:**
+- ✅ ADR-002: Separate try-catch for validation vs business logic
+- ✅ ADR-004: Proper logging with emoji prefixes (`🏥 > ALLERGY_TYPE > [METHOD]`)
+- ✅ Uses `h3eFromCatch` helper for consistent error handling
+- ✅ Validates all inputs with Zod schemas
+- ❌ **MISSING: Authorization** - Should verify ADMIN or ALLERGYMANAGER system role
 
 ### Household Allergy Routes
 
-#### File: `server/routes/api/household/[householdId]/allergy/index.get.ts`
+**Base Path:** `/api/household/allergy`
 
+**Implemented Routes:**
+- `GET /api/household/allergy?householdId=[id]` - Get allergies for entire household
+  - Validates: Query param `householdId` OR `inhabitantId` (exactly one required)
+  - Returns: Array of allergies for household (grouped by inhabitant in repository)
+  - Calls: `fetchAllergiesForHousehold(d1Client, householdId)`
+
+- `GET /api/household/allergy?inhabitantId=[id]` - Get allergies for specific inhabitant
+  - Validates: Query param `inhabitantId` (mutually exclusive with householdId)
+  - Returns: Array of allergies for single inhabitant
+  - Calls: `fetchAllergiesForInhabitant(d1Client, inhabitantId)`
+
+- `PUT /api/household/allergy` - Create new allergy for an inhabitant
+  - Validates: Request body with `AllergyCreateSchema` (inhabitantId, allergyTypeId, inhabitantComment)
+  - Returns: Created allergy with 201 status
+
+- `GET /api/household/allergy/[id]` - Get single allergy with full relations
+  - Validates: Route param `id` as positive integer
+  - Returns: Single allergy with inhabitant and allergyType details
+
+- `POST /api/household/allergy/[id]` - Update allergy (typically comment)
+  - Validates: Route param `id` and partial `AllergyUpdateSchema`
+  - Returns: Updated allergy with 200 status
+
+- `DELETE /api/household/allergy/[id]` - Delete allergy
+  - Validates: Route param `id` as positive integer
+  - Returns: Deleted allergy with 200 status
+
+**Smart Query Validation:**
+The GET index route uses a refined Zod schema that:
+- Requires exactly ONE of `householdId` or `inhabitantId`
+- Rejects requests with both parameters
+- Rejects requests with neither parameter
+
+**Compliance:**
+- ✅ ADR-002: Separate validation and business logic error handling
+- ✅ ADR-004: Proper logging with emoji prefixes (`🏥 > ALLERGY > [METHOD]`)
+- ✅ Uses `h3eFromCatch` helper
+- ✅ Smart query parameter validation with refinements
+- ❌ **CRITICAL MISSING: Authorization** - No household-scoped access checks
+
+### Authorization Requirements (TODO) - future improvements
+
+**Admin Routes:** Should verify user has ADMIN or ALLERGYMANAGER system role
 ```typescript
-import {fetchAllergiesByHousehold} from "~/server/data/prismaRepository"
-import {z} from "zod"
-
-const householdIdSchema = z.object({
-    householdId: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-
-    // Validation
-    let householdId
-    try {
-        const params = await getValidatedRouterParams(event, householdIdSchema.parse)
-        householdId = params.householdId
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // TODO: Authorization - verify user has access to this household
-    // const session = await requireUserSession(event)
-    // if (session.user.Inhabitant?.householdId !== householdId && session.user.systemRole !== 'ADMIN') {
-    //     throw createError({statusCode: 403, message: 'Forbidden'})
-    // }
-
-    // Business logic
-    try {
-        const inhabitants = await fetchAllergiesByHousehold(d1Client, householdId)
-        setResponseStatus(event, 200)
-        return inhabitants
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
+// Pseudo-code for admin routes
+const session = await requireUserSession(event)
+const hasAllergyRole = session.user.systemRoles.includes('ADMIN') ||
+                       session.user.systemRoles.includes('ALLERGYMANAGER')
+if (!hasAllergyRole) throw createError({statusCode: 403, message: 'Forbidden'})
 ```
 
-#### File: `server/routes/api/household/[householdId]/allergy/index.put.ts`
-
+**Household Routes:** Should verify user belongs to the household being accessed
 ```typescript
-import {createAllergy} from "~/server/data/prismaRepository"
-import {useAllergyValidation} from "~/composables/useAllergyValidation"
-import {z} from "zod"
-
-const householdIdSchema = z.object({
-    householdId: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-    const {AllergyCreateSchema} = useAllergyValidation()
-
-    // Validation
-    let householdId, requestData
-    try {
-        const params = await getValidatedRouterParams(event, householdIdSchema.parse)
-        householdId = params.householdId
-        requestData = await readValidatedBody(event, AllergyCreateSchema.parse)
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
+// Pseudo-code for household routes
+const session = await requireUserSession(event)
+if (session.user.systemRole !== 'ADMIN') {
+    // User must be member of the household
+    if (session.user.Inhabitant?.householdId !== requestedHouseholdId) {
+        throw createError({statusCode: 403, message: 'Forbidden'})
     }
-
-    // TODO: Authorization - verify inhabitant belongs to this household
-    // Fetch inhabitant and check householdId matches
-
-    // Business logic
-    try {
-        const allergy = await createAllergy(d1Client, requestData)
-        setResponseStatus(event, 201)
-        return allergy
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
+}
 ```
 
-#### File: `server/routes/api/household/[householdId]/allergy/[id].patch.ts`
-
-```typescript
-import {updateAllergy} from "~/server/data/prismaRepository"
-import {useAllergyValidation} from "~/composables/useAllergyValidation"
-import {z} from "zod"
-
-const paramsSchema = z.object({
-    householdId: z.coerce.number().int().positive(),
-    id: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-    const {AllergyUpdateSchema} = useAllergyValidation()
-
-    // Validation
-    let params, requestData
-    try {
-        params = await getValidatedRouterParams(event, paramsSchema.parse)
-        requestData = await readValidatedBody(event, AllergyUpdateSchema.partial().parse)
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // TODO: Authorization - verify allergy belongs to household
-
-    // Business logic
-    try {
-        const allergy = await updateAllergy(d1Client, params.id, requestData)
-        setResponseStatus(event, 200)
-        return allergy
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-#### File: `server/routes/api/household/[householdId]/allergy/[id].delete.ts`
-
-```typescript
-import {deleteAllergy} from "~/server/data/prismaRepository"
-import {z} from "zod"
-
-const paramsSchema = z.object({
-    householdId: z.coerce.number().int().positive(),
-    id: z.coerce.number().int().positive()
-})
-
-export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
-
-    // Validation
-    let params
-    try {
-        params = await getValidatedRouterParams(event, paramsSchema.parse)
-    } catch (error) {
-        throw createError({statusCode: 400, message: 'Invalid input', cause: error})
-    }
-
-    // TODO: Authorization - verify allergy belongs to household
-
-    // Business logic
-    try {
-        const allergy = await deleteAllergy(d1Client, params.id)
-        setResponseStatus(event, 200)
-        return allergy
-    } catch (error) {
-        throw createError({statusCode: 500, message: 'Server Error', cause: error})
-    }
-})
-```
-
-**Key Points:**
-- Follow ADR-002: Separate try-catch for validation and business logic
-- Use `getValidatedRouterParams` and `readValidatedBody`
-- TODO: Add authorization checks for household routes
-- 400 for validation errors, 404 for not found, 500 for server errors
+**Recommended Approach:**
+Create helper functions in `server/utils/authHelpers.ts`:
+- `verifyAdminOrAllergyManager(event)` - For admin routes
+- `verifyHouseholdAccess(event, householdId)` - For household routes
+- `verifyInhabitantAccess(event, inhabitantId)` - For inhabitant-specific operations
 
 ---
 
 ## Phase 4: Stores
-
-### File: `app/stores/allergyTypes.ts`
-
-```typescript
-import type {AllergyTypeWithInhabitants, AllergyTypeCreate, AllergyTypeUpdate} from '~/composables/useAllergyValidation'
-
-/**
- * AllergyType store - admin-managed global allergy type catalog
- * Following ADR-007: Store owns server data, component owns UI state
- */
-export const useAllergyTypesStore = defineStore("AllergyTypes", () => {
-
-    // STATE - Server data
-    const selectedAllergyTypeId = ref<number | null>(null)
-
-    // useFetch for list (immediate: true for autoload)
-    const {
-        data: allergyTypes,
-        status: allergyTypesStatus,
-        error: allergyTypesError,
-        refresh: refreshAllergyTypes
-    } = useFetch<AllergyTypeWithInhabitants[]>('/api/admin/allergy-type', {
-        immediate: true,
-        watch: false,
-        default: () => []
-    })
-
-    // Computed - Status-derived state (4-state UI)
-    const isAllergyTypesLoading = computed(() => allergyTypesStatus.value === 'pending')
-    const isAllergyTypesErrored = computed(() => allergyTypesStatus.value === 'error')
-    const isAllergyTypesInitialized = computed(() => allergyTypesStatus.value === 'success')
-    const isNoAllergyTypes = computed(() => isAllergyTypesInitialized.value && allergyTypes.value.length === 0)
-
-    // Convenience computed
-    const isAllergyTypesStoreReady = computed(() => isAllergyTypesInitialized.value)
-
-    // Selected allergy type
-    const selectedAllergyType = computed(() =>
-        allergyTypes.value.find(at => at.id === selectedAllergyTypeId.value) ?? null
-    )
-
-    // Actions
-    const loadAllergyTypes = async () => {
-        await refreshAllergyTypes()
-        if (allergyTypesError.value) {
-            console.error(`🏥 > ALLERGY_TYPES_STORE > Error loading allergy types:`, allergyTypesError.value)
-            throw allergyTypesError.value
-        }
-        console.info(`🏥 > ALLERGY_TYPES_STORE > Loaded ${allergyTypes.value.length} allergy types`)
-    }
-
-    const selectAllergyType = (id: number | null) => {
-        selectedAllergyTypeId.value = id
-    }
-
-    const createAllergyType = async (data: AllergyTypeCreate) => {
-        console.info(`🏥 > ALLERGY_TYPES_STORE > Creating allergy type: ${data.name}`)
-        try {
-            await $fetch('/api/admin/allergy-type', {
-                method: 'PUT',
-                body: data
-            })
-            await loadAllergyTypes() // Refresh list
-            console.info(`🏥 > ALLERGY_TYPES_STORE > Created allergy type`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGY_TYPES_STORE > Error creating allergy type:`, error)
-            throw error
-        }
-    }
-
-    const updateAllergyType = async (id: number, data: Partial<AllergyTypeUpdate>) => {
-        console.info(`🏥 > ALLERGY_TYPES_STORE > Updating allergy type ${id}`)
-        try {
-            await $fetch(`/api/admin/allergy-type/${id}`, {
-                method: 'PATCH',
-                body: data
-            })
-            await loadAllergyTypes() // Refresh list
-            console.info(`🏥 > ALLERGY_TYPES_STORE > Updated allergy type`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGY_TYPES_STORE > Error updating allergy type:`, error)
-            throw error
-        }
-    }
-
-    const deleteAllergyType = async (id: number) => {
-        console.info(`🏥 > ALLERGY_TYPES_STORE > Deleting allergy type ${id}`)
-        try {
-            await $fetch(`/api/admin/allergy-type/${id}`, {
-                method: 'DELETE'
-            })
-            await loadAllergyTypes() // Refresh list
-            console.info(`🏥 > ALLERGY_TYPES_STORE > Deleted allergy type (CASCADE removed all allergies)`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGY_TYPES_STORE > Error deleting allergy type:`, error)
-            throw error
-        }
-    }
-
-    // Initialization
-    const initAllergyTypesStore = () => {
-        // Auto-loads via immediate: true
-        console.info(`🏥 > ALLERGY_TYPES_STORE > Initialized`)
-    }
-
-    return {
-        // State
-        allergyTypes,
-        allergyTypesError,
-        selectedAllergyType,
-        // Computed
-        isAllergyTypesLoading,
-        isAllergyTypesErrored,
-        isAllergyTypesInitialized,
-        isNoAllergyTypes,
-        isAllergyTypesStoreReady,
-        // Actions
-        initAllergyTypesStore,
-        loadAllergyTypes,
-        selectAllergyType,
-        createAllergyType,
-        updateAllergyType,
-        deleteAllergyType
-    }
-})
-```
-
-### File: `app/stores/allergies.ts`
-
-```typescript
-import type {InhabitantWithAllergies, AllergyCreate, AllergyUpdate} from '~/composables/useAllergyValidation'
-
-/**
- * Allergy store - household-scoped allergy assignments
- * Following ADR-007: Store owns server data, component owns UI state
- */
-export const useAllergiesStore = defineStore("Allergies", () => {
-
-    // STATE
-    const currentHouseholdId = ref<number | null>(null)
-
-    // useFetch for household allergies
-    const {
-        data: inhabitants,
-        status: allergiesStatus,
-        error: allergiesError,
-        refresh: refreshAllergies
-    } = useAsyncData<InhabitantWithAllergies[]>(
-        () => `/api/household/${currentHouseholdId.value}/allergy`,
-        () => {
-            if (!currentHouseholdId.value) return Promise.resolve([])
-            return $fetch(`/api/household/${currentHouseholdId.value}/allergy`)
-        },
-        {
-            default: () => [],
-            watch: false
-        }
-    )
-
-    // Computed - Status-derived state
-    const isAllergiesLoading = computed(() => allergiesStatus.value === 'pending')
-    const isAllergiesErrored = computed(() => allergiesStatus.value === 'error')
-    const isAllergiesInitialized = computed(() => allergiesStatus.value === 'success')
-    const isAllergiesStoreReady = computed(() => isAllergiesInitialized.value)
-
-    // Actions
-    const loadAllergiesForHousehold = async (householdId: number) => {
-        currentHouseholdId.value = householdId
-        await refreshAllergies()
-        if (allergiesError.value) {
-            console.error(`🏥 > ALLERGIES_STORE > Error loading allergies:`, allergiesError.value)
-            throw allergiesError.value
-        }
-        console.info(`🏥 > ALLERGIES_STORE > Loaded allergies for household ${householdId}`)
-    }
-
-    const createAllergy = async (data: AllergyCreate) => {
-        if (!currentHouseholdId.value) throw new Error('No household selected')
-
-        console.info(`🏥 > ALLERGIES_STORE > Creating allergy`)
-        try {
-            await $fetch(`/api/household/${currentHouseholdId.value}/allergy`, {
-                method: 'PUT',
-                body: data
-            })
-            await refreshAllergies() // Refresh list
-            console.info(`🏥 > ALLERGIES_STORE > Created allergy`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGIES_STORE > Error creating allergy:`, error)
-            throw error
-        }
-    }
-
-    const updateAllergy = async (id: number, data: Partial<AllergyUpdate>) => {
-        if (!currentHouseholdId.value) throw new Error('No household selected')
-
-        console.info(`🏥 > ALLERGIES_STORE > Updating allergy ${id}`)
-        try {
-            await $fetch(`/api/household/${currentHouseholdId.value}/allergy/${id}`, {
-                method: 'PATCH',
-                body: data
-            })
-            await refreshAllergies() // Refresh list
-            console.info(`🏥 > ALLERGIES_STORE > Updated allergy`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGIES_STORE > Error updating allergy:`, error)
-            throw error
-        }
-    }
-
-    const deleteAllergy = async (id: number) => {
-        if (!currentHouseholdId.value) throw new Error('No household selected')
-
-        console.info(`🏥 > ALLERGIES_STORE > Deleting allergy ${id}`)
-        try {
-            await $fetch(`/api/household/${currentHouseholdId.value}/allergy/${id}`, {
-                method: 'DELETE'
-            })
-            await refreshAllergies() // Refresh list
-            console.info(`🏥 > ALLERGIES_STORE > Deleted allergy`)
-        } catch (error) {
-            console.error(`🏥 > ALLERGIES_STORE > Error deleting allergy:`, error)
-            throw error
-        }
-    }
-
-    // Initialization
-    const initAllergiesStore = (householdId: number) => {
-        loadAllergiesForHousehold(householdId)
-    }
-
-    return {
-        // State
-        inhabitants,
-        allergiesError,
-        currentHouseholdId,
-        // Computed
-        isAllergiesLoading,
-        isAllergiesErrored,
-        isAllergiesInitialized,
-        isAllergiesStoreReady,
-        // Actions
-        initAllergiesStore,
-        loadAllergiesForHousehold,
-        createAllergy,
-        updateAllergy,
-        deleteAllergy
-    }
-})
-```
-
-**Key Points:**
-- Follow ADR-007: useFetch patterns with status-derived state
-- AllergyTypes: immediate: true (admin needs catalog loaded)
-- Allergies: useAsyncData with reactive key (household-scoped)
-- Expose 4 status computeds + convenience `isStoreReady`
-- CRUD actions use $fetch, then refresh list
-
+### ✅File: `app/stores/allergies.ts`
 ---
 
 ## Phase 5: UI Components
@@ -1414,178 +963,6 @@ export const useAllergiesStore = defineStore("Allergies", () => {
 
 **Structure Overview:**
 
-```vue
-<script setup lang="ts">
-import {useAllergyTypesStore} from '~/stores/allergyTypes'
-import {storeToRefs} from 'pinia'
-import {FORM_MODES} from '~/composables/useEntityFormManager'
-
-const allergyTypesStore = useAllergyTypesStore()
-const {
-    allergyTypes,
-    isAllergyTypesStoreReady,
-    selectedAllergyType
-} = storeToRefs(allergyTypesStore)
-
-// Form state (component owns UI state per ADR-007)
-const formMode = ref(FORM_MODES.VIEW)
-const draft = ref<AllergyTypeCreate | AllergyTypeUpdate | null>(null)
-
-// Initialize store
-allergyTypesStore.initAllergyTypesStore()
-
-// Form actions
-const onCreateClick = () => {
-    formMode.value = FORM_MODES.CREATE
-    draft.value = { name: '', description: '', icon: null }
-}
-
-const onEditClick = (allergyType: AllergyTypeWithInhabitants) => {
-    formMode.value = FORM_MODES.EDIT
-    allergyTypesStore.selectAllergyType(allergyType.id)
-    draft.value = { ...allergyType }
-}
-
-const onSave = async () => {
-    if (!draft.value) return
-
-    if (formMode.value === FORM_MODES.CREATE) {
-        await allergyTypesStore.createAllergyType(draft.value as AllergyTypeCreate)
-    } else if (formMode.value === FORM_MODES.EDIT && selectedAllergyType.value) {
-        await allergyTypesStore.updateAllergyType(selectedAllergyType.value.id, draft.value)
-    }
-
-    formMode.value = FORM_MODES.VIEW
-    draft.value = null
-}
-
-const onDelete = async (id: number) => {
-    // Show confirmation modal (CASCADE warning)
-    const confirmed = confirm('Dette vil slette allergi-typen og ALLE relaterede allergi-registreringer. Er du sikker?')
-    if (!confirmed) return
-
-    await allergyTypesStore.deleteAllergyType(id)
-}
-
-const onCancel = () => {
-    formMode.value = FORM_MODES.VIEW
-    draft.value = null
-}
-</script>
-
-<template>
-  <div data-test-id="admin-allergies" class="space-y-6">
-    <div class="flex justify-between items-center">
-      <h1 class="text-2xl font-bold">Allergi-typer</h1>
-      <UButton
-        v-if="formMode === FORM_MODES.VIEW"
-        @click="onCreateClick"
-        name="create-allergy-type"
-        icon="i-heroicons-plus"
-      >
-        Opret allergi-type
-      </UButton>
-    </div>
-
-    <!-- Loading state -->
-    <Loader v-if="!isAllergyTypesStoreReady" text="Indlæser allergi-typer..." />
-
-    <!-- CREATE/EDIT Form -->
-    <UCard v-else-if="formMode !== FORM_MODES.VIEW">
-      <template #header>
-        <h3 class="text-lg font-semibold">
-          {{ formMode === FORM_MODES.CREATE ? 'Opret allergi-type' : 'Rediger allergi-type' }}
-        </h3>
-      </template>
-
-      <div class="space-y-4">
-        <UFormGroup label="Navn" required>
-          <UInput v-model="draft.name" name="allergy-type-name" />
-        </UFormGroup>
-
-        <UFormGroup label="Beskrivelse" required>
-          <UTextarea v-model="draft.description" name="allergy-type-description" />
-        </UFormGroup>
-
-        <UFormGroup label="Ikon (emoji eller icon class)" hint="F.eks. 🥜 eller i-heroicons-exclamation-triangle">
-          <UInput v-model="draft.icon" name="allergy-type-icon" />
-        </UFormGroup>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="onCancel" name="cancel-allergy-type">
-            Annuller
-          </UButton>
-          <UButton @click="onSave" name="save-allergy-type">
-            Gem
-          </UButton>
-        </div>
-      </template>
-    </UCard>
-
-    <!-- LIST View -->
-    <div v-else class="space-y-4">
-      <UCard
-        v-for="allergyType in allergyTypes"
-        :key="allergyType.id"
-        :data-testid="`allergy-type-${allergyType.id}`"
-      >
-        <template #header>
-          <div class="flex justify-between items-center">
-            <div class="flex items-center gap-3">
-              <span class="text-2xl">{{ allergyType.icon || '🏥' }}</span>
-              <div>
-                <h3 class="font-semibold">{{ allergyType.name }}</h3>
-                <p class="text-sm text-muted">{{ allergyType.description }}</p>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <UButton
-                variant="ghost"
-                icon="i-heroicons-pencil"
-                @click="onEditClick(allergyType)"
-                :name="`edit-allergy-type-${allergyType.id}`"
-              />
-              <UButton
-                variant="ghost"
-                color="red"
-                icon="i-heroicons-trash"
-                @click="onDelete(allergyType.id)"
-                :name="`delete-allergy-type-${allergyType.id}`"
-              />
-            </div>
-          </div>
-        </template>
-
-        <!-- Inhabitants with this allergy (lightweight display) -->
-        <div v-if="allergyType.inhabitants.length > 0" class="space-y-2">
-          <p class="text-sm font-medium">Beboere med denne allergi:</p>
-          <div class="flex flex-wrap gap-2">
-            <div
-              v-for="inhabitant in allergyType.inhabitants"
-              :key="inhabitant.id"
-              class="flex items-center gap-2 bg-muted px-3 py-1 rounded-full"
-            >
-              <UAvatar
-                :src="inhabitant.pictureUrl"
-                :alt="`${inhabitant.name} ${inhabitant.lastName}`"
-                size="xs"
-              />
-              <span class="text-sm">{{ inhabitant.name }} {{ inhabitant.lastName }}</span>
-            </div>
-          </div>
-        </div>
-        <p v-else class="text-sm text-muted">Ingen beboere har denne allergi endnu.</p>
-      </UCard>
-
-      <UCard v-if="allergyTypes.length === 0">
-        <p class="text-center text-muted">Ingen allergi-typer oprettet endnu.</p>
-      </UCard>
-    </div>
-  </div>
-</template>
-```
 
 **Key Features:**
 - List view shows all AllergyType with inhabitants (avatar + name)
@@ -1599,220 +976,6 @@ const onCancel = () => {
 
 **Structure Overview:**
 
-```vue
-<script setup lang="ts">
-import {useAllergiesStore} from '~/stores/allergies'
-import {useAllergyTypesStore} from '~/stores/allergyTypes'
-import {useHouseholdsStore} from '~/stores/households'
-import {storeToRefs} from 'pinia'
-
-const props = defineProps<{
-    household: HouseholdSummary
-}>()
-
-const allergiesStore = useAllergiesStore()
-const allergyTypesStore = useAllergyTypesStore()
-const householdsStore = useHouseholdsStore()
-
-const {inhabitants, isAllergiesStoreReady} = storeToRefs(allergiesStore)
-const {allergyTypes, isAllergyTypesStoreReady} = storeToRefs(allergyTypesStore)
-
-// Form state
-const showAddForm = ref(false)
-const addDraft = ref<{
-    inhabitantId: number | null
-    allergyTypeId: number | null
-    comment: string | null
-}>({
-    inhabitantId: null,
-    allergyTypeId: null,
-    comment: null
-})
-
-const editingAllergyId = ref<number | null>(null)
-const editComment = ref<string | null>(null)
-
-// Initialize stores
-allergiesStore.initAllergiesStore(props.household.id)
-allergyTypesStore.initAllergyTypesStore()
-
-const isReady = computed(() => isAllergiesStoreReady.value && isAllergyTypesStoreReady.value)
-
-// Actions
-const onAddClick = () => {
-    showAddForm.value = true
-    addDraft.value = {inhabitantId: null, allergyTypeId: null, comment: null}
-}
-
-const onSaveAdd = async () => {
-    if (!addDraft.value.inhabitantId || !addDraft.value.allergyTypeId) return
-
-    await allergiesStore.createAllergy({
-        inhabitantId: addDraft.value.inhabitantId,
-        allergyTypeId: addDraft.value.allergyTypeId,
-        inhabitantComment: addDraft.value.comment
-    })
-
-    showAddForm.value = false
-}
-
-const onEditComment = (allergyId: number, currentComment: string | null) => {
-    editingAllergyId.value = allergyId
-    editComment.value = currentComment
-}
-
-const onSaveComment = async (allergyId: number) => {
-    await allergiesStore.updateAllergy(allergyId, {inhabitantComment: editComment.value})
-    editingAllergyId.value = null
-}
-
-const onDeleteAllergy = async (allergyId: number) => {
-    const confirmed = confirm('Er du sikker på du vil fjerne denne allergi?')
-    if (!confirmed) return
-
-    await allergiesStore.deleteAllergy(allergyId)
-}
-</script>
-
-<template>
-  <div data-test-id="household-allergies" class="space-y-6">
-    <div class="flex justify-between items-center">
-      <h3 class="text-lg font-semibold">Familiens allergier og diætkrav</h3>
-      <UButton
-        v-if="!showAddForm"
-        @click="onAddClick"
-        name="add-allergy"
-        icon="i-heroicons-plus"
-      >
-        Tilføj allergi
-      </UButton>
-    </div>
-
-    <Loader v-if="!isReady" text="Indlæser allergier..." />
-
-    <!-- ADD Form -->
-    <UCard v-else-if="showAddForm">
-      <template #header>
-        <h4 class="font-semibold">Tilføj allergi</h4>
-      </template>
-
-      <div class="space-y-4">
-        <UFormGroup label="Beboer" required>
-          <USelect
-            v-model="addDraft.inhabitantId"
-            name="select-inhabitant"
-            :options="household.inhabitants.map(i => ({value: i.id, label: `${i.name} ${i.lastName}`}))"
-          />
-        </UFormGroup>
-
-        <UFormGroup label="Allergi-type" required>
-          <USelect
-            v-model="addDraft.allergyTypeId"
-            name="select-allergy-type"
-            :options="allergyTypes.map(at => ({value: at.id, label: `${at.icon || ''} ${at.name}`}))"
-          />
-        </UFormGroup>
-
-        <UFormGroup label="Kommentar til kokken" hint="F.eks. alvorlighed, symptomer">
-          <UTextarea v-model="addDraft.comment" name="allergy-comment" />
-        </UFormGroup>
-      </div>
-
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton variant="ghost" @click="showAddForm = false" name="cancel-add-allergy">
-            Annuller
-          </UButton>
-          <UButton @click="onSaveAdd" name="save-add-allergy">
-            Gem
-          </UButton>
-        </div>
-      </template>
-    </UCard>
-
-    <!-- LIST grouped by inhabitant -->
-    <div v-else class="space-y-4">
-      <UCard
-        v-for="inhabitant in inhabitants"
-        :key="inhabitant.id"
-        :data-testid="`inhabitant-allergies-${inhabitant.id}`"
-      >
-        <template #header>
-          <div class="flex items-center gap-3">
-            <UAvatar
-              :src="inhabitant.pictureUrl"
-              :alt="`${inhabitant.name} ${inhabitant.lastName}`"
-              size="md"
-            />
-            <div>
-              <h4 class="font-semibold">{{ inhabitant.name }} {{ inhabitant.lastName }}</h4>
-              <p class="text-sm text-muted">
-                {{ inhabitant.allergies.length }} allergi{{ inhabitant.allergies.length !== 1 ? 'er' : '' }}
-              </p>
-            </div>
-          </div>
-        </template>
-
-        <div v-if="inhabitant.allergies.length > 0" class="space-y-3">
-          <div
-            v-for="allergy in inhabitant.allergies"
-            :key="allergy.id"
-            class="flex items-start justify-between p-3 bg-muted rounded-lg"
-            :data-testid="`allergy-${allergy.id}`"
-          >
-            <div class="flex items-start gap-3 flex-1">
-              <span class="text-2xl">{{ allergy.allergyType.icon || '🏥' }}</span>
-              <div class="flex-1">
-                <p class="font-medium">{{ allergy.allergyType.name }}</p>
-                <p class="text-sm text-muted">{{ allergy.allergyType.description }}</p>
-
-                <!-- Comment display/edit -->
-                <div v-if="editingAllergyId === allergy.id" class="mt-2">
-                  <UTextarea
-                    v-model="editComment"
-                    name="edit-comment"
-                    placeholder="Tilføj kommentar..."
-                  />
-                  <div class="flex gap-2 mt-2">
-                    <UButton size="xs" @click="onSaveComment(allergy.id)" name="save-comment">
-                      Gem
-                    </UButton>
-                    <UButton size="xs" variant="ghost" @click="editingAllergyId = null" name="cancel-edit-comment">
-                      Annuller
-                    </UButton>
-                  </div>
-                </div>
-                <div v-else-if="allergy.inhabitantComment" class="mt-2 p-2 bg-primary/10 rounded">
-                  <p class="text-sm italic">{{ allergy.inhabitantComment }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex gap-2">
-              <UButton
-                variant="ghost"
-                size="xs"
-                icon="i-heroicons-pencil"
-                @click="onEditComment(allergy.id, allergy.inhabitantComment)"
-                :name="`edit-comment-${allergy.id}`"
-              />
-              <UButton
-                variant="ghost"
-                size="xs"
-                color="red"
-                icon="i-heroicons-trash"
-                @click="onDeleteAllergy(allergy.id)"
-                :name="`delete-allergy-${allergy.id}`"
-              />
-            </div>
-          </div>
-        </div>
-        <p v-else class="text-sm text-muted">Ingen allergier registreret.</p>
-      </UCard>
-    </div>
-  </div>
-</template>
-```
 
 **Key Features:**
 - Grouped by inhabitant (matches API response structure)
@@ -1824,176 +987,7 @@ const onDeleteAllergy = async (allergyId: number) => {
 
 ---
 
-## Phase 6: Test Factories
-
-### File: `tests/e2e/testDataFactories/allergyTypeFactory.ts`
-
-```typescript
-import {expect, BrowserContext} from "@playwright/test"
-import testHelpers from "../testHelpers"
-import type {AllergyTypeCreate, AllergyTypeResponse} from "~/composables/useAllergyValidation"
-
-const {salt, headers} = testHelpers
-const ALLERGY_TYPE_ENDPOINT = '/api/admin/allergy-type'
-
-export class AllergyTypeFactory {
-
-    static readonly defaultAllergyTypeData = (testSalt: string = Date.now().toString()): AllergyTypeCreate => {
-        return {
-            name: salt('Test Allergy', testSalt),
-            description: salt('Test allergy description', testSalt),
-            icon: '🏥'
-        }
-    }
-
-    static readonly createAllergyType = async (
-        context: BrowserContext,
-        data?: Partial<AllergyTypeCreate>,
-        expectedStatus: number = 201
-    ): Promise<AllergyTypeResponse> => {
-        const allergyTypeData = {
-            ...this.defaultAllergyTypeData(),
-            ...data
-        }
-
-        const response = await context.request.put(ALLERGY_TYPE_ENDPOINT, {
-            headers: headers,
-            data: allergyTypeData
-        })
-
-        const status = response.status()
-        const responseBody = await response.json()
-
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-
-        if (expectedStatus === 201) {
-            expect(responseBody.id, 'Response should contain the new allergy type ID').toBeDefined()
-        }
-
-        return responseBody
-    }
-
-    static readonly getAllergyType = async (
-        context: BrowserContext,
-        id: number
-    ): Promise<AllergyTypeResponse> => {
-        const response = await context.request.get(`${ALLERGY_TYPE_ENDPOINT}/${id}`, {
-            headers: headers
-        })
-
-        expect(response.status()).toBe(200)
-        return await response.json()
-    }
-
-    static readonly deleteAllergyType = async (
-        context: BrowserContext,
-        allergyTypeId: number,
-        expectedStatus: number = 200
-    ): Promise<any> => {
-        const response = await context.request.delete(`${ALLERGY_TYPE_ENDPOINT}/${allergyTypeId}`, {
-            headers: headers
-        })
-
-        const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-
-        return await response.json()
-    }
-
-    static readonly cleanupAllergyTypes = async (
-        context: BrowserContext,
-        allergyTypeIds: number[]
-    ): Promise<void> => {
-        for (const id of allergyTypeIds) {
-            try {
-                await this.deleteAllergyType(context, id)
-            } catch (error) {
-                console.warn(`Failed to cleanup allergy type ${id}:`, error)
-            }
-        }
-    }
-}
-```
-
-### File: `tests/e2e/testDataFactories/allergyFactory.ts`
-
-```typescript
-import {expect, BrowserContext} from "@playwright/test"
-import testHelpers from "../testHelpers"
-import type {AllergyCreate, AllergyResponse} from "~/composables/useAllergyValidation"
-
-const {headers} = testHelpers
-
-export class AllergyFactory {
-
-    static readonly defaultAllergyData = (
-        inhabitantId: number,
-        allergyTypeId: number,
-        comment?: string
-    ): AllergyCreate => {
-        return {
-            inhabitantId,
-            allergyTypeId,
-            inhabitantComment: comment ?? 'Test comment for chef'
-        }
-    }
-
-    static readonly createAllergy = async (
-        context: BrowserContext,
-        householdId: number,
-        data: AllergyCreate,
-        expectedStatus: number = 201
-    ): Promise<AllergyResponse> => {
-        const response = await context.request.put(`/api/household/${householdId}/allergy`, {
-            headers: headers,
-            data: data
-        })
-
-        const status = response.status()
-        const responseBody = await response.json()
-
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-
-        if (expectedStatus === 201) {
-            expect(responseBody.id, 'Response should contain the new allergy ID').toBeDefined()
-        }
-
-        return responseBody
-    }
-
-    static readonly deleteAllergy = async (
-        context: BrowserContext,
-        householdId: number,
-        allergyId: number,
-        expectedStatus: number = 200
-    ): Promise<any> => {
-        const response = await context.request.delete(
-            `/api/household/${householdId}/allergy/${allergyId}`,
-            {headers: headers}
-        )
-
-        const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-
-        return await response.json()
-    }
-
-    static readonly cleanupAllergies = async (
-        context: BrowserContext,
-        householdId: number,
-        allergyIds: number[]
-    ): Promise<void> => {
-        for (const id of allergyIds) {
-            try {
-                await this.deleteAllergy(context, householdId, id)
-            } catch (error) {
-                console.warn(`Failed to cleanup allergy ${id}:`, error)
-            }
-        }
-    }
-}
-```
-
+## ✅Phase 6: Test Factories
 **Key Points:**
 - Follow existing factory pattern from `householdFactory.ts`
 - Use `salt()` for unique test data
@@ -2006,197 +1000,8 @@ export class AllergyFactory {
 
 ### File: `tests/e2e/ui/AdminAllergies.e2e.spec.ts`
 
-```typescript
-import {test, expect} from '@playwright/test'
-import testHelpers from '../testHelpers'
-import {AllergyTypeFactory} from '../testDataFactories/allergyTypeFactory'
-import {HouseholdFactory} from '../testDataFactories/householdFactory'
-import {AllergyFactory} from '../testDataFactories/allergyFactory'
-
-const {validatedBrowserContext} = testHelpers
-
-let createdAllergyTypeIds: number[] = []
-
-test.afterAll(async ({browser}) => {
-    const context = await validatedBrowserContext(browser)
-    await AllergyTypeFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
-})
-
-test.describe('AdminAllergies - AllergyType CRUD', () => {
-
-    test('GIVEN admin user WHEN loading page THEN shows allergy types list', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create test allergy type
-        const allergyType = await AllergyTypeFactory.createAllergyType(context, {
-            name: 'Gluten Test',
-            description: 'Gluten intolerance',
-            icon: '🌾'
-        })
-        createdAllergyTypeIds.push(allergyType.id)
-
-        // WHEN: Load admin allergies page
-        await page.goto('/admin/allergies')
-
-        // THEN: Shows allergy type in list
-        const card = page.locator(`[data-testid="allergy-type-${allergyType.id}"]`)
-        await expect(card).toBeVisible()
-        await expect(card.locator('h3')).toContainText('Gluten Test')
-        await expect(card).toContainText('🌾')
-    })
-
-    test('GIVEN admin user WHEN creating allergy type THEN creates successfully', async ({page, browser}) => {
-        // WHEN: Navigate and create
-        await page.goto('/admin/allergies')
-        await page.locator('button[name="create-allergy-type"]').click()
-
-        await page.locator('input[name="allergy-type-name"]').fill('Lactose Test')
-        await page.locator('textarea[name="allergy-type-description"]').fill('Lactose intolerance')
-        await page.locator('input[name="allergy-type-icon"]').fill('🥛')
-
-        await page.locator('button[name="save-allergy-type"]').click()
-
-        // THEN: Verify via API
-        const context = await validatedBrowserContext(browser)
-        const response = await context.request.get('/api/admin/allergy-type')
-        const allergyTypes = await response.json()
-        const created = allergyTypes.find((at: any) => at.name === 'Lactose Test')
-
-        expect(created).toBeDefined()
-        expect(created.icon).toBe('🥛')
-        createdAllergyTypeIds.push(created.id)
-    })
-
-    test('GIVEN allergy type with inhabitants WHEN viewing THEN shows inhabitants', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create household with inhabitant and allergy
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, 'Test House', 1)
-        const allergyType = await AllergyTypeFactory.createAllergyType(context, {name: 'Peanut'})
-        await AllergyFactory.createAllergy(context, household.id, {
-            inhabitantId: inhabitants[0].id,
-            allergyTypeId: allergyType.id,
-            inhabitantComment: 'Severe'
-        })
-
-        createdAllergyTypeIds.push(allergyType.id)
-
-        // WHEN: Load page
-        await page.goto('/admin/allergies')
-
-        // THEN: Shows inhabitant in allergy type card
-        const card = page.locator(`[data-testid="allergy-type-${allergyType.id}"]`)
-        await expect(card).toContainText(inhabitants[0].name)
-
-        // Cleanup
-        await HouseholdFactory.deleteHousehold(context, household.id)
-    })
-
-    test('GIVEN allergy type WHEN deleting with confirmation THEN CASCADE deletes', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create allergy type
-        const allergyType = await AllergyTypeFactory.createAllergyType(context, {name: 'Shellfish'})
-        createdAllergyTypeIds.push(allergyType.id)
-
-        // WHEN: Delete with confirmation
-        await page.goto('/admin/allergies')
-
-        page.once('dialog', dialog => dialog.accept())
-        await page.locator(`button[name="delete-allergy-type-${allergyType.id}"]`).click()
-
-        // THEN: Verify deleted via API
-        const response = await context.request.get(`/api/admin/allergy-type/${allergyType.id}`)
-        expect(response.status()).toBe(404)
-
-        // Remove from cleanup list
-        createdAllergyTypeIds = createdAllergyTypeIds.filter(id => id !== allergyType.id)
-    })
-})
-```
-
 ### File: `tests/e2e/ui/HouseholdAllergies.e2e.spec.ts`
 
-```typescript
-import {test, expect} from '@playwright/test'
-import testHelpers from '../testHelpers'
-import {HouseholdFactory} from '../testDataFactories/householdFactory'
-import {AllergyTypeFactory} from '../testDataFactories/allergyTypeFactory'
-import {AllergyFactory} from '../testDataFactories/allergyFactory'
-
-const {validatedBrowserContext} = testHelpers
-
-let createdHouseholdId: number | null = null
-let createdAllergyTypeIds: number[] = []
-
-test.afterAll(async ({browser}) => {
-    const context = await validatedBrowserContext(browser)
-    if (createdHouseholdId) await HouseholdFactory.deleteHousehold(context, createdHouseholdId)
-    await AllergyTypeFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
-})
-
-test.describe('HouseholdAllergies - User allergy management', () => {
-
-    test('GIVEN household members WHEN adding allergy THEN creates successfully', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create household and allergy type
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, 'Test House', 2)
-        createdHouseholdId = household.id
-
-        const allergyType = await AllergyTypeFactory.createAllergyType(context, {name: 'Eggs', icon: '🥚'})
-        createdAllergyTypeIds.push(allergyType.id)
-
-        // WHEN: Navigate to household allergies tab
-        await page.goto(`/household/${household.shortName}/allergies`)
-
-        // Add allergy
-        await page.locator('button[name="add-allergy"]').click()
-        await page.locator('select[name="select-inhabitant"]').selectOption({value: String(inhabitants[0].id)})
-        await page.locator('select[name="select-allergy-type"]').selectOption({value: String(allergyType.id)})
-        await page.locator('textarea[name="allergy-comment"]').fill('Severe reaction')
-        await page.locator('button[name="save-add-allergy"]').click()
-
-        // THEN: Verify via API
-        const response = await context.request.get(`/api/household/${household.id}/allergy`)
-        const inhabitantsWithAllergies = await response.json()
-        const inhabitant = inhabitantsWithAllergies.find((i: any) => i.id === inhabitants[0].id)
-
-        expect(inhabitant.allergies).toHaveLength(1)
-        expect(inhabitant.allergies[0].allergyType.name).toBe('Eggs')
-        expect(inhabitant.allergies[0].inhabitantComment).toBe('Severe reaction')
-    })
-
-    test('GIVEN inhabitant with allergy WHEN editing comment THEN updates successfully', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create allergy
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, 'Test House', 1)
-        const allergyType = await AllergyTypeFactory.createAllergyType(context, {name: 'Soy'})
-        const allergy = await AllergyFactory.createAllergy(context, household.id, {
-            inhabitantId: inhabitants[0].id,
-            allergyTypeId: allergyType.id,
-            inhabitantComment: 'Mild'
-        })
-
-        createdHouseholdId = household.id
-        createdAllergyTypeIds.push(allergyType.id)
-
-        // WHEN: Edit comment
-        await page.goto(`/household/${household.shortName}/allergies`)
-        await page.locator(`button[name="edit-comment-${allergy.id}"]`).click()
-        await page.locator('textarea[name="edit-comment"]').fill('Severe - avoid completely')
-        await page.locator('button[name="save-comment"]').click()
-
-        // THEN: Verify via API
-        const response = await context.request.get(`/api/household/${household.id}/allergy`)
-        const inhabitantsWithAllergies = await response.json()
-        const updatedAllergy = inhabitantsWithAllergies[0].allergies.find((a: any) => a.id === allergy.id)
-
-        expect(updatedAllergy.inhabitantComment).toBe('Severe - avoid completely')
-    })
-})
-```
 
 **Key Points:**
 - Follow GIVEN/WHEN/THEN structure (ADR-003)
@@ -2204,31 +1009,6 @@ test.describe('HouseholdAllergies - User allergy management', () => {
 - Use factories for all test data creation
 - Cleanup in afterAll hooks
 - Test both admin and user flows
-
----
-
-## Implementation Order
-
-1. **Phase 1**: Composables (validation foundation)
-2. **Phase 2**: Repository functions (data layer)
-3. **Phase 3**: API routes (backend endpoints)
-4. **Phase 4**: Stores (state management)
-5. **Phase 5a**: AdminAllergies.vue (admin UI)
-6. **Phase 5b**: HouseholdAllergies.vue (user UI)
-7. **Phase 6**: Test factories
-8. **Phase 7**: E2E tests
-
-**Dependencies:**
-- Phases 1-3 must be sequential (each depends on previous)
-- Phase 4 requires Phase 3 (stores call API)
-- Phase 5 requires Phase 4 (components use stores)
-- Phases 6-7 can start once Phase 3 is complete (factories test API directly)
-
-**Recommended approach:**
-- Start with backend (Phases 1-3) - verify with Postman/curl
-- Add stores (Phase 4) - test with browser console
-- Build UI (Phase 5) - manual testing
-- Add E2E tests (Phases 6-7) - automated verification
 
 ---
 

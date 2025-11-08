@@ -9,6 +9,10 @@ import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateN
 import {maskPassword} from "~/utils/utils";
 import type {UserCreate} from "~/composables/useUserValidation";
 
+// Import SystemRole enum from validation composable (ADR-001 compliance)
+const {SystemRoleSchema} = useUserValidation()
+const SystemRole = SystemRoleSchema.enum
+
 dotenv.config();
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
 const heyNaboPassword = process.env.HEY_NABO_PASSWORD as string;
@@ -201,7 +205,7 @@ function inhabitantFromMember(locationId: number, member: HeynaboMember): Inhabi
             email: member.email,
             phone: member.phone,
             passwordHash: 'removeme',
-            systemRoles: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? ['ADMIN'] : []
+            systemRoles: ['admin', 'full'].includes(member.role) && member?.role === 'admin' ? [SystemRole.ADMIN] : []
         }
         inhabitant.user = userDomain
     }

@@ -221,7 +221,7 @@ describe('generateDinnerEventDataForSeason', () => {
             expect(event.menuTitle).toBe('TBD')
             expect(event.menuDescription).toBeNull()
             expect(event.menuPictureUrl).toBeNull()
-            expect(event.dinnerMode).toBe('NONE')
+            expect(event.dinnerMode).toBe('DINEIN')  // Default dinner mode (ADR-001: using enum value)
             expect(event.chefId).toBeNull()
             expect(event.cookingTeamId).toBeNull()
             expect(event.date).toBeInstanceOf(Date)

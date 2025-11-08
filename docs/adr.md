@@ -598,21 +598,53 @@ export default defineEventHandler(async (event) => {
 
 **Key Patterns:**
 
+**In Composables (single source of truth):**
 ```typescript
-// Import Zod enums from generated schemas (NOT Prisma enums)
-// These are auto-generated from schema.prisma by zod-prisma-types and guaranteed to match
+// Composables import from generated schemas and re-export
 import { TicketTypeSchema, OrderStateSchema } from '~~/prisma/generated/zod'
 
-// Zod schema in composables using generated enum schemas
-const OrderSchema = z.object({
-  id: z.number().int().positive().optional(),
-  state: OrderStateSchema,  // ✅ Use generated Zod enum
-  ticketType: TicketTypeSchema,  // ✅ Type-safe across stack
-  // ...
-})
-type Order = z.infer<typeof OrderSchema>
+export const useOrderValidation = () => {
+  const OrderSchema = z.object({
+    id: z.number().int().positive().optional(),
+    state: OrderStateSchema,  // ✅ Use generated Zod enum
+    ticketType: TicketTypeSchema,  // ✅ Type-safe across stack
+    // ...
+  })
 
-// API route validation
+  return {
+    OrderSchema,
+    OrderStateSchema,  // Re-export for application code
+    TicketTypeSchema   // Re-export for application code
+  }
+}
+
+// Export types
+export type Order = z.infer<ReturnType<typeof useOrderValidation>['OrderSchema']>
+```
+
+**In Application Code (stores, components, pages, app.config):**
+```typescript
+// ✅ CORRECT - Import from composables (Nuxt auto-imports)
+const { TicketTypeSchema } = useTicketPriceValidation()
+const TicketType = TicketTypeSchema.enum
+
+// Use enum values
+const config = {
+  ticketType: TicketType.ADULT,  // Type-safe enum value
+  price: 4000
+}
+
+// Check enum values
+if (systemRoles.value.includes(SystemRoleSchema.enum.ADMIN)) {
+  // ...
+}
+```
+
+**In Server Code (API routes):**
+```typescript
+// Server code can import from composables or directly from generated files
+import { OrderStateSchema } from '~~/prisma/generated/zod'
+
 export default defineEventHandler(async (event) => {
     const data = await readValidatedBody(event, OrderSchema.parse)
     // ...
@@ -627,22 +659,25 @@ import { OrderState } from '@prisma/client'  // ❌ No runtime validation
 const state: OrderState = 'BOOKED'  // Only TypeScript type checking
 ```
 
-**✅ CORRECT - Using generated Zod enums:**
+**❌ WRONG - Using string literals:**
 ```typescript
-import { OrderStateSchema } from '~~/prisma/generated/zod'  // ✅ Runtime + compile-time
+if (role === 'ADMIN') { }  // ❌ No type safety, typo-prone
+const config = { ticketType: 'ADULT' }  // ❌ Magic strings
+```
 
-// In validation composable
-const OrderSchema = z.object({
-  state: OrderStateSchema  // Auto-synced with Prisma schema
-})
+**✅ CORRECT - Import from composables:**
+```typescript
+// In stores, components, pages, app.config
+const { SystemRoleSchema } = useUserValidation()
+const SystemRole = SystemRoleSchema.enum
 
-// In API endpoint
-const data = await readValidatedBody(event, OrderSchema.parse)  // Runtime validation
+if (systemRoles.value.includes(SystemRole.ADMIN)) { }  // ✅ Type-safe
+const config = { ticketType: TicketType.ADULT }  // ✅ Enum value
 ```
 
 **Benefits:**
 1. **Single source of truth** - Prisma schema defines enums once
-2. **Auto-sync** - `npm run db:generate-client` updates Zod schemas automatically
+2. **Auto-sync** - `make prisma` updates Zod schemas automatically
 3. **Runtime validation** - Catch invalid enum values at API boundary
 4. **Type safety** - Compile-time checking across client/server
 5. **DRY** - No manual enum duplication between Prisma and Zod
@@ -661,10 +696,22 @@ const data = await readValidatedBody(event, OrderSchema.parse)  // Runtime valid
 
 ### Compliance
 
+**Composables:**
 1. MUST import enum schemas from `~~/prisma/generated/zod` (NOT from `@prisma/client`)
-2. MUST use generated Zod enum schemas in validation composables
-3. MUST run `npm run db:generate-client` after Prisma schema enum changes
-4. Use Zod schemas in composables for shared validation
-5. Leverage Nuxt auto-imports (no manual imports for utils/composables)
-6. Repository pattern for all database operations
-7. H3 validation helpers in all API routes
+2. MUST re-export enum schemas for application code
+3. MUST use generated Zod enum schemas in validation schemas
+
+**Application Code (stores, components, pages, app.config):**
+4. MUST import enum schemas from composables (e.g., `useTicketPriceValidation()`)
+5. MUST use `.enum` property for runtime values (e.g., `TicketTypeSchema.enum.ADULT`)
+6. MUST NOT use string literals for enum values (e.g., `'ADMIN'`, `'BABY'`)
+7. MUST NOT import directly from `~~/prisma/generated/zod` (import from composables instead)
+
+**Server Code (API routes, repositories):**
+8. MAY import from composables or directly from `~~/prisma/generated/zod`
+9. MUST use H3 validation helpers in all API routes
+
+**General:**
+10. MUST run `make prisma` after Prisma schema enum changes
+11. Repository pattern for all database operations
+12. Leverage Nuxt auto-imports (no manual imports for composables)
