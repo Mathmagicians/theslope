@@ -28,11 +28,17 @@ test.describe('Household tab navigation', () => {
         `/household/${encodeURIComponent(shortName)}/${tabPath}${query ? `?${query}` : ''}`
 
     const waitForTabVisible = async (page: any, tab: Tab) => {
+        console.log(`[waitForTabVisible] Waiting for tab: ${tab.name} (${tab.selector})`)
         await pollUntil(
-            async () => await page.locator(tab.selector).isVisible(),
+            async () => {
+                const isVisible = await page.locator(tab.selector).isVisible()
+                if (!isVisible) console.log(`[waitForTabVisible] Tab ${tab.name} not yet visible...`)
+                return isVisible
+            },
             (isVisible) => isVisible,
             10
         )
+        console.log(`[waitForTabVisible] Tab ${tab.name} is now visible!`)
     }
 
     const navigateToTab = async (page: any, tab: Tab) => {
@@ -77,6 +83,10 @@ test.describe('Household tab navigation', () => {
             10
         )
         expect(page.url()).toContain(buildUrl(defaultTab.path))
+
+        // Screenshot before waiting for component (debug flakiness)
+        await page.screenshot({ path: `test-results/base-url-redirect-before-wait-${Date.now()}.png`, fullPage: true })
+
         await waitForTabVisible(page, defaultTab)
     })
 

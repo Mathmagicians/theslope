@@ -1,5 +1,9 @@
 <script setup lang="ts">
 
+// Get SystemRole enum from validation composable
+const {SystemRoleSchema} = useUserValidation()
+const SystemRole = SystemRoleSchema.enum
+
 const store = useUsersStore()
 const {formattedUsers} = storeToRefs(store)
 const {importing} = storeToRefs(store)
@@ -8,8 +12,8 @@ loadData()
 
 const colorForSystemRole = (role: string) => {
   switch (role) {
-    case 'ADMIN': return 'error'
-    case 'ALLERGYMANAGER': return 'warning'
+    case SystemRole.ADMIN: return 'error'
+    case SystemRole.ALLERGYMANAGER: return 'warning'
     default: return 'neutral'
   }
 }
@@ -51,7 +55,7 @@ const userColumns = [
               variant="soft"
               size="md"
           >
-            {{ role === 'ALLERGYMANAGER' ? 'ALLERGIER' : role }}
+            {{ role === SystemRole.ALLERGYMANAGER ? 'ALLERGIER' : role }}
           </UBadge>
         </div>
       </template>

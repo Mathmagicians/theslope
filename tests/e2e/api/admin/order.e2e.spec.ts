@@ -2,18 +2,22 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '../../testDataFactories/orderFactory'
 import { HouseholdFactory } from '../../testDataFactories/householdFactory'
 import { SeasonFactory } from '../../testDataFactories/seasonFactory'
+import { useOrderValidation } from '~/composables/useOrderValidation'
 import testHelpers from '../../testHelpers'
 
 const { validatedBrowserContext, headers } = testHelpers
+const { TicketTypeSchema } = useOrderValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
-// Variables for cleanup
+// Variables for cleanup and test data
 let testOrderIds: number[] = []
 let testHouseholdId: number
 let testInhabitantId: number
 let testSeasonId: number
 let testDinnerEventId: number
+let testAdultTicketPriceId: number
+let testChildTicketPriceId: number
 
 test.describe('Order/api/order CRUD operations', () => {
 
@@ -33,6 +37,17 @@ test.describe('Order/api/order CRUD operations', () => {
     // Create season
     const season = await SeasonFactory.createSeason(context)
     testSeasonId = season.id
+
+    // Extract ticket price IDs from season
+    const adultTicketPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)
+    const childTicketPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.CHILD)
+
+    if (!adultTicketPrice?.id || !childTicketPrice?.id) {
+      throw new Error('Season must have ticket prices with IDs for ADULT and CHILD')
+    }
+
+    testAdultTicketPriceId = adultTicketPrice.id
+    testChildTicketPriceId = childTicketPrice.id
 
     // Generate dinner events for the season
     const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id)
@@ -69,18 +84,23 @@ test.describe('Order/api/order CRUD operations', () => {
 
     // GIVEN: Valid order data with existing dinnerEvent and inhabitant
     // WHEN: Create order (factory validates 201 and id exists)
-    const order = await OrderFactory.createOrder(context, {
+    const orders = await OrderFactory.createOrder(context, {
       dinnerEventId: testDinnerEventId,
-      inhabitantId: testInhabitantId,
-      ticketType: 'ADULT'
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId
+        }
+      ]
     })
+    const order = orders[0]
     testOrderIds.push(order.id)
 
     // THEN: Verify essential fields exist
     expect(order.id).toBeDefined()
     expect(order.dinnerEventId).toBe(testDinnerEventId)
     expect(order.inhabitantId).toBe(testInhabitantId)
-    expect(order.ticketType).toBe('ADULT')
+    expect(order.ticketType).toBe(TicketTypeSchema.enum.ADULT)
     expect(order.createdAt).toBeDefined()
 
     // WHEN: Retrieve the created order
@@ -89,18 +109,23 @@ test.describe('Order/api/order CRUD operations', () => {
     // THEN: Retrieved order matches created order
     expect(retrievedOrder).toBeDefined()
     expect(retrievedOrder!.id).toBe(order.id)
-    expect(retrievedOrder!.ticketType).toBe('ADULT')
+    expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
   })
 
   test('DELETE can remove existing order with status 200', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
     // GIVEN: Create order first
-    const order = await OrderFactory.createOrder(context, {
+    const orders = await OrderFactory.createOrder(context, {
       dinnerEventId: testDinnerEventId,
-      inhabitantId: testInhabitantId,
-      ticketType: 'CHILD'
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testChildTicketPriceId
+        }
+      ]
     })
+    const order = orders[0]
 
     // WHEN: Delete order
     const deletedOrder = await OrderFactory.deleteOrder(context, order.id)
@@ -129,7 +154,7 @@ test.describe('Order/api/order CRUD operations', () => {
     // GIVEN: Invalid order data (missing inhabitantId)
     const invalidData = {
       dinnerEventId: testDinnerEventId,
-      ticketType: 'ADULT'
+      ticketType: TicketTypeSchema.enum.ADULT
       // Missing inhabitantId
     }
 

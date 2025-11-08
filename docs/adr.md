@@ -2,6 +2,39 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-011: Booking System Schema Design
+
+**Status:** Accepted | **Date:** 2025-11-08
+
+### Decision
+
+**Three-state order model with comprehensive audit trail** - Orders transition through BOOKED→RELEASED→CLOSED states with full audit logging for dispute resolution.
+
+**Schema Design:**
+- **OrderState enum**: BOOKED, RELEASED, CLOSED (no CANCELLED - deleted instead)
+- **Order model**: Tracks `bookedByUserId` (financial owner), `inhabitantId` (ticket holder), `priceAtBooking` (frozen), state timestamps
+- **OrderAudit model**: Preserves full history including deletions via `orderSnapshot` JSON
+
+**CASCADE/SET NULL Strategy:**
+- **CASCADE**: Order→DinnerEvent, Order→Inhabitant, Transaction→Order (existential dependencies)
+- **SET NULL**: Order→User(bookedByUserId), OrderAudit→Order, OrderAudit→all actors (preserve history)
+
+### Rationale
+
+1. **Financial clarity**: Explicit `bookedByUserId` tracks who pays vs who eats
+2. **Audit resilience**: SET NULL on audit relations preserves dispute evidence
+3. **State simplicity**: Three states match business flow (no complex pending states)
+4. **Price integrity**: Frozen `priceAtBooking` prevents retroactive changes
+5. **D1 compatibility**: No database transactions needed - atomic operations only
+
+### Compliance
+
+1. Orders MUST track both `bookedByUserId` (payer) and `inhabitantId` (eater)
+2. Audit entries MUST survive order/user deletion (SET NULL relations)
+3. Deleted orders MUST capture `orderSnapshot` JSON before removal
+4. State transitions MUST create audit entries with performer tracking
+5. Migration MUST populate existing orders: CLOSED if transaction exists, BOOKED otherwise
+
 ## ADR-010: Domain-Driven Serialization Architecture
 
 **Status:** Accepted | **Date:** 2025-10-15
@@ -550,6 +583,7 @@ export default defineEventHandler(async (event) => {
 ## ADR-001: Core Framework and Technology Stack
 
 **Status:** Accepted | **Date:** 2025-01-22
+**Updated:** 2025-11-08 (Zod enum type safety pattern)
 
 ### Decision
 
@@ -558,27 +592,60 @@ export default defineEventHandler(async (event) => {
 - TypeScript 5.7.3 (strict mode)
 - Zod 3.24.1 for runtime validation
 - Prisma 6.3.1 + D1 (Cloudflare SQLite)
+- zod-prisma-types (auto-generates Zod schemas from Prisma)
 - Nuxt UI 3.3.3 + Tailwind CSS 4.1.13
 - Cloudflare Workers/Pages deployment
 
 **Key Patterns:**
 
 ```typescript
-// Zod schema in composables
-const SeasonSchema = z.object({
+// Import Zod enums from generated schemas (NOT Prisma enums)
+// These are auto-generated from schema.prisma by zod-prisma-types and guaranteed to match
+import { TicketTypeSchema, OrderStateSchema } from '~~/prisma/generated/zod'
+
+// Zod schema in composables using generated enum schemas
+const OrderSchema = z.object({
   id: z.number().int().positive().optional(),
-  shortName: z.string().min(4),
-  cookingDays: z.record(z.enum(WEEKDAYS), z.boolean()),
+  state: OrderStateSchema,  // ✅ Use generated Zod enum
+  ticketType: TicketTypeSchema,  // ✅ Type-safe across stack
   // ...
 })
-type Season = z.infer<typeof SeasonSchema>
+type Order = z.infer<typeof OrderSchema>
 
 // API route validation
 export default defineEventHandler(async (event) => {
-    const data = await readValidatedBody(event, schema.parse)
+    const data = await readValidatedBody(event, OrderSchema.parse)
     // ...
 })
 ```
+
+**Zod Enum Type Safety Pattern:**
+
+**❌ WRONG - Using Prisma enums directly:**
+```typescript
+import { OrderState } from '@prisma/client'  // ❌ No runtime validation
+const state: OrderState = 'BOOKED'  // Only TypeScript type checking
+```
+
+**✅ CORRECT - Using generated Zod enums:**
+```typescript
+import { OrderStateSchema } from '~~/prisma/generated/zod'  // ✅ Runtime + compile-time
+
+// In validation composable
+const OrderSchema = z.object({
+  state: OrderStateSchema  // Auto-synced with Prisma schema
+})
+
+// In API endpoint
+const data = await readValidatedBody(event, OrderSchema.parse)  // Runtime validation
+```
+
+**Benefits:**
+1. **Single source of truth** - Prisma schema defines enums once
+2. **Auto-sync** - `npm run db:generate-client` updates Zod schemas automatically
+3. **Runtime validation** - Catch invalid enum values at API boundary
+4. **Type safety** - Compile-time checking across client/server
+5. **DRY** - No manual enum duplication between Prisma and Zod
 
 **Auto-imports:** Utils (`~/utils/*`), composables (`~/composables/*`), components
 
@@ -588,12 +655,16 @@ export default defineEventHandler(async (event) => {
 
 - End-to-end type safety from database to frontend
 - Shared validation schemas (client + server)
+- Auto-generated Zod enums eliminate schema drift
 - Edge deployment with global distribution
 - Developer productivity through auto-imports
 
 ### Compliance
 
-1. Use Zod schemas in composables for shared validation
-2. Leverage Nuxt auto-imports (no manual imports for utils/composables)
-3. Repository pattern for all database operations
-4. H3 validation helpers in all API routes
+1. MUST import enum schemas from `~~/prisma/generated/zod` (NOT from `@prisma/client`)
+2. MUST use generated Zod enum schemas in validation composables
+3. MUST run `npm run db:generate-client` after Prisma schema enum changes
+4. Use Zod schemas in composables for shared validation
+5. Leverage Nuxt auto-imports (no manual imports for utils/composables)
+6. Repository pattern for all database operations
+7. H3 validation helpers in all API routes

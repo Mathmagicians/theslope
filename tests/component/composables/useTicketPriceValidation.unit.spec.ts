@@ -1,5 +1,6 @@
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import {describe, expect, it} from "vitest"
+import {TicketFactory} from "../../e2e/testDataFactories/ticketFactory"
 
 describe('useTicketPriceValidation', () => {
 
@@ -40,22 +41,16 @@ describe('useTicketPriceValidation', () => {
         expect(result.success).toBe(false)
     })
 
-    it('should reject duplicate ticket types', () => {
+    it('should allow multiple prices for the same ticket type (price tiers)', () => {
         const { TicketPricesArraySchema } = useTicketPriceValidation()
-        const duplicatePrices = [
-            {
-                seasonId: 1,
-                ticketType: 'ADULT',
-                price: 1000
-            },
-            {
-                seasonId: 1,
-                ticketType: 'ADULT',
-                price: 1200
-            }
-        ]
-        const result = TicketPricesArraySchema.safeParse(duplicatePrices)
-        expect(result.success).toBe(false)
+        // Use factory data which includes two BABY prices (free baby and hungry baby)
+        const priceTiers = TicketFactory.defaultTicketPrices({seasonId: 1})
+        const result = TicketPricesArraySchema.safeParse(priceTiers)
+        expect(result.success).toBe(true)
+
+        // Verify we actually have multiple BABY prices
+        const babyPrices = priceTiers.filter(p => p.ticketType === 'BABY')
+        expect(babyPrices.length).toBe(2)
     })
 
     it('should reject ticket prices with different seasonIds', () => {

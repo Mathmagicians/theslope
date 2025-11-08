@@ -31,14 +31,20 @@ enum Role {
 enum TicketType {
   ADULT
   CHILD
-  HUNGRY_BABY
   BABY
 }
 
 enum DinnerMode {
   TAKEAWAY
   DINEIN
+  DINEINLATE
   NONE
+}
+
+enum OrderState {
+  BOOKED
+  RELEASED
+  CLOSED
 }
 
 model AllergyType {
@@ -62,14 +68,16 @@ model Allergy {
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles
 model User {
-  id           Int         @id @default(autoincrement())
-  email        String      @unique
+  id           Int            @id @default(autoincrement())
+  email        String         @unique
   phone        String?
   passwordHash String
-  systemRoles  String      @default("[]") // JSON stringified array of SystemRole
+  systemRoles  String         @default("[]") // JSON stringified array of SystemRole
   Inhabitant   Inhabitant?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  bookedOrders Order[]        @relation("BookedByUser")
+  orderHistory OrderHistory[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 // Represents a member of a household, that can participate in the dinners and cooking
@@ -127,15 +135,23 @@ model DinnerEvent {
 }
 
 model Order {
-  id            Int          @id @default(autoincrement())
-  dinnerEventId Int
-  dinnerEvent   DinnerEvent  @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId  Int
-  inhabitant    Inhabitant   @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  ticketType    TicketType
-  Transaction   Transaction?
+  id             Int            @id @default(autoincrement())
+  dinnerEventId  Int
+  dinnerEvent    DinnerEvent    @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId   Int
+  inhabitant     Inhabitant     @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  bookedByUserId Int?
+  bookedByUser   User?          @relation("BookedByUser", fields: [bookedByUserId], references: [id], onDelete: SetNull)
+  ticketPriceId  Int
+  ticketPrice    TicketPrice    @relation(fields: [ticketPriceId], references: [id], onDelete: Restrict)
+  priceAtBooking Int
+  state          OrderState     @default(BOOKED)
+  releasedAt     DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  Transaction    Transaction?
+  orderHistory   OrderHistory[]
 }
 
 model Transaction {
@@ -206,4 +222,20 @@ model TicketPrice {
   price           Int
   description     String?
   maximumAgeLimit Int?
+  orders          Order[]
+}
+
+model OrderHistory {
+  id                Int      @id @default(autoincrement())
+  orderId           Int?
+  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  action            String
+  performedByUserId Int?
+  performedByUser   User?    @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  auditData         String
+  timestamp         DateTime @default(now())
+
+  @@index([orderId])
+  @@index([performedByUserId])
+  @@index([timestamp])
 }

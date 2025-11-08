@@ -15,7 +15,7 @@ import type {
     Allergy
 } from "@prisma/client"
 
-import type {Season as DomainSeason, SerializedSeason} from "~/composables/useSeasonValidation"
+import type {Season as DomainSeason} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate} from '~/composables/useHouseholdValidation'
@@ -26,7 +26,16 @@ import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, Serialize
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {UserCreate, UserDisplay, SystemRole} from '~/composables/useUserValidation'
 import {useUserValidation} from '~/composables/useUserValidation'
-import type {AllergyTypeCreate, AllergyTypeUpdate, AllergyCreate, AllergyUpdate} from '~/composables/useAllergyValidation'
+import type {
+    AllergyTypeCreate,
+    AllergyTypeUpdate,
+    AllergyTypeResponse,
+    AllergyTypeWithInhabitants,
+    AllergyCreate,
+    AllergyUpdate,
+    AllergyResponse,
+    AllergyWithRelations
+} from '~/composables/useAllergyValidation'
 
 export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
     include: {
@@ -401,14 +410,53 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
 /*** ALLERGY TYPES ***/
 
-export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyType[]> {
-    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types`)
+export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeWithInhabitants[]> {
+    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types with inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const allergyTypes = await prisma.allergyType.findMany()
-        console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${allergyTypes.length} allergy types`)
-        return allergyTypes
+        const allergyTypes = await prisma.allergyType.findMany({
+            include: {
+                Allergy: {
+                    include: {
+                        inhabitant: {
+                            select: {
+                                id: true,
+                                name: true,
+                                lastName: true,
+                                pictureUrl: true,
+                                birthDate: true,
+                                household: {
+                                    select: {
+                                        name: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        // Transform to AllergyTypeWithInhabitants format
+        const result = allergyTypes.map(allergyType => ({
+            id: allergyType.id,
+            name: allergyType.name,
+            description: allergyType.description,
+            icon: allergyType.icon,
+            inhabitants: allergyType.Allergy.map(allergy => ({
+                id: allergy.inhabitant.id,
+                name: allergy.inhabitant.name,
+                lastName: allergy.inhabitant.lastName,
+                pictureUrl: allergy.inhabitant.pictureUrl,
+                birthDate: allergy.inhabitant.birthDate,
+                householdName: allergy.inhabitant.household.name,
+                inhabitantComment: allergy.inhabitantComment
+            }))
+        }))
+
+        console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${result.length} allergy types with inhabitants`)
+        return result
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching allergy types', error)
         console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
@@ -416,7 +464,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
     }
 }
 
-export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyType | null> {
+export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse | null> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -439,7 +487,7 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
     }
 }
 
-export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyType> {
+export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -457,7 +505,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
     }
 }
 
-export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyType> {
+export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -478,7 +526,7 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
     }
 }
 
-export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyType> {
+export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -499,7 +547,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
 
 /*** ALLERGIES ***/
 
-export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<Allergy[]> {
+export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyWithRelations[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -508,7 +556,15 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
             where: {inhabitantId},
             include: {
                 allergyType: true,
-                inhabitant: true
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
             }
         })
 
@@ -521,7 +577,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
     }
 }
 
-export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<Allergy[]> {
+export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyWithRelations[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -534,7 +590,15 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
             },
             include: {
                 allergyType: true,
-                inhabitant: true
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
             }
         })
 
@@ -547,7 +611,7 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
     }
 }
 
-export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<Allergy[]> {
+export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyResponse[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -573,7 +637,7 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
     }
 }
 
-export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Allergy | null> {
+export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyWithRelations | null> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -582,7 +646,15 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
             where: {id},
             include: {
                 allergyType: true,
-                inhabitant: true
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
             }
         })
 
@@ -600,7 +672,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
     }
 }
 
-export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<Allergy> {
+export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyWithRelations> {
     console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -609,7 +681,15 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
             data: allergyData,
             include: {
                 allergyType: true,
-                inhabitant: true
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
             }
         })
 
@@ -622,7 +702,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
     }
 }
 
-export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<Allergy> {
+export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyWithRelations> {
     console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -634,7 +714,15 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
             data: updateData,
             include: {
                 allergyType: true,
-                inhabitant: true
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
+                    }
+                }
             }
         })
 
@@ -647,7 +735,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
     }
 }
 
-export async function deleteAllergy(d1Client: D1Database, id: number): Promise<Allergy> {
+export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyResponse> {
     console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 

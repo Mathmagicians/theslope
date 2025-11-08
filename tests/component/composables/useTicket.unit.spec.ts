@@ -9,7 +9,7 @@ describe('useTicket', () => {
 
     describe('ticketTypeConfig', () => {
         it('GIVEN ticketTypeConfig WHEN checking structure THEN has all required properties', () => {
-            const expectedTypes = ['ADULT', 'CHILD', 'HUNGRY_BABY', 'BABY']
+            const expectedTypes = ['ADULT', 'CHILD', 'BABY']
             const expectedProps = ['label', 'color', 'icon']
 
             expectedTypes.forEach(type => {
@@ -38,8 +38,8 @@ describe('useTicket', () => {
             it.each([
                 ['1 year old', '2024-01-01', 'BABY'],
                 ['2 years old (boundary)', '2023-01-15', 'BABY'],
-                ['3 years old', '2022-01-01', 'HUNGRY_BABY'],
-                ['4 years old (boundary)', '2021-01-15', 'HUNGRY_BABY'],
+                ['3 years old', '2022-01-01', 'CHILD'],
+                ['4 years old', '2021-01-15', 'CHILD'],
                 ['8 years old', '2017-01-01', 'CHILD'],
                 ['12 years old (boundary)', '2013-01-15', 'CHILD'],
                 ['25 years old', '2000-01-01', 'ADULT']
@@ -56,14 +56,14 @@ describe('useTicket', () => {
             const customPrices = TicketFactory.defaultTicketPrices({babyAge: 1, hungryBabyAge: 3, childAge: 10})
             const birthDate = new Date('2023-01-15') // 2 years old
 
-            expect(determineTicketType(birthDate, customPrices, referenceDate)).toBe('HUNGRY_BABY')
+            expect(determineTicketType(birthDate, customPrices, referenceDate)).toBe('BABY')
         })
 
         it('GIVEN unsorted ticket prices WHEN determining ticket type THEN still works correctly', () => {
             const unsortedPrices = [...ticketPrices].reverse()
             const birthDate = new Date('2022-01-01') // 3 years old
 
-            expect(determineTicketType(birthDate, unsortedPrices, referenceDate)).toBe('HUNGRY_BABY')
+            expect(determineTicketType(birthDate, unsortedPrices, referenceDate)).toBe('CHILD')
         })
     })
 

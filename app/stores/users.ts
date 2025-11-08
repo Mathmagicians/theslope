@@ -9,13 +9,17 @@ export const useUsersStore = defineStore("Users", () => {
     const users = ref<UsersApiResponse | null>(null)
     const importing = ref(false)
 
+    // Get SystemRole enum from validation composable
+    const {SystemRoleSchema} = useUserValidation()
+    const SystemRole = SystemRoleSchema.enum
+
     const {
         data: allergyManagers,
         status: allergyManagersStatus,
         error: allergyManagersError
     } = useAsyncData<UserDisplay[]>(
         'allergyManagers',
-        () => $fetch('/api/admin/users/by-role/ALLERGYMANAGER'),
+        () => $fetch(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`),
         {
             default: () => []
         }

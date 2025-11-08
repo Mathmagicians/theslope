@@ -2,6 +2,12 @@
 
 import {expect, BrowserContext} from "@playwright/test"
 import testHelpers from "../testHelpers"
+import type {
+    AllergyTypeResponse,
+    AllergyTypeWithInhabitants,
+    AllergyResponse,
+    AllergyWithRelations
+} from '~/composables/useAllergyValidation'
 
 const {salt, headers} = testHelpers
 const ALLERGY_TYPE_ENDPOINT = '/api/admin/allergy-type'
@@ -21,7 +27,7 @@ export class AllergyFactory {
         context: BrowserContext,
         partialAllergyType: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>> = {},
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<AllergyTypeResponse> => {
         // Merge partial with defaults to create full AllergyType object
         const allergyTypeData = {
             ...this.defaultAllergyTypeData(),  // Auto-generates unique salt
@@ -54,7 +60,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyTypeResponse | null> => {
         const response = await context.request.get(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -69,7 +75,7 @@ export class AllergyFactory {
         return null
     }
 
-    static readonly getAllergyTypes = async (context: BrowserContext): Promise<any[]> => {
+    static readonly getAllergyTypes = async (context: BrowserContext): Promise<AllergyTypeWithInhabitants[]> => {
         const response = await context.request.get(ALLERGY_TYPE_ENDPOINT)
         expect(response.status()).toBe(200)
 
@@ -83,7 +89,7 @@ export class AllergyFactory {
         id: number,
         updateData: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>>,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyTypeResponse> => {
         const response = await context.request.post(`${ALLERGY_TYPE_ENDPOINT}/${id}`, {
             headers: headers,
             data: updateData
@@ -105,7 +111,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyTypeResponse | null> => {
         const response = await context.request.delete(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -150,7 +156,7 @@ export class AllergyFactory {
             inhabitantComment?: string | null
         },
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<AllergyWithRelations> => {
         const response = await context.request.put(ALLERGY_ENDPOINT, {
             headers: headers,
             data: allergyData
@@ -172,7 +178,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyWithRelations | null> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -190,7 +196,7 @@ export class AllergyFactory {
     static readonly getAllergiesForInhabitant = async (
         context: BrowserContext,
         inhabitantId: number
-    ): Promise<any[]> => {
+    ): Promise<AllergyWithRelations[]> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}?inhabitantId=${inhabitantId}`)
         expect(response.status()).toBe(200)
 
@@ -202,7 +208,7 @@ export class AllergyFactory {
     static readonly getAllergiesForHousehold = async (
         context: BrowserContext,
         householdId: number
-    ): Promise<any[]> => {
+    ): Promise<AllergyWithRelations[]> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}?householdId=${householdId}`)
         expect(response.status()).toBe(200)
 
@@ -220,7 +226,7 @@ export class AllergyFactory {
             inhabitantComment?: string | null
         },
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyWithRelations> => {
         const response = await context.request.post(`${ALLERGY_ENDPOINT}/${id}`, {
             headers: headers,
             data: updateData
@@ -242,7 +248,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<AllergyResponse | null> => {
         const response = await context.request.delete(`${ALLERGY_ENDPOINT}/${id}`)
 
         const status = response.status()

@@ -46,8 +46,8 @@ interface Props {
 const props = defineProps<Props>()
 
 // Extract ticket type enum constants from Zod schema
-const {TicketTypesSchema} = useOrderValidation()
-const TicketType = TicketTypesSchema.enum
+const {TicketTypeSchema} = useOrderValidation()
+const TicketType = TicketTypeSchema.enum
 
 // Component needs to handle its own data needs for non core data elements
 const planStore = usePlanStore()
@@ -85,7 +85,6 @@ const determineTicketType = (birthDate: Date | null) => {
 const ticketTypeConfig = {
   [TicketType.ADULT]: {label: 'Voksen', color: 'primary'},
   [TicketType.CHILD]: {label: 'Barn', color: 'success'},
-  [TicketType.HUNGRY_BABY]: {label: 'Sulten baby', color: 'warning'},
   [TicketType.BABY]: {label: 'Baby', color: 'neutral'}
 } as const
 </script>

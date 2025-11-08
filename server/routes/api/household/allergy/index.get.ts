@@ -1,48 +1,58 @@
-import {defineEventHandler, getQuery} from "h3"
+import {defineEventHandler, getValidatedQuery} from "h3"
 import {fetchAllergiesForInhabitant, fetchAllergiesForHousehold} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import * as z from 'zod'
 
 const {h3eFromCatch} = eventHandlerHelper
+
+// Define schema for query parameters
+const querySchema = z.object({
+    householdId: z.coerce.number().int().positive().optional(),
+    inhabitantId: z.coerce.number().int().positive().optional()
+}).refine(
+    (data) => data.householdId || data.inhabitantId,
+    { message: 'Either householdId or inhabitantId query parameter is required' }
+).refine(
+    (data) => !(data.householdId && data.inhabitantId),
+    { message: 'Only one of householdId or inhabitantId query parameter can be provided, not both' }
+)
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    const query = getQuery(event)
-    const householdId = query.householdId ? Number(query.householdId) : undefined
-    const inhabitantId = query.inhabitantId ? Number(query.inhabitantId) : undefined
+    // Validate input - fail early on invalid data
+    let householdId: number | undefined
+    let inhabitantId: number | undefined
+    try {
+        const query = await getValidatedQuery(event, querySchema.parse)
+        householdId = query.householdId
+        inhabitantId = query.inhabitantId
+    } catch (error) {
+        const h3e = h3eFromCatch('🏥 > ALLERGY > [GET] Input validation error', error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
 
-    // If inhabitantId query parameter is provided, fetch allergies for that inhabitant
-    if (inhabitantId) {
-        console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ${inhabitantId}`)
-        try {
+
+    // Fetch allergies from database
+    try {
+        // If inhabitantId query parameter is provided, fetch allergies for that inhabitant
+        if (inhabitantId) {
+            console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ${inhabitantId}`)
             const allergies = await fetchAllergiesForInhabitant(d1Client, inhabitantId)
             console.info(`🏥 > ALLERGY > [GET] Found ${allergies.length} allergies for inhabitant ${inhabitantId}`)
             return allergies
-        } catch (error) {
-            const h3e = h3eFromCatch(`🏥 > ALLERGY > [GET] Error fetching allergies for inhabitant ${inhabitantId}`, error)
-            console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-            throw h3e
-        }
-    }
-
-    // If householdId query parameter is provided, fetch allergies for that household
-    if (householdId) {
-        console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ${householdId}`)
-        try {
+        }else if (householdId) {
+            console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ${householdId}`)
             const allergies = await fetchAllergiesForHousehold(d1Client, householdId)
             console.info(`🏥 > ALLERGY > [GET] Found ${allergies.length} allergies for household ${householdId}`)
             return allergies
-        } catch (error) {
-            const h3e = h3eFromCatch(`🏥 > ALLERGY > [GET] Error fetching allergies for household ${householdId}`, error)
-            console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-            throw h3e
-        }
+        } else return []
+    } catch (error) {
+        const h3e = h3eFromCatch('🏥 > ALLERGY > [GET] Error fetching allergies', error)
+        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
     }
 
-    // Neither householdId nor inhabitantId provided
-    throw createError({
-        statusCode: 400,
-        message: 'Either householdId or inhabitantId query parameter is required'
-    })
 })

@@ -1,6 +1,8 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
+import { TicketTypeSchema } from '~~/prisma/generated/zod'
 
 const {createTicketPrice} = useTicketPriceValidation()
+const TicketType = TicketTypeSchema.enum
 
 /**
  * Factory for creating test ticket price data
@@ -10,16 +12,16 @@ export class TicketFactory {
     /**
      * Standard ticket price configuration used across tests
      * Mirrors typical production pricing structure:
-     * - BABY: 0-2 years
-     * - HUNGRY_BABY: 3-4 years
-     * - CHILD: 5-12 years
-     * - ADULT: 13+ years
+     * - BABY (0-2 years): Free
+     * - BABY "Hungry Baby" (0-2 years): 1500 øre
+     * - CHILD (3-12 years): 3000 øre
+     * - ADULT (13+ years): 5000 øre
      */
     static readonly defaultTicketPricesData: TicketPrice[] = [
-        createTicketPrice('BABY', 0, undefined, undefined, 2),
-        createTicketPrice('HUNGRY_BABY', 1500, undefined, undefined, 4),
-        createTicketPrice('CHILD', 3000, undefined, undefined, 12),
-        createTicketPrice('ADULT', 5000, undefined, undefined, null)
+        createTicketPrice(TicketType.BABY, 0, undefined, 'Baby (0-2 år)', 2),
+        createTicketPrice(TicketType.BABY, 1500, undefined, 'Sulten baby (0-2 år)', 2),
+        createTicketPrice(TicketType.CHILD, 3000, undefined, undefined, 12),
+        createTicketPrice(TicketType.ADULT, 5000, undefined, undefined, null)
     ]
 
     /**
@@ -49,28 +51,28 @@ export class TicketFactory {
     }): TicketPrice[] => {
         return [
             createTicketPrice(
-                'BABY',
+                TicketType.BABY,
                 overrides?.babyPrice ?? 0,
                 overrides?.seasonId,
-                undefined,
+                'Baby (0-2 år)',
                 overrides?.babyAge ?? 2
             ),
             createTicketPrice(
-                'HUNGRY_BABY',
+                TicketType.BABY,
                 overrides?.hungryBabyPrice ?? 1500,
                 overrides?.seasonId,
-                undefined,
-                overrides?.hungryBabyAge ?? 4
+                'Sulten baby (0-2 år)',
+                overrides?.hungryBabyAge ?? 2
             ),
             createTicketPrice(
-                'CHILD',
+                TicketType.CHILD,
                 overrides?.childPrice ?? 3000,
                 overrides?.seasonId,
                 undefined,
                 overrides?.childAge ?? 12
             ),
             createTicketPrice(
-                'ADULT',
+                TicketType.ADULT,
                 overrides?.adultPrice ?? 5000,
                 overrides?.seasonId,
                 undefined,

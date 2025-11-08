@@ -12,8 +12,8 @@ import {calculateAgeOnDate} from '~/utils/date'
  */
 export const useTicket = () => {
     // Get ticket type enum from validation composable
-    const {TicketTypesSchema} = useOrderValidation()
-    const TicketType = TicketTypesSchema.enum
+    const {TicketTypeSchema} = useOrderValidation()
+    const TicketType = TicketTypeSchema.enum
 
     /**
      * UI configuration for ticket type display
@@ -29,11 +29,6 @@ export const useTicket = () => {
             label: 'Barn',
             color: 'success' as const,
             icon: 'i-heroicons-user-circle'
-        },
-        [TicketType.HUNGRY_BABY]: {
-            label: 'Sulten baby',
-            color: 'tertiary' as const,
-            icon: 'i-heroicons-cake'
         },
         [TicketType.BABY]: {
             label: 'Baby',

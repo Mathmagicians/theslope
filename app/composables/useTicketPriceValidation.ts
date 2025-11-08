@@ -1,4 +1,6 @@
 import {z} from 'zod'
+// Import TicketType enum from generated Zod schemas (single source of truth)
+import { TicketTypeSchema } from '~~/prisma/generated/zod'
 
 /**
  * Validation schemas for TicketPrice objects
@@ -6,16 +8,13 @@ import {z} from 'zod'
  * Prices are stored in øre (1 DKK = 100 øre)
  */
 export const useTicketPriceValidation = () => {
-    // Define ticket types matching Prisma enum
-    const TICKET_TYPES = ['ADULT', 'CHILD', 'BABY', 'HUNGRY_BABY'] as const
-
     /**
      * Schema for a single TicketPrice
      */
     const TicketPriceSchema = z.object({
         id: z.number().int().positive().optional(),
         seasonId: z.number().int().positive().optional(),
-        ticketType: z.enum(TICKET_TYPES),
+        ticketType: TicketTypeSchema,
         price: z.number().int().nonnegative(), // Non-negative integer in øre, no upper limit
         description: z.string().optional().nullable(),
         maximumAgeLimit: z.number().int().nonnegative().optional().nullable()
@@ -36,17 +35,12 @@ export const useTicketPriceValidation = () => {
 
     /**
      * - at least one ticket type
-     * - No duplicate ticket types
      * - All prices must belong to the same season
+     *
+     * Note: Multiple prices for the same ticket type are allowed (price tiers, e.g., free baby vs hungry baby)
      */
     const TicketPricesArraySchema = z.array(TicketPriceSchema)
         .min(1, {message: "Udfyld mindst en billettype"})
-        .refine((prices) => {
-            const types = prices.map(p => p.ticketType)
-            return new Set(types).size === types.length
-        }, {
-            message: "Der må ikke være duplikerede billettyper"
-        })
         .refine((prices) => {
             const seasonIds = prices.map(p => p.seasonId).filter(id => id !== undefined)
             // Only validate if seasonIds are present
@@ -70,7 +64,7 @@ export const useTicketPriceValidation = () => {
     }
 
     return {
-        TICKET_TYPES,
+        TicketTypeSchema,
         TicketPriceSchema,
         TicketPricesArraySchema,
         validateTicketPrice,

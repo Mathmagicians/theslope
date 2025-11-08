@@ -47,10 +47,18 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
   defaultValue: DinnerMode.DINEIN
 })
 
-// Dinner mode display config
+// Dinner mode display config (order determines button/cycle order)
+const dinnerModeOrder: DinnerMode[] = [
+  DinnerMode.DINEIN,
+  DinnerMode.DINEINLATE,
+  DinnerMode.TAKEAWAY,
+  DinnerMode.NONE
+]
+
 const dinnerModeConfig: Record<DinnerMode, {label: string, icon: string, color: string}> = {
   [DinnerMode.DINEIN]: {label: 'Fællesspisning', icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining', color: 'success'},
-  [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'success'},
+  [DinnerMode.DINEINLATE]: {label: 'Fællesspisning (sen)', icon: 'i-heroicons-clock', color: 'warning'},
+  [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'primary'},
   [DinnerMode.NONE]: {label: 'Ingen spisning', icon: 'i-heroicons-x-circle', color: 'neutral'}
 }
 
@@ -72,12 +80,9 @@ const cycleDayMode = (day: WeekDay) => {
   if (props.disabled || props.formMode === FORM_MODES.VIEW) return
 
   const current = props.modelValue?.[day] ?? DinnerMode.DINEIN
-  const nextMode: Record<DinnerMode, DinnerMode> = {
-    [DinnerMode.NONE]: DinnerMode.DINEIN,
-    [DinnerMode.DINEIN]: DinnerMode.TAKEAWAY,
-    [DinnerMode.TAKEAWAY]: DinnerMode.NONE
-  }
-  updateDay(day, nextMode[current])
+  const currentIndex = dinnerModeOrder.indexOf(current)
+  const nextIndex = (currentIndex + 1) % dinnerModeOrder.length
+  updateDay(day, dinnerModeOrder[nextIndex])
 }
 
 // Get icon for a mode
@@ -121,31 +126,15 @@ const visibleDays = computed(() => {
       <span v-if="showLabels" class="text-xs text-gray-600 capitalize">{{ formatWeekdayCompact(day) }}</span>
       <UFieldGroup size="xs" orientation="horizontal">
         <UButton
-          icon="i-streamline:food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining"
-          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.DINEIN ? 'success' : 'neutral'"
-          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.DINEIN ? 'solid' : 'ghost'"
+          v-for="mode in dinnerModeOrder"
+          :key="mode"
+          :icon="dinnerModeConfig[mode].icon"
+          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === mode ? dinnerModeConfig[mode].color : 'neutral'"
+          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === mode ? 'solid' : 'ghost'"
           :disabled="disabled"
           size="xs"
-          :name="`${name}-${day}-DINEIN`"
-          @click="updateDay(day, DinnerMode.DINEIN)"
-        />
-        <UButton
-          icon="i-heroicons-shopping-bag"
-          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'primary' : 'neutral'"
-          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.TAKEAWAY ? 'solid' : 'ghost'"
-          :disabled="disabled"
-          size="xs"
-          :name="`${name}-${day}-TAKEAWAY`"
-          @click="updateDay(day, DinnerMode.TAKEAWAY)"
-        />
-        <UButton
-          icon="i-heroicons-x-circle"
-          color="neutral"
-          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === DinnerMode.NONE ? 'solid' : 'ghost'"
-          :disabled="disabled"
-          size="xs"
-          :name="`${name}-${day}-NONE`"
-          @click="updateDay(day, DinnerMode.NONE)"
+          :name="`${name}-${day}-${mode}`"
+          @click="updateDay(day, mode)"
         />
       </UFieldGroup>
     </div>

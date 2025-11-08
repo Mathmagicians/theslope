@@ -67,6 +67,12 @@ export const useAllergyValidation = () => {
         allergyType: AllergyTypeResponseSchema
     })
 
+    // Allergy with full relations (allergyType + inhabitant) - used by household/inhabitant endpoints
+    const AllergyWithRelationsSchema = AllergyResponseSchema.extend({
+        allergyType: AllergyTypeResponseSchema,
+        inhabitant: InhabitantDisplaySchema
+    })
+
     // AllergyType with nested Inhabitants (for admin master-detail view)
     // Shows which inhabitants have this allergy type (lightweight)
     const AllergyTypeWithInhabitantsSchema = AllergyTypeResponseSchema.extend({
@@ -93,6 +99,7 @@ export const useAllergyValidation = () => {
         AllergyUpdateSchema,
         AllergyResponseSchema,
         AllergyWithTypeSchema,
+        AllergyWithRelationsSchema,
         InhabitantWithAllergiesSchema
     }
 }
@@ -109,4 +116,5 @@ export type AllergyCreate = z.infer<ReturnType<typeof useAllergyValidation>['All
 export type AllergyUpdate = z.infer<ReturnType<typeof useAllergyValidation>['AllergyUpdateSchema']>
 export type AllergyResponse = z.infer<ReturnType<typeof useAllergyValidation>['AllergyResponseSchema']>
 export type AllergyWithType = z.infer<ReturnType<typeof useAllergyValidation>['AllergyWithTypeSchema']>
+export type AllergyWithRelations = z.infer<ReturnType<typeof useAllergyValidation>['AllergyWithRelationsSchema']>
 export type InhabitantWithAllergies = z.infer<ReturnType<typeof useAllergyValidation>['InhabitantWithAllergiesSchema']>

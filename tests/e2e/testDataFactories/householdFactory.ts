@@ -293,6 +293,4 @@ export class HouseholdFactory {
 
         return null
     }
-
-
 }

@@ -139,6 +139,7 @@ export const useUserValidation = () => {
     }
 
     return {
+        SystemRoleSchema,
         BaseUserSchema,
         SerializedUserSchema,
         UserCreateSchema,

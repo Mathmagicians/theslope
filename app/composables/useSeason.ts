@@ -11,6 +11,7 @@ import {isWithinInterval} from "date-fns"
 import {useSeasonValidation, type Season} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {DinnerEventCreate} from './useDinnerEventValidation'
+import {useDinnerEventValidation} from './useDinnerEventValidation'
 import {
     computeAffinitiesForTeams,
     computeCookingDates,
@@ -30,6 +31,10 @@ export const useSeason = () => {
         deserializeSeason,
         createWeekDayMapFromSelection
     } = useSeasonValidation()
+
+    // Get DinnerMode enum from generated schema
+    const {DinnerModeSchema} = useDinnerEventValidation()
+    const DinnerMode = DinnerModeSchema.enum
 
     // Get app configuration
     const appConfig = useAppConfig()
@@ -132,7 +137,7 @@ export const useSeason = () => {
             menuTitle: 'TBD',
             menuDescription: null,
             menuPictureUrl: null,
-            dinnerMode: 'NONE',
+            dinnerMode: DinnerMode.DINEIN,
             chefId: null,
             cookingTeamId: null,
             seasonId: season.id!

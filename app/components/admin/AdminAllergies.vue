@@ -98,8 +98,7 @@ const showSuccessToast = (title: string, description?: string) => {
 const columns = [
   {
     accessorKey: 'icon',
-    header: '',
-    size: 60
+    header: ''
   },
   {
     accessorKey: 'name',
@@ -110,9 +109,12 @@ const columns = [
     header: 'Beskrivelse'
   },
   {
+    accessorKey: 'inhabitants',
+    header: 'Beboere'
+  },
+  {
     accessorKey: 'actions',
-    header: '',
-    size: 120
+    header: ''
   }
 ]
 </script>
@@ -200,18 +202,24 @@ const columns = [
         </div>
       </div>
 
-      <!-- Table -->
+      <!-- Desktop: Table View -->
       <UTable
           :columns="columns"
           :data="allergyTypes"
           :loading="isAllergyTypesLoading"
           :ui="{ td: 'py-3' }"
+          class="hidden md:block"
       >
         <!-- Icon cell with red circle -->
         <template #icon-cell="{ row }">
-          <div class="relative flex items-center justify-center w-10 h-10 md:w-12 md:h-12">
-            <div class="absolute inset-0 rounded-full border-4 md:border-[5px] border-red-700"></div>
-            <span class="relative text-xl md:text-2xl z-10">
+          <div class="relative flex items-center justify-center w-12 h-12">
+            <div class="absolute inset-0 rounded-full border-[5px] border-red-700"></div>
+            <UIcon
+                v-if="row.original.icon?.startsWith('i-')"
+                :name="row.original.icon"
+                class="relative text-2xl z-10"
+            />
+            <span v-else class="relative text-2xl z-10">
               {{ row.original.icon || '🏷️' }}
             </span>
           </div>
@@ -227,6 +235,14 @@ const columns = [
           <div class="text-sm text-gray-600 dark:text-gray-400">
             {{ row.original.description }}
           </div>
+        </template>
+
+        <!-- Inhabitants cell with avatar group -->
+        <template #inhabitants-cell="{ row }">
+          <UserListItem
+              v-if="row.original.inhabitants"
+              :inhabitants="row.original.inhabitants"
+          />
         </template>
 
         <!-- Actions cell -->
@@ -270,6 +286,84 @@ const columns = [
           </div>
         </template>
       </UTable>
+
+      <!-- Mobile: Card View -->
+      <div class="md:hidden">
+        <Loader v-if="isAllergyTypesLoading" text="Indlæser allergier..." />
+
+        <!-- Empty state -->
+        <div v-else-if="isNoAllergyTypes" class="flex flex-col items-center justify-center py-6 gap-3">
+          <UIcon name="i-heroicons-clipboard-document-list" class="w-8 h-8 text-gray-400"/>
+          <p class="text-sm text-gray-500 text-center">
+            Ingen allergier i kataloget endnu. Tilføj en allergi for at komme i gang.
+          </p>
+          <UButton
+              v-if="formMode === 'view'"
+              icon="i-heroicons-plus-circle"
+              color="primary"
+              @click="startCreate"
+              name="create-first-allergy-type"
+          >
+            Tilføj allergi
+          </UButton>
+        </div>
+
+        <!-- Cards -->
+        <div v-else class="space-y-3">
+          <UCard
+              v-for="allergyType in allergyTypes"
+              :key="allergyType.id"
+              :ui="{ body: { padding: 'p-4 sm:p-4' } }"
+          >
+            <div class="flex items-start gap-3">
+              <!-- Icon -->
+              <div class="relative flex items-center justify-center w-10 h-10 flex-shrink-0">
+                <div class="absolute inset-0 rounded-full border-4 border-red-700"></div>
+                <UIcon
+                    v-if="allergyType.icon?.startsWith('i-')"
+                    :name="allergyType.icon"
+                    class="relative text-xl z-10"
+                />
+                <span v-else class="relative text-xl z-10">
+                  {{ allergyType.icon || '🏷️' }}
+                </span>
+              </div>
+
+              <!-- Content -->
+              <div class="flex-1 min-w-0 space-y-2">
+                <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
+                <p class="text-xs text-gray-600 dark:text-gray-400">
+                  {{ allergyType.description }}
+                </p>
+                <UserListItem
+                    v-if="allergyType.inhabitants"
+                    :inhabitants="allergyType.inhabitants"
+                />
+              </div>
+
+              <!-- Actions -->
+              <div class="flex gap-2 flex-shrink-0">
+                <UButton
+                    icon="i-heroicons-pencil"
+                    size="xs"
+                    color="primary"
+                    variant="ghost"
+                    @click="startEdit(allergyType)"
+                    :name="`edit-allergy-type-${allergyType.id}`"
+                />
+                <UButton
+                    icon="i-heroicons-trash"
+                    size="xs"
+                    color="red"
+                    variant="ghost"
+                    @click="handleDelete(allergyType.id!, allergyType.name)"
+                    :name="`delete-allergy-type-${allergyType.id}`"
+                />
+              </div>
+            </div>
+          </UCard>
+        </div>
+      </div>
     </UCard>
   </div>
 </template>

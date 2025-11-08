@@ -3,7 +3,8 @@ import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
-const {TICKET_TYPES, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
+const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
+const TICKET_TYPES = TicketTypeSchema.options
 
 // COMPONENT DEFINITION
 const model = defineModel<TicketPrice[]>({required: true, default: () => []})
@@ -31,8 +32,7 @@ const formatTicketType = (type: string): string => {
   const labels: Record<string, string> = {
     'ADULT': 'Voksen',
     'CHILD': 'Barn',
-    'BABY': 'Baby',
-    'HUNGRY_BABY': 'Sulten baby'
+    'BABY': 'Baby'
   }
   return labels[type] || type
 }

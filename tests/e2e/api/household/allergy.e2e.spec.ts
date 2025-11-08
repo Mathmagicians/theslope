@@ -338,6 +338,16 @@ test.describe('Allergy API - Validation', () => {
         // THEN: Should return 400
         expect(response.status()).toBe(400)
     })
+
+    test('GIVEN both query parameters WHEN fetching allergies THEN returns 400', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // WHEN: Try to fetch with both householdId and inhabitantId
+        const response = await context.request.get('/api/household/allergy?householdId=1&inhabitantId=1')
+
+        // THEN: Should return 400
+        expect(response.status()).toBe(400)
+    })
 })
 
 test.describe('Allergy API - CASCADE Deletion', () => {

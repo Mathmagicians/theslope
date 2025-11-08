@@ -135,6 +135,65 @@ test.describe('AllergyType API - CRUD Operations', () => {
         // Icon can be null or undefined when omitted
         expect(created.icon === null || created.icon === undefined).toBe(true)
     })
+
+    test('GIVEN allergies assigned to inhabitants WHEN fetching all types THEN includes inhabitants data', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const {HouseholdFactory} = await import('../../testDataFactories/householdFactory')
+
+        // GIVEN: Create allergy type
+        const allergyType = await AllergyFactory.createAllergyType(context, {
+            name: 'Test Peanuts for Inhabitants',
+            description: 'Test allergy for checking inhabitants',
+            icon: '🥜'
+        })
+        createdAllergyTypeIds.push(allergyType.id)
+
+        // GIVEN: Create household with inhabitants (parametrized)
+        const household = await HouseholdFactory.createHousehold(context)
+        const inhabitantsData = [
+            { name: 'TestPerson1', comment: 'Severe allergy' },
+            { name: 'TestPerson2', comment: 'Mild reaction' }
+        ]
+
+        const inhabitants = await Promise.all(
+            inhabitantsData.map(data =>
+                HouseholdFactory.createInhabitantForHousehold(context, household.id, data.name)
+            )
+        )
+
+        // GIVEN: Assign allergies to inhabitants (parametrized)
+        const allergies = await Promise.all(
+            inhabitants.map((inhabitant, index) =>
+                AllergyFactory.createAllergy(context, {
+                    inhabitantId: inhabitant.id,
+                    allergyTypeId: allergyType.id,
+                    inhabitantComment: inhabitantsData[index].comment
+                })
+            )
+        )
+
+        // WHEN: Fetch all allergy types
+        const allergyTypes = await AllergyFactory.getAllergyTypes(context)
+
+        // THEN: Find our allergy type and verify structure
+        const found = allergyTypes.find((at: any) => at.id === allergyType.id)
+        expect(found).toBeTruthy()
+        expect(found.inhabitants).toBeDefined()
+        expect(Array.isArray(found.inhabitants)).toBe(true)
+        expect(found.inhabitants.length).toBe(2)
+
+        // Verify each inhabitant (parametrized)
+        inhabitants.forEach((inhabitant, index) => {
+            const foundInhabitant = found.inhabitants.find((i: any) => i.id === inhabitant.id)
+            expect(foundInhabitant).toBeDefined()
+            expect(foundInhabitant.name).toBe(inhabitantsData[index].name)
+            expect(foundInhabitant.householdName).toBe(household.name)
+            expect(foundInhabitant.inhabitantComment).toBe(inhabitantsData[index].comment)
+        })
+
+        // Cleanup: Delete household (CASCADE removes inhabitants and their allergies per ADR-005)
+        await HouseholdFactory.deleteHousehold(context, household.id)
+    })
 })
 
 test.describe('AllergyType API - Validation', () => {

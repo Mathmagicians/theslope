@@ -1,11 +1,10 @@
 import {z} from 'zod'
+import { DinnerModeSchema } from '~~/prisma/generated/zod'
 
 /**
  * Validation schemas for DinnerEvent entity
  */
-export const useDinnerEventValidation = () => {
-    // DinnerMode enum schema
-    const DinnerModeSchema = z.enum(['TAKEAWAY', 'DINEIN', 'NONE'])
+export const useDinnerEventValidation = () =>{
 
     // Base DinnerEvent schema for API operations
     const BaseDinnerEventSchema = z.object({
