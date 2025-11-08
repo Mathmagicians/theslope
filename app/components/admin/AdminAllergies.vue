@@ -48,7 +48,7 @@ store.initAllergiesStore()
 // SELECTION STATE
 const selectedAllergyTypeId = ref<number | null>(null)
 const selectedAllergyType = computed(() =>
-  allergyTypes.value.find(at => at.id === selectedAllergyTypeId.value) || null
+    allergyTypes.value.find(at => at.id === selectedAllergyTypeId.value) || null
 )
 
 // MULTISELECT STATE
@@ -64,18 +64,7 @@ const sortedAllergyTypes = computed(() => {
     const countB = b.inhabitants?.length || 0
     return isSorted.value === 'desc' ? countB - countA : countA - countB
   })
-
-  // Add meta classes for row styling
-  return sorted.map(allergy => ({
-    ...allergy,
-    meta: {
-      class: {
-        tr: isRowSelected(allergy.id!)
-          ? 'border-2 border-secondary-400 dark:border-secondary-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'
-          : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'
-      }
-    }
-  }))
+  return sorted
 })
 
 const toggleSortOrder = () => {
@@ -91,7 +80,7 @@ watch(allergyTypes, (newTypes) => {
   if (selectedAllergyTypeId.value && !newTypes.find(at => at.id === selectedAllergyTypeId.value)) {
     selectedAllergyTypeId.value = newTypes[0]?.id || null
   }
-}, { immediate: true })
+}, {immediate: true})
 
 // Toggle multiselect mode
 const toggleMultiselectMode = () => {
@@ -112,7 +101,7 @@ const toggleAllergySelection = (allergyId: number) => {
 
 // Computed for selected allergies
 const selectedAllergies = computed(() =>
-  allergyTypes.value.filter(at => at.id && selectedAllergyIds.value.has(at.id))
+    allergyTypes.value.filter(at => at.id && selectedAllergyIds.value.has(at.id))
 )
 
 // Statistics for selected allergies
@@ -131,6 +120,7 @@ const allergyStatistics = computed(() => {
 
   return {
     totalInhabitants: uniqueInhabitants.size,
+    uniqueInhabitantsList: Array.from(uniqueInhabitants.values()),
     breakdownByAllergy: selectedAllergies.value.map(allergy => ({
       name: allergy.name,
       icon: allergy.icon,
@@ -189,7 +179,7 @@ const cancelEdit = () => {
   onModeChange(FORM_MODES.VIEW)
 }
 
-const handleSubmit = async (data?: {name: string, description: string, icon?: string}) => {
+const handleSubmit = async (data?: { name: string, description: string, icon?: string }) => {
   try {
     const submitData = data || formData.value
     if (formMode.value === FORM_MODES.CREATE) {
@@ -230,11 +220,16 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // ACTIONS
 const handleRowClick = (allergyType: AllergyType) => {
-  selectedAllergyTypeId.value = allergyType.id || null
-  // In EDIT mode, just update selection without changing mode
-  // In other modes (CREATE), switch back to VIEW
-  if (formMode.value === FORM_MODES.CREATE) {
-    onModeChange(FORM_MODES.VIEW)
+  // In multiselect mode, toggle the allergy in the selection set
+  if (multiselectMode.value) {
+    toggleAllergySelection(allergyType.id!)
+  } else {
+    // In single select mode, update the selected allergy
+    selectedAllergyTypeId.value = allergyType.id || null
+    // In CREATE mode, switch back to VIEW
+    if (formMode.value === FORM_MODES.CREATE) {
+      onModeChange(FORM_MODES.VIEW)
+    }
   }
 }
 
@@ -242,6 +237,28 @@ const handleRowClick = (allergyType: AllergyType) => {
 const isRowSelected = (allergyTypeId: number) => {
   return allergyTypeId === selectedAllergyTypeId.value || (multiselectMode.value && selectedAllergyIds.value.has(allergyTypeId))
 }
+
+// ROW SELECTION for TanStack Table
+const rowSelection = computed(() => {
+  const selection: Record<number, boolean> = {}
+
+  if (multiselectMode.value) {
+    // Map selectedAllergyIds to row indices
+    sortedAllergyTypes.value.forEach((allergy, index) => {
+      if (allergy.id && selectedAllergyIds.value.has(allergy.id)) {
+        selection[index] = true
+      }
+    })
+  } else if (selectedAllergyTypeId.value !== null) {
+    // Find the index of the selected allergy
+    const index = sortedAllergyTypes.value.findIndex(a => a.id === selectedAllergyTypeId.value)
+    if (index !== -1) {
+      selection[index] = true
+    }
+  }
+
+  return selection
+})
 
 // TABLE COLUMNS (dynamic based on multiselect mode)
 const columns = computed(() => {
@@ -252,7 +269,7 @@ const columns = computed(() => {
     },
     {
       accessorKey: 'name',
-      header: 'Allergi'
+      header: 'Allergen'
     },
     {
       accessorKey: 'count',
@@ -295,46 +312,59 @@ const columns = computed(() => {
         <div class="flex flex-col gap-4">
           <div class="flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="text-lg font-semibold">Allergi Katalog</div>
-            <FormModeSelector v-model="formMode" @change="onModeChange" />
+            <div class="flex items-center gap-2">
+              <UButton
+                  color="secondary"
+                  variant="outline"
+                  icon="i-heroicons-document-text"
+                  to="/admin/allergies/pdf"
+                  target="_blank"
+                  name="pdf-poster-button"
+              >
+                PDF Plakat
+              </UButton>
+              <FormModeSelector v-model="formMode" @change="onModeChange"/>
+            </div>
           </div>
-          <AllergyManagersList />
+          <AllergyManagersList/>
         </div>
       </template>
 
       <!-- Desktop: Master-Detail Layout -->
       <div class="hidden md:flex gap-6">
         <!-- MASTER PANEL (Left) -->
-        <div class="w-1/3 space-y-4">
-          <!-- Multiselect Toggle -->
-          <div class="px-4">
-            <UButton
-                :color="multiselectMode ? 'info' : 'secondary'"
-                :variant="multiselectMode ? 'solid' : 'outline'"
-                size="lg"
-                @click="toggleMultiselectMode"
-                name="multiselect-toggle"
-                class="w-full"
-            >
-              <template #leading>
-                <UIcon  size="xl" :name="multiselectMode ? 'i-heroicons-clipboard-document-check' : 'i-heroicons-rectangle-stack'" />
-              </template>
-              Sammenlign allergier
-            </UButton>
-          </div>
-
+        <div class="w-1/3">
           <UTable
               :columns="columns"
               :data="sortedAllergyTypes"
               :loading="isAllergyTypesLoading"
+              v-model:row-selection="rowSelection"
               :ui="{ td: 'py-3' }"
           >
+            <template #icon-header>
+              <UButton
+                  color="secondary"
+                  :variant="multiselectMode ? 'solid' : 'outline'"
+                  @click="toggleMultiselectMode"
+                  name="multiselect-toggle"
+                  size="lg"
+              >
+                <template #leading>
+                  <UIcon
+                      :name="multiselectMode ? 'i-heroicons-clipboard-document-check' : 'i-heroicons-rectangle-stack'"
+                  />
+                </template>
+                Vælg
+              </UButton>
+            </template>
             <!-- Custom header for count column with sort icon -->
             <template #count-header>
               <UButton
                   @click="toggleSortOrder"
-                  variant="ghost"
-                  size="xl"
+                  variant="outline"
+                  size="lg"
                   name="sort-by-count"
+                  color="secondary"
               >
                 <template #leading>
                   <UIcon
@@ -407,7 +437,7 @@ const columns = computed(() => {
               <div class="flex flex-col items-center justify-center py-6 gap-3">
                 <UIcon name="i-heroicons-clipboard-document-list" class="w-8 h-8 text-gray-400"/>
                 <p class="text-sm text-gray-500">
-                  Ingen allergier i kataloget endnu
+                  Ingen alergener i kataloget endnu
                 </p>
               </div>
             </template>
@@ -420,18 +450,27 @@ const columns = computed(() => {
           <div v-if="multiselectMode && allergyStatistics" class="space-y-4">
             <h3 class="text-lg font-semibold">📊 Statistik</h3>
 
-            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <div class="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                {{ allergyStatistics.totalInhabitants }}
-              </div>
-              <div class="text-sm text-blue-700 dark:text-blue-300">
-                Unikke beboere berørt
-              </div>
+            <UAlert
+                title="Unikke beboere berørt"
+                description="Disse bofæller kan ikke tåle denne kombination af allergener."
+                color="primary"
+                :avatar="{text: allergyStatistics.totalInhabitants.toString()}"
+            />
+
+            <!-- Show unique inhabitants -->
+            <div class="space-y-2">
+              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Berørte beboere</h4>
+              <UserListItem
+                  :inhabitants="allergyStatistics.uniqueInhabitantsList"
+                  label="beboer"
+                  labelPlural="beboere"
+              />
             </div>
 
             <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Fordeling pr. allergi</h4>
-              <div v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name" class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Fordeling pr. allergen</h4>
+              <div v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
+                   class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
                 <div class="flex items-center gap-2">
                   <span class="text-lg">{{ item.icon || '🏷️' }}</span>
                   <span class="text-sm">{{ item.name }}</span>
@@ -455,15 +494,17 @@ const columns = computed(() => {
           </div>
 
           <!-- No selection state (not multiselect or no selections) -->
-          <div v-else-if="!selectedAllergyType && formMode === FORM_MODES.VIEW" class="flex flex-col items-center justify-center py-12 text-gray-500">
+          <div v-else-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
+               class="flex flex-col items-center justify-center py-12 text-gray-500">
             <UIcon name="i-heroicons-arrow-left" class="w-8 h-8 mb-2"/>
-            <p class="text-sm">{{ multiselectMode ? 'Vælg allergier for at se statistik' : 'Vælg en allergi for at se detaljer' }}</p>
+            <p class="text-sm">
+              {{ multiselectMode ? 'Vælg allergier for at se statistik' : 'Vælg en allergi for at se detaljer' }}</p>
           </div>
 
           <!-- Selected allergy in view mode (not multiselect) -->
           <div v-else-if="selectedAllergyType && formMode === FORM_MODES.VIEW" class="space-y-4">
             <h3 class="text-lg font-semibold">Detaljer</h3>
-            <AllergyTypeCard :allergy-type="selectedAllergyType" />
+            <AllergyTypeCard :allergy-type="selectedAllergyType"/>
           </div>
 
           <!-- Edit mode -->
@@ -489,7 +530,7 @@ const columns = computed(() => {
                 />
               </div>
             </div>
-            <AllergyTypeCard :allergy-type="selectedAllergyType" />
+            <AllergyTypeCard :allergy-type="selectedAllergyType"/>
           </div>
 
           <!-- Create mode -->
@@ -536,7 +577,7 @@ const columns = computed(() => {
                     @click="cancelEdit"
                     name="cancel-allergy-type"
                 >
-                    Annuller
+                  Annuller
                 </UButton>
               </div>
             </div>
@@ -546,7 +587,7 @@ const columns = computed(() => {
 
       <!-- Mobile: Card View -->
       <div class="md:hidden">
-        <Loader v-if="isAllergyTypesLoading" text="Indlæser allergier..." />
+        <Loader v-if="isAllergyTypesLoading" text="Indlæser allergier..."/>
 
         <!-- Empty state -->
         <div v-else-if="isNoAllergyTypes" class="flex flex-col items-center justify-center py-6 gap-3">
@@ -574,7 +615,8 @@ const columns = computed(() => {
           >
             <div class="flex items-start gap-3">
               <!-- Icon -->
-              <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
+              <div
+                  class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
                 <UIcon
                     v-if="allergyType.icon?.startsWith('i-')"
                     :name="allergyType.icon"

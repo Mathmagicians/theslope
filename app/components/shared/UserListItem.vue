@@ -36,7 +36,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Check if this is a group or single user
-const isGroup = computed(() => !!props.inhabitants && props.inhabitants.length > 0)
+const isGroup = computed(() => !!props.inhabitants)
 
 // Inject responsive breakpoint from parent
 const isMd = inject<Ref<boolean>>('isMd')
@@ -51,9 +51,10 @@ const inhabitantCount = computed(() => props.inhabitants?.length || 0)
 // Determine avatar size - use prop if provided, otherwise responsive based on compact
 const avatarSize = computed(() => {
     if (props.size) return props.size
-    if (props.compact) return 'xs'
-    return getIsMd.value ? 'md' : 'sm'
+    if (props.compact) return 'sm'
+    return getIsMd.value ? 'lg' : 'md'
 })
+
 </script>
 
 <template>
@@ -67,6 +68,7 @@ const avatarSize = computed(() => {
                 v-for="inhabitant in inhabitants"
                 :key="inhabitant.name"
                 :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                :delay-duration="0"
             >
                 <UAvatar
                     :src="inhabitant.pictureUrl || undefined"

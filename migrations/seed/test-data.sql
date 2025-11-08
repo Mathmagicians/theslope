@@ -7,9 +7,9 @@ VALUES (999, 9999, 99999, datetime('now', '-1 year'), NULL, 'Test Household', 'T
 -- Test Inhabitants
 INSERT OR REPLACE INTO Inhabitant (id, heynaboId, userId, householdId, pictureUrl, name, lastName, birthDate)
 VALUES
-(9991, 99991, NULL, 999, NULL, 'Anna', 'Testsen', datetime('now', '-35 years')),
-(9992, 99992, NULL, 999, NULL, 'Bob', 'Testsen', datetime('now', '-37 years')),
-(9993, 99993, NULL, 999, NULL, 'Charlie', 'Testsen', datetime('now', '-10 years'));
+(9991, 99991, NULL, 999, 'https://i.pravatar.cc/150?img=1', 'Anna', 'Testsen', datetime('now', '-35 years')),
+(9992, 99992, NULL, 999, 'https://i.pravatar.cc/150?img=12', 'Bob', 'Testsen', datetime('now', '-37 years')),
+(9993, 99993, NULL, 999, 'https://i.pravatar.cc/150?img=8', 'Charlie', 'Testsen', datetime('now', '-10 years'));
 
 -- Peanut Allergies for test inhabitants
 -- Anna has peanut allergy with comment
