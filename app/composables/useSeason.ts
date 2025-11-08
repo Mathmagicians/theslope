@@ -39,7 +39,8 @@ export const useSeason = () => {
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
-    const {createTicketPrice} = useTicketPriceValidation()
+    const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
+    const TicketType = TicketTypeSchema.enum
 
     /**
      * Create a default season based on app configuration.
@@ -59,7 +60,7 @@ export const useSeason = () => {
                                                                            maximumAgeLimit
                                                                        }) => createTicketPrice(
                 ticketType, price, undefined, description, maximumAgeLimit)) ??
-            [createTicketPrice('ADULT', 4000)]
+            [createTicketPrice(TicketType.ADULT, 4000)]
 
         return {
             shortName: createSeasonName(dateRange),

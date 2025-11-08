@@ -11,6 +11,7 @@
  * - UTable for consistent UI
  */
 import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TeamRole } from '~/composables/useCookingTeamValidation'
 
 interface Inhabitant {
   id: number
@@ -19,7 +20,7 @@ interface Inhabitant {
   pictureUrl: string | null
   CookingTeamAssignment?: Array<{
     id: number
-    role: 'CHEF' | 'COOK' | 'JUNIORHELPER'
+    role: TeamRole
     cookingTeamId: number
     cookingTeam: {
       id: number
@@ -40,7 +41,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  'add:member': [inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER']
+  'add:member': [inhabitantId: number, role: TeamRole]
   'remove:member': [assignmentId: number]
 }>()
 
@@ -57,13 +58,17 @@ defineExpose({
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
+// Import Role enum for use in template (ADR-001 compliance)
+const { TeamRoleSchema } = useCookingTeamValidation()
+const Role = TeamRoleSchema.enum
+
 // Search and filtering
 const searchQuery = ref('')
 
 const roleLabels = {
-  CHEF: 'Chefkok',
-  COOK: 'Kok',
-  JUNIORHELPER: 'Kokkespire'
+  [Role.CHEF]: 'Chefkok',
+  [Role.COOK]: 'Kok',
+  [Role.JUNIORHELPER]: 'Kokkespire'
 }
 
 // Filter inhabitants by search query
@@ -126,7 +131,7 @@ const sortByStatusTeamAndName = (rowA: any, rowB: any): number => {
   return `${a.name} ${a.lastName}`.localeCompare(`${b.name} ${b.lastName}`)
 }
 
-const handleAddMember = (inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER') => {
+const handleAddMember = (inhabitantId: number, role: TeamRole) => {
   emit('add:member', inhabitantId, role)
 }
 
@@ -249,7 +254,7 @@ const table = useTemplateRef('table')
               color="primary"
               size="xs"
               icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, 'CHEF')"
+              @click="handleAddMember(row.original.id, Role.CHEF)"
           >
             Chef
           </UButton>
@@ -257,7 +262,7 @@ const table = useTemplateRef('table')
               color="primary"
               size="xs"
               icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, 'COOK')"
+              @click="handleAddMember(row.original.id, Role.COOK)"
           >
             Kok
           </UButton>
@@ -265,7 +270,7 @@ const table = useTemplateRef('table')
               color="primary"
               size="xs"
               icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, 'JUNIORHELPER')"
+              @click="handleAddMember(row.original.id, Role.JUNIORHELPER)"
           >
             Spire
           </UButton>

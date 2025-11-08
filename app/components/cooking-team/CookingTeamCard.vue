@@ -2,10 +2,11 @@
 import type { FormMode } from '~/types/form'
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
+import type { TeamRole } from '~/composables/useCookingTeamValidation'
 
 interface TeamMember {
   id: number
-  role: 'CHEF' | 'COOK' | 'JUNIORHELPER'
+  role: TeamRole
   inhabitant: {
     id: number
     name: string
@@ -45,7 +46,7 @@ const emit = defineEmits<{
   'update:teamName': [name: string]
   'update:affinity': [affinity: WeekDayMap | null]
   delete: [teamId: number | undefined]
-  'add:member': [inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER']
+  'add:member': [inhabitantId: number, role: TeamRole]
   'remove:member': [assignmentId: number]
 }>()
 

@@ -234,8 +234,9 @@ describe('useCalendarEvents', () => {
             const result = getEventsForDay(calendarDate, eventMap)
 
             expect(result).toHaveLength(1)
-            expect(result[0]!.date).toEqual(toDate(calendarDate))
+            // Verify timezone-independent equality (UTC timestamp comparison would fail in non-UTC timezones)
             expect(formatDate(result[0]!.date)).toEqual(formatDate(toDate(calendarDate)))
+            expect(isSameDay(result[0]!.date, toDate(calendarDate))).toBe(true)
         })
     })
 

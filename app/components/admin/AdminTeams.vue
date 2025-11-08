@@ -21,7 +21,7 @@
  * └─────────────────┴──────────────────────────────┘
  */
 import {FORM_MODES} from "~/types/form"
-import type {CookingTeam} from "~/composables/useCookingTeamValidation"
+import type {CookingTeam, TeamRole} from "~/composables/useCookingTeamValidation"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
@@ -233,7 +233,7 @@ const handleDeleteTeam = async (teamId: number) => {
 const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
 // EDIT MODE: Add member to team (IMMEDIATE SAVE)
-const handleAddMember = async (inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER') => {
+const handleAddMember = async (inhabitantId: number, role: TeamRole) => {
   if (!selectedTeam.value?.id) return
 
   await addTeamMember({

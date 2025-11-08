@@ -5,6 +5,7 @@ import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 // COMPONENT DEPENDENCIES
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
 const TICKET_TYPES = TicketTypeSchema.options
+const TicketType = TicketTypeSchema.enum
 
 // COMPONENT DEFINITION
 const model = defineModel<TicketPrice[]>({required: true, default: () => []})
@@ -30,9 +31,9 @@ const toOre = (dkk: number): number => Math.round(dkk * 100)
 
 const formatTicketType = (type: string): string => {
   const labels: Record<string, string> = {
-    'ADULT': 'Voksen',
-    'CHILD': 'Barn',
-    'BABY': 'Baby'
+    [TicketType.ADULT]: 'Voksen',
+    [TicketType.CHILD]: 'Barn',
+    [TicketType.BABY]: 'Baby'
   }
   return labels[type] || type
 }

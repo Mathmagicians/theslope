@@ -14,6 +14,9 @@ import type {DinnerMode} from '~/composables/useDinnerEventValidation'
 import {z} from 'zod'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import {formatWeekdayCompact} from '~/utils/date'
+import type Badge from '#ui/components/Badge.vue'
+
+type BadgeColor = Badge['variants']['color']
 
 interface Props {
   modelValue?: WeekDayMap<DinnerMode> | null
@@ -55,7 +58,7 @@ const dinnerModeOrder: DinnerMode[] = [
   DinnerMode.NONE
 ]
 
-const dinnerModeConfig: Record<DinnerMode, {label: string, icon: string, color: string}> = {
+const dinnerModeConfig: Record<DinnerMode, {label: string, icon: string, color: BadgeColor}> = {
   [DinnerMode.DINEIN]: {label: 'Fællesspisning', icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining', color: 'success'},
   [DinnerMode.DINEINLATE]: {label: 'Fællesspisning (sen)', icon: 'i-heroicons-clock', color: 'warning'},
   [DinnerMode.TAKEAWAY]: {label: 'Takeaway', icon: 'i-heroicons-shopping-bag', color: 'primary'},
@@ -91,7 +94,7 @@ const getModeIcon = (mode: DinnerMode): string => {
 }
 
 // Get color for a mode
-const getModeColor = (mode: DinnerMode): string => {
+const getModeColor = (mode: DinnerMode): BadgeColor => {
   return dinnerModeConfig[mode].color
 }
 
@@ -129,8 +132,8 @@ const visibleDays = computed(() => {
           v-for="mode in dinnerModeOrder"
           :key="mode"
           :icon="dinnerModeConfig[mode].icon"
-          :color="(modelValue?.[day] ?? DinnerMode.DINEIN) === mode ? dinnerModeConfig[mode].color : 'neutral'"
-          :variant="(modelValue?.[day] ?? DinnerMode.DINEIN) === mode ? 'solid' : 'ghost'"
+          :color="getModeColor(modelValue?.[day] ?? DinnerMode.DINEIN)"
+          :variant="modelValue?.[day]  === mode ? 'solid' : 'ghost'"
           :disabled="disabled"
           size="xs"
           :name="`${name}-${day}-${mode}`"
