@@ -1,25 +1,35 @@
 <script setup lang="ts">
 const store = useUsersStore()
 const {allergyManagers, isAllergyManagersLoading} = storeToRefs(store)
+
+// Extract Inhabitant objects - they already match InhabitantLike interface
+const allergyManagerInhabitants = computed(() => {
+  if (!allergyManagers.value) return []
+  return allergyManagers.value
+    .filter(m => m.Inhabitant)
+    .map(m => m.Inhabitant!)
+})
 </script>
 
 <template>
   <Loader v-if="isAllergyManagersLoading" text="Henter allergi ansvarlige" />
 
-  <div v-else-if="allergyManagers && allergyManagers.length > 0" class="space-y-3">
-    <p class="text-sm text-muted">Kontakt allergi ansvarlig hvis du har spørgsmål om allergier:</p>
-
-    <div class="flex flex-col gap-3">
+  <UAlert
+    v-else-if="allergyManagers && allergyManagers.length > 0"
+    color="ocean"
+    variant="subtle"
+    :ui="{ description: 'flex items-center gap-3' }"
+  >
+    <template #description>
+      <p class="text-sm flex-1">Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:</p>
       <UserListItem
-        v-for="manager in allergyManagers"
-        :key="`manager-${manager.id}`"
-        :name="manager.Inhabitant?.name || ''"
-        :last-name="manager.Inhabitant?.lastName"
-        :picture-url="manager.Inhabitant?.pictureUrl || null"
-        :subtitle="manager.email"
+        :inhabitants="allergyManagerInhabitants"
+        label="Allergiansvarlig"
+        labelPlural="Allergiansvarlige"
+        ring-color="ocean-500"
       />
-    </div>
-  </div>
+    </template>
+  </UAlert>
 
   <p v-else class="text-muted text-sm">Ingen allergi ansvarlige registreret endnu.</p>
 </template>

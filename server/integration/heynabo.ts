@@ -8,9 +8,10 @@ import InhabitantCreateInput = Prisma.InhabitantCreateInput;
 import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
 import {maskPassword} from "~/utils/utils";
 import type {UserCreate} from "~/composables/useUserValidation";
+// Import SystemRole enum from generated schemas (ADR-001 compliance)
+// Note: server integration files execute at module load time, so import directly from generated schemas
+import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
-// Import SystemRole enum from validation composable (ADR-001 compliance)
-const {SystemRoleSchema} = useUserValidation()
 const SystemRole = SystemRoleSchema.enum
 
 dotenv.config();

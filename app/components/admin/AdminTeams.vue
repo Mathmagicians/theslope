@@ -28,13 +28,24 @@ const store = usePlanStore()
 const {
   isSeasonsLoading,
   isSelectedSeasonLoading,
+  isSeasonsInitialized,
+  isSelectedSeasonInitialized,
+  isPlanStoreReady,
   isNoSeasons,
   selectedSeason,
   activeSeason,
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createTeam, updateTeam, deleteTeam, onSeasonSelect, addTeamMember, removeTeamMember, assignTeamAffinitiesAndEvents} = store
+const {
+  createTeam,
+  updateTeam,
+  deleteTeam,
+  onSeasonSelect,
+  addTeamMember,
+  removeTeamMember,
+  assignTeamAffinitiesAndEvents
+} = store
 
 // Get teams from selected season - ALWAYS show live data
 const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
@@ -51,7 +62,7 @@ const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {onSeasonChange, season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
-  activeSeason: computed(() => activeSeason.value),
+  activeSeason: computed(() => activeSeason.value || null),
   onSeasonSelect: store.onSeasonSelect
 })
 
@@ -72,6 +83,8 @@ const isAddingTeam = ref(false)
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
+  console.info('AdminTeams watch', ', teamCount:', teamCount.value, ', selected season:', selectedSeason.value?.shortName, 'teams count:', teams.value.length)
+  if (!selectedSeason.value) return
   if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
     const existingTeamCount = teams.value.length
     createDraft.value = Array.from({length: teamCount.value}, (_, index) =>
@@ -218,7 +231,7 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: any) => {
   if (!team) return
 
   await updateTeam({...team, affinity}) // Immediate save to DB
-  showSuccessToast('Madlavningsdage opdateret')
+  showSuccessToast('Madlavningsdage for teams opdateret')
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -293,18 +306,38 @@ const columns = [
               class="w-full md:w-auto"
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
           />
-          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
+          <FormModeSelector v-if="!isNoSeasons" v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
       </div>
     </template>
 
     <template #default>
+      <Loader v-if="isSelectedSeasonLoading || isSeasonsLoading" text="Henter data for fællesspisningssæson"/>
+      <AdminToCreateSeason v-else-if="isNoSeasons"/>
+      <UAlert
+          v-else-if="isPlanStoreReady && isNoTeams && formMode !== FORM_MODES.CREATE"
+          title="Her ser lidt tomt ud!"
+          description="Ingen madhold oprettet endnu ..."
+          :avatar="{text: '💤'}"
+          :actions="[
+      {
+        label: 'Opret nye madhold',
+        color: 'secondary',
+        variant: 'solid',
+        to: '/admin/teams?mode=create',
+        icon: 'i-heroicons-plus-circle',
+      }
+    ]"
+          color="info"
+          class="space-y-4"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
         <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">
           <div class="flex items-center gap-4">
             <label for="team-count" class="text-lg font-bold">
-              <span v-if="teams.length > 0">Vi har allerede {{ teams.length }} madhold. Hvor mange nye vil du lave?</span>
+              <span v-if="teams.length > 0">Vi har allerede {{
+                  teams.length
+                }} madhold. Hvor mange nye vil du lave?</span>
               <span v-else>Hvor mange madhold skal vi have?</span>
             </label>
             <input
@@ -387,79 +420,73 @@ const columns = [
 
         <!-- VIEW MODE: Table with team assignments -->
         <div v-else class="px-4 pb-4 space-y-6">
-        <UTable
-            :columns="columns"
-            :data="displayedTeams"
-            :loading="isSelectedSeasonLoading"
-            :ui="{ td: 'py-2' }"
-        >
-          <!-- Team name column with colored badge -->
-          <template #name-cell="{ row }">
-            <UBadge
-                :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                variant="solid"
-                size="md"
-            >
-              {{ row.original.name }}
-            </UBadge>
-          </template>
-
-          <!-- Team affinity column with compact WeekDayMapDisplay -->
-          <template #affinity-cell="{ row }">
-            <WeekDayMapDisplay
-                :model-value="row.original.affinity"
-                :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                compact
-            />
-          </template>
-
-          <!-- Team assignments column with compact CookingTeamCard -->
-          <template #assignments-cell="{ row }">
-            <CookingTeamCard
-                :team-id="row.original.id"
-                :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
-                :team-name="row.original.name"
-                :assignments="row.original.assignments || []"
-                compact
-                :mode="FORM_MODES.VIEW"
-            />
-          </template>
-
-          <template #empty-state>
-            <div class="flex flex-col items-center justify-center py-6 gap-3">
-              <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
-              <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle madhold
-                for at komme i gang!</p>
-              <UButton
-                  v-if="!disabledModes.includes(FORM_MODES.CREATE)"
-                  name="create-new-team"
-                  color="secondary"
-                  size="sm"
-                  icon="i-heroicons-plus-circle"
-                  @click="onModeChange(FORM_MODES.CREATE)"
+          <UTable
+              :columns="columns"
+              :data="displayedTeams"
+              :loading="isSelectedSeasonLoading"
+              :ui="{ td: 'py-2' }"
+          >
+            <!-- Team name column with colored badge -->
+            <template #name-cell="{ row }">
+              <UBadge
+                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
+                  variant="solid"
+                  size="md"
               >
-                Opret madhold
-              </UButton>
-            </div>
-          </template>
-        </UTable>
+                {{ row.original.name }}
+              </UBadge>
+            </template>
 
-        <!-- Team calendar view -->
-        <TeamCalendarDisplay
-            v-if="selectedSeason && displayedTeams.length > 0"
-            :season-dates="selectedSeason.seasonDates"
-            :teams="displayedTeams"
-            :dinner-events="selectedSeason.dinnerEvents ?? []"
-            :holidays="selectedSeason.holidays"
-        />
+            <!-- Team affinity column with compact WeekDayMapDisplay -->
+            <template #affinity-cell="{ row }">
+              <WeekDayMapDisplay
+                  :model-value="row.original.affinity"
+                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
+                  compact
+              />
+            </template>
+
+            <!-- Team assignments column with compact CookingTeamCard -->
+            <template #assignments-cell="{ row }">
+              <CookingTeamCard
+                  :team-id="row.original.id"
+                  :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
+                  :team-name="row.original.name"
+                  :assignments="row.original.assignments || []"
+                  compact
+                  :mode="FORM_MODES.VIEW"
+              />
+            </template>
+
+            <template #empty-state>
+              <div class="flex flex-col items-center justify-center py-6 gap-3">
+                <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
+                <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle
+                  madhold
+                  for at komme i gang!</p>
+                <UButton
+                    v-if="!disabledModes.includes(FORM_MODES.CREATE)"
+                    name="create-new-team"
+                    color="secondary"
+                    size="sm"
+                    icon="i-heroicons-plus-circle"
+                    @click="onModeChange(FORM_MODES.CREATE)"
+                >
+                  Opret madhold
+                </UButton>
+              </div>
+            </template>
+          </UTable>
+
+          <!-- Team calendar view -->
+          <TeamCalendarDisplay
+              v-if="selectedSeason && displayedTeams.length > 0"
+              :season-dates="selectedSeason.seasonDates"
+              :teams="displayedTeams"
+              :dinner-events="selectedSeason.dinnerEvents ?? []"
+              :holidays="selectedSeason.holidays"
+          />
         </div>
-      </div>
-
-      <Loader v-else-if="isSelectedSeasonLoading" text="Madhold"/>
-      <div v-else-if="isNoSeasons"
-           class="flex flex-col items-center justify-center space-y-4 p-8">
-        <h3 class="text-lg font-semibold">Ingen sæson valgt</h3>
-        <p>Vælg en sæson for at se madhold, eller opret en ny sæson under Planlægning.</p>
       </div>
     </template>
 
@@ -483,8 +510,8 @@ const columns = [
         >
           Tilføj madhold
         </UButton>
-        <UButton color="gray" variant="ghost" @click="handleCancel">
-          Færdig
+        <UButton color="secondary" variant="ghost" @click="handleCancel">
+          Annuller
         </UButton>
       </div>
     </template>

@@ -126,22 +126,13 @@ const handleCancel = async () => {
         />
       </div>
       <Loader v-else-if="isSelectedSeasonLoading" text="Henter data for fællesspisningssæson"/>
-      <div v-else-if="isNoSeasons"
-           class="flex flex-col items-center justify-center space-y-4">
-        <h3 class="text-lg font-semibold">Her ser lidt tomt ud! </h3>
-        <UButton v-if="!disabledModes.includes(FORM_MODES.CREATE)"
-                 name="create-new-season"
-                 color="secondary"
-                 icon="i-heroicons-plus-circle"
-                 @click="onModeChange(FORM_MODES.CREATE)"
-        >
-          Opret ny sæson
-        </UButton>
-        <p>Bed din administrator om at oprette en fællespisningssæson.</p>
-      </div>
-      <div v-else>
-        <h3 class="text-lg font-semibold">Vælg en sæson for at komme i gang</h3>
-      </div>
+      <AdminToCreateSeason v-else-if="isNoSeasons"/>
+      <UAlert v-else
+          :avatar="{text: '💤'}"
+          color="info" class="space-y-4"
+          title="Her ser lidt tomt ud!"
+          description="Vælg en fællesspisningssæson for at komme i gang">
+      </UAlert>
     </template>
   </UCard>
 

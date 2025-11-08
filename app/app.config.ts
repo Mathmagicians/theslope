@@ -1,5 +1,7 @@
-// Import TicketType enum from validation composable (ADR-001 compliance)
-const { TicketTypeSchema } = useTicketPriceValidation()
+// Import TicketType enum from generated Zod schemas (ADR-001 compliance)
+// Note: app.config.ts is a build-time file, so we import directly from generated schemas
+import { TicketTypeSchema } from '~~/prisma/generated/zod'
+
 const TicketType = TicketTypeSchema.enum
 
 export default defineAppConfig({

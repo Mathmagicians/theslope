@@ -17,6 +17,10 @@ interface SingleProps {
 interface GroupProps {
     inhabitants: InhabitantLike[]
     compact?: boolean
+    label?: string
+    labelPlural?: string
+    size?: 'xs' | 'sm' | 'md' | 'lg'
+    ringColor?: string
     name?: never
     lastName?: never
     pictureUrl?: never
@@ -26,40 +30,54 @@ interface GroupProps {
 type Props = SingleProps | GroupProps
 
 const props = withDefaults(defineProps<Props>(), {
-    compact: false
+    compact: false,
+    label: 'beboer',
+    labelPlural: 'beboere'
 })
 
 // Check if this is a group or single user
 const isGroup = computed(() => !!props.inhabitants && props.inhabitants.length > 0)
 
-// Responsive max: 3 for mobile, 5 for desktop
-const { width } = useWindowSize()
-const maxAvatars = computed(() => width.value < 768 ? 3 : 5)
+// Inject responsive breakpoint from parent
+const isMd = inject<Ref<boolean>>('isMd')
+const getIsMd = computed((): boolean => isMd?.value ?? false)
 
-// Convert inhabitants to avatar format for UAvatarGroup
-const avatarItems = computed(() => {
-    if (!props.inhabitants) return []
-    return props.inhabitants.map(inhabitant => ({
-        src: inhabitant.pictureUrl || undefined,
-        alt: `${inhabitant.name} ${inhabitant.lastName || ''}`,
-        name: `${inhabitant.name} ${inhabitant.lastName || ''}`
-    }))
-})
+// Responsive max: 3 for mobile, 5 for desktop
+const maxAvatars = computed(() => getIsMd.value ? 5 : 3)
 
 // Show count when there are inhabitants
 const inhabitantCount = computed(() => props.inhabitants?.length || 0)
+
+// Determine avatar size - use prop if provided, otherwise responsive based on compact
+const avatarSize = computed(() => {
+    if (props.size) return props.size
+    if (props.compact) return 'xs'
+    return getIsMd.value ? 'md' : 'sm'
+})
 </script>
 
 <template>
     <!-- Group mode: Multiple inhabitants -->
     <div v-if="isGroup" class="flex items-center gap-2">
         <UAvatarGroup
-            :items="avatarItems"
             :max="maxAvatars"
-            :size="compact ? 'xs' : 'sm'"
-        />
-        <span class="text-xs text-muted">
-            {{ inhabitantCount }} {{ inhabitantCount === 1 ? 'beboer' : 'beboere' }}
+            :size="avatarSize"
+        >
+            <UTooltip
+                v-for="inhabitant in inhabitants"
+                :key="inhabitant.name"
+                :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+            >
+                <UAvatar
+                    :src="inhabitant.pictureUrl || undefined"
+                    :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                    icon="i-heroicons-user"
+                    :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
+                />
+            </UTooltip>
+        </UAvatarGroup>
+        <span class="text-xs md:text-md">
+            {{ inhabitantCount }} {{ inhabitantCount === 1 ? label : labelPlural }}
         </span>
     </div>
 

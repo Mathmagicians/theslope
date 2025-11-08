@@ -176,6 +176,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
             }
 
             console.info(`👨‍💻 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
+            console.info(`👨‍💻 > USER > [GET] Inhabitant: ${user.Inhabitant ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household ? user.Inhabitant.household.id : 'NULL'}` : 'NULL'}`)
 
             // Return with deserialized roles
             return {
@@ -454,6 +455,9 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
                 inhabitantComment: allergy.inhabitantComment
             }))
         }))
+
+        // Sort by number of inhabitants (descending)
+        result.sort((a, b) => b.inhabitants.length - a.inhabitants.length)
 
         console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${result.length} allergy types with inhabitants`)
         return result

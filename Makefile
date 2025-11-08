@@ -68,6 +68,11 @@ d1-migrate-prod:
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
 
+d1-seed-testdata:
+	@echo "🧪 Applying test data to local database"
+	@npx wrangler d1 execute theslope --file migrations/seed/test-data.sql --local
+	@echo "✅ Test data loaded!"
+
 d1-list-users-local:
 	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local
 

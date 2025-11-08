@@ -701,17 +701,21 @@ const config = { ticketType: TicketType.ADULT }  // ✅ Enum value
 2. MUST re-export enum schemas for application code
 3. MUST use generated Zod enum schemas in validation schemas
 
-**Application Code (stores, components, pages, app.config):**
+**Application Code (stores, components, pages):**
 4. MUST import enum schemas from composables (e.g., `useTicketPriceValidation()`)
 5. MUST use `.enum` property for runtime values (e.g., `TicketTypeSchema.enum.ADULT`)
 6. MUST NOT use string literals for enum values (e.g., `'ADMIN'`, `'BABY'`)
 7. MUST NOT import directly from `~~/prisma/generated/zod` (import from composables instead)
 
-**Server Code (API routes, repositories):**
-8. MAY import from composables or directly from `~~/prisma/generated/zod`
-9. MUST use H3 validation helpers in all API routes
+**Build-time Configuration (app.config.ts, nuxt.config.ts):**
+8. MUST import directly from `~~/prisma/generated/zod` (composables not available at build time)
+
+**Server Code:**
+9. **API event handlers:** MAY use composables or import from `~~/prisma/generated/zod`
+10. **Server integration/utility files:** MUST import directly from `~~/prisma/generated/zod` (auto-imports not available at module load time)
+11. MUST use H3 validation helpers in all API routes
 
 **General:**
-10. MUST run `make prisma` after Prisma schema enum changes
-11. Repository pattern for all database operations
-12. Leverage Nuxt auto-imports (no manual imports for composables)
+12. MUST run `make prisma` after Prisma schema enum changes
+13. Repository pattern for all database operations
+14. Leverage Nuxt auto-imports (no manual imports for composables in runtime application code)
