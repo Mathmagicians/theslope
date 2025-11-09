@@ -178,7 +178,12 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await page.locator('[name="holidayRangeList"] input[name="end"]').fill(holidayEnd)
             await page.locator('button[name="holidayRangeAddToList"]').click()
 
-            // THEN: Holiday appears in list
+            // THEN: Holiday appears in list (use pollUntil for reliable visibility check)
+            await pollUntil(
+                async () => await page.locator('[name^="holidayRangeList-0"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
             await expect(page.locator('[name^="holidayRangeList-0"]')).toBeVisible()
             await expect(page.locator('button[name="holidayRangeRemoveFromList-0"]')).toBeVisible()
 

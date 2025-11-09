@@ -21,12 +21,21 @@ export const useUsersStore = defineStore("Users", () => {
         'allergyManagers',
         () => $fetch(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`),
         {
-            default: () => []
+            default: () => [],
+            watch: false  // ADR-007: Prevent auto-refetch on reactive deps
         }
     )
 
     const isAllergyManagersLoading = computed(() => allergyManagersStatus.value === 'pending')
     const isAllergyManagersErrored = computed(() => allergyManagersStatus.value === 'error')
+
+    // Error logging for allergyManagers - fail gracefully with empty list
+    watch(allergyManagersError, (error) => {
+        if (error) {
+            console.error('👥 > USERS_STORE > Error loading allergy managers:', error)
+            console.info('👥 > USERS_STORE > Falling back to empty allergy managers list')
+        }
+    })
 
     /** Function to load user data */
     const loadData = async () => {
