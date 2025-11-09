@@ -38,7 +38,7 @@ const tabs = [
   {
     key: 'allergies',
     label: 'Allergier',
-    icon: 'i-heroicons-hand-raised',
+    icon: 'i-mdi-food-allergy-off-outline',
     content: 'Se allergier. Administrer allergier. Plakat til udprintning.',
     component: 'AdminAllergies'
   },

@@ -165,10 +165,8 @@ const showNewBadge = computed(() => isNew(props.allergyType.createdAt || ''))
         >
           <!-- Inhabitant with avatar and name -->
           <UserListItem
-              :name="inhabitant.name"
-              :last-name="inhabitant.lastName"
-              :picture-url="inhabitant.pictureUrl"
-              :subtitle="inhabitant.householdName"
+              :to-display="inhabitant"
+              :label="inhabitant.householdName"
           />
 
           <!-- Additional info: Comment and timestamp -->

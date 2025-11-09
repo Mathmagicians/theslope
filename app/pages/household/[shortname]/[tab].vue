@@ -30,7 +30,7 @@ const tabs = [
   {
     key: 'allergies',
     label: 'Allergier',
-    icon: 'i-heroicons-exclamation-triangle',
+    icon: 'i-mdi-food-allergy-off-outline',
     component: 'HouseholdAllergies'
   },
   {

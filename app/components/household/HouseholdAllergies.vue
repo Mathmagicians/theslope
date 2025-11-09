@@ -258,20 +258,16 @@ const columns = [
 
           <!-- Allergies column (collapsed state) -->
           <template #allergies-cell="{ row }">
-            <div v-if="row.original.allergies.length === 0" class="flex items-center gap-2 text-muted">
-              <span class="text-base md:text-lg">☀️</span>
-              <span class="text-xs md:text-sm">Ingen</span>
-            </div>
-            <div v-else class="space-y-1">
+            <AllergyTypeDisplay v-if="row.original.allergies.length === 0" compact show-name />
+            <div v-else class="flex flex-wrap gap-1 md:gap-2">
               <div
                   v-for="allergy in row.original.allergies"
                   :key="allergy.id"
-                  class="flex items-center gap-2"
+                  class="flex items-center gap-1"
               >
-                <span class="text-base md:text-lg">{{ allergy.allergyType.icon }}</span>
-                <span class="text-xs md:text-sm font-medium">{{ allergy.allergyType.name }}</span>
+                <AllergyTypeDisplay :allergy-type="allergy.allergyType" compact show-name />
                 <span v-if="allergy.inhabitantComment" class="text-xs text-muted">
-                  — {{ allergy.inhabitantComment }}
+                  ({{ allergy.inhabitantComment }})
                 </span>
               </div>
             </div>
@@ -316,12 +312,7 @@ const columns = [
                 >
                   <!-- Icon and name row -->
                   <div class="flex items-center gap-2 md:flex-shrink-0">
-                    <div class="flex-shrink-0">
-                      <span class="text-2xl">{{ allergy.allergyType.icon }}</span>
-                    </div>
-                    <div class="flex-shrink-0 min-w-24">
-                      <span class="text-sm font-medium">{{ allergy.allergyType.name }}</span>
-                    </div>
+                    <AllergyTypeDisplay :allergy-type="allergy.allergyType" show-name />
                   </div>
 
                   <!-- Comment input row -->
@@ -363,16 +354,72 @@ const columns = [
               </div>
 
               <!-- Empty state -->
-              <div v-else class="text-left py-6 text-xs md:text-sm text-muted">
-                <span class="text-xl md:text-2xl block mb-2">☀️</span>
-                Ingen allergier endnu.
-              </div>
+              <AllergyTypeDisplay show-name />
             </div>
           </template>
         </UTable>
 
         <!-- Contact allergi ansvarlig (always shown) -->
         <AllergyManagersList/>
+
+        <!-- MOCKUP: AllergyTypeDisplay Component Variations -->
+        <UCard class="rounded-none md:rounded-lg border-t-0 md:border-t">
+          <template #header>
+            <h4 class="text-base font-semibold">🎨 AllergyTypeDisplay Component Mockup</h4>
+          </template>
+          <div class="space-y-6">
+            <!-- Sample allergy types for testing -->
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <h5 class="text-sm font-semibold text-muted">1. Compact without name (compact)</h5>
+                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" compact />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" compact />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" compact />
+                  <AllergyTypeDisplay compact />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <h5 class="text-sm font-semibold text-muted">2. Compact with name (compact + show-name)</h5>
+                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" compact show-name />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" compact show-name />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" compact show-name />
+                  <AllergyTypeDisplay compact show-name />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <h5 class="text-sm font-semibold text-muted">3. Regular without name</h5>
+                <div class="flex flex-col gap-2 p-2 bg-elevated rounded">
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" />
+                  <AllergyTypeDisplay />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <h5 class="text-sm font-semibold text-muted">4. Regular with name (show-name)</h5>
+                <div class="flex flex-col gap-2 p-2 bg-elevated rounded">
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" show-name />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" show-name />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" show-name />
+                  <AllergyTypeDisplay show-name />
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <h5 class="text-sm font-semibold text-muted">5. With iconify class (i-mdi-food-allergy-off-outline)</h5>
+                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Allergi', icon: 'i-mdi-food-allergy-off-outline' }" compact show-name />
+                  <AllergyTypeDisplay :allergy-type="{ name: 'Allergi', icon: 'i-mdi-food-allergy-off-outline' }" show-name />
+                </div>
+              </div>
+            </div>
+          </div>
+        </UCard>
       </template>
     </div>
   </UCard>

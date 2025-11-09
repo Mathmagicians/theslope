@@ -1,28 +1,21 @@
 <script setup lang="ts">
-import type {Inhabitant} from '~/composables/useHouseholdValidation'
+import type {InhabitantDisplay} from '~/composables/useHouseholdValidation'
 
 interface Props {
-    inhabitant: Inhabitant
+    inhabitant: InhabitantDisplay
     compact?: boolean
+    label?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
     compact: false
 })
-
-const subtitle = computed(() => {
-    return props.inhabitant.birthDate
-        ? new Date(props.inhabitant.birthDate).toLocaleDateString()
-        : undefined
-})
 </script>
 
 <template>
     <UserListItem
-        :name="inhabitant.name"
-        :last-name="inhabitant.lastName"
-        :picture-url="inhabitant.pictureUrl"
-        :subtitle="subtitle"
+        :to-display="inhabitant"
         :compact="compact"
+        :label="label"
     />
 </template>
