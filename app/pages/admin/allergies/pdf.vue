@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {formatDate, calculateAge} from '~/utils/date'
+
+// No layout for printing
+definePageMeta({
+  layout: false
+})
+
 // STORE
 const store = useAllergiesStore()
 const {allergyTypes, isAllergyTypesLoading} = storeToRefs(store)
@@ -6,14 +13,8 @@ const {allergyTypes, isAllergyTypesLoading} = storeToRefs(store)
 // Initialize store
 store.initAllergiesStore()
 
-// Current date for header
-const currentDate = computed(() => {
-  return new Date().toLocaleDateString('da-DK', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-})
+// Current date for header (formatted in Danish)
+const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
 
 // QR Code URL (server base URL + current route)
 const config = useRuntimeConfig()
@@ -26,19 +27,6 @@ const qrCodeDataUrl = computed(() => {
   if (!qrCodeUrl.value) return ''
   return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl.value)}`
 })
-
-// Helper to calculate age from birthdate
-const calculateAge = (birthDate: Date | string | null) => {
-  if (!birthDate) return null
-  const birth = new Date(birthDate)
-  const today = new Date()
-  const age = today.getFullYear() - birth.getFullYear()
-  const monthDiff = today.getMonth() - birth.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    return age - 1
-  }
-  return age
-}
 
 // Format inhabitants by allergy with adult/child counts
 const allergyData = computed(() => {

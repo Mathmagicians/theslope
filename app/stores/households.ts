@@ -46,7 +46,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         data: selectedHousehold,
         status: selectedHouseholdStatus,
         error: selectedHouseholdError,
-     //   execute: refreshSelectedHousehold
+        refresh: refreshSelectedHousehold
     } = useAsyncData<HouseholdWithInhabitants | null>(
         selectedHouseholdKey,
         async () => {
@@ -200,6 +200,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Actions
         loadHouseholds,
         loadHousehold,
+        refreshSelectedHousehold,
         initHouseholdsStore,
         updateInhabitantPreferences
     }

@@ -131,8 +131,10 @@ export const useHouseholdValidation = () => {
 
     // Minimal inhabitant info for frontend display (team assignments, etc.)
     // Includes birthDate to distinguish children vs adults
+    // Includes heynaboId for profile links (ADR-009)
     const InhabitantDisplaySchema = z.object({
         id: z.number().int().positive(),
+        heynaboId: z.number().int().positive(),
         name: z.string(),
         lastName: z.string(),
         pictureUrl: z.string().optional().nullable(),

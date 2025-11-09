@@ -71,7 +71,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const {
         data: allergies,
         status: allergiesStatus,
-        error: allergiesError
+        error: allergiesError,
+        refresh: refreshAllergies
     } = useAsyncData<AllergyWithRelations[]>(
         allergiesQueryKey,
         () => {
@@ -81,6 +82,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             return $fetch(allergiesQueryKey.value)
         },
         {
+            immediate: true,
             default: () => []
         }
     )
@@ -178,16 +180,18 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Actions - Allergies (Household/Inhabitant)
     // ========================================
 
-    const loadAllergiesForHousehold = (householdId: number) => {
+    const loadAllergiesForHousehold = async (householdId: number) => {
         filterHouseholdId.value = householdId
         filterInhabitantId.value = null
-        console.info(`🥜 > ALLERGY_STORE > Loading allergies for household ID: ${householdId}`)
+        await refreshAllergies()
+        console.info(`🥜 > ALLERGY_STORE > Loaded ${allergies.value.length} allergies for household ${householdId}`)
     }
 
-    const loadAllergiesForInhabitant = (inhabitantId: number) => {
+    const loadAllergiesForInhabitant = async (inhabitantId: number) => {
         filterInhabitantId.value = inhabitantId
         filterHouseholdId.value = null
         console.info(`🥜 > ALLERGY_STORE > Loading allergies for inhabitant ID: ${inhabitantId}`)
+        await refreshAllergies()
     }
 
     const createAllergy = async (allergyData: AllergyCreate): Promise<Allergy> => {
@@ -197,12 +201,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}
             })
-            // Refresh current filter
-            if (filterInhabitantId.value) {
-                loadAllergiesForInhabitant(filterInhabitantId.value)
-            } else if (filterHouseholdId.value) {
-                loadAllergiesForHousehold(filterHouseholdId.value)
-            }
+            // Refresh allergies to get updated data
+            await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
             return created
         } catch (e: any) {
@@ -218,12 +218,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}
             })
-            // Refresh current filter
-            if (filterInhabitantId.value) {
-                loadAllergiesForInhabitant(filterInhabitantId.value)
-            } else if (filterHouseholdId.value) {
-                loadAllergiesForHousehold(filterHouseholdId.value)
-            }
+            // Refresh allergies to get updated data
+            await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
             return updated
         } catch (e: any) {
@@ -237,12 +233,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await $fetch(`/api/household/allergy/${id}`, {
                 method: 'DELETE'
             })
-            // Refresh current filter
-            if (filterInhabitantId.value) {
-                loadAllergiesForInhabitant(filterInhabitantId.value)
-            } else if (filterHouseholdId.value) {
-                loadAllergiesForHousehold(filterHouseholdId.value)
-            }
+            // Refresh allergies to get updated data
+            await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
         } catch (e: any) {
             handleApiError(e, 'deleteAllergy')

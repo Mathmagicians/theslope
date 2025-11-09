@@ -110,9 +110,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         expect(Array.isArray(fetchedHousehold.inhabitants)).toBe(true)
         expect(fetchedHousehold.inhabitants.length).toBe(2)
 
-        // Verify LIGHTWEIGHT inhabitant fields (per ADR-009: id, name, lastName, pictureUrl, birthDate)
+        // Verify LIGHTWEIGHT inhabitant fields (per ADR-009: id, name, lastName, pictureUrl, birthDate, heynaboId)
         fetchedHousehold.inhabitants.forEach((inhabitant: any) => {
             expect(inhabitant.id).toBeDefined()
+            expect(inhabitant.heynaboId).toBeDefined()
             expect(inhabitant.name).toBeDefined()
             expect(inhabitant.lastName).toBeDefined()
             expect(inhabitant.pictureUrl).toBeDefined()

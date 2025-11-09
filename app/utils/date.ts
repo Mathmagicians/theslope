@@ -235,3 +235,15 @@ export function isNew(dateString: string | Date): boolean {
     const days = differenceInDays(new Date(), date)
     return days <= 7
 }
+
+/**
+ * Calculate current age from birth date
+ * @param birthDate - Date of birth (Date, string, or null)
+ * @returns Age in complete years, or null if birthDate is null/invalid
+ */
+export function calculateAge(birthDate: Date | string | null): number | null {
+    if (!birthDate) return null
+    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
+    if (!isValid(birth)) return null
+    return calculateAgeOnDate(birth, new Date())
+}

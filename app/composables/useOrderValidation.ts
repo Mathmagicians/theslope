@@ -24,7 +24,7 @@ export const useOrderValidation = () => {
     inhabitantId: z.number().int().positive(),
     bookedByUserId: z.number().int().positive().optional(),
     ticketPriceId: z.number().int().positive(),
-    priceAtBooking: z.number().int(),
+    priceAtBooking: z.number().int().optional(),
     state: OrderStateSchema.optional()
   })
 
@@ -75,6 +75,7 @@ export const useOrderValidation = () => {
     inhabitantId: z.number().int().positive(),
     bookedByUserId: z.number().int().positive().nullable(),
     ticketPriceId: z.number().int().positive(),
+    ticketType: TicketTypeSchema,
     priceAtBooking: z.number().int(),
     state: OrderStateSchema,
     releasedAt: z.coerce.date().nullable(),

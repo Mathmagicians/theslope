@@ -809,6 +809,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<import('~/c
                 inhabitants: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -848,7 +849,15 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         const household = await prisma.household.findFirst({
             where: {id},
             include: {
-                inhabitants: true
+                inhabitants: {
+                    include: {
+                        allergies: {
+                            include: {
+                                allergyType: true
+                            }
+                        }
+                    }
+                }
             }
         })
 
@@ -1532,12 +1541,29 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        const ticketPrice = await prisma.ticketPrice.findUnique({
+            where: { id: orderData.ticketPriceId }
+        })
+
+        if (!ticketPrice) {
+            throw createError({
+                statusCode: 404,
+                message: `Ticket price with ID ${orderData.ticketPriceId} not found`
+            })
+        }
+
         const newOrder = await prisma.order.create({
-            data: orderData
+            data: {
+                ...orderData,
+                priceAtBooking: ticketPrice.price
+            }
         })
 
         console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
-        return newOrder
+        return {
+            ...newOrder,
+            ticketType: ticketPrice.ticketType
+        }
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
         console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
@@ -1551,15 +1577,27 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
 
     try {
         const order = await prisma.order.findFirst({
-            where: {id}
+            where: {id},
+            include: {
+                ticketPrice: {
+                    select: {
+                        ticketType: true
+                    }
+                }
+            }
         })
 
         if (order) {
             console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
+            return {
+                ...order,
+                ticketType: order.ticketPrice.ticketType,
+                ticketPrice: undefined
+            }
         } else {
             console.info(`🎟️ > ORDER > [GET] No order found with ID ${id}`)
+            return null
         }
-        return order
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
         console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)

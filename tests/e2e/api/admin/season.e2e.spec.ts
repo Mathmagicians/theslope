@@ -344,9 +344,9 @@ test.describe('Season API Tests', () => {
                 expect(event.seasonId).toBe(season.id)
             })
 
-            // AND: All events have dinnerMode NONE (default)
+            // AND: All events have dinnerMode DINEIN (default)
             result.events.forEach(event => {
-                expect(event.dinnerMode).toBe('NONE')
+                expect(event.dinnerMode).toBe('DINEIN')
             })
 
             // AND: All events are on Monday (1), Wednesday (3), or Friday (5)

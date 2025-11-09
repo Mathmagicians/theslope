@@ -3,6 +3,7 @@ interface InhabitantLike {
     name: string
     lastName?: string
     pictureUrl?: string | null
+    heynaboId?: number
 }
 
 interface SingleProps {
@@ -11,6 +12,7 @@ interface SingleProps {
     pictureUrl?: string | null
     subtitle?: string
     compact?: boolean
+    heynaboId?: number
     inhabitants?: never
 }
 
@@ -55,6 +57,9 @@ const avatarSize = computed(() => {
     return getIsMd.value ? 'lg' : 'md'
 })
 
+// Heynabo integration - get user profile URL
+const {getUserUrl} = useHeynabo()
+
 </script>
 
 <template>
@@ -64,39 +69,90 @@ const avatarSize = computed(() => {
             :max="maxAvatars"
             :size="avatarSize"
         >
-            <UTooltip
-                v-for="inhabitant in inhabitants"
-                :key="inhabitant.name"
-                :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                :delay-duration="0"
-            >
-                <UAvatar
-                    :src="inhabitant.pictureUrl || undefined"
-                    :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                    icon="i-heroicons-user"
-                    :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
-                />
-            </UTooltip>
+            <template v-for="inhabitant in inhabitants" :key="inhabitant.name">
+                <ULink
+                    v-if="inhabitant.heynaboId"
+                    :to="getUserUrl(inhabitant.heynaboId)"
+                    target="_blank"
+                    class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
+                >
+                    <UTooltip
+                        :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                        :delay-duration="0"
+                    >
+                        <UAvatar
+                            :src="inhabitant.pictureUrl || undefined"
+                            :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                            icon="i-heroicons-user"
+                            :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
+                        />
+                    </UTooltip>
+                </ULink>
+                <UTooltip
+                    v-else
+                    :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                    :delay-duration="0"
+                >
+                    <UAvatar
+                        :src="inhabitant.pictureUrl || undefined"
+                        :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
+                        icon="i-heroicons-user"
+                        :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
+                    />
+                </UTooltip>
+            </template>
         </UAvatarGroup>
         <span class="text-xs md:text-md">
             {{ inhabitantCount }} {{ inhabitantCount === 1 ? label : labelPlural }}
         </span>
     </div>
 
-    <!-- Single mode: Original behavior -->
-    <UCard v-else-if="compact" :ui="{ body: 'p-1' }" class="inline-flex items-center gap-2" variant="soft">
+    <!-- Single mode: Compact -->
+    <div v-else-if="compact" class="inline-flex items-center gap-2">
+        <ULink
+            v-if="heynaboId"
+            :to="getUserUrl(heynaboId)"
+            target="_blank"
+            class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
+        >
+            <UAvatar
+                :src="pictureUrl || undefined"
+                :alt="`${name} ${lastName || ''}`"
+                size="sm"
+                icon="i-heroicons-user"
+            />
+        </ULink>
         <UAvatar
+            v-else
             :src="pictureUrl || undefined"
-            :alt="name"
-            size="xs"
+            :alt="`${name} ${lastName || ''}`"
+            size="sm"
             icon="i-heroicons-user"
         />
-        <span class="text-xs font-medium">{{ name }}</span>
-    </UCard>
+        <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ name }}</span>
+            <span v-if="subtitle" class="text-xs text-muted">{{ subtitle }}</span>
+        </div>
+    </div>
 
+    <!-- Single mode: Non-compact -->
     <UCard v-else>
         <div class="flex items-center gap-3">
+            <ULink
+                v-if="heynaboId"
+                :to="getUserUrl(heynaboId)"
+                target="_blank"
+                class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
+            >
+                <UAvatar
+                    :src="pictureUrl || undefined"
+                    :alt="`${name} ${lastName || ''}`"
+                    size="md"
+                    icon="i-heroicons-user"
+                />
+            </ULink>
             <UAvatar
+                v-else
                 :src="pictureUrl || undefined"
                 :alt="`${name} ${lastName || ''}`"
                 size="md"

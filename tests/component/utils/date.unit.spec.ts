@@ -1,4 +1,4 @@
-import {describe, expect, it} from "vitest"
+import {describe, expect, it, vi, beforeEach, afterEach} from "vitest"
 import {
     calculateDayFromWeekNumber,
     copyPartialDateRange,
@@ -13,6 +13,7 @@ import {
     selectWeekNumbersFromListThatFitInsideDateRange,
     formatCalendarDate,
     calculateAgeOnDate,
+    calculateAge,
     toCalendarDate,
     toDate,
     DATE_SETTINGS
@@ -473,6 +474,39 @@ describe('calculateAgeOnDate', () => {
             const age = calculateAgeOnDate(birthDate, eventDate)
             expect(age).toBe(expectedAge)
         })
+    })
+})
+
+describe('calculateAge', () => {
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date(2025, 0, 15)) // January 15, 2025
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    const testCases = [
+        { description: 'Date object before birthday', input: new Date(2010, 2, 15), expected: 14 },
+        { description: 'ISO string before birthday', input: '2010-03-15T00:00:00.000Z', expected: 14 },
+        { description: 'child under 18', input: new Date(2015, 0, 1), expected: 10 },
+        { description: 'adult over 18', input: new Date(1985, 5, 20), expected: 39 },
+        { description: 'null input', input: null, expected: null },
+        { description: 'invalid date string', input: 'invalid-date', expected: null }
+    ]
+
+    testCases.forEach(({ description, input, expected }) => {
+        it(`should handle ${description}`, () => {
+            const age = calculateAge(input)
+            expect(age).toBe(expected)
+        })
+    })
+
+    it('should calculate correctly after birthday this year', () => {
+        vi.setSystemTime(new Date(2025, 11, 31)) // December 31, 2025
+        const age = calculateAge(new Date(2010, 2, 15))
+        expect(age).toBe(15)
     })
 })
 

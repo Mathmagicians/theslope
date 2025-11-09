@@ -109,7 +109,7 @@ export class OrderFactory {
   ): Promise<Order[]> => {
     const data = this.defaultCreateOrdersRequest(orderData)
 
-    const response = await context.request.post('/api/booking/order', {
+    const response = await context.request.put(ORDER_ENDPOINT, {
       headers,
       data
     })
@@ -131,7 +131,7 @@ export class OrderFactory {
     orderId: number,
     expectedStatus: number = 200
   ): Promise<OrderDetail | null> => {
-    const response = await context.request.get(`/api/booking/order/${orderId}`, { headers })
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
     expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -148,7 +148,7 @@ export class OrderFactory {
     orderId: number,
     expectedStatus: number = 200
   ): Promise<Order | null> => {
-    const response = await context.request.delete(`/api/booking/order/${orderId}`, { headers })
+    const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
     expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -165,7 +165,7 @@ export class OrderFactory {
     orderId: number,
     expectedStatus: number = 200
   ): Promise<Order | null> => {
-    const response = await context.request.post(`/api/booking/order/${orderId}/release`, { headers })
+    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
 
     const status = response.status()
     expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -185,7 +185,7 @@ export class OrderFactory {
   ): Promise<Order | null> => {
     const data = this.defaultSwapOrderRequest(swapData)
 
-    const response = await context.request.post(`/api/booking/order/${orderId}/swap-order`, {
+    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {
       headers,
       data
     })
@@ -205,7 +205,7 @@ export class OrderFactory {
     orderId: number,
     expectedStatus: number = 200
   ): Promise<OrderHistory[]> => {
-    const response = await context.request.get(`/api/booking/order/${orderId}/history`, { headers })
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}/history`, { headers })
 
     const status = response.status()
     expect(status, 'Unexpected status').toBe(expectedStatus)

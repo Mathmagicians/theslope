@@ -101,7 +101,7 @@ useHead({
     <ViewError v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
-    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg">
+    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ body: 'px-0 md:px-4' }">
       <template #header>
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-home" class="text-2xl"/>
@@ -111,7 +111,7 @@ useHead({
       <UTabs
           v-model="activeTab"
           :items="tabItems"
-          class="mb-1 md:mb-4"
+          class="mb-1 md:mb-4 mx-2 md:mx-0"
           :ui="{ label: 'hidden md:inline' }"
           color="primary"
       >
