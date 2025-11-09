@@ -33,6 +33,7 @@ export class OrderFactory {
     inhabitantId: 10,
     bookedByUserId: 1,
     ticketPriceId: 1,
+    ticketType: TicketTypeSchema.enum.ADULT,
     priceAtBooking: 45,
     state: OrderStateSchema.enum.BOOKED,
     releasedAt: null,

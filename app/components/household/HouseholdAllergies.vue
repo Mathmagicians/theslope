@@ -232,21 +232,21 @@ const columns = [
 </script>
 
 <template>
-  <UCard data-test-id="household-allergies" :ui="{ body: 'px-0 md:px-4' }">
+  <UCard data-test-id="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <!-- HEADER -->
     <template #header>
       <h3 class="text-lg font-semibold">Familiens allergier og diætkrav</h3>
     </template>
 
     <!-- BODY -->
-    <div class="space-y-4">
+    <div class="space-y-2 md:space-y-4">
       <template v-if="household">
         <!-- Inhabitants table with expandable allergy editing -->
         <UTable
             v-model:expanded="expanded"
             :data="tableData"
             :columns="columns"
-            :ui="{ tr: 'data-[expanded=true]:bg-elevated/50' }"
+            :ui="{ tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4' }"
         >
           <!-- Inhabitant column -->
           <template #name-cell="{ row }">

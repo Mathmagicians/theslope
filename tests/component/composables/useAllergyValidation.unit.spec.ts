@@ -422,6 +422,7 @@ describe('useAllergyValidation', () => {
                 inhabitants: [
                     {
                         id: 1,
+                        heynaboId: 101,
                         name: 'Anna',
                         lastName: 'Hansen',
                         pictureUrl: 'https://example.com/anna.jpg',
@@ -431,6 +432,7 @@ describe('useAllergyValidation', () => {
                     },
                     {
                         id: 2,
+                        heynaboId: 102,
                         name: 'Bob',
                         lastName: 'Jensen',
                         pictureUrl: null,
@@ -472,6 +474,7 @@ describe('useAllergyValidation', () => {
         it('should accept inhabitant with nested allergies array', () => {
             const inhabitantWithAllergies = {
                 id: 1,
+                heynaboId: 101,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: 'https://example.com/anna.jpg',
@@ -520,6 +523,7 @@ describe('useAllergyValidation', () => {
         it('should accept inhabitant with empty allergies array', () => {
             const inhabitantWithoutAllergies = {
                 id: 1,
+                heynaboId: 101,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: null,
