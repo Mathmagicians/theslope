@@ -1,167 +1,181 @@
+<!--
+┌─────────────────────────────────────────────────────────────────┐
+│ UserListItem - Display inhabitants in 4 modes                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│ MODE 1: SINGLE COMPACT (tables, inline)                        │
+│  [👤🔵] Lars                                                    │
+│         ↑ child badge (if under 18)                            │
+│  Display: Small avatar + first name only + optional badge      │
+│                                                                 │
+│ MODE 2: SINGLE NOT COMPACT (cards, detailed)                   │
+│  ┌───────────────────────────────────────────────┐             │
+│  │ [👤]🔵 Lars Jensen                           │             │
+│  └───────────────────────────────────────────────┘             │
+│  Display: Larger avatar + full name + badge (if child)         │
+│                                                                 │
+│ MODE 3: GROUP COMPACT (tables)                                 │
+│  [👤][👤][👤]+2  🔵5                                           │
+│                   ↑ badge with count only                      │
+│  Mobile: 3 avatars max, Desktop: 5 avatars max                 │
+│                                                                 │
+│ MODE 4: GROUP NOT COMPACT (prominent)                          │
+│  [👤 ][👤 ][👤 ][👤 ][👤 ]+2  🔵 7 bofæller                  │
+│                                 ↑ badge + count + label        │
+│  Mobile: 3 larger avatars, Desktop: 5 larger avatars, border           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+-->
 <script setup lang="ts">
-interface InhabitantLike {
-    name: string
-    lastName?: string
-    pictureUrl?: string | null
-    heynaboId?: number
-}
+import type {InhabitantDisplay} from '~/composables/useHouseholdValidation'
 
-interface SingleProps {
-    name: string
-    lastName?: string
-    pictureUrl?: string | null
-    subtitle?: string
-    compact?: boolean
-    heynaboId?: number
-    inhabitants?: never
+interface Props {
+  toDisplay: InhabitantDisplay | InhabitantDisplay[]
+  compact?: boolean
+  size?: 'xs' | 'sm' | 'md' | 'lg'
+  ringColor?: string
+  label?: string
+  propertyCheck?: (inhabitant: InhabitantDisplay) => boolean
 }
-
-interface GroupProps {
-    inhabitants: InhabitantLike[]
-    compact?: boolean
-    label?: string
-    labelPlural?: string
-    size?: 'xs' | 'sm' | 'md' | 'lg'
-    ringColor?: string
-    name?: never
-    lastName?: never
-    pictureUrl?: never
-    subtitle?: never
-}
-
-type Props = SingleProps | GroupProps
 
 const props = withDefaults(defineProps<Props>(), {
-    compact: false,
-    label: 'beboer',
-    labelPlural: 'beboere'
+  compact: false
 })
 
-// Check if this is a group or single user
-const isGroup = computed(() => !!props.inhabitants)
+// Child detection (under 18 years old)
+const isChild = (inhabitant: InhabitantDisplay): boolean => {
+  const age = calculateAge(inhabitant.birthDate)
+  return age !== null && age < 18
+}
 
-// Inject responsive breakpoint from parent
+// Use provided propertyCheck or default to isChild
+const checkProperty = computed(() => props.propertyCheck ?? isChild)
+
+// Mode detection
+const isGroup = computed(() => Array.isArray(props.toDisplay))
+const count = computed(() =>
+  isGroup.value ? props.toDisplay.length : (props.toDisplay ? 1 : 0)
+)
+
+// Duplicate first name detection
+const duplicateFirstNames = computed(() => {
+  const list = Array.isArray(props.toDisplay) ? props.toDisplay : [props.toDisplay]
+  const firstNameCounts = new Map<string, number>()
+
+  list.forEach(inhabitant => {
+    const count = firstNameCounts.get(inhabitant.name) || 0
+    firstNameCounts.set(inhabitant.name, count + 1)
+  })
+
+  return new Set(
+    Array.from(firstNameCounts.entries())
+      .filter(([_, count]) => count > 1)
+      .map(([name, _]) => name)
+  )
+})
+
+// Format display name: "FirstName L" if duplicate first name exists
+const formatDisplayName = (inhabitant: InhabitantDisplay): string => {
+  if (duplicateFirstNames.value.has(inhabitant.name)) {
+    const lastNameInitial = inhabitant.lastName.charAt(0).toUpperCase()
+    return `${inhabitant.name} ${lastNameInitial}`
+  }
+  return inhabitant.name
+}
+
+// Responsive breakpoint injection
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
-// Responsive max: 3 for mobile, 5 for desktop
+// Avatar display settings
 const maxAvatars = computed(() => getIsMd.value ? 5 : 3)
-
-// Show count when there are inhabitants
-const inhabitantCount = computed(() => props.inhabitants?.length || 0)
-
-// Determine avatar size - use prop if provided, otherwise responsive based on compact
 const avatarSize = computed(() => {
-    if (props.size) return props.size
-    if (props.compact) return 'sm'
-    return getIsMd.value ? 'lg' : 'md'
+  if (props.size) return props.size
+  if (props.compact) return 'sm'
+  return getIsMd.value ? 'lg' : 'md'
 })
 
-// Heynabo integration - get user profile URL
+// Heynabo integration
 const {getUserUrl} = useHeynabo()
-
 </script>
 
 <template>
-    <!-- Group mode: Multiple inhabitants -->
-    <div v-if="isGroup" class="flex items-center gap-2">
-        <UAvatarGroup
-            :max="maxAvatars"
-            :size="avatarSize"
-        >
-            <template v-for="inhabitant in inhabitants" :key="inhabitant.name">
-                <ULink
-                    v-if="inhabitant.heynaboId"
-                    :to="getUserUrl(inhabitant.heynaboId)"
-                    target="_blank"
-                    class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
-                >
-                    <UTooltip
-                        :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                        :delay-duration="0"
-                    >
-                        <UAvatar
-                            :src="inhabitant.pictureUrl || undefined"
-                            :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                            icon="i-heroicons-user"
-                            :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
-                        />
-                    </UTooltip>
-                </ULink>
-                <UTooltip
-                    v-else
-                    :text="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                    :delay-duration="0"
-                >
-                    <UAvatar
-                        :src="inhabitant.pictureUrl || undefined"
-                        :alt="`${inhabitant.name} ${inhabitant.lastName || ''}`"
-                        icon="i-heroicons-user"
-                        :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
-                    />
-                </UTooltip>
-            </template>
-        </UAvatarGroup>
-        <span class="text-xs md:text-md">
-            {{ inhabitantCount }} {{ inhabitantCount === 1 ? label : labelPlural }}
-        </span>
-    </div>
-
-    <!-- Single mode: Compact -->
-    <div v-else-if="compact" class="inline-flex items-center gap-2">
+  <!-- GROUP MODE -->
+  <div v-if="isGroup" class="flex items-center gap-2">
+    <UAvatarGroup :max="maxAvatars" :size="avatarSize">
+      <template v-for="inhabitant in toDisplay" :key="inhabitant.heynaboId">
         <ULink
-            v-if="heynaboId"
-            :to="getUserUrl(heynaboId)"
-            target="_blank"
-            class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
+          :to="getUserUrl(inhabitant.heynaboId)"
+          target="_blank"
+          class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
         >
+          <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
             <UAvatar
-                :src="pictureUrl || undefined"
-                :alt="`${name} ${lastName || ''}`"
-                size="sm"
-                icon="i-heroicons-user"
+              :src="inhabitant.pictureUrl || undefined"
+              :alt="`${inhabitant.name} ${inhabitant.lastName}`"
+              icon="i-heroicons-user"
+              :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
             />
+          </UTooltip>
         </ULink>
-        <UAvatar
-            v-else
-            :src="pictureUrl || undefined"
-            :alt="`${name} ${lastName || ''}`"
-            size="sm"
-            icon="i-heroicons-user"
-        />
-        <div class="flex flex-col">
-            <span class="text-sm font-medium">{{ name }}</span>
-            <span v-if="subtitle" class="text-xs text-muted">{{ subtitle }}</span>
-        </div>
-    </div>
+      </template>
+    </UAvatarGroup>
 
-    <!-- Single mode: Non-compact -->
-    <UCard v-else>
-        <div class="flex items-center gap-3">
-            <ULink
-                v-if="heynaboId"
-                :to="getUserUrl(heynaboId)"
-                target="_blank"
-                class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
-            >
-                <UAvatar
-                    :src="pictureUrl || undefined"
-                    :alt="`${name} ${lastName || ''}`"
-                    size="md"
-                    icon="i-heroicons-user"
-                />
-            </ULink>
-            <UAvatar
-                v-else
-                :src="pictureUrl || undefined"
-                :alt="`${name} ${lastName || ''}`"
-                size="md"
-                icon="i-heroicons-user"
-            />
-            <div class="flex flex-col">
-                <span class="font-semibold">{{ name }} {{ lastName }}</span>
-                <span v-if="subtitle" class="text-sm text-muted">{{ subtitle }}</span>
-            </div>
-        </div>
-    </UCard>
+    <!-- Compact: Badge only | Not compact: Badge + count + label -->
+    <UBadge v-if="compact" size="xs" color="primary">
+      {{ count }}
+    </UBadge>
+    <div v-else class="flex items-center gap-1">
+      <UBadge size="sm" color="primary">
+        {{ count }}
+      </UBadge>
+      <span v-if="label" class="text-sm">{{ label }}</span>
+    </div>
+  </div>
+
+  <!-- SINGLE MODE: COMPACT -->
+  <div v-else-if="compact" class="inline-flex items-center gap-2">
+    <ULink
+      :to="getUserUrl(toDisplay.heynaboId)"
+      target="_blank"
+      class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
+    >
+      <UAvatar
+        :src="toDisplay.pictureUrl || undefined"
+        :alt="`${toDisplay.name} ${toDisplay.lastName}`"
+        size="sm"
+        icon="i-heroicons-user"
+      />
+    </ULink>
+    <div class="flex items-center gap-1">
+      <span class="text-sm font-medium">{{ formatDisplayName(toDisplay) }}</span>
+      <UBadge v-if="checkProperty(toDisplay)" size="xs" color="blue">
+        Barn
+      </UBadge>
+    </div>
+  </div>
+
+  <!-- SINGLE MODE: NOT COMPACT -->
+  <UCard v-else>
+    <div class="flex items-center gap-3">
+      <ULink
+        :to="getUserUrl(toDisplay.heynaboId)"
+        target="_blank"
+        class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
+      >
+        <UAvatar
+          :src="toDisplay.pictureUrl || undefined"
+          :alt="`${toDisplay.name} ${toDisplay.lastName}`"
+          size="md"
+          icon="i-heroicons-user"
+        />
+      </ULink>
+      <div class="flex items-center gap-2">
+        <span class="font-semibold">{{ toDisplay.name }} {{ toDisplay.lastName }}</span>
+        <UBadge v-if="checkProperty(toDisplay)" size="sm" color="blue">
+          Barn
+        </UBadge>
+      </div>
+    </div>
+  </UCard>
 </template>

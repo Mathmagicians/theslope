@@ -19,10 +19,12 @@ export function useHeynabo() {
      * // API URL: https://skraaningeni.spaces.heynabo.com/api
      * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/users/residents/48
      */
-    const getUserUrl = (heynaboId?: number): string | null => {
-        if (!heynaboId) return null
+    const getUserUrl = (heynaboId: number): string  => {
         const apiUrl = config.public.HEY_NABO_API
-        return apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
+        const url = apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
+        //FIXME cleanup
+        console.log("DEBUG, heynabo url:", url)
+        return url
     }
 
 

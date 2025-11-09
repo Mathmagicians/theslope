@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import { usePlanStore } from '~/stores/plan'
-import { setActivePinia, createPinia } from 'pinia'
+import { setActivePinia, createPinia, storeToRefs } from 'pinia'
 import { clearNuxtData } from '#app'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 
@@ -61,7 +61,7 @@ describe('useCookingTeam', () => {
                 role: 'CHEF',
                 cookingTeamId: 1,
                 inhabitantId: 1,
-                inhabitant: { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null }
+                inhabitant: { id: 1, heynaboId: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null }
               }
             ]
           },
@@ -75,7 +75,7 @@ describe('useCookingTeam', () => {
                 role: 'COOK',
                 cookingTeamId: 2,
                 inhabitantId: 2,
-                inhabitant: { id: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null }
+                inhabitant: { id: 2, heynaboId: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null }
               }
             ]
           }
@@ -109,13 +109,19 @@ describe('useCookingTeam', () => {
 
         // Select the season via store
       const store = usePlanStore()
-      await store.onSeasonSelect(1)
+      const { isSelectedSeasonInitialized } = storeToRefs(store)
+      store.onSeasonSelect(1)
+
+      // Wait for season to load (has the CookingTeams data needed for merging)
+      await vi.waitFor(() => {
+        expect(isSelectedSeasonInitialized.value).toBe(true)
+      })
 
       // Use the composable
       const { useInhabitantsWithAssignments } = useCookingTeam()
       const { inhabitants, pending, refresh } = await useInhabitantsWithAssignments()
 
-      // Wait for async data to load
+      // Wait for inhabitants to load
       await vi.waitFor(() => {
         expect(pending.value).toBe(false)
       })

@@ -22,13 +22,11 @@ const allergyManagerInhabitants = computed(() => {
   >
     <template #description>
       <p class="text-sm md:flex-1">Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:</p>
-      <UserListItem v-if="allergyManagers && allergyManagers.length > 0"
-        :inhabitants="allergyManagerInhabitants"
-        label="Allergiansvarlig"
-        labelPlural="Allergiansvarlige"
+      <UserListItem 
+        :to-display="allergyManagerInhabitants"
+        label="Allergiansvarlige"
         ring-color="ocean-500"
       />
-      <p v-else class="text-muted text-sm">Ingen allergi ansvarlige registreret endnu.</p>
     </template>
   </UAlert>
 

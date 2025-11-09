@@ -250,18 +250,10 @@ const columns = [
         >
           <!-- Inhabitant column -->
           <template #name-cell="{ row }">
-            <div class="flex items-center gap-2">
-              <UserListItem
-                  :name="row.original.name"
-                  :last-name="row.original.lastName"
-                  :picture-url="row.original.pictureUrl"
-                  :heynabo-id="row.original.heynaboId"
-                  compact
-              />
-              <UBadge v-if="row.original.isChild" color="info" variant="soft" size="xs">
-                Barn
-              </UBadge>
-            </div>
+            <UserListItem
+                :to-display="row.original"
+                compact
+            />
           </template>
 
           <!-- Allergies column (collapsed state) -->

@@ -213,9 +213,12 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
                 systemRoles: true,
                 Inhabitant: {
                     select: {
+                        id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
-                        pictureUrl: true
+                        pictureUrl: true,
+                        birthDate: true
                     }
                 }
             }

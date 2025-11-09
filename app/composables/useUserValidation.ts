@@ -48,15 +48,21 @@ export const useUserValidation = () => {
     })
 
     // Minimal user info for frontend display (allergy managers with avatar)
+    // NOTE: Inhabitant schema duplicated from InhabitantDisplaySchema in useHouseholdValidation
+    // Cannot import directly due to circular dependency (useHouseholdValidation imports useUserValidation)
+    // IMPORTANT: Keep in sync with InhabitantDisplaySchema - verified by unit test
     const UserDisplaySchema = z.object({
         id: z.number().int().positive(),
         email: z.string().email(),
         systemRoles: z.array(SystemRoleSchema),
         phone: z.string().optional(),
         Inhabitant: z.object({
+            id: z.number().int().positive(),
+            heynaboId: z.number().int().positive(),
             name: z.string(),
             lastName: z.string(),
-            pictureUrl: z.string().nullable()
+            pictureUrl: z.string().optional().nullable(),
+            birthDate: z.coerce.date().optional().nullable()
         }).nullable().optional()
     })
 

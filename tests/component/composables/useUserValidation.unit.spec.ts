@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {useUserValidation} from '~/composables/useUserValidation'
-import {getHouseholdShortName} from '~/composables/useHouseholdValidation'
+import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
 
 describe('useUserValidation', () => {
     const {
@@ -10,6 +10,8 @@ describe('useUserValidation', () => {
         UserDisplaySchema,
         mergeUserRoles
     } = useUserValidation()
+
+    const {InhabitantDisplaySchema} = useHouseholdValidation()
 
     describe('BaseUserSchema', () => {
         it('should parse valid user data with roles array', () => {
@@ -198,9 +200,12 @@ describe('useUserValidation', () => {
                 systemRoles: ['ALLERGYMANAGER'],
                 phone: '+4512345678',
                 Inhabitant: {
+                    id: 10,
+                    heynaboId: 100,
                     name: 'John',
                     lastName: 'Doe',
-                    pictureUrl: 'https://example.com/pic.jpg'
+                    pictureUrl: 'https://example.com/pic.jpg',
+                    birthDate: new Date('1990-01-01')
                 }
             }
 
@@ -208,8 +213,12 @@ describe('useUserValidation', () => {
             expect(result.id).toBe(1)
             expect(result.systemRoles).toEqual(['ALLERGYMANAGER'])
             expect(result.Inhabitant).toBeDefined()
+            expect(result.Inhabitant?.id).toBe(10)
+            expect(result.Inhabitant?.heynaboId).toBe(100)
             expect(result.Inhabitant?.name).toBe('John')
+            expect(result.Inhabitant?.lastName).toBe('Doe')
             expect(result.Inhabitant?.pictureUrl).toBe('https://example.com/pic.jpg')
+            expect(result.Inhabitant?.birthDate).toEqual(new Date('1990-01-01'))
         })
 
         it('should parse user without inhabitant', () => {
@@ -249,8 +258,34 @@ describe('useUserValidation', () => {
             expect(() => UserDisplaySchema.parse(invalidUser)).toThrow()
         })
 
-        it('should validate inhabitant has all required fields for display', () => {
+        it('should validate inhabitant has all required InhabitantDisplay fields', () => {
             const userDisplay = {
+                id: 1,
+                email: 'manager@example.com',
+                systemRoles: ['ALLERGYMANAGER'],
+                Inhabitant: {
+                    id: 20,
+                    heynaboId: 200,
+                    name: 'Jane',
+                    lastName: 'Smith',
+                    pictureUrl: 'https://example.com/avatar.jpg',
+                    birthDate: new Date('1985-05-15')
+                }
+            }
+
+            const result = UserDisplaySchema.parse(userDisplay)
+            expect(result.Inhabitant).toBeDefined()
+            // Verify all InhabitantDisplay fields are present
+            expect(result.Inhabitant?.id).toBe(20)
+            expect(result.Inhabitant?.heynaboId).toBe(200)
+            expect(result.Inhabitant?.name).toBe('Jane')
+            expect(result.Inhabitant?.lastName).toBe('Smith')
+            expect(result.Inhabitant?.pictureUrl).toBe('https://example.com/avatar.jpg')
+            expect(result.Inhabitant?.birthDate).toEqual(new Date('1985-05-15'))
+        })
+
+        it('should reject inhabitant missing required InhabitantDisplay fields', () => {
+            const invalidUser = {
                 id: 1,
                 email: 'manager@example.com',
                 systemRoles: ['ALLERGYMANAGER'],
@@ -258,16 +293,45 @@ describe('useUserValidation', () => {
                     name: 'Jane',
                     lastName: 'Smith',
                     pictureUrl: 'https://example.com/avatar.jpg'
+                    // Missing id, heynaboId, birthDate
                 }
             }
 
-            const result = UserDisplaySchema.parse(userDisplay)
-            expect(result.Inhabitant).toBeDefined()
-            expect(result.Inhabitant?.name).toBe('Jane')
-            expect(result.Inhabitant?.lastName).toBe('Smith')
-            expect(result.Inhabitant?.pictureUrl).toBe('https://example.com/avatar.jpg')
-            expect(typeof result.Inhabitant?.name).toBe('string')
-            expect(typeof result.Inhabitant?.lastName).toBe('string')
+            expect(() => UserDisplaySchema.parse(invalidUser)).toThrow()
+        })
+
+        it('should have Inhabitant schema compatible with InhabitantDisplaySchema', () => {
+            // This test verifies the schemas stay in sync (circular dependency workaround)
+            const inhabitantData = {
+                id: 15,
+                heynaboId: 150,
+                name: 'Test',
+                lastName: 'User',
+                pictureUrl: 'https://example.com/test.jpg',
+                birthDate: new Date('1992-03-20')
+            }
+
+            // Should pass InhabitantDisplaySchema validation
+            const validatedInhabitant = InhabitantDisplaySchema.parse(inhabitantData)
+            expect(validatedInhabitant.id).toBe(15)
+            expect(validatedInhabitant.heynaboId).toBe(150)
+
+            // Should also pass UserDisplaySchema.Inhabitant validation
+            const userWithInhabitant = {
+                id: 5,
+                email: 'test@example.com',
+                systemRoles: ['ALLERGYMANAGER'],
+                Inhabitant: inhabitantData
+            }
+
+            const validatedUser = UserDisplaySchema.parse(userWithInhabitant)
+            expect(validatedUser.Inhabitant).toBeDefined()
+            expect(validatedUser.Inhabitant?.id).toBe(15)
+            expect(validatedUser.Inhabitant?.heynaboId).toBe(150)
+            expect(validatedUser.Inhabitant?.name).toBe('Test')
+            expect(validatedUser.Inhabitant?.lastName).toBe('User')
+            expect(validatedUser.Inhabitant?.pictureUrl).toBe('https://example.com/test.jpg')
+            expect(validatedUser.Inhabitant?.birthDate).toEqual(new Date('1992-03-20'))
         })
     })
 
