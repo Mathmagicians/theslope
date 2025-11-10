@@ -68,7 +68,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
                             ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
                             : null
                     }))
-                } as HouseholdWithInhabitants
+                    } as HouseholdWithInhabitants
             }
             return null
         },

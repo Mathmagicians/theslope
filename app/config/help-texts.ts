@@ -22,7 +22,7 @@ export const HELP_TEXTS = {
         },
         users: {
             title: 'Brugere',
-            content: 'Administrer brugere og deres adgange til systemet. Importer data fra Heynabo og håndter brugerroller.'
+            content: 'Her kan du se brugere der har login til systemet. Brugere importeres fra Heynabo, og du kan opdatere listen ved at trykke på importknappen.'
         },
         economy: {
             title: 'Økonomi',

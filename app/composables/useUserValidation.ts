@@ -9,10 +9,22 @@ export type SystemRole = z.infer<typeof SystemRoleSchema>
  * Following ADR-010: Domain-Driven Serialization Architecture
  */
 export const useUserValidation = () => {
+    // Email validation accepts two formats:
+    // 1. Standard: user@domain.com
+    // 2. RFC 5322 with display name: Display Name <user@domain.com>
+    const emailSchema = z.union([
+        z.string().email(),
+        z.string().regex(/^.+\s+<.+@.+\..+>$/)
+    ]).transform((val) => {
+        // Normalize to standard format by extracting email from angle brackets
+        const match = val.match(/<(.+)>/)
+        return match ? match[1] : val
+    })
+
     // Domain schema - systemRoles as array
     const BaseUserSchema = z.object({
         id: z.number().int().positive().optional(),
-        email: z.string().email('Email-adressen er ikke gyldig'),
+        email: emailSchema,
         phone: z.string()
             .regex(/^\+?\d+$/, 'Telefonnummer må kun indeholde tal og eventuelt et plus-tegn i starten')
             .nullable()
@@ -53,9 +65,9 @@ export const useUserValidation = () => {
     // IMPORTANT: Keep in sync with InhabitantDisplaySchema - verified by unit test
     const UserDisplaySchema = z.object({
         id: z.number().int().positive(),
-        email: z.string().email(),
+        email: emailSchema,
         systemRoles: z.array(SystemRoleSchema),
-        phone: z.string().optional(),
+        phone: z.string().nullable().optional(),
         Inhabitant: z.object({
             id: z.number().int().positive(),
             heynaboId: z.number().int().positive(),
@@ -82,12 +94,12 @@ export const useUserValidation = () => {
         Inhabitant: z.object({
             id: z.number().int().positive(),
             heynaboId: z.number().int().positive(),
-            userId: z.number().int().positive().nullable(),
-            householdId: z.number().int().positive(),
-            pictureUrl: z.string().url().or(z.literal('')).nullable(),
             name: z.string(),
             lastName: z.string(),
+            pictureUrl: z.string().url().or(z.literal('')).nullable(),
             birthDate: z.coerce.date().nullable(),
+            userId: z.number().int().positive().nullable(),
+            householdId: z.number().int().positive(),
             household: z.object({
                 id: z.number().int().positive(),
                 heynaboId: z.number().int().positive(),

@@ -321,6 +321,7 @@ const columns = computed(() => {
                   target="_blank"
                   name="pdf-poster-button"
               >
+
                 Plakat
               </UButton>
               <FormModeSelector v-model="formMode" @change="onModeChange"/>

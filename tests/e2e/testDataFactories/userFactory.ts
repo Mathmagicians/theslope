@@ -2,8 +2,11 @@ import type {BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {User, UserCreate} from "~/composables/useUserValidation"
+import {useUserValidation} from "~/composables/useUserValidation"
 
 const {salt, headers} = testHelpers
+const {SystemRoleSchema} = useUserValidation()
+const SystemRole = SystemRoleSchema.enum
 
 export class UserFactory {
 
@@ -50,21 +53,21 @@ export class UserFactory {
     static readonly createAdmin = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: ['ADMIN'] as const
+            systemRoles: [SystemRole.ADMIN] as const
         }
     }
 
     static readonly createAllergyManager = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: ['ALLERGYMANAGER'] as const
+            systemRoles: [SystemRole.ALLERGYMANAGER] as const
         }
     }
 
     static readonly createAdminAndAllergyManager = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: ['ADMIN', 'ALLERGYMANAGER'] as const
+            systemRoles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER] as const
         }
     }
 

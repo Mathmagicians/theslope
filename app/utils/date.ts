@@ -222,7 +222,7 @@ export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
  */
 export function formatRelativeTime(dateString: string | Date): string {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-    return formatDistanceToNow(date, { locale: da, addSuffix: true })
+    return formatDistanceToNow(date, { locale: DATE_SETTINGS.locale, addSuffix: true })
 }
 
 /**

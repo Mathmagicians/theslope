@@ -1,12 +1,8 @@
-import type { InternalApi } from 'nitropack'
-import {formatDistanceToNow} from "date-fns"
-import {da} from "date-fns/locale"
+import type {InternalApi} from 'nitropack'
 import type {UserDisplay} from '~/composables/useUserValidation'
-
-type UsersApiResponse = InternalApi['/api/admin/users']['get']
+import type {Household} from '~/composables/useHouseholdValidation'
 
 export const useUsersStore = defineStore("Users", () => {
-    const users = ref<UsersApiResponse | null>(null)
     const importing = ref(false)
 
     // Get SystemRole enum from validation composable
@@ -16,77 +12,84 @@ export const useUsersStore = defineStore("Users", () => {
     const {
         data: allergyManagers,
         status: allergyManagersStatus,
-        error: allergyManagersError
+        error: allergyManagersError,
+        refresh: refreshAllergyManagers
     } = useAsyncData<UserDisplay[]>(
         'allergyManagers',
-        () => $fetch(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`),
+        () => $fetch<UserDisplay[]>(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`),
         {
-            default: () => [],
-            watch: false  // ADR-007: Prevent auto-refetch on reactive deps
+            default: () => []
         }
     )
 
+    const {
+        data: users,
+        status: usersStatus,
+        error: usersError,
+        refresh: refreshUsers
+    } = useAsyncData<UserDisplay[]>(
+        '/api/admin/users',
+        () => $fetch<UserDisplay[]>('/api/admin/users'),
+        {
+            default: () => []
+        }
+    )
+
+    const {
+        data: heynaboImport,
+        status: heynaboImportStatus,
+        error: heynaboImportError,
+        refresh: refreshHeynaboImport
+    } = useAsyncData<Household[]>(
+        '/api/admin/heynabo/import',
+        () => $fetch<Household[]>('/api/admin/heynabo/import'),
+        {
+            default: () => [],
+            immediate: false // only when triggered by admin, not on store creation
+        }
+    )
+
+
+    // ========================================
+    // Computed - Public API (derived from status)
+    // ========================================
     const isAllergyManagersLoading = computed(() => allergyManagersStatus.value === 'pending')
     const isAllergyManagersErrored = computed(() => allergyManagersStatus.value === 'error')
+    const isImportHeynaboLoading = computed(() => heynaboImportStatus.value === 'pending')
+    const isImportHeynaboErrored = computed(() => heynaboImportStatus.value === 'error')
 
-    // Error logging for allergyManagers - fail gracefully with empty list
-    watch(allergyManagersError, (error) => {
-        if (error) {
-            console.error('👥 > USERS_STORE > Error loading allergy managers:', error)
-            console.info('👥 > USERS_STORE > Falling back to empty allergy managers list')
+    // ========================================
+    // Store Actions
+    // ========================================
+    const loadUsers = async () => {
+        await refreshUsers()
+        if (usersError.value) {
+            console.error(LOG_CTX, '🪪 > USERS_STORE > loadUsers > Error loading users', usersError.value)
+            throw usersError.value
         }
-    })
-
-    /** Function to load user data */
-    const loadData = async () => {
-        try {
-            // Fetch data from the server
-            const response = await useFetch("/api/admin/users", {
-                deep: true
-            })
-            users.value = response.data.value
-            console.log("🍍 > PINA > USERS > Fetched users data")
-        } catch (error: any) {
-            createError({
-                statusMessage: "Error getting users from database",
-                statusCode: 500,
-                cause: error
-            });
-        }
+        console.info(LOG_CTX, `🪪 > USERS_STORE > loadUsers > Loaded ${users.value.length} users`)
     }
 
-    const timeAgo = (then: string) => formatDistanceToNow(new Date(then), { locale: da })
-    const formattedUsers = computed(() => users.value?.map((user) => {
-        return {
-            ...user,
-            updatedAt: timeAgo(user.updatedAt)
-        }
-    }))
 
     const importHeynaboData = async () => {
-        try {
-            importing.value = true
-            console.log("🍍 > PINA > USERS > Importing Heynabo data")
-            await $fetch("/api/admin/heynabo/import")
-            await loadData()
-        } catch (error: any) {
-            console.error("🍍 > PINA > USERS > Error importing Heynabo data:", error)
-            createError({
-                statusMessage: "Error Importing users from Heynabo",
-                statusCode: 500,
-                cause: error
-            })
-        } finally {
-            importing.value = false
+        await refreshHeynaboImport()
+        if (heynaboImportError.value) {
+            console.error(LOG_CTX, '🪪 > USERS_STORE > importHeynaboData > Error importing users from Heynabo', heynaboImportError.value)
+            throw heynaboImportError.value
         }
-    };
+        console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Loaded ${heynaboImport.value?.length} households from Heynabo`)
+        loadUsers()
+    }
 
     return {
-        users,
-        formattedUsers,
-        loadData,
         importHeynaboData,
-        importing,
+        isImportHeynaboLoading,
+        isImportHeynaboErrored,
+        users,
+        loadUsers,
+        isUsersLoading,
+        isUsersErrored,
+        usersError,
         allergyManagers,
         isAllergyManagersLoading,
         isAllergyManagersErrored,

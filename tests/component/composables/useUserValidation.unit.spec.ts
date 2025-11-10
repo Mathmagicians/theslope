@@ -89,6 +89,32 @@ describe('useUserValidation', () => {
         })
     })
 
+    describe('Email validation and normalization', () => {
+        it.each([
+            { input: 'user@example.com', expected: 'user@example.com', description: 'standard email' },
+           { input: 'Rikke Baggesen <rikke@baggesen.org>', expected: 'rikke@baggesen.org', description: 'real-world RFC 5322 format' }
+        ])('should accept and normalize $description', ({ input, expected }) => {
+            const userCreate = {
+                email: input,
+                passwordHash: 'hash123',
+                systemRoles: []
+            }
+
+            const result = UserCreateSchema.parse(userCreate)
+            expect(result.email).toBe(expected)
+        })
+
+        it('should reject invalid email formats', () => {
+            const invalidUser = {
+                email: 'not-an-email',
+                passwordHash: 'hash123',
+                systemRoles: []
+            }
+
+            expect(() => UserCreateSchema.parse(invalidUser)).toThrow()
+        })
+    })
+
     describe('UserCreateSchema', () => {
         it('should parse user creation data without id', () => {
             const createData = {
@@ -246,6 +272,25 @@ describe('useUserValidation', () => {
             expect(result.id).toBe(3)
             expect(result.systemRoles).toEqual([])
             expect(result.Inhabitant).toBeNull()
+        })
+
+        it.each([
+            { phone: null, expected: null, description: 'null phone' },
+            { phone: undefined, expected: undefined, description: 'undefined phone' },
+            { phone: '+4512345678', expected: '+4512345678', description: 'string phone' }
+        ])('should parse user with $description', ({ phone, expected }) => {
+            const userDisplay: any = {
+                id: 4,
+                email: 'user@example.com',
+                systemRoles: []
+            }
+
+            if (phone !== undefined) {
+                userDisplay.phone = phone
+            }
+
+            const result = UserDisplaySchema.parse(userDisplay)
+            expect(result.phone).toBe(expected)
         })
 
         it('should reject user missing required fields', () => {

@@ -84,8 +84,9 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
 const {serializeUser, deserializeUser, mergeUserRoles} = useUserValidation()
 
 export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
-    console.info(`👨‍💻 > USER > [SAVE] Saving user ${user.email}`)
+    console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {UserResponseSchema} = useUserValidation()
 
     try {
         // Check if user exists to merge roles
@@ -99,7 +100,7 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         if (existingUser) {
             const existingDomain = deserializeUser(existingUser)
             userToSave = mergeUserRoles(existingDomain, user)
-            console.info(`👨‍💻 > USER > [SAVE] Merging roles for existing user ${user.email}: [${existingDomain.systemRoles}] + [${user.systemRoles}] = [${userToSave.systemRoles}]`)
+            console.info(`🪪 > USER > [SAVE] Merging roles for existing user ${user.email}: [${existingDomain.systemRoles}] + [${user.systemRoles}] = [${userToSave.systemRoles}]`)
         }
 
         // Serialize before writing to DB (ADR-010 pattern)
@@ -109,51 +110,132 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
             create: serializedUser,
             update: serializedUser
         })
-        console.info(`👨‍💻 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
-        // Deserialize before returning
-        return deserializeUser(newUser)
+        console.info(`🪪 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
+
+        // Deserialize and validate before returning (ADR-010 pattern)
+        const deserialized = deserializeUser(newUser)
+        return UserResponseSchema.parse(deserialized)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving user ${user.email}`, error)
-        console.error(`👨‍💻 > USER > [SAVE] ${h3e.statusMessage}`, error)
+        console.error(`🪪 > USER > [SAVE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
 
-export async function fetchUsers(d1Client: D1Database): Promise<User[]> {
-    console.info(`👨‍💻 > USER > [GET] Fetching users from database`)
+
+// Shared select clause for UserDisplay - ADR-009: lightweight relations
+const USER_DISPLAY_SELECT = {
+    id: true,
+    email: true,
+    phone: true,
+    systemRoles: true,
+    Inhabitant: {
+        select: {
+            id: true,
+            heynaboId: true,
+            name: true,
+            lastName: true,
+            pictureUrl: true,
+            birthDate: true
+        }
+    }
+} as const
+
+// Shared deserialization logic for UserDisplay
+function deserializeToUserDisplay(user: any): UserDisplay {
+    const {UserDisplaySchema} = useUserValidation()
+
+    const deserialized = deserializeUser({
+        ...user,
+        passwordHash: '', // Not needed for display
+        systemRoles: user.systemRoles
+    })
+
+    const userDisplay = {
+        id: deserialized.id!,
+        email: deserialized.email,
+        phone: deserialized.phone,
+        systemRoles: deserialized.systemRoles,
+        Inhabitant: user.Inhabitant
+    }
+
+    // Schema validation with z.coerce.date() handles birthDate conversion
+    return UserDisplaySchema.parse(userDisplay)
+}
+
+export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
+    console.info(`🪪 > USER > [GET] Fetching users from database`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const users = await prisma.user.findMany()
-        console.info(`👨‍💻 > USER > [GET] Successfully fetched ${users.length} users`)
-        // Deserialize before returning (ADR-010 pattern)
-        return users.map(user => deserializeUser(user))
+        // ADR-009: Include lightweight Inhabitant relation for display
+        const users = await prisma.user.findMany({
+            select: USER_DISPLAY_SELECT
+        })
+
+        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
+        const deserializedUsers = users.map(deserializeToUserDisplay)
+
+        console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users`)
+        return deserializedUsers
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching users', error)
-        console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemRole): Promise<UserDisplay[]> {
+    console.info(`🪪 > USER > [GET] Fetching users with role ${systemRole}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Query users where systemRoles JSON array contains the specified role
+        const users = await prisma.user.findMany({
+            where: {
+                systemRoles: {
+                    contains: systemRole
+                }
+            },
+            select: USER_DISPLAY_SELECT
+        })
+
+        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
+        const deserializedUsers = users.map(deserializeToUserDisplay)
+
+        console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)
+        return deserializedUsers
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error fetching users with role ${systemRole}`, error)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
 
 export async function deleteUser(d1Client: D1Database, userId: number): Promise<User> {
-    console.info(`👨‍💻 > USER > [DELETE] Deleting user with ID ${userId}`)
+    console.info(`🪪 > USER > [DELETE] Deleting user with ID ${userId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {UserResponseSchema} = useUserValidation()
+
     try {
         const deletedUser = await prisma.user.delete({
             where: {id: userId}
         })
 
-        console.info(`👨‍💻 > USER > [DELETE] Successfully deleted user ${deletedUser.email}`)
-        return deletedUser
+        console.info(`🪪 > USER > [DELETE] Successfully deleted user ${deletedUser.email}`)
+
+        // Deserialize and validate before returning (ADR-010 pattern)
+        const deserialized = deserializeUser(deletedUser)
+        return UserResponseSchema.parse(deserialized)
     } catch (error) {
         const h3e = h3eFromCatch('Error deleting user', error)
-        console.error(`👨‍💻 > USER > [DELETE] ${h3e.statusMessage}`, error)
+        console.error(`🪪 > USER > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
 
 export async function fetchUser(email: string, d1Client: D1Database): Promise<UserWithInhabitant | null> {
-    console.info(`👨‍💻 > USER > [GET] Fetching user for email ${email}`)
+    console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -175,8 +257,8 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
                 user.Inhabitant.household.shortName = getHouseholdShortName(user.Inhabitant.household.address)
             }
 
-            console.info(`👨‍💻 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
-            console.info(`👨‍💻 > USER > [GET] Inhabitant: ${user.Inhabitant ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household ? user.Inhabitant.household.id : 'NULL'}` : 'NULL'}`)
+            console.info(`🪪 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
+            console.info(`🪪 > USER > [GET] Inhabitant: ${user.Inhabitant ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household ? user.Inhabitant.household.id : 'NULL'}` : 'NULL'}`)
 
             // Return with deserialized roles
             return {
@@ -184,68 +266,12 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
                 systemRoles: deserializedRoles
             }
         } else {
-            console.info(`👨‍💻 > USER > [GET] No user found for email ${email}`)
+            console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
         return null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching user for email ${email}`, error)
-        console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemRole): Promise<UserDisplay[]> {
-    console.info(`👨‍💻 > USER > [GET] Fetching users with role ${systemRole}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        // Query users where systemRoles JSON array contains the specified role
-        const users = await prisma.user.findMany({
-            where: {
-                systemRoles: {
-                    contains: systemRole
-                }
-            },
-            select: {
-                id: true,
-                email: true,
-                phone: true,
-                systemRoles: true,
-                Inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
-        const deserializedUsers = users.map(user => {
-            const deserialized = deserializeUser({
-                ...user,
-                passwordHash: '', // Not needed for display
-                systemRoles: user.systemRoles
-            })
-
-            return {
-                id: deserialized.id!,
-                email: deserialized.email,
-                phone: deserialized.phone,
-                systemRoles: deserialized.systemRoles,
-                Inhabitant: user.Inhabitant
-            } as UserDisplay
-        })
-
-        console.info(`👨‍💻 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)
-        return deserializedUsers
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching users with role ${systemRole}`, error)
-        console.error(`👨‍💻 > USER > [GET] ${h3e.statusMessage}`, error)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
