@@ -3,7 +3,7 @@ import { HELP_TEXTS } from '~/config/help-texts'
 
 const route = useRoute()
 const isOpen = ref(false)
-
+const close = () => isOpen.value = false
 // Dynamically lookup help content based on current route
 const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
@@ -23,27 +23,37 @@ const helpContent = computed(() => {
 
 // Close help when route changes
 watch(() => route.path, () => {
-  isOpen.value = false
+  close()
 })
 </script>
 
 <template>
-  <UCollapsible v-if="helpContent" v-model="isOpen">
-      <UTooltip :text="helpContent.title">
-        <UButton
-            icon="i-heroicons-question-mark-circle"
-            variant="soft"
-            color="tertiary"
-            size="xl"
-        />
-      </UTooltip>
-    <template #content>
-      <UCard class="mt-2 w-80" @click="isOpen = false">
+  <UPopover
+      v-if="helpContent"
+      v-model:open="isOpen"
+      :popper="{ placement: 'bottom-start' }"
+  >
+    <UButton
+        icon="i-heroicons-question-mark-circle"
+        variant="solid"
+        color="ocean"
+        size="xl"
+    />
+
+    <template #content="{ close }">
+      <UCard class="w-1/3 cursor-pointer" @click="close" variant="outline">
         <template #header>
-          <span class="text-sm font-semibold">{{ helpContent.title }}</span>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-semibold">{{ helpContent.title }}</span>
+            <UButton
+                icon="i-heroicons-x-mark"
+                variant="ghost"
+                size="xs"
+            />
+          </div>
         </template>
         <p class="text-sm">{{ helpContent.content }}</p>
       </UCard>
     </template>
-  </UCollapsible>
+  </UPopover>
 </template>

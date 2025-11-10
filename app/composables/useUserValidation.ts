@@ -25,19 +25,35 @@ export const useUserValidation = () => {
     const BaseUserSchema = z.object({
         id: z.number().int().positive().optional(),
         email: emailSchema,
-        phone: z.string()
-            .regex(/^\+?\d+$/, 'Telefonnummer må kun indeholde tal og eventuelt et plus-tegn i starten')
-            .nullable()
-            .optional(),
+        phone: z.union([
+            z.string().regex(/^\+?[\d\s]+$/, 'Telefonnummer må kun indeholde tal, mellemrum og eventuelt et plus-tegn i starten'),
+            z.literal(''),
+            z.null()
+        ])
+            .optional()
+            .transform(val => val === '' ? null : val), // Convert empty string to null
         passwordHash: z.string().default('caramba'),
         systemRoles: z.array(SystemRoleSchema).default([]), // Array of roles
         createdAt: z.coerce.date().optional(),
         updatedAt: z.coerce.date().optional()
     })
 
-    // Serialized schema - systemRoles as JSON string (database format)
-    const SerializedUserSchema = BaseUserSchema.extend({
+    // Serialized schema for database INPUT (create/update operations)
+    // Omit auto-generated fields (id, createdAt, updatedAt managed by Prisma)
+    const SerializedUserInputSchema = BaseUserSchema.omit({
+        id: true,
+        createdAt: true,
+        updatedAt: true
+    }).extend({
         systemRoles: z.string().default('[]') // JSON stringified array
+    })
+
+    // Serialized schema for database OUTPUT (read operations)
+    // Matches Prisma User model - id, createdAt, updatedAt are always present
+    const SerializedUserSchema = SerializedUserInputSchema.extend({
+        id: z.number().int().positive(),
+        createdAt: z.coerce.date(),
+        updatedAt: z.coerce.date()
     })
 
     // User schema for creation (API input validation)
@@ -59,22 +75,30 @@ export const useUserValidation = () => {
         systemRoles: true
     })
 
-    // Minimal user info for frontend display (allergy managers with avatar)
-    // NOTE: Inhabitant schema duplicated from InhabitantDisplaySchema in useHouseholdValidation
+    // Shared Inhabitant schema with all scalar properties
+    // NOTE: Duplicated from InhabitantDisplaySchema in useHouseholdValidation
     // Cannot import directly due to circular dependency (useHouseholdValidation imports useUserValidation)
     // IMPORTANT: Keep in sync with InhabitantDisplaySchema - verified by unit test
-    const UserDisplaySchema = z.object({
+    const InhabitantScalarsSchema = z.object({
         id: z.number().int().positive(),
-        email: emailSchema,
-        systemRoles: z.array(SystemRoleSchema),
-        phone: z.string().nullable().optional(),
-        Inhabitant: z.object({
-            id: z.number().int().positive(),
-            heynaboId: z.number().int().positive(),
-            name: z.string(),
-            lastName: z.string(),
-            pictureUrl: z.string().optional().nullable(),
-            birthDate: z.coerce.date().optional().nullable()
+        heynaboId: z.number().int().positive(),
+        name: z.string(),
+        lastName: z.string(),
+        pictureUrl: z.string().url().or(z.literal('')).nullable(),
+        birthDate: z.coerce.date().nullable(),
+        userId: z.number().int().positive().nullable(),
+        householdId: z.number().int().positive()
+    })
+
+    // Minimal user info for frontend display (allergy managers with avatar)
+    // Reuses BaseUserSchema and InhabitantScalarsSchema (without userId/householdId)
+    const UserDisplaySchema = BaseUserSchema.omit({
+        passwordHash: true
+    }).extend({
+        id: z.number().int().positive(), // Make id required (BaseUserSchema has it optional)
+        Inhabitant: InhabitantScalarsSchema.omit({
+            userId: true,
+            householdId: true
         }).nullable().optional()
     })
 
@@ -85,21 +109,9 @@ export const useUserValidation = () => {
     })
 
     // ADR-009: User with nested Inhabitant and Household (essential context for auth)
-    // Inline schemas to avoid circular dependency with useHouseholdValidation
-    const UserWithInhabitantSchema = BaseUserSchema.required({
-        id: true,
-        email: true,
-        systemRoles: true
-    }).extend({
-        Inhabitant: z.object({
-            id: z.number().int().positive(),
-            heynaboId: z.number().int().positive(),
-            name: z.string(),
-            lastName: z.string(),
-            pictureUrl: z.string().url().or(z.literal('')).nullable(),
-            birthDate: z.coerce.date().nullable(),
-            userId: z.number().int().positive().nullable(),
-            householdId: z.number().int().positive(),
+    // Extends UserDisplaySchema to add userId, householdId, and household relation to Inhabitant
+    const UserWithInhabitantSchema = UserDisplaySchema.extend({
+        Inhabitant: InhabitantScalarsSchema.extend({
             household: z.object({
                 id: z.number().int().positive(),
                 heynaboId: z.number().int().positive(),
@@ -115,6 +127,7 @@ export const useUserValidation = () => {
 
     // Type definitions
     type User = z.infer<typeof BaseUserSchema>
+    type SerializedUserInput = z.infer<typeof SerializedUserInputSchema>
     type SerializedUser = z.infer<typeof SerializedUserSchema>
     type UserCreate = z.infer<typeof UserCreateSchema>
     type UserUpdate = z.infer<typeof UserUpdateSchema>
@@ -124,13 +137,22 @@ export const useUserValidation = () => {
     type LoginCredentials = z.infer<typeof LoginSchema>
 
     // Serialization functions (database ⟷ domain)
-    const serializeUser = (user: User): SerializedUser => {
+
+    /**
+     * Serialize user for database input (create/update)
+     * Converts domain UserCreate to database format (JSON stringified systemRoles)
+     */
+    const serializeUserInput = (user: UserCreate): SerializedUserInput => {
         return {
             ...user,
             systemRoles: JSON.stringify(user.systemRoles)
         }
     }
 
+    /**
+     * Deserialize user from database output (read)
+     * Converts database format to domain User (parsed systemRoles array)
+     */
     const deserializeUser = (serialized: SerializedUser): User => {
         return {
             ...serialized,
@@ -159,6 +181,7 @@ export const useUserValidation = () => {
     return {
         SystemRoleSchema,
         BaseUserSchema,
+        SerializedUserInputSchema,
         SerializedUserSchema,
         UserCreateSchema,
         UserUpdateSchema,
@@ -166,7 +189,7 @@ export const useUserValidation = () => {
         UserDisplaySchema,
         UserWithInhabitantSchema,
         LoginSchema,
-        serializeUser,
+        serializeUserInput,
         deserializeUser,
         mergeUserRoles
     }

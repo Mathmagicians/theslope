@@ -22,7 +22,7 @@ export const HELP_TEXTS = {
         },
         users: {
             title: 'Brugere',
-            content: 'Her kan du se brugere der har login til systemet. Brugere importeres fra Heynabo, og du kan opdatere listen ved at trykke på importknappen.'
+            content: 'Her ser du brugere der har login til systemet. De importeres fra Heynabo med samme brugernavn og password. Du kan se hvilke systemroller hver bruger har, og opdatere listen ved at trykke på importknappen.'
         },
         economy: {
             title: 'Økonomi',

@@ -81,7 +81,7 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
 /*** USERS ***/
 
 // Get serialization utilities
-const {serializeUser, deserializeUser, mergeUserRoles} = useUserValidation()
+const {serializeUserInput, deserializeUser, mergeUserRoles} = useUserValidation()
 
 export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
     console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
@@ -104,7 +104,7 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         }
 
         // Serialize before writing to DB (ADR-010 pattern)
-        const serializedUser = serializeUser(userToSave)
+        const serializedUser = serializeUserInput(userToSave)
         const newUser = await prisma.user.upsert({
             where: {email: user.email},
             create: serializedUser,
@@ -129,6 +129,8 @@ const USER_DISPLAY_SELECT = {
     email: true,
     phone: true,
     systemRoles: true,
+    createdAt: true,
+    updatedAt: true,
     Inhabitant: {
         select: {
             id: true,
@@ -145,21 +147,13 @@ const USER_DISPLAY_SELECT = {
 function deserializeToUserDisplay(user: any): UserDisplay {
     const {UserDisplaySchema} = useUserValidation()
 
-    const deserialized = deserializeUser({
-        ...user,
-        passwordHash: '', // Not needed for display
-        systemRoles: user.systemRoles
-    })
-
+    // Let the schema do ALL the work - parse systemRoles JSON, validate fields, transform dates
     const userDisplay = {
-        id: deserialized.id!,
-        email: deserialized.email,
-        phone: deserialized.phone,
-        systemRoles: deserialized.systemRoles,
-        Inhabitant: user.Inhabitant
+        ...user,
+        systemRoles: JSON.parse(user.systemRoles) // Only deserialize systemRoles from JSON
     }
 
-    // Schema validation with z.coerce.date() handles birthDate conversion
+    // Schema validation with z.coerce.date() handles date conversion and all other transformations
     return UserDisplaySchema.parse(userDisplay)
 }
 

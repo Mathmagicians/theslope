@@ -57,6 +57,8 @@ export const useUsersStore = defineStore("Users", () => {
     const isAllergyManagersErrored = computed(() => allergyManagersStatus.value === 'error')
     const isImportHeynaboLoading = computed(() => heynaboImportStatus.value === 'pending')
     const isImportHeynaboErrored = computed(() => heynaboImportStatus.value === 'error')
+    const isUsersLoading = computed(() => usersStatus.value === 'pending')
+    const isUsersErrored = computed(() => usersStatus.value === 'error')
 
     // ========================================
     // Store Actions

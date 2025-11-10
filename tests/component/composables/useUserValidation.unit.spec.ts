@@ -277,7 +277,9 @@ describe('useUserValidation', () => {
         it.each([
             { phone: null, expected: null, description: 'null phone' },
             { phone: undefined, expected: undefined, description: 'undefined phone' },
-            { phone: '+4512345678', expected: '+4512345678', description: 'string phone' }
+            { phone: '+4512345678', expected: '+4512345678', description: 'phone without spaces' },
+            { phone: '+45 12 34 56 78', expected: '+45 12 34 56 78', description: 'phone with spaces (Heynabo format)' },
+            { phone: '', expected: null, description: 'empty string phone (converted to null)' }
         ])('should parse user with $description', ({ phone, expected }) => {
             const userDisplay: any = {
                 id: 4,
@@ -293,11 +295,11 @@ describe('useUserValidation', () => {
             expect(result.phone).toBe(expected)
         })
 
-        it('should reject user missing required fields', () => {
+        it('should reject user missing required id field', () => {
             const invalidUser = {
-                id: 1,
-                email: 'test@example.com'
-                // Missing systemRoles
+                email: 'test@example.com',
+                systemRoles: []
+                // Missing id (required in UserDisplaySchema)
             }
 
             expect(() => UserDisplaySchema.parse(invalidUser)).toThrow()
@@ -424,6 +426,119 @@ describe('useUserValidation', () => {
 
             expect(merged.systemRoles).toEqual(expected)
             expect(merged.passwordHash).toBe('newhash')
+        })
+    })
+
+    describe('Serialization/Deserialization (ADR-010)', () => {
+        const {serializeUserInput, deserializeUser} = useUserValidation()
+
+        describe('serializeUserInput', () => {
+            it.each([
+                {
+                    description: 'multiple roles',
+                    input: { email: 'test@example.com', passwordHash: 'hash123', systemRoles: ['ADMIN', 'ALLERGYMANAGER'], phone: '+4512345678' },
+                    expectedRoles: '["ADMIN","ALLERGYMANAGER"]'
+                },
+                {
+                    description: 'empty roles',
+                    input: { email: 'test@example.com', passwordHash: 'hash123', systemRoles: [] },
+                    expectedRoles: '[]'
+                },
+                {
+                    description: 'null phone',
+                    input: { email: 'test@example.com', passwordHash: 'hash123', systemRoles: [], phone: null },
+                    expectedRoles: '[]'
+                }
+            ])('should serialize $description', ({input, expectedRoles}) => {
+                const serialized = serializeUserInput(input)
+
+                expect(serialized.systemRoles).toBe(expectedRoles)
+                expect(serialized.email).toBe(input.email)
+                expect(serialized.passwordHash).toBe(input.passwordHash)
+                if (input.phone !== undefined) {
+                    expect(serialized.phone).toBe(input.phone)
+                }
+            })
+        })
+
+        describe('deserializeUser', () => {
+            it.each([
+                {
+                    description: 'multiple roles',
+                    input: {
+                        id: 1,
+                        email: 'test@example.com',
+                        passwordHash: 'hash123',
+                        systemRoles: '["ADMIN","ALLERGYMANAGER"]',
+                        phone: '+4512345678',
+                        createdAt: new Date('2025-01-10'),
+                        updatedAt: new Date('2025-01-10')
+                    },
+                    expectedRoles: ['ADMIN', 'ALLERGYMANAGER']
+                },
+                {
+                    description: 'empty roles',
+                    input: {
+                        id: 2,
+                        email: 'user@example.com',
+                        passwordHash: 'hash456',
+                        systemRoles: '[]',
+                        createdAt: new Date('2025-01-10'),
+                        updatedAt: new Date('2025-01-10')
+                    },
+                    expectedRoles: []
+                },
+                {
+                    description: 'null phone',
+                    input: {
+                        id: 3,
+                        email: 'test@example.com',
+                        passwordHash: 'hash789',
+                        systemRoles: '[]',
+                        phone: null,
+                        createdAt: new Date('2025-01-10'),
+                        updatedAt: new Date('2025-01-10')
+                    },
+                    expectedRoles: []
+                }
+            ])('should deserialize $description', ({input, expectedRoles}) => {
+                const deserialized = deserializeUser(input)
+
+                expect(deserialized.systemRoles).toEqual(expectedRoles)
+                expect(deserialized.id).toBe(input.id)
+                expect(deserialized.email).toBe(input.email)
+                expect(deserialized.passwordHash).toBe(input.passwordHash)
+                if (input.phone !== undefined) {
+                    expect(deserialized.phone).toBe(input.phone)
+                }
+                expect(deserialized.createdAt).toEqual(input.createdAt)
+                expect(deserialized.updatedAt).toEqual(input.updatedAt)
+            })
+        })
+
+        it('should preserve data through round-trip serialization', () => {
+            const userCreate = {
+                email: 'roundtrip@example.com',
+                passwordHash: 'hash999',
+                systemRoles: ['ADMIN'],
+                phone: '+4587654321'
+            }
+
+            const serialized = serializeUserInput(userCreate)
+            const fromDatabase = {
+                ...serialized,
+                id: 123,
+                createdAt: new Date('2025-01-10'),
+                updatedAt: new Date('2025-01-10')
+            }
+            const deserialized = deserializeUser(fromDatabase)
+
+            expect(deserialized).toMatchObject({
+                ...userCreate,
+                id: 123,
+                createdAt: new Date('2025-01-10'),
+                updatedAt: new Date('2025-01-10')
+            })
         })
     })
 })
