@@ -166,10 +166,15 @@ const sorting = ref([
   }
 ])
 
+// Toggle sort order
+const toggleSortOrder = () => {
+  sorting.value[0].desc = !sorting.value[0].desc
+}
+
 // Pagination
 const pagination = ref({
   pageIndex: 0,
-  pageSize: 15
+  pageSize: 8
 })
 
 const table = useTemplateRef('table')
@@ -178,7 +183,7 @@ const table = useTemplateRef('table')
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <!-- Search and Pagination Row -->
     <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
       <!-- Search -->
@@ -214,6 +219,23 @@ const table = useTemplateRef('table')
         }"
         class="flex-1"
     >
+      <!-- Custom header for status column with sort button -->
+      <template #status-header>
+        <UButton
+            @click="toggleSortOrder"
+            variant="outline"
+            size="md"
+            name="sort-by-status"
+        >
+          <template #leading>
+            <UIcon
+                :name="sorting[0].desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+            />
+          </template>
+          Status
+        </UButton>
+      </template>
+
       <!-- Name column with avatar -->
       <template #name-cell="{ row }">
         <div class="flex items-center gap-3">
