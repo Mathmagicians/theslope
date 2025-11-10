@@ -1,13 +1,13 @@
 import {defineEventHandler} from 'h3';
-import {createHouseholdsFromImport, importFromHeyNabo} from "~~/server/integration/heynabo";
-import {saveHousehold} from "~~/server/data/prismaRepository";
-import eventHandlerHelper from "~~/server/utils/eventHandlerHelper";
-
+import {createHouseholdsFromImport, importFromHeyNabo} from "~~/server/integration/heynabo"
+import {saveHousehold} from "~~/server/data/prismaRepository"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import type {Household} from "~/composables/useHouseholdValidation"
 const {h3eFromCatch} = eventHandlerHelper
 
 
 // Returns imported locations and members from HeyNabo
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Household[]>(async (event) => {
     const { locations, members } = await importFromHeyNabo()
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB

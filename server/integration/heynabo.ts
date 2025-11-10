@@ -2,19 +2,31 @@ import {Prisma as PrismaFromClient} from "@prisma/client"
 import HouseholdCreateInput = PrismaFromClient.HouseholdCreateInput
 
 // Load environment variables - for some undocumented reason, they are not passed to nitro from .env automatically
-import dotenv from 'dotenv';
+import dotenv from 'dotenv'
 import {z} from 'zod'
 import InhabitantCreateInput = Prisma.InhabitantCreateInput;
 import HouseholdCreateNestedOneWithoutInhabitantsInput = Prisma.HouseholdCreateNestedOneWithoutInhabitantsInput;
 import {maskPassword} from "~/utils/utils";
-import type {UserCreate} from "~/composables/useUserValidation";
+import type {UserCreate} from "~/composables/useUserValidation"
+import {useHeynaboValidation} from "~/composables/useHeynaboValidation"
+import type {HeynaboMember, HeynaboUser, LoggedInHeynaboUser, HeynaboLocation} from "~/composables/useHeynaboValidation"
 // Import SystemRole enum from generated schemas (ADR-001 compliance)
 // Note: server integration files execute at module load time, so import directly from generated schemas
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper";
 
 const SystemRole = SystemRoleSchema.enum
 
-dotenv.config();
+const LOG = '🔑 > HEYNABO > '
+const {h3eFromCatch} = eventHandlerHelper
+const {
+    LoggedInHeynaboUserSchema,
+    HeynaboMemberSchema,
+    HeynaboLocationSchema
+} = useHeynaboValidation()
+
+/* ==== INITIALIZATION ==== */
+dotenv.config()
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string; //will give runtime error if env variable is undefined - this is intentional
 const heyNaboPassword = process.env.HEY_NABO_PASSWORD as string;
 const heyNaboApi = process.env.HEY_NABO_API as string;
@@ -22,168 +34,124 @@ const heyNaboApi = process.env.HEY_NABO_API as string;
 // curl -X POST https://demo.spaces.heynabo.com/api/login "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)
 // grab bearer token from heynabo /login endpoint
 
-/*
-{
-    "id": 153,
-    "type": "user",
-    "email": "agata@m.dk",
-    "firstName": "Skraaningen",
-    "lastName": "API",
-    "phone": "12345678",
-    "emergencyContact": null,
-    "dateOfBirth": null,
-    "description": "<p>Dette er en robot der bruges til at teste modul til fællesspisning.</p>",
-    "uiStorage": "{\"tryOurApp\":true,\"welcome\":{\"calendar\":true}}",
-    "role": "admin",
-    "roles": [],
-    "avatar": "https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/67896247d11fb.jpg",
-    "alias": null,
-    "locationId": 2,
-    "isFirstLogin": false,
-    "lastLogin": "2025-02-02T00:11:37.155541Z",
-    "inviteSent": "2025-01-14T10:49:53+00:00",
-    "created": "2025-01-14T10:49:53+00:00",
-    "token": "300e1068fdd7e628cc7cf6d8b893b1c1"
-}
-*/
-const heynaboUserSchema = z.object({
-    id: z.number(),
-    type: z.string(),
-    email: z.string().email(),
-    firstName: z.string(),
-    lastName: z.string(),
-    phone: z.string().nullable(),
-    emergencyContact: z.string().nullable(),
-    dateOfBirth: z.string().nullable(),
-    description: z.string().nullable(),
-    uiStorage: z.string(),
-    role: z.string(),
-    roles: z.array(z.string()),
-    avatar: z.string().url(),
-    alias: z.string().nullable(),
-    locationId: z.number(),
-    isFirstLogin: z.boolean(),
-    lastLogin: z.string(),
-    inviteSent: z.string(),
-    created: z.string(),
-    token: z.string().nonempty()
-});
 
-type HeynaboUser = z.infer<typeof heynaboUserSchema>
+async function getTokenFromHeynaboApi(username: string | undefined, password: string | undefined, api: string | undefined): Promise<LoggedInHeynaboUser> {
+    if (!username || !password || !api) throw createError({
+        statusCode: 400,
+        statusMessage: "Heyabo integration not configured properly - missing env variables"
+    })
+    console.info(LOG, "TOKEN >", "Getting token for username: ", username)
 
-async function getTokenFromHeynaboApi(username: string | undefined, password: string | undefined, api: string | undefined): Promise<HeynaboUser> {
-    console.log("🔑 > HEYNABO > Getting token for username: ", username);
+    let heynaboUser: LoggedInHeynaboUser
+
     try {
-
-        const heynaboUser = await $fetch(`${api}/login`, {
+        heynaboUser = await $fetch<LoggedInHeynaboUser>(`${api}/login`, {
             method: 'POST',
             body: {email: username, password: password},
             headers: {ContentType: 'application/json'}
-        }) satisfies  HeynaboUser
-        const validatedHeynaboUser = heynaboUserSchema.parse(heynaboUser)
-        console.log("🔑 > HEYNABO > Got Heynabo security token: ", maskPassword(heynaboUser?.token))
-        return heynaboUser
+        })
+    } catch (error: any) {
+        const h3e = h3eFromCatch(`Error fetching token from Heynabo API for username ${maskPassword(username)}: `, error)
+        console.error(LOG, h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        const validatedHeynaboUser = LoggedInHeynaboUserSchema.parse(heynaboUser)
+        console.info(LOG, "TOKEN > Got Heynabo security token: ", maskPassword(validatedHeynaboUser.token))
+        return validatedHeynaboUser
     } catch (e: unknown) {
-        if (e instanceof z.ZodError && e.format()?.token) {
-            throw createError({
-                statusCode: 404,
-                statusMessage: "Invalid Heynabo credentials - cant login"
-            })
-        } else {
-            throw (e) //rethrow error
-        }
+        const h3e = h3eFromCatch(`Error no Heynabo token for username ${maskPassword(username)}: `, e)
+        console.error(LOG, "TOKEN > ", h3e.statusMessage, e)
+        throw h3e
     }
 }
 
 export async function getApiToken(username: string, password: string, api: string): Promise<string> {
-    const result = await getTokenFromHeynaboApi(username, password, api)
-    console.log("🔑 > HEYNABO > Got Heynabo security token: ", result?.token.length > 0 ? "🔑" : "❌")
-    return result.token
+    const {token} = await getTokenFromHeynaboApi(username, password, api)
+    console.info(LOG, "TOKEN > Got Heynabo security token: ", token ? "🔑" : "❌")
+    return token
 }
 
-export async function loginUserIntoHeynabo(username: string, password: string): Promise<HeynaboUser> {
+export async function loginUserIntoHeynabo(username: string, password: string): Promise<LoggedInHeynaboUser> {
     const result = await getTokenFromHeynaboApi(username, password, heyNaboApi)
-    console.log("🔑 > HEYNABO > Logged into Heynabo for username: ", username, result?.token.length > 0 ? "🔑" : "❌")
+    console.info(LOG, "LOGIN > Logged into Heynabo for username: ", username, result?.token.length > 0 ? "🔑" : "❌")
     return result
 }
 
-const heyNaboLocationExample = {
-    "id": 2,
-    "type": "location",
-    "address": "Heynabo! ",
-    "street": "Heynabo!",
-    "streetNumber": "",
-    "floor": null,
-    "ext": null,
-    "map": null,
-    "city": "",
-    "zipCode": "",
-    "typeId": 1,
-    "hidden": true
-}
-type HeynaboLocation = typeof heyNaboLocationExample
 
 async function loadLocations(from: string, token: string): Promise<HeynaboLocation[]> {
     const url = `${from}/members/locations/`
-    console.log("Loading locations from: ", url)
-    const result = await $fetch(url, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            ContentType: 'application/json'
-        }
-    }) satisfies HeynaboLocation[];
-    return result
+    console.info("> 🤖 > HEYNABO > LOCATIONS > Loading locations from: ", url)
+
+    let list: HeynaboLocation[]
+    try {
+        list = await $fetch<HeynaboLocation[]>(url, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                ContentType: 'application/json'
+            }
+        }) || []
+    } catch (error: any) {
+        const h3e = h3eFromCatch('> 🤖 > HEYNABO > LOCATIONS > Error loading locations from HeyNabo API: ', error)
+        console.error(LOG, h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        console.info(`> 🤖 > HEYNABO > LOCATIONS > Loaded ${list?.length} locations from HeyNabo`)
+        return z.array(HeynaboLocationSchema).parse(list)
+    } catch (e: unknown) {
+        const h3e = h3eFromCatch('> 🤖 > HEYNABO > LOCATIONS > Error validating locations from HeyNabo API: ', e)
+        console.error(LOG, h3e.statusMessage, e)
+        throw h3e
+    }
 }
 
-const henaboMemberExample = {
-    "id": 130,
-    "type": "user",
-    "email": "karin.thoby@gmail.com",
-    "firstName": "Karin",
-    "lastName": "Thoby",
-    "phone": "29261868",
-    "emergencyContact": null,
-    "dateOfBirth": null,
-    "description": "",
-    "uiStorage": "{\"welcome\":{\"notifications\":true,\"calendar\":true,\"bulletin_board\":true},\"setNotifications\":true,\"selectedGroupIds\":[]}",
-    "role": "full",
-    "roles": [],
-    "avatar": "https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/66d8a3239eabe.jpeg",
-    "alias": "",
-    "locationId": 48,
-    "isFirstLogin": false,
-    "lastLogin": "2024-10-09T16:37:43.000000Z",
-    "inviteSent": "2024-08-31T17:11:06+00:00",
-    "created": "2024-08-31T17:11:00+00:00"
+interface HeynaboAPIMembers {
+    list: HeynaboMember[]
 }
-type  HeynaboMember = typeof henaboMemberExample
 
 async function loadMembers(from: string, token: string): Promise<HeynaboMember[]> {
     const url = `${from}/admin/users/`
-    console.log(`Loading members from ${url}, token ${token}`)
-    const {list} = await $fetch(url, {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            ContentType: 'application/json'
-        }
-    }) satisfies HeynaboMember[]
-    return list
+    console.info(`> 🤖 > HEYNABO > MEMBERS > Loading members from ${url}, token ${maskPassword(token)}`)
+
+    let response: HeynaboAPIMembers
+    try {
+        response = await $fetch<HeynaboAPIMembers>(url, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                ContentType: 'application/json'
+            }
+        })
+    } catch (error: any) {
+        const h3e = h3eFromCatch('> 🤖 > HEYNABO > MEMBERS > Error loading members from HeyNabo API: ', error)
+        console.error(LOG, h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        const {list} = response
+        console.info(`> 🤖 > HEYNABO > MEMBERS > Loaded ${list?.length} members from HeyNabo`)
+        return z.array(HeynaboMemberSchema).parse(list)
+    } catch (e: unknown) {
+        const h3e = h3eFromCatch('> 🤖 > HEYNABO > MEMBERS > Error validating members from HeyNabo API: ', e)
+        console.error(LOG, " MEMBERS > error validating members ", h3e.statusMessage, e)
+        throw h3e
+    }
 }
 
 async function importFromHeyNaboForSystemUser(user: string, password: string, api: string) {
     const token = await getApiToken(user, password, api)
-    const locations = await loadLocations(heyNaboApi, token)
-    console.log(">>>🤖 Imported locations heynabo: ", locations.length)
-    const members = await loadMembers(heyNaboApi, token)
-    console.log(">>>🤖 Imported members from heynabo: ", members.length)
-    return {locations: locations, members: members}
+    const [locations, members] = await Promise.all([loadLocations(heyNaboApi, token),
+        loadMembers(heyNaboApi, token)])
+    return {locations, members}
 }
 
 export async function importFromHeyNabo() {
-    const imported = await importFromHeyNaboForSystemUser(heyNaboUserName, heyNaboPassword, heyNaboApi)
-    return imported
+    return await importFromHeyNaboForSystemUser(heyNaboUserName, heyNaboPassword, heyNaboApi)
 }
 
 type HeyNaboRoles = 'admin' | 'full' | 'limited'
@@ -200,7 +168,7 @@ function inhabitantFromMember(locationId: number, member: HeynaboMember): Inhabi
         household: {} as HouseholdCreateNestedOneWithoutInhabitantsInput
     } satisfies InhabitantCreateInput
 
-    if (member.email && member.role  !== 'limited') {
+    if (member.email && member.role !== 'limited') {
         // Domain format - saveUser in repository will serialize (ADR-010 pattern)
         const userDomain: UserCreate = {
             email: member.email,

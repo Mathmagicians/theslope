@@ -10,7 +10,7 @@
  * - Immediate save on add/remove
  * - UTable for consistent UI
  */
-import { getPaginationRowModel } from '@tanstack/vue-table'
+import { getPaginationRowModel, getSortedRowModel } from '@tanstack/vue-table'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
 
 interface Inhabitant {

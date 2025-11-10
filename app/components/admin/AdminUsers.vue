@@ -59,9 +59,7 @@ const userColumns = [
     </template>
 
     <!-- Show when users are loaded -->
-    <ViewError :statusCode="400"
-               message="Kunne ikke loade bruger data"/>
-    <ViewError v-if="isUsersErrored"
+   <ViewError v-if="isUsersErrored"
                :statusCode="usersError?.statusCode" :cause="usersError"
                message="Kunne ikke loade bruger data 🤖"
     />
