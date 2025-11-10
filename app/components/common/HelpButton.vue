@@ -3,7 +3,7 @@ import { HELP_TEXTS } from '~/config/help-texts'
 
 const route = useRoute()
 const isOpen = ref(false)
-const close = () => isOpen.value = false
+const doClose = () => isOpen.value = false
 // Dynamically lookup help content based on current route
 const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
@@ -23,7 +23,7 @@ const helpContent = computed(() => {
 
 // Close help when route changes
 watch(() => route.path, () => {
-  close()
+  doClose()
 })
 </script>
 
@@ -40,8 +40,8 @@ watch(() => route.path, () => {
         size="xl"
     />
 
-    <template #content="{ close }">
-      <UCard class="w-1/3 cursor-pointer" @click="close" variant="outline">
+    <template #content>
+      <UCard class="cursor-pointer" @click="doClose()" variant="outline">
         <template #header>
           <div class="flex justify-between items-center">
             <span class="text-sm font-semibold">{{ helpContent.title }}</span>
@@ -49,6 +49,7 @@ watch(() => route.path, () => {
                 icon="i-heroicons-x-mark"
                 variant="ghost"
                 size="xs"
+                @click="doClose()"
             />
           </div>
         </template>

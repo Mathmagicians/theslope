@@ -1,10 +1,15 @@
 <script setup lang="ts">
 
-import type {ErrorWithStatusCode} from "~/types/error"
+export interface ViewErrorProps {
+  statusCode?: number
+  message?: string
+  cause?: {
+    stack?: string
+  }
+}
+const props = defineProps<ViewErrorProps>()
 
-const props = defineProps< ErrorWithStatusCode>()
-
-const icons = Array.from({length: 32}, (_, i) => i)
+const icons = Array.from({length: 16}, (_, i) => i)
 
 function getRotationClass(i: number) {
 
@@ -37,7 +42,7 @@ function getRotationClass(i: number) {
       <UIcon
           v-for="(item,i) in icons"
           :key="i"
-          name="fluent-emoji-high-contrast:confused-face"
+          :name="i%2 ? 'mage:robot-dead': 'fluent-emoji-high-contrast:confused-face'"
           class="size-32 md:size-64 lg:size-128 text-red-500"
           :class="getRotationClass(i)"/>
     </div>
@@ -45,6 +50,7 @@ function getRotationClass(i: number) {
     <!-- Error Content -->
     <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 grow items-start min-w-1/2 opacity-90 bg-red-100 flex flex-col p-2 md:p-4">
       <!-- Error Code -->
+      <UIcon name="i-mage-robot-dead" size="64"/>
       <p v-if="props.statusCode"
          class="text-2xl md:text-4xl font-mono font-bold bg-red-100 text-red-900 rounded inline-block mb-2">
         FEJL {{ props.statusCode }}

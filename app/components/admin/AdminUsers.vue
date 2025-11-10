@@ -5,7 +5,7 @@ const {SystemRoleSchema} = useUserValidation()
 const SystemRole = SystemRoleSchema.enum
 
 const store = useUsersStore()
-const {isImportHeynaboLoading, users, isUsersLoading, isUsersErrored, usersError } = storeToRefs(store)
+const {isImportHeynaboLoading, users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 const {importHeynaboData} = store
 
 const formattedUsers = computed(() => users.value?.map((user) => {
@@ -17,9 +17,12 @@ const formattedUsers = computed(() => users.value?.map((user) => {
 
 const colorForSystemRole = (role: string) => {
   switch (role) {
-    case SystemRole.ADMIN: return 'error'
-    case SystemRole.ALLERGYMANAGER: return 'warning'
-    default: return 'neutral'
+    case SystemRole.ADMIN:
+      return 'error'
+    case SystemRole.ALLERGYMANAGER:
+      return 'warning'
+    default:
+      return 'neutral'
   }
 }
 
@@ -36,7 +39,7 @@ const userColumns = [
 
 <template>
   <UCard id="admin-users" data-test-id="admin-users"
-              class="flex flex-col items-center text-secondary">
+         class="flex flex-col items-center text-secondary">
     <template #header>
       <UAlert
           title=" Brugere"
@@ -56,8 +59,12 @@ const userColumns = [
     </template>
 
     <!-- Show when users are loaded -->
-    <ViewError v-if="isUsersErrored" :error="usersError?.statusCode"
-    message="Kunne ikke loade bruger data 🤖"/>
+    <ViewError :statusCode="400"
+               message="Kunne ikke loade bruger data"/>
+    <ViewError v-if="isUsersErrored"
+               :statusCode="usersError?.statusCode" :cause="usersError"
+               message="Kunne ikke loade bruger data 🤖"
+    />
     <UTable
         :data="formattedUsers"
         :columns="userColumns"
