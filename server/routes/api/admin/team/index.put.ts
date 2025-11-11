@@ -3,6 +3,7 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
@@ -19,7 +20,7 @@ const PutTeamSchema = CookingTeamWithMembersSchema.refine(
     }
 )
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamWithMembers> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

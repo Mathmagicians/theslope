@@ -12,7 +12,7 @@ const paramSchema = z.object({
     id: z.coerce.number().int().positive('assignment ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     let id: number

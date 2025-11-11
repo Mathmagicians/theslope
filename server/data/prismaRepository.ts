@@ -37,6 +37,7 @@ import type {
     AllergyResponse,
     AllergyWithRelations
 } from '~/composables/useAllergyValidation'
+import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
     include: {
@@ -431,6 +432,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeWithInhabitants[]> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types with inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyTypeWithInhabitantsSchema} = useAllergyValidation()
 
     try {
         const allergyTypes = await prisma.allergyType.findMany({
@@ -477,7 +479,9 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
         result.sort((a, b) => b.inhabitants.length - a.inhabitants.length)
 
         console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${result.length} allergy types with inhabitants`)
-        return result
+
+        // Validate before returning (ADR-010)
+        return result.map(at => AllergyTypeWithInhabitantsSchema.parse(at))
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching allergy types', error)
         console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)

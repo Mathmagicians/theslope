@@ -3,6 +3,7 @@
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -27,7 +28,7 @@ const InputTeamSchema = CookingTeamSchema.extend({
 // Create a schema for POST operations (partial updates)
 const PostTeamSchema = InputTeamSchema.partial().omit({ id: true })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamWithMembers> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

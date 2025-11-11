@@ -4,6 +4,7 @@ const {h3eFromCatch} = eventHandlerHelper
 
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {fetchTeam} from "~~/server/data/prismaRepository"
+import type {CookingTeamWithMembers} from '~/composables/useCookingTeamValidation'
 import * as z from 'zod'
 
 // Define schema for ID parameter
@@ -11,7 +12,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Team ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamWithMembers> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

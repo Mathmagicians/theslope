@@ -5,6 +5,7 @@ import {defineEventHandler, getValidatedQuery} from "h3"
 import {fetchTeams} from "~~/server/data/prismaRepository"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import type {CookingTeamWithMembers} from '~/composables/useCookingTeamValidation'
 
 const {h3eFromCatch} = eventHandlerHelper
 
@@ -13,7 +14,7 @@ const querySchema = z.object({
     seasonId: z.coerce.number().int().positive().optional()
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

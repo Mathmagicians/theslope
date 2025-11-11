@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-11-11 (Dinner Events - Full ADR-002 & ADR-010 compliance)
+**Last Updated:** 2025-11-11 (Order Management - Full ADR-002 & ADR-010 compliance)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -21,6 +21,7 @@
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ OK | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |
+| `/api/admin/dinner-event/[id].post.ts` | ✅ | ✅ OK | ✅ | ✅ | updateDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ OK | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
 | **Admin - Teams** |
@@ -72,16 +73,63 @@
 
 ## Recent Improvements
 
+### 2025-11-11: Order Management Endpoints - Full ADR-002 & ADR-010 Compliance ✅
+
+**ADR-010 Repository Compliance:**
+1. ✅ All 4 Order repository functions validate with `OrderSchema` before returning
+2. ✅ Repository functions include `ticketPrice` relation and transform to domain type with `ticketType` field
+3. ✅ Functions: `createOrder()`, `fetchOrder()`, `fetchOrders()`, `deleteOrder()`
+4. ✅ Pattern: Extract schema inside function via `useOrderValidation()`, parse before return
+
+**Schemas Used:**
+- `OrderSchema` - Domain order with `ticketType` field (from ticketPrice relation)
+- `CreateOrdersRequestSchema` - Input validation for batch order creation
+- `OrderQuerySchema` - Query parameter validation (dinnerEventId filter)
+- `OrderIdSchema` - Route parameter validation
+
+**Test Coverage:**
+1. ✅ All 6 E2E tests passing (order.e2e.spec.ts)
+2. ✅ Tests verify: CRUD operations, validation errors, ticket type enum
+3. ✅ Proper cleanup using factories (CASCADE behavior per ADR-005)
+
+**Files Modified:**
+- `server/data/prismaRepository.ts` - Added missing `useOrderValidation` import, all functions validate with OrderSchema
+- `tests/e2e/testDataFactories/orderFactory.ts` - Enhanced assertions to capture error response bodies
+
+**Key Pattern (ADR-010):**
+```typescript
+// At module level
+import {useOrderValidation} from '~/composables/useOrderValidation'
+
+// Inside each function
+export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<Order> {
+    const {OrderSchema} = useOrderValidation()  // Extract schema here
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const ticketPrice = await prisma.ticketPrice.findUnique({where: {id: orderData.ticketPriceId}})
+    const newOrder = await prisma.order.create({data: {...orderData, priceAtBooking: ticketPrice.price}})
+
+    // Transform Prisma type to domain type with ticketType
+    const domainOrder = {...newOrder, ticketType: ticketPrice.ticketType}
+    return OrderSchema.parse(domainOrder)  // Validate before returning
+}
+```
+
+**Compliance:**
+- ADR-002: ✅ Separate try-catch, H3 validation, explicit return types
+- ADR-010: ✅ Domain types in repository returns, composable schemas
+
 ### 2025-11-11: Dinner Event Endpoints - Full ADR-002 & ADR-010 Compliance ✅
 
 **ADR-002 Violations Fixed:**
-1. ✅ Added explicit return types to all 4 endpoints (`Promise<DinnerEvent>` / `Promise<DinnerEvent[]>`)
-2. ✅ Added `setResponseStatus(event, 200)` to GET and DELETE endpoints
+1. ✅ Added explicit return types to all 5 endpoints (`Promise<DinnerEvent>` / `Promise<DinnerEvent[]>`)
+2. ✅ Added `setResponseStatus(event, 200)` to GET, POST, and DELETE endpoints
 3. ✅ Added `setResponseStatus(event, 201)` to PUT (create) endpoint
 4. ✅ Fixed `console.log` → `console.info` in index.put.ts (ADR-004 compliance)
 5. ✅ Removed unused Vue component import from [id].get.ts
 6. ✅ Fixed variable scoping in [id].get.ts
 7. ✅ Added missing `createError` import in [id].get.ts
+8. ✅ Implemented missing POST endpoint for dinner event updates with inline schema validation pattern
 
 **ADR-010 Repository Compliance (CRITICAL FIX):**
 1. ✅ Removed Prisma `DinnerEvent` type import from repository
