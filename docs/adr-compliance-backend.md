@@ -39,12 +39,12 @@
 | `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema                                                    |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveUser() validates with UserResponseSchema                                                     |
 | `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema                                              |
-| **Admin - Households** | | | | | **✅ FULLY COMPLIANT (2025-11-11)** - Inhabitants only |
-| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | N/A | deleteHousehold() → Household (no E2E tests yet) |
-| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | N/A | fetchHousehold() → HouseholdWithInhabitants (no E2E tests yet) |
-| `/api/admin/household/[id].post.ts` | ✅ | ✅ | ✅ | N/A | updateHousehold() → Household (no E2E tests yet) |
-| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | N/A | fetchHouseholds() → HouseholdSummary[] (no E2E tests yet) |
-| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | N/A | saveHousehold() → Household (no E2E tests yet) |
+| **Admin - Households** | | | | | **✅ FULLY COMPLIANT (2025-11-12)** |
+| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteHousehold() → Household |
+| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchHousehold() → HouseholdWithInhabitants (ADR-009) |
+| `/api/admin/household/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() → Household |
+| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchHouseholds() → HouseholdSummary[] (ADR-009) |
+| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveHousehold() → Household |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteInhabitant() → Inhabitant with deserializeInhabitant() |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitant() → Inhabitant with deserialization |
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → Inhabitant with deserialization |

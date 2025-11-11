@@ -223,6 +223,27 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        const activateSeason = async (seasonId: number) => {
+            try {
+                console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
+                await $fetch<Season>('/api/admin/season/active', {
+                    method: 'POST',
+                    body: {seasonId},
+                    headers: {'Content-Type': 'application/json'}
+                })
+                // Refresh seasons list to update active status indicators
+                await loadSeasons()
+                // If the activated season is the selected one, refresh it
+                if (selectedSeasonId.value === seasonId) {
+                    await refreshSelectedSeason()
+                }
+                console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
+            } catch (e: any) {
+                handleApiError(e, 'activateSeason')
+                throw e
+            }
+        }
+
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
         const createTeam = async (team: CookingTeam): Promise<CookingTeam> => {
             try {

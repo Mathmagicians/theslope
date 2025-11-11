@@ -30,17 +30,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // Use useAsyncData for detail endpoint - allows manual execute() without context issues
     const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
 
-    const {deserializeWeekDayMap} = useHouseholdValidation()
-
-    // Type for API response (dates are ISO strings from JSON)
-    type SerializedHouseholdWithInhabitants = Omit<HouseholdWithInhabitants, 'movedInDate' | 'moveOutDate' | 'inhabitants'> & {
-        movedInDate: string
-        moveOutDate: string | null
-        inhabitants: Array<Omit<HouseholdWithInhabitants['inhabitants'][number], 'birthDate' | 'dinnerPreferences'> & {
-            birthDate: string | null
-            dinnerPreferences: string | null
-        }>
-    }
+    const {HouseholdWithInhabitantsSchema} = useHouseholdValidation()
 
     const {
         data: selectedHousehold,
@@ -49,31 +39,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
         refresh: refreshSelectedHousehold
     } = useAsyncData<HouseholdWithInhabitants | null>(
         selectedHouseholdKey,
-        async () => {
+        () => {
             if (!selectedHouseholdId.value) return Promise.resolve(null)
-
-            // Fetch as serialized type (strings for dates)
-            const serialized = await $fetch<SerializedHouseholdWithInhabitants>(`/api/admin/household/${selectedHouseholdId.value}`)
-
-            // ADR-010: Client-side deserialization of Date fields from HTTP JSON
-            if (serialized) {
-                return {
-                    ...serialized,
-                    movedInDate: new Date(serialized.movedInDate),
-                    moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
-                    inhabitants: serialized.inhabitants.map(inhabitant => ({
-                        ...inhabitant,
-                        birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
-                        dinnerPreferences: inhabitant.dinnerPreferences
-                            ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
-                            : null
-                    }))
-                    } as HouseholdWithInhabitants
-            }
-            return null
+            return $fetch(`/api/admin/household/${selectedHouseholdId.value}`)
         },
         {
             default: () => null,
+            transform: (data: any) => {
+                if (!data) return null
+                // Repository validates data per ADR-010, schema handles HTTP JSON deserialization (ISO strings → Date objects)
+                return HouseholdWithInhabitantsSchema.parse(data)
+            }
         }
     )
 

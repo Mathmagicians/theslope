@@ -472,3 +472,229 @@ describe('getHouseholdShortName', () => {
         })
     })
 })
+
+describe('Household Deserialization (ADR-010)', () => {
+    const {
+        deserializeInhabitant,
+        deserializeHouseholdSummary,
+        deserializeHouseholdWithInhabitants,
+        serializeWeekDayMap,
+        createDefaultWeekdayMap
+    } = useHouseholdValidation()
+
+    describe('deserializeInhabitant', () => {
+        it('should deserialize inhabitant from factory data', () => {
+            const inhabitantData = HouseholdFactory.defaultInhabitantData()
+            const dinnerPrefs = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+
+            // Simulate database serialized format
+            const serialized = {
+                ...inhabitantData,
+                householdId: 1,
+                birthDate: '1990-01-15',
+                dinnerPreferences: serializeWeekDayMap(dinnerPrefs)
+            }
+
+            const result = deserializeInhabitant(serialized)
+
+            expect(result.birthDate).toBeInstanceOf(Date)
+            expect(result.dinnerPreferences?.mandag).toBe('DINEIN')
+            expect(result.dinnerPreferences?.tirsdag).toBe('TAKEAWAY')
+        })
+
+        it.each([
+            {birthDate: null, dinnerPreferences: null, description: 'null values'}
+        ])('should handle $description', ({birthDate, dinnerPreferences}) => {
+            const inhabitantData = HouseholdFactory.defaultInhabitantData()
+
+            const serialized = {
+                ...inhabitantData,
+                householdId: 1,
+                birthDate,
+                dinnerPreferences
+            }
+
+            const result = deserializeInhabitant(serialized)
+            expect(result.birthDate).toBe(birthDate)
+            expect(result.dinnerPreferences).toBe(dinnerPreferences)
+        })
+    })
+
+    describe('deserializeHouseholdSummary', () => {
+        it('should deserialize household summary from factory data', () => {
+            const householdData = HouseholdFactory.defaultHouseholdData()
+            const inhabitantData = HouseholdFactory.defaultInhabitantData()
+
+            const serialized = {
+                ...householdData,
+                id: 1,
+                movedInDate: '2020-01-01',
+                moveOutDate: null,
+                inhabitants: [
+                    {
+                        ...inhabitantData,
+                        id: 10,
+                        birthDate: '1990-01-15'
+                    }
+                ]
+            }
+
+            const result = deserializeHouseholdSummary(serialized)
+
+            expect(result.id).toBe(1)
+            expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
+            expect(result.movedInDate).toBeInstanceOf(Date)
+            expect(result.inhabitants[0].birthDate).toBeInstanceOf(Date)
+        })
+
+        it.each([
+            {moveOutDate: null, description: 'null moveOutDate'},
+            {moveOutDate: '2024-12-31', description: 'with moveOutDate'}
+        ])('should handle $description', ({moveOutDate}) => {
+            const householdData = HouseholdFactory.defaultHouseholdData()
+
+            const serialized = {
+                ...householdData,
+                id: 1,
+                movedInDate: '2020-01-01',
+                moveOutDate,
+                inhabitants: []
+            }
+
+            const result = deserializeHouseholdSummary(serialized)
+
+            if (moveOutDate) {
+                expect(result.moveOutDate).toBeInstanceOf(Date)
+            } else {
+                expect(result.moveOutDate).toBeNull()
+            }
+        })
+    })
+
+    describe('deserializeHouseholdWithInhabitants', () => {
+        it('should deserialize household with inhabitants from factory data', () => {
+            const householdData = HouseholdFactory.defaultHouseholdData()
+            const inhabitantData = HouseholdFactory.defaultInhabitantData()
+            const dinnerPrefs = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+
+            const serialized = {
+                ...householdData,
+                id: 1,
+                movedInDate: '2020-01-01',
+                moveOutDate: null,
+                inhabitants: [
+                    {
+                        ...inhabitantData,
+                        id: 10,
+                        householdId: 1,
+                        birthDate: '1990-01-15',
+                        dinnerPreferences: serializeWeekDayMap(dinnerPrefs)
+                    }
+                ]
+            }
+
+            const result = deserializeHouseholdWithInhabitants(serialized)
+
+            expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
+            expect(result.movedInDate).toBeInstanceOf(Date)
+            expect(result.inhabitants[0].birthDate).toBeInstanceOf(Date)
+            expect(result.inhabitants[0].dinnerPreferences?.mandag).toBe('DINEIN')
+        })
+    })
+
+    describe('Roundtrip Tests', () => {
+        it.each([
+            {
+                type: 'inhabitant',
+                getData: () => ({
+                    ...HouseholdFactory.defaultInhabitantData(),
+                    householdId: 1,
+                    birthDate: new Date('1990-01-15'),
+                    dinnerPreferences: createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+                }),
+                serialize: (data: any) => ({
+                    ...data,
+                    birthDate: data.birthDate.toISOString(),
+                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)
+                }),
+                deserialize: deserializeInhabitant,
+                checkFields: (original: any, deserialized: any) => {
+                    expect(deserialized.birthDate).toBeInstanceOf(Date)
+                    expect(deserialized.birthDate.getTime()).toBe(original.birthDate.getTime())
+                    expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
+                }
+            },
+            {
+                type: 'household summary',
+                getData: () => ({
+                    ...HouseholdFactory.defaultHouseholdData(),
+                    id: 1,
+                    movedInDate: new Date('2020-01-01'),
+                    moveOutDate: new Date('2024-12-31'),
+                    inhabitants: [
+                        {
+                            ...HouseholdFactory.defaultInhabitantData(),
+                            id: 10,
+                            birthDate: new Date('1990-01-15')
+                        }
+                    ]
+                }),
+                serialize: (data: any) => ({
+                    ...data,
+                    movedInDate: data.movedInDate.toISOString(),
+                    moveOutDate: data.moveOutDate?.toISOString(),
+                    inhabitants: data.inhabitants.map((i: any) => ({
+                        ...i,
+                        birthDate: i.birthDate?.toISOString()
+                    }))
+                }),
+                deserialize: deserializeHouseholdSummary,
+                checkFields: (original: any, deserialized: any) => {
+                    expect(deserialized.movedInDate).toBeInstanceOf(Date)
+                    expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
+                    expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
+                    expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
+                }
+            },
+            {
+                type: 'household with inhabitants',
+                getData: () => ({
+                    ...HouseholdFactory.defaultHouseholdData(),
+                    id: 1,
+                    movedInDate: new Date('2020-01-01'),
+                    moveOutDate: null,
+                    inhabitants: [
+                        {
+                            ...HouseholdFactory.defaultInhabitantData(),
+                            id: 10,
+                            householdId: 1,
+                            birthDate: new Date('1990-01-15'),
+                            dinnerPreferences: createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN'])
+                        }
+                    ]
+                }),
+                serialize: (data: any) => ({
+                    ...data,
+                    movedInDate: data.movedInDate.toISOString(),
+                    inhabitants: data.inhabitants.map((i: any) => ({
+                        ...i,
+                        birthDate: i.birthDate?.toISOString(),
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
+                    }))
+                }),
+                deserialize: deserializeHouseholdWithInhabitants,
+                checkFields: (original: any, deserialized: any) => {
+                    expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
+                    expect(deserialized.inhabitants[0].birthDate.getTime()).toBe(original.inhabitants[0].birthDate.getTime())
+                    expect(deserialized.inhabitants[0].dinnerPreferences).toEqual(original.inhabitants[0].dinnerPreferences)
+                }
+            }
+        ])('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
+            const original = getData()
+            const serialized = serialize(original)
+            const deserialized = deserialize(serialized)
+
+            checkFields(original, deserialized)
+        })
+    })
+})

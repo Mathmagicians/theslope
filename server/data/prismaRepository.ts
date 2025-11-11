@@ -850,6 +850,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSummary[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeHouseholdSummary} = useHouseholdValidation()
 
     try {
         const households = await prisma.household.findMany({
@@ -867,20 +868,11 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSu
             }
         })
 
-        // ADR-010: Deserialize database format to domain format + add computed shortName
-        const householdsWithShortName = households.map(household => ({
-            ...household,
-            movedInDate: new Date(household.movedInDate),
-            moveOutDate: household.moveOutDate ? new Date(household.moveOutDate) : null,
-            shortName: getHouseholdShortName(household.address),
-            inhabitants: household.inhabitants.map(inhabitant => ({
-                ...inhabitant,
-                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null
-            }))
-        }))
+        // ADR-010: Repository validates data after deserialization
+        const validatedHouseholds = households.map(household => deserializeHouseholdSummary(household))
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
-        return householdsWithShortName
+        return validatedHouseholds
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching households', error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
@@ -891,7 +883,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSu
 export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdWithInhabitants | null> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeWeekDayMap} = useHouseholdValidation()
+    const {deserializeHouseholdWithInhabitants} = useHouseholdValidation()
 
     try {
         const household = await prisma.household.findFirst({
@@ -911,26 +903,11 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
 
         if (!household) return null
 
-        // ADR-010: Deserialize database format to domain format
-        const inhabitantsWithDeserializedData = household.inhabitants.map(inhabitant => ({
-            ...inhabitant,
-            birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
-            dinnerPreferences: inhabitant.dinnerPreferences
-                ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
-                : null
-        }))
-
-        // Add computed shortName (domain logic)
-        const householdWithShortName = {
-            ...household,
-            movedInDate: new Date(household.movedInDate),
-            moveOutDate: household.moveOutDate ? new Date(household.moveOutDate) : null,
-            shortName: getHouseholdShortName(household.address),
-            inhabitants: inhabitantsWithDeserializedData
-        }
+        // ADR-010: Repository validates data after deserialization
+        const validatedHousehold = deserializeHouseholdWithInhabitants(household)
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
-        return householdWithShortName
+        return validatedHousehold
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
@@ -1038,6 +1015,55 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching current active season', error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+/**
+ * Activate a season - ensures only one season is active at a time
+ * Validates that season exists before deactivating other seasons
+ * @param d1Client - D1 database client
+ * @param seasonId - ID of season to activate
+ * @returns Activated season
+ */
+export async function activateSeason(d1Client: D1Database, seasonId: number): Promise<Season> {
+    console.info(`🌞 > SEASON > [POST] Activating season ID ${seasonId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // First, verify the season exists
+        const seasonToActivate = await prisma.season.findUnique({
+            where: { id: seasonId }
+        })
+
+        if (!seasonToActivate) {
+            console.warn(`🌞 > SEASON > [POST] Season ${seasonId} not found`)
+            throw createError({
+                statusCode: 404,
+                message: `Sæson med ID ${seasonId} blev ikke fundet`
+            })
+        }
+
+        console.info(`🌞 > SEASON > [POST] Found season ${seasonToActivate.shortName}, proceeding with activation`)
+
+        // Deactivate all currently active seasons
+        await prisma.season.updateMany({
+            where: { isActive: true },
+            data: { isActive: false }
+        })
+        console.info(`🌞 > SEASON > [POST] Deactivated all previously active seasons`)
+
+        // Activate the requested season
+        const activatedSeason = await prisma.season.update({
+            where: { id: seasonId },
+            data: { isActive: true }
+        })
+
+        console.info(`🌞 > SEASON > [POST] Activated season ${activatedSeason.shortName} (ID: ${seasonId})`)
+        return deserializeSeason(activatedSeason)
+    } catch (error) {
+        const h3e = h3eFromCatch('Error activating season', error)
+        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }

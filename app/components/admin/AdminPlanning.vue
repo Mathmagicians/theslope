@@ -91,7 +91,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect} = store
+const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect, activateSeason} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
 const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
@@ -170,6 +170,17 @@ const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
 
+const handleActivateSeason = async () => {
+  if (!selectedSeason.value?.id) return
+
+  try {
+    await activateSeason(selectedSeason.value.id)
+    showSuccessToast('Sæson aktiveret', `${selectedSeason.value.shortName} er nu den aktive sæson`)
+  } catch (error) {
+    console.error('Failed to activate season:', error)
+  }
+}
+
 </script>
 
 <template>
@@ -201,7 +212,7 @@ const handleCancel = async () => {
             v-if="selectedSeason && formMode === FORM_MODES.VIEW"
             :season="selectedSeason"
             :show-activation-button="true"
-            @activate="() => console.log('TODO: Implement activation')"
+            @activate="handleActivateSeason"
             class="mb-6"
         />
 

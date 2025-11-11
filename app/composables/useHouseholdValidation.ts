@@ -173,6 +173,11 @@ export const useHouseholdValidation = () => {
         inhabitants: z.array(InhabitantResponseSchema)
     })
 
+    // Internal type definitions (used within composable)
+    type Inhabitant = z.infer<typeof BaseInhabitantSchema>
+    type HouseholdSummary = z.infer<typeof HouseholdSummarySchema>
+    type HouseholdWithInhabitants = z.infer<typeof HouseholdWithInhabitantsSchema>
+
     /**
      * ADR-010: Deserialize Inhabitant from database format to domain format
      * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
@@ -186,6 +191,31 @@ export const useHouseholdValidation = () => {
                 : null
         }
         return BaseInhabitantSchema.parse(deserialized)
+    }
+
+    const deserializeHouseholdSummary = (serialized: any): HouseholdSummary => {
+        const deserialized = {
+            ...serialized,
+            movedInDate: new Date(serialized.movedInDate),
+            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
+            shortName: getHouseholdShortName(serialized.address),
+            inhabitants: serialized.inhabitants?.map((inhabitant: any) => ({
+                ...inhabitant,
+                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null
+            }))
+        }
+        return HouseholdSummarySchema.parse(deserialized)
+    }
+
+    const deserializeHouseholdWithInhabitants = (serialized: any): HouseholdWithInhabitants => {
+        const deserialized = {
+            ...serialized,
+            movedInDate: new Date(serialized.movedInDate),
+            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
+            shortName: getHouseholdShortName(serialized.address),
+            inhabitants: serialized.inhabitants?.map((inhabitant: any) => deserializeInhabitant(inhabitant))
+        }
+        return HouseholdWithInhabitantsSchema.parse(deserialized)
     }
 
     return {
@@ -204,6 +234,8 @@ export const useHouseholdValidation = () => {
         serializeWeekDayMap,
         deserializeWeekDayMap,
         deserializeInhabitant,
+        deserializeHouseholdSummary,
+        deserializeHouseholdWithInhabitants,
         createDefaultWeekdayMap
     }
 }

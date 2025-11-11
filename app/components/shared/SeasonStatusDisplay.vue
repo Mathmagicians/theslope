@@ -32,6 +32,10 @@ import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
 
+// Inject responsive breakpoint
+const isMd = inject<Ref<boolean>>('isMd')
+const getIsMd = computed((): boolean => isMd?.value ?? false)
+
 // Compute season status
 const status = computed(() => {
   if (!props.season) return null
@@ -53,8 +57,8 @@ const alertConfig = computed(() => {
       }
     case SEASON_STATUS.FUTURE:
       return {
-        color: 'warning' as const,
-        icon: 'i-heroicons-calendar-outline',
+        color: 'success' as const,
+        icon: 'i-heroicons-calendar',
         variant: 'outline',
         title: 'Fremtidig sæson',
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
@@ -70,10 +74,10 @@ const alertConfig = computed(() => {
     case SEASON_STATUS.CURRENT:
       return {
         color: 'success' as const,
-        icon: 'i-heroicons-calendar-outline',
+        icon: 'i-heroicons-calendar',
         variant: 'outline',
         title: 'Inaktiv sæson',
-        description: 'Denne sæson er aktuel men ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
+        description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
       }
   }
 })
@@ -102,30 +106,22 @@ const handleActivate = () => {
     :icon="alertConfig.icon"
     :title="alertConfig.title"
     :description="alertConfig.description"
-    variant="subtle"
+    :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
       <UButton
         name="activate-season"
         color="success"
         icon="i-heroicons-check-circle"
-        size="sm"
+        :size="getIsMd ? 'md' : 'sm'"
         :disabled="isActivateButtonDisabled"
         @click="handleActivate"
-        class="hidden md:inline-flex"
+        :square="!getIsMd"
       >
-        {{ isActivateButtonDisabled ? 'Igangværende Sæson' : 'Aktiver Sæson' }}
+        <template v-if="getIsMd">
+          {{ isActivateButtonDisabled ? 'Igangværende Sæson' : 'Aktiver Sæson' }}
+        </template>
       </UButton>
-      <UButton
-        name="activate-season-mobile"
-        color="success"
-        icon="i-heroicons-check-circle"
-        size="sm"
-        :disabled="isActivateButtonDisabled"
-        @click="handleActivate"
-        class="md:hidden"
-        square
-      />
     </template>
   </UAlert>
 </template>
