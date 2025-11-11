@@ -8,7 +8,6 @@ import type {
     Inhabitant,
     Household,
     CookingTeam,
-    DinnerEvent,
     Order,
     TicketPrice as PrismaTicketPrice,
     AllergyType,
@@ -20,9 +19,11 @@ import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate} from '~/composables/useHouseholdValidation'
 import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
-import type {DinnerEventCreate} from '~/composables/useDinnerEventValidation'
+import type {DinnerEventCreate, DinnerEvent} from '~/composables/useDinnerEventValidation'
+import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import type {OrderCreate} from '~/composables/useOrderValidation'
-import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
+import {useOrderValidation} from '~/composables/useOrderValidation'
+import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, CookingTeamAssignment, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {UserCreate, UserDisplay, SystemRole} from '~/composables/useUserValidation'
 import {useUserValidation} from '~/composables/useUserValidation'
@@ -56,13 +57,6 @@ export type SeasonWithRelations = PrismaFromClient.SeasonGetPayload<{
             }
         },
         ticketPrices: true
-    }
-}>
-
-export type CookingTeamAssignmentWithRelations = PrismaFromClient.CookingTeamAssignmentGetPayload<{
-    include: {
-        inhabitant: true
-        cookingTeam: true
     }
 }>
 
@@ -1173,9 +1167,9 @@ export async function updateSeason(d1Client: D1Database, seasonData: DomainSeaso
 // - Weak to DinnerEvents (events can exist without assigned team)
 
 // Get serialization utilities for CookingTeam
-const {serializeCookingTeam, deserializeCookingTeam} = useCookingTeamValidation()
+const {serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment} = useCookingTeamValidation()
 
-export async function createTeamAssignment(d1Client: D1Database, assignmentData: any): Promise<any> {
+export async function createTeamAssignment(d1Client: D1Database, assignmentData: any): Promise<CookingTeamAssignment> {
     console
         .info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${assignmentData.inhabitantId} in team ${assignmentData.cookingTeamId} with role ${assignmentData.role}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -1197,7 +1191,9 @@ export async function createTeamAssignment(d1Client: D1Database, assignmentData:
         })
 
         console.info(`👥🔗 > ASSIGNMENT > [CREATE] Successfully created team assignment with ID ${assignment.id}`)
-        return assignment
+
+        // ADR-010: Deserialize to domain type before returning
+        return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating team assignment for inhabitant ${assignmentData.inhabitantId}`, error)
         console.error(`👥🔗 > ASSIGNMENT > [CREATE] ${h3e.message}`, error)
@@ -1205,7 +1201,7 @@ export async function createTeamAssignment(d1Client: D1Database, assignmentData:
     }
 }
 
-export async function fetchTeamAssignment(d1Client: D1Database, id: number): Promise<Promise<CookingTeamAssignmentWithRelations | null> | null> {
+export async function fetchTeamAssignment(d1Client: D1Database, id: number): Promise<CookingTeamAssignment | null> {
     console.info(`👥🔗 > ASSIGNMENT > [GET] Fetching team assignment with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1220,10 +1216,12 @@ export async function fetchTeamAssignment(d1Client: D1Database, id: number): Pro
 
         if (assignment) {
             console.info(`👥🔗 > ASSIGNMENT > [GET] Found assignment ID ${assignment.id}`)
+            // ADR-010: Deserialize to domain type before returning
+            return deserializeCookingTeamAssignment(assignment)
         } else {
             console.info(`👥🔗 > ASSIGNMENT > [GET] No assignment found with ID ${id}`)
+            return null
         }
-        return assignment
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching team assignment with ID ${id}`, error)
         console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.message}`, error)
@@ -1407,7 +1405,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
     }
 }
 
-export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeam> {
+export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamCreate> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {
@@ -1417,7 +1415,9 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         })
 
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
-        return deletedTeam
+
+        // ADR-010: Deserialize to domain type before returning (add empty assignments for deserializer)
+        return deserializeCookingTeam({...deletedTeam, assignments: []})
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting team with ID ${id}`, error)
         console.error(`👥 > TEAM > [DELETE] ${h3e.message}`, error)
@@ -1435,6 +1435,7 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEvent> {
     console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
 
     try {
         const newDinnerEvent = await prisma.dinnerEvent.create({
@@ -1442,7 +1443,7 @@ export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerE
         })
 
         console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
-        return newDinnerEvent
+        return DinnerEventResponseSchema.parse(newDinnerEvent)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
         console.error(`🍽️ > DINNER_EVENT > [SAVE] ${h3e.message}`, error)
@@ -1453,6 +1454,7 @@ export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerE
 export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number): Promise<DinnerEvent[]> {
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
 
     try {
         const dinnerEvents = await prisma.dinnerEvent.findMany({
@@ -1472,7 +1474,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
         })
 
         console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
-        return dinnerEvents
+        return dinnerEvents.map(de => DinnerEventResponseSchema.parse(de))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`, error)
         console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
@@ -1483,6 +1485,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
 export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEvent | null> {
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
 
     try {
         const dinnerEvent = await prisma.dinnerEvent.findFirst({
@@ -1500,10 +1503,11 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 
         if (dinnerEvent) {
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
+            return DinnerEventResponseSchema.parse(dinnerEvent)
         } else {
             console.info(`🍽️ > DINNER_EVENT > [GET] No dinner event found with ID ${id}`)
+            return null
         }
-        return dinnerEvent
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching dinner event with ID ${id}`, error)
         console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
@@ -1514,6 +1518,8 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEvent> {
     console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
+
     try {
         const updatedDinnerEvent = await prisma.dinnerEvent.update({
             where: {id},
@@ -1526,7 +1532,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
         })
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)
-        return updatedDinnerEvent
+        return DinnerEventResponseSchema.parse(updatedDinnerEvent)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating dinner event with ID ${id}`, error)
         console.error(`🍽️ > DINNER_EVENT > [UPDATE] ${h3e.message}`, error)
@@ -1537,6 +1543,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
 export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEvent> {
     console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
 
     try {
         const deletedDinnerEvent = await prisma.dinnerEvent.delete({
@@ -1544,7 +1551,7 @@ export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promi
         })
 
         console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${deletedDinnerEvent.menuTitle}`)
-        return deletedDinnerEvent
+        return DinnerEventResponseSchema.parse(deletedDinnerEvent)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting dinner event with ID ${id}`, error)
         console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.message}`, error)
@@ -1561,6 +1568,7 @@ export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promi
 
 export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<Order> {
     console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
+    const {OrderSchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -1583,10 +1591,14 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
         })
 
         console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
-        return {
+
+        // Transform Prisma type to domain type and validate (ADR-010)
+        const domainOrder = {
             ...newOrder,
             ticketType: ticketPrice.ticketType
         }
+
+        return OrderSchema.parse(domainOrder)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
         console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
@@ -1596,6 +1608,7 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
 
 export async function fetchOrder(d1Client: D1Database, id: number): Promise<Order | null> {
     console.info(`🎟️ > ORDER > [GET] Fetching order with ID ${id}`)
+    const {OrderSchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -1610,17 +1623,21 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
             }
         })
 
-        if (order) {
-            console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
-            return {
-                ...order,
-                ticketType: order.ticketPrice.ticketType,
-                ticketPrice: undefined
-            }
-        } else {
+        if (!order) {
             console.info(`🎟️ > ORDER > [GET] No order found with ID ${id}`)
             return null
         }
+
+        console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
+
+        // Transform Prisma type to domain type and validate (ADR-010)
+        const {ticketPrice, ...orderWithoutRelation} = order
+        const domainOrder = {
+            ...orderWithoutRelation,
+            ticketType: ticketPrice.ticketType
+        }
+
+        return OrderSchema.parse(domainOrder)
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
         console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
@@ -1630,16 +1647,32 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
 
 export async function deleteOrder(d1Client: D1Database, id: number): Promise<Order> {
     console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
+    const {OrderSchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         // Delete order - cascade handles strong associations (Transaction) automatically
         const deletedOrder = await prisma.order.delete({
-            where: {id}
+            where: {id},
+            include: {
+                ticketPrice: {
+                    select: {
+                        ticketType: true
+                    }
+                }
+            }
         })
 
         console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order with ID ${deletedOrder.id}`)
-        return deletedOrder
+
+        // Transform Prisma type to domain type and validate (ADR-010)
+        const {ticketPrice, ...orderWithoutRelation} = deletedOrder
+        const domainOrder = {
+            ...orderWithoutRelation,
+            ticketType: ticketPrice.ticketType
+        }
+
+        return OrderSchema.parse(domainOrder)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting order with ID ${id}`, error)
         console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
@@ -1649,18 +1682,37 @@ export async function deleteOrder(d1Client: D1Database, id: number): Promise<Ord
 
 export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<Order[]> {
     console.info(`🎟️ > ORDER > [GET] Fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
+    const {OrderSchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const orders = await prisma.order.findMany({
             where: dinnerEventId ? {dinnerEventId} : undefined,
+            include: {
+                ticketPrice: {
+                    select: {
+                        ticketType: true
+                    }
+                }
+            },
             orderBy: {
                 createdAt: 'asc'
             }
         })
 
         console.info(`🎟️ > ORDER > [GET] Successfully fetched ${orders.length} orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
-        return orders
+
+        // Transform Prisma types to domain types and validate (ADR-010)
+        const domainOrders = orders.map(order => {
+            const {ticketPrice, ...orderWithoutRelation} = order
+            const domainOrder = {
+                ...orderWithoutRelation,
+                ticketType: ticketPrice.ticketType
+            }
+            return OrderSchema.parse(domainOrder)
+        })
+
+        return domainOrders
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`, error)
         console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)

@@ -116,7 +116,8 @@ export class OrderFactory {
     })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 201) {
       const responseBody = await response.json()
@@ -135,7 +136,8 @@ export class OrderFactory {
     const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 200) {
       return await response.json()
@@ -152,7 +154,8 @@ export class OrderFactory {
     const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 200) {
       return await response.json()
@@ -169,7 +172,8 @@ export class OrderFactory {
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 200) {
       return await response.json()
@@ -192,7 +196,8 @@ export class OrderFactory {
     })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 200) {
       return await response.json()
@@ -209,7 +214,8 @@ export class OrderFactory {
     const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}/history`, { headers })
 
     const status = response.status()
-    expect(status, 'Unexpected status').toBe(expectedStatus)
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
     if (expectedStatus === 200) {
       return await response.json()

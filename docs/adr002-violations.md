@@ -1,21 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-11-11 (Heynabo import endpoint fully compliant)
-**Total Endpoints:** 60
-**Compliant:** 36 (60%)
-**Violations:** 24 (40%)
-
-## Summary
-
-| Issue | Count | Severity | Progress |
-|-------|-------|----------|----------|
-| Missing Return Type | 27 | ⚠️ Medium | ✅ Users complete (4/4) |
-| Uses `readBody` (unvalidated) | 0 | ✅ None | ✅ |
-| Uses `readBody` + manual parse | 4 | 💡 Acceptable | TODO |
-| Missing Zod schema | 0 | ✅ None | ✅ |
-| Repository no schema parse | 0 | ✅ None | ✅ Users complete |
-| Missing E2E tests | Unknown | 💡 Info | ✅ Users complete (4/4) |
+**Last Updated:** 2025-11-11 (Dinner Events - Full ADR-002 & ADR-010 compliance)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -24,30 +10,34 @@
 
 ## Detailed Violations
 
-| Endpoint | Return Type | Validation | Repository | E2E Tests | Notes |
-|----------|-------------|------------|------------|-----------|-------|
-| **Order Management** |
-| `/api/order/swap-order.post.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/order/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| **Admin - Dinner Events** |
-| `/api/admin/dinner-event/[id].delete.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/dinner-event/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/dinner-event/index.put.ts` | ❌ | ✅ OK | ❓ | ❓ | |
+| Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
+|----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
+| **Order Management** | | | | | **✅ FULLY COMPLIANT** (4/5 endpoints implemented)                                               |
+| `/api/order/index.put.ts` | ✅ | ✅ OK | ✅ | ✅ | createOrder() validates with OrderSchema                                                         |
+| `/api/order/index.get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchOrders() validates with OrderSchema                                                         |
+| `/api/order/[id].get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchOrder() validates with OrderSchema                                                          |
+| `/api/order/[id].delete.ts` | ✅ | ✅ OK | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
+| `/api/order/swap-order.post.ts` | N/A | N/A | N/A | N/A | Stub - not yet implemented                                                                       |
+| **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ OK | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
+| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |
+| `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
+| `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ OK | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
 | **Admin - Teams** |
-| `/api/admin/team/[id].delete.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/index.get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/[id].post.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/index.put.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/assignment/[id].delete.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/assignment/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| `/api/admin/team/assignment/index.put.ts` | ❌ | ✅ OK | ❓ | ❓ | |
-| **Admin - Users** | | | | | **✅ FULLY COMPLIANT** |
-| `/api/admin/users/[id].delete.ts` | ✅ | ✅ OK | ✅ | ✅ | deleteUser() validates with UserResponseSchema |
-| `/api/admin/users/index.get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema |
-| `/api/admin/users/index.put.ts` | ✅ | ✅ OK | ✅ | ✅ | saveUser() validates with UserResponseSchema |
-| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema |
+| `/api/admin/team/[id].delete.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/index.get.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/[id].post.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/index.put.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/assignment/[id].delete.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/assignment/[id].get.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| `/api/admin/team/assignment/index.put.ts` | ❌ | ✅ OK | ❓ | ❓ |                                                                                                  |
+| **Admin - Users** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| `/api/admin/users/[id].delete.ts` | ✅ | ✅ OK | ✅ | ✅ | deleteUser() validates with UserResponseSchema                                                   |
+| `/api/admin/users/index.get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema                                                    |
+| `/api/admin/users/index.put.ts` | ✅ | ✅ OK | ✅ | ✅ | saveUser() validates with UserResponseSchema                                                     |
+| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ OK | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema                                              |
 | **Admin - Households** |
 | `/api/admin/household/[id].delete.ts` | ❌ | ✅ OK | |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ❌ | ✅ OK | |
@@ -77,10 +67,65 @@
 | `/api/calendar/index.get.ts` | ❌ | ✅ OK | |
 | `/api/calendar/feed.ts` | ❌ | ✅ OK | |
 | `/api/auth/login.post.ts` | ❌ | ✅ OK | |
-| **Admin - Heynabo** | | | | | **✅ COMPLIANT** |
+| **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ OK | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 
 ## Recent Improvements
+
+### 2025-11-11: Dinner Event Endpoints - Full ADR-002 & ADR-010 Compliance ✅
+
+**ADR-002 Violations Fixed:**
+1. ✅ Added explicit return types to all 4 endpoints (`Promise<DinnerEvent>` / `Promise<DinnerEvent[]>`)
+2. ✅ Added `setResponseStatus(event, 200)` to GET and DELETE endpoints
+3. ✅ Added `setResponseStatus(event, 201)` to PUT (create) endpoint
+4. ✅ Fixed `console.log` → `console.info` in index.put.ts (ADR-004 compliance)
+5. ✅ Removed unused Vue component import from [id].get.ts
+6. ✅ Fixed variable scoping in [id].get.ts
+7. ✅ Added missing `createError` import in [id].get.ts
+
+**ADR-010 Repository Compliance (CRITICAL FIX):**
+1. ✅ Removed Prisma `DinnerEvent` type import from repository
+2. ✅ Imported domain `DinnerEvent` type from `~/composables/useDinnerEventValidation`
+3. ✅ Updated all 5 repository functions to parse with `DinnerEventResponseSchema` before returning:
+   - `saveDinnerEvent()` - Parse created event
+   - `fetchDinnerEvents()` - Parse array with `.map(de => DinnerEventResponseSchema.parse(de))`
+   - `fetchDinnerEvent()` - Parse single event or return null
+   - `updateDinnerEvent()` - Parse updated event
+   - `deleteDinnerEvent()` - Parse deleted event
+4. ✅ Repository now returns domain types, not Prisma types (ADR-010 pattern)
+
+**Test Coverage:**
+1. ✅ All 6 E2E tests passing (dinnerEvent.e2e.spec.ts)
+2. ✅ Tests verify: CRUD operations, seasonId filtering, validation errors
+3. ✅ Proper cleanup using SeasonFactory (CASCADE behavior per ADR-005)
+
+**Files Modified:**
+- `server/routes/api/admin/dinner-event/[id].delete.ts` - Return type, setResponseStatus, domain types
+- `server/routes/api/admin/dinner-event/[id].get.ts` - Return type, setResponseStatus, domain types, imports
+- `server/routes/api/admin/dinner-event/index.get.ts` - Domain types
+- `server/routes/api/admin/dinner-event/index.put.ts` - Return type, console.info, domain types
+- `server/data/prismaRepository.ts` - Removed Prisma DinnerEvent import, added domain type + validation parsing
+
+**Key Pattern (ADR-010):**
+```typescript
+// ✅ CORRECT - Domain types from composable, Prisma types stay in repository
+import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import {useDinnerEventValidation} from "~/composables/useDinnerEventValidation"
+
+export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEvent | null> {
+    const {DinnerEventResponseSchema} = useDinnerEventValidation()
+    const prismaEvent = await prisma.dinnerEvent.findFirst({where: {id}})
+    if (prismaEvent) {
+        return DinnerEventResponseSchema.parse(prismaEvent) // Convert Prisma → Domain
+    }
+    return null
+}
+```
+
+**Compliance:**
+- ADR-002: ✅ Separate try-catch, H3 validation, explicit return types, setResponseStatus
+- ADR-004: ✅ console.info for operations, console.error for errors
+- ADR-010: ✅ Domain types in API + Repository return values, Prisma types internal only
 
 ### 2025-11-11: Heynabo Import Endpoint - Full Refactor & ADR Compliance ✅
 

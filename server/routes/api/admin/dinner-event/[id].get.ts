@@ -1,8 +1,8 @@
-import {defineEventHandler, getValidatedRouterParams} from "h3"
+import {defineEventHandler, getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchDinnerEvent} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
-import dinnerEvent from "~/components/dinner/DinnerEvent.vue";
+import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
 
 const {h3eFromCatch} = eventHandlerHelper
 
@@ -10,12 +10,12 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<DinnerEvent> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id, dinnerEvent
+    let id
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Database operations try-catch - separate concerns
+    let dinnerEvent
     try {
         console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event ${id}`)
         dinnerEvent = await fetchDinnerEvent(d1Client, id)
@@ -41,5 +42,6 @@ export default defineEventHandler(async (event) => {
     }
 
     console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched dinner event ${dinnerEvent.menuTitle}`)
+    setResponseStatus(event, 200)
     return dinnerEvent
 })

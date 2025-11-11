@@ -3,11 +3,11 @@ import {useOrderValidation} from "~/composables/useOrderValidation"
 import type { Order } from '~/composables/useOrderValidation'
 import {createOrder} from "~~/server/data/prismaRepository"
 const {h3eFromCatch} = eventHandlerHelper
-const {CreateOrdersRequestSchema} = useOrderValidation()
 
 export default defineEventHandler(async (event): Promise<Order[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+    const {CreateOrdersRequestSchema} = useOrderValidation()
 
     let requestData
     try {

@@ -77,15 +77,21 @@ export const useCookingTeamValidation = () => {
         return SerializedCookingTeamWithMembersSchema.parse(team)
     }
 
+    // Deserialize individual assignment
+    const deserializeCookingTeamAssignment = (serialized: any): CookingTeamAssignment => {
+        const deserialized = {
+            ...serialized,
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined
+        }
+        return CookingTeamAssignmentSchema.parse(deserialized)
+    }
+
     // Deserialize aggregate root (team + nested assignments)
     const deserializeCookingTeam = (serialized: SerializedCookingTeam): CookingTeamWithMembers => {
         const deserialized = {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
-            assignments: serialized.assignments?.map(assignment => ({
-                ...assignment,
-                affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : undefined
-            })) || []
+            assignments: serialized.assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
         }
 
         return CookingTeamWithMembersSchema.parse(deserialized)
@@ -129,6 +135,7 @@ export const useCookingTeamValidation = () => {
         getAssignmentIdsForRole,
         serializeCookingTeam,
         deserializeCookingTeam,
+        deserializeCookingTeamAssignment,
         // Export configured WeekDayMap functions for team affinity
         createWeekDayMapFromSelection,
         serializeWeekDayMap,

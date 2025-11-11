@@ -43,8 +43,39 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(retrievedDinnerEvent?.menuTitle).toBe(dinnerEventData.menuTitle)
     })
 
-    test.skip('POST can update existing dinner event with status 200', async ({browser}) => {
-        // TODO: Implement POST endpoint and test
+    test('POST can update existing dinner event with status 200', async ({browser}) => {
+        // GIVEN: An existing dinner event
+        const context = await validatedBrowserContext(browser)
+        const dinnerEventData = {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        }
+        const createdDinnerEvent = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
+        testDinnerEventIds.push(createdDinnerEvent.id)
+
+        // WHEN: Updating the dinner event
+        const updatedData = {
+            menuTitle: 'Updated Menu Title',
+            menuDescription: 'Updated description',
+            dinnerMode: 'TAKEAWAY' as const
+        }
+        const updatedDinnerEvent = await DinnerEventFactory.updateDinnerEvent(
+            context,
+            createdDinnerEvent.id,
+            updatedData
+        )
+
+        // THEN: Dinner event is updated successfully
+        expect(updatedDinnerEvent?.id).toBe(createdDinnerEvent.id)
+        expect(updatedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
+        expect(updatedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
+        expect(updatedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
+
+        // AND: Changes are persisted
+        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id)
+        expect(retrievedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
+        expect(retrievedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
+        expect(retrievedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
     })
 
     test('GET /api/admin/dinner-event should return all dinner events', async ({browser}) => {

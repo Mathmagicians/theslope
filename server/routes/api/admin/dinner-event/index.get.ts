@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedQuery, setResponseStatus} from "h3"
 import {fetchDinnerEvents} from "~~/server/data/prismaRepository"
 import {z} from "zod"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type {DinnerEvent} from "@prisma/client"
+import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
 
 const {h3eFromCatch} = eventHandlerHelper
 

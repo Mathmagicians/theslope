@@ -77,6 +77,29 @@ export class DinnerEventFactory {
         return null
     }
 
+    static readonly updateDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        dinnerEventData: Partial<DinnerEventCreate>,
+        expectedStatus: number = 200
+    ): Promise<DinnerEvent | null> => {
+        const response = await context.request.post(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`, {
+            headers: headers,
+            data: dinnerEventData
+        })
+
+        const status = response.status()
+        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const responseBody = await response.json()
+            expect(responseBody.id).toBe(dinnerEventId)
+            return responseBody
+        }
+
+        return null
+    }
+
     static readonly deleteDinnerEvent = async (
         context: BrowserContext,
         dinnerEventId: number,

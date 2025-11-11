@@ -234,8 +234,57 @@ describe('useCookingTeamValidation', () => {
   })
 
   describe('serialization and deserialization', () => {
-    const { serializeCookingTeam, deserializeCookingTeam } = useCookingTeamValidation()
+    const { serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment } = useCookingTeamValidation()
     const { createDefaultWeekdayMap } = useWeekDayMapValidation()
+
+    describe('CookingTeamAssignment deserialization', () => {
+      it.each([
+        {
+          name: 'assignment with affinity',
+          serialized: {
+            id: 10,
+            cookingTeamId: 1,
+            inhabitantId: 42,
+            role: 'CHEF',
+            allocationPercentage: 75,
+            affinity: '{"mandag":true,"tirsdag":false,"onsdag":true,"torsdag":false,"fredag":false,"lørdag":false,"søndag":false}'
+          },
+          expectedAffinity: createDefaultWeekdayMap([true, false, true, false, false, false, false])
+        },
+        {
+          name: 'assignment without affinity',
+          serialized: {
+            id: 11,
+            cookingTeamId: 2,
+            inhabitantId: 99,
+            role: 'COOK',
+            allocationPercentage: 100
+          },
+          expectedAffinity: undefined
+        },
+        {
+          name: 'assignment with null affinity',
+          serialized: {
+            id: 12,
+            cookingTeamId: 3,
+            inhabitantId: 55,
+            role: 'JUNIORHELPER',
+            allocationPercentage: 50,
+            affinity: null
+          },
+          expectedAffinity: undefined
+        }
+      ])('should deserialize $name', ({ serialized, expectedAffinity }) => {
+        const deserialized = deserializeCookingTeamAssignment(serialized)
+
+        expect(deserialized.id).toBe(serialized.id)
+        expect(deserialized.cookingTeamId).toBe(serialized.cookingTeamId)
+        expect(deserialized.inhabitantId).toBe(serialized.inhabitantId)
+        expect(deserialized.role).toBe(serialized.role)
+        expect(deserialized.allocationPercentage).toBe(serialized.allocationPercentage)
+        expect(deserialized.affinity).toEqual(expectedAffinity)
+      })
+    })
 
     describe('CookingTeamWithMembers aggregate root roundtrip', () => {
       it.each([

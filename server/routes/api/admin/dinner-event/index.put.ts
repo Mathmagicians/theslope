@@ -1,12 +1,13 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {saveDinnerEvent} from "~~/server/data/prismaRepository"
 import {useDinnerEventValidation} from "~/composables/useDinnerEventValidation"
+import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
 const {DinnerEventCreateSchema} = useDinnerEventValidation()
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<DinnerEvent> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`🍽️ > DINNER_EVENT > [PUT] Creating dinner event ${dinnerEventData.menuTitle}`)
+        console.info(`🍽️ > DINNER_EVENT > [PUT] Creating dinner event ${dinnerEventData.menuTitle}`)
         const savedDinnerEvent = await saveDinnerEvent(d1Client, dinnerEventData)
         console.info(`🍽️> DINNER_EVENT > [PUT] Successfully created dinner event ${savedDinnerEvent.menuTitle}`)
         setResponseStatus(event, 201)
