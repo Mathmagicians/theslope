@@ -54,7 +54,7 @@ const getStatusIcon = (season: Season): string => {
 
   switch (status) {
     case SEASON_STATUS.ACTIVE:
-      return 'i-heroicons-check-circle-solid'
+      return 'i-heroicons-calendar'
     case SEASON_STATUS.FUTURE:
       return 'i-heroicons-calendar'
     case SEASON_STATUS.CURRENT:
@@ -62,17 +62,35 @@ const getStatusIcon = (season: Season): string => {
     case SEASON_STATUS.PAST:
       return 'i-heroicons-archive-box-solid'
     default:
-      return 'i-heroicons-calendar'
+      return 'i-question-mark-circle'
+  }
+}
+
+// Get status emoji circle
+const getStatusEmoji = (season: Season): string => {
+  const status = getSeasonStatus(season)
+
+  switch (status) {
+    case SEASON_STATUS.ACTIVE:
+      return '🟢'  // Solid green circle
+    case SEASON_STATUS.FUTURE:
+      return '🌱'  // Green heart (no green outline emoji exists)
+    case SEASON_STATUS.CURRENT:
+      return '🟡'  // Solid yellow circle
+    case SEASON_STATUS.PAST:
+    default:
+      return '⚪'  // Grey circle
   }
 }
 
 // Sort seasons and add icons for USelect
-type SeasonWithIcon = Season & { icon: string }
+type SeasonWithIcon = Season & { icon: string; suffix: string }
 
 const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
   return sortSeasonsByActivePriority(props.seasons).map(season => ({
     ...season,
-    icon: getStatusIcon(season)
+    icon: getStatusIcon(season),
+    suffix: getStatusEmoji(season)
   }))
 })
 
@@ -94,11 +112,24 @@ const selectedSeasonId = computed({
       labelKey="shortName"
       valueKey="id"
       iconKey="icon"
+      suffixKey="suffix"
       leading
+      trailing
       :disabled="props.disabled || props.seasons.length === 0"
       :class="props.class"
       :size="getIsMd ? 'lg' : 'sm'"
       class="min-w-48"
   >
+    <template #leading>
+      <UIcon
+        v-if="selectedSeasonId && sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)"
+        :name="sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)!.icon"
+      />
+    </template>
+    <template #trailing>
+      <span v-if="selectedSeasonId && sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)">
+        {{ sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)!.suffix }}
+      </span>
+    </template>
   </USelect>
 </template>

@@ -380,6 +380,7 @@ export const usePlanStore = defineStore("Plan", () => {
             onSeasonSelect,
             createSeason,
             updateSeason,
+            activateSeason,
             generateDinnerEvents,
             assignTeamAffinitiesAndEvents,
             createTeam,
