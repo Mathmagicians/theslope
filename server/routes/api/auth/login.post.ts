@@ -1,5 +1,5 @@
 import {defineEventHandler, readValidatedBody, createError} from "h3"
-import {loginUserIntoHeynabo} from "~~/server/integration/heynabo"
+import {loginUserIntoHeynabo} from "~~/server/integration/heynabo/heynaboClient"
 import {fetchUser} from "~~/server/data/prismaRepository"
 import {useUserValidation} from '~/composables/useUserValidation'
 

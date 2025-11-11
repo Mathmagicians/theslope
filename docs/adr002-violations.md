@@ -1,10 +1,10 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-11-10 (Users endpoints fully compliant: API + Repository + Tests + ADR-010 Serialization)
+**Last Updated:** 2025-11-11 (Heynabo import endpoint fully compliant)
 **Total Endpoints:** 60
-**Compliant:** 35 (58%)
-**Violations:** 25 (42%)
+**Compliant:** 36 (60%)
+**Violations:** 24 (40%)
 
 ## Summary
 
@@ -77,7 +77,51 @@
 | `/api/calendar/index.get.ts` | ❌ | ✅ OK | |
 | `/api/calendar/feed.ts` | ❌ | ✅ OK | |
 | `/api/auth/login.post.ts` | ❌ | ✅ OK | |
-| `/api/admin/heynabo/import.get.ts` | ❌ | ✅ OK | |
+| **Admin - Heynabo** | | | | | **✅ COMPLIANT** |
+| `/api/admin/heynabo/import.get.ts` | ✅ | ✅ OK | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
+
+## Recent Improvements
+
+### 2025-11-11: Heynabo Import Endpoint - Full Refactor & ADR Compliance ✅
+
+**Architecture Refactor:**
+1. ✅ Extracted pure transformation functions to `useHeynaboValidation` composable
+2. ✅ Created `server/integration/heynabo/heynaboClient.ts` for HTTP/API operations only
+3. ✅ Separated concerns: composable (transformation), client (HTTP), endpoint (orchestration)
+4. ✅ Removed console logging from pure functions (moved to endpoint per ADR-004)
+5. ✅ Uses `useUserValidation()` to get `SystemRoleSchema` (ADR-001 compliance, no Prisma imports)
+
+**ADR-002 Compliance:**
+1. ✅ Single try-catch wrapping entire business logic (fetch → transform → save)
+2. ✅ Explicit return type `defineEventHandler<Household[]>`
+3. ✅ No validation try-catch needed (GET endpoint with no user input)
+4. ✅ Proper error handling with `h3eFromCatch` and `setResponseStatus(event, 200)`
+5. ✅ Clear 3-step orchestration with detailed logging at each step
+
+**Test Coverage:**
+1. ✅ 27 unit tests total (16 new transformation tests + 11 existing schema tests)
+2. ✅ DRY parametrized tests using `it.each()` for all transformation functions
+3. ✅ E2E test passing (heynabo.e2e.spec.ts)
+4. ✅ Tests verify: role mapping, inhabitant creation, location filtering, household assembly
+
+**Key Transformations (Pure Functions):**
+- `mapHeynaboRoleToSystemRole(role)` - Maps 'admin' → [SystemRole.ADMIN]
+- `inhabitantFromMember(locationId, member)` - HeynaboMember → InhabitantCreate
+- `findInhabitantsByLocation(locationId, members)` - Filters and transforms members
+- `createHouseholdsFromImport(locations, members)` - Complete household assembly
+
+**Updated ADR-001:**
+Added composable naming conventions and responsibilities:
+- `useEntityValidation` - Schemas + transformations (simple helpers)
+- `useEntity` - Business logic (when intricate)
+
+**Files Modified:**
+- `app/composables/useHeynaboValidation.ts` - Added 4 transformation functions
+- `server/integration/heynabo/heynaboClient.ts` - New file, HTTP operations only
+- `server/routes/api/admin/heynabo/import.get.ts` - ADR-002 compliant orchestration
+- `tests/component/composables/useHeynaboValidation.unit.spec.ts` - 16 new parametrized tests
+- `docs/adr.md` - Updated ADR-001 with composable patterns
+- Deleted `server/integration/heynabo.ts` (old monolithic file)
 
 ## Recent Improvements
 

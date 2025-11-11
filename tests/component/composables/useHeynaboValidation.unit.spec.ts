@@ -153,4 +153,101 @@ describe('useHeynaboValidation', () => {
             expect(result.id).toBe(user.id)
         })
     })
+
+    describe('Transformation functions', () => {
+        const {
+            mapHeynaboRoleToSystemRole,
+            inhabitantFromMember,
+            findInhabitantsByLocation,
+            createHouseholdsFromImport
+        } = useHeynaboValidation()
+
+        describe('mapHeynaboRoleToSystemRole', () => {
+            it.each([
+                {role: 'admin', expected: ['ADMIN']},
+                {role: 'full', expected: []},
+                {role: 'limited', expected: []},
+                {role: 'unknown', expected: []}
+            ])('maps $role to $expected', ({role, expected}) => {
+                expect(mapHeynaboRoleToSystemRole(role)).toEqual(expected)
+            })
+        })
+
+        describe('inhabitantFromMember', () => {
+            it.each([
+                {member: sampleHeynaboMembers[0], locationId: 2, hasUser: true, systemRoles: ['ADMIN']},
+                {member: {...sampleHeynaboMembers[2], email: 'valid@email.com'}, locationId: 48, hasUser: true, systemRoles: []},
+                {member: sampleHeynaboMembers[1], locationId: 116, hasUser: false, systemRoles: []},
+                {member: {...sampleHeynaboMembers[0], role: 'limited'}, locationId: 2, hasUser: false, systemRoles: []}
+            ])('creates inhabitant with hasUser=$hasUser for member $member.id', ({member, locationId, hasUser, systemRoles}) => {
+                const result = inhabitantFromMember(locationId, member)
+
+                expect(result.heynaboId).toBe(member.id)
+                expect(result.householdId).toBe(locationId)
+                if (hasUser) {
+                    expect(result.user).toBeDefined()
+                    expect(result.user?.systemRoles).toEqual(systemRoles)
+                } else {
+                    expect(result.user).toBeUndefined()
+                }
+            })
+
+            it.each([
+                {dateOfBirth: '1990-01-15', expected: new Date('1990-01-15')},
+                {dateOfBirth: null, expected: null}
+            ])('handles dateOfBirth=$dateOfBirth', ({dateOfBirth, expected}) => {
+                const member = {...sampleHeynaboMembers[0], dateOfBirth}
+                const result = inhabitantFromMember(2, member)
+                expect(result.birthDate).toEqual(expected)
+            })
+        })
+
+        describe('findInhabitantsByLocation', () => {
+            it.each([
+                {locationId: 2, expectedCount: 1, expectedIds: [153]},
+                {locationId: 116, expectedCount: 1, expectedIds: [219]},
+                {locationId: 999, expectedCount: 0, expectedIds: []}
+            ])('filters locationId=$locationId returns $expectedCount inhabitants', ({locationId, expectedCount, expectedIds}) => {
+                const result = findInhabitantsByLocation(locationId, sampleHeynaboMembers)
+                expect(result).toHaveLength(expectedCount)
+                expect(result.map(i => i.heynaboId)).toEqual(expectedIds)
+            })
+        })
+
+        describe('createHouseholdsFromImport', () => {
+            it.each([
+                {
+                    locationIds: [2, 118],
+                    memberLocations: [2, 118],
+                    expectedHouseholds: 2,
+                    expectedInhabitantCounts: [1, 1]
+                },
+                {
+                    locationIds: [2],
+                    memberLocations: [2, 2],
+                    expectedHouseholds: 1,
+                    expectedInhabitantCounts: [2]
+                },
+                {
+                    locationIds: [2],
+                    memberLocations: [999],
+                    expectedHouseholds: 1,
+                    expectedInhabitantCounts: [0]
+                }
+            ])('creates $expectedHouseholds households with inhabitants $expectedInhabitantCounts',
+                ({locationIds, memberLocations, expectedHouseholds, expectedInhabitantCounts}) => {
+                const locations = locationIds.map(id => sampleHeynaboLocations.find(l => l.id === id)!)
+                const members = memberLocations.map((locId, idx) => ({...sampleHeynaboMembers[idx], locationId: locId}))
+
+                const result = createHouseholdsFromImport(locations, members)
+
+                expect(result).toHaveLength(expectedHouseholds)
+                result.forEach((household, idx) => {
+                    expect(household.inhabitants).toHaveLength(expectedInhabitantCounts[idx])
+                    expect(household.heynaboId).toBe(household.pbsId)
+                    expect(household.movedInDate).toBeInstanceOf(Date)
+                })
+            })
+        })
+    })
 })

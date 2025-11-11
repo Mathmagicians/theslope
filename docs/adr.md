@@ -622,6 +622,28 @@ export const useOrderValidation = () => {
 export type Order = z.infer<ReturnType<typeof useOrderValidation>['OrderSchema']>
 ```
 
+**Composable Naming Conventions and Responsibilities:**
+
+TheSlope uses two composable patterns for domain logic:
+
+1. **`useEntityValidation`** - Schemas and transformations
+   - Zod validation schemas
+   - Type definitions (via `z.infer`)
+   - Transformation functions (serialize/deserialize, mapping)
+   - Simple helper functions
+   - Examples: `useSeasonValidation`, `useHeynaboValidation`, `useUserValidation`
+
+2. **`useEntity`** - Business logic (when intricate)
+   - Complex business logic and calculations
+   - Default value creation
+   - Domain-specific utilities
+   - Functions that depend on multiple composables
+   - Examples: `useSeason` (generateDinnerEventDataForSeason), `useCookingTeam` (getTeamColor, useInhabitantsWithAssignments), `useHeynabo` (getUserUrl)
+
+**When to use which:**
+- **Validation composable**: Always required for entities with database persistence
+- **Business logic composable**: Optional, create only when business logic is intricate enough to warrant separation
+
 **In Application Code (stores, components, pages, app.config):**
 ```typescript
 // ✅ CORRECT - Import from composables (Nuxt auto-imports)
