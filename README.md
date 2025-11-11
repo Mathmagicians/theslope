@@ -114,6 +114,26 @@ When using Prisma's D1 adapter, implicit & explicit transactions will be ignored
 
 
 ## 📚 Documentation
+
+### Architecture & Compliance
+
+**Critical:** TheSlope follows strict Architecture Decision Records (ADRs) to ensure consistency and quality.
+
+- **[ADR Documentation](docs/adr.md)** - Architecture patterns and decisions
+- **[Backend Compliance](docs/adr-compliance-backend.md)** - API endpoint ADR compliance tracking
+- **[Frontend Compliance](docs/adr-compliance-frontend.md)** - Component, store, and route ADR compliance tracking
+
+**When to update compliance documents:**
+- ✅ After implementing new API endpoints (update backend compliance)
+- ✅ After creating new components or stores (update frontend compliance)
+- ✅ When test coverage changes (update test status columns)
+- ✅ When fixing ADR violations (mark as compliant)
+
+**How to keep docs DRY:**
+- Compliance docs reference ADRs, don't duplicate them
+- Component tables show routes without duplicating route documentation
+- Status markers (✅ ⚠️ ❌) provide quick overview without verbose explanations
+
 ### NPM
 There is an error about preflight, that can be removed by adding to package.json: (but it conflicts with new installs!)
 ```json

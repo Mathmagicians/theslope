@@ -13,6 +13,33 @@
 
 ---
 
+## 🎨 HIGH PRIORITY: Active Season Management Feature (UX Design Phase)
+
+**Status:** UX Design Complete ✅
+
+### UX Work Completed
+- ✅ **Three-state season system designed**: Active (solid green) / Future (dashed green) / Past (grey)
+- ✅ **SeasonSelector visual indicators**: Status icons with color coding
+- ✅ **AdminPlanning status badges**: Visual feedback for active/future/past seasons
+- ✅ **Activation workflow**: Clear UI for activating future seasons with confirmation
+- ✅ **Past season protection**: Archived seasons cannot be reactivated
+- ✅ **Sorting strategy**: Active → Future (closest) → Past (most recent)
+- ✅ **Mockups added to**:
+  - `app/components/form/SeasonSelector.vue` (visual indicators)
+  - `app/components/admin/AdminPlanning.vue` (status badges & activation controls)
+  - `docs/feature-active-season-management.md` (complete UX specifications)
+
+### Next Steps (Implementation)
+See `docs/feature-active-season-management.md` for:
+- TDD implementation plan (6 phases)
+- Domain logic (pure functions in `useSeason`)
+- Repository functions (atomic activation)
+- API endpoints (POST/GET active season)
+- Store integration (`activeSeason` computed)
+- UI component implementation
+
+---
+
 ## CRITICAL : Bug in adminTeams
 1After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
 . Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help

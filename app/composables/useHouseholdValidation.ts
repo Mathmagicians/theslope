@@ -173,6 +173,21 @@ export const useHouseholdValidation = () => {
         inhabitants: z.array(InhabitantResponseSchema)
     })
 
+    /**
+     * ADR-010: Deserialize Inhabitant from database format to domain format
+     * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
+     */
+    const deserializeInhabitant = (serialized: any): Inhabitant => {
+        const deserialized = {
+            ...serialized,
+            birthDate: serialized.birthDate ? new Date(serialized.birthDate) : null,
+            dinnerPreferences: serialized.dinnerPreferences
+                ? deserializeWeekDayMap(serialized.dinnerPreferences)
+                : null
+        }
+        return BaseInhabitantSchema.parse(deserialized)
+    }
+
     return {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
@@ -188,6 +203,7 @@ export const useHouseholdValidation = () => {
         InhabitantDisplaySchema,
         serializeWeekDayMap,
         deserializeWeekDayMap,
+        deserializeInhabitant,
         createDefaultWeekdayMap
     }
 }

@@ -1,5 +1,6 @@
-import {defineEventHandler, getValidatedQuery} from "h3"
+import {defineEventHandler, getValidatedQuery, setResponseStatus} from "h3"
 import {fetchAllergiesForInhabitant, fetchAllergiesForHousehold} from "~~/server/data/prismaRepository"
+import {type AllergyWithRelations} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -17,7 +18,7 @@ const querySchema = z.object({
     { message: 'Only one of householdId or inhabitantId query parameter can be provided, not both' }
 )
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<AllergyWithRelations[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -42,13 +43,18 @@ export default defineEventHandler(async (event) => {
             console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ${inhabitantId}`)
             const allergies = await fetchAllergiesForInhabitant(d1Client, inhabitantId)
             console.info(`🏥 > ALLERGY > [GET] Found ${allergies.length} allergies for inhabitant ${inhabitantId}`)
+            setResponseStatus(event, 200)
             return allergies
-        }else if (householdId) {
+        } else if (householdId) {
             console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ${householdId}`)
             const allergies = await fetchAllergiesForHousehold(d1Client, householdId)
             console.info(`🏥 > ALLERGY > [GET] Found ${allergies.length} allergies for household ${householdId}`)
+            setResponseStatus(event, 200)
             return allergies
-        } else return []
+        } else {
+            setResponseStatus(event, 200)
+            return []
+        }
     } catch (error) {
         const h3e = h3eFromCatch('🏥 > ALLERGY > [GET] Error fetching allergies', error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)

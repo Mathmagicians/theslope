@@ -1,6 +1,6 @@
-import {fetchSeasons} from "~~/server/data/prismaRepository";
+import {fetchSeasons} from "~~/server/data/prismaRepository"
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<number | null> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster } from '~/utils/season'
+import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster, isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority, selectMostAppropriateActiveSeason } from '~/utils/season'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { DateRange, WeekDay, WeekDayMap } from '~/types/dateTypes'
 import type { CookingTeam } from '~/composables/useCookingTeamValidation'
 import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
+import type { Season } from '~/composables/useSeasonValidation'
 import { createWeekDayMapFromSelection } from '~/types/dateTypes'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
@@ -608,5 +609,146 @@ describe('computeTeamAssignmentsForEvents', () => {
         // Holiday Wed Jan 8 → Team 1 gets credit (quota=2, rotation triggers)
         expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
         expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
+    })
+})
+
+describe('Active Season Management - Pure Functions', () => {
+    const { isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority, selectMostAppropriateActiveSeason } = await import('~/utils/season')
+
+    // Helper to create minimal test season
+    const createTestSeason = (id: number, shortName: string, start: Date, end: Date, isActive = false): import('~/composables/useSeasonValidation').Season => ({
+        id,
+        shortName,
+        isActive,
+        seasonDates: { start, end },
+        cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+        holidays: [],
+        ticketPrices: [],
+        ticketIsCancellableDaysBefore: 2,
+        diningModeIsEditableMinutesBefore: 120,
+        consecutiveCookingDays: 2
+    })
+
+    describe('isPast', () => {
+        it.each([
+            { desc: 'season ending yesterday', end: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: true },
+            { desc: 'season ending today (not past)', end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'season ending tomorrow', end: new Date(2025, 0, 20), ref: new Date(2025, 0, 19), expected: false }
+        ])('$desc → $expected', ({ end, ref, expected }) => {
+            const season = createTestSeason(1, 'Test', new Date(2025, 0, 1), end)
+            expect(isPast(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('isFuture', () => {
+        it.each([
+            { desc: 'season starting tomorrow', start: new Date(2025, 0, 16), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'season starting today (not future)', start: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'season starting yesterday', start: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: false }
+        ])('$desc → $expected', ({ start, ref, expected }) => {
+            const season = createTestSeason(1, 'Test', start, new Date(2025, 5, 30))
+            expect(isFuture(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('distanceToToday', () => {
+        it.each([
+            { desc: 'current season (includes today)', start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: 0 },
+            { desc: 'future season starting in 10 days', start: new Date(2025, 0, 25), end: new Date(2025, 5, 30), ref: new Date(2025, 0, 15), expected: 10 },
+            { desc: 'past season ended 5 days ago', start: new Date(2024, 6, 1), end: new Date(2025, 0, 10), ref: new Date(2025, 0, 15), expected: -5 }
+        ])('$desc → $expected', ({ start, end, ref, expected }) => {
+            const season = createTestSeason(1, 'Test', start, end)
+            expect(distanceToToday(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('canSeasonBeActive', () => {
+        it.each([
+            { desc: 'past season (ended yesterday)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 14), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'current season (includes today)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 31), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'future season', start: new Date(2025, 1, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'season ending today (still eligible)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: true }
+        ])('$desc → $expected', ({ start, end, ref, expected }) => {
+            const season = createTestSeason(1, 'Test', start, end)
+            expect(canSeasonBeActive(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('getSeasonStatus', () => {
+        it.each([
+            { desc: 'active season (isActive = true)', active: true, start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: 'active' },
+            { desc: 'past season', active: false, start: new Date(2024, 6, 1), end: new Date(2024, 11, 31), ref: new Date(2025, 0, 15), expected: 'past' },
+            { desc: 'current season (not active)', active: false, start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: 'current' },
+            { desc: 'future season', active: false, start: new Date(2025, 6, 1), end: new Date(2025, 11, 31), ref: new Date(2025, 0, 15), expected: 'future' }
+        ])('$desc → $expected', ({ active, start, end, ref, expected }) => {
+            const season = createTestSeason(1, 'Test', start, end, active)
+            expect(getSeasonStatus(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('sortSeasonsByActivePriority', () => {
+        it('should sort: active → future (closest) → current → past (recent)', () => {
+            const ref = new Date(2025, 0, 15)
+            const seasons = [
+                createTestSeason(1, 'Past Far', new Date(2023, 0, 1), new Date(2023, 11, 31)),
+                createTestSeason(2, 'Past Recent', new Date(2024, 6, 1), new Date(2024, 11, 31)),
+                createTestSeason(3, 'Current', new Date(2025, 0, 1), new Date(2025, 5, 30)),
+                createTestSeason(4, 'Active', new Date(2025, 0, 1), new Date(2025, 5, 30), true),
+                createTestSeason(5, 'Future Close', new Date(2025, 1, 1), new Date(2025, 6, 30)),
+                createTestSeason(6, 'Future Far', new Date(2026, 0, 1), new Date(2026, 11, 31))
+            ]
+
+            const sorted = sortSeasonsByActivePriority(seasons, ref)
+
+            expect(sorted.map(s => s.shortName)).toEqual([
+                'Active', 'Future Close', 'Future Far', 'Current', 'Past Recent', 'Past Far'
+            ])
+        })
+
+        it.each([
+            { desc: 'empty array', seasons: [], expected: [] },
+            { desc: 'single season', seasons: [createTestSeason(1, 'Test', new Date(2025, 0, 1), new Date(2025, 5, 30))], expected: ['Test'] }
+        ])('$desc', ({ seasons, expected }) => {
+            expect(sortSeasonsByActivePriority(seasons).map(s => s.shortName)).toEqual(expected)
+        })
+    })
+
+    describe('selectMostAppropriateActiveSeason', () => {
+        it.each([
+            {
+                desc: 'future season closest to today when no active',
+                ref: new Date(2025, 0, 15),
+                seasons: [
+                    { id: 1, name: 'Past', start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) },
+                    { id: 2, name: 'Future Close', start: new Date(2025, 1, 1), end: new Date(2025, 6, 30) },
+                    { id: 3, name: 'Future Far', start: new Date(2026, 0, 1), end: new Date(2026, 11, 31) }
+                ],
+                expected: 'Future Close'
+            },
+            {
+                desc: 'current season when no future seasons',
+                ref: new Date(2025, 2, 15),
+                seasons: [
+                    { id: 1, name: 'Past', start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) },
+                    { id: 2, name: 'Current', start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) }
+                ],
+                expected: 'Current'
+            },
+            {
+                desc: 'null when all seasons past (cannot activate past)',
+                ref: new Date(2026, 0, 15),
+                seasons: [
+                    { id: 1, name: 'Past 2023', start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) },
+                    { id: 2, name: 'Past 2024', start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) },
+                    { id: 3, name: 'Past 2025', start: new Date(2025, 0, 1), end: new Date(2025, 11, 31) }
+                ],
+                expected: null
+            },
+            { desc: 'null when no seasons', ref: new Date(2025, 0, 15), seasons: [], expected: null }
+        ])('$desc', ({ ref, seasons, expected }) => {
+            const testSeasons = seasons.map(s => createTestSeason(s.id, s.name, s.start, s.end))
+            const selected = selectMostAppropriateActiveSeason(testSeasons, ref)
+            expect(selected?.shortName).toBe(expected)
+        })
     })
 })

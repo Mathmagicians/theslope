@@ -1,6 +1,6 @@
-import {defineEventHandler, getValidatedRouterParams, readBody} from "h3"
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {updateAllergy} from "~~/server/data/prismaRepository"
-import {useAllergyValidation, type AllergyUpdate} from "~/composables/useAllergyValidation"
+import {useAllergyValidation, type AllergyWithRelations} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -12,20 +12,18 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Allergy ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<AllergyWithRelations> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    console.info("🏥 > ALLERGY > [POST] Processing allergy update request")
-
     // Validate input - fail early on invalid data
     let allergyId: number
-    let allergyData: AllergyUpdate
+    let allergyData
     try {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
 
-        const body = await readBody(event)
+        const body = await readValidatedBody(event, z.object({}).passthrough().parse)
         allergyData = AllergyUpdateSchema.parse({...body, id: allergyId})
     } catch (error) {
         const h3e = h3eFromCatch('🏥 > ALLERGY > [POST] Input validation error', error)
@@ -38,6 +36,7 @@ export default defineEventHandler(async (event) => {
         console.info(`🏥 > ALLERGY > [POST] Updating allergy with ID ${allergyId}`)
         const updatedAllergy = await updateAllergy(d1Client, allergyData)
         console.info(`🏥 > ALLERGY > [POST] Updated allergy with ID ${updatedAllergy.id}`)
+        setResponseStatus(event, 200)
         return updatedAllergy
     } catch (error) {
         const h3e = h3eFromCatch(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)

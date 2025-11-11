@@ -1,4 +1,4 @@
-import {defineEventHandler, getValidatedRouterParams, createError} from "h3"
+import {defineEventHandler, getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchInhabitant} from "~~/server/data/prismaRepository"
 import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -29,7 +29,10 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
         console.info(`🏠👤 > INHABITANT > [GET] Fetching inhabitant with id ${id}`)
         const inhabitant = await fetchInhabitant(d1Client, id)
         console.info(`🏠👤 > INHABITANT > [GET] Returning inhabitant ${inhabitant?.name} ${inhabitant?.lastName}`)
-        if (inhabitant) return inhabitant
+        if (inhabitant) {
+            setResponseStatus(event, 200)
+            return inhabitant
+        }
     } catch (error) {
         const h3e = h3eFromCatch(`🏠👤 > INHABITANT > [GET] Error fetching inhabitant with id ${id}`, error)
         console.error(`🏠👤 > INHABITANT > [GET] ${h3e.statusMessage}`, error)

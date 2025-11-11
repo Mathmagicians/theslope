@@ -1,6 +1,6 @@
 // GET /api/admin/household/:id - returns the household with the specified ID
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {getValidatedRouterParams} from "h3"
+import {getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchHousehold} from "~~/server/data/prismaRepository"
 import type {HouseholdWithInhabitants} from "~/composables/useHouseholdValidation"
 import * as z from 'zod'
@@ -20,8 +20,8 @@ export default defineEventHandler<Promise<HouseholdWithInhabitants>>(async (even
     try {
         ({id}  = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        const h3e = h3eFromCatch('👥 > TEAM > [GET] Input validation error for team', error)
-        console.warn("👥 > TEAM > [GET] Input validation error:", h3e.statusMessage)
+        const h3e = h3eFromCatch('🏠 > HOUSEHOLD > [GET] Input validation error', error)
+        console.warn("🏠 > HOUSEHOLD > [GET] Input validation error:", h3e.statusMessage)
         throw h3e
     }
 
@@ -31,6 +31,7 @@ export default defineEventHandler<Promise<HouseholdWithInhabitants>>(async (even
         const household = await fetchHousehold(d1Client, id)
         if (household) {
             console.info("🏠 > HOUSEHOLD > [GET] found household", "name", household.name)
+            setResponseStatus(event, 200)
             return household
         }
     } catch (error: any) {

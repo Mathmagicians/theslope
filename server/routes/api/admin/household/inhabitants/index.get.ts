@@ -1,6 +1,6 @@
 // GET /api/admin/household/inhabitants - Get all inhabitants
 
-import {defineEventHandler} from "h3"
+import {defineEventHandler, setResponseStatus} from "h3"
 import {fetchInhabitants} from "~~/server/data/prismaRepository"
 import type {Inhabitant} from "~/composables/useHouseholdValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -15,6 +15,7 @@ export default defineEventHandler<Promise<Inhabitant[]>>(async (event) => {
         console.info("👩‍🏠 > INHABITANT > [GET] Fetching all inhabitants")
         const inhabitants = await fetchInhabitants(d1Client)
         console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched ${inhabitants.length} inhabitants`)
+        setResponseStatus(event, 200)
         return inhabitants
     } catch (error) {
         const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)

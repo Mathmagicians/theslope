@@ -1,4 +1,3 @@
-import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -41,6 +40,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
         }
 
         console.info(`🌞 > SEASON > Returning season ${season.shortName}`)
+        setResponseStatus(event, 200)
         return season
     } catch (error) {
         const h3e = h3eFromCatch(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)

@@ -3,6 +3,7 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteHousehold} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import type {Household} from "~/composables/useHouseholdValidation"
 import * as z from 'zod'
 
 const {h3eFromCatch} = eventHandlerHelper
@@ -12,7 +13,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Household ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Household> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

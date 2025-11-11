@@ -1,4 +1,4 @@
-import {defineEventHandler, getValidatedRouterParams} from "h3"
+import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchAllergyType} from "~~/server/data/prismaRepository"
 import type {AllergyTypeResponse} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event): Promise<AllergyTypeResponse> =>
         throw h3e
     }
 
-    // Fetch allergy type from database
+    // Business logic
     try {
         console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${allergyTypeId}`)
         const allergyType = await fetchAllergyType(d1Client, allergyTypeId)
@@ -38,7 +38,8 @@ export default defineEventHandler(async (event): Promise<AllergyTypeResponse> =>
             })
         }
 
-        console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type ${allergyType.name}`)
+        console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched allergy type ${allergyType.name}`)
+        setResponseStatus(event, 200)
         return allergyType
     } catch (error) {
         const h3e = h3eFromCatch(`🏥 > ALLERGY_TYPE > [GET] Error fetching allergy type with ID ${allergyTypeId}`, error)

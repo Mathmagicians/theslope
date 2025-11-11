@@ -1,6 +1,6 @@
-import {defineEventHandler, createError, getQuery, getValidatedQuery} from "h3"
 import z from 'zod'
 import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository"
+import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
@@ -12,11 +12,11 @@ const seasonQuerySchema = z.object({
 
 
 // Will return the active season, if query parameter is not provided, or the requested season if query parameter is provided
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season | null> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    console.log("👨‍💻 > SEASON > query received", getQuery(event))
+    console.info("👨‍💻 > SEASON > query received", getQuery(event))
 
     // Validate query parameters - fail early on invalid data
     let seasonQuery
@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
             ? await fetchSeasonForRange(d1Client, seasonQuery.start, seasonQuery.end)
             : await fetchCurrentSeason(d1Client)
         console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
+        setResponseStatus(event, 200)
         return season
     } catch (error) {
         const h3e = h3eFromCatch("👨‍💻 > SEASON > [GET] Error fetching active season", error)

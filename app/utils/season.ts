@@ -6,7 +6,7 @@ import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval
 } from '~/utils/date'
-import {getISODay} from "date-fns"
+import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter} from "date-fns"
 
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
@@ -192,4 +192,141 @@ export const computeTeamAssignmentsForEvents = (teams: CookingTeam[], cookingDay
             ? {...event, cookingTeamId: assignmentsMap.get(event.id)!}
             : event
     )
+}
+
+/**
+ * Active Season Management - Pure Functions
+ * All functions accept referenceDate parameter for testability (defaults to new Date())
+ */
+
+export type SeasonStatus = 'active' | 'future' | 'current' | 'past'
+
+/**
+ * Check if a season is in the past (ended before reference date)
+ * @param season - Season to check
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns true if season ended before reference date
+ */
+export const isPast = (season: Season, referenceDate: Date = new Date()): boolean => {
+    return isBefore(season.seasonDates.end, referenceDate)
+}
+
+/**
+ * Check if a season is in the future (starts after reference date)
+ * @param season - Season to check
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns true if season starts after reference date
+ */
+export const isFuture = (season: Season, referenceDate: Date = new Date()): boolean => {
+    return isAfter(season.seasonDates.start, referenceDate)
+}
+
+/**
+ * Calculate distance in days from reference date to season
+ * @param season - Season to check
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns Days until season starts (positive), days since ended (negative), or 0 if current
+ */
+export const distanceToToday = (season: Season, referenceDate: Date = new Date()): number => {
+    // Current season (reference date within season)
+    if (isWithinInterval(referenceDate, season.seasonDates)) {
+        return 0
+    }
+
+    // Future season (starts after reference date)
+    if (isFuture(season, referenceDate)) {
+        return differenceInDays(season.seasonDates.start, referenceDate)
+    }
+
+    // Past season (ended before reference date)
+    return differenceInDays(season.seasonDates.end, referenceDate)
+}
+
+/**
+ * Check if a season can be set as active (not in the past)
+ * @param season - Season to check
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns true if season is current or future (not past)
+ */
+export const canSeasonBeActive = (season: Season, referenceDate: Date = new Date()): boolean => {
+    return !isPast(season, referenceDate)
+}
+
+/**
+ * Get the status category of a season
+ * @param season - Season to categorize
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns 'active' | 'future' | 'current' | 'past'
+ */
+export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatus => {
+    // Active takes precedence regardless of dates
+    if (season.isActive) {
+        return 'active'
+    }
+
+    // Past: ended before reference date
+    if (isPast(season, referenceDate)) {
+        return 'past'
+    }
+
+    // Future: starts after reference date
+    if (isFuture(season, referenceDate)) {
+        return 'future'
+    }
+
+    // Current: reference date within season dates
+    return 'current'
+}
+
+/**
+ * Sort seasons by active priority: active → future (closest) → current → past (recent)
+ * @param seasons - Seasons to sort
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns Sorted seasons array (does not mutate input)
+ */
+export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Date = new Date()): Season[] => {
+    return [...seasons].sort((a, b) => {
+        const statusA = getSeasonStatus(a, referenceDate)
+        const statusB = getSeasonStatus(b, referenceDate)
+
+        // Priority order: active > future > current > past
+        const statusPriority: Record<SeasonStatus, number> = {
+            active: 0,
+            future: 1,
+            current: 2,
+            past: 3
+        }
+
+        const priorityDiff = statusPriority[statusA] - statusPriority[statusB]
+        if (priorityDiff !== 0) return priorityDiff
+
+        // Within same status, sort by distance to today
+        const distanceA = Math.abs(distanceToToday(a, referenceDate))
+        const distanceB = Math.abs(distanceToToday(b, referenceDate))
+
+        // For future: closest first (ascending distance)
+        // For past: most recent first (ascending distance from end)
+        return distanceA - distanceB
+    })
+}
+
+/**
+ * Select the most appropriate season to activate
+ * Priority: 1) Future closest to today, 2) Current
+ * IMPORTANT: Past seasons cannot be activated (business rule)
+ * @param seasons - Seasons to choose from
+ * @param referenceDate - Date to compare against (defaults to now)
+ * @returns Most appropriate eligible season, or null if no eligible seasons
+ */
+export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDate: Date = new Date()): Season | null => {
+    if (seasons.length === 0) return null
+
+    // Filter to only eligible (non-past, non-active) seasons
+    const eligible = seasons.filter(s => !s.isActive && canSeasonBeActive(s, referenceDate))
+
+    if (eligible.length === 0) return null
+
+    // Sort and return first (future closest, or current if no future)
+    const sorted = sortSeasonsByActivePriority(eligible, referenceDate)
+    return sorted[0]!
 }

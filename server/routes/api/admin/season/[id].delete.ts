@@ -1,5 +1,5 @@
-import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {deleteSeason} from "~~/server/data/prismaRepository"
+import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 const {h3eFromCatch} = eventHandlerHelper
@@ -9,7 +9,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
         console.info(`🌞 > DELETE SEASON >  Deleting season with id ${id}`)
         const deletedSeason = await deleteSeason(d1Client, id)
         console.info(`🌞 DELETE SEASON >  Successfully deleted season ${deletedSeason.shortName}`)
+        setResponseStatus(event, 200)
         return deletedSeason
     } catch (error) {
         const h3e = h3eFromCatch(`🌞 > DELETE SEASON > Error deleting season with id ${id}`, error)

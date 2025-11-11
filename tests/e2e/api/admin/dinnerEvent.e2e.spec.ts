@@ -7,7 +7,6 @@ const {validatedBrowserContext} = testHelpers
 
 // Variables to store IDs for cleanup
 let testSeasonId: number
-let testDinnerEventIds: number[] = []
 
 test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
@@ -29,16 +28,15 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // WHEN: Creating a new dinner event
         const createdDinnerEvent = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        testDinnerEventIds.push(createdDinnerEvent.id)
+        expect(createdDinnerEvent.id).toBeDefined()
 
         // THEN: Dinner event is created successfully
-        expect(createdDinnerEvent.id).toBeDefined()
         expect(createdDinnerEvent.menuTitle).toBe(dinnerEventData.menuTitle)
         expect(createdDinnerEvent.dinnerMode).toBe(dinnerEventData.dinnerMode)
         expect(createdDinnerEvent.seasonId).toBe(testSeasonId)
 
         // AND: Dinner event can be retrieved
-        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id)
+        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
         expect(retrievedDinnerEvent?.id).toBe(createdDinnerEvent.id)
         expect(retrievedDinnerEvent?.menuTitle).toBe(dinnerEventData.menuTitle)
     })
@@ -51,7 +49,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             seasonId: testSeasonId
         }
         const createdDinnerEvent = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        testDinnerEventIds.push(createdDinnerEvent.id)
+        expect(createdDinnerEvent.id).toBeDefined()
 
         // WHEN: Updating the dinner event
         const updatedData = {
@@ -61,7 +59,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         }
         const updatedDinnerEvent = await DinnerEventFactory.updateDinnerEvent(
             context,
-            createdDinnerEvent.id,
+            createdDinnerEvent.id!,
             updatedData
         )
 
@@ -72,7 +70,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(updatedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
 
         // AND: Changes are persisted
-        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id)
+        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
         expect(retrievedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
         expect(retrievedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
         expect(retrievedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
@@ -86,13 +84,13 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             ...DinnerEventFactory.defaultDinnerEvent(),
             seasonId: testSeasonId
         })
-        testDinnerEventIds.push(dinnerEvent1.id)
+        expect(dinnerEvent1.id).toBeDefined()
 
         const dinnerEvent2 = await DinnerEventFactory.createDinnerEvent(context, {
             ...DinnerEventFactory.defaultDinnerEvent(),
             seasonId: testSeasonId
         })
-        testDinnerEventIds.push(dinnerEvent2.id)
+        expect(dinnerEvent2.id).toBeDefined()
 
         // WHEN: GET /api/admin/dinner-event
         const response = await context.request.get('/api/admin/dinner-event')
@@ -116,7 +114,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             ...DinnerEventFactory.defaultDinnerEvent(),
             seasonId: testSeasonId
         })
-        testDinnerEventIds.push(dinnerEvent.id)
+        expect(dinnerEvent.id).toBeDefined()
 
         // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId
         const response = await context.request.get(`/api/admin/dinner-event?seasonId=${testSeasonId}`)
@@ -158,13 +156,13 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(createdDinnerEvent.id).toBeDefined()
 
         // WHEN: Deleting the dinner event
-        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id)
+        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id!)
 
         // THEN: Delete succeeds and returns the deleted event
         expect(deletedDinnerEvent?.id).toBe(createdDinnerEvent.id)
 
         // AND: Dinner event no longer exists
-        await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id, 404)
+        await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!, 404)
     })
 
     // Cleanup after all tests
@@ -175,7 +173,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         if (testSeasonId) {
             try {
                 await SeasonFactory.deleteSeason(context, testSeasonId)
-                console.info(`Cleaned up test season ${testSeasonId} (cascade deleted ${testDinnerEventIds.length} dinner events)`)
+                console.info(`Cleaned up test season ${testSeasonId} (cascade deleted all dinner events)`)
             } catch (error) {
                 console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
             }

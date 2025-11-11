@@ -1,4 +1,3 @@
-import {defineEventHandler} from "h3"
 import {fetchSeasons} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -13,6 +12,7 @@ export default defineEventHandler(async (event): Promise<Season[]> => {
         console.info("🌞 > SEASON > [GET] Fetching all seasons")
         const seasons = await fetchSeasons(d1Client)
         console.info(`🌞 > SEASON > [GET] Returning ${seasons?.length} seasons`)
+        setResponseStatus(event, 200)
         return seasons ? seasons : []
     } catch (error) {
         const h3e = h3eFromCatch("🌞 > SEASON > [GET] Error fetching seasons", error)

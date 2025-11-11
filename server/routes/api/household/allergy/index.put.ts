@@ -1,22 +1,19 @@
-import {defineEventHandler, readBody, setResponseStatus} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createAllergy} from "~~/server/data/prismaRepository"
-import {useAllergyValidation, type AllergyCreate} from "~/composables/useAllergyValidation"
+import {useAllergyValidation, type AllergyWithRelations} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {AllergyCreateSchema} = useAllergyValidation()
 const {h3eFromCatch} = eventHandlerHelper
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<AllergyWithRelations> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    console.info("🏥 > ALLERGY > [PUT] Processing allergy creation request")
-
     // Validate input - fail early on invalid data
-    let allergyData: AllergyCreate
+    let allergyData
     try {
-        const body = await readBody(event)
-        allergyData = AllergyCreateSchema.parse(body)
+        allergyData = await readValidatedBody(event, AllergyCreateSchema.parse)
     } catch (error) {
         const h3e = h3eFromCatch('🏥 > ALLERGY > [PUT] Input validation error', error)
         console.error(`🏥 > ALLERGY > [PUT] ${h3e.statusMessage}`, error)

@@ -3,10 +3,7 @@ import {PrismaD1} from "@prisma/adapter-d1"
 import {PrismaClient, Prisma as PrismaFromClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import type {
-    Season,
     User,
-    Inhabitant,
-    Household,
     CookingTeam,
     Order,
     TicketPrice as PrismaTicketPrice,
@@ -14,10 +11,10 @@ import type {
     Allergy
 } from "@prisma/client"
 
-import type {Season as DomainSeason} from "~/composables/useSeasonValidation"
+import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
-import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate} from '~/composables/useHouseholdValidation'
+import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate, Inhabitant, Household, HouseholdSummary, HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
 import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate, DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
@@ -270,6 +267,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<Inhabitant> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeInhabitant} = useHouseholdValidation()
 
     try {
         const data = {
@@ -302,12 +300,14 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
                 }
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
-            return updatedInhabitant
+            // ADR-010: Deserialize to domain type before returning
+            return deserializeInhabitant(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
         }
 
-        return newInhabitant
+        // ADR-010: Deserialize to domain type before returning
+        return deserializeInhabitant(newInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
         console.error(`👩‍🏠 > INHABITANT > [SAVE] ${h3e.statusMessage}`, error)
@@ -408,6 +408,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeInhabitant} = useHouseholdValidation()
 
     try {
 
@@ -419,7 +420,8 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
         })
 
         console.info(`👩‍🏠 > INHABITANT > [DELETE] Successfully deleted inhabitant ${deletedInhabitant.name} ${deletedInhabitant.lastName}`)
-        return deletedInhabitant
+        // ADR-010: Deserialize to domain type before returning
+        return deserializeInhabitant(deletedInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting inhabitant with ID ${id}`, error)
         console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}`, error)
@@ -442,6 +444,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
                         inhabitant: {
                             select: {
                                 id: true,
+                                heynaboId: true,
                                 name: true,
                                 lastName: true,
                                 pictureUrl: true,
@@ -466,6 +469,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
             icon: allergyType.icon,
             inhabitants: allergyType.Allergy.map(allergy => ({
                 id: allergy.inhabitant.id,
+                heynaboId: allergy.inhabitant.heynaboId,
                 name: allergy.inhabitant.name,
                 lastName: allergy.inhabitant.lastName,
                 pictureUrl: allergy.inhabitant.pictureUrl,
@@ -492,6 +496,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
 export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse | null> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyTypeResponseSchema} = useAllergyValidation()
 
     try {
         const allergyType = await prisma.allergyType.findFirst({
@@ -500,7 +505,7 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
 
         if (allergyType) {
             console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type ${allergyType.name} (ID: ${allergyType.id})`)
-            return allergyType
+            return AllergyTypeResponseSchema.parse(allergyType)
         } else {
             console.info(`🏥 > ALLERGY_TYPE > [GET] No allergy type found with ID ${id}`)
             return null
@@ -515,6 +520,7 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
 export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyTypeResponseSchema} = useAllergyValidation()
 
     try {
         const newAllergyType = await prisma.allergyType.create({
@@ -522,7 +528,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [CREATE] Successfully created allergy type ${newAllergyType.name} with ID ${newAllergyType.id}`)
-        return newAllergyType
+        return AllergyTypeResponseSchema.parse(newAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating allergy type ${allergyTypeData.name}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [CREATE] ${h3e.statusMessage}`, error)
@@ -533,6 +539,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
 export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyTypeResponseSchema} = useAllergyValidation()
 
     const {id, ...updateData} = allergyTypeData
 
@@ -543,7 +550,7 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Successfully updated allergy type ${updatedAllergyType.name}`)
-        return updatedAllergyType
+        return AllergyTypeResponseSchema.parse(updatedAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating allergy type with ID ${id}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [UPDATE] ${h3e.statusMessage}`, error)
@@ -554,6 +561,7 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
 export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse> {
     console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyTypeResponseSchema} = useAllergyValidation()
 
     try {
         // ADR-005: Single atomic delete - Prisma handles CASCADE deletion of related allergies
@@ -562,7 +570,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [DELETE] Successfully deleted allergy type ${deletedAllergyType.name}`)
-        return deletedAllergyType
+        return AllergyTypeResponseSchema.parse(deletedAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting allergy type with ID ${id}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
@@ -575,6 +583,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
 export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyWithRelations[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyWithRelationsSchema} = useAllergyValidation()
 
     try {
         const allergies = await prisma.allergy.findMany({
@@ -584,6 +593,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -594,7 +604,9 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
         })
 
         console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for inhabitant ${inhabitantId}`)
-        return allergies
+
+        // Validate before returning (ADR-010)
+        return allergies.map(a => AllergyWithRelationsSchema.parse(a))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching allergies for inhabitant ${inhabitantId}`, error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
@@ -605,6 +617,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
 export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyWithRelations[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyWithRelationsSchema} = useAllergyValidation()
 
     try {
         const allergies = await prisma.allergy.findMany({
@@ -618,6 +631,7 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -628,7 +642,9 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
         })
 
         console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for household ${householdId}`)
-        return allergies
+
+        // Validate before returning (ADR-010)
+        return allergies.map(a => AllergyWithRelationsSchema.parse(a))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching allergies for household ${householdId}`, error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
@@ -665,6 +681,7 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
 export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyWithRelations | null> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyWithRelationsSchema} = useAllergyValidation()
 
     try {
         const allergy = await prisma.allergy.findFirst({
@@ -674,6 +691,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -685,7 +703,8 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
 
         if (allergy) {
             console.info(`🏥 > ALLERGY > [GET] Found allergy (ID: ${allergy.id})`)
-            return allergy
+            // Validate before returning (ADR-010)
+            return AllergyWithRelationsSchema.parse(allergy)
         } else {
             console.info(`🏥 > ALLERGY > [GET] No allergy found with ID ${id}`)
             return null
@@ -700,6 +719,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
 export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyWithRelations> {
     console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyWithRelationsSchema} = useAllergyValidation()
 
     try {
         const newAllergy = await prisma.allergy.create({
@@ -709,6 +729,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -719,7 +740,8 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
         })
 
         console.info(`🏥 > ALLERGY > [CREATE] Successfully created allergy with ID ${newAllergy.id}`)
-        return newAllergy
+        // Validate before returning (ADR-010)
+        return AllergyWithRelationsSchema.parse(newAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
         console.error(`🏥 > ALLERGY > [CREATE] ${h3e.statusMessage}`, error)
@@ -730,6 +752,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
 export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyWithRelations> {
     console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyWithRelationsSchema} = useAllergyValidation()
 
     const {id, ...updateData} = allergyData
 
@@ -742,6 +765,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -752,7 +776,8 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
         })
 
         console.info(`🏥 > ALLERGY > [UPDATE] Successfully updated allergy with ID ${updatedAllergy.id}`)
-        return updatedAllergy
+        // Validate before returning (ADR-010)
+        return AllergyWithRelationsSchema.parse(updatedAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating allergy with ID ${id}`, error)
         console.error(`🏥 > ALLERGY > [UPDATE] ${h3e.statusMessage}`, error)
@@ -763,6 +788,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
 export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyResponse> {
     console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyResponseSchema} = useAllergyValidation()
 
     try {
         const deletedAllergy = await prisma.allergy.delete({
@@ -770,7 +796,8 @@ export async function deleteAllergy(d1Client: D1Database, id: number): Promise<A
         })
 
         console.info(`🏥 > ALLERGY > [DELETE] Successfully deleted allergy with ID ${deletedAllergy.id}`)
-        return deletedAllergy
+        // Validate before returning (ADR-010)
+        return AllergyResponseSchema.parse(deletedAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting allergy with ID ${id}`, error)
         console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
@@ -820,7 +847,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 }
 
 // ADR-009 & ADR-010: Returns HouseholdSummary (all scalar fields + lightweight inhabitant relation)
-export async function fetchHouseholds(d1Client: D1Database): Promise<import('~/composables/useHouseholdValidation').HouseholdSummary[]> {
+export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSummary[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -960,7 +987,7 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
 // Get serialization utilities
 const {serializeSeason, deserializeSeason} = useSeasonValidation()
 
-export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<DomainSeason | null> {
+export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season for range ${start} to ${end}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -990,7 +1017,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
-export async function fetchCurrentSeason(d1Client: D1Database): Promise<DomainSeason | null> {
+export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching current active season`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1015,7 +1042,7 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<DomainSe
     }
 }
 
-export async function fetchSeason(d1Client: D1Database, id: number): Promise<DomainSeason | null> {
+export async function fetchSeason(d1Client: D1Database, id: number): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1049,7 +1076,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Dom
     }
 }
 
-export async function fetchSeasons(d1Client: D1Database): Promise<DomainSeason[]> {
+export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     console.info(`🌞 > SEASON > [GET] Fetching all seasons`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1092,7 +1119,7 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
     }
 }
 
-export async function createSeason(d1Client: D1Database, seasonData: DomainSeason): Promise<DomainSeason> {
+export async function createSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1126,7 +1153,7 @@ export async function createSeason(d1Client: D1Database, seasonData: DomainSeaso
     }
 }
 
-export async function updateSeason(d1Client: D1Database, seasonData: DomainSeason): Promise<DomainSeason> {
+export async function updateSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1409,7 +1436,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
     }
 }
 
-export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamCreate> {
+export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamWithMembers> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {

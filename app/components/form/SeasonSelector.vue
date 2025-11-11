@@ -1,3 +1,25 @@
+<!--
+UX MOCKUP: Season Selector with Status Indicators
+
+┌─────────────────────────────┐
+│ ▼ Vælg sæson               │
+│ ───────────────────────────  │
+│ ● Forår 2025               │  ◄─── ACTIVE (solid green circle)
+│ ◌ Efterår 2025              │  ◄─── FUTURE (dashed green circle)
+│ ◌ Forår 2026                │  ◄─── FUTURE (dashed green circle)
+│ ◉ Efterår 2024              │  ◄─── PAST (solid grey circle)
+│ ◉ Forår 2024                │  ◄─── PAST (solid grey circle)
+└─────────────────────────────┘
+
+Season Status Legend:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+● Forår 2025           🟢 ACTIVE    (solid green circle)
+◌ Efterår 2025         🟢 FUTURE    (dashed green circle)
+◉ Efterår 2024         ⚫ PAST      (solid grey circle)
+
+Sorting: Active → Future (by start date) → Past (by start date descending)
+-->
+
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
 

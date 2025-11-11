@@ -1,13 +1,15 @@
 import {test, expect} from '@playwright/test'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import testHelpers from '../../testHelpers'
 
-const {headers, validatedBrowserContext, pollUntil} = testHelpers
+const {headers, validatedBrowserContext, pollUntil, salt} = testHelpers
 
 // Variables to store IDs for cleanup
+// Only track household - CASCADE will delete all inhabitants (ADR-005)
 let testHouseholdId: number
-let testInhabitantIds: number[] = []
 
 test.describe('Admin Inhabitant API', () => {
 
@@ -25,7 +27,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId)
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             // Verify response structure
             expect(testInhabitant.id).toBeGreaterThanOrEqual(0)
@@ -41,7 +42,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'List-Test-Inhabitant')
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             const inhabitants = await HouseholdFactory.getAllInhabitants(context)
             expect(Array.isArray(inhabitants)).toBe(true)
@@ -55,7 +55,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const createdInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'Details-Test-Inhabitant')
             expect(createdInhabitant.id).toBeDefined()
-            testInhabitantIds.push(createdInhabitant.id)
 
             // Get inhabitant details
             const inhabitantDetails = await HouseholdFactory.getInhabitantById(context, createdInhabitant.id)
@@ -84,7 +83,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', 'usertest@example.com')
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             // Verify inhabitant has user association
             expect(testInhabitant.userId).toBeDefined()
@@ -125,7 +123,7 @@ test.describe('Admin Inhabitant API', () => {
             const team = await SeasonFactory.createCookingTeamWithMembersForSeason(
                 context,
                 season.id as number,
-                'Team-For-Cascade-Test',
+                salt('Team-For-Cascade-Test'),  // Salted to prevent race conditions
                 1  // Single member
             )
 
@@ -169,9 +167,8 @@ test.describe('Admin Inhabitant API', () => {
 
         test('GIVEN inhabitant exists WHEN updating dinner preferences THEN preferences are updated and other fields unchanged', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const {useWeekDayMapValidation} = await import('~/composables/useWeekDayMapValidation')
-            const {DinnerModeSchema} = await import('~/composables/useDinnerEventValidation')
 
+            const {DinnerModeSchema} = useDinnerEventValidation()
             const {createDefaultWeekdayMap} = useWeekDayMapValidation({
                 valueSchema: DinnerModeSchema,
                 defaultValue: 'NONE'
@@ -179,7 +176,6 @@ test.describe('Admin Inhabitant API', () => {
 
             const createdInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'DinnerPref-Test-Inhabitant')
             expect(createdInhabitant.id).toBeDefined()
-            testInhabitantIds.push(createdInhabitant.id)
 
             const newPreferences = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'NONE'])
 
@@ -233,16 +229,11 @@ test.describe('Admin Inhabitant API', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up all created inhabitants
-        await Promise.all(testInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id).catch(error => {
-            // Ignore cleanup errors
-            console.warn(`Failed to cleanup inhabitant ${id}:`, error)
-        })))
-
-        // Clean up the test household
+        // Clean up the test household (CASCADE deletes all inhabitants automatically per ADR-005)
         if (testHouseholdId) {
             try {
                 await HouseholdFactory.deleteHousehold(context, testHouseholdId)
+                console.info(`Cleaned up test household ${testHouseholdId} (cascade deleted all inhabitants)`)
             } catch (error) {
                 console.warn(`Failed to cleanup test household ${testHouseholdId}:`, error)
             }

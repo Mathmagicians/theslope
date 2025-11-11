@@ -3,9 +3,10 @@ import { OrderFactory } from '../../testDataFactories/orderFactory'
 import { HouseholdFactory } from '../../testDataFactories/householdFactory'
 import { SeasonFactory } from '../../testDataFactories/seasonFactory'
 import { useOrderValidation } from '~/composables/useOrderValidation'
+import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
-const { validatedBrowserContext, headers } = testHelpers
+const { validatedBrowserContext, salt } = testHelpers
 const { TicketTypeSchema } = useOrderValidation()
 
 const ORDER_ENDPOINT = '/api/order'
@@ -28,7 +29,7 @@ test.describe('Order/api/order CRUD operations', () => {
     // Create household with one inhabitant
     const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(
       context,
-      'Order Test Household',
+      { name: salt('Order Test Household') },
       1
     )
     testHouseholdId = household.id
@@ -39,8 +40,8 @@ test.describe('Order/api/order CRUD operations', () => {
     testSeasonId = season.id
 
     // Extract ticket price IDs from season
-    const adultTicketPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)
-    const childTicketPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.CHILD)
+    const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
+    const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
 
     if (!adultTicketPrice?.id || !childTicketPrice?.id) {
       throw new Error('Season must have ticket prices with IDs for ADULT and CHILD')
@@ -93,22 +94,27 @@ test.describe('Order/api/order CRUD operations', () => {
         }
       ]
     })
+
+    // THEN: Verify order was created
+    expect(orders).toBeDefined()
+    expect(orders.length).toBeGreaterThan(0)
     const order = orders[0]
-    testOrderIds.push(order.id)
+    expect(order).toBeDefined()
+    expect(order!.id).toBeDefined()
+    testOrderIds.push(order!.id)
 
     // THEN: Verify essential fields exist
-    expect(order.id).toBeDefined()
-    expect(order.dinnerEventId).toBe(testDinnerEventId)
-    expect(order.inhabitantId).toBe(testInhabitantId)
-    expect(order.ticketType).toBe(TicketTypeSchema.enum.ADULT)
-    expect(order.createdAt).toBeDefined()
+    expect(order!.dinnerEventId).toBe(testDinnerEventId)
+    expect(order!.inhabitantId).toBe(testInhabitantId)
+    expect(order!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
+    expect(order!.createdAt).toBeDefined()
 
     // WHEN: Retrieve the created order
-    const retrievedOrder = await OrderFactory.getOrder(context, order.id)
+    const retrievedOrder = await OrderFactory.getOrder(context, order!.id)
 
     // THEN: Retrieved order matches created order
     expect(retrievedOrder).toBeDefined()
-    expect(retrievedOrder!.id).toBe(order.id)
+    expect(retrievedOrder!.id).toBe(order!.id)
     expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
   })
 
@@ -125,16 +131,21 @@ test.describe('Order/api/order CRUD operations', () => {
         }
       ]
     })
+    expect(orders).toBeDefined()
+    expect(orders.length).toBeGreaterThan(0)
     const order = orders[0]
+    expect(order).toBeDefined()
+    expect(order!.id).toBeDefined()
 
     // WHEN: Delete order
-    const deletedOrder = await OrderFactory.deleteOrder(context, order.id)
+    const deletedOrder = await OrderFactory.deleteOrder(context, order!.id)
 
     // THEN: Deletion successful
-    expect(deletedOrder!.id).toBe(order.id)
+    expect(deletedOrder).toBeDefined()
+    expect(deletedOrder!.id).toBe(order!.id)
 
     // THEN: Verify order is deleted - should get 404
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${order.id}`)
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${order!.id}`)
     expect(response.status()).toBe(404)
   })
 

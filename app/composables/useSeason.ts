@@ -182,6 +182,35 @@ export const useSeason = () => {
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
+
+    /**
+     * Determine season status relative to today (MOCK - TODO: Implement)
+     * Pure function - accepts referenceDate for testing
+     *
+     * @param season - Season to check
+     * @param referenceDate - Date to compare against (defaults to today)
+     * @returns 'active' | 'future' | 'past'
+     */
+    const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): 'active' | 'future' | 'past' => {
+        // MOCK: Always return 'active' for now
+        // TODO: Implement proper logic in feature-active-season-management
+        return 'active'
+    }
+
+    /**
+     * Check if a season can be activated (MOCK - TODO: Implement)
+     * Seasons in the past cannot be activated
+     *
+     * @param season - Season to check
+     * @param referenceDate - Date to compare against (defaults to today)
+     * @returns true if season can be activated
+     */
+    const canSeasonBeActive = (season: Season, referenceDate: Date = new Date()): boolean => {
+        // MOCK: Always return true for now
+        // TODO: Implement proper logic - season.seasonDates.end >= referenceDate
+        return true
+    }
+
     return {
         holidaysSchema,
         SeasonSchema,
@@ -197,6 +226,8 @@ export const useSeason = () => {
         assignTeamsToEvents,
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
-        computeCookingDates
+        computeCookingDates,
+        getSeasonStatus,
+        canSeasonBeActive
     }
 }

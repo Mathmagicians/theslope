@@ -1,6 +1,6 @@
 // POST /api/admin/household/[id] - Update household
 
-import {defineEventHandler, readValidatedBody, getValidatedRouterParams} from "h3"
+import {defineEventHandler, readValidatedBody, getValidatedRouterParams, setResponseStatus} from "h3"
 import {updateHousehold} from "~~/server/data/prismaRepository"
 import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
 import type {Household, HouseholdUpdate} from "~/composables/useHouseholdValidation"
@@ -37,6 +37,7 @@ export default defineEventHandler<Promise<Household>>(async (event) => {
         const updatedHousehold = await updateHousehold(d1Client, id, householdData)
 
         console.info("🏠 > HOUSEHOLD > [POST] Updated household", "name", updatedHousehold.name)
+        setResponseStatus(event, 200)
         return updatedHousehold
     } catch (error) {
         const h3e = h3eFromCatch(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)

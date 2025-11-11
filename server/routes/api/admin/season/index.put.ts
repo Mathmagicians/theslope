@@ -1,4 +1,3 @@
-import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"

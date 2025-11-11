@@ -1,8 +1,6 @@
-
-import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, updateTeam} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
-import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import {useCookingTeamValidation, type CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
@@ -22,7 +20,13 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+type AssignAffinitiesResponse = {
+    seasonId: number
+    teamCount: number
+    teams: CookingTeamWithMembers[]
+}
+
+export default defineEventHandler(async (event): Promise<AssignAffinitiesResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

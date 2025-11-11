@@ -25,7 +25,7 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👩‍🏠 > INHABITANT > [PUT] Creating inhabitant ${inhabitantData.name} for household ${householdId}`)
+        console.info(`👩‍🏠 > INHABITANT > [PUT] Creating inhabitant ${inhabitantData.name} for household ${householdId}`)
         const savedInhabitant = await saveInhabitant(d1Client, inhabitantData, householdId)
         console.info(`👩‍🏠 > INHABITANT > [PUT] Successfully created inhabitant ${savedInhabitant.name}`)
         setResponseStatus(event, 201)
