@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import testHelpers from '../../testHelpers'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, salt} = testHelpers
 
 // Variables to store IDs for cleanup
 let testHouseholdIds: number[] = []
@@ -66,10 +66,11 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('PUT can create household with inhabitants', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Create household with inhabitants
+        // Create household with inhabitants (with unique data for parallel execution)
+        const testSalt = Date.now().toString()
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            'Household With Inhabitants',
+            { name: salt('Household With Inhabitants', testSalt) },
             2
         )
         testHouseholdIds.push(household.id)
@@ -87,10 +88,11 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('GET /api/admin/household (index) should return households with lightweight inhabitant data (ADR-009)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // GIVEN: Create household with inhabitants
+        // GIVEN: Create household with inhabitants (with unique data for parallel execution)
+        const testSalt = Date.now().toString()
         const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            'Household For Index Test',
+            HouseholdFactory.defaultHouseholdData(testSalt),
             2
         )
         testHouseholdIds.push(household.id)
@@ -129,10 +131,11 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('GET /api/admin/household/[id] (detail) should return household with comprehensive inhabitant data (ADR-009)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // GIVEN: Create household with inhabitants
+        // GIVEN: Create household with inhabitants (with unique data for parallel execution)
+        const testSalt = Date.now().toString()
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            'Household For Detail Test',
+            { name: salt('Household For Detail Test', testSalt) },
             2
         )
         testHouseholdIds.push(household.id)
@@ -160,11 +163,12 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     })
 
     test('DELETE should cascade delete inhabitants (strong relation)', async ({browser}) => {
-        // GIVEN: A household with inhabitants
+        // GIVEN: A household with inhabitants (with unique data for parallel execution)
         const context = await validatedBrowserContext(browser)
+        const testSalt = Date.now().toString()
         const result = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            'Household For Cascade Delete',
+            { name: salt('Household For Cascade Delete', testSalt) },
             2
         )
         // Don't add to cleanup - we're testing deletion
@@ -182,7 +186,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
 
         // THEN: All inhabitants should be cascade deleted
         const checksAfter = await Promise.all(
-            inhabitantIds.map(id => context.request.get(`/api/admin/inhabitant/${id}`))
+            inhabitantIds.map(id => context.request.get(`/api/admin/household/inhabitants/${id}`))
         )
         checksAfter.forEach(response => {
             expect(response.status()).toBe(404)

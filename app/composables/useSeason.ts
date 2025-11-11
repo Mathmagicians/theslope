@@ -8,7 +8,7 @@ import {
     isCalendarDateInDateList
 } from '~/utils/date'
 import {isWithinInterval} from "date-fns"
-import {useSeasonValidation, type Season} from './useSeasonValidation'
+import {useSeasonValidation, type Season, SEASON_STATUS} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {DinnerEventCreate} from './useDinnerEventValidation'
 import {useDinnerEventValidation} from './useDinnerEventValidation'
@@ -16,7 +16,14 @@ import {
     computeAffinitiesForTeams,
     computeCookingDates,
     computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates
+    findFirstCookingDayInDates,
+    isPast,
+    isFuture,
+    distanceToToday,
+    canSeasonBeActive as canSeasonBeActiveUtil,
+    getSeasonStatus as getSeasonStatusUtil,
+    sortSeasonsByActivePriority,
+    selectMostAppropriateActiveSeason
 } from "~/utils/season"
 
 /**
@@ -25,12 +32,14 @@ import {
 export const useSeason = () => {
     // Get validation utilities (including createWeekDayMapFromSelection configured for Season)
     const {
+        SeasonStatusSchema,
         holidaysSchema,
         SeasonSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection
     } = useSeasonValidation()
+    const SeasonStatus = SeasonStatusSchema.enum
 
     // Get DinnerMode enum from generated schema
     const {DinnerModeSchema} = useDinnerEventValidation()
@@ -183,37 +192,14 @@ export const useSeason = () => {
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
-    /**
-     * Determine season status relative to today (MOCK - TODO: Implement)
-     * Pure function - accepts referenceDate for testing
-     *
-     * @param season - Season to check
-     * @param referenceDate - Date to compare against (defaults to today)
-     * @returns 'active' | 'future' | 'past'
-     */
-    const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): 'active' | 'future' | 'past' => {
-        // MOCK: Always return 'active' for now
-        // TODO: Implement proper logic in feature-active-season-management
-        return 'active'
-    }
-
-    /**
-     * Check if a season can be activated (MOCK - TODO: Implement)
-     * Seasons in the past cannot be activated
-     *
-     * @param season - Season to check
-     * @param referenceDate - Date to compare against (defaults to today)
-     * @returns true if season can be activated
-     */
-    const canSeasonBeActive = (season: Season, referenceDate: Date = new Date()): boolean => {
-        // MOCK: Always return true for now
-        // TODO: Implement proper logic - season.seasonDates.end >= referenceDate
-        return true
-    }
-
     return {
+        // Validation schemas
+        SeasonStatusSchema,
+        SeasonStatus,
         holidaysSchema,
         SeasonSchema,
+
+        // Business logic
         getDefaultSeason,
         getDefaultHolidays,
         createSeasonName,
@@ -227,7 +213,15 @@ export const useSeason = () => {
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
-        getSeasonStatus,
-        canSeasonBeActive
+
+        // Active season management - pure functions
+        isPast,
+        isFuture,
+        distanceToToday,
+        canSeasonBeActive: canSeasonBeActiveUtil,
+        getSeasonStatus: getSeasonStatusUtil,
+        sortSeasonsByActivePriority,
+        selectMostAppropriateActiveSeason
     }
 }
+

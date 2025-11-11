@@ -1079,6 +1079,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
 export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     console.info(`🌞 > SEASON > [GET] Fetching all seasons`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {SeasonSchema} = useSeasonValidation()
 
     try {
         const seasons = await prisma.season.findMany({
@@ -1090,7 +1091,12 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
             }
         })
         console.info(`🌞 > SEASON > [GET] Successfully fetched ${seasons.length} seasons`)
-        return seasons.map(season => deserializeSeason(season))
+
+        // Validate each season after deserialization
+        return seasons.map(season => {
+            const deserialized = deserializeSeason(season)
+            return SeasonSchema.parse(deserialized)
+        })
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching seasons', error)
         console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)

@@ -7,10 +7,23 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 
+// Season status constants - single source of truth
+export const SEASON_STATUS = {
+    ACTIVE: 'aktiv',
+    FUTURE: 'kommende',
+    CURRENT: 'i gang',
+    PAST: 'afsluttet'
+} as const
+
+const seasonStatusValues = Object.values(SEASON_STATUS)
+
 /**
  * Validation schemas and serialization functions for Season objects
  */
 export const useSeasonValidation = () => {
+    // Season status enum - computed status based on dates and isActive flag
+    const SeasonStatusSchema = z.enum(seasonStatusValues as [string, ...string[]])
+
     // Get validation schemas with explicit boolean options for Season cookingDays
     const {
         WeekDayMapSchemaRequired,
@@ -109,6 +122,7 @@ export const useSeasonValidation = () => {
 
     // Return all schemas and utility functions
     return {
+        SeasonStatusSchema,
         holidaysSchema,
         BaseSeasonSchema,
         SeasonSchema,
@@ -123,3 +137,4 @@ export const useSeasonValidation = () => {
 // Re-export the Season and serializedSeason types
 export type Season = z.infer<ReturnType<typeof useSeasonValidation>['SeasonSchema']>
 export type SerializedSeason = z.infer<ReturnType<typeof useSeasonValidation>['SerializedSeasonSchema']>
+export type SeasonStatus = z.infer<ReturnType<typeof useSeasonValidation>['SeasonStatusSchema']>

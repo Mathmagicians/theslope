@@ -38,13 +38,8 @@ export const usePlanStore = defineStore("Plan", () => {
                 watch: false,
                 default: () => [],
                 transform: (data: any[]) => {
-                    try {
-                        return data.map(season => SeasonSchema.parse(season))
-                    } catch (e) {
-                        console.error('🗓️ > PLAN_STORE > Error parsing seasons:', e)
-                        console.error('🗓️ > PLAN_STORE > Raw data:', data)
-                        throw e
-                    }
+                    // Repository validates data per ADR-010, so we can trust it's valid
+                    return data.map(season => SeasonSchema.parse(season))
                 }
             }
         )

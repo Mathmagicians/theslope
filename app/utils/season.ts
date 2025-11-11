@@ -1,7 +1,8 @@
 import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
 import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
-import type {Season} from '~/composables/useSeasonValidation'
+import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval
@@ -199,8 +200,6 @@ export const computeTeamAssignmentsForEvents = (teams: CookingTeam[], cookingDay
  * All functions accept referenceDate parameter for testability (defaults to new Date())
  */
 
-export type SeasonStatus = 'active' | 'future' | 'current' | 'past'
-
 /**
  * Check if a season is in the past (ended before reference date)
  * @param season - Season to check
@@ -256,30 +255,30 @@ export const canSeasonBeActive = (season: Season, referenceDate: Date = new Date
  * Get the status category of a season
  * @param season - Season to categorize
  * @param referenceDate - Date to compare against (defaults to now)
- * @returns 'active' | 'future' | 'current' | 'past'
+ * @returns 'aktiv' | 'kommende' | 'i gang' | 'afsluttet'
  */
 export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatus => {
     // Active takes precedence regardless of dates
     if (season.isActive) {
-        return 'active'
+        return SEASON_STATUS.ACTIVE
     }
 
     // Past: ended before reference date
     if (isPast(season, referenceDate)) {
-        return 'past'
+        return SEASON_STATUS.PAST
     }
 
     // Future: starts after reference date
     if (isFuture(season, referenceDate)) {
-        return 'future'
+        return SEASON_STATUS.FUTURE
     }
 
     // Current: reference date within season dates
-    return 'current'
+    return SEASON_STATUS.CURRENT
 }
 
 /**
- * Sort seasons by active priority: active → future (closest) → current → past (recent)
+ * Sort seasons by active priority: aktiv → kommende (closest) → i gang → afsluttet (recent)
  * @param seasons - Seasons to sort
  * @param referenceDate - Date to compare against (defaults to now)
  * @returns Sorted seasons array (does not mutate input)
@@ -289,12 +288,12 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
         const statusA = getSeasonStatus(a, referenceDate)
         const statusB = getSeasonStatus(b, referenceDate)
 
-        // Priority order: active > future > current > past
+        // Priority order: aktiv > kommende > i gang > afsluttet
         const statusPriority: Record<SeasonStatus, number> = {
-            active: 0,
-            future: 1,
-            current: 2,
-            past: 3
+            [SEASON_STATUS.ACTIVE]: 0,
+            [SEASON_STATUS.FUTURE]: 1,
+            [SEASON_STATUS.CURRENT]: 2,
+            [SEASON_STATUS.PAST]: 3
         }
 
         const priorityDiff = statusPriority[statusA] - statusPriority[statusB]

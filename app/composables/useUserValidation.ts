@@ -2,7 +2,8 @@ import {z} from 'zod'
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
 // Re-export SystemRole type
-export type SystemRole = z.infer<typeof SystemRoleSchema>
+
+
 
 /**
  * Validation schemas and serialization functions for User objects
