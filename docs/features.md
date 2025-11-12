@@ -23,6 +23,37 @@ Solve problems with signing up for meals, and paying for them
   - Set holiday periods (excluded from event generation)
   - Automatic event generation based on season dates
   - Calendar visualization of generated events
+- **Activate seasons** - control which season is visible to users
+  - Visual status indicators show season state (active/future/past)
+  - One-click activation for eligible seasons
+  - Past seasons automatically archived (cannot be reactivated)
+  - Smart sorting: active → future → past
+
+**Season Selector with Status:**
+```
+┌─────────────────────────────────┐
+│ 📅 Forår 2025            🟢 ▼ │  ← Selected (active season)
+│ ─────────────────────────────── │
+│ 📅 Forår 2025            🟢    │  ← ACTIVE - visible to all
+│ 📅 Efterår 2025          🌱    │  ← FUTURE - can activate
+│ 📅 Vinter 2025           🟡    │  ← CURRENT - dates match now
+│ 📦 Efterår 2024          ⚪    │  ← PAST - archived
+└─────────────────────────────────┘
+
+Legend: 🟢 Active | 🌱 Future | 🟡 Current | ⚪ Past
+```
+
+**Actual Interface:**
+
+![Season Selector](screenshots/admin/season-selector-dropdown-status-indicators.png)
+*Season selector showing all seasons with color-coded status indicators*
+
+![Active Season Status](screenshots/admin/season-status-display-active-season.png)
+*Active season alert - shown in VIEW and EDIT modes*
+
+![Future Season Activation](screenshots/admin/season-status-display-future-season.png)
+*Future season with activation button - make it visible to users with one click*
+
 - **Manage cooking teams** with master-detail interface
   - Create multiple teams in batch
   - Edit team names (immediate save on blur)

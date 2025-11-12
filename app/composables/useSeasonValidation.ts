@@ -96,6 +96,11 @@ export const useSeasonValidation = () => {
 
         const baseSeason = {
             ...serialized,
+            // Compute shortName from seasonDates if not provided
+            shortName: serialized.shortName || formatDateRange({
+                start: parseDate(parsedSeasonDates.start),
+                end: parseDate(parsedSeasonDates.end)
+            }, DATE_SETTINGS.SEASON_NAME_MASK),
             cookingDays: deserializeWeekDayMap(serialized.cookingDays),
             holidays: JSON.parse(serialized.holidays).map((holiday: any) => ({
                 start: parseDate(holiday.start),

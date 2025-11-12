@@ -1,23 +1,24 @@
 <!--
 UX MOCKUP: Season Selector with Status Indicators
 
-┌─────────────────────────────┐
-│ ▼ Vælg sæson               │
-│ ───────────────────────────  │
-│ ● Forår 2025               │  ◄─── ACTIVE (solid green circle)
-│ ◌ Efterår 2025              │  ◄─── FUTURE (dashed green circle)
-│ ◌ Forår 2026                │  ◄─── FUTURE (dashed green circle)
-│ ◉ Efterår 2024              │  ◄─── PAST (solid grey circle)
-│ ◉ Forår 2024                │  ◄─── PAST (solid grey circle)
-└─────────────────────────────┘
+┌─────────────────────────────────┐
+│ 📅 Forår 2025            🟢 ▼ │  ◄─── Selected (ACTIVE - green circle)
+│ ─────────────────────────────── │
+│ 📅 Forår 2025            🟢    │  ◄─── ACTIVE (calendar icon, green circle)
+│ 📅 Efterår 2025          🌱    │  ◄─── FUTURE (calendar icon, seedling)
+│ 📅 Efterår 2025          🟡    │  ◄─── CURRENT (calendar icon, yellow circle)
+│ 📦 Efterår 2024          ⚪    │  ◄─── PAST (archive icon, grey circle)
+└─────────────────────────────────┘
 
 Season Status Legend:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-● Forår 2025           🟢 ACTIVE    (solid green circle)
-◌ Efterår 2025         🟢 FUTURE    (dashed green circle)
-◉ Efterår 2024         ⚫ PAST      (solid grey circle)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🟢 ACTIVE    - Synlig for alle brugere (solid green)
+🌱 FUTURE    - Fremtidig sæson (green seedling)
+🟡 CURRENT   - Igangværende men ikke aktiv (yellow)
+⚪ PAST      - Arkiveret sæson (grey/white)
 
-Sorting: Active → Future (by start date) → Past (by start date descending)
+Icons: 📅 Calendar for active/future/current, 📦 Archive for past
+Sorting: Active → Future → Current → Past (by date)
 -->
 
 <script setup lang="ts">

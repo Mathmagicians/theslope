@@ -207,9 +207,9 @@ const handleActivateSeason = async () => {
     </template>
     <template #default>
       <div v-if="showAdminSeason">
-        <!-- Season Status Display -->
+        <!-- Season Status Display - Show in view and edit modes, not create -->
         <SeasonStatusDisplay
-            v-if="selectedSeason && formMode === FORM_MODES.VIEW"
+            v-if="selectedSeason && (formMode === FORM_MODES.VIEW || formMode === FORM_MODES.EDIT)"
             :season="selectedSeason"
             :show-activation-button="true"
             @activate="handleActivateSeason"

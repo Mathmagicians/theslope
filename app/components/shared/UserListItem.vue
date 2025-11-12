@@ -91,7 +91,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 const maxAvatars = computed(() => getIsMd.value ? 5 : 3)
 const avatarSize = computed(() => {
   if (props.size) return props.size
-  if (props.compact) return 'sm'
+  if (props.compact) return getIsMd.value ? 'md' : 'sm'
   return getIsMd.value ? 'lg' : 'md'
 })
 
@@ -114,7 +114,7 @@ const {getUserUrl} = useHeynabo()
               :src="inhabitant.pictureUrl || undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
               icon="i-heroicons-user"
-              :class="ringColor ? `ring-2 ring-${ringColor}` : ''"
+              :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
             />
           </UTooltip>
         </ULink>
@@ -143,12 +143,13 @@ const {getUserUrl} = useHeynabo()
       <UAvatar
         :src="toDisplay.pictureUrl || undefined"
         :alt="`${toDisplay.name} ${toDisplay.lastName}`"
-        size="sm"
+        :size="avatarSize"
         icon="i-heroicons-user"
+        :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
       />
     </ULink>
     <div class="flex items-center gap-1">
-      <span class="text-sm font-medium">{{ formatDisplayName(toDisplay) }}</span>
+      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(toDisplay) }}</span>
       <UBadge v-if="checkProperty(toDisplay)" size="xs" color="blue">
         Barn
       </UBadge>
@@ -166,8 +167,9 @@ const {getUserUrl} = useHeynabo()
         <UAvatar
           :src="toDisplay.pictureUrl || undefined"
           :alt="`${toDisplay.name} ${toDisplay.lastName}`"
-          size="md"
+          :size="avatarSize"
           icon="i-heroicons-user"
+          :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
         />
       </ULink>
       <div class="flex items-center gap-2">

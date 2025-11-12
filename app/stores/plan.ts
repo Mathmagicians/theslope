@@ -122,6 +122,11 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
         }
 
+    const loadActiveSeason = () => {
+        refreshActiveSeasonId()
+        console.info('🗓️ > PLAN_STORE > Refreshing active season')
+    }
+
         const loadSeasonByShortName = (shortName: string) => {
             const season = seasons.value.find(s => s.shortName === shortName)
             if (season) {
@@ -231,7 +236,8 @@ export const usePlanStore = defineStore("Plan", () => {
                     body: {seasonId},
                     headers: {'Content-Type': 'application/json'}
                 })
-                // Refresh seasons list to update active status indicators
+                // Refresh
+                await loadActiveSeason()
                 await loadSeasons()
                 // If the activated season is the selected one, refresh it
                 if (selectedSeasonId.value === seasonId) {

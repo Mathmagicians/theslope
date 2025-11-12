@@ -122,7 +122,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
             // Refresh the selected household to get updated data
             if (selectedHouseholdId.value) {
-                selectedHouseholdId.value = selectedHouseholdId.value // Trigger reactive update
+                await refreshSelectedHousehold()
             }
         } catch (e: any) {
             handleApiError(e, 'updateInhabitantPreferences')

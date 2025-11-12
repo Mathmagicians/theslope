@@ -6,8 +6,8 @@ export default defineEventHandler(async (event): Promise<number | null> => {
 
     try {
         const seasons = await fetchSeasons(d1Client)
-        const activeSeasonId = seasons[0]?.id ?? null
-        // FIXME should be changed to real implementation
+        const activeSeason = seasons.find(season => season.isActive === true)
+        const activeSeasonId = activeSeason?.id ?? null
         console.info(`📆 > SEASON_ACTIVE_ID > Returning active season ID: ${activeSeasonId}`)
         setResponseStatus(event, 200)
         return activeSeasonId

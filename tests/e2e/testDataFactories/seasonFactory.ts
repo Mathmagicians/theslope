@@ -18,6 +18,9 @@ export class SeasonFactory {
     static readonly today = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
     static readonly oneWeekLater = new Date(2025, 0, 7) // Jan 7, 2025 (Tue) - generates exactly 3 events with Mon/Wed/Fri
 
+    // Singleton cache for active season (only one can exist at a time)
+    private static activeSeason: Season | null = null
+
     /**
      * Generate a unique test date to avoid collisions between parallel test runs
      * @returns Date with random year (4025-4124) and random month (0-11)
@@ -88,6 +91,43 @@ export class SeasonFactory {
         return responseBody
     }
 
+    /**
+     * SINGLETON: Create and activate a season (only one active season allowed)
+     * Returns cached instance if already created, otherwise creates and activates new season
+     * @param context BrowserContext for API requests
+     * @param aSeason Partial season data (only used on first call)
+     * @returns Active Season (singleton)
+     */
+    static readonly createActiveSeason = async (
+        context: BrowserContext,
+        aSeason: Partial<Season> = {}
+    ): Promise<Season> => {
+        // Return cached active season if it exists
+        if (this.activeSeason) {
+            console.info('🌞 > SEASON_FACTORY > Returning cached active season:', this.activeSeason.shortName)
+            return this.activeSeason
+        }
+
+        // Create the season (always creates with isActive: false per defaultSeason)
+        const createdSeason = await this.createSeason(context, aSeason)
+
+        // Activate it via the activation endpoint
+        const response = await context.request.post('/api/admin/season/active', {
+            headers: headers,
+            data: { seasonId: createdSeason.id }
+        })
+
+        expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+        const activatedSeason = await response.json()
+        expect(activatedSeason.isActive, 'Season should be active').toBe(true)
+
+        // Cache the active season
+        this.activeSeason = activatedSeason
+        console.info('🌞 > SEASON_FACTORY > Created and cached active season:', activatedSeason.shortName)
+
+        return activatedSeason
+    }
+
     static readonly getAllSeasons = async (
         context: BrowserContext,
         expectedStatus: number = 200
@@ -153,6 +193,11 @@ export class SeasonFactory {
 
         for (const id of seasonIds) {
             try {
+                // Clear singleton cache if deleting the active season
+                if (this.activeSeason && this.activeSeason.id === id) {
+                    console.info('🌞 > SEASON_FACTORY > Clearing cached active season:', this.activeSeason.shortName)
+                    this.activeSeason = null
+                }
                 await this.deleteSeason(context, id)
             } catch (error) {
                 // Ignore 404 errors (season already deleted), log others
