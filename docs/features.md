@@ -132,39 +132,85 @@ Legend: 🟢 Active | 🌱 Future | 🟡 Current | ⚪ Past
 
 #### Weekly Dinner Preferences
 - **Set weekly preferences** for each household member
-  - Choose DINE IN, TAKEAWAY, or NONE for each weekday
-  - Auto-calculated ticket types based on age (Baby, Hungry Baby, Child, Adult)
+  - Choose DINE IN, DINE IN LATE, TAKEAWAY, or NONE for each weekday
+  - Auto-calculated ticket types based on age (Baby, Child, Adult)
   - Toggle between VIEW/EDIT mode with pencil icon
   - Changes save immediately without page reload
+  - **⚡ Power Mode**: Update all family members at once with a single click
 
 **VIEW Mode:**
 - Compact icon badges show current preference for each day
 - Read-only display - click pencil icon to edit
+- Info-highlighted power row at top for whole-family editing
 
 **EDIT Mode:**
-- Button groups for each day with all 3 options visible
+- Button groups for each day with all 4 options visible
 - Click any button to select that preference
 - Active selection highlighted with color
 - Changes save instantly
 
+**Power Mode (⚡):**
+- Edit the entire family's preferences in one go
+- Click the ⚡ icon on the "Alle medlemmer" (All members) row
+- Warning alert shows how many people will be affected
+- Mixed preferences show as default (DINE IN) in the editor
+- Save applies the same preferences to all household members
+- Perfect for setting up a new household or changing family routines
+
 **Interface (ASCII):**
 ```
-┌─ 🏠 Hansen Familie ──────────────────────────────────────────┐
-│ Husstandens ugentlige booking præferencer         [✏️ Edit] │
-├──────────────────────────────────────────────────────────────┤
-│ Billettype │ Navn  │ Man Tir Ons Tor Fre                    │
-├────────────┼───────┼────────────────────────────────────────┤
-│ Voksen     │ Anna  │ 🍽️  🍽️  🍽️  🍽️  🛍️                 │
-│ Voksen     │ Bob   │ 🍽️  🍽️  ⊘   🍽️  🛍️                 │
-│ Barn       │ Clara │ 🍽️  🍽️  🍽️  🍽️  🛍️                 │
-│ Baby       │ David │ ⊘   ⊘   ⊘   ⊘   ⊘                   │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ UCARD                                                                   │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ HEADER: Husstandens ugentlige booking præferencer                   │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ BODY                                                                │ │
+│ │                                                                     │ │
+│ │ UTable - Inhabitants with expandable rows                          │ │
+│ │ ┌───────────────────────────────────────────────────────────────┐  │ │
+│ │ │ [⚡] Powermode! 👥👥👥 Alle medlemmer  🍽️ 🍽️ 🍽️ 🍽️ 🛍️   │  │ │  ← Power mode
+│ │ ├───────────────────────────────────────────────────────────────┤  │ │
+│ │ │ [✏️] Voksen  👤 Anna      🍽️ 🍽️ 🍽️ 🍽️ 🛍️   ← collapsed      │  │ │
+│ │ ├───────────────────────────────────────────────────────────────┤  │ │
+│ │ │ [✏️] Voksen  👤 Bob      🍽️ 🍽️ ❌ 🍽️ 🛍️   ← collapsed      │  │ │
+│ │ ├───────────────────────────────────────────────────────────────┤  │ │
+│ │ │ [✏️] Barn    👤 Clara    🍽️ 🍽️ 🍽️ 🍽️ 🛍️   ← collapsed      │  │ │
+│ │ ├───────────────────────────────────────────────────────────────┤  │ │
+│ │ │ [✏️] Baby    👤 David    ❌ ❌ ❌ ❌ ❌       ← collapsed      │  │ │
+│ │ └───────────────────────────────────────────────────────────────┘  │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+
+EXPANDED (regular member):
+┌───────────────────────────────────────────────────────────────┐
+│ [▼] Voksen  👤 Anna                                          │
+│ ──────────────────────────────────────────────────────────── │
+│  EXPANDED:                                                   │
+│  Mon: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]   ← button groups │
+│  Tue: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                 │
+│  Wed: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                 │
+│  Thu: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                 │
+│  Fri: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                 │
+│  (Active: solid success/warning/primary, Inactive: ghost)    │
+│  (NONE: active=ghost error, inactive=ghost neutral)          │
+└───────────────────────────────────────────────────────────────┘
+
+Legend:
+- ⚡ = Power mode (update all members)
+- ✏️ = Pencil icon (edit single member)
+- ▼ = Chevron down (expanded row - click to collapse)
+- 🍽️🕐🛍️❌ = Compact badges (collapsed VIEW mode)
+- [Button] = Button groups (expanded EDIT mode)
 ```
 
 **Actual Interface:**
 
 ![Weekly Preferences Interface](screenshots/household/household-members-view-mode.png)
-*Screenshot: VIEW mode showing household members with ticket types and weekly preferences. Click the pencil icon to switch to EDIT mode where each day shows a button group with all 3 dining options.*
+*VIEW mode showing household members with ticket types and weekly preferences. The top row (info-highlighted) is the power mode row that lets you update all family members at once. Click the ⚡ icon to edit the entire family, or click the ✏️ pencil icon on individual rows to edit one person at a time.*
+
+![Weekly Preferences Editing](screenshots/household/household-card-preferences-editing.png)
+*EDIT mode for individual household member showing button groups for each weekday. Each day has four options: DINE IN (🍽️), DINE IN LATE (🕐), TAKEAWAY (🛍️), or NONE (❌). Active selections are highlighted with solid color, inactive options shown as ghost buttons. Click "Gem" (Save) to persist changes.*
 
 #### Meal Booking (Coming Soon)
 - Buy meal tickets (monthly view of household members and all dinner events)

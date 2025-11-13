@@ -183,26 +183,35 @@ export class SeasonFactory {
 
     /**
      * Cleanup multiple seasons by ID (for test afterAll hooks)
+     * Automatically includes singleton active season if it exists
      * Gracefully handles 404 errors for already-deleted seasons
      */
     static readonly cleanupSeasons = async (
         context: BrowserContext,
         seasonIds: number[]
     ): Promise<void> => {
-        if (seasonIds.length === 0) return
+        // Add active season to cleanup list if it exists
+        const allSeasonIds = this.activeSeason?.id
+            ? [...seasonIds, this.activeSeason.id]
+            : seasonIds
 
-        for (const id of seasonIds) {
-            try {
-                // Clear singleton cache if deleting the active season
-                if (this.activeSeason && this.activeSeason.id === id) {
-                    console.info('🌞 > SEASON_FACTORY > Clearing cached active season:', this.activeSeason.shortName)
-                    this.activeSeason = null
+        if (allSeasonIds.length === 0) return
+
+        // Delete all seasons in parallel
+        await Promise.all(
+            allSeasonIds.map(async (id) => {
+                try {
+                    await this.deleteSeason(context, id)
+                } catch (error) {
+                    console.error(`Failed to delete test season with ID ${id}:`, error)
                 }
-                await this.deleteSeason(context, id)
-            } catch (error) {
-                // Ignore 404 errors (season already deleted), log others
-                console.error(`Failed to delete test season with ID ${id}:`, error)
-            }
+            })
+        )
+
+        // Clear singleton cache
+        if (this.activeSeason) {
+            console.info('🌞 > SEASON_FACTORY > Cleared cached active season')
+            this.activeSeason = null
         }
     }
 

@@ -274,6 +274,30 @@ export class HouseholdFactory {
     }
 
     /**
+     * Update inhabitant (for preference updates, etc.)
+     */
+    static readonly updateInhabitant = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        updates: Partial<Inhabitant>,
+        expectedStatus: number = 200
+    ): Promise<any> => {
+        const response = await context.request.post(`${INHABITANT_ENDPOINT}/${inhabitantId}`, {
+            headers: headers,
+            data: updates
+        })
+
+        const status = response.status()
+        expect(status, 'Unexpected status').toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return await response.json()
+        }
+
+        return null
+    }
+
+    /**
      * Delete inhabitant (for 4a test scenarios)
      */
     static readonly deleteInhabitant = async (

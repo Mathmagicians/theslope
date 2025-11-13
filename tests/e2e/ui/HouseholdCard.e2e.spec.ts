@@ -1,0 +1,179 @@
+import {test, expect} from '@playwright/test'
+import {authFiles} from '../config'
+import testHelpers from '../testHelpers'
+import {HouseholdFactory} from '../testDataFactories/householdFactory'
+import {SeasonFactory} from '../testDataFactories/seasonFactory'
+import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+
+const {adminUIFile} = authFiles
+const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {deserializeWeekDayMap} = useHouseholdValidation()
+const {DinnerModeSchema} = useDinnerEventValidation()
+const DinnerMode = DinnerModeSchema.enum
+
+// Helper to create valid WeekDayMap with all 7 days
+const {createDefaultWeekdayMap, createWeekDayMapFromSelection} = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerMode.DINEIN
+})
+
+test.describe('HouseholdCard - Weekday Preferences', () => {
+    let householdId: number
+    let seasonId: number
+    let shortName: string
+    let scroogeId: number
+    const testSalt = temporaryAndRandom()
+
+    test.use({storageState: adminUIFile})
+
+    test.beforeAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        const season = await SeasonFactory.createSeason(context, {
+            isActive: true
+        })
+        seasonId = season.id!
+
+        const household = await HouseholdFactory.createHousehold(context, {
+            name: salt('Duckburg', testSalt)
+        })
+        householdId = household.id
+        shortName = household.shortName
+
+        const today = new Date()
+
+        const scrooge = await HouseholdFactory.createInhabitantForHousehold(
+            context,
+            householdId,
+            'Scrooge McDuck',
+            new Date(today.getFullYear() - 30, today.getMonth(), 1)
+        )
+        scroogeId = scrooge.id
+    })
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        if (householdId) {
+            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
+        }
+        if (seasonId) {
+            await SeasonFactory.cleanupSeasons(context, [seasonId]).catch(() => {})
+        }
+    })
+
+    test('GIVEN inhabitant with preferences WHEN editing via UI THEN changes persist and display correctly', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: Set initial preferences via API - all days DINEIN
+        const initialPreferences = createDefaultWeekdayMap(DinnerMode.DINEIN)
+        await HouseholdFactory.updateInhabitant(context, scroogeId, {
+            dinnerPreferences: initialPreferences
+        })
+
+        // WHEN: Navigate to members page
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+
+        await page.waitForResponse(
+            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+            {timeout: 10000}
+        )
+
+        await pollUntil(
+            async () => await page.locator('[data-test-id="household-members"]').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
+        // THEN: Verify VIEW mode shows initial preferences (all DINEIN badges visible)
+        await pollUntil(
+            async () => {
+                const viewPreferences = page.locator(`[name="inhabitant-${scroogeId}-preferences-view"]`)
+                return await viewPreferences.isVisible()
+            },
+            (isVisible) => isVisible,
+            10
+        )
+
+        // THEN: Verify VIEW mode displays preferences
+        const viewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)
+        await expect(viewPreferences).toBeVisible()
+
+        // WHEN: Click pencil icon to edit
+        const editButton = page.locator('[aria-label="Rediger præferencer"]').first()
+        await editButton.click()
+
+        await pollUntil(
+            async () => {
+                const button = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY"]`)
+                return await button.count() > 0
+            },
+            (count) => count,
+            10
+        )
+
+        // WHEN: Change Monday to TAKEAWAY
+        const mondayTakeawayButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY"]`)
+        await mondayTakeawayButton.click()
+
+        // WHEN: Change Wednesday to DINEINLATE
+        const wednesdayLateButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-onsdag-DINEINLATE"]`)
+        await wednesdayLateButton.click()
+
+        // WHEN: Change Friday to NONE
+        const fridayNoneButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-fredag-NONE"]`)
+        await fridayNoneButton.click()
+
+        // Documentation screenshot showing edit mode with changes
+        await doScreenshot(page, 'household/household-card-preferences-editing', true)
+
+        // WHEN: Save preferences
+        const saveButton = page.locator('button[name="save-preferences"]')
+        await saveButton.click()
+
+        // THEN: Poll until preferences are updated in database
+        const household = await pollUntil(
+            async () => await HouseholdFactory.getHouseholdById(context, householdId),
+            (h) => {
+                const scrooge = h.inhabitants.find((i: any) => i.id === scroogeId)
+                if (!scrooge?.dinnerPreferences) return false
+
+                const preferences = typeof scrooge.dinnerPreferences === 'string'
+                    ? deserializeWeekDayMap(scrooge.dinnerPreferences)
+                    : scrooge.dinnerPreferences
+
+                return preferences.mandag === DinnerMode.TAKEAWAY &&
+                    preferences.onsdag === DinnerMode.DINEINLATE &&
+                    preferences.fredag === DinnerMode.NONE
+            },
+            10,
+            500
+        )
+
+        // THEN: Verify preferences persisted correctly via API
+        const scrooge = household.inhabitants.find((i: any) => i.id === scroogeId)
+        expect(scrooge.dinnerPreferences).toBeDefined()
+
+        const preferences = typeof scrooge.dinnerPreferences === 'string'
+            ? deserializeWeekDayMap(scrooge.dinnerPreferences)
+            : scrooge.dinnerPreferences
+
+        expect(preferences.mandag).toBe(DinnerMode.TAKEAWAY)
+        expect(preferences.tirsdag).toBe(DinnerMode.DINEIN)
+        expect(preferences.onsdag).toBe(DinnerMode.DINEINLATE)
+        expect(preferences.torsdag).toBe(DinnerMode.DINEIN)
+        expect(preferences.fredag).toBe(DinnerMode.NONE)
+
+        // THEN: Verify UI collapsed back to VIEW mode
+        await pollUntil(
+            async () => await page.locator('[aria-label="Rediger præferencer"]').first().isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
+        // THEN: Verify VIEW mode shows updated preferences correctly
+        const updatedViewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)
+        await expect(updatedViewPreferences).toBeVisible()
+    })
+})

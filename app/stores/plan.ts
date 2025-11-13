@@ -18,12 +18,12 @@ export const usePlanStore = defineStore("Plan", () => {
         // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
 
         // Fetch active season ID (static endpoint - no reactive URL issues)
-        const {data: activeSeasonId, refresh: refreshActiveSeasonId} = useFetch<number | undefined>(
+        const {data: activeSeasonId, refresh: refreshActiveSeasonId} = useFetch<number | null>(
             '/api/admin/season/activeId',
             {
                 key: 'plan-store-active-season-id',
                 watch: false,
-                default: () => undefined
+                default: () => null
             }
         )
 
@@ -81,6 +81,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const isSelectedSeasonInitialized = computed(() => {
             // When there are no seasons, consider it initialized (nothing to select)
             if (isNoSeasons.value) return true
+            // Otherwise wait for a season to be selected and loaded
             return selectedSeasonStatus.value === 'success' && selectedSeason.value !== null
         })
 
@@ -122,8 +123,8 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
         }
 
-    const loadActiveSeason = () => {
-        refreshActiveSeasonId()
+    const loadActiveSeason = async () => {
+        await refreshActiveSeasonId()
         console.info('🗓️ > PLAN_STORE > Refreshing active season')
     }
 
@@ -347,13 +348,16 @@ export const usePlanStore = defineStore("Plan", () => {
                 loadSeasonByShortName(shortName)
             } else if (activeSeasonId.value) {
                 loadSeason(activeSeasonId.value)
+            } else if (seasons.value.length > 0) {
+                // No active season - select first season as fallback
+                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first season:', seasons.value[0].shortName)
+                loadSeason(seasons.value[0].id)
             }
         }
 
         // AUTO-INITIALIZATION - Watch for seasons to load, then auto-select active season
         watch([isSeasonsInitialized, activeSeasonId], () => {
             if (!isSeasonsInitialized.value) return
-            if (activeSeasonId.value === undefined) return // Wait for activeSeasonId to load
             if (selectedSeasonId.value !== null) return // Already selected
 
             console.info(LOG_CTX, '🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')

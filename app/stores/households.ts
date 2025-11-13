@@ -131,6 +131,45 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
+     * Update all inhabitants' dinner preferences in a household (power mode)
+     * @param householdId - ID of the household
+     * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
+     */
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: any) => {
+        const {handleApiError} = useApiHandler()
+
+        try {
+            // Get the household to access inhabitants
+            const household = households.value.find(h => h.id === householdId)
+            if (!household) {
+                throw new Error(`Household ${householdId} not found`)
+            }
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
+
+            // Update all inhabitants in parallel
+            await Promise.all(
+                household.inhabitants.map(inhabitant =>
+                    $fetch(`/api/admin/household/inhabitants/${inhabitant.id}`, {
+                        method: 'POST',
+                        body: { dinnerPreferences: preferences }
+                    })
+                )
+            )
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated all ${household.inhabitants.length} inhabitants`)
+
+            // Refresh the selected household once after all updates
+            if (selectedHouseholdId.value === householdId) {
+                await refreshSelectedHousehold()
+            }
+        } catch (e: any) {
+            handleApiError(e, 'updateAllInhabitantPreferences')
+            throw e
+        }
+    }
+
+    /**
      * Initialize store - load households and optionally select one by shortName
      * If no shortName provided, keeps current selection or falls back to user's household
      * @param shortName - Optional shortName to load specific household
@@ -178,7 +217,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         loadHousehold,
         refreshSelectedHousehold,
         initHouseholdsStore,
-        updateInhabitantPreferences
+        updateInhabitantPreferences,
+        updateAllInhabitantPreferences
     }
 })
 

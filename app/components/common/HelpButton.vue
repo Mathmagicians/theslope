@@ -9,9 +9,17 @@ const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
   if (pathSegments.length === 0) return null
 
-  // Traverse HELP_TEXTS using path segments
+  // Get all param values to identify dynamic segments
+  const paramValues = Object.values(route.params).flat()
+
+  // Traverse HELP_TEXTS using path segments, skipping dynamic params
   let current: any = HELP_TEXTS
   for (const segment of pathSegments) {
+    // Skip dynamic param values (e.g., shortname like 'abc-123')
+    if (paramValues.includes(segment) && !current[segment]) {
+      continue
+    }
+
     if (current[segment]) {
       current = current[segment]
     } else {

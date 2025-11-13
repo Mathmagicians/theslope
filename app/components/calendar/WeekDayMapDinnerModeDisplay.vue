@@ -176,7 +176,7 @@ const visibleDays = computed(() => {
 
 <template>
   <!-- VIEW MODE: Horizontal compact display with badges - filtered weekdays only -->
-<UFieldGroup v-if="formMode === FORM_MODES.VIEW" :size="componentSize" orientation="horizontal" :class="WEEKDAY_FIELD_GROUP_CLASSES">
+<UFieldGroup v-if="formMode === FORM_MODES.VIEW" :name="name" :data-testid="name" :size="componentSize" orientation="horizontal" :class="WEEKDAY_FIELD_GROUP_CLASSES">
     <div
       v-for="day in visibleDays"
       :key="day"

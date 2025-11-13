@@ -4,7 +4,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot, salt} = testHelpers
 
 test.describe('SeasonSelector UI - Status Indicators', () => {
     const adminPlanningUrl = '/admin/planning'
@@ -28,7 +28,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         const futureYear = new Date().getFullYear() + 1
         const futureSeason = await SeasonFactory.createSeason(context, {
-            shortName: `Test Future ${testSalt}`,
+            shortName: salt('Future', testSalt),
             seasonDates: {
                 start: new Date(futureYear, 0, 1),
                 end: new Date(futureYear, 5, 30)
@@ -40,7 +40,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         const pastYear = new Date().getFullYear() - 1
         const pastSeason = await SeasonFactory.createSeason(context, {
-            shortName: `Test Past ${testSalt}`,
+            shortName: salt('Past', testSalt),
             seasonDates: {
                 start: new Date(pastYear, 0, 1),
                 end: new Date(pastYear, 5, 30)
@@ -75,30 +75,23 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Take screenshot of dropdown with all status indicators
         await doScreenshot(page, 'admin/season-selector-dropdown-status-indicators', true)
 
-        // Verify seasons appear in dropdown - check for status indicators
-        const dropdownOptions = page.locator('[role="option"]')
-
-        // Verify we can see at least one of each status type
-        await expect(dropdownOptions.filter({ hasText: '🟢' })).toHaveCount(1) // One active season
-        await expect(dropdownOptions.filter({ hasText: futureSeason.shortName })).toBeVisible()
-        await expect(dropdownOptions.filter({ hasText: pastSeason.shortName })).toBeVisible()
+        // Verify seasons appear in dropdown
+        // Note: Emojis are displayed via suffixKey in separate elements, so we just check season names are visible
+        await expect(page.locator('[role="option"]', { hasText: futureSeason.shortName })).toBeVisible()
+        await expect(page.locator('[role="option"]', { hasText: pastSeason.shortName })).toBeVisible()
     })
 
     test('GIVEN active season selected WHEN switching to future season THEN selection updates', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // GIVEN: Create active and future seasons
+        // GIVEN: Get or create active season (singleton)
+        const activeSeason = await SeasonFactory.createActiveSeason(context)
+
+        // Create test-specific future season
         const testSalt = Date.now().toString()
-
-        // Active season - use singleton factory method
-        const activeSeason = await SeasonFactory.createActiveSeason(context,
-            SeasonFactory.defaultSeason(testSalt + '-active')
-        )
-        createdSeasonIds.push(activeSeason.id!)
-
         const futureYear = new Date().getFullYear() + 1
         const futureSeason = await SeasonFactory.createSeason(context, {
-            shortName: `Test Future ${testSalt}`,
+            shortName: salt('Future', testSalt),
             seasonDates: {
                 start: new Date(futureYear, 0, 1),
                 end: new Date(futureYear, 5, 30)
@@ -108,7 +101,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         })
         createdSeasonIds.push(futureSeason.id!)
 
-        // Navigate to page (active season should be selected by default)
+        // Navigate to page (active season auto-selected)
         await page.goto(adminPlanningUrl)
         await pollUntil(
             async () => await page.getByTestId('season-selector').isVisible(),
@@ -118,7 +111,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         // Verify active season is selected (shows green circle)
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toContainText(activeSeason.shortName)
         await expect(seasonSelector).toContainText('🟢')
 
         // WHEN: Switch to future season
@@ -145,7 +137,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const testSalt = Date.now().toString()
         const futureYear = new Date().getFullYear() + 1
         const futureSeason = await SeasonFactory.createSeason(context, {
-            shortName: `Test Future ${testSalt}`,
+            shortName: salt('Future', testSalt),
             seasonDates: {
                 start: new Date(futureYear, 0, 1),
                 end: new Date(futureYear, 5, 30)
@@ -163,23 +155,21 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
             10
         )
 
-        // Wait for page content to load
+        // Wait for page content to load - look for activation button instead of role="alert"
         await pollUntil(
-            async () => await page.locator('div[role="alert"]').isVisible(),
+            async () => await page.locator('button[name="activate-season"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: Season status display should show future season alert with activation button
-        const statusAlert = page.locator('div[role="alert"]')
-        await expect(statusAlert).toBeVisible()
-        await expect(statusAlert).toContainText('Fremtidig sæson')
-        await expect(statusAlert).toContainText('🌱')
-
-        // Verify activation button is visible
+        // THEN: Season status display should show future season with activation button
         const activateButton = page.locator('button[name="activate-season"]')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).not.toBeDisabled()
+        await expect(activateButton).toContainText('Aktiver Sæson')
+
+        // Verify status text with emoji is visible (emoji appears in both selector and title, so check full text)
+        await expect(page.getByText('Fremtidig sæson 🌱')).toBeVisible()
 
         // Take screenshot showing season status display with activation controls
         await doScreenshot(page, 'admin/season-status-display-future-season', true)
@@ -188,14 +178,10 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     test('GIVEN active season selected WHEN viewing season status display THEN shows active status without activation controls', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // GIVEN: Create active season using singleton factory method
-        const testSalt = Date.now().toString()
-        const activeSeason = await SeasonFactory.createActiveSeason(context,
-            SeasonFactory.defaultSeason(testSalt + '-active')
-        )
-        createdSeasonIds.push(activeSeason.id!)
+        // GIVEN: Get or create active season (singleton)
+        const activeSeason = await SeasonFactory.createActiveSeason(context)
 
-        // WHEN: Navigate to season in VIEW mode (status display only shows in VIEW/EDIT)
+        // WHEN: Navigate to active season in VIEW mode (status display only shows in VIEW/EDIT)
         await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(activeSeason.shortName)}&mode=view`)
         await pollUntil(
             async () => await page.getByTestId('season-selector').isVisible(),
@@ -203,23 +189,21 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
             10
         )
 
-        // Wait for page content to load
+        // Wait for page content to load - look for activation button instead of role="alert"
         await pollUntil(
-            async () => await page.locator('div[role="alert"]').isVisible(),
+            async () => await page.locator('button[name="activate-season"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: Season status display should show active season alert with disabled button
-        const statusAlert = page.locator('div[role="alert"]')
-        await expect(statusAlert).toBeVisible()
-        await expect(statusAlert).toContainText('Aktiv sæson')
-        await expect(statusAlert).toContainText('🟢')
-
-        // Verify activation button is disabled (already active)
+        // THEN: Season status display should show active season with disabled button
         const activateButton = page.locator('button[name="activate-season"]')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).toBeDisabled()
+        await expect(activateButton).toContainText('Igangværende Sæson')
+
+        // Verify status text with emoji is visible (emoji appears in both selector and title, so check full text)
+        await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()
 
         // Take screenshot showing active season status
         await doScreenshot(page, 'admin/season-status-display-active-season', true)

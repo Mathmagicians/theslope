@@ -22,7 +22,7 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
         inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({householdId: true, id: true}).parse)
     } catch (error) {
         const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
-        console.error(`👩‍🏠 > INHABITANT > [POST] ${h3e.statusMessage}`, error)
+        console.warn(`👩‍🏠 > INHABITANT > [POST] ${h3e.statusMessage}`, error)
         throw h3e
     }
 

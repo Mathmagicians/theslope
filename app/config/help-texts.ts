@@ -32,5 +32,27 @@ export const HELP_TEXTS = {
             title: 'Indstillinger',
             content: 'Systemindstillinger for fællesspisningen. Administrer globale præferencer og konfigurationer.'
         }
+    },
+    household: {
+        members: {
+            title: 'Medlemmer',
+            content: '⚡ Power mode opdaterer alle medlemmer samtidigt • ✏️ Klik på blyanten for at redigere enkeltpersoner • ▼ Udvid rækken for at se valgmuligheder • Ændringer gemmes når du trykker på GEM, og påvirker fremtidige bookinger'
+        },
+        bookings: {
+            title: 'Bookinger',
+            content: 'Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer.'
+        },
+        allergies: {
+            title: 'Allergier',
+            content: 'Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer.'
+        },
+        settings: {
+            title: 'Indstillinger',
+            content: 'Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer.'
+        },
+        economy: {
+            title: 'Økonomi',
+            content: 'Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer.'
+        }
     }
 } as const
