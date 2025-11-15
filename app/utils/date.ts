@@ -152,12 +152,15 @@ export function translateToDanish(day: string): string {
 }
 
 /**
- * Format Danish weekday to compact 3-letter form
+ * Format Danish weekday to compact form
  * @param day - Full Danish weekday name (e.g., 'mandag')
- * @returns First 3 letters capitalized (e.g., 'Man')
+ * @param ultraCompact - If true, return 1 letter (e.g., 'M'); if false, return 3 letters (e.g., 'Man')
+ * @returns Capitalized weekday abbreviation
  */
-export function formatWeekdayCompact(day: WeekDay): string {
-    return day.substring(0, 3)
+export function formatWeekdayCompact(day: WeekDay, ultraCompact: boolean = false): string {
+    const length = ultraCompact ? 1 : 3
+    const abbreviated = day.substring(0, length)
+    return abbreviated.charAt(0).toUpperCase() + abbreviated.slice(1)
 }
 
 /**

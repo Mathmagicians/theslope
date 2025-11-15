@@ -64,7 +64,7 @@ const {
   getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {BG, TEXT, BORDER, TYPOGRAPHY} = useColorSystem()
+const {BG, TEXT, BORDER, TYPOGRAPHY} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])

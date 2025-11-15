@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type {AllergyType} from '~/composables/useAllergyValidation'
 
+// Design system
+const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+
 // PROPS
 const props = defineProps<{
   allergyType: AllergyType
@@ -47,6 +50,20 @@ const handleCancel = () => {
 // COMPUTED
 const inhabitantCount = computed(() => props.allergyType.inhabitants?.length || 0)
 const showNewBadge = computed(() => isNew(props.allergyType.createdAt || ''))
+
+// Funny empty state messages (rotates based on allergy ID for consistency)
+const emptyStateMessages = [
+  { emoji: '🤷', text: 'Ingen beboere har denne allergi... endnu' },
+  { emoji: '✨', text: 'Kan spises af alle - så er køkkenlivet lidt lettere!' },
+  { emoji: '🎉', text: 'Hurra! Ingen allergiske reaktioner her' },
+  { emoji: '👍', text: 'Alle has sagt god for denne ingrediens' },
+  { emoji: '😌', text: 'Ingen bekymringer med denne ingrediens' }
+]
+const emptyStateMessage = computed(() => {
+  const id = props.allergyType.id || 0
+  const index = id % emptyStateMessages.length
+  return emptyStateMessages[index]
+})
 </script>
 
 <template>
@@ -183,8 +200,19 @@ const showNewBadge = computed(() => isNew(props.allergyType.createdAt || ''))
     </div>
 
     <!-- Empty State -->
-    <div v-else class="text-center py-6 text-sm text-gray-500">
-      Ingen beboere har denne allergi endnu
-    </div>
+    <UAlert
+      v-else
+      variant="soft"
+      :color="COLOR.success"
+      :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+      :ui="COMPONENTS.emptyStateAlert"
+    >
+      <template #title>
+        {{ emptyStateMessage.text }}
+      </template>
+      <template #description>
+        Ingen beboere har denne allergi
+      </template>
+    </UAlert>
   </div>
 </template>

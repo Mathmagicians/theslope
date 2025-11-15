@@ -6,7 +6,7 @@ const getIsMd = computed(():boolean =>  isMd?.value ?? false)
 const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
 
 // Use design system for consistent styling
-const { LAYOUTS, TYPOGRAPHY } = useColorSystem()
+const { LAYOUTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 </script>
 
 <template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const words = ['natur', 'fællesskab', 'bæredygtighed', 'nationalpark', 'fællesspisning', 'fredagsbar', 'hjemmekoncerter', 'pool', 'byttehylde', 'lånebiler', 'hugelbede', 'børneleg', 'bålplads','solnedgange','bier']
 
-const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
+const { BACKGROUNDS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 </script>
 
 <template>

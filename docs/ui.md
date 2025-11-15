@@ -7,7 +7,7 @@
 We try to a large extent to use the built-in components from Nuxt UI 3, and extend them with our own styles in [app/assets/main.css](../app/assets/main.css).
 The only extension this far is custom colors.
 
-## Color System
+## TheSlope Design System
 
 TheSlope uses a custom color palette inspired by Pantone Color of the Year 2025 and deliciousness themes. Colors are defined in three layers:
 
@@ -46,13 +46,13 @@ TheSlope uses a custom color palette inspired by Pantone Color of the Year 2025 
 | <span class="color-swatch" style="background-color: #f59e0b;"></span> | **Amber** | `#f59e0b` | `amber-500` (override) | `warning` | Semantic | TAKEAWAY mode, warnings |
 | <span class="color-swatch" style="background-color: #6b7280;"></span> | **Gray** | `#6b7280` | Tailwind default `gray-500` | `neutral` | Semantic | Borders, disabled states |
 
-### Usage in Components - Color System (`useColorSystem`)
+### Usage in Components - TheSlope Design System (`useTheSlopeDesignSystem`)
 
-We provide a centralized design system in `app/composables/useColorSystem.ts` for consistent color, typography, layout, and sizing usage.
+We provide a centralized design system in `app/composables/useTheSlopeDesignSystem.ts` for consistent color, typography, layout, and sizing usage.
 
 **Import the design system:**
 ```ts
-const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useColorSystem()
+const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 ```
 
 **1. For NuxtUI component colors:**

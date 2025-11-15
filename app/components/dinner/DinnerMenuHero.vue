@@ -35,7 +35,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { BACKGROUNDS, TYPOGRAPHY, SIZES } = useColorSystem()
+const { BACKGROUNDS, TYPOGRAPHY, SIZES } = useTheSlopeDesignSystem()
 </script>
 
 <template>

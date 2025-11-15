@@ -31,6 +31,9 @@ Multiselect mode shows statistics instead of single allergy detail.
 import type {AllergyType, AllergyTypeCreate, AllergyTypeUpdate} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
+// Design system
+const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+
 // STORE
 const store = useAllergiesStore()
 const {
@@ -293,6 +296,13 @@ const columns = computed(() => {
 
   return baseColumns
 })
+
+// Funny empty state message for allergy catalog
+const catalogEmptyState = {
+  emoji: '🎉',
+  text: 'Kataloget er tomt - men,  kan alle mon spise alt ?',
+  description: 'Tilføj allergener for at komme i gang'
+}
 </script>
 
 <template>
@@ -435,12 +445,19 @@ const columns = computed(() => {
 
             <!-- Empty state -->
             <template #empty-state>
-              <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-clipboard-document-list" class="w-8 h-8 text-gray-400"/>
-                <p class="text-sm text-gray-500">
-                  Ingen alergener i kataloget endnu
-                </p>
-              </div>
+              <UAlert
+                variant="soft"
+                :color="COLOR.success"
+                :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
+                :ui="COMPONENTS.emptyStateAlert"
+              >
+                <template #title>
+                  {{ catalogEmptyState.text }}
+                </template>
+                <template #description>
+                  {{ catalogEmptyState.description }}
+                </template>
+              </UAlert>
             </template>
           </UTable>
         </div>
@@ -591,21 +608,31 @@ const columns = computed(() => {
         <Loader v-if="isAllergyTypesLoading" text="Indlæser allergier..."/>
 
         <!-- Empty state -->
-        <div v-else-if="isNoAllergyTypes" class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-clipboard-document-list" class="w-8 h-8 text-gray-400"/>
-          <p class="text-sm text-gray-500 text-center">
-            Ingen allergier i kataloget endnu. Tilføj en allergi for at komme i gang.
-          </p>
-          <UButton
+        <UAlert
+          v-else-if="isNoAllergyTypes"
+          variant="soft"
+          :color="COLOR.success"
+          :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
+          :ui="COMPONENTS.emptyStateAlert"
+        >
+          <template #title>
+            {{ catalogEmptyState.text }}
+          </template>
+          <template #description>
+            {{ catalogEmptyState.description }}
+          </template>
+          <template #actions>
+            <UButton
               v-if="formMode === FORM_MODES.VIEW"
               icon="i-heroicons-plus-circle"
-              color="primary"
+              :color="COLOR.primary"
               @click="startCreate"
               name="create-first-allergy-type"
-          >
-            Tilføj allergi
-          </UButton>
-        </div>
+            >
+              Tilføj allergi
+            </UButton>
+          </template>
+        </UAlert>
 
         <!-- Cards -->
         <div v-else class="space-y-3">

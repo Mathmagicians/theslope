@@ -19,6 +19,9 @@ import type { TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useHouseholdValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
+// Design system
+const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+
 type DisplayMode = 'monitor' | 'compact' | 'regular' | 'edit'
 
 interface TeamMember {
@@ -29,8 +32,8 @@ interface TeamMember {
 
 interface Props {
   teamId?: number          // Database ID (optional for create mode)
-  teamNumber?: number      // Logical number 1..N in season (optional for empty state)
-  teamName?: string        // Team name (optional for empty state)
+  teamNumber: number       // Logical number 1..N in season (required)
+  teamName: string         // Team name (required)
   seasonId?: number       // Required for EDIT mode (inhabitant selector)
   assignments?: TeamMember[]
   affinity?: WeekDayMap | null  // Team's weekday preferences
@@ -44,8 +47,6 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  teamNumber: undefined,
-  teamName: undefined,
   mode: 'regular',
   assignments: () => [],
   affinity: null,
@@ -77,7 +78,6 @@ watch(() => props.teamName, (newName) => {
 // Team color rotation based on teamNumber (1..N)
 const { getTeamColor } = useCookingTeam()
 const teamColor = computed(() => {
-  if (props.teamNumber === undefined) return 'neutral'
   return getTeamColor(props.teamNumber - 1) // teamNumber is 1-based, getTeamColor expects 0-based
 })
 
@@ -135,6 +135,25 @@ const handleDelete = () => {
 
 const isEditable = computed(() => props.mode === 'edit')
 
+// Empty state check (same condition used in multiple modes)
+const hasNoMembers = computed(() => props.assignments.length === 0)
+
+// Cooking days count (number of dinner events assigned to this team)
+const cookingDaysCount = computed(() => props.dinnerEvents.length)
+
+// Funny empty state messages (rotates based on team number for consistency)
+const emptyStateMessages = [
+  { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
+  { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
+  { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
+  { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
+  { emoji: '🏃‍♀️🏃‍♂️', text: 'Køkkenholdet er løbet ud at lege' }
+]
+const emptyStateMessage = computed(() => {
+  const index = (props.teamNumber - 1) % emptyStateMessages.length
+  return emptyStateMessages[index]
+})
+
 // Ref to InhabitantSelector for refresh
 const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
@@ -145,11 +164,25 @@ defineExpose({
   }
 })
 </script>
-
+chan
 <template>
   <!-- MONITOR MODE: Large display for kitchen monitors -->
   <div v-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
-    <div class="flex flex-col md:flex-row gap-3 md:gap-4">
+    <!-- Team name header (always visible) -->
+    <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
+      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'xl' : 'lg'" class="w-fit">
+        <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '20' : '16'" class="inline" /> {{ teamName }}
+      </UBadge>
+      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+        👥 {{ assignments.length }}
+      </UBadge>
+      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+        📅 {{ cookingDaysCount }}
+      </UBadge>
+    </div>
+
+    <!-- Members display OR empty state -->
+    <div v-if="!hasNoMembers" class="flex flex-col md:flex-row gap-3 md:gap-4">
       <!-- Chef display (if assigned) -->
       <div v-if="roleGroups.CHEF.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
         <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.CHEF }}</span>
@@ -168,32 +201,30 @@ defineExpose({
       <div v-if="teamMembers.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
         <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.COOK }}</span>
         <div class="flex-1">
-          <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
-            <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
-              {{ teamName }}
-            </UBadge>
-            <UserListItem
-              :to-display="teamMembers.map(m => m.inhabitant)"
-              :compact="false"
-              :size="getIsMd ? 'lg' : 'md'"
-              :ring-color="teamColor"
-              label="medlemmer"
-            />
-          </div>
+          <UserListItem
+            :to-display="teamMembers.map(m => m.inhabitant)"
+            :compact="false"
+            :size="getIsMd ? 'lg' : 'md'"
+            :ring-color="teamColor"
+            label="medlemmer"
+          />
         </div>
       </div>
-
-      <!-- No members assigned -->
-      <div v-if="roleGroups.CHEF.length === 0 && teamMembers.length === 0" class="text-center py-6 md:py-12">
-        <div class="text-5xl md:text-6xl mb-3 md:mb-4">🏃‍♀️🏃‍♂️</div>
-        <p class="text-lg md:text-xl font-semibold text-gray-400 dark:text-gray-300">
-          Køkkenholdet er gået ud at lege
-        </p>
-        <p class="text-sm md:text-base text-gray-400 dark:text-gray-400 mt-2">
-          Intet madhold tildelt endnu
-        </p>
-      </div>
     </div>
+    <UAlert
+      v-else
+      variant="soft"
+      :color="COLOR.neutral"
+      :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+      :ui="COMPONENTS.emptyStateAlert"
+    >
+      <template #title>
+        {{ emptyStateMessage.text }}
+      </template>
+      <template #description>
+        Ingen medlemmer på dette køkkenhold
+      </template>
+    </UAlert>
   </div>
 
   <!-- COMPACT MODE: Minimal display for tables -->
@@ -212,7 +243,14 @@ defineExpose({
         variant="soft"
         size="md"
       >
-        {{ assignments.length }} medlem{{ assignments.length !== 1 ? 'mer' : '' }}
+        👥 {{ assignments.length }}
+      </UBadge>
+      <UBadge
+        :color="teamColor"
+        variant="soft"
+        size="md"
+      >
+        📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
 
@@ -281,7 +319,14 @@ defineExpose({
             variant="soft"
             size="md"
           >
-            {{ assignments.length }} medlem{{ assignments.length !== 1 ? 'mer' : '' }}
+            👥 {{ assignments.length }}
+          </UBadge>
+          <UBadge
+            :color="teamColor"
+            variant="soft"
+            size="md"
+          >
+            📅 {{ cookingDaysCount }}
           </UBadge>
         </div>
       </div>
@@ -298,9 +343,16 @@ defineExpose({
     </div>
 
     <!-- VIEW MODE: Team name header -->
-    <div v-else class="flex items-center gap-3 p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
-      <UIcon name="i-heroicons-user-group" class="text-xl" :class="`text-${teamColor}-500`" />
-      <h3 class="text-lg font-semibold">{{ teamName }}</h3>
+    <div v-else class="flex items-center gap-2 flex-wrap p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
+      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+        <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '20' : '16'" class="inline" /> {{ teamName }}
+      </UBadge>
+      <UBadge :color="teamColor" variant="soft" size="md" class="w-fit">
+        👥 {{ assignments.length }}
+      </UBadge>
+      <UBadge :color="teamColor" variant="soft" size="md" class="w-fit">
+        📅 {{ cookingDaysCount }}
+      </UBadge>
     </div>
 
     <!-- EDIT MODE: Two-row layout as per mockup -->
@@ -407,26 +459,39 @@ defineExpose({
     </div>
 
     <!-- REGULAR MODE: Single row layout on desktop -->
-    <div v-else class="flex flex-col md:flex-row gap-4">
-      <div
-        v-for="(members, role) in roleGroups"
-        :key="role"
-        v-show="members.length > 0"
-        class="flex-1"
+    <div v-else>
+      <!-- Members display -->
+      <div v-if="!hasNoMembers" class="flex flex-col md:flex-row gap-4">
+        <div
+          v-for="(members, role) in roleGroups"
+          :key="role"
+          v-show="members.length > 0"
+          class="flex-1"
+        >
+          <UserListItem
+            :to-display="members.map(m => m.inhabitant)"
+            :compact="false"
+            size="md"
+            :ring-color="teamColor"
+            :label="ROLE_LABELS[role]"
+          />
+        </div>
+      </div>
+      <!-- Empty state -->
+      <UAlert
+        v-else
+        variant="soft"
+        :color="COLOR.neutral"
+        :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+        :ui="COMPONENTS.emptyStateAlert"
       >
-        <UserListItem
-          :to-display="members.map(m => m.inhabitant)"
-          :compact="false"
-          size="md"
-          :ring-color="teamColor"
-          :label="ROLE_LABELS[role]"
-        />
-      </div>
-
-      <!-- Show message if no members -->
-      <div v-if="assignments.length === 0" class="text-sm text-gray-500 italic p-3">
-        Madhold uden kokke!
-      </div>
+        <template #title>
+          {{ emptyStateMessage.text }}
+        </template>
+        <template #description>
+          Ingen medlemmer på dette køkkenhold
+        </template>
+      </UAlert>
     </div>
   </div>
 </template>

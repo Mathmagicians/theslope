@@ -50,7 +50,7 @@ import type {DateRange} from '~/types/dateTypes'
 import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, TYPOGRAPHY, BACKGROUNDS, LAYOUTS } = useColorSystem()
+const { COLOR, TYPOGRAPHY, BACKGROUNDS, LAYOUTS, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -77,7 +77,7 @@ const getDefaultDate = (): Date => {
     return nextDinner?.start ?? new Date()
 }
 
-const {value: selectedDate, needsSync, setValue} = useQueryParam<Date>('date', {
+const {value: selectedDate, setValue} = useQueryParam<Date>('date', {
     serialize: formatDate,
     deserialize: (s) => {
         const parsed = parseDate(s)
@@ -90,18 +90,9 @@ const {value: selectedDate, needsSync, setValue} = useQueryParam<Date>('date', {
             return eventDate.toDateString() === date.toDateString()
         })
     },
-    defaultValue: getDefaultDate
-})
-
-// NAVIGATION GUARD: Auto-sync URL when missing date param
-watchPostEffect(() => {
-    if (!isPlanStoreReady.value) return // Wait for store to load
-    if (dinnerEvents.value.length === 0) return // Wait for events to load
-
-    if (needsSync.value) {
-        // URL is missing or has invalid date - sync to next dinner
-        setValue(getDefaultDate())
-    }
+    defaultValue: getDefaultDate,
+    // Auto-sync URL when store is ready and events are loaded
+    syncWhen: () => isPlanStoreReady.value && dinnerEvents.value.length > 0
 })
 
 // Selected dinner event based on URL date
@@ -211,12 +202,29 @@ useHead({
 
           <!-- Cooking Team Display (Monitor Mode) -->
           <CookingTeamCard
-            :team-id="selectedDinnerEvent?.cookingTeam?.id"
-            :team-number="selectedDinnerEvent?.cookingTeam?.id"
-            :team-name="selectedDinnerEvent?.cookingTeam?.name"
+            v-if="selectedDinnerEvent?.cookingTeam"
+            :team-id="selectedDinnerEvent.cookingTeam.id"
+            :team-number="selectedDinnerEvent.cookingTeam.id"
+            :team-name="selectedDinnerEvent.cookingTeam.name"
             :assignments="teamAssignments"
             mode="monitor"
           />
+
+          <!-- No cooking team assigned -->
+          <UAlert
+            v-else
+            variant="soft"
+            :color="COLOR.neutral"
+            :avatar="{ text: '🏃‍♀️🏃‍♂️', size: SIZES.emptyStateAvatar.value }"
+            :ui="COMPONENTS.emptyStateAlert"
+          >
+            <template #title>
+              👥 Køkkenholdet er løbet ud at lege
+            </template>
+            <template #description>
+              Intet madhold tildelt endnu
+            </template>
+          </UAlert>
         </div>
         <KitchenPreparation :orders="orders" />
       </div>

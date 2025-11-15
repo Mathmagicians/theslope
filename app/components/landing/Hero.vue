@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { BACKGROUNDS, TYPOGRAPHY, BG, TEXT } = useColorSystem()
+const { BACKGROUNDS, TYPOGRAPHY, BG, TEXT } = useTheSlopeDesignSystem()
 </script>
 
 <template>

@@ -8,15 +8,42 @@ export interface UseQueryParamOptions<T> {
   defaultValue: T | (() => T)
   preserveOtherParams?: boolean
   replaceHistory?: boolean
+
+  /**
+   * Condition function that must return true before auto-sync occurs.
+   * Use this to wait for required data (e.g., store ready, data loaded).
+   *
+   * @example
+   * syncWhen: () => store.isReady && items.value.length > 0
+   */
+  syncWhen?: () => boolean
 }
 
 /**
- * Generic composable for managing URL query parameters with type safety
+ * Generic composable for managing URL query parameters with type safety and auto-sync
+ *
+ * Auto-sync is ALWAYS enabled - the URL will automatically sync to valid values.
+ * Use `syncWhen` option to control WHEN sync occurs (e.g., wait for data to load).
  *
  * @template T - The value type for the query parameter
  * @param key - Query parameter name (e.g., 'mode', 'season', 'date')
  * @param options - Configuration options
- * @returns Reactive query parameter with two-way binding
+ * @returns Reactive query parameter with automatic URL synchronization
+ *
+ * @example
+ * // Simple auto-sync (no wait condition)
+ * const {value: mode} = useQueryParam('mode', {
+ *   defaultValue: 'view'
+ * })
+ *
+ * @example
+ * // Auto-sync with data dependency
+ * const {value: date} = useQueryParam('date', {
+ *   serialize: formatDate,
+ *   deserialize: parseDate,
+ *   defaultValue: () => new Date(),
+ *   syncWhen: () => store.isReady && events.value.length > 0
+ * })
  */
 export function useQueryParam<T>(
   key: string,
@@ -29,6 +56,7 @@ export function useQueryParam<T>(
   const validate = options.validate ?? (() => true)
   const preserveOtherParams = options.preserveOtherParams ?? true
   const replaceHistory = options.replaceHistory ?? true
+  const syncWhen = options.syncWhen ?? (() => true)
 
   const getDefault = (): T => {
     return typeof options.defaultValue === 'function'
@@ -102,6 +130,14 @@ export function useQueryParam<T>(
     const currentValue = value.value
     const serialized = serialize(currentValue)
     return queryValue !== serialized
+  })
+
+  // AUTO-SYNC: Automatically sync URL when needed and conditions are met
+  watchPostEffect(() => {
+    if (syncWhen() && needsSync.value) {
+      setValue(value.value)
+      console.info(`🔗 > Auto-synced query param '${key}' to:`, value.value)
+    }
   })
 
   return {

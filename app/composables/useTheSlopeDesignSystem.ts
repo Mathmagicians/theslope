@@ -307,6 +307,13 @@ export const COMPONENTS = {
     DINEIN: `${BG.party[700]} ${TEXT.white} border-party-800 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
     DINEINLATE: `${BG.orange[500]} ${TEXT.white} border-orange-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
     RELEASED: `${BG.gray[500]} ${TEXT.white} ${BORDER.gray[600]} border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`
+  },
+
+  // Empty state alert - centered with large text and emoji
+  emptyStateAlert: {
+    root: 'text-center',
+    title: 'text-lg md:text-xl font-semibold',
+    description: 'text-sm md:text-base'
   }
 } as const
 
@@ -344,6 +351,24 @@ export const TICKET_TYPE_COLORS = {
 } as const
 
 /**
+ * ICONS - Standard icon names for common UI elements
+ *
+ * Centralized icon definitions for consistent icon usage across the app.
+ *
+ * @example
+ * ```vue
+ * <UIcon :name="ICONS.team" />
+ * <UIcon :name="ICONS.calendar" />
+ * ```
+ */
+export const ICONS = {
+  team: 'i-fluent-mdl2-team-favorite',
+  calendar: 'i-heroicons-calendar',
+  user: 'i-heroicons-user',
+  users: 'i-heroicons-users'
+} as const
+
+/**
  * SIZES - Responsive size patterns for NuxtUI components
  *
  * Automatically adapts based on `isMd` breakpoint from layout.
@@ -359,22 +384,59 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   // Large responsive: lg on mobile, xl on desktop
   large: computed(() => isMd.value ? 'xl' : 'lg'),
 
+  // Empty state avatar: 2xl on mobile, 3xl on desktop
+  emptyStateAvatar: computed(() => isMd.value ? '3xl' : '2xl'),
+
   // Static sizes (for when you need non-responsive)
   xs: 'xs' as const,
   sm: 'sm' as const,
   md: 'md' as const,
   lg: 'lg' as const,
-  xl: 'xl' as const
+  xl: 'xl' as const,
+  '2xl': '2xl' as const,
+  '3xl': '3xl' as const
 })
 
 /**
- * useColorSystem Composable
+ * createWeekdayDisplay - Weekday label formatting with responsive sizing
  *
- * Provides access to the entire design system
+ * Centralizes weekday display logic (3 letters desktop, 1 letter mobile).
+ * Based on HouseholdCard pattern (lines 181-185, 271-283).
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Weekday display helpers
+ */
+const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
+  /**
+   * Get formatted weekday label (responsive)
+   * Desktop: 3 letters (e.g., "Man")
+   * Mobile: 1 letter (e.g., "M")
+   */
+  getLabel: (day: WeekDay) => formatWeekdayCompact(day, !isMd.value),
+
+  /**
+   * Badge props for weekday title headers (table columns)
+   * Matches HouseholdCard preferences-header styling
+   */
+  titleBadgeProps: {
+    color: 'neutral' as const,
+    variant: 'outline' as const,
+    ui: { rounded: 'rounded-none md:rounded-md' }
+  }
+})
+
+/**
+ * useTheSlopeDesignSystem Composable
+ *
+ * TheSlope's centralized design system - single source of truth for colors, typography,
+ * layouts, backgrounds, components, and responsive sizing patterns.
+ *
+ * Provides curated design decisions based on Pantone Color of the Year 2025 (Mocha Mousse)
+ * and TheSlope's vibrant color palette.
  *
  * @example
  * ```ts
- * const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useColorSystem()
+ * const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES, WEEKDAY } = useTheSlopeDesignSystem()
  *
  * // Use semantic patterns
  * <footer :class="LAYOUTS.footer">
@@ -383,9 +445,14 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
  *
  * // Use responsive sizes
  * <UButton :size="SIZES.standard">Click me</UButton>
+ *
+ * // Use weekday labels
+ * <UBadge v-bind="WEEKDAY.titleBadgeProps">
+ *   {{ WEEKDAY.getLabel('mandag') }}
+ * </UBadge>
  * ```
  */
-export const useColorSystem = () => {
+export const useTheSlopeDesignSystem = () => {
   // Inject responsive breakpoint from layout
   const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
@@ -400,8 +467,11 @@ export const useColorSystem = () => {
     BACKGROUNDS,
     COMPONENTS,
 
-    // Responsive sizes (NEW!)
+    // Responsive sizes
     SIZES: createResponsiveSizes(isMd),
+
+    // Weekday display helpers
+    WEEKDAY: createWeekdayDisplay(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,
@@ -412,3 +482,6 @@ export const useColorSystem = () => {
     getKitchenPanelClasses
   }
 }
+
+// Backwards compatibility alias (deprecated - use useTheSlopeDesignSystem)
+export const useColorSystem = useTheSlopeDesignSystem
