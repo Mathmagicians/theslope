@@ -1,7 +1,7 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNow, differenceInHours, differenceInDays
+    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, differenceInMinutes, intervalToDuration
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
@@ -12,6 +12,7 @@ export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
         locale: da,
+        localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
         SEASON_NAME_MASK: 'MM/yy',
         timezone: 'Europe/Copenhagen'
@@ -246,4 +247,53 @@ export function calculateAge(birthDate: Date | string | null): number | null {
     const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
     if (!isValid(birth)) return null
     return calculateAgeOnDate(birth, new Date())
+}
+
+/**
+ * Format date with Danish 3-letter weekday abbreviation
+ * @param date - Date to format
+ * @returns Formatted string like "Man 15/11"
+ */
+export function formatDanishWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEE dd/MM')
+}
+
+/**
+ * Calculate countdown from current time to target time
+ * Shows days when >24h away, hours and minutes when <24h away
+ * @param targetDate - Target date/time (e.g., dinner time)
+ * @param currentDate - Current date/time (defaults to now)
+ * @returns Countdown object with hours, minutes, and formatted Danish string
+ */
+export function calculateCountdown(
+    targetDate: Date,
+    currentDate: Date = new Date()
+): { hours: number; minutes: number; formatted: string } {
+    if (targetDate <= currentDate) {
+        return { hours: 0, minutes: 0, formatted: 'NU' }
+    }
+
+    const totalHours = differenceInHours(targetDate, currentDate)
+
+    // More than 24 hours away - show days
+    if (totalHours >= 24) {
+        const daysText = formatDistanceToNowStrict(targetDate, {
+            locale: DATE_SETTINGS.locale,
+            unit: 'day'
+        })
+        const formatted = daysText.toUpperCase()
+        return { hours: totalHours, minutes: 0, formatted }
+    }
+
+    // Less than 24 hours - show hours and minutes
+    const duration = intervalToDuration({
+        start: currentDate,
+        end: targetDate
+    })
+
+    const hours = duration.hours ?? 0
+    const minutes = duration.minutes ?? 0
+    const formatted = hours > 0 ? `${hours}T ${minutes}M` : `${minutes}M`
+
+    return { hours, minutes, formatted }
 }

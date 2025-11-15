@@ -56,8 +56,7 @@
 | `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateSeason() → Season |
 | `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchSeasons() → Season[] |
 | `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createSeason() → Season |
-| `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchCurrentSeason() → Season |
-| `/api/admin/season/activeId.get.ts` | ✅ | ✅ | ✅ | ✅ | Returns active season ID |
+| `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | Returns active season ID (number \| null) |
 | `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignTeamsResponse |
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignAffinitiesResponse |
 | **Admin - Allergy Types** | | | | | **✅ FULLY COMPLIANT** |

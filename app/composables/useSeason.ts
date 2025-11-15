@@ -5,9 +5,10 @@ import {
     formatDateRange,
     DATE_SETTINGS,
     selectWeekNumbersFromListThatFitInsideDateRange, getEachDayOfIntervalWithSelectedWeekdays, eachDayOfManyIntervals,
-    isCalendarDateInDateList
+    isCalendarDateInDateList,
+    toDate
 } from '~/utils/date'
-import {isWithinInterval} from "date-fns"
+import {isWithinInterval, isSameDay} from "date-fns"
 import {useSeasonValidation, type Season, SEASON_STATUS} from './useSeasonValidation'
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {DinnerEventCreate} from './useDinnerEventValidation'
@@ -23,7 +24,10 @@ import {
     canSeasonBeActive as canSeasonBeActiveUtil,
     getSeasonStatus as getSeasonStatusUtil,
     sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason
+    selectMostAppropriateActiveSeason,
+    getNextDinnerDate as getNextDinnerDateUtil,
+    getDinnerTimeRange,
+    splitDinnerEvents
 } from "~/utils/season"
 
 /**
@@ -192,6 +196,28 @@ export const useSeason = () => {
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
+    /**
+     * Get the default dinner start time (hour) from app configuration
+     * @returns Hour (0-23) for dinner start time
+     */
+    const getDefaultDinnerStartTime = (): number => theslope.defaultDinnerStartTime
+
+    /**
+     * Check if a calendar day is the next upcoming dinner event
+     * @param day - Calendar day to check
+     * @param nextDinner - Next dinner event (or null if none)
+     * @returns True if the day matches the next dinner date
+     */
+    const isNextDinnerDate = (day: any, nextDinner: { date: Date } | null): boolean => {
+        if (!nextDinner) return false
+        const dayAsDate = toDate(day)
+        const nextDinnerDate = new Date(nextDinner.date)
+        return isSameDay(dayAsDate, nextDinnerDate)
+    }
+
+    // Configure getNextDinnerDate with default 60 minute duration
+    const getNextDinnerDate = getNextDinnerDateUtil(60)
+
     return {
         // Validation schemas
         SeasonStatusSchema,
@@ -213,6 +239,11 @@ export const useSeason = () => {
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
+        getDefaultDinnerStartTime,
+        isNextDinnerDate,
+        getDinnerTimeRange,
+        getNextDinnerDate,
+        splitDinnerEvents,
 
         // Active season management - pure functions
         isPast,

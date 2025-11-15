@@ -128,6 +128,20 @@ export class SeasonFactory {
         return activatedSeason
     }
 
+    /**
+     * Clean up the cached active season singleton
+     * Deletes the season from database and clears the cache
+     * @param context BrowserContext for API requests
+     */
+    static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
+        if (this.activeSeason) {
+            console.info('🌞 > SEASON_FACTORY > Cleaning up cached active season:', this.activeSeason.shortName)
+            await this.deleteSeason(context, this.activeSeason.id!)
+            this.activeSeason = null
+            console.info('🌞 > SEASON_FACTORY > Active season cache cleared')
+        }
+    }
+
     static readonly getAllSeasons = async (
         context: BrowserContext,
         expectedStatus: number = 200

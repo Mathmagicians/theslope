@@ -167,7 +167,7 @@ const handleActivate = () => {
         :square="!getIsMd"
       >
         <template v-if="getIsMd">
-          {{ isActivateButtonDisabled ? 'Igangværende Sæson' : 'Aktiver Sæson' }}
+          {{ isActivateButtonDisabled ? 'Fællesspisnings sæson er i gang 🟢' : 'Aktiver Sæson' }}
         </template>
       </UButton>
     </template>

@@ -1,47 +1,20 @@
-import z from 'zod'
-import {fetchCurrentSeason, fetchSeasonForRange} from "~~/server/data/prismaRepository"
-import type {Season} from "~/composables/useSeasonValidation"
-import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 
-const {h3eFromCatch} = eventHandlerHelper
-
-const seasonQuerySchema = z.object({
-    start: z.string().date().optional(),
-    end: z.string().date().optional()
-})
-
-
-// Will return the active season, if query parameter is not provided, or the requested season if query parameter is provided
-export default defineEventHandler(async (event): Promise<Season | null> => {
+export default defineEventHandler(async (event): Promise<number | null> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    console.info("👨‍💻 > SEASON > query received", getQuery(event))
-
-    // Validate query parameters - fail early on invalid data
-    let seasonQuery
     try {
-        seasonQuery = await getValidatedQuery(event, seasonQuerySchema.parse)
+        const activeSeasonId = await fetchActiveSeasonId(d1Client)
+        console.info(`📆 > SEASON > ACTIVE > GET > Returning active season ID: ${activeSeasonId}`)
+        setResponseStatus(event, 200)
+        return activeSeasonId
     } catch (error) {
-        console.error("👨‍💻 > SEASON > Validation error: ", error)
+        console.error('📆 > SEASON > ACTIVE > GET > Error fetching active season ID:', error)
         throw createError({
-            statusCode: 400,
-            message: 'Forkert brugerinput',
+            statusCode: 500,
+            message: 'Failed to fetch active season ID',
             cause: error
         })
-    }
-
-    // Fetch season from database
-    try {
-        const season = seasonQuery && seasonQuery.start && seasonQuery.end
-            ? await fetchSeasonForRange(d1Client, seasonQuery.start, seasonQuery.end)
-            : await fetchCurrentSeason(d1Client)
-        console.info(`👨‍💻 > SEASON > Returning season ${season?.shortName}`)
-        setResponseStatus(event, 200)
-        return season
-    } catch (error) {
-        const h3e = h3eFromCatch("👨‍💻 > SEASON > [GET] Error fetching active season", error)
-        console.error(`👨‍💻 > SEASON > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
     }
 })

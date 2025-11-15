@@ -88,6 +88,36 @@ test.describe('Season API Tests', () => {
             expect(foundSeason.ticketPrices).toEqual(created.ticketPrices)
         })
 
+        test("GET /api/admin/season/[id] (detail) should include dinnerEvents and cookingTeams", async ({browser}) => {
+            // GIVEN: A season with dinner events and cooking teams
+            const context = await validatedBrowserContext(browser)
+            const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, SeasonFactory.defaultSeason(), 2)
+            trackSeason(season.id!)
+
+            // Generate dinner events for the season
+            const dinnerResult = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
+            expect(dinnerResult.eventCount).toBeGreaterThan(0)
+
+            // WHEN: GET detail endpoint for specific season
+            const detailResponse = await context.request.get(`/api/admin/season/${season.id}`)
+            expect(detailResponse.status()).toBe(200)
+
+            const detailSeason = await detailResponse.json()
+
+            // THEN: dinnerEvents should be included (detail endpoint per ADR-009)
+            expect(detailSeason.dinnerEvents).toBeDefined()
+            expect(Array.isArray(detailSeason.dinnerEvents)).toBe(true)
+            expect(detailSeason.dinnerEvents.length).toBe(dinnerResult.eventCount)
+
+            // AND: CookingTeams should be included with assignments
+            expect(detailSeason.CookingTeams).toBeDefined()
+            expect(Array.isArray(detailSeason.CookingTeams)).toBe(true)
+            expect(detailSeason.CookingTeams.length).toBe(2)
+
+            // AND: ticketPrices should be included
+            assertTicketPrices(detailSeason)
+        })
+
 // Test for updating a season
         test("POST should update an existing season", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -553,22 +583,80 @@ test.describe('Season API Tests', () => {
         })
     })
 
+    test.describe('Active Season endpoints', () => {
+
+        test('GET /api/admin/season/active should return active season ID', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Ensure an active season exists (uses singleton pattern - may return cached)
+            const activeSeason = await SeasonFactory.createActiveSeason(context)
+            expect(activeSeason.id).toBeDefined()
+            expect(activeSeason.isActive).toBe(true)
+            // No need to track - cleanupSeasons() automatically includes active season
+
+            // Call GET endpoint to get active season ID
+            const response = await context.request.get('/api/admin/season/active', { headers })
+            expect(response.status()).toBe(200)
+
+            const activeSeasonId = await response.json()
+            expect(typeof activeSeasonId).toBe('number')
+            expect(activeSeasonId).toBe(activeSeason.id)
+
+            // Verify full season via factory getSeason
+            const fullSeason = await SeasonFactory.getSeason(context, activeSeasonId)
+            expect(fullSeason.isActive).toBe(true)
+            expect(fullSeason.id).toBe(activeSeason.id)
+        })
+
+        test('POST /api/admin/season/active should activate a season', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Create a regular non-active season with unique salt
+            const seasonToActivate = await SeasonFactory.createSeason(context,
+                SeasonFactory.defaultSeason()
+            )
+            trackSeason(seasonToActivate.id!)
+            expect(seasonToActivate.isActive).toBe(false)
+
+            // Activate it via POST
+            const response = await context.request.post('/api/admin/season/active', {
+                headers,
+                data: { seasonId: seasonToActivate.id }
+            })
+            expect(response.status()).toBe(200)
+
+            const activatedResponse = await response.json()
+            expect(activatedResponse.id).toBe(seasonToActivate.id)
+            expect(activatedResponse.isActive).toBe(true)
+
+            // Verify via factory getSeason
+            const verifiedSeason = await SeasonFactory.getSeason(context, seasonToActivate.id!)
+            expect(verifiedSeason.isActive).toBe(true)
+
+            // Verify GET endpoint returns this season ID
+            const getResponse = await context.request.get('/api/admin/season/active', { headers })
+            expect(getResponse.status()).toBe(200)
+            const activeSeasonId = await getResponse.json()
+            expect(activeSeasonId).toBe(seasonToActivate.id)
+        })
+
+        test('POST /api/admin/season/active should return 404 for non-existent season', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Try to activate non-existent season
+            const response = await context.request.post('/api/admin/season/active', {
+                headers,
+                data: { seasonId: 9999999 }
+            })
+            expect(response.status()).toBe(404)
+        })
+    })
+
 
     test.afterAll(async ({browser}) => {
-        // Only run cleanup if we created a season
-        if (createdSeasonIds.length > 0) {
-            const context = await validatedBrowserContext(browser)
-            // iterate over list and delete each season
-            for (const id of createdSeasonIds) {
-                try {
-                    const deleted = await SeasonFactory.deleteSeason(context, id)
-                    expect(deleted.id).toBe(id)
-                } catch (error) {
-                    console.error(`Failed to delete test season with ID ${id}:`, error)
-                }
-            }
-
-        }
+        const context = await validatedBrowserContext(browser)
+        // Factory cleanup automatically includes active season singleton
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
 })

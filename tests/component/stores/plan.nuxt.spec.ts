@@ -19,7 +19,7 @@ const seasonIndexEndpoint = vi.fn(() => mockSeasons)
 const seasonByIdEndpoint = vi.fn(() => season1)
 const activeSeasonIdEndpoint = vi.fn(() => season1.id)
 
-registerEndpoint('/api/admin/season/activeId', activeSeasonIdEndpoint)
+registerEndpoint('/api/admin/season/active', activeSeasonIdEndpoint)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)

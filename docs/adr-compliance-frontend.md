@@ -323,50 +323,139 @@ All components and stores work with domain types:
 
 ## Compliance Checklist
 
-Use this checklist when creating/reviewing frontend components:
+Use this checklist when creating/reviewing frontend components.
+
+### Critical Architectural Principles
+
+**Before implementing ANY frontend code, understand these core principles:**
+
+1. **🎨 NuxtUI First** - Use NuxtUI components (UButton, UInput, UCard, USelect) instead of custom HTML. We use the Nuxt ecosystem.
+
+2. **📱 Mobile First** - 90% of users on mobile. Design mobile-first, use `isMd` (injected from layout) for desktop enhancements, use Tailwind `md:` breakpoint for responsive styling.
+
+3. **📡 Stores Own Network** - ALL API calls (`$fetch`) happen in stores. Components/pages NEVER call APIs directly. (ADR-007)
+
+4. **✅ Validation Composables Are Truth** - ALL validation schemas, types, and enums live in `use*Validation.ts` composables. Application code imports from there, NEVER from `~~/prisma/generated/zod` or `@prisma/client`. (ADR-001)
+
+5. **🔄 Three-Layer Architecture** (ADR-001):
+   - **Generated Layer** (`~~/prisma/generated/zod/`) → **Validation Layer** (`use*Validation.ts`) → **Application Layer** (components, stores, pages)
+   - Each layer imports from the previous layer only
+   - Application code gets everything from validation composables
+
+6. **🎯 Domain Types Everywhere** - Work with domain types (Season with Date objects) throughout application code. Serialization happens in repository layer. (ADR-010)
+
+---
 
 ### Components (Application Layer)
+
+**UI & Presentation:**
+- [ ] **CRITICAL:** Use NuxtUI components (UButton, UInput, UCard, USelect, UCheckbox, etc.) instead of hand-coded HTML (Nuxt stack principle)
+- [ ] **CRITICAL:** Mobile-first responsive design - 90% of users on mobile
+- [ ] Inject `isMd` from layout via `inject<Ref<boolean>>('isMd')` for reactive breakpoint detection
+- [ ] Use `md:` breakpoint in Tailwind classes for responsive styling
+- [ ] For NuxtUI component props (colors, variants, size), use `isMd` ref to switch between mobile/desktop values
+- [ ] Use `name` attribute for form elements (E2E test selectors)
+- [ ] Use `data-testid` for complex UI components that may not forward `name` to DOM
+
+**Data & Types:**
+- [ ] **CRITICAL:** NO direct API calls (`$fetch`) in components - ALL network communication goes through stores (ADR-007)
+- [ ] **CRITICAL:** Import types/enums ONLY from validation composables, NEVER from `~~/prisma/generated/zod` or `@prisma/client` (ADR-001)
 - [ ] Use domain types from validation composables (ADR-010)
-- [ ] Import enums ONLY from validation composables, NEVER from `~~/prisma/generated/zod` (ADR-001)
-- [ ] NEVER import from `@prisma/client` for types/enums (ADR-001)
 - [ ] Use `.enum` property for enum values (e.g., `TicketTypeSchema.enum.ADULT`)
-- [ ] Component tests for logic components
+- [ ] NO validation logic in components - ALL validation in validation composables (ADR-001)
+
+**State Management:**
+- [ ] Interact with stores for all server data (read/write)
+- [ ] Own UI state only (formMode, draft, UI flags)
+- [ ] Show reactive loaders based on store's `isReady` flags (ADR-007)
+
+**Testing:**
+- [ ] Component tests for components with logic
 - [ ] E2E tests for user-facing flows
-- [ ] Use `data-testid` for E2E selectors
-- [ ] Use `name` attribute for form elements
+- [ ] Adequate test coverage (see test coverage tables)
 
 ### Pages (Application Layer)
-- [ ] Store initialization is synchronous (ADR-007)
+
+**Initialization & Navigation:**
+- [ ] **CRITICAL:** Store initialization is synchronous - NO `await` on init (ADR-007)
 - [ ] Show reactive loaders based on `isStoreReady` (ADR-007)
-- [ ] Use URL parameters for navigation (ADR-006)
+- [ ] Use URL parameters for navigation state (ADR-006)
+- [ ] Path-based routing for tabs, query params for modes (`?mode=edit`)
+
+**Data & State:**
+- [ ] **CRITICAL:** NO direct API calls - ALL network communication through stores
+- [ ] **CRITICAL:** Import types/enums from validation composables only (ADR-001)
 - [ ] Use `useEntityFormManager` for CRUD forms (ADR-008)
-- [ ] Import enums from validation composables, not generated layer (ADR-001)
-- [ ] E2E test coverage for critical paths
+- [ ] Pages coordinate between stores and components, don't own data
+
+**Testing:**
+- [ ] E2E test coverage for critical user paths
 
 ### Stores (Application Layer)
-- [ ] Prefer `useAsyncData` over `useFetch` (ADR-007)
+
+**Data Fetching:**
+- [ ] **CRITICAL:** Prefer `useAsyncData` over `useFetch` (ADR-007)
+- [ ] **CRITICAL:** ALL API calls happen in stores - NO direct $fetch in components/pages (ADR-007)
 - [ ] Use unique string keys for static endpoints, computed keys for reactive (ADR-007)
-- [ ] Export status-derived computeds (`isLoading`, `isErrored`, `isInitialized`, `isEmpty`) (ADR-007)
-- [ ] Export `isStoreReady` convenience computed (ADR-007)
-- [ ] Expose raw error ref for statusCode access (ADR-007)
-- [ ] Provide `refresh()` actions (ADR-007)
-- [ ] Init methods are synchronous (ADR-007)
 - [ ] Internal watchers for reactive initialization (ADR-007)
-- [ ] Import enums from validation composables, not generated layer (ADR-001)
-- [ ] Component tests for store logic
+
+**State Management:**
+- [ ] Export status-derived computeds: `isLoading`, `isErrored`, `isInitialized`, `isEmpty` (ADR-007)
+- [ ] Export `isStoreReady` convenience computed combining all checks (ADR-007)
+- [ ] Expose raw error ref for statusCode access (ADR-007)
+- [ ] Provide `refresh()` actions wrapping `useAsyncData` refresh (ADR-007)
+- [ ] Init methods are synchronous - NO async/await (ADR-007)
+
+**Types & Validation:**
+- [ ] **CRITICAL:** Import types/enums from validation composables, NEVER from generated layer or @prisma/client (ADR-001)
+- [ ] Work with domain types throughout (ADR-010)
+- [ ] NO validation logic in stores - validation in composables only
+
+**Testing:**
+- [ ] Component tests for store logic (initialization, CRUD actions, computeds)
+- [ ] Mock endpoints using `registerEndpoint` pattern
+- [ ] Use `clearNuxtData()` in `beforeEach()` to prevent test pollution
 
 ### Validation Composables (Validation Layer - `use*Validation.ts`)
-- [ ] Import ONLY from `~~/prisma/generated/zod` for enum schemas (ADR-001)
+
+**Single Source of Truth:**
+- [ ] **CRITICAL:** ALL validation schemas defined here - NEVER in components, stores, or pages (ADR-001)
+- [ ] **CRITICAL:** ALL types exported via `z.infer` - application code imports types from here (ADR-001)
+- [ ] **CRITICAL:** ALL enum schemas re-exported - application code gets enums from here (ADR-001)
+
+**Schema Definition:**
+- [ ] Import enum schemas from `~~/prisma/generated/zod` ONLY (not @prisma/client) (ADR-001)
 - [ ] Re-export enum schemas for application code (ADR-001)
 - [ ] Define all validation schemas using Zod (ADR-001)
 - [ ] Export TypeScript types via `z.infer` (ADR-001)
+
+**Domain Serialization (if needed):**
 - [ ] Define domain types (ADR-010)
-- [ ] Export serialize/deserialize if needed (ADR-010)
-- [ ] Unit tests for validation logic
+- [ ] Define serialized types for database format (ADR-010)
+- [ ] Export serialize/deserialize functions (ADR-010)
+- [ ] Transformation functions stay in validation composable
+
+**Testing:**
+- [ ] Unit tests for all validation schemas
+- [ ] Unit tests for serialize/deserialize functions
+- [ ] Unit tests for edge cases and validation rules
 
 ### Business Logic Composables (`use*.ts`)
-- [ ] Import from validation composables for types/enums (ADR-001)
-- [ ] Unit tests for complex logic
+
+**Types & Validation:**
+- [ ] **CRITICAL:** Import types/enums from validation composables ONLY (ADR-001)
+- [ ] NO validation schemas here - validation in `use*Validation.ts` only
+- [ ] Work with domain types from validation composables (ADR-010)
+
+**Logic & Utilities:**
+- [ ] Complex business logic and calculations
+- [ ] Default value creation
+- [ ] Domain-specific utilities
+- [ ] Functions depending on multiple composables
+
+**Testing:**
+- [ ] Unit tests for all complex logic functions
+- [ ] Parametrized tests for similar cases with different data
 
 ## Fully Compliant Examples
 

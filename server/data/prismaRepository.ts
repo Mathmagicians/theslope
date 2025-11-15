@@ -1020,6 +1020,37 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
 }
 
 /**
+ * Fetch the ID of the currently active season (if any)
+ * Validates that only one season is active (data integrity check)
+ * @param d1Client - D1 database client
+ * @returns Active season ID or null if no season is active
+ * @throws Error if multiple active seasons found (data integrity violation)
+ */
+export async function fetchActiveSeasonId(d1Client: D1Database): Promise<number | null> {
+    console.info(`🌞 > SEASON > [GET] Fetching active season ID`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Get all active seasons to validate uniqueness
+    const activeSeasons = await prisma.season.findMany({
+        where: { isActive: true },
+        select: { id: true }
+    })
+
+    // Validate uniqueness - should only be one active season
+    if (activeSeasons.length > 1) {
+        console.error(`🌞 > SEASON > [GET] Data integrity error: ${activeSeasons.length} active seasons found`)
+        throw createError({
+            statusCode: 500,
+            message: `Data integrity error: Multiple active seasons found (${activeSeasons.length})`
+        })
+    }
+
+    const seasonId = activeSeasons[0]?.id ?? null
+    console.info(`🌞 > SEASON > [GET] Active season ID: ${seasonId}`)
+    return seasonId
+}
+
+/**
  * Activate a season - ensures only one season is active at a time
  * Validates that season exists before deactivating other seasons
  * @param d1Client - D1 database client

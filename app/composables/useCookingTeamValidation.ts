@@ -5,6 +5,24 @@ import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 /**
+ * Role display labels (Danish)
+ */
+export const ROLE_LABELS = {
+    CHEF: 'Chefkok',
+    COOK: 'Kok',
+    JUNIORHELPER: 'Kokkespire'
+} as const
+
+/**
+ * Role icons for visual distinction
+ */
+export const ROLE_ICONS = {
+    CHEF: '👨‍🍳',
+    COOK: '👥',
+    JUNIORHELPER: '👶'
+} as const
+
+/**
  * Validation schemas for CookingTeam objects
  */
 export const useCookingTeamValidation = () => {

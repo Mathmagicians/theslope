@@ -11,18 +11,20 @@ export const usePlanStore = defineStore("Plan", () => {
         const {isAdmin} = storeToRefs(authStore)
 
         // ========================================
-        // State - useFetch with status exposed internally
+        // State - useAsyncData/useFetch with status exposed internally
         // ========================================
-        // DATA FETCHING - useFetch for SSR compatibility with auth context
+        // DATA FETCHING - Per ADR-007, prefer useAsyncData for explicit refresh control
         // HTTP JSON converts Date objects to ISO strings during transport
         // SeasonSchema.parse converts ISO strings back to Date objects via dateRangeSchema union
 
-        // Fetch active season ID (static endpoint - no reactive URL issues)
-        const {data: activeSeasonId, refresh: refreshActiveSeasonId} = useFetch<number | null>(
-            '/api/admin/season/activeId',
+        // Fetch active season ID (static endpoint)
+        const {
+            data: activeSeasonId, status: activeSeasonIdStatus,
+            error: activeSeasonIdError, refresh: refreshActiveSeasonId
+        } = useAsyncData<number | null>(
+            'plan-store-active-season-id',
+            () => $fetch('/api/admin/season/active'),
             {
-                key: 'plan-store-active-season-id',
-                watch: false,
                 default: () => null
             }
         )
@@ -67,6 +69,10 @@ export const usePlanStore = defineStore("Plan", () => {
         // ========================================
         // Computed - Public API (derived from status)
         // ========================================
+        const isActiveSeasonIdLoading = computed(() => activeSeasonIdStatus.value === 'pending')
+        const isActiveSeasonIdErrored = computed(() => activeSeasonIdStatus.value === 'error')
+        const isActiveSeasonIdInitialized = computed(() => activeSeasonIdStatus.value === 'success')
+
         const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
         const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
         const isSeasonsInitialized = computed(() => seasonsStatus.value === 'success')
@@ -125,7 +131,11 @@ export const usePlanStore = defineStore("Plan", () => {
 
     const loadActiveSeason = async () => {
         await refreshActiveSeasonId()
-        console.info('🗓️ > PLAN_STORE > Refreshing active season')
+        if (activeSeasonIdError.value) {
+            console.error('🗓️ > PLAN_STORE > Error loading active season ID:', activeSeasonIdError.value)
+            throw activeSeasonIdError.value
+        }
+        console.info('🗓️ > PLAN_STORE > Loaded active season ID:', activeSeasonId.value)
     }
 
         const loadSeasonByShortName = (shortName: string) => {
@@ -240,10 +250,8 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Refresh
                 await loadActiveSeason()
                 await loadSeasons()
-                // If the activated season is the selected one, refresh it
-                if (selectedSeasonId.value === seasonId) {
-                    await refreshSelectedSeason()
-                }
+                // Switch to the newly activated season
+                loadSeason(seasonId)
                 console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
             } catch (e: any) {
                 handleApiError(e, 'activateSeason')
@@ -349,22 +357,25 @@ export const usePlanStore = defineStore("Plan", () => {
             } else if (activeSeasonId.value) {
                 loadSeason(activeSeasonId.value)
             } else if (seasons.value.length > 0) {
-                // No active season - select first season as fallback
-                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first season:', seasons.value[0].shortName)
-                loadSeason(seasons.value[0].id)
+                // No active season - select first season from sorted list as fallback
+                const {sortSeasonsByActivePriority} = useSeason()
+                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
+                const first = sortedSeasons[0]!
+                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first from sorted seasons:', first.shortName)
+                loadSeason(first.id)
             }
         }
 
-        // AUTO-INITIALIZATION - Watch for seasons to load, then auto-select active season
-        watch([isSeasonsInitialized, activeSeasonId], () => {
+        // AUTO-INITIALIZATION - Watch for data to load, then auto-select active season
+        // Don't call initPlanStore immediately - wait for both data sources to load
+        watch([isSeasonsInitialized, isActiveSeasonIdInitialized], () => {
             if (!isSeasonsInitialized.value) return
+            if (!isActiveSeasonIdInitialized.value) return // Wait for activeSeasonId to load
             if (selectedSeasonId.value !== null) return // Already selected
 
-            console.info(LOG_CTX, '🗓️ > PLAN_STORE > Seasons loaded, calling initPlanStore')
+            console.info(LOG_CTX, '🗓️ > PLAN_STORE > Data loaded, calling initPlanStore')
             initPlanStore()
-        })
-
-        initPlanStore()
+        }, { immediate: true }) // Check immediately in case data is already loaded
 
 
         return {
@@ -372,6 +383,10 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeason,
             seasons,
             // computed state
+            isActiveSeasonIdLoading,
+            isActiveSeasonIdErrored,
+            isActiveSeasonIdInitialized,
+            activeSeasonIdError,
             isSeasonsLoading,
             isNoSeasons,
             isSeasonsErrored,

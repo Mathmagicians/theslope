@@ -102,6 +102,61 @@ test('GIVEN unique season WHEN creating THEN succeeds', async ({ page, browser }
 })
 ```
 
+#### Test Data Naming Convention
+
+Use Donald Duck universe names (obvious test data, will be deleted):
+```typescript
+const household = await HouseholdFactory.createHousehold(context, {
+  name: salt('Duckburg', testSalt)
+})
+const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
+  context, householdId, 'Scrooge McDuck'
+)
+```
+
+#### Use Validation Composable Helpers
+
+Create domain objects using validation composable helpers, not manual construction:
+```typescript
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+
+// ✅ GOOD: Use helper
+const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+  valueSchema: DinnerModeSchema,
+  defaultValue: DinnerMode.DINEIN
+})
+const preferences = createDefaultWeekdayMap(DinnerMode.DINEIN)
+
+// ❌ BAD: Manual construction (missing days, invalid structure)
+const preferences = { mandag: 'DINEIN', tirsdag: 'DINEIN' }
+```
+
+#### Deserialization Pattern
+
+API responses return serialized data - use composable deserializers:
+```typescript
+import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+const {deserializeWeekDayMap} = useHouseholdValidation()
+
+const inhabitant = await HouseholdFactory.getInhabitant(context, id)
+const preferences = typeof inhabitant.dinnerPreferences === 'string'
+  ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+  : inhabitant.dinnerPreferences
+```
+
+#### Troubleshooting: Element Not Found
+
+If `[name="..."]` selector fails, check if component forwards `name` to DOM. Add `data-testid`:
+```vue
+<!-- Component: Add data-testid for test selection -->
+<UFieldGroup :name="name" :data-testid="name" />
+```
+
+```typescript
+// Test: Use getByTestId when name doesn't forward
+await page.getByTestId('element-name').click()
+```
+
 ### Component Testing (Nuxt UI v4+)
 
 After the Nuxt 3→4 and Nuxt UI 2→4 migration, specific patterns are required for reliable component testing:

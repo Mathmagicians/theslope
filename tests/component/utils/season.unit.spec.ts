@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster, isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority, selectMostAppropriateActiveSeason } from '~/utils/season'
+import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster, isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority, selectMostAppropriateActiveSeason, splitDinnerEvents, getNextDinnerDate } from '~/utils/season'
 import { SEASON_STATUS } from '~/composables/useSeasonValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { DateRange, WeekDay, WeekDayMap } from '~/types/dateTypes'
@@ -735,6 +735,128 @@ describe('Active Season Management utilities', () => {
             { desc: 'null when no seasons', ref: new Date(2025, 0, 15), seasons: [] }
         ])('$desc', ({ ref, seasons }) => {
             expect(selectMostAppropriateActiveSeason(seasons, ref)).toBeNull()
+        })
+    })
+
+    describe('splitDinnerEvents', () => {
+        it.each([
+            {
+                scenario: 'splits events with next dinner at start',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 6, 18, 0), end: new Date(2025, 0, 6, 19, 0) },
+                expectedNextDinnerId: 1,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'splits events with next dinner in middle',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedNextDinnerId: 2,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'splits events with next dinner at end',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 10, 18, 0), end: new Date(2025, 0, 10, 19, 0) },
+                expectedNextDinnerId: 3,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'matches by same day, ignoring time differences',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 12, 30) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedNextDinnerId: 2,
+                expectedOtherCount: 1
+            }
+        ])('$scenario', ({ events, nextDinnerDateRange, expectedNextDinnerId, expectedOtherCount }) => {
+            const result = splitDinnerEvents(events, nextDinnerDateRange)
+
+            expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
+            expect(result.otherDinnerDates).toHaveLength(expectedOtherCount)
+            expect(result.otherDinnerDates.every(date => date instanceof Date)).toBe(true)
+        })
+
+        it.each([
+            {
+                scenario: 'returns null nextDinner when no match',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 15, 18, 0), end: new Date(2025, 0, 15, 19, 0) },
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'returns all events as others when nextDinnerDateRange is null',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: null,
+                expectedOtherCount: 3
+            },
+            {
+                scenario: 'handles empty events array',
+                events: [],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedOtherCount: 0
+            }
+        ])('$scenario', ({ events, nextDinnerDateRange, expectedOtherCount }) => {
+            const result = splitDinnerEvents(events, nextDinnerDateRange)
+
+            expect(result.nextDinner).toBeNull()
+            expect(result.otherDinnerDates).toHaveLength(expectedOtherCount)
+        })
+    })
+
+    describe('getNextDinnerDate', () => {
+        it('should find next dinner when there are future dates', () => {
+            // GIVEN: Dinner dates with mix of past and future
+            const dinnerDates = [
+                new Date(2020, 10, 3, 18, 0),  // Nov 3, 2020 (past)
+                new Date(2030, 10, 17, 18, 0)  // Nov 17, 2030 (future)
+            ]
+            const dinnerStartHour = 18
+
+            // WHEN: Getting next dinner
+            const getNext = getNextDinnerDate(60)
+            const result = getNext(dinnerDates, dinnerStartHour)
+
+            // THEN: Should return the next future date (skipping past dates)
+            expect(result).not.toBeNull()
+            expect(result?.start).toEqual(new Date(2030, 10, 17, 18, 0))
+        })
+
+        it('should return null when all dates are in the past', () => {
+            // GIVEN: Only past dinner dates
+            const dinnerDates = [
+                new Date(2020, 0, 1, 18, 0),
+                new Date(2020, 0, 3, 18, 0)
+            ]
+            const dinnerStartHour = 18
+
+            // WHEN: Getting next dinner
+            const getNext = getNextDinnerDate(60)
+            const result = getNext(dinnerDates, dinnerStartHour)
+
+            // THEN: Should return null
+            expect(result).toBeNull()
         })
     })
 })

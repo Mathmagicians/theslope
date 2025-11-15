@@ -5,9 +5,10 @@ import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
-    excludeDatesFromInterval
+    excludeDatesFromInterval,
+    DATE_SETTINGS
 } from '~/utils/date'
-import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter} from "date-fns"
+import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
 
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
@@ -328,4 +329,103 @@ export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDa
     // Sort and return first (future closest, or current if no future)
     const sorted = sortSeasonsByActivePriority(eligible, referenceDate)
     return sorted[0]!
+}
+
+/**
+ * Get dinner time range for a given date
+ *
+ * @param date - The date to get dinner time for
+ * @param startHour - Hour when dinner starts (24h format, e.g. 18 for 6 PM)
+ * @param durationMinutes - Duration of dinner window in minutes (e.g. 60 for 1 hour)
+ * @returns DateRange with start and end times in configured timezone
+ */
+export const getDinnerTimeRange = (date: Date, startHour: number, durationMinutes: number): DateRange => {
+    const start = new Date(date)
+    start.setHours(startHour, 0, 0, 0)
+
+    const end = new Date(start)
+    end.setMinutes(end.getMinutes() + durationMinutes)
+
+    return {start, end}
+}
+
+/**
+ * Get next dinner time range from now (accounting for dinner time window)
+ * Curried function to allow pre-configuring dinner duration
+ *
+ * - If now is within dinner time window and today has dinner → today's dinner time
+ * - Otherwise → next upcoming dinner time
+ *
+ * @param dinnerDurationMinutes - Duration of dinner window in minutes (e.g. 60 for 1 hour)
+ * @returns Function that takes dinnerDates and startHour, returns DateRange or null
+ *
+ * @example
+ * const getNextDinner = getNextDinnerDate(60) // Configure 60 min duration
+ * const nextDinnerRange = getNextDinner(dinnerDates, 18) // {start: Date, end: Date} or null
+ */
+export const getNextDinnerDate = (dinnerDurationMinutes: number): (dinnerDates: Date[], dinnerStartTimeHour: number) => DateRange | null =>
+    (dinnerDates: Date[], dinnerStartTimeHour: number): DateRange | null => {
+        const now = new Date()
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        // Check if today has dinner
+        const todayHasDinner = dinnerDates.some(d => isSameDay(d, today))
+
+        if (todayHasDinner) {
+            // Check if we're still within the dinner window
+            const dinnerTimeRange = getDinnerTimeRange(now, dinnerStartTimeHour, dinnerDurationMinutes)
+
+            if (now < dinnerTimeRange.end) {
+                return dinnerTimeRange
+            }
+        }
+
+        // Dates are sorted - filter to future dates and take first
+        const upcoming = dinnerDates.filter(d => d > today)
+        const nextDate = upcoming[0]
+
+        return nextDate ? getDinnerTimeRange(nextDate, dinnerStartTimeHour, dinnerDurationMinutes) : null
+    }
+
+/**
+ * Split dinner events into next dinner and others in a single pass
+ * @param dinnerEvents - Array of dinner events to split
+ * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
+ * @returns Object with nextDinner event and array of other dinner dates
+ */
+export const splitDinnerEvents = <T extends { date: Date }>(
+    dinnerEvents: T[],
+    nextDinnerDateRange: DateRange | null
+): { nextDinner: T | null; pastDinnerDates: Date[]; futureDinnerDates: Date[] } => {
+    const now = new Date()
+
+    if (!nextDinnerDateRange) {
+        const allDates = dinnerEvents.map(e => e.date)
+        return {
+            nextDinner: null,
+            pastDinnerDates: allDates.filter(d => d < now),
+            futureDinnerDates: allDates.filter(d => d >= now)
+        }
+    }
+
+    return dinnerEvents.reduce(
+        (acc, event) => {
+            if (isSameDay(event.date, nextDinnerDateRange.start)) {
+                acc.nextDinner = event
+            } else {
+                if (event.date < now) {
+                    acc.pastDinnerDates.push(event.date)
+                } else {
+                    acc.futureDinnerDates.push(event.date)
+                }
+            }
+            return acc
+        },
+        {
+            nextDinner: null as T | null,
+            pastDinnerDates: [] as Date[],
+            futureDinnerDates: [] as Date[]
+        }
+    )
 }

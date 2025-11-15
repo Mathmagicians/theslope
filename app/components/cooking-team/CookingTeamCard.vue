@@ -1,24 +1,36 @@
 <script setup lang="ts">
-import type { FormMode } from '~/types/form'
+/**
+ * CookingTeamCard - Display cooking team in multiple modes
+ *
+ * Display Modes:
+ * - monitor: Large display for kitchen monitors (read-only, uses UserListItem)
+ * - compact: Minimal display for tables (avatars + badges)
+ * - regular: Standard display with role sections (view mode)
+ * - edit: Full CRUD interface with member management
+ *
+ * ADR Compliance:
+ * - ADR-001: Types from validation composables
+ * - Mobile-first responsive design
+ * - Uses UserListItem for consistent inhabitant display
+ */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
+import type { InhabitantDisplay } from '~/composables/useHouseholdValidation'
+import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
+
+type DisplayMode = 'monitor' | 'compact' | 'regular' | 'edit'
 
 interface TeamMember {
   id: number
   role: TeamRole
-  inhabitant: {
-    id: number
-    name: string
-    lastName: string
-    pictureUrl: string | null
-  }
+  inhabitant: InhabitantDisplay
 }
 
 interface Props {
   teamId?: number          // Database ID (optional for create mode)
-  teamNumber: number      // Logical number 1..N in season
-  teamName: string        // Team name (editable)
+  teamNumber?: number      // Logical number 1..N in season (optional for empty state)
+  teamName?: string        // Team name (optional for empty state)
   seasonId?: number       // Required for EDIT mode (inhabitant selector)
   assignments?: TeamMember[]
   affinity?: WeekDayMap | null  // Team's weekday preferences
@@ -27,16 +39,16 @@ interface Props {
   dinnerEvents?: DinnerEvent[]  // All dinner events (will be filtered to this team)
   holidays?: DateRange[]   // Holiday periods
   teams?: Array<{ id: number, name: string }>  // All teams in season (for InhabitantSelector lookup)
-  compact?: boolean
-  mode?: FormMode         // Form mode: view, edit, create
+  mode?: DisplayMode       // Display mode: monitor, compact, regular, edit
   showMembers?: boolean   // If false, only show count badge in compact mode
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  compact: false,
+  teamNumber: undefined,
+  teamName: undefined,
+  mode: 'regular',
   assignments: () => [],
   affinity: null,
-  mode: 'view',
   showMembers: true,
   dinnerEvents: () => [],
   holidays: () => []
@@ -55,16 +67,17 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Local state for editing team name
-const editedName = ref(props.teamName)
+const editedName = ref(props.teamName ?? '')
 
 // Reset edited name when team name prop changes
 watch(() => props.teamName, (newName) => {
-  editedName.value = newName
+  editedName.value = newName ?? ''
 })
 
 // Team color rotation based on teamNumber (1..N)
 const { getTeamColor } = useCookingTeam()
 const teamColor = computed(() => {
+  if (props.teamNumber === undefined) return 'neutral'
   return getTeamColor(props.teamNumber - 1) // teamNumber is 1-based, getTeamColor expects 0-based
 })
 
@@ -92,10 +105,15 @@ const roleGroups = computed(() => {
   return groups
 })
 
-const roleLabels = {
-  CHEF: 'Chefkok',
-  COOK: 'Kok',
-  JUNIORHELPER: 'Kokkespire'
+// Team members (all cooks and helpers, excluding chef)
+const teamMembers = computed(() => [
+  ...roleGroups.value.COOK,
+  ...roleGroups.value.JUNIORHELPER
+])
+
+// Format names for monitor display (comma-separated)
+const formatNames = (members: TeamMember[]): string => {
+  return members.map(m => `${m.inhabitant.name} ${m.inhabitant.lastName}`).join(', ')
 }
 
 const navigateToInhabitant = (inhabitantId: number) => {
@@ -115,7 +133,7 @@ const handleDelete = () => {
   emit('delete', props.teamId)
 }
 
-const isEditable = computed(() => props.mode === 'create' || props.mode === 'edit')
+const isEditable = computed(() => props.mode === 'edit')
 
 // Ref to InhabitantSelector for refresh
 const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
@@ -129,8 +147,57 @@ defineExpose({
 </script>
 
 <template>
-  <!-- COMPACT VIEW for table display -->
-  <div v-if="compact">
+  <!-- MONITOR MODE: Large display for kitchen monitors -->
+  <div v-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
+    <div class="flex flex-col md:flex-row gap-3 md:gap-4">
+      <!-- Chef display (if assigned) -->
+      <div v-if="roleGroups.CHEF.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
+        <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.CHEF }}</span>
+        <div class="flex-1">
+          <UserListItem
+            :to-display="roleGroups.CHEF.map(m => m.inhabitant)"
+            :compact="false"
+            :size="getIsMd ? 'lg' : 'md'"
+            :ring-color="teamColor"
+            :label="ROLE_LABELS.CHEF"
+          />
+        </div>
+      </div>
+
+      <!-- Team display (cooks + helpers) -->
+      <div v-if="teamMembers.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
+        <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.COOK }}</span>
+        <div class="flex-1">
+          <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+            <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+              {{ teamName }}
+            </UBadge>
+            <UserListItem
+              :to-display="teamMembers.map(m => m.inhabitant)"
+              :compact="false"
+              :size="getIsMd ? 'lg' : 'md'"
+              :ring-color="teamColor"
+              label="medlemmer"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- No members assigned -->
+      <div v-if="roleGroups.CHEF.length === 0 && teamMembers.length === 0" class="text-center py-6 md:py-12">
+        <div class="text-5xl md:text-6xl mb-3 md:mb-4">🏃‍♀️🏃‍♂️</div>
+        <p class="text-lg md:text-xl font-semibold text-gray-400 dark:text-gray-300">
+          Køkkenholdet er gået ud at lege
+        </p>
+        <p class="text-sm md:text-base text-gray-400 dark:text-gray-400 mt-2">
+          Intet madhold tildelt endnu
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPACT MODE: Minimal display for tables -->
+  <div v-else-if="mode === 'compact'">
     <!-- Show only count badge when showMembers is false -->
     <div v-if="!showMembers" class="flex items-center gap-2">
       <UBadge
@@ -157,48 +224,23 @@ defineExpose({
         v-show="members.length > 0"
         class="flex flex-col gap-1"
       >
-        <span class="text-xs text-gray-500 font-medium">{{ roleLabels[role] }}</span>
-        <div class="flex items-center gap-2">
-          <UAvatarGroup size="sm" :max="3">
-            <UTooltip
-              v-for="member in members"
-              :key="member.id"
-              :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-            >
-              <UAvatar
-                :src="member.inhabitant.pictureUrl"
-                :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-                icon="i-heroicons-user"
-                class="cursor-pointer"
-                @click="navigateToInhabitant(member.inhabitant.id)"
-              />
-            </UTooltip>
-          </UAvatarGroup>
-
-          <div class="flex flex-wrap gap-1">
-            <UBadge
-              v-for="member in members"
-              :key="member.id"
-              size="sm"
-              variant="soft"
-              :color="teamColor"
-              class="cursor-pointer"
-              @click="navigateToInhabitant(member.inhabitant.id)"
-            >
-              {{ member.inhabitant.name }}
-            </UBadge>
-          </div>
-        </div>
+        <span class="text-xs text-gray-500 font-medium">{{ ROLE_LABELS[role] }}</span>
+        <UserListItem
+          :to-display="members.map(m => m.inhabitant)"
+          :compact="true"
+          size="sm"
+          :ring-color="teamColor"
+        />
       </div>
     </div>
   </div>
 
-  <!-- FULL VIEW with role sections -->
+  <!-- REGULAR/EDIT MODE: Full display with role sections -->
   <div v-else class="space-y-4">
-    <!-- TEAM HEADER (for CREATE/EDIT modes) -->
+    <!-- TEAM HEADER (for EDIT mode) -->
     <div
       v-if="isEditable"
-      class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed rounded-none md:rounded-lg"
+      class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed"
       :class="`border-${teamColor}-400 dark:border-${teamColor}-700`"
       :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
     >
@@ -225,7 +267,7 @@ defineExpose({
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
-              :text="`${assignment.inhabitant.name} ${assignment.inhabitant.lastName} (${roleLabels[assignment.role]})`"
+              :text="`${assignment.inhabitant.name} ${assignment.inhabitant.lastName} (${ROLE_LABELS[assignment.role]})`"
             >
               <UAvatar
                 :src="assignment.inhabitant.pictureUrl"
@@ -256,7 +298,7 @@ defineExpose({
     </div>
 
     <!-- VIEW MODE: Team name header -->
-    <div v-else class="flex items-center gap-3 p-4 border rounded-lg" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
+    <div v-else class="flex items-center gap-3 p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
       <UIcon name="i-heroicons-user-group" class="text-xl" :class="`text-${teamColor}-500`" />
       <h3 class="text-lg font-semibold">{{ teamName }}</h3>
     </div>
@@ -275,10 +317,10 @@ defineExpose({
               class="space-y-2"
             >
               <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
-                {{ roleLabels[role] }}
+                {{ ROLE_LABELS[role] }}
               </h5>
 
-              <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
                 <div v-for="member in members" :key="member.id" class="flex items-center gap-2">
                   <UAvatar
                     :src="member.inhabitant.pictureUrl"
@@ -308,7 +350,7 @@ defineExpose({
               </div>
 
               <div v-else class="text-sm text-gray-500 italic p-3">
-                Ingen {{ roleLabels[role].toLowerCase() }}
+                Ingen {{ ROLE_LABELS[role].toLowerCase() }}
               </div>
             </div>
           </div>
@@ -328,7 +370,7 @@ defineExpose({
             @add:member="(inhabitantId, role) => emit('add:member', inhabitantId, role)"
             @remove:member="(assignmentId) => emit('remove:member', assignmentId)"
           />
-          <div v-else class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
+          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
             <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
             <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
           </div>
@@ -356,7 +398,7 @@ defineExpose({
             :dinner-events="dinnerEvents"
             :holidays="holidays"
           />
-          <div v-else class="p-6 border-2 border-dashed rounded-lg text-center text-gray-500">
+          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
             <UIcon name="i-heroicons-calendar" class="text-4xl mb-2" />
             <p class="text-sm">Ingen fællesspisninger tildelt endnu</p>
           </div>
@@ -364,53 +406,26 @@ defineExpose({
       </div>
     </div>
 
-    <!-- CREATE/VIEW MODE: Single column with role sections -->
-    <div v-else class="space-y-4">
+    <!-- REGULAR MODE: Single row layout on desktop -->
+    <div v-else class="flex flex-col md:flex-row gap-4">
       <div
         v-for="(members, role) in roleGroups"
         :key="role"
-        class="space-y-2"
+        v-show="members.length > 0"
+        class="flex-1"
       >
-        <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          {{ roleLabels[role] }}
-        </h4>
+        <UserListItem
+          :to-display="members.map(m => m.inhabitant)"
+          :compact="false"
+          size="md"
+          :ring-color="teamColor"
+          :label="ROLE_LABELS[role]"
+        />
+      </div>
 
-        <div v-if="members.length > 0" class="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-          <UAvatarGroup size="md" :max="5">
-            <UTooltip
-              v-for="member in members"
-              :key="member.id"
-              :text="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-            >
-              <UAvatar
-                :src="member.inhabitant.pictureUrl"
-                :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
-                icon="i-heroicons-user"
-                class="cursor-pointer hover:ring-2 hover:ring-offset-2"
-                :class="`hover:ring-${teamColor}`"
-                @click="navigateToInhabitant(member.inhabitant.id)"
-              />
-            </UTooltip>
-          </UAvatarGroup>
-
-          <div class="flex flex-wrap gap-2">
-            <UBadge
-              v-for="member in members"
-              :key="member.id"
-              size="md"
-              variant="subtle"
-              :color="teamColor"
-              class="cursor-pointer hover:opacity-80 transition-opacity"
-              @click="navigateToInhabitant(member.inhabitant.id)"
-            >
-              {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
-            </UBadge>
-          </div>
-        </div>
-
-        <div v-else class="text-sm text-gray-500 italic p-3">
-          Madhold uden kokke!
-        </div>
+      <!-- Show message if no members -->
+      <div v-if="assignments.length === 0" class="text-sm text-gray-500 italic p-3">
+        Madhold uden kokke!
       </div>
     </div>
   </div>

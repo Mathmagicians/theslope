@@ -16,6 +16,7 @@ import {
     calculateAge,
     toCalendarDate,
     toDate,
+    calculateCountdown,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -639,6 +640,85 @@ describe('toCalendarDate roundtrip conversions', () => {
 
                 expect(date.getMonth()).toBe(jsMonth)
             })
+        })
+    })
+})
+
+describe('calculateCountdown', () => {
+    const testCases = [
+        {
+            description: 'target is 2 hours and 30 minutes away',
+            currentDate: new Date(2025, 0, 15, 16, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 30, 0),
+            expectedHours: 2,
+            expectedMinutes: 30,
+            expectedFormatted: '2T 30M'
+        },
+        {
+            description: 'target is exactly 1 hour away',
+            currentDate: new Date(2025, 0, 15, 17, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 1,
+            expectedMinutes: 0,
+            expectedFormatted: '1T 0M'
+        },
+        {
+            description: 'target is 45 minutes away (less than 1 hour)',
+            currentDate: new Date(2025, 0, 15, 17, 15, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 0,
+            expectedMinutes: 45,
+            expectedFormatted: '45M'
+        },
+        {
+            description: 'target is 5 minutes away',
+            currentDate: new Date(2025, 0, 15, 17, 55, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 0,
+            expectedMinutes: 5,
+            expectedFormatted: '5M'
+        },
+        {
+            description: 'target is exactly now (same time)',
+            currentDate: new Date(2025, 0, 15, 18, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 0,
+            expectedMinutes: 0,
+            expectedFormatted: 'NU'
+        },
+        {
+            description: 'target is in the past',
+            currentDate: new Date(2025, 0, 15, 19, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 0,
+            expectedMinutes: 0,
+            expectedFormatted: 'NU'
+        },
+        {
+            description: 'target is 10 hours away',
+            currentDate: new Date(2025, 0, 15, 8, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 10,
+            expectedMinutes: 0,
+            expectedFormatted: '10T 0M'
+        },
+        {
+            description: 'target crosses midnight',
+            currentDate: new Date(2025, 0, 15, 23, 30, 0),
+            targetDate: new Date(2025, 0, 16, 1, 15, 0),
+            expectedHours: 1,
+            expectedMinutes: 45,
+            expectedFormatted: '1T 45M'
+        }
+    ]
+
+    testCases.forEach(({ description, currentDate, targetDate, expectedHours, expectedMinutes, expectedFormatted }) => {
+        it(`should calculate countdown correctly when ${description}`, () => {
+            const result = calculateCountdown(targetDate, currentDate)
+
+            expect(result.hours).toBe(expectedHours)
+            expect(result.minutes).toBe(expectedMinutes)
+            expect(result.formatted).toBe(expectedFormatted)
         })
     })
 })
