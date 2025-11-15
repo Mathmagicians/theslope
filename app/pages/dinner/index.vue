@@ -83,6 +83,13 @@ const {value: selectedDate, needsSync, setValue} = useQueryParam<Date>('date', {
         const parsed = parseDate(s)
         return parsed && !isNaN(parsed.getTime()) ? parsed : null
     },
+    validate: (date) => {
+        // Check if this date has a dinner event
+        return dinnerEvents.value.some(e => {
+            const eventDate = new Date(e.date)
+            return eventDate.toDateString() === date.toDateString()
+        })
+    },
     defaultValue: getDefaultDate
 })
 
@@ -92,8 +99,8 @@ watchPostEffect(() => {
     if (dinnerEvents.value.length === 0) return // Wait for events to load
 
     if (needsSync.value) {
-        // URL is missing or has invalid date - sync the default
-        setValue(selectedDate.value)
+        // URL is missing or has invalid date - sync to next dinner
+        setValue(getDefaultDate())
     }
 })
 
@@ -171,13 +178,15 @@ useHead({
         </template>
 
         <DinnerCalendarDisplay
-          v-if="seasonDates"
+          v-if="seasonDates && selectedDate"
           :season-dates="seasonDates"
           :cooking-days="cookingDays"
           :holidays="holidays"
           :dinner-events="dinnerEvents"
           :show-countdown="true"
           :color="COLOR.peach"
+          :selected-date="selectedDate"
+          @date-selected="setValue"
         />
       </UCard>
     </template>

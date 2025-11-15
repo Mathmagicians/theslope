@@ -48,14 +48,14 @@ TheSlope uses a custom color palette inspired by Pantone Color of the Year 2025 
 
 ### Usage in Components - Color System (`useColorSystem`)
 
-We provide a centralized color system in `app/composables/useColorSystem.ts` for consistent color usage.
+We provide a centralized design system in `app/composables/useColorSystem.ts` for consistent color, typography, layout, and sizing usage.
 
-**Import the color system:**
+**Import the design system:**
 ```ts
-const { COLOR, CLASSES, BG, TEXT } = useColorSystem()
+const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useColorSystem()
 ```
 
-**1. For NuxtUI components (UButton, UBadge, UAlert):**
+**1. For NuxtUI component colors:**
 ```vue
 <UButton :color="COLOR.primary">Save</UButton>
 <UBadge :color="COLOR.success">Active</UBadge>
@@ -63,31 +63,64 @@ const { COLOR, CLASSES, BG, TEXT } = useColorSystem()
 <UBadge :color="COLOR.mocha">Mocha Mousse</UBadge>
 ```
 
-**2. For pre-built class combinations:**
+**2. For responsive sizes (NEW!):**
 ```vue
-<div :class="CLASSES.hero.primary">Hero Section</div>
-<section :class="CLASSES.landing.section1">Landing Section</section>
-<div :class="CLASSES.kitchen.neutral.DINEIN">Kitchen Panel</div>
+<!-- ✅ GOOD: Automatic responsive sizing -->
+<UButton :size="SIZES.standard">Click me</UButton>
+<UBadge :size="SIZES.small">Badge</UBadge>
+
+<!-- ❌ OLD: Manual breakpoint checking -->
+<UButton :size="getIsMd ? 'lg' : 'md'">Click me</UButton>
 ```
 
-**3. For dynamic class building:**
-```ts
-const heroClass = `${BG.mocha[500]} ${TEXT.mocha[50]}`
-const cardBg = BG.gray[50]
+**Available responsive sizes:**
+- `SIZES.standard` - md on mobile, lg on desktop (most common)
+- `SIZES.small` - sm on mobile, md on desktop
+- `SIZES.large` - lg on mobile, xl on desktop
+- `SIZES.xs`, `SIZES.sm`, `SIZES.md`, `SIZES.lg`, `SIZES.xl` - Static sizes
+
+**3. For semantic typography:**
+```vue
+<h1 :class="TYPOGRAPHY.heroTitle">Welcome</h1>
+<span :class="TYPOGRAPHY.footerText">Copyright 2025</span>
+<p :class="TYPOGRAPHY.finePrint">Terms and conditions</p>
 ```
 
-**4. For ticket type badges:**
+**4. For semantic layouts:**
+```vue
+<footer :class="LAYOUTS.footer">Footer content</footer>
+<div :class="LAYOUTS.sectionDivider">Divider between sections</div>
+<div :class="LAYOUTS.gridTwoCol">Two column grid</div>
+```
+
+**5. For semantic backgrounds:**
+```vue
+<div :class="BACKGROUNDS.hero.mocha">Hero section</div>
+<div :class="BACKGROUNDS.card">Card background</div>
+<section :class="BACKGROUNDS.landing.section1">Landing section</section>
+```
+
+**6. For complete component styling:**
+```vue
+<div :class="COMPONENTS.kitchenStatsBar">Kitchen stats</div>
+```
+
+**7. For ticket type badges:**
 ```vue
 <UBadge :color="TICKET_TYPE_COLORS[ticketType]">{{ label }}</UBadge>
 ```
 
 **Available exports:**
 - `COLOR` - NuxtUI component color prop values ('primary', 'mocha', 'success', etc.)
-- `CLASSES` - Pre-built Tailwind class combinations for common patterns
-- `BG` - Background color scale (e.g., `BG.mocha[500]` = 'bg-amber-500')
-- `TEXT` - Text color scale (e.g., `TEXT.mocha[50]` = 'text-amber-50')
-- `BORDER` - Border color scale
-- `getKitchenPanelClasses(mode, variant)` - Helper for kitchen panels
+- `SIZES` - Responsive size patterns for NuxtUI components (standard, small, large)
+- `TYPOGRAPHY` - Text styling patterns (heroTitle, footerText, finePrint, etc.)
+- `LAYOUTS` - Layout patterns (footer, sectionDivider, grids)
+- `BACKGROUNDS` - Background+text combinations (hero, card, landing sections)
+- `COMPONENTS` - Complete component styling (kitchen panels, stats bar)
+- `BG` - Background color scale (low-level, use BACKGROUNDS instead)
+- `TEXT` - Text color scale (low-level, use TYPOGRAPHY instead)
+- `BORDER` - Border color scale (low-level, use LAYOUTS instead)
+- `getKitchenPanelClasses(mode)` - Helper for kitchen panels
 - `TICKET_TYPE_COLORS` - Ticket type to color mapping
 
 ## Color Usage Guidelines

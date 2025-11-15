@@ -34,12 +34,8 @@ const emit = defineEmits<{
   changeDiningMode: []
 }>()
 
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
 // Design system
-const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
+const { BACKGROUNDS, TYPOGRAPHY, SIZES } = useColorSystem()
 </script>
 
 <template>
@@ -102,7 +98,7 @@ const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
         <UButton
           v-if="!hasBooking"
           color="primary"
-          :size="getIsMd ? 'lg' : 'md'"
+          :size="SIZES.standard"
           name="book-dinner"
           @click="emit('book')"
         >
@@ -112,7 +108,7 @@ const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
           v-if="canSwap"
           color="neutral"
           variant="solid"
-          :size="getIsMd ? 'lg' : 'md'"
+          :size="SIZES.standard"
           name="swap-dinner"
           @click="emit('swap')"
         >
@@ -122,7 +118,7 @@ const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
           v-if="canCancel"
           color="error"
           variant="solid"
-          :size="getIsMd ? 'lg' : 'md'"
+          :size="SIZES.standard"
           name="cancel-dinner"
           @click="emit('cancel')"
         >
@@ -132,7 +128,7 @@ const { BACKGROUNDS, TYPOGRAPHY } = useColorSystem()
           v-if="hasBooking"
           color="neutral"
           variant="solid"
-          :size="getIsMd ? 'lg' : 'md'"
+          :size="SIZES.standard"
           name="change-dining-mode"
           @click="emit('changeDiningMode')"
         >

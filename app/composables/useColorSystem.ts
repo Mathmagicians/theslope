@@ -1,3 +1,4 @@
+1
 /**
  * Color System - TheSlope Design System
  *
@@ -343,21 +344,51 @@ export const TICKET_TYPE_COLORS = {
 } as const
 
 /**
+ * SIZES - Responsive size patterns for NuxtUI components
+ *
+ * Automatically adapts based on `isMd` breakpoint from layout.
+ * Use these instead of manually checking `getIsMd ? 'lg' : 'md'`.
+ */
+export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
+  // Standard responsive: md on mobile, lg on desktop
+  standard: computed(() => isMd.value ? 'lg' : 'md'),
+
+  // Small responsive: sm on mobile, md on desktop
+  small: computed(() => isMd.value ? 'md' : 'sm'),
+
+  // Large responsive: lg on mobile, xl on desktop
+  large: computed(() => isMd.value ? 'xl' : 'lg'),
+
+  // Static sizes (for when you need non-responsive)
+  xs: 'xs' as const,
+  sm: 'sm' as const,
+  md: 'md' as const,
+  lg: 'lg' as const,
+  xl: 'xl' as const
+})
+
+/**
  * useColorSystem Composable
  *
  * Provides access to the entire design system
  *
  * @example
  * ```ts
- * const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS } = useColorSystem()
+ * const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useColorSystem()
  *
  * // Use semantic patterns
  * <footer :class="LAYOUTS.footer">
  *   <span :class="TYPOGRAPHY.footerText">Copyright 2025</span>
  * </footer>
+ *
+ * // Use responsive sizes
+ * <UButton :size="SIZES.standard">Click me</UButton>
  * ```
  */
 export const useColorSystem = () => {
+  // Inject responsive breakpoint from layout
+  const isMd = inject<Ref<boolean>>('isMd', ref(false))
+
   return {
     // For NuxtUI components
     COLOR,
@@ -368,6 +399,9 @@ export const useColorSystem = () => {
     LAYOUTS,
     BACKGROUNDS,
     COMPONENTS,
+
+    // Responsive sizes (NEW!)
+    SIZES: createResponsiveSizes(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,

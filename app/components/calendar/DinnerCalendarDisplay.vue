@@ -34,7 +34,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useDinnerEventValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import {isCalendarDateInDateList, formatDanishWeekdayDate, calculateCountdown} from '~/utils/date'
+import {isCalendarDateInDateList, formatDanishWeekdayDate, calculateCountdown, toDate} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
 
 interface Props {
@@ -45,13 +45,15 @@ interface Props {
   showCountdown?: boolean
   color?: string
   useRings?: boolean
+  selectedDate?: Date
 }
 
 const props = withDefaults(defineProps<Props>(), {
   numberOfMonths: 1,
   showCountdown: false,
   color: 'peach',
-  useRings: false
+  useRings: false,
+  selectedDate: undefined
 })
 
 const {createEventList} = useCalendarEvents()
@@ -153,6 +155,11 @@ const legendItems = computed(() => [
     circleClass: `w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold ${BG.peach[400]}`
   },
   {
+    label: 'Valgt dato',
+    type: 'circle' as const,
+    circleClass: `w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold ${BG.peach[400]} ring-2 ring-peach-700`
+  },
+  {
     label: 'Planlagt fællesspisning',
     type: 'circle' as const,
     circleClass: props.useRings
@@ -179,6 +186,20 @@ const accordionItems = [{
 }]
 
 const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
+
+const emit = defineEmits<{
+  'date-selected': [date: Date]
+}>()
+
+const handleDateClick = (day: DateValue) => {
+  emit('date-selected', toDate(day))
+}
+
+const isSelected = (day: DateValue): boolean => {
+  if (!props.selectedDate) return false
+  const dayDate = toDate(day)
+  return dayDate.toDateString() === props.selectedDate.toDateString()
+}
 </script>
 
 <template>
@@ -238,29 +259,33 @@ const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
 
               <!-- Next dinner event (prominent - full color) -->
               <div v-else-if="hasNextDinnerEvent(eventLists)"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold"
-                   :class="BG.peach[400]">
+                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold cursor-pointer hover:opacity-90"
+                   :class="[BG.peach[400], isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
+                   @click="handleDateClick(day)">
                 {{ day.day }}
               </div>
 
               <!-- Future dinner event (rings - subtle) -->
               <div v-else-if="hasFutureDinnerEvent(eventLists) && useRings"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2"
-                   :class="`${BORDER.peach[400]} ${TEXT.peach[600]}`">
+                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 cursor-pointer hover:opacity-90"
+                   :class="[`${BORDER.peach[400]} ${TEXT.peach[600]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
+                   @click="handleDateClick(day)">
                 {{ day.day }}
               </div>
 
               <!-- Future dinner event (lighter fill - subtle) -->
               <div v-else-if="hasFutureDinnerEvent(eventLists)"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-                   :class="`${BG.peach[200]} ${TEXT.peach[800]}`">
+                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
+                   :class="[`${BG.peach[200]} ${TEXT.peach[800]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
+                   @click="handleDateClick(day)">
                 {{ day.day }}
               </div>
 
               <!-- Past dinner event (mocha - discrete) -->
               <div v-else-if="hasPastDinnerEvent(eventLists)"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-                   :class="`${BG.mocha[100]} ${TEXT.mocha[900]}`">
+                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
+                   :class="[`${BG.mocha[100]} ${TEXT.mocha[900]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
+                   @click="handleDateClick(day)">
                 {{ day.day }}
               </div>
 
