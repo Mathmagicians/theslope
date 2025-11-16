@@ -41,9 +41,17 @@ enum DinnerMode {
   NONE
 }
 
+enum DinnerState {
+  SCHEDULED
+  ANNOUNCED
+  CANCELLED // used if the dinner is cancelled, and orders should be refunded
+  CONSUMED
+}
+
 enum OrderState {
   BOOKED
   RELEASED
+  CANCELLED // permitted if parent dinner is cancelled
   CLOSED
 }
 
@@ -124,7 +132,9 @@ model DinnerEvent {
   menuTitle       String
   menuDescription String?
   menuPictureUrl  String?
-  dinnerMode      DinnerMode
+  state           DinnerState  @default(SCHEDULED)
+  totalCost       Int          @default(0) // Price in DKK øre, total grocery costs
+  heynaboEventId  Int?         @unique
   chefId          Int?
   chef            Inhabitant?  @relation(fields: [chefId], references: [id], onDelete: SetNull)
   cookingTeamId   Int?

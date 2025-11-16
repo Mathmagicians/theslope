@@ -4,12 +4,15 @@
  *
  * Used in HouseholdCard expandable table rows
  *
+ * Now uses DinnerModeSelector (the atomic DRY component) for each weekday.
+ * This component is just a loop wrapper - all display logic is in DinnerModeSelector.
+ *
  * VIEW MODE (collapsed row):
  * ┌────────────────────────────────────┐
  * │ Mon Tue Wed Thu Fri                │
  * │ 🍽️  🍽️  🍽️  🍽️  🛍️              │
  * └────────────────────────────────────┘
- * - Compact badges 
+ * - Compact badges
  * - Colors: success (eating), error (none)
  * - Read-only (no interaction)
  *
@@ -32,11 +35,6 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useDinnerEventValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import {FIELD_GROUP_CLASSES, WEEKDAY_FIELD_GROUP_CLASSES, WEEKDAY_BADGE_CONTENT_SIZE} from '~/utils/form'
-import {formatWeekdayCompact} from '~/utils/date'
-import type Badge from '#ui/components/Badge.vue'
-
-type BadgeColor = Badge['variants']['color']
 
 interface Props {
   modelValue?: WeekDayMap<DinnerMode> | null
@@ -58,16 +56,10 @@ const emit = defineEmits<{
   'update:modelValue': [value: WeekDayMap<DinnerMode>]
 }>()
 
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Responsive size for badges and buttons (matches header and VIEW mode)
-const componentSize = computed(() => getIsMd.value ? 'md' : 'sm')
+// Design system
+const { ORIENTATIONS, WEEKDAY } = useTheSlopeDesignSystem()
 
 const {DinnerModeSchema} = useDinnerEventValidation()
-
-// Extract enum constants from Zod schema
 const DinnerMode = DinnerModeSchema.enum
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation({
@@ -75,57 +67,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
   defaultValue: DinnerMode.DINEIN
 })
 
-// Dinner mode display config (order determines button/cycle order)
-const dinnerModeOrder: DinnerMode[] = [
-  DinnerMode.DINEIN,
-  DinnerMode.DINEINLATE,
-  DinnerMode.TAKEAWAY,
-  DinnerMode.NONE
-]
-
-const dinnerModeConfig: Record<DinnerMode, {
-  label: string
-  icon: string
-  activeColor: BadgeColor
-  viewVariant: 'solid' | 'ghost' | 'outline'  // VIEW mode (display only)
-  editActiveVariant: 'solid' | 'ghost'        // EDIT mode when selected
-  editInactiveVariant: 'solid' | 'ghost'      // EDIT mode when not selected
-}> = {
-  [DinnerMode.DINEIN]: {
-    label: 'Fællesspisning',
-    icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
-  },
-  [DinnerMode.DINEINLATE]: {
-    label: 'Fællesspisning (sen)',
-    icon: 'i-heroicons-clock',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
-  },
-  [DinnerMode.TAKEAWAY]: {
-    label: 'Takeaway',
-    icon: 'i-heroicons-shopping-bag',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
-  },
-  [DinnerMode.NONE]: {
-    label: 'Ingen spisning',
-    icon: 'i-heroicons-x-circle',
-    activeColor: 'error',
-    viewVariant: 'ghost',               // VIEW: subtle (no dinner)
-    editActiveVariant: 'solid',         // EDIT: clearly visible when selected
-    editInactiveVariant: 'ghost'
-  }
-}
-
-// Update local model value
+// Update single day
 const updateDay = (day: WeekDay, value: DinnerMode) => {
   if (props.disabled || props.formMode === FORM_MODES.VIEW) return
 
@@ -138,80 +80,59 @@ const updateDay = (day: WeekDay, value: DinnerMode) => {
   emit('update:modelValue', updated)
 }
 
-// Get icon for a mode
-const getModeIcon = (mode: DinnerMode): string => {
-  return dinnerModeConfig[mode].icon
-}
-
-// Get badge color for VIEW mode (uses same color as EDIT mode)
-const getBadgeColor = (mode: DinnerMode): BadgeColor => {
-  return dinnerModeConfig[mode].activeColor
-}
-
-// Get badge variant for VIEW mode
-const getBadgeVariant = (mode: DinnerMode): 'solid' | 'ghost' | 'outline' => {
-  return dinnerModeConfig[mode].viewVariant
-}
-
-// Get button color for EDIT mode (active vs inactive)
-const getButtonColor = (day: WeekDay, mode: DinnerMode): BadgeColor => {
-  const currentMode = props.modelValue?.[day] ?? DinnerMode.DINEIN
-  const isActive = currentMode === mode
-  return isActive ? dinnerModeConfig[mode].activeColor : 'neutral'
-}
-
-// Get button variant for EDIT mode (active vs inactive)
-const getButtonVariant = (day: WeekDay, mode: DinnerMode): 'solid' | 'ghost' => {
-  const currentMode = props.modelValue?.[day] ?? DinnerMode.DINEIN
-  const isActive = currentMode === mode
-  return isActive ? dinnerModeConfig[mode].editActiveVariant : dinnerModeConfig[mode].editInactiveVariant
-}
-
 // Filter weekdays based on parent restriction (e.g., season cooking days)
 const visibleDays = computed(() => {
   if (!props.parentRestriction) return WEEKDAYS
   return WEEKDAYS.filter(day => props.parentRestriction![day])
 })
+
+// Get dinner mode for a specific day
+const getDayValue = (day: WeekDay): DinnerMode => {
+  return props.modelValue?.[day] ?? DinnerMode.DINEIN
+}
 </script>
 
 <template>
   <!-- VIEW MODE: Horizontal compact display with badges - filtered weekdays only -->
-<UFieldGroup v-if="formMode === FORM_MODES.VIEW" :name="name" :data-testid="name" :size="componentSize" orientation="horizontal" :class="WEEKDAY_FIELD_GROUP_CLASSES">
-    <div
+  <UFieldGroup
+    v-if="formMode === FORM_MODES.VIEW"
+    :name="name"
+    :data-testid="name"
+    size="sm"
+    orientation="horizontal"
+    :class="WEEKDAY.fieldGroupClasses"
+  >
+    <DinnerModeSelector
       v-for="day in visibleDays"
       :key="day"
-    >
-      <UBadge
-        :color="getBadgeColor(modelValue?.[day] ?? DinnerMode.DINEIN)"
-        :variant="getBadgeVariant(modelValue?.[day] ?? DinnerMode.DINEIN)"
-        :ui="{ rounded: 'rounded-none md:rounded-md' }"
-      >
-        <UIcon
-          :name="getModeIcon(modelValue?.[day] ?? DinnerMode.DINEIN)"
-          :class="WEEKDAY_BADGE_CONTENT_SIZE"
-        />
-      </UBadge>
-    </div>
+      :model-value="getDayValue(day)"
+      :form-mode="formMode"
+      :disabled="disabled"
+      size="sm"
+      :name="`${name}-${day}`"
+    />
   </UFieldGroup>
 
   <!-- EDIT MODE: Responsive button groups (vertical on mobile, horizontal on desktop) -->
-  <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2 md:gap-4 flex-wrap">
+  <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2 md:gap-4 flex-wrap ">
     <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-2">
-      <span v-if="showLabels" class="text-xs font-semibold text-gray-600 capitalize">{{ formatWeekdayCompact(day) }}</span>
-      <UFieldGroup :size="componentSize" :orientation="getIsMd ? 'horizontal' : 'vertical'" :class="FIELD_GROUP_CLASSES">
-        <UButton
-          v-for="mode in dinnerModeOrder"
-          :key="mode"
-          :icon="dinnerModeConfig[mode].icon"
-          :color="getButtonColor(day, mode)"
-          :variant="getButtonVariant(day, mode)"
-          :disabled="disabled"
-          :size="componentSize"
-          :name="`${name}-${day}-${mode}`"
-          :ui="{ rounded: 'rounded-none md:rounded-md' }"
-          @click="updateDay(day, mode)"
-        />
-      </UFieldGroup>
+      <!-- Weekday label (if enabled) -->
+      <DinnerModeSelector
+        v-if="showLabels"
+        :model-value="day"
+        size="sm"
+        :name="`${name}-${day}-label`"
+      />
+
+      <!-- Dinner mode selector (with responsive orientation inside) -->
+      <DinnerModeSelector
+        :model-value="getDayValue(day)"
+        :form-mode="formMode"
+        :disabled="disabled"
+        size="sm"
+        :name="`${name}-${day}`"
+        @update:model-value="(value) => updateDay(day, value as DinnerMode)"
+      />
     </div>
   </div>
 </template>

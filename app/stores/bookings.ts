@@ -1,9 +1,9 @@
-import {type Order, type OrderCreate} from '~/composables/useOrderValidation'
+import {type OrderDisplay, type OrderCreate} from '~/composables/useOrderValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderSchema} = useOrderValidation()
+    const {OrderDisplaySchema} = useOrderValidation()
 
     // ========================================
     // State - useFetch with status exposed internally
@@ -25,7 +25,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {
         data: orders, status: ordersStatus,
         error: ordersError, refresh: refreshOrders
-    } = useAsyncData<Order[]>(
+    } = useAsyncData<OrderDisplay[]>(
         ordersKey,
         () => {
             const params = new URLSearchParams()
@@ -38,7 +38,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             transform: (data: any[]) => {
                 try {
-                    return data.map(order => OrderSchema.parse(order))
+                    return data.map(order => OrderDisplaySchema.parse(order))
                 } catch (e) {
                     console.error('🎟️ > BOOKINGS_STORE > Error parsing orders:', e)
                     console.error('🎟️ > BOOKINGS_STORE > Raw data:', data)
@@ -92,9 +92,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(`🎟️ > BOOKINGS_STORE > Loading all orders`)
     }
 
-    const createOrder = async (orderData: OrderCreate): Promise<Order> => {
+    const createOrder = async (orderData: OrderCreate): Promise<OrderDisplay> => {
         try {
-            const createdOrder = await $fetch<Order>('/api/order', {
+            const createdOrder = await $fetch<OrderDisplay>('/api/order', {
                 method: 'PUT',
                 body: orderData,
                 headers: {'Content-Type': 'application/json'}
@@ -121,9 +121,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
-    const updateOrder = async (orderId: number, orderData: Partial<OrderCreate>): Promise<Order> => {
+    const updateOrder = async (orderId: number, orderData: Partial<OrderCreate>): Promise<OrderDisplay> => {
         try {
-            const updatedOrder = await $fetch<Order>(`/api/order/${orderId}`, {
+            const updatedOrder = await $fetch<OrderDisplay>(`/api/order/${orderId}`, {
                 method: 'POST',
                 body: orderData,
                 headers: {'Content-Type': 'application/json'}

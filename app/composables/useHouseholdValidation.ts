@@ -1,7 +1,7 @@
 import {z} from 'zod'
+import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {useUserValidation} from './useUserValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
-import {useDinnerEventValidation} from './useDinnerEventValidation'
 
 /**
  * Generate shortName from household address
@@ -51,9 +51,8 @@ export const getHouseholdShortName = (address: string): string => {
  */
 export const useHouseholdValidation = () => {
     const {UserCreateSchema} = useUserValidation()
-    const {DinnerModeSchema} = useDinnerEventValidation()
 
-    // Extract enum constants from Zod schema
+    // Extract enum constants from Zod schema (imported from generated schemas)
     const DinnerMode = DinnerModeSchema.enum
 
     const {

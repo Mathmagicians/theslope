@@ -20,6 +20,8 @@ export class SeasonFactory {
 
     // Singleton cache for active season (only one can exist at a time)
     private static activeSeason: Season | null = null
+    // Remember the previously active season before we activate our test season
+    private static previouslyActiveSeason: Season | null = null
 
     /**
      * Generate a unique test date to avoid collisions between parallel test runs
@@ -94,6 +96,7 @@ export class SeasonFactory {
     /**
      * SINGLETON: Create and activate a season (only one active season allowed)
      * Returns cached instance if already created, otherwise creates and activates new season
+     * Remembers the previously active season to restore after cleanup
      * @param context BrowserContext for API requests
      * @param aSeason Partial season data (only used on first call)
      * @returns Active Season (singleton)
@@ -108,10 +111,20 @@ export class SeasonFactory {
             return this.activeSeason
         }
 
+        // Remember the currently active season (if any) before we deactivate it
+        const activeSeasonIdResponse = await context.request.get('/api/admin/season/active', { headers })
+        const currentActiveSeasonId = await activeSeasonIdResponse.json() as number | null
+
+        if (currentActiveSeasonId) {
+            const seasonResponse = await context.request.get(`/api/admin/season/${currentActiveSeasonId}`, { headers })
+            this.previouslyActiveSeason = await seasonResponse.json()
+            console.info('🌞 > SEASON_FACTORY > Remembered previously active season:', this.previouslyActiveSeason.shortName)
+        }
+
         // Create the season (always creates with isActive: false per defaultSeason)
         const createdSeason = await this.createSeason(context, aSeason)
 
-        // Activate it via the activation endpoint
+        // Activate it via the activation endpoint (this deactivates the previous active season)
         const response = await context.request.post('/api/admin/season/active', {
             headers: headers,
             data: { seasonId: createdSeason.id }
@@ -130,7 +143,7 @@ export class SeasonFactory {
 
     /**
      * Clean up the cached active season singleton
-     * Deletes the season from database and clears the cache
+     * Deletes the test season from database, clears the cache, and restores previously active season
      * @param context BrowserContext for API requests
      */
     static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
@@ -139,6 +152,18 @@ export class SeasonFactory {
             await this.deleteSeason(context, this.activeSeason.id!)
             this.activeSeason = null
             console.info('🌞 > SEASON_FACTORY > Active season cache cleared')
+        }
+
+        // Restore the previously active season if one existed
+        if (this.previouslyActiveSeason) {
+            console.info('🌞 > SEASON_FACTORY > Restoring previously active season:', this.previouslyActiveSeason.shortName)
+            const response = await context.request.post('/api/admin/season/active', {
+                headers: headers,
+                data: { seasonId: this.previouslyActiveSeason.id }
+            })
+            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+            console.info('🌞 > SEASON_FACTORY > Previously active season restored')
+            this.previouslyActiveSeason = null
         }
     }
 

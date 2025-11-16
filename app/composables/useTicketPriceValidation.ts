@@ -63,10 +63,18 @@ export const useTicketPriceValidation = () => {
         return TicketPricesArraySchema.parse(prices)
     }
 
+    /**
+     * Schema for creating ticket prices - excludes id and seasonId (auto-assigned by database)
+     */
+    const CreateTicketPriceSchema = TicketPriceSchema.omit({ id: true, seasonId: true })
+    const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
+
     return {
         TicketTypeSchema,
         TicketPriceSchema,
         TicketPricesArraySchema,
+        CreateTicketPriceSchema,
+        CreateTicketPricesArraySchema,
         validateTicketPrice,
         validateTicketPrices,
         createTicketPrice

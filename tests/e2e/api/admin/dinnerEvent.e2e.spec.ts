@@ -1,21 +1,26 @@
 import {test, expect} from '@playwright/test'
 import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {OrderFactory} from '../../testDataFactories/orderFactory'
+import {HouseholdFactory} from '../../testDataFactories/householdFactory'
+import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '../../testHelpers'
 
 const {validatedBrowserContext} = testHelpers
 
-// Variables to store IDs for cleanup
+// Variables to store for cleanup and test data
 let testSeasonId: number
+let testSeason: Season
 
 test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
     // Setup test season before all tests
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const season = await SeasonFactory.createSeason(context)
-        testSeasonId = season.id as number
-        console.info(`Created test season ${season.shortName} with ID ${testSeasonId}`)
+        testSeason = await SeasonFactory.createSeason(context)
+        testSeasonId = testSeason.id as number
+        console.info(`Created test season ${testSeason.shortName} with ID ${testSeasonId}`)
     })
 
     test('PUT can create and GET can retrieve with status 200', async ({browser}) => {
@@ -35,10 +40,76 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(createdDinnerEvent.dinnerMode).toBe(dinnerEventData.dinnerMode)
         expect(createdDinnerEvent.seasonId).toBe(testSeasonId)
 
-        // AND: Dinner event can be retrieved
+        // AND: Dinner event can be retrieved with full relations (ADR-009: detail endpoint includes comprehensive data)
         const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
         expect(retrievedDinnerEvent?.id).toBe(createdDinnerEvent.id)
         expect(retrievedDinnerEvent?.menuTitle).toBe(dinnerEventData.menuTitle)
+
+        // AND: Use ticket prices from test season created in beforeAll
+        const {TicketTypeSchema} = useTicketPriceValidation()
+        const TicketType = TicketTypeSchema.enum
+
+        expect(testSeason.ticketPrices.length).toBe(4) // BABY (free), BABY (hungry), CHILD, ADULT
+
+        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)
+        expect(adultPrice).toBeDefined()
+        expect(adultPrice!.price).toBe(5000)
+        expect(adultPrice!.id).toBeDefined()
+
+        // AND: Create tickets for the dinner event using database ticket price
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
+        const inhabitant = inhabitants[0]
+
+        // Verify ticket price ID is from database
+        expect(adultPrice!.id).toBeGreaterThan(0)
+        expect(adultPrice!.id).not.toBe(1) // Should not be factory default
+
+        const [createdOrders1, createdOrders2] = await Promise.all([
+            OrderFactory.createOrder(context, {
+                dinnerEventId: createdDinnerEvent.id!,
+                orders: [{
+                    inhabitantId: inhabitant.id,
+                    ticketPriceId: adultPrice!.id!
+                }]
+            }),
+            OrderFactory.createOrder(context, {
+                dinnerEventId: createdDinnerEvent.id!,
+                orders: [{
+                    inhabitantId: inhabitant.id,
+                    ticketPriceId: adultPrice!.id!
+                }]
+            })
+        ])
+
+        expect(createdOrders1.length).toBe(1)
+        expect(createdOrders2.length).toBe(1)
+
+        // AND: Retrieve dinner event detail again with tickets
+        const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
+
+        // THEN: Detail includes cookingTeam with assignments (if assigned)
+        if (detailWithTickets?.cookingTeam) {
+            expect(detailWithTickets.cookingTeam.assignments.length).toBeGreaterThanOrEqual(0)
+            if (detailWithTickets.cookingTeam.assignments.length > 0) {
+                expect(detailWithTickets.cookingTeam.assignments[0].inhabitant.id).toBeDefined()
+            }
+        }
+
+        // AND: Detail includes tickets with full relations (ADR-009: detail endpoint comprehensive)
+        expect(detailWithTickets?.tickets).toBeDefined()
+        expect(detailWithTickets!.tickets.length).toBe(2)
+        const ticket = detailWithTickets!.tickets[0]
+        expect(ticket.inhabitant.id).toBe(inhabitant.id)
+        expect(ticket.inhabitant.name).toBeDefined()
+        expect(ticket.ticketPrice.id).toBe(adultPrice!.id)
+        expect(ticket.ticketPrice.ticketType).toBe(TicketType.ADULT)
+        expect(ticket.ticketPrice.price).toBe(5000)
+
+        // Cleanup orders before season deletion (ticketPrice has onDelete: Restrict)
+        await Promise.all([
+            OrderFactory.deleteOrder(context, createdOrders1[0].id!),
+            OrderFactory.deleteOrder(context, createdOrders2[0].id!)
+        ])
     })
 
     test('POST can update existing dinner event with status 200', async ({browser}) => {

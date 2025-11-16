@@ -54,7 +54,6 @@
  * - [Button] = Button groups (expanded EDIT mode)
  */
 import {FORM_MODES} from '~/types/form'
-import {WEEKDAY_FIELD_GROUP_CLASSES, WEEKDAY_BADGE_CONTENT_SIZE} from '~/utils/form'
 import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
 import {WEEKDAYS, type WeekDayMap, type WeekDay} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useDinnerEventValidation'
@@ -80,6 +79,9 @@ const {computeAggregatedPreferences} = useHousehold()
 // Inject responsive breakpoint
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
+
+// Design system
+const { WEEKDAY, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
 const tableData = computed(() => {
@@ -177,13 +179,6 @@ const visibleDays = computed(() => {
   return WEEKDAYS.filter(day => activeSeason.value!.cookingDays[day])
 })
 
-// Get weekday label for header (3 letters desktop, 1 letter mobile)
-const getWeekdayLabel = (day: WeekDay) => {
-  const compact = formatWeekdayCompact(day)
-  const capitalized = compact.charAt(0).toUpperCase() + compact.slice(1)
-  return getIsMd.value ? capitalized : capitalized.substring(0, 1)
-}
-
 // Table columns
 const columns = [
   {
@@ -270,15 +265,14 @@ const columns = [
 
         <!-- Preferences header (weekday labels) -->
         <template #preferences-header>
-          <UFieldGroup :size="getIsMd ? 'md' : 'sm'" orientation="horizontal" :class="WEEKDAY_FIELD_GROUP_CLASSES">
-            <div v-for="day in visibleDays" :key="day">
-              <UBadge color="neutral" variant="outline" :ui="{ rounded: 'rounded-none md:rounded-md' }">
-                <div
-                    :class="`${WEEKDAY_BADGE_CONTENT_SIZE} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
-                  {{ getWeekdayLabel(day) }}
-                </div>
-              </UBadge>
-            </div>
+          <UFieldGroup size="sm" orientation="horizontal" :class="WEEKDAY.fieldGroupClasses">
+            <DinnerModeSelector
+              v-for="day in visibleDays"
+              :key="day"
+              :model-value="day"
+              size="sm"
+              :name="`weekday-header-${day}`"
+            />
           </UFieldGroup>
         </template>
 
@@ -296,8 +290,8 @@ const columns = [
         <!-- Expanded row: EDIT mode preferences -->
         <template #expanded="{ row }">
           <UCard
-              :color="row.original.isSynthetic ? 'warning' : 'primary'"
-              variant="outline"
+              :color="row.original.isSynthetic ? COMPONENTS.powerMode.card.color : 'primary'"
+              :variant="COMPONENTS.powerMode.card.variant"
               class="max-w-full overflow-x-auto"
               :ui="{ body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4' }"
           >
@@ -311,9 +305,9 @@ const columns = [
             <!-- Power mode warning alert -->
             <UAlert
                 v-if="row.original.isSynthetic"
-                icon="i-fluent-emoji-high-contrast-woman-superhero"
-                color="warning"
-                variant="soft"
+                :icon="COMPONENTS.powerMode.alert.icon"
+                :color="COMPONENTS.powerMode.alert.color"
+                :variant="COMPONENTS.powerMode.alert.variant"
                 title="Du er ved at aktivere power mode"
                 :description="`Her kan du editere hele familien på en gang. Ændringer påvirker alle ${household.inhabitants.length} medlemmer i husstanden. Individuelle præferencer overskrives.`"
                 class="min-w-0"
@@ -343,9 +337,9 @@ const columns = [
                   Annuller
                 </UButton>
                 <UButton
-                    :color="row.original.isSynthetic ? 'warning' : 'primary'"
+                    :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : 'primary'"
                     variant="solid"
-                    :icon="row.original.isSynthetic ? 'i-heroicons-bolt' : 'i-heroicons-check'"
+                    :icon="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : 'i-heroicons-check'"
                     :size="getIsMd ? 'md' : 'sm'"
                     name="save-preferences"
                     @click="savePreferences"

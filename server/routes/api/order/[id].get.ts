@@ -1,14 +1,14 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {fetchOrder} from "~~/server/data/prismaRepository"
 import {z} from "zod"
-import type { Order } from '~/composables/useOrderValidation'
+import type { OrderDetail } from '~/composables/useOrderValidation'
 const {h3eFromCatch} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event):Promise<Order> => {
+export default defineEventHandler(async (event):Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

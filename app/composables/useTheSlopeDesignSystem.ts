@@ -314,6 +314,22 @@ export const COMPONENTS = {
     root: 'text-center',
     title: 'text-lg md:text-xl font-semibold',
     description: 'text-sm md:text-base'
+  },
+
+  // Power mode - family-wide bulk editing pattern
+  powerMode: {
+    color: 'warning' as const,
+    icon: 'i-fluent-emoji-high-contrast-woman-superhero',
+    buttonIcon: 'i-heroicons-bolt',
+    alert: {
+      color: 'warning' as const,
+      variant: 'soft' as const,
+      icon: 'i-fluent-emoji-high-contrast-woman-superhero'
+    },
+    card: {
+      color: 'warning' as const,
+      variant: 'outline' as const
+    }
   }
 } as const
 
@@ -373,16 +389,34 @@ export const ICONS = {
  *
  * Automatically adapts based on `isMd` breakpoint from layout.
  * Use these instead of manually checking `getIsMd ? 'lg' : 'md'`.
+ *
+ * Each size includes both badge size and matching icon size for consistency.
+ *
+ * @example
+ * ```vue
+ * <UBadge :size="SIZES.large.value">
+ *   <UIcon :name="ICONS.team" :size="SIZES.large.iconSize" />
+ * </UBadge>
+ * ```
  */
 export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   // Standard responsive: md on mobile, lg on desktop
-  standard: computed(() => isMd.value ? 'lg' : 'md'),
+  standard: {
+    value: computed(() => isMd.value ? 'lg' : 'md'),
+    iconSize: computed(() => isMd.value ? '20' : '16')
+  },
 
   // Small responsive: sm on mobile, md on desktop
-  small: computed(() => isMd.value ? 'md' : 'sm'),
+  small: {
+    value: computed(() => isMd.value ? 'md' : 'sm'),
+    iconSize: computed(() => isMd.value ? '16' : '12')
+  },
 
   // Large responsive: lg on mobile, xl on desktop
-  large: computed(() => isMd.value ? 'xl' : 'lg'),
+  large: {
+    value: computed(() => isMd.value ? 'xl' : 'lg'),
+    iconSize: computed(() => isMd.value ? '24' : '20')
+  },
 
   // Empty state avatar: 2xl on mobile, 3xl on desktop
   emptyStateAvatar: computed(() => isMd.value ? '3xl' : '2xl'),
@@ -395,6 +429,32 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   xl: 'xl' as const,
   '2xl': '2xl' as const,
   '3xl': '3xl' as const
+})
+
+/**
+ * createOrientations - Responsive orientation patterns for UFieldGroup
+ *
+ * Provides responsive orientation values for button groups and field groups.
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Orientation helpers
+ */
+const createOrientations = (isMd: Ref<boolean>) => ({
+  /**
+   * Responsive orientation: vertical on mobile, horizontal on desktop
+   * Common for button groups, weekday selectors showing multiple items
+   */
+  responsive: computed(() => isMd.value ? 'horizontal' : 'vertical'),
+
+  /**
+   * Always horizontal (desktop/mobile)
+   */
+  horizontal: 'horizontal' as const,
+
+  /**
+   * Always vertical (desktop/mobile)
+   */
+  vertical: 'vertical' as const
 })
 
 /**
@@ -422,7 +482,14 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
     color: 'neutral' as const,
     variant: 'outline' as const,
     ui: { rounded: 'rounded-none md:rounded-md' }
-  }
+  },
+
+  /**
+   * UFieldGroup classes for weekday preference displays
+   * Used in table headers and weekday selector rows
+   * Responsive padding, borders, background, and minimum widths
+   */
+  fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
 })
 
 /**
@@ -460,6 +527,7 @@ export const useTheSlopeDesignSystem = () => {
     // For NuxtUI components
     COLOR,
     TICKET_TYPE_COLORS,
+    ICONS,
 
     // Semantic design patterns (USE THESE!)
     TYPOGRAPHY,
@@ -469,6 +537,9 @@ export const useTheSlopeDesignSystem = () => {
 
     // Responsive sizes
     SIZES: createResponsiveSizes(isMd),
+
+    // Responsive orientations
+    ORIENTATIONS: createOrientations(isMd),
 
     // Weekday display helpers
     WEEKDAY: createWeekdayDisplay(isMd),

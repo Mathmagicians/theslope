@@ -20,7 +20,7 @@ import type { InhabitantDisplay } from '~/composables/useHouseholdValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, ICONS } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'compact' | 'regular' | 'edit'
 
@@ -63,32 +63,23 @@ const emit = defineEmits<{
   'remove:member': [assignmentId: number]
 }>()
 
-// Inject responsive breakpoint from parent
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Local state for editing team name
 const editedName = ref(props.teamName ?? '')
 
-// Reset edited name when team name prop changes
 watch(() => props.teamName, (newName) => {
   editedName.value = newName ?? ''
 })
 
-// Team color rotation based on teamNumber (1..N)
 const { getTeamColor } = useCookingTeam()
 const teamColor = computed(() => {
-  return getTeamColor(props.teamNumber - 1) // teamNumber is 1-based, getTeamColor expects 0-based
+  return getTeamColor(props.teamNumber - 1)
 })
 
-// Resolve color alias to actual CSS variable color name
 const appConfig = useAppConfig()
 const resolvedColor = computed(() => {
   const colorName = teamColor.value as string
   return appConfig.ui?.colors?.[colorName] ?? 'neutral'
 })
 
-// Group assignments by role
 const roleGroups = computed(() => {
   const groups = {
     CHEF: [] as TeamMember[],
@@ -111,11 +102,6 @@ const teamMembers = computed(() => [
   ...roleGroups.value.JUNIORHELPER
 ])
 
-// Format names for monitor display (comma-separated)
-const formatNames = (members: TeamMember[]): string => {
-  return members.map(m => `${m.inhabitant.name} ${m.inhabitant.lastName}`).join(', ')
-}
-
 const navigateToInhabitant = (inhabitantId: number) => {
   navigateTo(`/inhabitant/${inhabitantId}`)
 }
@@ -124,7 +110,6 @@ const handleNameUpdate = () => {
   if (editedName.value !== props.teamName && editedName.value.trim()) {
     emit('update:teamName', editedName.value.trim())
   } else if (!editedName.value.trim()) {
-    // Revert to original if empty
     editedName.value = props.teamName
   }
 }
@@ -134,11 +119,7 @@ const handleDelete = () => {
 }
 
 const isEditable = computed(() => props.mode === 'edit')
-
-// Empty state check (same condition used in multiple modes)
 const hasNoMembers = computed(() => props.assignments.length === 0)
-
-// Cooking days count (number of dinner events assigned to this team)
 const cookingDaysCount = computed(() => props.dinnerEvents.length)
 
 // Funny empty state messages (rotates based on team number for consistency)
@@ -154,29 +135,27 @@ const emptyStateMessage = computed(() => {
   return emptyStateMessages[index]
 })
 
-// Ref to InhabitantSelector for refresh
 const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
 
-// Expose refresh method to parent
 defineExpose({
   refreshInhabitants: async () => {
     await inhabitantSelectorRef.value?.refresh()
   }
 })
 </script>
-chan
+
 <template>
   <!-- MONITOR MODE: Large display for kitchen monitors -->
   <div v-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
-      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'xl' : 'lg'" class="w-fit">
-        <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '20' : '16'" class="inline" /> {{ teamName }}
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+        <UIcon :name="ICONS.team" :size="SIZES.large.iconSize.value" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
         👥 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -190,7 +169,7 @@ chan
           <UserListItem
             :to-display="roleGroups.CHEF.map(m => m.inhabitant)"
             :compact="false"
-            :size="getIsMd ? 'lg' : 'md'"
+            :size="SIZES.standard.value.value"
             :ring-color="teamColor"
             :label="ROLE_LABELS.CHEF"
           />
@@ -204,7 +183,7 @@ chan
           <UserListItem
             :to-display="teamMembers.map(m => m.inhabitant)"
             :compact="false"
-            :size="getIsMd ? 'lg' : 'md'"
+            :size="SIZES.standard.value.value"
             :ring-color="teamColor"
             label="medlemmer"
           />
@@ -234,21 +213,21 @@ chan
       <UBadge
         :color="teamColor"
         variant="soft"
-        size="md"
+        :size="SIZES.small.value.value"
       >
         {{ teamName }}
       </UBadge>
       <UBadge
         :color="teamColor"
         variant="soft"
-        size="md"
+        :size="SIZES.small.value.value"
       >
         👥 {{ assignments.length }}
       </UBadge>
       <UBadge
         :color="teamColor"
         variant="soft"
-        size="md"
+        :size="SIZES.small.value.value"
       >
         📅 {{ cookingDaysCount }}
       </UBadge>
@@ -283,8 +262,8 @@ chan
       :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="rounded-full p-2 md:p-3">
-          <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '24' : '16'" />
+        <UBadge :color="teamColor" variant="soft" :size="SIZES.standard.value.value" class="rounded-full p-2 md:p-3">
+          <UIcon :name="ICONS.team" :size="SIZES.standard.iconSize.value" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
           <UInput
@@ -317,14 +296,14 @@ chan
           <UBadge
             :color="teamColor"
             variant="soft"
-            size="md"
+            :size="SIZES.large.value.value"
           >
             👥 {{ assignments.length }}
           </UBadge>
           <UBadge
             :color="teamColor"
             variant="soft"
-            size="md"
+            :size="SIZES.large.value.value"
           >
             📅 {{ cookingDaysCount }}
           </UBadge>
@@ -344,13 +323,13 @@ chan
 
     <!-- VIEW MODE: Team name header -->
     <div v-else class="flex items-center gap-2 flex-wrap p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
-      <UBadge :color="teamColor" variant="soft" :size="getIsMd ? 'lg' : 'md'" class="w-fit">
-        <UIcon name="i-fluent-mdl2-team-favorite" :size="getIsMd ? '20' : '16'" class="inline" /> {{ teamName }}
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+        <UIcon :name="ICONS.team" :size="SIZES.large.iconSize.value" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" size="md" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
         👥 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" size="md" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>

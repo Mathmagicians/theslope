@@ -15,7 +15,7 @@ describe('useOrderValidation', () => {
     SwapOrderRequestSchema,
     OrderQuerySchema,
     OrderIdSchema,
-    OrderSchema,
+    OrderDisplaySchema,
     OrderDetailSchema,
     OrderHistorySchema,
     serializeOrder,
@@ -175,11 +175,11 @@ describe('useOrderValidation', () => {
   })
 
   describe('Domain Schemas', () => {
-    describe('OrderSchema', () => {
+    describe('OrderDisplaySchema', () => {
       it('should accept valid order', () => {
         const validOrder = OrderFactory.defaultOrder()
 
-        const result = OrderSchema.safeParse(validOrder)
+        const result = OrderDisplaySchema.safeParse(validOrder)
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
@@ -187,7 +187,7 @@ describe('useOrderValidation', () => {
         'should accept order with state: %s',
         (state) => {
           const order = OrderFactory.defaultOrder(undefined, { state })
-          const result = OrderSchema.safeParse(order)
+          const result = OrderDisplaySchema.safeParse(order)
           expect(result.success, getValidationError(result)).toBe(true)
         }
       )
@@ -199,7 +199,7 @@ describe('useOrderValidation', () => {
           closedAt: null
         })
 
-        const result = OrderSchema.safeParse(order)
+        const result = OrderDisplaySchema.safeParse(order)
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
@@ -211,7 +211,7 @@ describe('useOrderValidation', () => {
           releasedAt: '2025-01-03T00:00:00.000Z'
         }
 
-        const result = OrderSchema.safeParse(order)
+        const result = OrderDisplaySchema.safeParse(order)
         expect(result.success, getValidationError(result)).toBe(true)
         if (result.success) {
           expect(result.data.createdAt).toBeInstanceOf(Date)
@@ -228,12 +228,13 @@ describe('useOrderValidation', () => {
         'priceAtBooking',
         'state',
         'createdAt',
-        'updatedAt'
+        'updatedAt',
+        'ticketType'
       ])('should reject missing required field: %s', (field) => {
         const order = OrderFactory.defaultOrder()
         delete (order as any)[field]
 
-        const result = OrderSchema.safeParse(order)
+        const result = OrderDisplaySchema.safeParse(order)
         expect(result.success).toBe(false)
       })
     })

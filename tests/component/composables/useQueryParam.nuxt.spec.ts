@@ -47,7 +47,8 @@ describe('useQueryParam.ts', () => {
     const createModeParam = () => useQueryParam<Mode>('mode', {
       deserialize: (s) => validModes.includes(s as Mode) ? s as Mode : null,
       validate: (v) => validModes.includes(v),
-      defaultValue: 'view'
+      defaultValue: 'view',
+      syncWhen: () => false // Disable auto-sync for isolated testing
     })
 
     describe('Reading from URL', () => {
@@ -147,7 +148,8 @@ describe('useQueryParam.ts', () => {
         const parsed = parseDate(s)
         return parsed && !isNaN(parsed.getTime()) ? parsed : null
       },
-      defaultValue: () => new Date('2025-01-01')
+      defaultValue: () => new Date('2025-01-01'),
+      syncWhen: () => false // Disable auto-sync for isolated testing
     })
 
     describe('Reading from URL', () => {
@@ -235,7 +237,8 @@ describe('useQueryParam.ts', () => {
         setupQuery({other: 'value'})
 
         const {value} = useQueryParam<string>('test', {
-          defaultValue: 'default'
+          defaultValue: 'default',
+          syncWhen: () => false
         })
 
         value.value = 'new'
@@ -252,7 +255,8 @@ describe('useQueryParam.ts', () => {
 
         const {value} = useQueryParam<string>('test', {
           defaultValue: 'default',
-          preserveOtherParams: false
+          preserveOtherParams: false,
+          syncWhen: () => false
         })
 
         value.value = 'new'
@@ -269,7 +273,8 @@ describe('useQueryParam.ts', () => {
         setupQuery({})
 
         const {value} = useQueryParam<string>('test', {
-          defaultValue: 'default'
+          defaultValue: 'default',
+          syncWhen: () => false
         })
 
         value.value = 'new'
@@ -283,7 +288,8 @@ describe('useQueryParam.ts', () => {
 
         const {value} = useQueryParam<string>('test', {
           defaultValue: 'default',
-          replaceHistory: false
+          replaceHistory: false,
+          syncWhen: () => false
         })
 
         value.value = 'new'
@@ -298,7 +304,8 @@ describe('useQueryParam.ts', () => {
         setupQuery({})
 
         const {value} = useQueryParam<string>('test', {
-          defaultValue: () => 'factory-value'
+          defaultValue: () => 'factory-value',
+          syncWhen: () => false
         })
 
         expect(value.value).toBe('factory-value')
@@ -362,13 +369,102 @@ describe('useQueryParam.ts', () => {
     }
   })
 
+  describe('Auto-Sync (syncWhen)', () => {
+    it('should auto-sync when URL is invalid and syncWhen returns true', async () => {
+      setupQuery({mode: 'invalid'})
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => true // Auto-sync enabled
+      })
+
+      // Value should be 'view' (default for invalid)
+      expect(value.value).toBe('view')
+
+      // Wait for watchPostEffect to run
+      await flushPromises()
+
+      // Should have called navigateTo to sync URL
+      expect(mockNavigateTo).toHaveBeenCalledWith(
+        {path: '/test', query: {mode: 'view'}},
+        {replace: true}
+      )
+    })
+
+    it('should NOT auto-sync when syncWhen returns false', async () => {
+      setupQuery({mode: 'invalid'})
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => false // Auto-sync disabled
+      })
+
+      expect(value.value).toBe('view')
+      await flushPromises()
+
+      // Should NOT have called navigateTo
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('should wait for syncWhen condition before auto-syncing', async () => {
+      setupQuery({mode: 'invalid'})
+
+      const isReady = ref(false)
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => isReady.value
+      })
+
+      expect(value.value).toBe('view')
+      await flushPromises()
+
+      // Should NOT sync yet (isReady = false)
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+
+      // Now enable sync condition
+      isReady.value = true
+      await flushPromises()
+
+      // Should sync now
+      expect(mockNavigateTo).toHaveBeenCalledWith(
+        {path: '/test', query: {mode: 'view'}},
+        {replace: true}
+      )
+    })
+
+    it('should NOT auto-sync when URL already matches value', async () => {
+      setupQuery({mode: 'view'})
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => true
+      })
+
+      expect(value.value).toBe('view')
+      await flushPromises()
+
+      // URL already matches, no need to sync
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+  })
+
   describe('Edge Cases', () => {
     it('should handle empty string as valid query value', () => {
       setupQuery({test: ''})
 
       const {value} = useQueryParam<string>('test', {
         deserialize: (s) => s, // Empty string is valid
-        defaultValue: 'default'
+        defaultValue: 'default',
+        syncWhen: () => false // Disable auto-sync for this test
       })
 
       expect(value.value).toBe('')
@@ -378,7 +474,8 @@ describe('useQueryParam.ts', () => {
       setupQuery({})
 
       const {value} = useQueryParam<string>('test', {
-        defaultValue: 'default'
+        defaultValue: 'default',
+        syncWhen: () => false // Disable auto-sync for this test
       })
 
       value.value = 'value/with/slashes'
@@ -392,7 +489,8 @@ describe('useQueryParam.ts', () => {
 
       const {value} = useQueryParam<string>('test', {
         validate: () => false,
-        defaultValue: 'default'
+        defaultValue: 'default',
+        syncWhen: () => false // Disable auto-sync for this test
       })
 
       expect(value.value).toBe('default')

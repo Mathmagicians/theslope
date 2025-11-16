@@ -109,6 +109,7 @@ const allergies = computed(() => {
     // TODO: Get allergies for inhabitants with orders for this event
     return []
 })
+const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
 const teamAssignments = computed(() => {
     // Get cooking team assignments from the selected event's cooking team
     return selectedDinnerEvent.value?.cookingTeam?.assignments ?? []
@@ -189,9 +190,8 @@ useHead({
         <DinnerMenuHero
           :dinner-event="selectedDinnerEvent"
           :allergies="allergies"
-          :has-booking="true"
-          :can-swap="true"
-          :can-cancel="true"
+          :orders="orders"
+          :ticket-prices="ticketPrices"
         />
       </template>
 

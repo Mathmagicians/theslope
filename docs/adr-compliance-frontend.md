@@ -351,6 +351,8 @@ Use this checklist when creating/reviewing frontend components.
 **UI & Presentation:**
 - [ ] **CRITICAL:** Use NuxtUI components (UButton, UInput, UCard, USelect, UCheckbox, etc.) instead of hand-coded HTML (Nuxt stack principle)
 - [ ] **CRITICAL:** Mobile-first responsive design - 90% of users on mobile
+- [ ] **CRITICAL:** DRY components - extract repeated logic into reusable atomic components
+- [ ] **CRITICAL:** Clean template structure - use single if-else instead of checking same condition multiple times (e.g., `v-if="isTitle"` / `v-else` instead of `v-if="isTitle"` / `v-else-if="!isTitle && ..."`)
 - [ ] Inject `isMd` from layout via `inject<Ref<boolean>>('isMd')` for reactive breakpoint detection
 - [ ] Use `md:` breakpoint in Tailwind classes for responsive styling
 - [ ] For NuxtUI component props (colors, variants, size), use `isMd` ref to switch between mobile/desktop values

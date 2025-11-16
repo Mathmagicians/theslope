@@ -1,6 +1,8 @@
 import {describe, it, expect} from 'vitest'
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
+import {OrderFactory} from '../../e2e/testDataFactories/orderFactory'
+import {HouseholdFactory} from '../../e2e/testDataFactories/householdFactory'
 
 describe('useDinnerEventValidation', () => {
     const {
@@ -8,7 +10,8 @@ describe('useDinnerEventValidation', () => {
         BaseDinnerEventSchema,
         DinnerEventCreateSchema,
         DinnerEventUpdateSchema,
-        DinnerEventResponseSchema
+        DinnerEventResponseSchema,
+        DinnerEventDetailSchema
     } = useDinnerEventValidation()
 
     describe('DinnerModeSchema', () => {
@@ -147,6 +150,104 @@ describe('useDinnerEventValidation', () => {
             expect(result.id).toBe(1)
             expect(result.menuTitle).toBe('Test Dinner')
             expect(result.dinnerMode).toBe('DINEIN')
+        })
+    })
+
+    describe('DinnerEventDetailSchema', () => {
+        // Factory-based test data (DRY principle)
+        const baseDinnerEvent = {
+            id: 1,
+            date: new Date('2025-01-15'),
+            menuTitle: 'Pasta Night',
+            dinnerMode: 'DINEIN' as const
+        }
+
+        const createChef = () => {
+            const inhabitant = HouseholdFactory.defaultInhabitantData('test-chef')
+            return {id: 5, ...inhabitant}
+        }
+
+        const createCookingTeam = () => ({
+            id: 10,
+            seasonId: 1,
+            name: 'Team Awesome',
+            assignments: [
+                {
+                    id: 1,
+                    cookingTeamId: 10,
+                    inhabitantId: 5,
+                    role: 'CHEF' as const,
+                    allocationPercentage: 100,
+                    inhabitant: createChef()
+                }
+            ]
+        })
+
+        const createTickets = () => [
+            {
+                ...OrderFactory.defaultOrder('test-1', {id: 1}),
+                inhabitant: createChef(),
+                bookedByUser: {id: 1, email: 'test@example.com'},
+                ticketPrice: {id: 1, ticketType: 'ADULT' as const, price: 5000, description: null}
+            },
+            {
+                ...OrderFactory.defaultOrder('test-2', {id: 2}),
+                inhabitant: createChef(),
+                bookedByUser: {id: 1, email: 'test@example.com'},
+                ticketPrice: {id: 2, ticketType: 'CHILD' as const, price: 2500, description: null}
+            }
+        ]
+
+        it('GIVEN dinner event with all relations WHEN parsing THEN validates all relations', () => {
+            const result = DinnerEventDetailSchema.parse({
+                ...baseDinnerEvent,
+                chef: createChef(),
+                cookingTeam: createCookingTeam(),
+                tickets: createTickets()
+            })
+
+            expect(result.chef).toBeDefined()
+            expect(result.cookingTeam?.assignments).toHaveLength(1)
+            expect(result.tickets).toHaveLength(2)
+        })
+
+        it.each([
+            {desc: 'only chef', data: {chef: createChef()}, hasChef: true, hasTeam: false, hasTickets: false},
+            {desc: 'only cookingTeam', data: {cookingTeam: createCookingTeam()}, hasChef: false, hasTeam: true, hasTickets: false},
+            {desc: 'only tickets', data: {tickets: createTickets()}, hasChef: false, hasTeam: false, hasTickets: true},
+            {desc: 'chef and tickets', data: {chef: createChef(), tickets: createTickets()}, hasChef: true, hasTeam: false, hasTickets: true},
+            {desc: 'no relations', data: {}, hasChef: false, hasTeam: false, hasTickets: false}
+        ])('GIVEN $desc WHEN parsing THEN validates correctly', ({data, hasChef, hasTeam, hasTickets}) => {
+            const result = DinnerEventDetailSchema.parse({...baseDinnerEvent, ...data})
+
+            expect(result.chef !== undefined).toBe(hasChef)
+            expect(result.cookingTeam !== undefined).toBe(hasTeam)
+            expect(result.tickets !== undefined).toBe(hasTickets)
+        })
+
+        it.each([
+            {desc: 'chef is null', data: {chef: null}},
+            {desc: 'cookingTeam is null', data: {cookingTeam: null}},
+            {desc: 'tickets is empty array', data: {tickets: []}}
+        ])('GIVEN $desc WHEN parsing THEN validates successfully', ({data}) => {
+            expect(() => DinnerEventDetailSchema.parse({...baseDinnerEvent, ...data})).not.toThrow()
+        })
+
+        it.each([
+            {desc: 'chef missing required fields', data: {chef: {id: 5}}},
+            {desc: 'cookingTeam missing required fields', data: {cookingTeam: {id: 10}}},
+            {desc: 'tickets with invalid order', data: {tickets: [{id: 1}]}},
+            {desc: 'team with invalid role', data: {cookingTeam: {id: 10, seasonId: 1, name: 'Team', assignments: [{role: 'INVALID'}]}}}
+        ])('GIVEN $desc WHEN parsing THEN throws validation error', ({data}) => {
+            expect(() => DinnerEventDetailSchema.parse({...baseDinnerEvent, ...data})).toThrow()
+        })
+
+        it('GIVEN detail without required id WHEN parsing THEN throws error', () => {
+            expect(() => DinnerEventDetailSchema.parse({
+                date: new Date('2025-01-15'),
+                menuTitle: 'Test',
+                dinnerMode: 'DINEIN' as const
+            })).toThrow()
         })
     })
 })

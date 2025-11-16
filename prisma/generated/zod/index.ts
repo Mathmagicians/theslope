@@ -22,7 +22,7 @@ export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId'
 
 export const HouseholdScalarFieldEnumSchema = z.enum(['id','heynaboId','pbsId','movedInDate','moveOutDate','name','address']);
 
-export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','dinnerMode','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
+export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','totalCost','heynaboEventId','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
 
 export const OrderScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','bookedByUserId','ticketPriceId','priceAtBooking','state','releasedAt','closedAt','createdAt','updatedAt']);
 
@@ -60,7 +60,11 @@ export const DinnerModeSchema = z.enum(['TAKEAWAY','DINEIN','DINEINLATE','NONE']
 
 export type DinnerModeType = `${z.infer<typeof DinnerModeSchema>}`
 
-export const OrderStateSchema = z.enum(['BOOKED','RELEASED','CLOSED']);
+export const DinnerStateSchema = z.enum(['SCHEDULED','ANNOUNCED','CANCELLED','CONSUMED']);
+
+export type DinnerStateType = `${z.infer<typeof DinnerStateSchema>}`
+
+export const OrderStateSchema = z.enum(['BOOKED','RELEASED','CANCELLED','CLOSED']);
 
 export type OrderStateType = `${z.infer<typeof OrderStateSchema>}`
 
@@ -151,12 +155,14 @@ export type Household = z.infer<typeof HouseholdSchema>
 /////////////////////////////////////////
 
 export const DinnerEventSchema = z.object({
-  dinnerMode: DinnerModeSchema,
+  state: DinnerStateSchema,
   id: z.number().int(),
   date: z.coerce.date(),
   menuTitle: z.string(),
   menuDescription: z.string().nullable(),
   menuPictureUrl: z.string().nullable(),
+  totalCost: z.number().int(),
+  heynaboEventId: z.number().int().nullable(),
   chefId: z.number().int().nullable(),
   cookingTeamId: z.number().int().nullable(),
   createdAt: z.coerce.date(),
@@ -503,7 +509,9 @@ export const DinnerEventSelectSchema: z.ZodType<Prisma.DinnerEventSelect> = z.ob
   menuTitle: z.boolean().optional(),
   menuDescription: z.boolean().optional(),
   menuPictureUrl: z.boolean().optional(),
-  dinnerMode: z.boolean().optional(),
+  state: z.boolean().optional(),
+  totalCost: z.boolean().optional(),
+  heynaboEventId: z.boolean().optional(),
   chefId: z.boolean().optional(),
   cookingTeamId: z.boolean().optional(),
   createdAt: z.boolean().optional(),
@@ -865,11 +873,21 @@ export const AllergyOrderByWithRelationInputSchema: z.ZodType<Prisma.AllergyOrde
   allergyType: z.lazy(() => AllergyTypeOrderByWithRelationInputSchema).optional(),
 }).strict();
 
-export const AllergyWhereUniqueInputSchema: z.ZodType<Prisma.AllergyWhereUniqueInput> = z.object({
-  id: z.number().int(),
-})
+export const AllergyWhereUniqueInputSchema: z.ZodType<Prisma.AllergyWhereUniqueInput> = z.union([
+  z.object({
+    id: z.number().int(),
+    inhabitantId_allergyTypeId: z.lazy(() => AllergyInhabitantIdAllergyTypeIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.number().int(),
+  }),
+  z.object({
+    inhabitantId_allergyTypeId: z.lazy(() => AllergyInhabitantIdAllergyTypeIdCompoundUniqueInputSchema),
+  }),
+])
 .and(z.object({
   id: z.number().int().optional(),
+  inhabitantId_allergyTypeId: z.lazy(() => AllergyInhabitantIdAllergyTypeIdCompoundUniqueInputSchema).optional(),
   AND: z.union([ z.lazy(() => AllergyWhereInputSchema), z.lazy(() => AllergyWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => AllergyWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => AllergyWhereInputSchema), z.lazy(() => AllergyWhereInputSchema).array() ]).optional(),
@@ -1220,7 +1238,9 @@ export const DinnerEventWhereInputSchema: z.ZodType<Prisma.DinnerEventWhereInput
   menuTitle: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   menuDescription: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   menuPictureUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
+  state: z.union([ z.lazy(() => EnumDinnerStateFilterSchema), z.lazy(() => DinnerStateSchema) ]).optional(),
+  totalCost: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  heynaboEventId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   chefId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   cookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -1238,7 +1258,9 @@ export const DinnerEventOrderByWithRelationInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.lazy(() => SortOrderSchema).optional(),
   menuDescription: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   menuPictureUrl: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
+  state: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   chefId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   cookingTeamId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -1250,11 +1272,21 @@ export const DinnerEventOrderByWithRelationInputSchema: z.ZodType<Prisma.DinnerE
   Season: z.lazy(() => SeasonOrderByWithRelationInputSchema).optional(),
 }).strict();
 
-export const DinnerEventWhereUniqueInputSchema: z.ZodType<Prisma.DinnerEventWhereUniqueInput> = z.object({
-  id: z.number().int(),
-})
+export const DinnerEventWhereUniqueInputSchema: z.ZodType<Prisma.DinnerEventWhereUniqueInput> = z.union([
+  z.object({
+    id: z.number().int(),
+    heynaboEventId: z.number().int(),
+  }),
+  z.object({
+    id: z.number().int(),
+  }),
+  z.object({
+    heynaboEventId: z.number().int(),
+  }),
+])
 .and(z.object({
   id: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional(),
   AND: z.union([ z.lazy(() => DinnerEventWhereInputSchema), z.lazy(() => DinnerEventWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => DinnerEventWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => DinnerEventWhereInputSchema), z.lazy(() => DinnerEventWhereInputSchema).array() ]).optional(),
@@ -1262,7 +1294,8 @@ export const DinnerEventWhereUniqueInputSchema: z.ZodType<Prisma.DinnerEventWher
   menuTitle: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   menuDescription: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   menuPictureUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
+  state: z.union([ z.lazy(() => EnumDinnerStateFilterSchema), z.lazy(() => DinnerStateSchema) ]).optional(),
+  totalCost: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   chefId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   cookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -1280,7 +1313,9 @@ export const DinnerEventOrderByWithAggregationInputSchema: z.ZodType<Prisma.Dinn
   menuTitle: z.lazy(() => SortOrderSchema).optional(),
   menuDescription: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   menuPictureUrl: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
+  state: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   chefId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   cookingTeamId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -1302,7 +1337,9 @@ export const DinnerEventScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.D
   menuTitle: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   menuDescription: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   menuPictureUrl: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeWithAggregatesFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
+  state: z.union([ z.lazy(() => EnumDinnerStateWithAggregatesFilterSchema), z.lazy(() => DinnerStateSchema) ]).optional(),
+  totalCost: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  heynaboEventId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
   chefId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
   cookingTeamId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
@@ -2294,7 +2331,9 @@ export const DinnerEventCreateInputSchema: z.ZodType<Prisma.DinnerEventCreateInp
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   chef: z.lazy(() => InhabitantCreateNestedOneWithoutDinnerEventInputSchema).optional(),
@@ -2309,7 +2348,9 @@ export const DinnerEventUncheckedCreateInputSchema: z.ZodType<Prisma.DinnerEvent
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -2323,7 +2364,9 @@ export const DinnerEventUpdateInputSchema: z.ZodType<Prisma.DinnerEventUpdateInp
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   chef: z.lazy(() => InhabitantUpdateOneWithoutDinnerEventNestedInputSchema).optional(),
@@ -2338,7 +2381,9 @@ export const DinnerEventUncheckedUpdateInputSchema: z.ZodType<Prisma.DinnerEvent
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -2353,7 +2398,9 @@ export const DinnerEventCreateManyInputSchema: z.ZodType<Prisma.DinnerEventCreat
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -2366,7 +2413,9 @@ export const DinnerEventUpdateManyMutationInputSchema: z.ZodType<Prisma.DinnerEv
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2377,7 +2426,9 @@ export const DinnerEventUncheckedUpdateManyInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3091,6 +3142,11 @@ export const AllergyTypeScalarRelationFilterSchema: z.ZodType<Prisma.AllergyType
   isNot: z.lazy(() => AllergyTypeWhereInputSchema).optional(),
 }).strict();
 
+export const AllergyInhabitantIdAllergyTypeIdCompoundUniqueInputSchema: z.ZodType<Prisma.AllergyInhabitantIdAllergyTypeIdCompoundUniqueInput> = z.object({
+  inhabitantId: z.number(),
+  allergyTypeId: z.number(),
+}).strict();
+
 export const AllergyCountOrderByAggregateInputSchema: z.ZodType<Prisma.AllergyCountOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
@@ -3401,11 +3457,11 @@ export const HouseholdSumOrderByAggregateInputSchema: z.ZodType<Prisma.Household
   pbsId: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
-export const EnumDinnerModeFilterSchema: z.ZodType<Prisma.EnumDinnerModeFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
+export const EnumDinnerStateFilterSchema: z.ZodType<Prisma.EnumDinnerStateFilter> = z.object({
+  equals: z.lazy(() => DinnerStateSchema).optional(),
+  in: z.lazy(() => DinnerStateSchema).array().optional(),
+  notIn: z.lazy(() => DinnerStateSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => NestedEnumDinnerStateFilterSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamNullableScalarRelationFilterSchema: z.ZodType<Prisma.CookingTeamNullableScalarRelationFilter> = z.object({
@@ -3424,7 +3480,9 @@ export const DinnerEventCountOrderByAggregateInputSchema: z.ZodType<Prisma.Dinne
   menuTitle: z.lazy(() => SortOrderSchema).optional(),
   menuDescription: z.lazy(() => SortOrderSchema).optional(),
   menuPictureUrl: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
+  state: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.lazy(() => SortOrderSchema).optional(),
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -3434,6 +3492,8 @@ export const DinnerEventCountOrderByAggregateInputSchema: z.ZodType<Prisma.Dinne
 
 export const DinnerEventAvgOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerEventAvgOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.lazy(() => SortOrderSchema).optional(),
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
@@ -3445,7 +3505,9 @@ export const DinnerEventMaxOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.lazy(() => SortOrderSchema).optional(),
   menuDescription: z.lazy(() => SortOrderSchema).optional(),
   menuPictureUrl: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
+  state: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.lazy(() => SortOrderSchema).optional(),
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -3459,7 +3521,9 @@ export const DinnerEventMinOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.lazy(() => SortOrderSchema).optional(),
   menuDescription: z.lazy(() => SortOrderSchema).optional(),
   menuPictureUrl: z.lazy(() => SortOrderSchema).optional(),
-  dinnerMode: z.lazy(() => SortOrderSchema).optional(),
+  state: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.lazy(() => SortOrderSchema).optional(),
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -3469,19 +3533,21 @@ export const DinnerEventMinOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerE
 
 export const DinnerEventSumOrderByAggregateInputSchema: z.ZodType<Prisma.DinnerEventSumOrderByAggregateInput> = z.object({
   id: z.lazy(() => SortOrderSchema).optional(),
+  totalCost: z.lazy(() => SortOrderSchema).optional(),
+  heynaboEventId: z.lazy(() => SortOrderSchema).optional(),
   chefId: z.lazy(() => SortOrderSchema).optional(),
   cookingTeamId: z.lazy(() => SortOrderSchema).optional(),
   seasonId: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
-export const EnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDinnerModeWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
+export const EnumDinnerStateWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDinnerStateWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DinnerStateSchema).optional(),
+  in: z.lazy(() => DinnerStateSchema).array().optional(),
+  notIn: z.lazy(() => DinnerStateSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => NestedEnumDinnerStateWithAggregatesFilterSchema) ]).optional(),
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDinnerStateFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDinnerStateFilterSchema).optional(),
 }).strict();
 
 export const EnumOrderStateFilterSchema: z.ZodType<Prisma.EnumOrderStateFilter> = z.object({
@@ -4495,8 +4561,8 @@ export const OrderUncheckedCreateNestedManyWithoutDinnerEventInputSchema: z.ZodT
   connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
 }).strict();
 
-export const EnumDinnerModeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDinnerModeFieldUpdateOperationsInput> = z.object({
-  set: z.lazy(() => DinnerModeSchema).optional(),
+export const EnumDinnerStateFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDinnerStateFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => DinnerStateSchema).optional(),
 }).strict();
 
 export const InhabitantUpdateOneWithoutDinnerEventNestedInputSchema: z.ZodType<Prisma.InhabitantUpdateOneWithoutDinnerEventNestedInput> = z.object({
@@ -5319,21 +5385,21 @@ export const NestedDateTimeNullableWithAggregatesFilterSchema: z.ZodType<Prisma.
   _max: z.lazy(() => NestedDateTimeNullableFilterSchema).optional(),
 }).strict();
 
-export const NestedEnumDinnerModeFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeFilterSchema) ]).optional(),
+export const NestedEnumDinnerStateFilterSchema: z.ZodType<Prisma.NestedEnumDinnerStateFilter> = z.object({
+  equals: z.lazy(() => DinnerStateSchema).optional(),
+  in: z.lazy(() => DinnerStateSchema).array().optional(),
+  notIn: z.lazy(() => DinnerStateSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => NestedEnumDinnerStateFilterSchema) ]).optional(),
 }).strict();
 
-export const NestedEnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeWithAggregatesFilter> = z.object({
-  equals: z.lazy(() => DinnerModeSchema).optional(),
-  in: z.lazy(() => DinnerModeSchema).array().optional(),
-  notIn: z.lazy(() => DinnerModeSchema).array().optional(),
-  not: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => NestedEnumDinnerModeWithAggregatesFilterSchema) ]).optional(),
+export const NestedEnumDinnerStateWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDinnerStateWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DinnerStateSchema).optional(),
+  in: z.lazy(() => DinnerStateSchema).array().optional(),
+  notIn: z.lazy(() => DinnerStateSchema).array().optional(),
+  not: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => NestedEnumDinnerStateWithAggregatesFilterSchema) ]).optional(),
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
-  _max: z.lazy(() => NestedEnumDinnerModeFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDinnerStateFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDinnerStateFilterSchema).optional(),
 }).strict();
 
 export const NestedEnumOrderStateFilterSchema: z.ZodType<Prisma.NestedEnumOrderStateFilter> = z.object({
@@ -5848,7 +5914,9 @@ export const DinnerEventCreateWithoutChefInputSchema: z.ZodType<Prisma.DinnerEve
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cookingTeam: z.lazy(() => CookingTeamCreateNestedOneWithoutDinnersInputSchema).optional(),
@@ -5862,7 +5930,9 @@ export const DinnerEventUncheckedCreateWithoutChefInputSchema: z.ZodType<Prisma.
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
@@ -6052,7 +6122,9 @@ export const DinnerEventScalarWhereInputSchema: z.ZodType<Prisma.DinnerEventScal
   menuTitle: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   menuDescription: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   menuPictureUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
+  state: z.union([ z.lazy(() => EnumDinnerStateFilterSchema), z.lazy(() => DinnerStateSchema) ]).optional(),
+  totalCost: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  heynaboEventId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   chefId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   cookingTeamId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -6478,7 +6550,9 @@ export const DinnerEventCreateWithoutTicketsInputSchema: z.ZodType<Prisma.Dinner
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   chef: z.lazy(() => InhabitantCreateNestedOneWithoutDinnerEventInputSchema).optional(),
@@ -6492,7 +6566,9 @@ export const DinnerEventUncheckedCreateWithoutTicketsInputSchema: z.ZodType<Pris
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -6647,7 +6723,9 @@ export const DinnerEventUpdateWithoutTicketsInputSchema: z.ZodType<Prisma.Dinner
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   chef: z.lazy(() => InhabitantUpdateOneWithoutDinnerEventNestedInputSchema).optional(),
@@ -6661,7 +6739,9 @@ export const DinnerEventUncheckedUpdateWithoutTicketsInputSchema: z.ZodType<Pris
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -7079,7 +7159,9 @@ export const DinnerEventCreateWithoutCookingTeamInputSchema: z.ZodType<Prisma.Di
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   chef: z.lazy(() => InhabitantCreateNestedOneWithoutDinnerEventInputSchema).optional(),
@@ -7093,7 +7175,9 @@ export const DinnerEventUncheckedCreateWithoutCookingTeamInputSchema: z.ZodType<
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
@@ -7383,7 +7467,9 @@ export const DinnerEventCreateWithoutSeasonInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   chef: z.lazy(() => InhabitantCreateNestedOneWithoutDinnerEventInputSchema).optional(),
@@ -7397,7 +7483,9 @@ export const DinnerEventUncheckedCreateWithoutSeasonInputSchema: z.ZodType<Prism
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7875,7 +7963,9 @@ export const DinnerEventCreateManyChefInputSchema: z.ZodType<Prisma.DinnerEventC
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
@@ -7933,7 +8023,9 @@ export const DinnerEventUpdateWithoutChefInputSchema: z.ZodType<Prisma.DinnerEve
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cookingTeam: z.lazy(() => CookingTeamUpdateOneWithoutDinnersNestedInputSchema).optional(),
@@ -7947,7 +8039,9 @@ export const DinnerEventUncheckedUpdateWithoutChefInputSchema: z.ZodType<Prisma.
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -7961,7 +8055,9 @@ export const DinnerEventUncheckedUpdateManyWithoutChefInputSchema: z.ZodType<Pri
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8242,7 +8338,9 @@ export const DinnerEventCreateManyCookingTeamInputSchema: z.ZodType<Prisma.Dinne
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
@@ -8264,7 +8362,9 @@ export const DinnerEventUpdateWithoutCookingTeamInputSchema: z.ZodType<Prisma.Di
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   chef: z.lazy(() => InhabitantUpdateOneWithoutDinnerEventNestedInputSchema).optional(),
@@ -8278,7 +8378,9 @@ export const DinnerEventUncheckedUpdateWithoutCookingTeamInputSchema: z.ZodType<
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8292,7 +8394,9 @@ export const DinnerEventUncheckedUpdateManyWithoutCookingTeamInputSchema: z.ZodT
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8348,7 +8452,9 @@ export const DinnerEventCreateManySeasonInputSchema: z.ZodType<Prisma.DinnerEven
   menuTitle: z.string(),
   menuDescription: z.string().optional().nullable(),
   menuPictureUrl: z.string().optional().nullable(),
-  dinnerMode: z.lazy(() => DinnerModeSchema),
+  state: z.lazy(() => DinnerStateSchema).optional(),
+  totalCost: z.number().int().optional(),
+  heynaboEventId: z.number().int().optional().nullable(),
   chefId: z.number().int().optional().nullable(),
   cookingTeamId: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -8406,7 +8512,9 @@ export const DinnerEventUpdateWithoutSeasonInputSchema: z.ZodType<Prisma.DinnerE
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   chef: z.lazy(() => InhabitantUpdateOneWithoutDinnerEventNestedInputSchema).optional(),
@@ -8420,7 +8528,9 @@ export const DinnerEventUncheckedUpdateWithoutSeasonInputSchema: z.ZodType<Prism
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8434,7 +8544,9 @@ export const DinnerEventUncheckedUpdateManyWithoutSeasonInputSchema: z.ZodType<P
   menuTitle: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   menuDescription: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   menuPictureUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
+  state: z.union([ z.lazy(() => DinnerStateSchema), z.lazy(() => EnumDinnerStateFieldUpdateOperationsInputSchema) ]).optional(),
+  totalCost: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  heynaboEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   chefId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cookingTeamId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),

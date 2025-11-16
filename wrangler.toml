@@ -17,7 +17,7 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "373cce02-f8be-4f44-ae68-544f94385367"
+database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
 
 # Development deployment: Remote dev.skraaningen.dk
@@ -34,7 +34,7 @@ DB_D1_NAME = "theslope"
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "theslope"
-database_id = "373cce02-f8be-4f44-ae68-544f94385367"
+database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
 
 # Production deployment: Remote www.skraaningen.dk (overrides name, routes, vars, and database)
@@ -53,5 +53,5 @@ DB_D1_NAME = "theslope-prod"
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "theslope-prod"
-database_id = "f512e46a-3c93-4723-9fb8-74a177953ffb"
+database_id = "495e319b-3b88-4cc8-949a-64a96ba2c019"
 migrations_dir = "migrations"

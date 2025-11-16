@@ -67,15 +67,14 @@ export const useOrderValidation = () => {
   // ============================================================================
 
   /**
-   * Basic order schema (list view)
+   * Base order schema - core fields from database
    */
-  const OrderSchema = z.object({
+  const BaseOrderSchema = z.object({
     id: z.number().int().positive(),
     dinnerEventId: z.number().int().positive(),
     inhabitantId: z.number().int().positive(),
     bookedByUserId: z.number().int().positive().nullable(),
     ticketPriceId: z.number().int().positive(),
-    ticketType: TicketTypeSchema,
     priceAtBooking: z.number().int(),
     state: OrderStateSchema,
     releasedAt: z.coerce.date().nullable(),
@@ -85,9 +84,16 @@ export const useOrderValidation = () => {
   })
 
   /**
-   * Order with relations (detail view)
+   * Order display schema - base + flat ticketType for list views
    */
-  const OrderDetailSchema = OrderSchema.extend({
+  const OrderDisplaySchema = BaseOrderSchema.extend({
+    ticketType: TicketTypeSchema
+  })
+
+  /**
+   * Order with relations (detail view) - base + nested relations
+   */
+  const OrderDetailSchema = BaseOrderSchema.extend({
     dinnerEvent: z.object({
       id: z.number().int().positive(),
       date: z.coerce.date(),
@@ -131,7 +137,7 @@ export const useOrderValidation = () => {
   /**
    * Serialized order schema for database operations (dates as ISO strings)
    */
-  const SerializedOrderSchema = OrderSchema.extend({
+  const SerializedOrderSchema = OrderDisplaySchema.extend({
     releasedAt: z.string().nullable(),
     closedAt: z.string().nullable(),
     createdAt: z.string(),
@@ -150,9 +156,9 @@ export const useOrderValidation = () => {
   // ============================================================================
 
   /**
-   * Serialize Order domain object to database format
+   * Serialize OrderDisplay domain object to database format
    */
-  function serializeOrder(order: Order): SerializedOrder {
+  function serializeOrder(order: z.infer<typeof OrderDisplaySchema>): z.infer<typeof SerializedOrderSchema> {
     return {
       ...order,
       releasedAt: order.releasedAt?.toISOString() ?? null,
@@ -163,9 +169,9 @@ export const useOrderValidation = () => {
   }
 
   /**
-   * Deserialize database Order to domain object
+   * Deserialize database Order to OrderDisplay domain object
    */
-  function deserializeOrder(serialized: SerializedOrder): Order {
+  function deserializeOrder(serialized: z.infer<typeof SerializedOrderSchema>): z.infer<typeof OrderDisplaySchema> {
     return {
       ...serialized,
       releasedAt: serialized.releasedAt ? new Date(serialized.releasedAt) : null,
@@ -209,7 +215,7 @@ export const useOrderValidation = () => {
     OrderIdSchema,
 
     // Output schemas
-    OrderSchema,
+    OrderDisplaySchema,
     OrderDetailSchema,
     OrderHistorySchema,
 
@@ -230,7 +236,7 @@ export type OrderCreate = z.infer<ReturnType<typeof useOrderValidation>['OrderCr
 export type CreateOrdersRequest = z.infer<ReturnType<typeof useOrderValidation>['CreateOrdersRequestSchema']>
 export type SwapOrderRequest = z.infer<ReturnType<typeof useOrderValidation>['SwapOrderRequestSchema']>
 export type OrderQuery = z.infer<ReturnType<typeof useOrderValidation>['OrderQuerySchema']>
-export type Order = z.infer<ReturnType<typeof useOrderValidation>['OrderSchema']>
+export type OrderDisplay = z.infer<ReturnType<typeof useOrderValidation>['OrderDisplaySchema']>
 export type OrderDetail = z.infer<ReturnType<typeof useOrderValidation>['OrderDetailSchema']>
 export type OrderHistory = z.infer<ReturnType<typeof useOrderValidation>['OrderHistorySchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useOrderValidation>['SerializedOrderSchema']>

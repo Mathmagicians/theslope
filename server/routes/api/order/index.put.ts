@@ -1,10 +1,10 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {useOrderValidation} from "~/composables/useOrderValidation"
-import type { Order } from '~/composables/useOrderValidation'
+import type { OrderDisplay } from '~/composables/useOrderValidation'
 import {createOrder} from "~~/server/data/prismaRepository"
 const {h3eFromCatch} = eventHandlerHelper
 
-export default defineEventHandler(async (event): Promise<Order[]> => {
+export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     const {CreateOrdersRequestSchema} = useOrderValidation()
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event): Promise<Order[]> => {
     try {
         console.info(`🎟️ > ORDER > [PUT] Creating ${requestData.orders.length} order(s) for dinner event ${requestData.dinnerEventId}`)
 
-        const createdOrders: Order[] = []
+        const createdOrders: OrderDisplay[] = []
         for (const orderItem of requestData.orders) {
             const orderData = {
                 dinnerEventId: requestData.dinnerEventId,

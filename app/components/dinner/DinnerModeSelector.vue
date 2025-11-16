@@ -30,10 +30,15 @@
 import type {DinnerMode} from '~/composables/useDinnerEventValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import {FIELD_GROUP_CLASSES, WEEKDAY_BADGE_CONTENT_SIZE} from '~/utils/form'
 import type Badge from '#ui/components/Badge.vue'
+import type Button from '#ui/components/Button.vue'
 
 type BadgeColor = Badge['variants']['color']
+type ButtonSize = Button['size']
+
+// Local styling constants (used only in this component)
+const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1'
+const WEEKDAY_BADGE_CONTENT_SIZE = 'size-4 md:size-8'
 
 interface Props {
   modelValue: WeekDay | DinnerMode
@@ -41,7 +46,7 @@ interface Props {
   disabled?: boolean
   name?: string
   showLabel?: boolean // Show mode label text in VIEW mode (when in selector mode)
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  size?: ButtonSize
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -56,7 +61,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { WEEKDAY } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS } = useTheSlopeDesignSystem()
 
 // Dinner mode validation
 const {DinnerModeSchema} = useDinnerEventValidation()
@@ -64,6 +69,9 @@ const DinnerMode = DinnerModeSchema.enum
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
+
+// Unwrap responsive orientation (vertical on mobile, horizontal on desktop)
+const buttonOrientation = computed(() => ORIENTATIONS.responsive.value)
 
 // Dinner mode display config (shared with WeekDayMapDinnerModeDisplay)
 const dinnerModeOrder: DinnerMode[] = [
@@ -159,51 +167,55 @@ const getModeLabel = (): string => {
 
 <template>
   <!-- TITLE MODE: Weekday header badge -->
-  <UBadge
-    v-if="isTitle"
-    v-bind="WEEKDAY.titleBadgeProps"
-    :size="size"
-    :name="name"
-    :data-testid="name"
-  >
-    <div :class="`${WEEKDAY_BADGE_CONTENT_SIZE} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
-      {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
-    </div>
-  </UBadge>
-
-  <!-- SELECTOR VIEW MODE: Badge showing current dinner mode selection -->
-  <UBadge
-    v-else-if="!isTitle && formMode === FORM_MODES.VIEW"
-    :color="getBadgeColor()"
-    :variant="getBadgeVariant()"
-    :size="size"
-    :name="name"
-    :data-testid="name"
-  >
-    <UIcon :name="getModeIcon()" :class="WEEKDAY_BADGE_CONTENT_SIZE" />
-    <span v-if="showLabel" class="ml-1">{{ getModeLabel() }}</span>
-  </UBadge>
-
-  <!-- SELECTOR EDIT MODE: Button group for dinner mode selection -->
-  <UFieldGroup
-    v-else-if="!isTitle && formMode === FORM_MODES.EDIT"
-    :size="size"
-    orientation="horizontal"
-    :class="FIELD_GROUP_CLASSES"
-    :name="name"
-    :data-testid="name"
-  >
-    <UButton
-      v-for="mode in dinnerModeOrder"
-      :key="mode"
-      :icon="dinnerModeConfig[mode].icon"
-      :color="getButtonColor(mode)"
-      :variant="getButtonVariant(mode)"
-      :disabled="disabled"
+  <template v-if="isTitle">
+    <UBadge
+      v-bind="WEEKDAY.titleBadgeProps"
       :size="size"
-      :name="`${name}-${mode}`"
-      :ui="{ rounded: 'rounded-none md:rounded-md' }"
-      @click="updateMode(mode)"
-    />
-  </UFieldGroup>
+      :name="name"
+      :data-testid="name"
+    >
+      <div :class="`${WEEKDAY_BADGE_CONTENT_SIZE} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+        {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
+      </div>
+    </UBadge>
+  </template>
+
+  <!-- SELECTOR MODE: Dinner mode selection -->
+  <template v-else>
+    <!-- VIEW MODE: Badge showing current selection -->
+    <UBadge
+      v-if="formMode === FORM_MODES.VIEW"
+      :color="getBadgeColor()"
+      :variant="getBadgeVariant()"
+      :size="size"
+      :name="name"
+      :data-testid="name"
+    >
+      <UIcon :name="getModeIcon()" :class="WEEKDAY_BADGE_CONTENT_SIZE" />
+      <span v-if="showLabel" class="ml-1">{{ getModeLabel() }}</span>
+    </UBadge>
+
+    <!-- EDIT MODE: Button group for selection -->
+    <UFieldGroup
+      v-else-if="formMode === FORM_MODES.EDIT"
+      :size="size"
+      :orientation="buttonOrientation"
+      :class="FIELD_GROUP_CLASSES"
+      :name="name"
+      :data-testid="name"
+    >
+      <UButton
+        v-for="mode in dinnerModeOrder"
+        :key="mode"
+        :icon="dinnerModeConfig[mode].icon"
+        :color="getButtonColor(mode)"
+        :variant="getButtonVariant(mode)"
+        :disabled="disabled"
+        :size="size"
+        :name="`${name}-${mode}`"
+        :ui="{ rounded: 'rounded-none md:rounded-md' }"
+        @click="updateMode(mode)"
+      />
+    </UFieldGroup>
+  </template>
 </template>

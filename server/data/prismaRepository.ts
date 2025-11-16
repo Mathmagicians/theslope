@@ -2,27 +2,20 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {PrismaD1} from "@prisma/adapter-d1"
 import {PrismaClient, Prisma as PrismaFromClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
-import type {
-    User,
-    CookingTeam,
-    Order,
-    TicketPrice as PrismaTicketPrice,
-    AllergyType,
-    Allergy
-} from "@prisma/client"
 
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
+import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate, Inhabitant, Household, HouseholdSummary, HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
 import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
 import type {DinnerEventCreate, DinnerEvent} from '~/composables/useDinnerEventValidation'
 import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
-import type {OrderCreate} from '~/composables/useOrderValidation'
+import type {OrderCreate, OrderDisplay, OrderDetail} from '~/composables/useOrderValidation'
 import {useOrderValidation} from '~/composables/useOrderValidation'
 import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, CookingTeamAssignment, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import type {UserCreate, UserDisplay, SystemRole} from '~/composables/useUserValidation'
+import type {UserCreate, UserDisplay, UserResponse, UserWithInhabitant, SystemRole} from '~/composables/useUserValidation'
 import {useUserValidation} from '~/composables/useUserValidation'
 import type {
     AllergyTypeCreate,
@@ -35,28 +28,6 @@ import type {
     AllergyWithRelations
 } from '~/composables/useAllergyValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
-
-export type UserWithInhabitant = PrismaFromClient.UserGetPayload<{
-    include: {
-        Inhabitant: {
-            include: { household: true }
-        }
-    }
-}>
-
-export type SeasonWithRelations = PrismaFromClient.SeasonGetPayload<{
-    include: {
-        dinnerEvents: true,
-        CookingTeams: {
-            include: {
-                assignments: {
-                    include: { inhabitant: true }
-                }
-            }
-        },
-        ticketPrices: true
-    }
-}>
 
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
@@ -75,7 +46,7 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
 // Get serialization utilities
 const {serializeUserInput, deserializeUser, mergeUserRoles} = useUserValidation()
 
-export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<User> {
+export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserResponse> {
     console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {UserResponseSchema} = useUserValidation()
@@ -198,7 +169,7 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
     }
 }
 
-export async function deleteUser(d1Client: D1Database, userId: number): Promise<User> {
+export async function deleteUser(d1Client: D1Database, userId: number): Promise<UserResponse> {
     console.info(`🪪 > USER > [DELETE] Deleting user with ID ${userId}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {UserResponseSchema} = useUserValidation()
@@ -1185,6 +1156,7 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
 export async function createSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {CreateTicketPricesArraySchema} = useTicketPriceValidation()
 
     // Serialize domain object to database format
     const serialized = serializeSeason(seasonData)
@@ -1192,11 +1164,16 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
     // Exclude id and read-only relation fields from create
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...createData} = serialized
 
+    // Validate and strip IDs from ticket prices for creation
+    const ticketPricesForCreate = ticketPrices && ticketPrices.length > 0
+        ? CreateTicketPricesArraySchema.parse(ticketPrices)
+        : Prisma.skip
+
     try {
         const newSeason = await prisma.season.create({
             data: {
                 ...createData,
-                ticketPrices: ticketPrices ? { create: ticketPrices } : undefined
+                ticketPrices: { create: ticketPricesForCreate }
             },
             include: {
                 ticketPrices: true,
@@ -1579,7 +1556,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
 export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEvent | null> {
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventResponseSchema} = useDinnerEventValidation()
+    const {DinnerEventDetailSchema} = useDinnerEventValidation()
 
     try {
         const dinnerEvent = await prisma.dinnerEvent.findFirst({
@@ -1589,7 +1566,19 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                 chef: true,
                 cookingTeam: {
                     include: {
-                        season: true
+                        season: true,
+                        assignments: {
+                            include: {
+                                inhabitant: true
+                            }
+                        }
+                    }
+                },
+                tickets: {
+                    include: {
+                        inhabitant: true,
+                        bookedByUser: true,
+                        ticketPrice: true
                     }
                 }
             }
@@ -1597,7 +1586,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 
         if (dinnerEvent) {
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
-            return DinnerEventResponseSchema.parse(dinnerEvent)
+            return DinnerEventDetailSchema.parse(dinnerEvent)
         } else {
             console.info(`🍽️ > DINNER_EVENT > [GET] No dinner event found with ID ${id}`)
             return null
@@ -1660,9 +1649,9 @@ export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promi
 // - Strong to Inhabitant (order cannot exist without inhabitant)
 // - Weak to Transaction (order can exist without transaction)
 
-export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<Order> {
+export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<OrderDisplay> {
     console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
-    const {OrderSchema} = useOrderValidation()
+    const {OrderDisplaySchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -1692,7 +1681,7 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
             ticketType: ticketPrice.ticketType
         }
 
-        return OrderSchema.parse(domainOrder)
+        return OrderDisplaySchema.parse(domainOrder)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
         console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
@@ -1700,18 +1689,43 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
     }
 }
 
-export async function fetchOrder(d1Client: D1Database, id: number): Promise<Order | null> {
+export async function fetchOrder(d1Client: D1Database, id: number): Promise<OrderDetail | null> {
     console.info(`🎟️ > ORDER > [GET] Fetching order with ID ${id}`)
-    const {OrderSchema} = useOrderValidation()
+    const {OrderDetailSchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const order = await prisma.order.findFirst({
             where: {id},
             include: {
+                dinnerEvent: {
+                    select: {
+                        id: true,
+                        date: true,
+                        menuTitle: true,
+                        dinnerMode: true
+                    }
+                },
+                inhabitant: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true
+                    }
+                },
+                bookedByUser: {
+                    select: {
+                        id: true,
+                        email: true
+                    }
+                },
                 ticketPrice: {
                     select: {
-                        ticketType: true
+                        id: true,
+                        ticketType: true,
+                        price: true,
+                        description: true
                     }
                 }
             }
@@ -1724,14 +1738,8 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
 
         console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
 
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const {ticketPrice, ...orderWithoutRelation} = order
-        const domainOrder = {
-            ...orderWithoutRelation,
-            ticketType: ticketPrice.ticketType
-        }
-
-        return OrderSchema.parse(domainOrder)
+        // Domain type matches Prisma result structure for detail endpoint (ADR-009)
+        return OrderDetailSchema.parse(order)
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
         console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
@@ -1739,9 +1747,9 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
     }
 }
 
-export async function deleteOrder(d1Client: D1Database, id: number): Promise<Order> {
+export async function deleteOrder(d1Client: D1Database, id: number): Promise<OrderDisplay> {
     console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
-    const {OrderSchema} = useOrderValidation()
+    const {OrderDisplaySchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -1766,7 +1774,7 @@ export async function deleteOrder(d1Client: D1Database, id: number): Promise<Ord
             ticketType: ticketPrice.ticketType
         }
 
-        return OrderSchema.parse(domainOrder)
+        return OrderDisplaySchema.parse(domainOrder)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting order with ID ${id}`, error)
         console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
@@ -1774,9 +1782,9 @@ export async function deleteOrder(d1Client: D1Database, id: number): Promise<Ord
     }
 }
 
-export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<Order[]> {
+export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<OrderDisplay[]> {
     console.info(`🎟️ > ORDER > [GET] Fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
-    const {OrderSchema} = useOrderValidation()
+    const {OrderDisplaySchema} = useOrderValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -1803,7 +1811,7 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
                 ...orderWithoutRelation,
                 ticketType: ticketPrice.ticketType
             }
-            return OrderSchema.parse(domainOrder)
+            return OrderDisplaySchema.parse(domainOrder)
         })
 
         return domainOrders
