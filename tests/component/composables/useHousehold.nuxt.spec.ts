@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { useHousehold } from '~/composables/useHousehold'
-import { useDinnerEventValidation } from '~/composables/useDinnerEventValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { Inhabitant } from '~/composables/useHouseholdValidation'
 import { WEEKDAYS } from '~/types/dateTypes'
 
 describe('useHousehold', () => {
-  const { DinnerModeSchema } = useDinnerEventValidation()
+  const { DinnerModeSchema } = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
   const { createDefaultWeekdayMap } = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,

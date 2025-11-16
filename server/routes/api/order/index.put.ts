@@ -1,13 +1,12 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {useOrderValidation} from "~/composables/useOrderValidation"
-import type { OrderDisplay } from '~/composables/useOrderValidation'
+import type { OrderDisplay } from '~/composables/useBookingValidation'
 import {createOrder} from "~~/server/data/prismaRepository"
 const {h3eFromCatch} = eventHandlerHelper
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const {CreateOrdersRequestSchema} = useOrderValidation()
+    const {CreateOrdersRequestSchema} = useBookingValidation()
 
     let requestData
     try {

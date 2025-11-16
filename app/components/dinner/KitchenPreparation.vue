@@ -27,12 +27,11 @@
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
  * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
-import type {OrderDetail} from '~/composables/useOrderValidation'
+import type {OrderDetail} from '~/composables/useBookingValidation'
 
 // Import DinnerMode from validation composable (ADR-001)
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
-const {TicketTypeSchema} = useOrderValidation()
 const TicketType = TicketTypeSchema.enum
 
 // Extended order detail for mock data (diningMode will come from inhabitant preferences in real implementation)

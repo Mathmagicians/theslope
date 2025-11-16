@@ -3,11 +3,13 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import type {Order} from '~/composables/useOrderValidation'
+import type {Order} from '~/composables/useBookingValidation'
+import type {DinnerEvent} from '~/composables/useBookingValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
-  const {OrderStateSchema, TicketTypeSchema} = useOrderValidation()
+  const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
   const OrderState = OrderStateSchema.enum
   const TicketType = TicketTypeSchema.enum
 

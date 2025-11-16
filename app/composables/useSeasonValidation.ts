@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping, formatDateRange, DATE_SETTINGS} from '~/utils/date'
-import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -36,7 +36,7 @@ export const useSeasonValidation = () => {
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
-    const {DinnerEventDisplaySchema} = useDinnerEventValidation()
+    const {DinnerEventDisplaySchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeam, CookingTeamWithMembersSchema} = useCookingTeamValidation()
 

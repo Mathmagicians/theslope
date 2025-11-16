@@ -27,7 +27,7 @@
  * │           inactive (ghost, neutral)                  │
  * └──────────────────────────────────────────────────────┘
  */
-import type {DinnerMode} from '~/composables/useDinnerEventValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type Badge from '#ui/components/Badge.vue'
@@ -64,7 +64,7 @@ const emit = defineEmits<{
 const { WEEKDAY, ORIENTATIONS } = useTheSlopeDesignSystem()
 
 // Dinner mode validation
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)

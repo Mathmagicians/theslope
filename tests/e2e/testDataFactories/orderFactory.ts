@@ -1,13 +1,13 @@
 // Factory for Order test data
-import type { Order, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useOrderValidation'
-import { useOrderValidation } from '~/composables/useOrderValidation'
+import type { Order, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import { expect, BrowserContext } from '@playwright/test'
 import testHelpers from '../testHelpers'
 
 const { headers, salt, temporaryAndRandom } = testHelpers
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, OrderActionSchema } = useOrderValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderActionSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -35,6 +35,7 @@ export class OrderFactory {
     ticketPriceId: 1,
     ticketType: TicketTypeSchema.enum.ADULT,
     priceAtBooking: 45,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
     releasedAt: null,
     closedAt: null,
@@ -49,7 +50,16 @@ export class OrderFactory {
       id: 5,
       date: SeasonFactory.generateUniqueDate(),
       menuTitle: salt('Test Menu', testSalt),
-      menuDescription: 'Test Description'
+      menuDescription: 'Test Description',
+      menuPictureUrl: null,
+      state: DinnerStateSchema.enum.SCHEDULED,
+      totalCost: 0,
+      heynaboEventId: null,
+      chefId: null,
+      cookingTeamId: null,
+      seasonId: null,
+      createdAt: SeasonFactory.generateUniqueDate(),
+      updatedAt: SeasonFactory.generateUniqueDate()
     },
     inhabitant: {
       id: 10,
@@ -75,7 +85,8 @@ export class OrderFactory {
     orders: [
       {
         inhabitantId: 10,
-        ticketPriceId: 1
+        ticketPriceId: 1,
+        dinnerMode: DinnerModeSchema.enum.DINEIN
       }
     ],
     ...overrides

@@ -33,7 +33,7 @@
  */
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
-import type {DinnerMode} from '~/composables/useDinnerEventValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
@@ -59,7 +59,7 @@ const emit = defineEmits<{
 // Design system
 const { ORIENTATIONS, WEEKDAY } = useTheSlopeDesignSystem()
 
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation({

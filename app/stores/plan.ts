@@ -1,6 +1,6 @@
 import {type Season} from '~/composables/useSeasonValidation'
 import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
-import {type DinnerEvent} from '~/composables/useDinnerEventValidation'
+import {type DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -200,7 +200,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 const assignmentResult = await $fetch<{
                     seasonId: number,
                     eventCount: number,
-                    events: DinnerEvent[]
+                    events: DinnerEventDisplay[]
                 }>(`/api/admin/season/${seasonId}/assign-cooking-teams`, {
                     method: 'POST'
                 })

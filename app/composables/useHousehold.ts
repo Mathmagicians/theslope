@@ -1,13 +1,13 @@
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {useHouseholdValidation, type Inhabitant} from './useHouseholdValidation'
-import {useDinnerEventValidation} from './useDinnerEventValidation'
+import {useBookingValidation} from './useBookingValidation'
 
 /**
  * Business logic for working with households and inhabitants
  */
 export const useHousehold = () => {
     const {createDefaultWeekdayMap} = useHouseholdValidation()
-    const {DinnerModeSchema} = useDinnerEventValidation()
+    const {DinnerModeSchema} = useBookingValidation()
 
     // Extract enum constants from Zod schema
     const DinnerMode = DinnerModeSchema.enum

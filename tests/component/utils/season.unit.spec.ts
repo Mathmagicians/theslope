@@ -1,13 +1,39 @@
-import { describe, it, expect } from 'vitest'
-import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster, isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority, selectMostAppropriateActiveSeason, splitDinnerEvents, getNextDinnerDate } from '~/utils/season'
-import { SEASON_STATUS } from '~/composables/useSeasonValidation'
-import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import type { DateRange, WeekDay, WeekDayMap } from '~/types/dateTypes'
-import type { CookingTeam } from '~/composables/useCookingTeamValidation'
-import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
-import type { Season } from '~/composables/useSeasonValidation'
-import { createWeekDayMapFromSelection } from '~/types/dateTypes'
-import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {z} from 'zod'
+import {
+    canSeasonBeActive,
+    compareAffinities,
+    computeAffinitiesForTeams,
+    computeCookingDates,
+    computeTeamAssignmentsForEvents,
+    createSortedAffinitiesToTeamsMap,
+    createTeamRoster,
+    distanceToToday,
+    findFirstCookingDayInDates,
+    getNextDinnerDate,
+    getSeasonStatus,
+    isBeforeDeadline,
+    isFuture,
+    isPast,
+    isThisACookingDay,
+    selectMostAppropriateActiveSeason,
+    sortSeasonsByActivePriority,
+    splitDinnerEvents
+} from '~/utils/season'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
+import {createWeekDayMapFromSelection} from '~/types/dateTypes'
+import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type {DinnerEvent} from '~/composables/useBookingValidation'
+import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+
+// Schema for splitDinnerEvents return structure
+const SplitDinnerEventsResultSchema = z.object({
+    nextDinner: z.object({ id: z.number(), date: z.date() }).nullable(),
+    pastDinnerDates: z.array(z.date()),
+    futureDinnerDates: z.array(z.date())
+})
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
@@ -786,9 +812,14 @@ describe('Active Season Management utilities', () => {
         ])('$scenario', ({ events, nextDinnerDateRange, expectedNextDinnerId, expectedOtherCount }) => {
             const result = splitDinnerEvents(events, nextDinnerDateRange)
 
+            // Validate structure
+            const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
+            expect(parseResult.success, parseResult.success ? '' : JSON.stringify(parseResult.error.format(), null, 2)).toBe(true)
+
+            // Verify expected values
             expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
-            expect(result.otherDinnerDates).toHaveLength(expectedOtherCount)
-            expect(result.otherDinnerDates.every(date => date instanceof Date)).toBe(true)
+            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
+            expect(allOtherDates).toHaveLength(expectedOtherCount)
         })
 
         it.each([
@@ -857,6 +888,106 @@ describe('Active Season Management utilities', () => {
 
             // THEN: Should return null
             expect(result).toBeNull()
+        })
+    })
+
+    describe('isBeforeDeadline', () => {
+        let mockNow: Date
+
+        beforeEach(() => {
+            // Set a fixed "now" for testing: Jan 15, 2025 at 12:00
+            mockNow = new Date(2025, 0, 15, 12, 0, 0)
+            vi.useFakeTimers()
+            vi.setSystemTime(mockNow)
+        })
+
+        afterEach(() => {
+            vi.useRealTimers()
+        })
+
+        it.each([
+            {
+                scenario: 'now is before deadline (3 days before dinner)',
+                dinnerStartTime: new Date(2025, 0, 20, 18, 0),  // Jan 20 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: true  // Now (Jan 15) is before Jan 18 (2 days before dinner)
+            },
+            {
+                scenario: 'now is after deadline (dinner tomorrow)',
+                dinnerStartTime: new Date(2025, 0, 16, 18, 0),  // Jan 16 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: false  // Now (Jan 15) is after Jan 14 (2 days before dinner)
+            },
+            {
+                scenario: 'now is exactly at deadline',
+                dinnerStartTime: new Date(2025, 0, 17, 12, 0),  // Jan 17 at 12:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: false  // Now (Jan 15 12:00) equals deadline (Jan 15 12:00)
+            },
+            {
+                scenario: 'minutes offset - before deadline',
+                dinnerStartTime: new Date(2025, 0, 15, 18, 0),  // Jan 15 at 18:00 (today)
+                offsetDays: 0,
+                offsetMinutes: 120,  // 2 hours
+                expected: true  // Now (12:00) is before 16:00 (2 hours before 18:00)
+            },
+            {
+                scenario: 'minutes offset - after deadline',
+                dinnerStartTime: new Date(2025, 0, 15, 13, 0),  // Jan 15 at 13:00 (today)
+                offsetDays: 0,
+                offsetMinutes: 30,
+                expected: false  // Now (12:00) is after 12:30 (30 min before 13:00)
+            },
+            {
+                scenario: 'combined days and minutes - before deadline',
+                dinnerStartTime: new Date(2025, 0, 18, 18, 0),  // Jan 18 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 360,  // 6 hours
+                expected: true  // Now (Jan 15 12:00) is before Jan 16 12:00 (2 days + 6 hours before dinner)
+            },
+            {
+                scenario: 'combined days and minutes - after deadline',
+                dinnerStartTime: new Date(2025, 0, 16, 18, 0),  // Jan 16 at 18:00
+                offsetDays: 1,
+                offsetMinutes: 300,  // 5 hours
+                expected: false  // Now (Jan 15 12:00) is after Jan 15 13:00 (1 day + 5 hours before dinner)
+            },
+            {
+                scenario: 'zero offsets - dinner in future',
+                dinnerStartTime: new Date(2025, 0, 20, 18, 0),  // Jan 20 at 18:00
+                offsetDays: 0,
+                offsetMinutes: 0,
+                expected: true  // Now is before dinner time
+            },
+            {
+                scenario: 'zero offsets - dinner in past',
+                dinnerStartTime: new Date(2025, 0, 10, 18, 0),  // Jan 10 at 18:00
+                offsetDays: 0,
+                offsetMinutes: 0,
+                expected: false  // Now is after dinner time
+            }
+        ])('$scenario', ({ dinnerStartTime, offsetDays, offsetMinutes, expected }) => {
+            // WHEN: Checking if now is before deadline
+            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes)
+            const result = checkDeadline(dinnerStartTime)
+
+            // THEN: Returns expected result
+            expect(result).toBe(expected)
+        })
+
+        it('should use default parameters (0 days, 0 minutes)', () => {
+            // GIVEN: Dinner tomorrow at 18:00
+            const dinnerStartTime = new Date(2025, 0, 16, 18, 0)
+
+            // WHEN: Calling with default parameters
+            const checkDeadline = isBeforeDeadline()
+            const result = checkDeadline(dinnerStartTime)
+
+            // THEN: Checks against dinner time directly (no offset)
+            expect(result).toBe(true)  // Now (Jan 15 12:00) is before Jan 16 18:00
         })
     })
 })

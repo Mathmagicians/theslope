@@ -1,6 +1,6 @@
 import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
-import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
+import type {DinnerEvent} from '~/composables/useBookingValidation'
 import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
@@ -9,6 +9,8 @@ import {
     DATE_SETTINGS
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
+import {subDays} from "date-fns/subDays"
+import {subMinutes} from "date-fns/subMinutes"
 
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
@@ -429,3 +431,18 @@ export const splitDinnerEvents = <T extends { date: Date }>(
         }
     )
 }
+
+/**
+ * Generic curried function to check if now is before a deadline relative to dinner start time
+ *
+ * @param offsetDays - Number of days before dinner (default: 0)
+ * @param offsetMinutes - Number of minutes before dinner (default: 0)
+ * @returns Function that checks if now is before the deadline for a given dinner start time
+ */
+export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number = 0) =>
+    (dinnerStartTime: Date): boolean => {
+        const now = new Date()
+        let freezeTime = subDays(dinnerStartTime, offsetDays)
+        freezeTime = subMinutes(freezeTime, offsetMinutes)
+        return isBefore(now, freezeTime)
+    }

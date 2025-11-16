@@ -157,6 +157,7 @@ model Order {
   ticketPriceId  Int
   ticketPrice    TicketPrice    @relation(fields: [ticketPriceId], references: [id], onDelete: Restrict)
   priceAtBooking Int
+  dinnerMode     DinnerMode     @default(DINEIN)
   state          OrderState     @default(BOOKED)
   releasedAt     DateTime?
   closedAt       DateTime?

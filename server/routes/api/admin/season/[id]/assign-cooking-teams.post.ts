@@ -3,7 +3,7 @@ import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type {Season} from "~/composables/useSeasonValidation"
-import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
 const {h3eFromCatch} = eventHandlerHelper
 const {assignTeamsToEvents} = useSeason()
@@ -15,7 +15,7 @@ const idSchema = z.object({
 type AssignTeamsResponse = {
     seasonId: number
     eventCount: number
-    events: DinnerEvent[]
+    events: DinnerEventDetail[]
 }
 
 export default defineEventHandler(async (event): Promise<AssignTeamsResponse> => {

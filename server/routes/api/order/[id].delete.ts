@@ -1,6 +1,6 @@
 import {deleteOrder} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type { OrderDisplay } from '~/composables/useOrderValidation'
+import type { OrderDisplay } from '~/composables/useBookingValidation'
 import {z} from "zod"
 
 const {h3eFromCatch} = eventHandlerHelper

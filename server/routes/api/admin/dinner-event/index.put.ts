@@ -1,13 +1,13 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {saveDinnerEvent} from "~~/server/data/prismaRepository"
-import {useDinnerEventValidation} from "~/composables/useDinnerEventValidation"
-import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import {useBookingValidation} from "~/composables/useBookingValidation"
+import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
-const {DinnerEventCreateSchema} = useDinnerEventValidation()
+const {DinnerEventCreateSchema} = useBookingValidation()
 
-export default defineEventHandler(async (event): Promise<DinnerEvent> => {
+export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

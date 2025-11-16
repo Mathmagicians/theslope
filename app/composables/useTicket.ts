@@ -1,4 +1,4 @@
-import {useOrderValidation} from '~/composables/useOrderValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
@@ -12,7 +12,7 @@ import {calculateAgeOnDate} from '~/utils/date'
  */
 export const useTicket = () => {
     // Get ticket type enum from validation composable
-    const {TicketTypeSchema} = useOrderValidation()
+    const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
 
     /**

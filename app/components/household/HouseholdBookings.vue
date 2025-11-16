@@ -10,7 +10,6 @@ import type {DateRange} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
 import {formatDate, formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
-import {useOrderValidation} from '~/composables/useOrderValidation'
 
 interface Inhabitant {
   id: number
@@ -46,7 +45,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Extract ticket type enum constants from Zod schema
-const {TicketTypeSchema} = useOrderValidation()
+const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 
 // Component needs to handle its own data needs for non core data elements

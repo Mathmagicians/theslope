@@ -1,9 +1,9 @@
-import {type OrderDisplay, type OrderCreate} from '~/composables/useOrderValidation'
+import {type OrderDisplay, type OrderCreate} from '~/composables/useBookingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema} = useOrderValidation()
+    const {OrderDisplaySchema} = useBookingValidation()
 
     // ========================================
     // State - useFetch with status exposed internally

@@ -113,17 +113,16 @@
  * - TODO: Add guest functionality
  * - TODO: Ticket price selection dropdown (when multiple prices per type)
  */
-import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
+import type {DinnerEventDetail, OrderDisplay} from '~/composables/useBookingValidation'
 import type {AllergyWithRelations} from '~/composables/useAllergyValidation'
-import type {Order} from '~/composables/useOrderValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
-  dinnerEvent?: DinnerEvent
+  dinnerEvent?: DinnerEventDetail
   allergies?: AllergyWithRelations[]
   // Booking section data (optional - for specific dinner event view)
-  orders?: Order[]
+  orders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]
 }
 
@@ -141,9 +140,7 @@ const emit = defineEmits<{
   addGuest: []
 }>()
 
-// Store integration
-const householdsStore = useHouseholdsStore()
-const { myHousehold } = storeToRefs(householdsStore)
+// No store integration needed - DinnerBookingForm handles its own data fetching
 
 // Design system
 const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
@@ -153,7 +150,7 @@ const formMode = ref(FORM_MODES.VIEW)
 const isPowerModeActive = ref(false)
 
 // Draft state for editing
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMode.DINEIN)
 
@@ -231,10 +228,9 @@ const bookedCount = computed(() => {
         </div>
 
         <!-- Booking Section -->
-        <div v-if="myHousehold" class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
-          <!-- Booking Form -->
+        <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
+          <!-- Booking Form (handles household data fetching internally) -->
           <DinnerBookingForm
-            :household="myHousehold"
             :dinner-event="dinnerEvent"
             :orders="orders"
             :ticket-prices="ticketPrices"

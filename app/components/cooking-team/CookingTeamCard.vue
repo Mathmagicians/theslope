@@ -14,7 +14,7 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
+import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useHouseholdValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
@@ -39,7 +39,7 @@ interface Props {
   affinity?: WeekDayMap | null  // Team's weekday preferences
   seasonCookingDays?: WeekDayMap | null  // Season's cooking days (parent restriction)
   seasonDates?: DateRange  // Season date range (for calendar)
-  dinnerEvents?: DinnerEvent[]  // All dinner events (will be filtered to this team)
+  dinnerEvents?: DinnerEventDisplay[]  // All dinner events (will be filtered to this team)
   holidays?: DateRange[]   // Holiday periods
   teams?: Array<{ id: number, name: string }>  // All teams in season (for InhabitantSelector lookup)
   mode?: DisplayMode       // Display mode: monitor, compact, regular, edit

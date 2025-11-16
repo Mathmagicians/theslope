@@ -14,15 +14,14 @@
  * - Responsive: Horizontal selectors (desktop), vertical (mobile)
  */
 import type {HouseholdWithInhabitants, Inhabitant} from '~/composables/useHouseholdValidation'
-import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
-import type {Order} from '~/composables/useOrderValidation'
+import type {DinnerEventDisplay, OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
   household?: HouseholdWithInhabitants  // Optional - fetched if not provided
-  dinnerEvent: DinnerEvent
-  orders?: Order[]
+  dinnerEvent: DinnerEventDisplay
+  orders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]
   formMode?: FormMode
 }
@@ -50,18 +49,32 @@ householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
 // Design system
-const { COMPONENTS } = useTheSlopeDesignSystem()
+const { COMPONENTS, SIZES, COLOR } = useTheSlopeDesignSystem()
 
 // Ticket business logic
 const {getTicketTypeConfig} = useTicket()
 
 // Validation
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 // Power mode state
 const isPowerModeActive = ref(false)
 const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMode.DINEIN)
+
+// Funny empty state messages (rotates based on dinner event ID for consistency)
+const emptyStateMessages = [
+  { emoji: '👻', text: 'Husstanden er forsvundet i tågen' },
+  { emoji: '🏝️', text: 'Alle på ferie - ingen hjemme!' },
+  { emoji: '🎪', text: 'Familien er stukket af med cirkus' },
+  { emoji: '🧘', text: 'Familien mediterer i bjergene' },
+  { emoji: '🚀', text: 'Husstanden tog til månen... uden WiFi' }
+]
+const emptyStateMessage = computed(() => {
+  const id = props.dinnerEvent?.id || 0
+  const index = id % emptyStateMessages.length
+  return emptyStateMessages[index]
+})
 
 // UTable columns
 const columns = [
@@ -96,7 +109,24 @@ const handlePowerModeUpdate = () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <!-- Empty state: No household or no inhabitants -->
+  <UAlert
+    v-if="!household?.inhabitants?.length"
+    :color="COLOR.neutral"
+    variant="soft"
+    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+    :ui="COMPONENTS.emptyStateAlert"
+  >
+    <template #title>
+      {{ emptyStateMessage.text }}
+    </template>
+    <template #description>
+      Ingen husstandsmedlemmer fundet
+    </template>
+  </UAlert>
+
+  <!-- Booking form with inhabitants -->
+  <div v-else class="space-y-4">
     <!-- Power Mode (EDIT mode only) -->
     <div v-if="formMode === FORM_MODES.EDIT" class="border-b border-white/20 pb-4">
       <UButton

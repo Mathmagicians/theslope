@@ -1,13 +1,16 @@
 import {formatDate} from "../../../app/utils/date"
 import {
-    type DinnerEvent,
-    type DinnerEventCreate
-} from "../../../app/composables/useDinnerEventValidation"
+    type DinnerEventDisplay,
+    type DinnerEventDetail,
+    type DinnerEventCreate,
+    useBookingValidation
+} from "../../../app/composables/useBookingValidation"
 import testHelpers from "../testHelpers"
 import {expect, BrowserContext} from "@playwright/test"
 
 const {salt, headers, pollUntil} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
+const { DinnerStateSchema } = useBookingValidation()
 
 export class DinnerEventFactory {
     static readonly today = new Date()
@@ -18,7 +21,6 @@ export class DinnerEventFactory {
         menuTitle: 'Test Menu',
         menuDescription: 'A delicious test menu',
         menuPictureUrl: null,
-        dinnerMode: 'DINEIN',
         chefId: null,
         cookingTeamId: null,
         seasonId: null
@@ -30,6 +32,34 @@ export class DinnerEventFactory {
             menuTitle: salt(this.defaultDinnerEventData.menuTitle, testSalt)
         }
     }
+
+    static readonly defaultDinnerEventCreate = (testSalt?: string): DinnerEventCreate => ({
+        ...this.defaultDinnerEventData,
+        menuTitle: testSalt ? salt(this.defaultDinnerEventData.menuTitle, testSalt) : this.defaultDinnerEventData.menuTitle
+    })
+
+    static readonly defaultDinnerEventDisplay = (testSalt?: string): DinnerEventDisplay => ({
+        id: 1,
+        date: this.tomorrow,
+        menuTitle: testSalt ? salt('Test Menu', testSalt) : 'Test Menu',
+        state: DinnerStateSchema.enum.SCHEDULED,
+        chefId: null,
+        cookingTeamId: null
+    })
+
+    static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
+        ...this.defaultDinnerEventDisplay(testSalt),
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
+        totalCost: 0,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today,
+        chef: null,
+        cookingTeam: null,
+        tickets: []
+    })
 
     static readonly createDinnerEvent = async (
         context: BrowserContext,

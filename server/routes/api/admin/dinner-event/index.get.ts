@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedQuery, setResponseStatus} from "h3"
 import {fetchDinnerEvents} from "~~/server/data/prismaRepository"
 import {z} from "zod"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 
 const {h3eFromCatch} = eventHandlerHelper
 
@@ -10,7 +10,7 @@ const querySchema = z.object({
     seasonId: z.coerce.number().int().positive().optional()
 })
 
-export default defineEventHandler(async (event): Promise<DinnerEvent[]> => {
+export default defineEventHandler(async (event): Promise<DinnerEventDisplay[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

@@ -4,8 +4,12 @@ import {type Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
+const {DinnerStateSchema, DinnerEventCreateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -202,7 +206,7 @@ describe('generateDinnerEventDataForSeason', () => {
     it('should create event objects from computed cooking dates', () => {
         // GIVEN: A valid season with cooking days
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             id: 1,
             seasonDates: {
                 start: new Date(2025, 0, 6),   // Monday
@@ -214,32 +218,17 @@ describe('generateDinnerEventDataForSeason', () => {
         // WHEN: Generating dinner event data
         const events = generateDinnerEventDataForSeason(season)
 
-        // THEN: Creates event objects with correct properties
+        // THEN: Creates valid DinnerEventCreate objects
         expect(events.length).toBe(5)
         events.forEach(event => {
-            expect(event.seasonId).toBe(1)
-            expect(event.menuTitle).toBe('TBD')
-            expect(event.menuDescription).toBeNull()
-            expect(event.menuPictureUrl).toBeNull()
-            expect(event.dinnerMode).toBe('DINEIN')  // Default dinner mode (ADR-001: using enum value)
-            expect(event.chefId).toBeNull()
-            expect(event.cookingTeamId).toBeNull()
-            expect(event.date).toBeInstanceOf(Date)
+            const result = DinnerEventCreateSchema.safeParse(event)
+            expect(result.success, result.success ? '' : JSON.stringify(result.error.format(), null, 2)).toBe(true)
         })
     })
 })
 
 describe('assignAffinitiesToTeams', () => {
-    const { assignAffinitiesToTeams, getDefaultSeason } = useSeason()
-
-    // Helper to create teams without affinity
-    const createTeam = (id: number, name: string) => ({
-        id,
-        name,
-        seasonId: 1,
-        affinity: null,
-        assignments: []
-    })
+    const { assignAffinitiesToTeams } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -255,7 +244,7 @@ describe('assignAffinitiesToTeams', () => {
     it('should return empty array when CookingTeams is missing', () => {
         // GIVEN: Valid season but no CookingTeams
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             id: 1,
             CookingTeams: undefined
         }
@@ -270,14 +259,14 @@ describe('assignAffinitiesToTeams', () => {
     it('should call computeAffinitiesForTeams with destructured season data', () => {
         // GIVEN: Valid season with teams
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             id: 1,
             consecutiveCookingDays: 2,
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
             CookingTeams: [
-                createTeam(1, 'Hold 1'),
-                createTeam(2, 'Hold 2'),
-                createTeam(3, 'Hold 3')
+                { id: 1, name: 'Hold 1', seasonId: 1, affinity: null, assignments: [] },
+                { id: 2, name: 'Hold 2', seasonId: 1, affinity: null, assignments: [] },
+                { id: 3, name: 'Hold 3', seasonId: 1, affinity: null, assignments: [] }
             ]
         }
 
@@ -298,26 +287,7 @@ describe('assignAffinitiesToTeams', () => {
 })
 
 describe('assignTeamsToEvents', () => {
-    const { assignTeamsToEvents, getDefaultSeason } = useSeason()
-
-    // Helper to create teams with affinity
-    const createTeam = (id: number, name: string, affinity: WeekDayMap | null = null) => ({
-        id,
-        name,
-        seasonId: 1,
-        affinity: affinity || createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri by default
-        assignments: []
-    })
-
-    // Helper to create dinner events
-    const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
-        id,
-        date,
-        menuTitle: 'TBD',
-        dinnerMode: 'NONE' as const,
-        cookingTeamId: teamId,
-        seasonId: 1
-    })
+    const { assignTeamsToEvents } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -333,19 +303,19 @@ describe('assignTeamsToEvents', () => {
     it('should call computeTeamAssignmentsForEvents with destructured season data', () => {
         // GIVEN: Valid season with teams and events (simple happy path)
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             id: 1,
             consecutiveCookingDays: 2,
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
             CookingTeams: [
-                createTeam(1, 'Hold 1'),
-                createTeam(2, 'Hold 2')
+                { id: 1, name: 'Hold 1', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] },
+                { id: 2, name: 'Hold 2', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] }
             ],
             dinnerEvents: [
-                createEvent(1, new Date(2025, 0, 6)),  // Mon
-                createEvent(2, new Date(2025, 0, 8)),  // Wed
-                createEvent(3, new Date(2025, 0, 10)), // Fri
-                createEvent(4, new Date(2025, 0, 13))  // Mon
+                { id: 1, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 2, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 3, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 4, date: new Date(2025, 0, 13), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
             ]
         }
 
@@ -361,7 +331,7 @@ describe('assignTeamsToEvents', () => {
 })
 
 describe('getHolidaysForSeason', () => {
-    const { getHolidaysForSeason, getDefaultSeason } = useSeason()
+    const { getHolidaysForSeason } = useSeason()
 
     it.each([
         {
@@ -390,7 +360,7 @@ describe('getHolidaysForSeason', () => {
     ])('should return $expectedCount dates for $description', ({ holidays, expectedCount }) => {
         // GIVEN: Season with specified holidays
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             holidays
         }
 
@@ -404,7 +374,7 @@ describe('getHolidaysForSeason', () => {
     it('should expand holiday ranges into consecutive dates', () => {
         // GIVEN: Season with 3-day holiday
         const season: Season = {
-            ...getDefaultSeason(),
+            ...SeasonFactory.defaultSeason(),
             holidays: [{ start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) }]
         }
 
@@ -415,5 +385,79 @@ describe('getHolidaysForSeason', () => {
         expect(result[0]).toEqual(new Date(2025, 0, 1))
         expect(result[1]).toEqual(new Date(2025, 0, 2))
         expect(result[2]).toEqual(new Date(2025, 0, 3))
+    })
+})
+
+describe('canModifyOrders', () => {
+    const { canModifyOrders } = useSeason()
+
+    it('should allow modifications when dinner is far in future', () => {
+        // GIVEN: Dinner 10 days from now
+        const dinnerDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if orders can be modified
+        const result = canModifyOrders(dinnerDate)
+
+        // THEN: Should allow (10 days > default 2 days deadline)
+        expect(result).toBe(true)
+    })
+
+    it('should not allow modifications when dinner is tomorrow', () => {
+        // GIVEN: Dinner tomorrow
+        const dinnerDate = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if orders can be modified
+        const result = canModifyOrders(dinnerDate)
+
+        // THEN: Should not allow (1 day < default 2 days deadline)
+        expect(result).toBe(false)
+    })
+
+    it('should not allow modifications when dinner is in the past', () => {
+        // GIVEN: Dinner yesterday
+        const dinnerDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if orders can be modified
+        const result = canModifyOrders(dinnerDate)
+
+        // THEN: Should not allow (past deadline)
+        expect(result).toBe(false)
+    })
+})
+
+describe('canEditDiningMode', () => {
+    const { canEditDiningMode } = useSeason()
+
+    it('should allow editing when dinner is far in future', () => {
+        // GIVEN: Dinner 10 days from now
+        const dinnerDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if dining mode can be edited
+        const result = canEditDiningMode(dinnerDate)
+
+        // THEN: Should allow (well before dinner time)
+        expect(result).toBe(true)
+    })
+
+    it('should allow editing when dinner is tomorrow', () => {
+        // GIVEN: Dinner tomorrow at same time
+        const dinnerDate = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if dining mode can be edited
+        const result = canEditDiningMode(dinnerDate)
+
+        // THEN: Should allow (24 hours > default 60 minutes deadline)
+        expect(result).toBe(true)
+    })
+
+    it('should not allow editing when dinner is in the past', () => {
+        // GIVEN: Dinner yesterday
+        const dinnerDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+
+        // WHEN: Checking if dining mode can be edited
+        const result = canEditDiningMode(dinnerDate)
+
+        // THEN: Should not allow (past deadline)
+        expect(result).toBe(false)
     })
 })

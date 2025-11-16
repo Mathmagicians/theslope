@@ -4,13 +4,13 @@ import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
-import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
 const {deserializeWeekDayMap} = useHouseholdValidation()
-const {DinnerModeSchema} = useDinnerEventValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 // Helper to create valid WeekDayMap with all 7 days

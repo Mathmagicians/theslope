@@ -1,7 +1,7 @@
 import {fetchOrders} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
-import type { OrderDisplay } from '~/composables/useOrderValidation'
+import type { OrderDisplay } from '~/composables/useBookingValidation'
 
 const {h3eFromCatch} = eventHandlerHelper
 

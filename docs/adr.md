@@ -160,12 +160,39 @@ fetchSeasons() {
 ```
 Unbounded (100+), heavy (nested), not essential, performance risk
 
+### Mutation Response Types
+
+Mutations (PUT/POST/DELETE) return the same **Zod-validated Detail schema** as GET/:id endpoints, not a separate Response schema.
+
+**Schema pattern:**
+```typescript
+// validation composable exports Zod schemas
+export const useHouseholdValidation = () => {
+  const HouseholdDisplaySchema = z.object({...})  // Index only
+  const HouseholdDetailSchema = z.object({...})   // GET/:id + mutations
+  const HouseholdCreateSchema = z.object({...})   // PUT input
+  const HouseholdUpdateSchema = z.object({...})   // POST input
+
+  return { HouseholdDisplaySchema, HouseholdDetailSchema, ... }
+}
+
+// API endpoints use Zod types
+GET  /api/admin/household     → HouseholdDisplay[]
+GET  /api/admin/household/:id → HouseholdDetail
+PUT  /api/admin/household     → HouseholdDetail  // Same as GET/:id
+POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
+```
+
+**Rationale:** Small payloads make separate Response schemas unjustified complexity.
+
 ### Compliance
 
 1. Use Prisma Payload types: `EntityListItem` vs `EntityDetail`
 2. Use `select` for lightweight fields in included relations
 3. Document criteria decisions in repository comments
 4. Index = display-ready, Detail = operation-ready
+5. Mutations MUST return Detail schema (same Zod type as GET/:id)
+6. Prisma types MUST NOT leave repository layer (ADR-010)
 
 ---
 

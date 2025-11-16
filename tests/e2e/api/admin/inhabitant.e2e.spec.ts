@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {useDinnerEventValidation} from '~/composables/useDinnerEventValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '../../testHelpers'
 
 const {headers, validatedBrowserContext, pollUntil, salt} = testHelpers
@@ -168,7 +168,7 @@ test.describe('Admin Inhabitant API', () => {
         test('GIVEN inhabitant exists WHEN updating dinner preferences THEN preferences are updated and other fields unchanged', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
-            const {DinnerModeSchema} = useDinnerEventValidation()
+            const {DinnerModeSchema} = useBookingValidation()
             const {createDefaultWeekdayMap} = useWeekDayMapValidation({
                 valueSchema: DinnerModeSchema,
                 defaultValue: 'NONE'

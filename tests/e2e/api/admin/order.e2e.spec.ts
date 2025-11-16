@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '../../testDataFactories/orderFactory'
 import { HouseholdFactory } from '../../testDataFactories/householdFactory'
 import { SeasonFactory } from '../../testDataFactories/seasonFactory'
-import { useOrderValidation } from '~/composables/useOrderValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
 const { validatedBrowserContext, salt } = testHelpers
-const { TicketTypeSchema } = useOrderValidation()
+const { TicketTypeSchema } = useBookingValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 

@@ -10,14 +10,14 @@
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
-import type {DinnerEvent} from '~/composables/useDinnerEventValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
 
 interface Props {
   seasonDates: DateRange
   teams: CookingTeam[]
-  dinnerEvents: DinnerEvent[]
+  dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
 }
 

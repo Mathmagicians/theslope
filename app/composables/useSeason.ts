@@ -1,34 +1,7 @@
-import {type DateRange, type WeekDayMap} from '~/types/dateTypes'
-import {
-    calculateDayFromWeekNumber,
-    copyPartialDateRange,
-    formatDateRange,
-    DATE_SETTINGS,
-    selectWeekNumbersFromListThatFitInsideDateRange, getEachDayOfIntervalWithSelectedWeekdays, eachDayOfManyIntervals,
-    isCalendarDateInDateList,
-    toDate
-} from '~/utils/date'
-import {isWithinInterval, isSameDay} from "date-fns"
-import {useSeasonValidation, type Season, SEASON_STATUS} from './useSeasonValidation'
-import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
-import type {DinnerEventCreate} from './useDinnerEventValidation'
-import {useDinnerEventValidation} from './useDinnerEventValidation'
-import {
-    computeAffinitiesForTeams,
-    computeCookingDates,
-    computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates,
-    isPast,
-    isFuture,
-    distanceToToday,
-    canSeasonBeActive as canSeasonBeActiveUtil,
-    getSeasonStatus as getSeasonStatusUtil,
-    sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason,
-    getNextDinnerDate as getNextDinnerDateUtil,
-    getDinnerTimeRange,
-    splitDinnerEvents
-} from "~/utils/season"
+import {type DateRange} from '~/types/dateTypes'
+import {isSameDay, isWithinInterval} from "date-fns"
+import {type Season} from '~/composables/useSeasonValidation'
+import type {DinnerEventCreate} from '~/composables/useBookingValidation'
 
 /**
  * Business logic for working with seasons
@@ -45,9 +18,9 @@ export const useSeason = () => {
     } = useSeasonValidation()
     const SeasonStatus = SeasonStatusSchema.enum
 
-    // Get DinnerMode enum from generated schema
-    const {DinnerModeSchema} = useDinnerEventValidation()
-    const DinnerMode = DinnerModeSchema.enum
+    // Get DinnerState enum from booking validation
+    const {DinnerStateSchema} = useBookingValidation()
+    const DinnerState = DinnerStateSchema.enum
 
     // Get app configuration
     const appConfig = useAppConfig()
@@ -151,7 +124,7 @@ export const useSeason = () => {
             menuTitle: 'TBD',
             menuDescription: null,
             menuPictureUrl: null,
-            dinnerMode: DinnerMode.DINEIN,
+            state: DinnerState.SCHEDULED,
             chefId: null,
             cookingTeamId: null,
             seasonId: season.id!
@@ -216,7 +189,27 @@ export const useSeason = () => {
     }
 
     // Configure getNextDinnerDate with default 60 minute duration
-    const getNextDinnerDate = getNextDinnerDateUtil(60)
+    const configuredGetNextDinnerDate = getNextDinnerDate(60)
+
+    /**
+     * Check if orders can be created/cancelled for a dinner event
+     * Configured with app config ticketIsCancellableDaysBefore
+     */
+    const canModifyOrders = (dinnerEventDate: Date): boolean => {
+        const dinnerStartHour = getDefaultDinnerStartTime()
+        const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
+        return isBeforeDeadline(theslope.defaultSeason.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
+    }
+
+    /**
+     * Check if dining mode can be edited for a dinner event
+     * Configured with app config diningModeIsEditableMinutesBefore
+     */
+    const canEditDiningMode = (dinnerEventDate: Date): boolean => {
+        const dinnerStartHour = getDefaultDinnerStartTime()
+        const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
+        return isBeforeDeadline(0, theslope.defaultSeason.diningModeIsEditableMinutesBefore)(dinnerStartTime)
+    }
 
     return {
         // Validation schemas
@@ -242,17 +235,18 @@ export const useSeason = () => {
         getDefaultDinnerStartTime,
         isNextDinnerDate,
         getDinnerTimeRange,
-        getNextDinnerDate,
+        getNextDinnerDate: configuredGetNextDinnerDate,
         splitDinnerEvents,
+        canModifyOrders,
+        canEditDiningMode,
 
         // Active season management - pure functions
         isPast,
         isFuture,
         distanceToToday,
-        canSeasonBeActive: canSeasonBeActiveUtil,
-        getSeasonStatus: getSeasonStatusUtil,
+        canSeasonBeActive,
+        getSeasonStatus,
         sortSeasonsByActivePriority,
         selectMostAppropriateActiveSeason
     }
 }
-

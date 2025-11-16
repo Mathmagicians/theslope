@@ -12,7 +12,7 @@
  */
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import type {DateValue} from "@internationalized/date"
-import type {DinnerEventDisplay} from '~/composables/useDinnerEventValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import {isCalendarDateInDateList} from "~/utils/date"
 

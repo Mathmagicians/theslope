@@ -56,7 +56,7 @@
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
 import {WEEKDAYS, type WeekDayMap, type WeekDay} from '~/types/dateTypes'
-import type {DinnerMode} from '~/composables/useDinnerEventValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 
 interface Props {
   household: HouseholdWithInhabitants
@@ -152,7 +152,7 @@ const handleToggleRow = (row: any) => {
 
     // Convert any null values to DINEIN default (power mode with mixed preferences)
     if (row.original.dinnerPreferences) {
-      const {DinnerModeSchema} = useDinnerEventValidation()
+      const {DinnerModeSchema} = useBookingValidation()
       const DinnerMode = DinnerModeSchema.enum
       const {createDefaultWeekdayMap} = useWeekDayMapValidation({
         valueSchema: DinnerModeSchema,
