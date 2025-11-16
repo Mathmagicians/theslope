@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
-import {updateAllergy} from "~~/server/data/prismaRepository"
+import {updateAllergy} from "~~/server/data/allergyRepository"
 import {useAllergyValidation, type AllergyWithRelations} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'

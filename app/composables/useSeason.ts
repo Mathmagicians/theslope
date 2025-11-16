@@ -1,7 +1,12 @@
 import {type DateRange} from '~/types/dateTypes'
 import {isSameDay, isWithinInterval} from "date-fns"
-import {type Season} from '~/composables/useSeasonValidation'
-import type {DinnerEventCreate} from '~/composables/useBookingValidation'
+import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import { computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
+    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
+    isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
+    selectMostAppropriateActiveSeason} from "~/utils/season"
 
 /**
  * Business logic for working with seasons
@@ -153,7 +158,7 @@ export const useSeason = () => {
         return computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, first)
     }
 
-    const assignTeamsToEvents = (season: Season): DinnerEvent[] => {
+    const assignTeamsToEvents = (season: Season): DinnerEventDisplay[] => {
         // check inputs, and fail early
         if (!SeasonSchema.safeParse(season).success) return []
         const {

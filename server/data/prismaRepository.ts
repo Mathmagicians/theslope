@@ -19,12 +19,12 @@ import {useUserValidation} from '~/composables/useUserValidation'
 import type {
     AllergyTypeCreate,
     AllergyTypeUpdate,
-    AllergyTypeResponse,
-    AllergyTypeWithInhabitants,
+    AllergyTypeDisplay,
+    AllergyTypeDetail,
     AllergyCreate,
     AllergyUpdate,
-    AllergyResponse,
-    AllergyWithRelations
+    AllergyDisplay,
+    AllergyDetail
 } from '~/composables/useAllergyValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
@@ -401,10 +401,10 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
 /*** ALLERGY TYPES ***/
 
-export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeWithInhabitants[]> {
+export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeDetail[]> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types with inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeWithInhabitantsSchema} = useAllergyValidation()
+    const {AllergyTypeDetailSchema} = useAllergyValidation()
 
     try {
         const allergyTypes = await prisma.allergyType.findMany({
@@ -431,7 +431,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
             }
         })
 
-        // Transform to AllergyTypeWithInhabitants format
+        // Transform to AllergyTypeDetail format
         const result = allergyTypes.map(allergyType => ({
             id: allergyType.id,
             name: allergyType.name,
@@ -455,7 +455,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
         console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${result.length} allergy types with inhabitants`)
 
         // Validate before returning (ADR-010)
-        return result.map(at => AllergyTypeWithInhabitantsSchema.parse(at))
+        return result.map(at => AllergyTypeDetailSchema.parse(at))
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching allergy types', error)
         console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
@@ -463,19 +463,19 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
     }
 }
 
-export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse | null> {
+export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay | null> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeResponseSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
-        const allergyType = await prisma.allergyType.findFirst({
+        const allergyType = await prisma.allergyType.findUnique({
             where: {id}
         })
 
         if (allergyType) {
             console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type ${allergyType.name} (ID: ${allergyType.id})`)
-            return AllergyTypeResponseSchema.parse(allergyType)
+            return AllergyTypeDisplaySchema.parse(allergyType)
         } else {
             console.info(`🏥 > ALLERGY_TYPE > [GET] No allergy type found with ID ${id}`)
             return null
@@ -487,10 +487,10 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
     }
 }
 
-export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeResponse> {
+export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeResponseSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
         const newAllergyType = await prisma.allergyType.create({
@@ -498,7 +498,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [CREATE] Successfully created allergy type ${newAllergyType.name} with ID ${newAllergyType.id}`)
-        return AllergyTypeResponseSchema.parse(newAllergyType)
+        return AllergyTypeDisplaySchema.parse(newAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating allergy type ${allergyTypeData.name}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [CREATE] ${h3e.statusMessage}`, error)
@@ -506,10 +506,10 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
     }
 }
 
-export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeResponse> {
+export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeResponseSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     const {id, ...updateData} = allergyTypeData
 
@@ -520,7 +520,7 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Successfully updated allergy type ${updatedAllergyType.name}`)
-        return AllergyTypeResponseSchema.parse(updatedAllergyType)
+        return AllergyTypeDisplaySchema.parse(updatedAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating allergy type with ID ${id}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [UPDATE] ${h3e.statusMessage}`, error)
@@ -528,10 +528,10 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
     }
 }
 
-export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeResponse> {
+export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeResponseSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
         // ADR-005: Single atomic delete - Prisma handles CASCADE deletion of related allergies
@@ -540,7 +540,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
         })
 
         console.info(`🏥 > ALLERGY_TYPE > [DELETE] Successfully deleted allergy type ${deletedAllergyType.name}`)
-        return AllergyTypeResponseSchema.parse(deletedAllergyType)
+        return AllergyTypeDisplaySchema.parse(deletedAllergyType)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting allergy type with ID ${id}`, error)
         console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
@@ -550,10 +550,10 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
 
 /*** ALLERGIES ***/
 
-export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyWithRelations[]> {
+export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyWithRelationsSchema} = useAllergyValidation()
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
         const allergies = await prisma.allergy.findMany({
@@ -576,7 +576,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
         console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for inhabitant ${inhabitantId}`)
 
         // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyWithRelationsSchema.parse(a))
+        return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching allergies for inhabitant ${inhabitantId}`, error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
@@ -584,10 +584,10 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
     }
 }
 
-export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyWithRelations[]> {
+export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyWithRelationsSchema} = useAllergyValidation()
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
         const allergies = await prisma.allergy.findMany({
@@ -614,7 +614,7 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
         console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for household ${householdId}`)
 
         // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyWithRelationsSchema.parse(a))
+        return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching allergies for household ${householdId}`, error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
@@ -622,9 +622,10 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
     }
 }
 
-export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyResponse[]> {
+export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
         const allergies = await prisma.allergy.findMany({
@@ -632,15 +633,22 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
             include: {
                 allergyType: true,
                 inhabitant: {
-                    include: {
-                        household: true
+                    select: {
+                        id: true,
+                        heynaboId: true,
+                        name: true,
+                        lastName: true,
+                        pictureUrl: true,
+                        birthDate: true
                     }
                 }
             }
         })
 
         console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for allergy type ${allergyTypeId}`)
-        return allergies
+
+        // Validate before returning (ADR-010)
+        return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching allergies for allergy type ${allergyTypeId}`, error)
         console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
@@ -648,10 +656,10 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
     }
 }
 
-export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyWithRelations | null> {
+export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyDetail | null> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyWithRelationsSchema} = useAllergyValidation()
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
         const allergy = await prisma.allergy.findFirst({
@@ -674,7 +682,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
         if (allergy) {
             console.info(`🏥 > ALLERGY > [GET] Found allergy (ID: ${allergy.id})`)
             // Validate before returning (ADR-010)
-            return AllergyWithRelationsSchema.parse(allergy)
+            return AllergyDetailSchema.parse(allergy)
         } else {
             console.info(`🏥 > ALLERGY > [GET] No allergy found with ID ${id}`)
             return null
@@ -686,10 +694,10 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
     }
 }
 
-export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyWithRelations> {
+export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyDetail> {
     console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyWithRelationsSchema} = useAllergyValidation()
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
         const newAllergy = await prisma.allergy.create({
@@ -711,7 +719,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
 
         console.info(`🏥 > ALLERGY > [CREATE] Successfully created allergy with ID ${newAllergy.id}`)
         // Validate before returning (ADR-010)
-        return AllergyWithRelationsSchema.parse(newAllergy)
+        return AllergyDetailSchema.parse(newAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
         console.error(`🏥 > ALLERGY > [CREATE] ${h3e.statusMessage}`, error)
@@ -719,10 +727,10 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
     }
 }
 
-export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyWithRelations> {
+export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyDetail> {
     console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyWithRelationsSchema} = useAllergyValidation()
+    const {AllergyDetailSchema} = useAllergyValidation()
 
     const {id, ...updateData} = allergyData
 
@@ -747,7 +755,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
 
         console.info(`🏥 > ALLERGY > [UPDATE] Successfully updated allergy with ID ${updatedAllergy.id}`)
         // Validate before returning (ADR-010)
-        return AllergyWithRelationsSchema.parse(updatedAllergy)
+        return AllergyDetailSchema.parse(updatedAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating allergy with ID ${id}`, error)
         console.error(`🏥 > ALLERGY > [UPDATE] ${h3e.statusMessage}`, error)
@@ -755,19 +763,22 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
     }
 }
 
-export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyResponse> {
+export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyDisplay> {
     console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyResponseSchema} = useAllergyValidation()
+    const {AllergyDisplaySchema} = useAllergyValidation()
 
     try {
         const deletedAllergy = await prisma.allergy.delete({
-            where: {id}
+            where: {id},
+            include: {
+                allergyType: true
+            }
         })
 
         console.info(`🏥 > ALLERGY > [DELETE] Successfully deleted allergy with ID ${deletedAllergy.id}`)
         // Validate before returning (ADR-010)
-        return AllergyResponseSchema.parse(deletedAllergy)
+        return AllergyDisplaySchema.parse(deletedAllergy)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting allergy with ID ${id}`, error)
         console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
@@ -1684,6 +1695,131 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
         console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
+        throw h3e
+    }
+}
+
+/**
+ * Batch create multiple orders for a household (parent booking for family + guests)
+ * Business rules:
+ * - ONE user (bookedByUserId) books for entire family
+ * - Can have different inhabitantIds from same household
+ * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
+ * - All orders must have same bookedByUserId
+ * - All inhabitants must be from same household
+ * @param d1Client - D1 database client
+ * @param ordersData - Array of order creation data
+ * @returns Promise<OrderDisplay[]> - All orders for this dinner from this household
+ */
+export async function createOrders(d1Client: D1Database, ordersData: OrderCreate[]): Promise<OrderDisplay[]> {
+    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household`)
+    const {OrderDisplaySchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Business validation: All inhabitants must be from same household (requires DB lookup)
+        const inhabitantIds = [...new Set(ordersData.map(o => o.inhabitantId))]
+        const inhabitants = await prisma.inhabitant.findMany({
+            where: { id: { in: inhabitantIds } },
+            select: { id: true, householdId: true }
+        })
+
+        if (inhabitants.length !== inhabitantIds.length) {
+            throw createError({
+                statusCode: 404,
+                message: `Some inhabitants not found`
+            })
+        }
+
+        const householdIds = [...new Set(inhabitants.map(i => i.householdId))]
+        if (householdIds.length > 1) {
+            throw createError({
+                statusCode: 400,
+                message: `All inhabitants must be from the same household. Found ${householdIds.length} different households.`
+            })
+        }
+
+        const householdId = householdIds[0]
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Validated: All ${inhabitantIds.length} inhabitants from household ${householdId}`)
+
+        // Validate all ticket prices exist
+        const ticketPriceIds = [...new Set(ordersData.map(o => o.ticketPriceId))]
+        const ticketPrices = await prisma.ticketPrice.findMany({
+            where: { id: { in: ticketPriceIds } }
+        })
+
+        if (ticketPrices.length !== ticketPriceIds.length) {
+            throw createError({
+                statusCode: 404,
+                message: `Some ticket prices not found`
+            })
+        }
+
+        // Create price lookup map
+        const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp]))
+
+        // Prepare data with priceAtBooking
+        const ordersWithPrices = ordersData.map(orderData => ({
+            ...orderData,
+            priceAtBooking: priceMap.get(orderData.ticketPriceId)!.price
+        }))
+
+        // Batch insert - Prisma createMany returns { count: number }, NOT the created records
+        const result = await prisma.order.createMany({
+            data: ordersWithPrices
+        })
+
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Inserted ${result.count} orders`)
+
+        // Fetch ALL orders for this household + dinner event (acceptable per business rules)
+        // This handles the fact that createMany doesn't return IDs
+        const dinnerEventId = ordersData[0].dinnerEventId // All orders for same dinner event
+        const householdInhabitantIds = inhabitants.map(i => i.id)
+
+        const createdOrders = await prisma.order.findMany({
+            where: {
+                dinnerEventId,
+                inhabitantId: { in: householdInhabitantIds }
+            },
+            select: {
+                id: true,
+                dinnerEventId: true,
+                inhabitantId: true,
+                bookedByUserId: true,
+                ticketPriceId: true,
+                priceAtBooking: true,
+                dinnerMode: true,
+                state: true,
+                releasedAt: true,
+                closedAt: true,
+                createdAt: true,
+                updatedAt: true,
+                ticketPrice: {
+                    select: {
+                        id: true,
+                        ticketType: true,
+                        price: true,
+                        description: true,
+                        maximumAgeLimit: true
+                    }
+                }
+            },
+            orderBy: { id: 'asc' }
+        })
+
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully fetched ${createdOrders.length} orders for household ${householdId}`)
+
+        // Transform to domain type with ticketType
+        return createdOrders.map(order => {
+            const ticketPrice = priceMap.get(order.ticketPriceId)!
+            return OrderDisplaySchema.parse({
+                ...order,
+                ticketType: ticketPrice.ticketType
+            })
+        })
+    } catch (error) {
+        const h3e = h3eFromCatch(`Error batch creating ${ordersData.length} orders`, error)
+        console.error(`🎟️ > ORDER > [BATCH CREATE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }

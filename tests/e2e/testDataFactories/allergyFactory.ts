@@ -1,12 +1,12 @@
 // Helpers to work with BDD tests for Allergy and AllergyType entities
 
-import {expect, BrowserContext} from "@playwright/test"
+import {expect, type BrowserContext} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {
-    AllergyTypeResponse,
-    AllergyTypeWithInhabitants,
-    AllergyResponse,
-    AllergyWithRelations
+    AllergyTypeDisplay,
+    AllergyTypeDetail,
+    AllergyDisplay,
+    AllergyDetail
 } from '~/composables/useAllergyValidation'
 
 const {salt, headers} = testHelpers
@@ -15,7 +15,57 @@ const ALLERGY_ENDPOINT = '/api/household/allergy'
 
 export class AllergyFactory {
 
-    // === ALLERGY TYPE METHODS ===
+    // === MOCK DATA GENERATORS (for unit tests) ===
+
+    /**
+     * Create mock AllergyType data for unit tests (no API call)
+     * Returns array of AllergyTypeDisplay objects
+     */
+    static readonly createMockAllergyTypes = (): AllergyTypeDisplay[] => [
+        {
+            id: 1,
+            name: 'Peanuts',
+            description: 'Peanut allergy - severe',
+            icon: '🥜'
+        },
+        {
+            id: 2,
+            name: 'Lactose',
+            description: 'Lactose intolerance',
+            icon: '🥛'
+        }
+    ]
+
+    /**
+     * Create mock Allergy data for unit tests (no API call)
+     * Returns array of AllergyDetail objects with full relations
+     */
+    static readonly createMockAllergies = (): AllergyDetail[] => [
+        {
+            id: 1,
+            inhabitantId: 1,
+            allergyTypeId: 1,
+            inhabitantComment: 'Severe reaction',
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-01'),
+            allergyType: {
+                id: 1,
+                name: 'Peanuts',
+                description: 'Peanut allergy',
+                icon: '🥜'
+            },
+            inhabitant: {
+                id: 1,
+                heynaboId: 1001,
+                name: 'Alice',
+                lastName: 'Anderson',
+                pictureUrl: null,
+                birthDate: new Date('1990-01-01')
+            }
+        }
+    ]
+
+    // === ALLERGY TYPE METHODS (for E2E tests) ===
 
     static readonly defaultAllergyTypeData = (testSalt: string = Date.now().toString()) => ({
         name: salt('Peanuts', testSalt),
@@ -27,7 +77,7 @@ export class AllergyFactory {
         context: BrowserContext,
         partialAllergyType: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>> = {},
         expectedStatus: number = 201
-    ): Promise<AllergyTypeResponse> => {
+    ): Promise<AllergyTypeDisplay> => {
         // Merge partial with defaults to create full AllergyType object
         const allergyTypeData = {
             ...this.defaultAllergyTypeData(),  // Auto-generates unique salt
@@ -60,7 +110,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<AllergyTypeResponse | null> => {
+    ): Promise<AllergyTypeDisplay | null> => {
         const response = await context.request.get(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -75,7 +125,7 @@ export class AllergyFactory {
         return null
     }
 
-    static readonly getAllergyTypes = async (context: BrowserContext): Promise<AllergyTypeWithInhabitants[]> => {
+    static readonly getAllergyTypes = async (context: BrowserContext): Promise<AllergyTypeDetail[]> => {
         const response = await context.request.get(ALLERGY_TYPE_ENDPOINT)
         expect(response.status()).toBe(200)
 
@@ -89,7 +139,7 @@ export class AllergyFactory {
         id: number,
         updateData: Partial<ReturnType<typeof AllergyFactory.defaultAllergyTypeData>>,
         expectedStatus: number = 200
-    ): Promise<AllergyTypeResponse> => {
+    ): Promise<AllergyTypeDisplay> => {
         const response = await context.request.post(`${ALLERGY_TYPE_ENDPOINT}/${id}`, {
             headers: headers,
             data: updateData
@@ -111,7 +161,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<AllergyTypeResponse | null> => {
+    ): Promise<AllergyTypeDisplay | null> => {
         const response = await context.request.delete(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -156,7 +206,7 @@ export class AllergyFactory {
             inhabitantComment?: string | null
         },
         expectedStatus: number = 201
-    ): Promise<AllergyWithRelations> => {
+    ): Promise<AllergyDetail> => {
         const response = await context.request.put(ALLERGY_ENDPOINT, {
             headers: headers,
             data: allergyData
@@ -178,7 +228,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<AllergyWithRelations | null> => {
+    ): Promise<AllergyDetail | null> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}/${id}`)
 
         const status = response.status()
@@ -196,7 +246,7 @@ export class AllergyFactory {
     static readonly getAllergiesForInhabitant = async (
         context: BrowserContext,
         inhabitantId: number
-    ): Promise<AllergyWithRelations[]> => {
+    ): Promise<AllergyDetail[]> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}?inhabitantId=${inhabitantId}`)
         expect(response.status()).toBe(200)
 
@@ -208,7 +258,7 @@ export class AllergyFactory {
     static readonly getAllergiesForHousehold = async (
         context: BrowserContext,
         householdId: number
-    ): Promise<AllergyWithRelations[]> => {
+    ): Promise<AllergyDetail[]> => {
         const response = await context.request.get(`${ALLERGY_ENDPOINT}?householdId=${householdId}`)
         expect(response.status()).toBe(200)
 
@@ -226,7 +276,7 @@ export class AllergyFactory {
             inhabitantComment?: string | null
         },
         expectedStatus: number = 200
-    ): Promise<AllergyWithRelations> => {
+    ): Promise<AllergyDetail> => {
         const response = await context.request.post(`${ALLERGY_ENDPOINT}/${id}`, {
             headers: headers,
             data: updateData
@@ -248,7 +298,7 @@ export class AllergyFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<AllergyResponse | null> => {
+    ): Promise<AllergyDisplay | null> => {
         const response = await context.request.delete(`${ALLERGY_ENDPOINT}/${id}`)
 
         const status = response.status()

@@ -4,9 +4,10 @@ import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { clearNuxtData } from '#app'
 import type {
-    AllergyType,
-    AllergyWithRelations
+    AllergyTypeDisplay,
+    AllergyDetail
 } from '~/composables/useAllergyValidation'
+import { AllergyFactory } from '../../e2e/testDataFactories/allergyFactory'
 
 // ========================================
 // IMPORTANT: Register endpoints BEFORE importing the store
@@ -27,45 +28,6 @@ import { useAllergiesStore } from '~/stores/allergies'
 // ========================================
 // Test Helpers
 // ========================================
-
-const createMockAllergyTypes = (): AllergyType[] => [
-    {
-        id: 1,
-        name: 'Peanuts',
-        description: 'Peanut allergy - severe',
-        icon: '🥜'
-    },
-    {
-        id: 2,
-        name: 'Lactose',
-        description: 'Lactose intolerance',
-        icon: '🥛'
-    }
-]
-
-const createMockAllergies = (): AllergyWithRelations[] => [
-    {
-        id: 1,
-        inhabitantId: 1,
-        allergyTypeId: 1,
-        inhabitantComment: 'Severe reaction',
-        createdAt: new Date('2024-01-01'),
-        updatedAt: new Date('2024-01-01'),
-        allergyType: {
-            id: 1,
-            name: 'Peanuts',
-            description: 'Peanut allergy',
-            icon: '🥜'
-        },
-        inhabitant: {
-            id: 1,
-            name: 'Alice',
-            lastName: 'Anderson',
-            pictureUrl: null,
-            birthDate: new Date('1990-01-01')
-        }
-    }
-]
 
 const setupStore = async () => {
     const store = useAllergiesStore()
@@ -88,8 +50,8 @@ describe('Allergies Store - AllergyTypes', () => {
         allergyTypesEndpoint.mockClear()
         allergyTypeByIdEndpoint.mockClear()
 
-        allergyTypesEndpoint.mockReturnValue(createMockAllergyTypes())
-        allergyTypeByIdEndpoint.mockReturnValue(createMockAllergyTypes()[0])
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes())
+        allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
     })
 
     it('initializes with allergy types', async () => {
@@ -117,7 +79,7 @@ describe('Allergies Store - AllergyTypes', () => {
 
     it.each([
         { data: [], expected: true, description: 'empty array' },
-        { data: createMockAllergyTypes(), expected: false, description: 'with data' }
+        { data: AllergyFactory.createMockAllergyTypes(), expected: false, description: 'with data' }
     ])('isNoAllergyTypes detects $description', async ({ data, expected }) => {
         allergyTypesEndpoint.mockReturnValue(data)
 
@@ -148,7 +110,7 @@ describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
         allergiesEndpoint.mockClear()
 
         // Mock allergies endpoint with query params
-        allergiesEndpoint.mockReturnValue(createMockAllergies())
+        allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
     })
 
     it('loads allergies for inhabitant', async () => {

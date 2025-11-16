@@ -1,4 +1,4 @@
-import {z} from 'zod'
+import {z, ZodType} from 'zod'
 import {
     WEEKDAYS,
     type WeekDayMap,
@@ -14,12 +14,33 @@ import {
  *     requiredMessage? : string         // Error message for validation
  * })
  */
-const DEFAULT_BOOLEAN_OPTIONS = {
+export interface UseWeekDayMapValidationOptions<T> {
+    valueSchema: z.ZodType<T>
+    defaultValue: T
+    isRequired?: (map: WeekDayMap<T>) => boolean
+    requiredMessage?: string
+}
+
+export interface UseWeekDayMapValidationReturn<T> {
+    WeekDayMapSchema: ZodType<WeekDayMap<T>>
+    WeekDayMapSchemaRequired: ZodType<WeekDayMap<T>> | undefined
+    WeekDayMapSchemaOptional: ZodType<WeekDayMap<T>>
+    serializeWeekDayMap: (map: WeekDayMap<T>) => string
+    deserializeWeekDayMap: (serialized: string) => WeekDayMap<T> | null
+    createWeekDayMapFromSelection: (
+        selectedDays: string[],
+        selectedValue: T,
+        unselectedValue: T
+    ) => WeekDayMap<T>
+    createDefaultWeekdayMap: (value?: T | T[]) => WeekDayMap<T>
+}
+
+const DEFAULT_BOOLEAN_OPTIONS: UseWeekDayMapValidationOptions<boolean> = {
     valueSchema: z.boolean(),
     defaultValue: false,
     isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
     requiredMessage: "Man skal lave mad mindst en dag om ugen"
-} as const
+}
 
 export const useWeekDayMapValidation = <T = boolean>(
     options: {
@@ -27,7 +48,7 @@ export const useWeekDayMapValidation = <T = boolean>(
         defaultValue: T,
         isRequired?: (map: WeekDayMap<T>) => boolean,
         requiredMessage?: string
-    } = DEFAULT_BOOLEAN_OPTIONS as any) => {
+    } = DEFAULT_BOOLEAN_OPTIONS as any): UseWeekDayMapValidationReturn<T> => {
     const {defaultValue, valueSchema, isRequired, requiredMessage} = options
     // Base schema - validates structure (all 7 weekdays present)
     const WeekDayMapSchema: z.ZodType<WeekDayMap<T>> = z.object(

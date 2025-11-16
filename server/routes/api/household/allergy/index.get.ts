@@ -1,6 +1,6 @@
 import {defineEventHandler, getValidatedQuery, setResponseStatus} from "h3"
-import {fetchAllergiesForInhabitant, fetchAllergiesForHousehold} from "~~/server/data/prismaRepository"
-import {type AllergyWithRelations} from "~/composables/useAllergyValidation"
+import {fetchAllergiesForInhabitant, fetchAllergiesForHousehold} from "~~/server/data/allergyRepository"
+import {type AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -18,7 +18,7 @@ const querySchema = z.object({
     { message: 'Only one of householdId or inhabitantId query parameter can be provided, not both' }
 )
 
-export default defineEventHandler(async (event): Promise<AllergyWithRelations[]> => {
+export default defineEventHandler(async (event): Promise<AllergyDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

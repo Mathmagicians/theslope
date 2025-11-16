@@ -1,11 +1,11 @@
 import {defineEventHandler, setResponseStatus} from "h3"
-import {fetchAllergyTypes} from "~~/server/data/prismaRepository"
-import type {AllergyTypeWithInhabitants} from "~/composables/useAllergyValidation"
+import {fetchAllergyTypes} from "~~/server/data/allergyRepository"
+import type {AllergyTypeDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {h3eFromCatch} = eventHandlerHelper
 
-export default defineEventHandler(async (event): Promise<AllergyTypeWithInhabitants[]> => {
+export default defineEventHandler(async (event): Promise<AllergyTypeDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

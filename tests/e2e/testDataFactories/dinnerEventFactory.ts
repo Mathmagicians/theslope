@@ -1,12 +1,11 @@
-import {formatDate} from "../../../app/utils/date"
 import {
     type DinnerEventDisplay,
     type DinnerEventDetail,
     type DinnerEventCreate,
     useBookingValidation
-} from "../../../app/composables/useBookingValidation"
+} from "~/composables/useBookingValidation"
 import testHelpers from "../testHelpers"
-import {expect, BrowserContext} from "@playwright/test"
+import {expect, type BrowserContext} from "@playwright/test"
 
 const {salt, headers, pollUntil} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
@@ -21,9 +20,14 @@ export class DinnerEventFactory {
         menuTitle: 'Test Menu',
         menuDescription: 'A delicious test menu',
         menuPictureUrl: null,
+        state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
         chefId: null,
         cookingTeamId: null,
-        seasonId: null
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today
     }
 
     static readonly defaultDinnerEvent = (testSalt: string = Date.now().toString()) => {
@@ -42,9 +46,16 @@ export class DinnerEventFactory {
         id: 1,
         date: this.tomorrow,
         menuTitle: testSalt ? salt('Test Menu', testSalt) : 'Test Menu',
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
         state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
         chefId: null,
-        cookingTeamId: null
+        cookingTeamId: null,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today
     })
 
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
@@ -65,7 +76,7 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventData: Partial<DinnerEventCreate> = this.defaultDinnerEvent(),
         expectedStatus: number = 201
-    ): Promise<DinnerEvent> => {
+    ): Promise<DinnerEventDisplay> => {
         const requestData = {
             ...this.defaultDinnerEvent(),
             ...dinnerEventData
@@ -92,7 +103,7 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent | null> => {
+    ): Promise<DinnerEventDetail | null> => {
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
 
         const status = response.status()
@@ -112,7 +123,7 @@ export class DinnerEventFactory {
         dinnerEventId: number,
         dinnerEventData: Partial<DinnerEventCreate>,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent | null> => {
+    ): Promise<DinnerEventDisplay | null> => {
         const response = await context.request.post(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`, {
             headers: headers,
             data: dinnerEventData
@@ -134,7 +145,7 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent | null> => {
+    ): Promise<DinnerEventDisplay | null> => {
         const response = await context.request.delete(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
 
         const status = response.status()
@@ -151,7 +162,7 @@ export class DinnerEventFactory {
         context: BrowserContext,
         seasonId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent[]> => {
+    ): Promise<DinnerEventDisplay[]> => {
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}?seasonId=${seasonId}`)
 
         const status = response.status()
@@ -175,7 +186,7 @@ export class DinnerEventFactory {
      * @param expectedCount - Expected number of events
      * @param maxAttempts - Maximum polling attempts (default 5)
      * @param initialDelayMs - Initial delay between attempts in ms (default 500ms), doubles on each attempt
-     * @returns Promise<DinnerEvent[]> - Array of generated dinner events
+     * @returns Promise<DinnerEventDisplay[]> - Array of generated dinner events
      * @throws Error if expected count not reached within maxAttempts
      */
     static readonly waitForDinnerEventsGeneration = async (
@@ -184,7 +195,7 @@ export class DinnerEventFactory {
         expectedCount: number,
         maxAttempts: number = 5,
         initialDelayMs: number = 500
-    ): Promise<DinnerEvent[]> => {
+    ): Promise<DinnerEventDisplay[]> => {
         return await pollUntil(
             () => this.getDinnerEventsForSeason(context, seasonId),
             (events) => events.length === expectedCount,

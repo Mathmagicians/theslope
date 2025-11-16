@@ -6,12 +6,12 @@ import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
-const { validatedBrowserContext, salt } = testHelpers
+const { validatedBrowserContext, salt, headers } = testHelpers
 const { TicketTypeSchema } = useBookingValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
-// Variables for cleanup and test data
+// Shared variables for cleanup and test data across all test suites
 let testOrderIds: number[] = []
 let testHouseholdId: number
 let testInhabitantId: number
@@ -195,5 +195,170 @@ test.describe('Order/api/order CRUD operations', () => {
     })
 
     expect(response.status()).toBe(400)
+  })
+})
+
+test.describe('Order Business Rules Validation', () => {
+
+  // Setup: Ensure test data is initialized (reuses data from first test suite if it ran)
+  test.beforeAll(async ({ browser }) => {
+    // If test data not initialized, initialize it
+    if (!testDinnerEventId || !testInhabitantId || !testHouseholdId) {
+      const context = await validatedBrowserContext(browser)
+
+      // Create household with one inhabitant
+      const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(
+        context,
+        { name: salt('Order Test Household BR') },
+        1
+      )
+      testHouseholdId = household.id
+      testInhabitantId = inhabitants[0].id
+
+      // Create season
+      const season = await SeasonFactory.createSeason(context)
+      testSeasonId = season.id
+
+      // Extract ticket price IDs from season
+      const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
+      const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
+
+      if (!adultTicketPrice?.id || !childTicketPrice?.id) {
+        throw new Error('Season must have ticket prices with IDs for ADULT and CHILD')
+      }
+
+      testAdultTicketPriceId = adultTicketPrice.id
+      testChildTicketPriceId = childTicketPrice.id
+
+      // Generate dinner events for the season
+      const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id)
+      testDinnerEventId = generatedEvents.events[0].id
+    }
+  })
+
+  test.afterAll(async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Cleanup orders created in business rules tests
+    await Promise.all(testOrderIds.map(id =>
+      OrderFactory.deleteOrder(context, id).catch(() => {
+        console.warn(`Failed to cleanup order ${id}`)
+      })
+    ))
+  })
+
+  test('GIVEN orders with different bookedByUserId WHEN creating batch THEN fails with 400', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // GIVEN: Two orders with DIFFERENT bookedByUserId (violates business rule)
+    const invalidData = {
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId,
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 1 // User A
+        },
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testChildTicketPriceId,
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 999 // User B - DIFFERENT!
+        }
+      ]
+    }
+
+    // WHEN/THEN: Create should fail with 400
+    const response = await context.request.put(ORDER_ENDPOINT, {
+      headers,
+      data: invalidData
+    })
+
+    expect(response.status()).toBe(400)
+    const errorBody = await response.json()
+    expect(errorBody.message || errorBody.statusMessage).toMatch(/samme bruger/i)
+  })
+
+  test('GIVEN orders from different households WHEN creating batch THEN fails with 400', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+    const {HouseholdFactory} = await import('../../testDataFactories/householdFactory')
+
+    // GIVEN: Create second household with inhabitant
+    const household2 = await HouseholdFactory.createHousehold(context)
+    const inhabitant2 = await HouseholdFactory.createInhabitantForHousehold(context, household2.id, 'TestPerson2')
+
+    // GIVEN: Orders with inhabitants from DIFFERENT households (violates business rule)
+    const invalidData = {
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId, // From household 1
+          ticketPriceId: testAdultTicketPriceId,
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 1
+        },
+        {
+          inhabitantId: inhabitant2.id, // From household 2 - DIFFERENT!
+          ticketPriceId: testAdultTicketPriceId,
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 1
+        }
+      ]
+    }
+
+    // WHEN/THEN: Create should fail with 400
+    const response = await context.request.put(ORDER_ENDPOINT, {
+      headers,
+      data: invalidData
+    })
+
+    expect(response.status()).toBe(400)
+    const errorBody = await response.json()
+    expect(errorBody.message || errorBody.statusMessage).toMatch(/same household|household/i)
+
+    // Cleanup
+    await HouseholdFactory.deleteHousehold(context, household2.id)
+  })
+
+  test('GIVEN multiple orders for same inhabitant WHEN creating batch THEN succeeds', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // GIVEN: Multiple orders for SAME inhabitant (e.g., adult + child tickets - allowed)
+    const validData = {
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId, // Same person
+          ticketPriceId: testAdultTicketPriceId, // Adult ticket
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 1
+        },
+        {
+          inhabitantId: testInhabitantId, // Same person
+          ticketPriceId: testChildTicketPriceId, // Child ticket
+          dinnerMode: 'DINEIN',
+          bookedByUserId: 1
+        }
+      ]
+    }
+
+    // WHEN: Create orders
+    const response = await context.request.put(ORDER_ENDPOINT, {
+      headers,
+      data: validData
+    })
+
+    // THEN: Should succeed
+    const errorBody = response.status() !== 201 ? await response.json() : null
+    expect(response.status(), `Expected 201 but got ${response.status()}: ${JSON.stringify(errorBody)}`).toBe(201)
+    const createdOrders = await response.json()
+    expect(Array.isArray(createdOrders)).toBe(true)
+    expect(createdOrders.length).toBeGreaterThanOrEqual(2)
+
+    // Cleanup
+    for (const order of createdOrders) {
+      testOrderIds.push(order.id)
+    }
   })
 })

@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {useUserValidation} from './useUserValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
+import {useAllergyValidation} from './useAllergyValidation'
 
 /**
  * Generate shortName from household address
@@ -51,6 +52,7 @@ export const getHouseholdShortName = (address: string): string => {
  */
 export const useHouseholdValidation = () => {
     const {UserCreateSchema} = useUserValidation()
+    const {AllergyDisplaySchema} = useAllergyValidation()
 
     // Extract enum constants from Zod schema (imported from generated schemas)
     const DinnerMode = DinnerModeSchema.enum
@@ -65,6 +67,7 @@ export const useHouseholdValidation = () => {
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
     })
+
     // Base Household schema for API operations
     const BaseHouseholdSchema = z.object({
         id: z.number().int().positive().optional(),
@@ -88,6 +91,8 @@ export const useHouseholdValidation = () => {
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
         birthDate: z.coerce.date().optional().nullable(),
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
+        // Note: allergies field removed to break circular dependency with useAllergyValidation
+        // Allergies should be fetched separately via /api/household/allergy endpoints
     })
 
     // Household schemas

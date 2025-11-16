@@ -1,6 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
-import {fetchAllergy} from "~~/server/data/prismaRepository"
-import {type AllergyWithRelations} from "~/composables/useAllergyValidation"
+import {fetchAllergy} from "~~/server/data/allergyRepository"
+import {type AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -11,7 +11,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Allergy ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<AllergyWithRelations> => {
+export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 

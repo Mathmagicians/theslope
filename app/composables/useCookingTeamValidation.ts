@@ -19,7 +19,7 @@ export const ROLE_LABELS = {
 export const ROLE_ICONS = {
     CHEF: '👨‍🍳',
     COOK: '👥',
-    JUNIORHELPER: '👶'
+    JUNIORHELPER: '🌱‍👩‍🍳'
 } as const
 
 /**

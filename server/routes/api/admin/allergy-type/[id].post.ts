@@ -1,7 +1,6 @@
-import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
-import {updateAllergyType} from "~~/server/data/prismaRepository"
+import {updateAllergyType} from "~~/server/data/allergyRepository"
 import {useAllergyValidation} from "~/composables/useAllergyValidation"
-import type {AllergyTypeResponse} from "~/composables/useAllergyValidation"
+import type {AllergyTypeDisplay} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
@@ -12,7 +11,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Allergy type ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<AllergyTypeResponse> => {
+export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     const {AllergyTypeUpdateSchema} = useAllergyValidation()
@@ -23,7 +22,9 @@ export default defineEventHandler(async (event): Promise<AllergyTypeResponse> =>
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
-        requestData = await readValidatedBody(event, (body) => AllergyTypeUpdateSchema.parse({...body, id}))
+        requestData = await readValidatedBody(event, (body) =>
+            AllergyTypeUpdateSchema.parse({...(body as object), id})
+        )
     } catch (error) {
         const h3e = h3eFromCatch('🏥 > ALLERGY_TYPE > [POST] Input validation error', error)
         console.error(`🏥 > ALLERGY_TYPE > [POST] ${h3e.statusMessage}`, error)

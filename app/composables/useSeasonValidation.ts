@@ -33,7 +33,7 @@ export const useSeasonValidation = () => {
     } = useWeekDayMapValidation<boolean>({
         valueSchema: z.boolean(),
         defaultValue: false,
-        isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
+        isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
     const {DinnerEventDisplaySchema} = useBookingValidation()
@@ -51,7 +51,7 @@ export const useSeasonValidation = () => {
         shortName: z.string().min(4),
         seasonDates: dateRangeSchema,
         isActive: z.boolean(),
-        cookingDays: WeekDayMapSchemaRequired,
+        cookingDays: WeekDayMapSchemaRequired!,
         holidays: holidaysSchema,
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
         diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),
@@ -91,7 +91,7 @@ export const useSeasonValidation = () => {
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
-    const deserializeSeason = (serialized: SerializedSeason | any): Season => {
+    const deserializeSeason = (serialized: any): Season => {
         const parsedSeasonDates = JSON.parse(serialized.seasonDates)
 
         const baseSeason = {
