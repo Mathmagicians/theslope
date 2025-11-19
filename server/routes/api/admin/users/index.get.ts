@@ -21,7 +21,7 @@ export default defineEventHandler(async (event): Promise<UserDisplay[] | UserDet
             console.info("🪪 > USER > [GET] Found users:", users.length)
             return users
         } catch (error) {
-            throwH3Error(`🪪 > USER > [GET] Error fetching user by email ${email}`, error)
+            return throwH3Error(`🪪 > USER > [GET] Error fetching user by email ${email}`, error)
         }
     }
 
@@ -32,6 +32,6 @@ export default defineEventHandler(async (event): Promise<UserDisplay[] | UserDet
         console.info("🪪 > USER > Got users:", users ? users.length : 0)
         return users
     } catch (error) {
-        throwH3Error("🪪 > USER > [GET] Error fetching users", error)
+        return throwH3Error("🪪 > USER > [GET] Error fetching users", error)
     }
 })

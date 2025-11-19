@@ -24,34 +24,34 @@
 │ │ 👤 👤 👤   3 beboere berørt                                             ││
 │ └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
-│ USAGE:                                                                      │
-│                                                                             │
-│ Allergy Manager (AdminAllergies):                                          │
-│   <AllergenMultiSelector                                                   │
-│     v-model="selectedAllergyIds"                                           │
-│     :allergy-types="allergyTypes"                                          │
-│     mode="edit"                                                            │
-│     :show-statistics="true"                                                │
-│     :show-new-badge="true"                                                 │
-│   />                                                                        │
-│                                                                             │
-│ Chef (DinnerMenuHero - readonly view):                                     │
-│   <AllergenMultiSelector                                                   │
-│     :model-value="dinner.allergenIds"                                      │
-│     :allergy-types="allergyTypes"                                          │
-│     mode="view"                                                            │
-│     readonly                                                               │
-│   />                                                                        │
-│                                                                             │
-│ Chef (DinnerMenuHero - editing):                                           │
-│   <AllergenMultiSelector                                                   │
-│     v-model="dinner.allergenIds"                                           │
-│     :allergy-types="allergyTypes"                                          │
-│     mode="edit"                                                            │
-│     :show-statistics="true"                                                │
-│   />                                                                        │
-│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+USAGE:
+
+Allergy Manager (AdminAllergies):
+  <AllergenMultiSelector
+    v-model="selectedAllergyIds"
+    :allergy-types="allergyTypes"
+    mode="edit"
+    :show-statistics="true"
+    :show-new-badge="true"
+  />
+
+Chef (DinnerMenuHero - readonly view):
+  <AllergenMultiSelector
+    :model-value="dinner.allergenIds"
+    :allergy-types="allergyTypes"
+    mode="view"
+    readonly
+  />
+
+Chef (DinnerMenuHero - editing):
+  <AllergenMultiSelector
+    v-model="dinner.allergenIds"
+    :allergy-types="allergyTypes"
+    mode="edit"
+    :show-statistics="true"
+  />
 -->
 <script setup lang="ts">
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
@@ -228,7 +228,14 @@ const columns = computed(() => {
 
         <!-- Icon cell -->
         <template #icon-cell="{ row }">
-          <div class="flex items-center justify-center p-2 rounded-lg">
+          <div
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
+              :class="[
+                'flex items-center justify-center p-2 rounded-lg transition-colors',
+                !readonly && COMPONENTS.table.clickableCell,
+                selectedAllergyIds.has(row.original.id!) && COMPONENTS.table.selectedRow
+              ]"
+          >
             <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
               <UIcon
                   v-if="row.original.icon?.startsWith('i-')"
@@ -244,21 +251,39 @@ const columns = computed(() => {
 
         <!-- Name cell -->
         <template #name-cell="{ row }">
-          <div class="font-medium">
+          <div
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
+              :class="[
+                'font-medium',
+                !readonly && COMPONENTS.table.clickableCell
+              ]"
+          >
             {{ row.original.name }}
           </div>
         </template>
 
         <!-- Count cell -->
         <template #count-cell="{ row }">
-          <div class="text-center">
+          <div
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
+              :class="[
+                'text-center',
+                !readonly && COMPONENTS.table.clickableCell
+              ]"
+          >
             {{ row.original.inhabitants?.length || 0 }}
           </div>
         </template>
 
         <!-- New badge cell -->
         <template v-if="showNewBadge" #new-cell="{ row }">
-          <div class="text-center">
+          <div
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
+              :class="[
+                'text-center',
+                !readonly && COMPONENTS.table.clickableCell
+              ]"
+          >
             <span v-if="isNew(row.original.createdAt || '')">🆕</span>
           </div>
         </template>
@@ -289,20 +314,20 @@ const columns = computed(() => {
         </div>
 
         <div class="space-y-2">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Fordeling pr. allergen</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Fordeling pr. allergen</h4>
           <div v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
                class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
             <div class="flex items-center gap-2">
               <span class="text-lg">{{ item.icon || '�️' }}</span>
-              <span class="text-sm">{{ item.name }}</span>
+              <span :class="TYPOGRAPHY.bodyTextSmall">{{ item.name }}</span>
             </div>
-            <span class="text-sm font-medium">{{ item.count }}</span>
+            <span :class="TYPOGRAPHY.bodyTextMedium">{{ item.count }}</span>
           </div>
         </div>
 
         <!-- Show compact selected allergy cards -->
         <div class="space-y-2">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Valgte allergier</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Valgte allergier</h4>
           <div class="space-y-2">
             <AllergyTypeCard
                 v-for="allergy in selectedAllergies"
@@ -315,10 +340,17 @@ const columns = computed(() => {
       </div>
 
       <!-- No selection state -->
-      <div v-else class="flex flex-col items-center justify-center py-12 text-gray-500">
-        <UIcon name="i-heroicons-arrow-left" class="w-8 h-8 mb-2"/>
-        <p class="text-sm">Vælg allergier for at se statistik</p>
-      </div>
+      <UAlert
+          v-else
+          icon="i-mdi-food-allergy-off-outline"
+          :color="COLOR.neutral"
+          variant="soft"
+          :ui="COMPONENTS.emptyStateAlert"
+      >
+        <template #title>
+          Vælg allergier for at se statistik
+        </template>
+      </UAlert>
     </div>
   </div>
 </template>

@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedRouterParams} from "h3"
 import {deleteUser} from "~~/server/data/prismaRepository"
 import type {UserDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -16,12 +16,12 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let userId: number
+    let userId!: number
     try {
         const { id } = await getValidatedRouterParams(event, idSchema.parse)
         userId = id
     } catch (error) {
-        throwH3Error('🪪 > USER > [DELETE] Input validation error', error)
+        return throwH3Error('🪪 > USER > [DELETE] Input validation error', error)
     }
 
     // Delete user from database
@@ -31,6 +31,6 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
         console.info(`🪪 > USER > [DELETE] Deleted user ${deletedUser.email}`)
         return deletedUser
     } catch (error) {
-        throwH3Error(`🪪 > USER > [DELETE] Error deleting user with id ${userId}`, error)
+        return throwH3Error(`🪪 > USER > [DELETE] Error deleting user with id ${userId}`, error)
     }
 })

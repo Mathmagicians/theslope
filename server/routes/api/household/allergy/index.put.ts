@@ -1,6 +1,6 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createAllergy} from "~~/server/data/allergyRepository"
-import {useAllergyValidation, type AllergyDetail} from "~/composables/useAllergyValidation"
+import {useAllergyValidation, type AllergyDetail, type AllergyCreate} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {AllergyCreateSchema} = useAllergyValidation()
@@ -11,11 +11,11 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let allergyData
+    let allergyData!: AllergyCreate
     try {
         allergyData = await readValidatedBody(event, AllergyCreateSchema.parse)
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [PUT] Input validation error', error)
+        return throwH3Error('🏥 > ALLERGY > [PUT] Input validation error', error)
     }
 
     // Create allergy in database
@@ -26,6 +26,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 201)
         return newAllergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [PUT] Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
+        return throwH3Error(`🏥 > ALLERGY > [PUT] Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
     }
 })

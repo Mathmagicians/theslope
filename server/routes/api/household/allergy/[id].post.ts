@@ -1,8 +1,8 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {updateAllergy} from "~~/server/data/allergyRepository"
-import {useAllergyValidation, type AllergyWithRelations} from "~/composables/useAllergyValidation"
+import {useAllergyValidation, type AllergyWithRelations, type AllergyUpdate} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {AllergyUpdateSchema} = useAllergyValidation()
 const {throwH3Error} = eventHandlerHelper
@@ -17,8 +17,8 @@ export default defineEventHandler(async (event): Promise<AllergyWithRelations> =
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let allergyId: number
-    let allergyData
+    let allergyId!: number
+    let allergyData!: AllergyUpdate
     try {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event): Promise<AllergyWithRelations> =
         const body = await readValidatedBody(event, z.object({}).passthrough().parse)
         allergyData = AllergyUpdateSchema.parse({...body, id: allergyId})
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)
+        return throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)
     }
 
     // Update allergy in database
@@ -37,6 +37,6 @@ export default defineEventHandler(async (event): Promise<AllergyWithRelations> =
         setResponseStatus(event, 200)
         return updatedAllergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
+        return throwH3Error(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
     }
 })

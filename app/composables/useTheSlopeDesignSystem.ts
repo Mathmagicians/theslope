@@ -334,6 +334,12 @@ export const COMPONENTS = {
       color: 'warning' as const,
       variant: 'outline' as const
     }
+  },
+
+  // Table interactions - row selection and click patterns
+  table: {
+    selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
+    clickableCell: 'cursor-pointer'
   }
 } as const
 

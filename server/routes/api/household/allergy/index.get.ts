@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedQuery, setResponseStatus} from "h3"
 import {fetchAllergiesForInhabitant, fetchAllergiesForHousehold} from "~~/server/data/allergyRepository"
 import type {AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -30,7 +30,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail[]> => {
         householdId = query.householdId
         inhabitantId = query.inhabitantId
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
+        return throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
     }
 
 
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail[]> => {
             return []
         }
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [GET] Error fetching allergies', error)
+        return throwH3Error('🏥 > ALLERGY > [GET] Error fetching allergies', error)
     }
 
 })

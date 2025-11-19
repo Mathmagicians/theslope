@@ -2,7 +2,7 @@ import {createError, defineEventHandler, getValidatedRouterParams, setResponseSt
 import {fetchAllergy} from "~~/server/data/allergyRepository"
 import type {AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -16,12 +16,12 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let allergyId: number
+    let allergyId!: number
     try {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
+        return throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
     }
 
     // Fetch allergy from database
@@ -40,6 +40,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 200)
         return allergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
+        return throwH3Error(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
     }
 })

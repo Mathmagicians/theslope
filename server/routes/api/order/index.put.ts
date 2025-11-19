@@ -1,5 +1,5 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type { OrderDisplay } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import {createOrders} from "~~/server/data/financesRepository"
 const {throwH3Error} = eventHandlerHelper
@@ -9,11 +9,11 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const d1Client = cloudflare.env.DB
     const {CreateOrdersRequestSchema, OrderStateSchema} = useBookingValidation()
 
-    let requestData
+    let requestData!: CreateOrdersRequest
     try {
         requestData = await readValidatedBody(event, CreateOrdersRequestSchema.parse)
     } catch (error) {
-        throwH3Error('🎟️ > ORDER > [PUT] Input validation error', error)
+        return throwH3Error('🎟️ > ORDER > [PUT] Input validation error', error)
     }
 
     try {
@@ -35,6 +35,6 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         setResponseStatus(event, 201)
         return createdOrders
     } catch (error) {
-        throwH3Error(`🎟️ > ORDER > [PUT] Error creating orders`, error)
+        return throwH3Error(`🎟️ > ORDER > [PUT] Error creating orders`, error)
     }
 })

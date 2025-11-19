@@ -83,6 +83,7 @@ d1-list-tables-local:
 	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
 
 d1-nuke-seasons:
+	@npx wrangler d1 execute theslope --command="DELETE FROM 'Order';"
 	@npx wrangler d1 execute theslope --command="DELETE FROM Season WHERE ShortName LIKE 'Test%';"
 
 logs-dev:

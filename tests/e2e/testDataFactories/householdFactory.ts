@@ -3,7 +3,7 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {Household, Inhabitant} from "../../../app/composables/useCoreValidation"
+import type {HouseholdDetail, Inhabitant} from "~/composables/useCoreValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
@@ -63,7 +63,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         inhabitantCount: number = 2
-    ): Promise<{household: Household, inhabitants: Inhabitant[]}> => {
+    ): Promise<{household: HouseholdDetail, inhabitants: Inhabitant[]}> => {
         const household = await this.createHousehold(context, partialHousehold)
         const inhabitants = []
         for (let i = 0; i < inhabitantCount; i++) {

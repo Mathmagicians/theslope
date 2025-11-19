@@ -3,11 +3,16 @@ import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
-import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
-const {deserializeWeekDayMap} = useHouseholdValidation()
+const {DinnerModeSchema} = useBookingValidation()
+const {deserializeWeekDayMap} = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerModeSchema.enum.DINEIN
+})
 
 test.describe('Household members display', () => {
     let householdId: number

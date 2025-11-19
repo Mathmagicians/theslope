@@ -1,10 +1,13 @@
 <script setup lang="ts">
 /**
- * DinnerMenuHero - Hero panel with booking section
+ * DinnerMenuHero - Hero panel for dinner display and editing
  *
- * Mobile-first booking interface for busy families (90% mobile usage)
- * Reuses DinnerModeSelector for consistent UX with household preferences
- * Single-click edit: VIEW mode shows bookings, [ÆNDRE BOOKING] button enters EDIT mode
+ * Supports two modes:
+ * - 'household': Mobile-first booking interface (90% mobile usage) + readonly allergen view
+ * - 'chef': Menu editing interface with allergen selection (no booking section)
+ *
+ * Household mode: Single-click edit for bookings, [ÆNDRE BOOKING] button enters EDIT mode
+ * Chef mode: Inline editing for menu title, description, allergens
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * EMPTY STATE (no dinner event):
@@ -119,11 +122,13 @@ import {FORM_MODES} from '~/types/form'
 interface Props {
   dinnerEventId?: number
   ticketPrices?: TicketPrice[]
+  mode?: 'household' | 'chef'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   dinnerEventId: undefined,
-  ticketPrices: () => []
+  ticketPrices: () => [],
+  mode: 'household'
 })
 
 // Emit events for booking actions (parent handles business logic)

@@ -56,7 +56,7 @@ const selectedAllergyType = computed(() =>
 
 // MULTISELECT STATE
 const multiselectMode = ref(false)
-const selectedAllergyIds = ref<Set<number>>(new Set())
+const selectedAllergyIds = ref<number[]>([])
 
 // SORT STATE
 const isSorted = ref<'asc' | 'desc'>('desc')
@@ -89,48 +89,9 @@ watch(allergyTypes, (newTypes) => {
 const toggleMultiselectMode = () => {
   multiselectMode.value = !multiselectMode.value
   if (!multiselectMode.value) {
-    selectedAllergyIds.value.clear()
+    selectedAllergyIds.value = []
   }
 }
-
-// Toggle individual allergy selection
-const toggleAllergySelection = (allergyId: number) => {
-  if (selectedAllergyIds.value.has(allergyId)) {
-    selectedAllergyIds.value.delete(allergyId)
-  } else {
-    selectedAllergyIds.value.add(allergyId)
-  }
-}
-
-// Computed for selected allergies
-const selectedAllergies = computed(() =>
-    allergyTypes.value.filter(at => at.id && selectedAllergyIds.value.has(at.id))
-)
-
-// Statistics for selected allergies
-const allergyStatistics = computed(() => {
-  if (selectedAllergies.value.length === 0) return null
-
-  // Get unique inhabitants across all selected allergies
-  const uniqueInhabitants = new Map()
-  selectedAllergies.value.forEach(allergy => {
-    allergy.inhabitants?.forEach(inhabitant => {
-      if (!uniqueInhabitants.has(inhabitant.id)) {
-        uniqueInhabitants.set(inhabitant.id, inhabitant)
-      }
-    })
-  })
-
-  return {
-    totalInhabitants: uniqueInhabitants.size,
-    uniqueInhabitantsList: Array.from(uniqueInhabitants.values()),
-    breakdownByAllergy: selectedAllergies.value.map(allergy => ({
-      name: allergy.name,
-      icon: allergy.icon,
-      count: allergy.inhabitants?.length || 0
-    }))
-  }
-})
 
 // FORM STATE
 const formMode = ref<FormMode>(FORM_MODES.VIEW)
@@ -223,11 +184,8 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // ACTIONS
 const handleRowClick = (allergyType: AllergyType) => {
-  // In multiselect mode, toggle the allergy in the selection set
-  if (multiselectMode.value) {
-    toggleAllergySelection(allergyType.id!)
-  } else {
-    // In single select mode, update the selected allergy
+  // Only handle single select mode (multiselect is handled by AllergenMultiSelector)
+  if (!multiselectMode.value) {
     selectedAllergyTypeId.value = allergyType.id || null
     // In CREATE mode, switch back to VIEW
     if (formMode.value === FORM_MODES.CREATE) {
@@ -236,23 +194,16 @@ const handleRowClick = (allergyType: AllergyType) => {
   }
 }
 
-// Helper to check if a row is selected
+// Helper to check if a row is selected (only used in single-select mode)
 const isRowSelected = (allergyTypeId: number) => {
-  return allergyTypeId === selectedAllergyTypeId.value || (multiselectMode.value && selectedAllergyIds.value.has(allergyTypeId))
+  return allergyTypeId === selectedAllergyTypeId.value
 }
 
-// ROW SELECTION for TanStack Table
+// ROW SELECTION for TanStack Table (only used in single-select mode)
 const rowSelection = computed(() => {
   const selection: Record<number, boolean> = {}
 
-  if (multiselectMode.value) {
-    // Map selectedAllergyIds to row indices
-    sortedAllergyTypes.value.forEach((allergy, index) => {
-      if (allergy.id && selectedAllergyIds.value.has(allergy.id)) {
-        selection[index] = true
-      }
-    })
-  } else if (selectedAllergyTypeId.value !== null) {
+  if (!multiselectMode.value && selectedAllergyTypeId.value !== null) {
     // Find the index of the selected allergy
     const index = sortedAllergyTypes.value.findIndex(a => a.id === selectedAllergyTypeId.value)
     if (index !== -1) {
@@ -263,39 +214,25 @@ const rowSelection = computed(() => {
   return selection
 })
 
-// TABLE COLUMNS (dynamic based on multiselect mode)
-const columns = computed(() => {
-  const baseColumns = [
-    {
-      accessorKey: 'icon',
-      header: ''
-    },
-    {
-      accessorKey: 'name',
-      header: 'Allergen'
-    },
-    {
-      accessorKey: 'count',
-      header: 'Antal'
-    },
-    {
-      accessorKey: 'new',
-      header: 'Nyt'
-    }
-  ]
-
-  if (multiselectMode.value) {
-    return [
-      {
-        accessorKey: 'checkbox',
-        header: ''
-      },
-      ...baseColumns
-    ]
+// TABLE COLUMNS (only used in single-select mode)
+const columns = [
+  {
+    accessorKey: 'icon',
+    header: ''
+  },
+  {
+    accessorKey: 'name',
+    header: 'Allergen'
+  },
+  {
+    accessorKey: 'count',
+    header: 'Antal'
+  },
+  {
+    accessorKey: 'new',
+    header: 'Nyt'
   }
-
-  return baseColumns
-})
+]
 
 // Funny empty state message for allergy catalog
 const catalogEmptyState = {
@@ -343,264 +280,244 @@ const catalogEmptyState = {
 
       <!-- Desktop: Master-Detail Layout -->
       <div class="hidden md:flex gap-6">
-        <!-- MASTER PANEL (Left) -->
-        <div class="w-1/3">
-          <UTable
-              :columns="columns"
-              :data="sortedAllergyTypes"
-              :loading="isAllergyTypesLoading"
-              v-model:row-selection="rowSelection"
-              :ui="{ td: 'py-3' }"
-          >
-            <template #icon-header>
+        <!-- MULTISELECT MODE: Use AllergenMultiSelector -->
+        <template v-if="multiselectMode">
+          <div class="w-full space-y-4">
+            <!-- Controls above multiselect -->
+            <div class="flex justify-between items-center">
               <UButton
                   color="secondary"
-                  :variant="multiselectMode ? 'solid' : 'outline'"
+                  variant="outline"
                   @click="toggleMultiselectMode"
                   name="multiselect-toggle"
-                  size="lg"
               >
                 <template #leading>
-                  <UIcon
-                      :name="multiselectMode ? 'i-heroicons-clipboard-document-check' : 'i-heroicons-rectangle-stack'"
-                  />
+                  <UIcon name="i-heroicons-x-mark"/>
                 </template>
-                Vælg
+                Afslut sammenligning
               </UButton>
-            </template>
-            <!-- Custom header for count column with sort icon -->
-            <template #count-header>
+
               <UButton
                   @click="toggleSortOrder"
                   variant="outline"
-                  size="lg"
                   name="sort-by-count"
                   color="secondary"
               >
                 <template #leading>
                   <UIcon
-                      :name="isSorted === 'asc' ?'i-lucide-arrow-up-narrow-wide'
-                          : 'i-lucide-arrow-down-wide-narrow'"
-                      color="neutral"
+                      :name="isSorted === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'"
                   />
                 </template>
-                Antal
+                {{ isSorted === 'asc' ? 'Stigende' : 'Faldende' }}
               </UButton>
-            </template>
+            </div>
 
-            <!-- Checkbox cell (multiselect mode) -->
-            <template #checkbox-cell="{ row }">
-              <div class="flex items-center justify-center">
-                <UCheckbox
-                    :model-value="selectedAllergyIds.has(row.original.id!)"
-                    @change="toggleAllergySelection(row.original.id!)"
-                    :name="`select-allergy-${row.original.id}`"
+            <!-- AllergenMultiSelector component -->
+            <AllergenMultiSelector
+                v-model="selectedAllergyIds"
+                :allergy-types="sortedAllergyTypes"
+                mode="edit"
+                :show-statistics="true"
+                :show-new-badge="true"
+            />
+          </div>
+        </template>
+
+        <!-- SINGLE-SELECT MODE: Original table + detail panel -->
+        <template v-else>
+          <!-- MASTER PANEL (Left) -->
+          <div class="w-1/3">
+            <UTable
+                :columns="columns"
+                :data="sortedAllergyTypes"
+                :loading="isAllergyTypesLoading"
+                v-model:row-selection="rowSelection"
+                :ui="{ td: 'py-3' }"
+            >
+              <template #icon-header>
+                <UButton
+                    v-if="formMode === FORM_MODES.VIEW"
                     color="secondary"
-                />
-              </div>
-            </template>
+                    variant="outline"
+                    @click="toggleMultiselectMode"
+                    name="multiselect-toggle"
+                    size="lg"
+                >
+                  <template #leading>
+                    <UIcon name="i-heroicons-rectangle-stack"/>
+                  </template>
+                  Sammenlign
+                </UButton>
+              </template>
 
-            <!-- Icon cell -->
-            <template #icon-cell="{ row }">
-              <div
-                  @click="handleRowClick(row.original)"
-                  :class="[
+              <!-- Custom header for count column with sort icon -->
+              <template #count-header>
+                <UButton
+                    @click="toggleSortOrder"
+                    variant="outline"
+                    size="lg"
+                    name="sort-by-count"
+                    color="secondary"
+                >
+                  <template #leading>
+                    <UIcon
+                        :name="isSorted === 'asc' ?'i-lucide-arrow-up-narrow-wide'
+                          : 'i-lucide-arrow-down-wide-narrow'"
+                        color="neutral"
+                    />
+                  </template>
+                  Antal
+                </UButton>
+              </template>
+
+              <!-- Icon cell -->
+              <template #icon-cell="{ row }">
+                <div
+                    @click="handleRowClick(row.original)"
+                    :class="[
                     'flex items-center justify-center p-2 rounded-lg transition-colors',
-                    isRowSelected(row.original.id!) ? 'bg-secondary-100 dark:bg-secondary-900' : ''
+                    COMPONENTS.table.clickableCell,
+                    isRowSelected(row.original.id!) && COMPONENTS.table.selectedRow
                   ]"
-              >
-                <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
-                  <UIcon
-                      v-if="row.original.icon?.startsWith('i-')"
-                      :name="row.original.icon"
-                      class="text-xl"
-                  />
-                  <span v-else class="text-xl">
+                >
+                  <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
+                    <UIcon
+                        v-if="row.original.icon?.startsWith('i-')"
+                        :name="row.original.icon"
+                        class="text-xl"
+                    />
+                    <span v-else class="text-xl">
                     {{ row.original.icon || '🏷️' }}
                   </span>
+                  </div>
                 </div>
-              </div>
-            </template>
+              </template>
 
-            <!-- Name cell -->
-            <template #name-cell="{ row }">
-              <div @click="handleRowClick(row.original)" class="font-medium">
-                {{ row.original.name }}
-              </div>
-            </template>
+              <!-- Name cell -->
+              <template #name-cell="{ row }">
+                <div
+                    @click="handleRowClick(row.original)"
+                    :class="['font-medium', COMPONENTS.table.clickableCell]"
+                >
+                  {{ row.original.name }}
+                </div>
+              </template>
 
-            <!-- Count cell -->
-            <template #count-cell="{ row }">
-              <div @click="handleRowClick(row.original)" class="text-center">
-                {{ row.original.inhabitants?.length || 0 }}
-              </div>
-            </template>
+              <!-- Count cell -->
+              <template #count-cell="{ row }">
+                <div
+                    @click="handleRowClick(row.original)"
+                    :class="['text-center', COMPONENTS.table.clickableCell]"
+                >
+                  {{ row.original.inhabitants?.length || 0 }}
+                </div>
+              </template>
 
-            <!-- New badge cell -->
-            <template #new-cell="{ row }">
-              <div @click="handleRowClick(row.original)" class="text-center">
-                <span v-if="isNew(row.original.createdAt || '')">🆕</span>
-              </div>
-            </template>
+              <!-- New badge cell -->
+              <template #new-cell="{ row }">
+                <div
+                    @click="handleRowClick(row.original)"
+                    :class="['text-center', COMPONENTS.table.clickableCell]"
+                >
+                  <span v-if="isNew(row.original.createdAt || '')">🆕</span>
+                </div>
+              </template>
 
-            <!-- Empty state -->
-            <template #empty-state>
-              <UAlert
-                variant="soft"
-                :color="COLOR.success"
-                :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
-                :ui="COMPONENTS.emptyStateAlert"
-              >
-                <template #title>
-                  {{ catalogEmptyState.text }}
-                </template>
-                <template #description>
-                  {{ catalogEmptyState.description }}
-                </template>
-              </UAlert>
-            </template>
-          </UTable>
-        </div>
+              <!-- Empty state -->
+              <template #empty-state>
+                <UAlert
+                    variant="soft"
+                    :color="COLOR.success"
+                    :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
+                    :ui="COMPONENTS.emptyStateAlert"
+                >
+                  <template #title>
+                    {{ catalogEmptyState.text }}
+                  </template>
+                  <template #description>
+                    {{ catalogEmptyState.description }}
+                  </template>
+                </UAlert>
+              </template>
+            </UTable>
+          </div>
 
-        <!-- DETAIL PANEL (Right) -->
-        <div class="flex-1 border-l pl-6">
-          <!-- Statistics panel (multiselect mode with selections) -->
-          <div v-if="multiselectMode && allergyStatistics" class="space-y-4">
-            <h3 class="text-lg font-semibold">📊 Statistik</h3>
+          <!-- DETAIL PANEL (Right) -->
+          <div class="flex-1 border-l pl-6">
+            <!-- No selection state -->
+            <div v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
+                 class="flex flex-col items-center justify-center py-12 text-gray-500">
+              <UIcon name="i-heroicons-arrow-left" class="w-8 h-8 mb-2"/>
+              <p class="text-sm">Vælg en allergi for at se detaljer</p>
+            </div>
 
-            <UAlert
-                title="Unikke beboere berørt"
-                description="Disse bofæller kan ikke tåle denne kombination af allergener."
-                color="primary"
-                :avatar="{text: allergyStatistics.totalInhabitants.toString()}"
-            />
+            <!-- Selected allergy in view mode -->
+            <div v-else-if="selectedAllergyType && formMode === FORM_MODES.VIEW" class="space-y-4">
+              <h3 class="text-lg font-semibold">Detaljer</h3>
+              <AllergyTypeCard :allergy-type="selectedAllergyType"/>
+            </div>
 
-            <!-- Show unique inhabitants -->
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Berørte beboere</h4>
-              <UserListItem
-                  :inhabitants="allergyStatistics.uniqueInhabitantsList"
-                  label="beboer"
-                  labelPlural="beboere"
+            <!-- Edit mode -->
+            <div v-else-if="formMode === FORM_MODES.EDIT && selectedAllergyType">
+              <AllergyTypeCard
+                  :allergy-type="selectedAllergyType"
+                  mode="edit"
+                  @save="handleSubmit"
+                  @cancel="cancelEdit"
               />
             </div>
 
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Fordeling pr. allergen</h4>
-              <div v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
-                   class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">{{ item.icon || '🏷️' }}</span>
-                  <span class="text-sm">{{ item.name }}</span>
+            <!-- Create mode -->
+            <div v-else-if="formMode === FORM_MODES.CREATE">
+              <h3 class="text-lg font-semibold mb-4">Opret ny allergi</h3>
+              <div class="space-y-4">
+                <UFormField label="Navn" required>
+                  <UInput
+                      v-model="formData.name"
+                      placeholder="F.eks. Jordnødder"
+                      name="allergy-name"
+                  />
+                </UFormField>
+
+                <UFormField label="Ikon (emoji)">
+                  <UInput
+                      v-model="formData.icon"
+                      placeholder="F.eks. 🥜"
+                      name="allergy-icon"
+                  />
+                </UFormField>
+
+                <UFormField label="Beskrivelse" required>
+                  <UTextarea
+                      v-model="formData.description"
+                      placeholder="Beskriv allergien..."
+                      name="allergy-description"
+                      :rows="3"
+                  />
+                </UFormField>
+
+                <div class="flex gap-2">
+                  <UButton
+                      color="primary"
+                      @click="handleSubmit"
+                      :disabled="!formData.name || !formData.description"
+                      name="submit-allergy-type"
+                  >
+                    Opret
+                  </UButton>
+                  <UButton
+                      color="neutral"
+                      variant="outline"
+                      @click="cancelEdit"
+                      name="cancel-allergy-type"
+                  >
+                    Annuller
+                  </UButton>
                 </div>
-                <span class="text-sm font-medium">{{ item.count }}</span>
-              </div>
-            </div>
-
-            <!-- Show compact selected allergy cards -->
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Valgte allergier</h4>
-              <div class="space-y-2">
-                <AllergyTypeCard
-                    v-for="allergy in selectedAllergies"
-                    :key="allergy.id"
-                    :allergy-type="allergy"
-                    compact
-                />
               </div>
             </div>
           </div>
-
-          <!-- No selection state (not multiselect or no selections) -->
-          <div v-else-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
-               class="flex flex-col items-center justify-center py-12 text-gray-500">
-            <UIcon name="i-heroicons-arrow-left" class="w-8 h-8 mb-2"/>
-            <p class="text-sm">
-              {{ multiselectMode ? 'Vælg allergier for at se statistik' : 'Vælg en allergi for at se detaljer' }}</p>
-          </div>
-
-          <!-- Selected allergy in view mode (not multiselect) -->
-          <div v-else-if="selectedAllergyType && formMode === FORM_MODES.VIEW" class="space-y-4">
-            <h3 class="text-lg font-semibold">Detaljer</h3>
-            <AllergyTypeCard :allergy-type="selectedAllergyType"/>
-          </div>
-
-          <!-- Edit mode -->
-          <div v-else-if="formMode === FORM_MODES.EDIT && selectedAllergyType" class="space-y-4">
-            <div class="flex justify-between items-center">
-              <h3 class="text-lg font-semibold">Rediger</h3>
-              <div class="flex gap-2">
-                <UButton
-                    icon="i-heroicons-pencil"
-                    size="xs"
-                    color="primary"
-                    variant="ghost"
-                    @click="startEdit(selectedAllergyType)"
-                    :name="`edit-selected-allergy-${selectedAllergyType.id}`"
-                />
-                <UButton
-                    icon="i-heroicons-trash"
-                    size="xs"
-                    color="red"
-                    variant="ghost"
-                    @click="handleDelete(selectedAllergyType.id!, selectedAllergyType.name)"
-                    :name="`delete-selected-allergy-${selectedAllergyType.id}`"
-                />
-              </div>
-            </div>
-            <AllergyTypeCard :allergy-type="selectedAllergyType"/>
-          </div>
-
-          <!-- Create mode -->
-          <div v-else-if="formMode === FORM_MODES.CREATE">
-            <h3 class="text-lg font-semibold mb-4">Opret ny allergi</h3>
-            <div class="space-y-4">
-              <UFormField label="Navn" required>
-                <UInput
-                    v-model="formData.name"
-                    placeholder="F.eks. Jordnødder"
-                    name="allergy-name"
-                />
-              </UFormField>
-
-              <UFormField label="Ikon (emoji)">
-                <UInput
-                    v-model="formData.icon"
-                    placeholder="F.eks. 🥜"
-                    name="allergy-icon"
-                />
-              </UFormField>
-
-              <UFormField label="Beskrivelse" required>
-                <UTextarea
-                    v-model="formData.description"
-                    placeholder="Beskriv allergien..."
-                    name="allergy-description"
-                    :rows="3"
-                />
-              </UFormField>
-
-              <div class="flex gap-2">
-                <UButton
-                    color="primary"
-                    @click="handleSubmit"
-                    :disabled="!formData.name || !formData.description"
-                    name="submit-allergy-type"
-                >
-                  Opret
-                </UButton>
-                <UButton
-                    color="neutral"
-                    variant="outline"
-                    @click="cancelEdit"
-                    name="cancel-allergy-type"
-                >
-                  Annuller
-                </UButton>
-              </div>
-            </div>
-          </div>
-        </div>
+        </template>
       </div>
 
       <!-- Mobile: Card View -->

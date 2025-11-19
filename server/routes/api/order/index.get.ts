@@ -18,7 +18,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         const query = await getValidatedQuery(event, querySchema.parse)
         dinnerId = query.dinnerEventId
     } catch (error) {
-        throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
+        return throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
     }
 
     try {
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         setResponseStatus(event, 200)
         return orders
     } catch (error) {
-        throwH3Error('🎟️ > ORDER > [GET] Error fetching orders', error)
+        return throwH3Error('🎟️ > ORDER > [GET] Error fetching orders', error)
     }
 
 })

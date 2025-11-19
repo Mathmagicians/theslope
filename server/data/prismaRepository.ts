@@ -890,7 +890,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // - Weak to DinnerEvents (events can exist without assigned team)
 
 // Get serialization utilities for CookingTeam
-const {serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment} = useCookingTeamValidation()
+const {serializeCookingTeam: _serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment} = useCookingTeamValidation()
 
 export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id'>): Promise<CookingTeamAssignment> {
     console

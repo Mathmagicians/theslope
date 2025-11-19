@@ -19,6 +19,7 @@ const tabs = [
 
 test.describe('Admin page path-based navigation', () => {
   const adminUrl = '/admin'
+  const createdSeasonIds: number[] = []
 
   const formModes = [
     { mode: 'view', buttonName: 'form-mode-view' },
@@ -27,6 +28,11 @@ test.describe('Admin page path-based navigation', () => {
   ]
 
   test.use({ storageState: adminUIFile })
+
+  test.afterAll(async ({browser}) => {
+    const context = await validatedBrowserContext(browser)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+  })
 
   const redirectScenarios = [
     { path: '', description: 'Load /admin redirects to /admin/planning by default' },
@@ -125,6 +131,7 @@ test.describe('Admin page path-based navigation', () => {
     test(`Tab "${tab.name}" can navigate between all form modes`, async ({ page, browser }) => {
       const context = await validatedBrowserContext(browser)
       const season = await SeasonFactory.createSeason(context)
+      createdSeasonIds.push(season.id!)
 
       try {
         for (const formMode of formModes) {
@@ -154,7 +161,14 @@ test.describe('Admin page path-based navigation', () => {
 })
 
 test.describe('Admin season URL persistence', () => {
+  const createdSeasonIds: number[] = []
+
   test.use({ storageState: adminUIFile })
+
+  test.afterAll(async ({browser}) => {
+    const context = await validatedBrowserContext(browser)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+  })
 
   const tabTransitions = [
     { fromTab: 'planning', toTab: 'teams' },
@@ -171,6 +185,7 @@ test.describe('Admin season URL persistence', () => {
     test(`Season persists from ${fromTab} to ${toTab} tab`, async ({ page, browser }) => {
       const context = await validatedBrowserContext(browser)
       const season = await SeasonFactory.createSeason(context)
+      createdSeasonIds.push(season.id!)
 
       try {
         await page.goto(`/admin/${fromTab}?season=${season.shortName}`)
@@ -204,6 +219,7 @@ test.describe('Admin season URL persistence', () => {
   test('Season and mode params coexist', async ({ page, browser }) => {
     const context = await validatedBrowserContext(browser)
     const season = await SeasonFactory.createSeason(context)
+    createdSeasonIds.push(season.id!)
 
     try {
       await page.goto(`/admin/planning?season=${season.shortName}&mode=edit`)
@@ -226,6 +242,7 @@ test.describe('Admin season URL persistence', () => {
   test('Invalid season redirects to active season', async ({ page, browser }) => {
     const context = await validatedBrowserContext(browser)
     const season = await SeasonFactory.createSeason(context)
+    createdSeasonIds.push(season.id!)
 
     try {
       await page.goto('/admin/planning?season=invalid-123')

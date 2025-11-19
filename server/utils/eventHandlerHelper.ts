@@ -109,13 +109,11 @@ const h3eFromPrismaError = (prepend: string = 'uh oh, a prisma error', error: Pr
  * @param h3e - The H3Error to log
  * @param originalError - Optional original error for additional context
  */
-const logH3Error = (h3e: H3Error, originalError?: unknown): void => {
+const logH3Error = (h3e: H3Error, _originalError?: unknown): void => {
     if (h3e.statusCode >= 400 && h3e.statusCode < 500) {
-        // Client errors (400-499): log as warning
         console.warn(h3e.message)
     } else {
-        // Server errors (500+): log as error with original error for stack trace
-        console.error(h3e.message, originalError)
+        console.error(h3e.message)
     }
 }
 

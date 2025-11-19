@@ -12,11 +12,12 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id, order
+    let id!: number
+    let order!: OrderDetail
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
+        return throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
     }
 
     try {
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
         order = await fetchOrder(d1Client, id)
 
     } catch (error) {
-        throwH3Error(`🎟️ > ORDER > [GET] Error fetching order ${id}`, error)
+        return throwH3Error(`🎟️ > ORDER > [GET] Error fetching order ${id}`, error)
     }
     if (!order) {
         throw createError({

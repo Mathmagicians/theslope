@@ -15,11 +15,11 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {UserCreateSchema} = useCoreValidation()
 
     // Validate input - fail early on invalid data
-    let userFromBody: UserCreate
+    let userFromBody!: UserCreate
     try {
         userFromBody = await readValidatedBody(event, UserCreateSchema.parse)
     } catch (error) {
-        throwH3Error('🪪 > USER > [PUT] Input validation error', error)
+        return throwH3Error('🪪 > USER > [PUT] Input validation error', error)
     }
 
     // Save user to database
@@ -30,6 +30,6 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
         setResponseStatus(event, 201)
         return newUser
     } catch (error) {
-        throwH3Error(`🪪 > USER > [PUT] Error saving user ${userFromBody.email}`, error)
+        return throwH3Error(`🪪 > USER > [PUT] Error saving user ${userFromBody.email}`, error)
     }
 })

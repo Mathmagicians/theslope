@@ -14,11 +14,11 @@ export default defineEventHandler(async (event):Promise<OrderDisplay> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        throwH3Error('🎟️ > ORDER > [DELETE] Input validation error', error)
+        return throwH3Error('🎟️ > ORDER > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -28,6 +28,6 @@ export default defineEventHandler(async (event):Promise<OrderDisplay> => {
         console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id}`)
         return deletedOrder
     } catch (error) {
-        throwH3Error(`🎟️ > ORDER > [DELETE] Error deleting order ${id}`, error)
+        return throwH3Error(`🎟️ > ORDER > [DELETE] Error deleting order ${id}`, error)
     }
 })

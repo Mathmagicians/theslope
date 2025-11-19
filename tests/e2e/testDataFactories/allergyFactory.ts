@@ -89,6 +89,44 @@ export class AllergyFactory {
         }
     ]
 
+    /**
+     * Create mock AllergyTypeDetail data with inhabitants for component tests (no API call)
+     * Returns array of AllergyTypeDetail objects (includes inhabitants)
+     */
+    static readonly createMockAllergyTypesWithInhabitants = (): AllergyTypeDetail[] => [
+        {
+            id: 1,
+            name: 'Mælk',
+            description: 'Laktoseintolerans',
+            icon: '🥛',
+            inhabitants: [
+                { id: 1, heynaboId: 101, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01') },
+                { id: 2, heynaboId: 102, name: 'Bob', lastName: 'Jensen', pictureUrl: null, birthDate: new Date('1985-05-15') }
+            ],
+            createdAt: new Date('2025-01-01')
+        },
+        {
+            id: 2,
+            name: 'Jordnødder',
+            description: 'Nøddeallergi',
+            icon: '🥜',
+            inhabitants: [
+                { id: 3, heynaboId: 103, name: 'Clara', lastName: 'Petersen', pictureUrl: null, birthDate: new Date('1995-03-20') }
+            ],
+            createdAt: new Date('2025-01-10')
+        },
+        {
+            id: 3,
+            name: 'Gluten',
+            description: 'Cøliaki',
+            icon: '🌾',
+            inhabitants: [
+                { id: 1, heynaboId: 101, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01') }
+            ],
+            createdAt: new Date('2024-12-01')
+        }
+    ]
+
     // === ALLERGY TYPE METHODS (for E2E tests) ===
 
     static readonly defaultAllergyTypeData = (testSalt: string = Date.now().toString()) => ({

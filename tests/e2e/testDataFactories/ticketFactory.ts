@@ -1,7 +1,6 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
-import { TicketTypeSchema } from '~~/prisma/generated/zod'
 
-const {createTicketPrice} = useTicketPriceValidation()
+const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 
 /**
