@@ -50,7 +50,7 @@ const getSerializableCause = (error: unknown): SerializableError => {
         return String(error)
 }
 
-const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown): H3Error => {
+const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statusCode: number = 500): H3Error => {
     // If error is already an H3Error, just re-throw it (pass through from repository layer)
     if (error instanceof H3Error) {
         throw error
@@ -66,22 +66,22 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown): H3Er
     if (error instanceof Prisma.PrismaClientKnownRequestError) return h3eFromPrismaError(prepend, error)
 
     if (error instanceof Error) return createError({
-        statusCode: 500,
-        statusMessage: 'Internal Server Error',
+        statusCode: statusCode,
+        statusMessage: statusCode === 404 ? 'Not Found' : 'Internal Server Error',
         message: `${prepend} - Error: ${error.message}`,
         cause: getSerializableCause(error)
     })
 
     if (typeof error === 'string') return createError({
-        statusCode: 500,
-        statusMessage: 'Internal Server Error',
+        statusCode: statusCode,
+        statusMessage: statusCode === 404 ? 'Not Found' : 'Internal Server Error',
         message: `${prepend}: ${error}`,
         cause: error
     })
 
     return createError({
-        statusCode: 500,
-        statusMessage: 'Internal Server Error',
+        statusCode: statusCode,
+        statusMessage: statusCode === 404 ? 'Not Found' : 'Internal Server Error',
         message: `${prepend}: Unknown error occurred`,
         cause: getSerializableCause(error)
     })
@@ -134,8 +134,8 @@ const logH3Error = (h3e: H3Error, originalError?: unknown): void => {
  *   throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
  * }
  */
-const throwH3Error = (prepend: string, error: unknown): never => {
-    const h3e = h3eFromCatch(prepend, error)
+const throwH3Error = (prepend: string, error: unknown, statusCode: number = 500): never => {
+    const h3e = h3eFromCatch(prepend, error, statusCode)
     logH3Error(h3e, error)
     throw h3e
 }

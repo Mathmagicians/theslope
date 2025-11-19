@@ -212,7 +212,7 @@ const handlePowerModeUpdate = () => {
       <!-- Name Column -->
       <template #name-cell="{ row }">
         <UserListItem
-          :to-display="row"
+          :inhabitants="row"
           compact
           :property-check="() => false"
         />

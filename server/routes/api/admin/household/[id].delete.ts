@@ -4,7 +4,7 @@ import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h
 import {deleteHousehold} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import type {HouseholdDetail} from "~/composables/useCoreValidation"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -18,12 +18,12 @@ export default defineEventHandler(async (event): Promise<HouseholdDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -35,6 +35,6 @@ export default defineEventHandler(async (event): Promise<HouseholdDetail> => {
         setResponseStatus(event, 200)
         return deletedHousehold
     } catch (error) {
-        throwH3Error(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
+        return throwH3Error(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
     }
 })

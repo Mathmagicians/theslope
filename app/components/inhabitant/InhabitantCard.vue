@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 <template>
     <UserListItem
-        :to-display="inhabitant"
+        :inhabitants="inhabitant"
         :compact="compact"
         :label="label"
     />

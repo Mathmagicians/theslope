@@ -24,7 +24,7 @@ v-else
     <template #description>
       <p class="text-sm md:flex-1">Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:</p>
       <UserListItem 
-        :to-display="allergyManagerInhabitants"
+        :inhabitants="allergyManagerInhabitants"
         label="Allergiansvarlige"
         ring-color="ocean-500"
       />

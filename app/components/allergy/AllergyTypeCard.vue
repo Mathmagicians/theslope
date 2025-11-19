@@ -182,7 +182,7 @@ const emptyStateMessage = computed(() => {
         >
           <!-- Inhabitant with avatar and name -->
           <UserListItem
-              :to-display="inhabitant"
+              :inhabitants="inhabitant"
               :label="inhabitant.householdName"
           />
 

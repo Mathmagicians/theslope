@@ -59,8 +59,9 @@ describe('AllergenSelector', () => {
     it('renders checkbox for each allergen type', async () => {
       const wrapper = await createWrapper({ mode: 'edit' })
 
+      const html = wrapper.html()
       const checkboxes = wrapper.findAll('input[type="checkbox"]')
-      expect(checkboxes.length).toBe(mockAllergyTypes.length)
+      expect(checkboxes.length, `Expected ${mockAllergyTypes.length} checkboxes, found ${checkboxes.length}. Component rendered: ${html.substring(0, 500)}`).toBe(mockAllergyTypes.length)
     })
 
     it.each([

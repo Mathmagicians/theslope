@@ -30,7 +30,7 @@
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 
 interface Props {
-  toDisplay: InhabitantDisplay | InhabitantDisplay[]
+  inhabitants: InhabitantDisplay | InhabitantDisplay[]
   compact?: boolean
   size?: 'xs' | 'sm' | 'md' | 'lg'
   ringColor?: string
@@ -52,14 +52,14 @@ const isChild = (inhabitant: InhabitantDisplay): boolean => {
 const checkProperty = computed(() => props.propertyCheck ?? isChild)
 
 // Mode detection
-const isGroup = computed(() => Array.isArray(props.toDisplay))
+const isGroup = computed(() => Array.isArray(props.inhabitants))
 const count = computed(() =>
-  isGroup.value ? props.toDisplay.length : (props.toDisplay ? 1 : 0)
+  isGroup.value ? props.inhabitants.length : (props.inhabitants ? 1 : 0)
 )
 
 // Duplicate first name detection
 const duplicateFirstNames = computed(() => {
-  const list = Array.isArray(props.toDisplay) ? props.toDisplay : [props.toDisplay]
+  const list = Array.isArray(props.inhabitants) ? props.inhabitants : [props.inhabitants]
   const firstNameCounts = new Map<string, number>()
 
   list.forEach(inhabitant => {
@@ -103,7 +103,7 @@ const {getUserUrl} = useHeynabo()
   <!-- GROUP MODE -->
   <div v-if="isGroup" class="flex items-center gap-2">
     <UAvatarGroup :max="maxAvatars" :size="avatarSize">
-      <template v-for="inhabitant in toDisplay" :key="inhabitant.heynaboId">
+      <template v-for="inhabitant in inhabitants" :key="inhabitant.heynaboId">
         <ULink
           :to="getUserUrl(inhabitant.heynaboId)"
           target="_blank"
@@ -136,21 +136,21 @@ const {getUserUrl} = useHeynabo()
   <!-- SINGLE MODE: COMPACT -->
   <div v-else-if="compact" class="inline-flex items-center gap-2">
     <ULink
-      :to="getUserUrl(toDisplay.heynaboId)"
+      :to="getUserUrl(inhabitants.heynaboId)"
       target="_blank"
       class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
     >
       <UAvatar
-        :src="toDisplay.pictureUrl || undefined"
-        :alt="`${toDisplay.name} ${toDisplay.lastName}`"
+        :src="inhabitants.pictureUrl || undefined"
+        :alt="`${inhabitants.name} ${inhabitants.lastName}`"
         :size="avatarSize"
         icon="i-heroicons-user"
         :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
       />
     </ULink>
     <div class="flex items-center gap-1">
-      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(toDisplay) }}</span>
-      <UBadge v-if="checkProperty(toDisplay)" size="xs" color="blue">
+      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(inhabitants) }}</span>
+      <UBadge v-if="checkProperty(inhabitants)" size="xs" color="blue">
         Barn
       </UBadge>
     </div>
@@ -160,21 +160,21 @@ const {getUserUrl} = useHeynabo()
   <UCard v-else>
     <div class="flex items-center gap-3">
       <ULink
-        :to="getUserUrl(toDisplay.heynaboId)"
+        :to="getUserUrl(inhabitants.heynaboId)"
         target="_blank"
         class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
       >
         <UAvatar
-          :src="toDisplay.pictureUrl || undefined"
-          :alt="`${toDisplay.name} ${toDisplay.lastName}`"
+          :src="inhabitants.pictureUrl || undefined"
+          :alt="`${inhabitants.name} ${inhabitants.lastName}`"
           :size="avatarSize"
           icon="i-heroicons-user"
           :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
         />
       </ULink>
       <div class="flex items-center gap-2">
-        <span class="font-semibold">{{ toDisplay.name }} {{ toDisplay.lastName }}</span>
-        <UBadge v-if="checkProperty(toDisplay)" size="sm" color="blue">
+        <span class="font-semibold">{{ inhabitants.name }} {{ inhabitants.lastName }}</span>
+        <UBadge v-if="checkProperty(inhabitants)" size="sm" color="blue">
           Barn
         </UBadge>
       </div>

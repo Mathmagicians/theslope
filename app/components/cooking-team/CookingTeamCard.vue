@@ -181,7 +181,7 @@ defineExpose({
         <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.CHEF }}</span>
         <div class="flex-1">
           <UserListItem
-            :to-display="roleGroups.CHEF.map(m => m.inhabitant)"
+            :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
             :compact="false"
             :size="SIZES.standard.value.value"
             :ring-color="teamColor"
@@ -195,7 +195,7 @@ defineExpose({
         <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.COOK }}</span>
         <div class="flex-1">
           <UserListItem
-            :to-display="teamMembers.map(m => m.inhabitant)"
+            :inhabitants="teamMembers.map(m => m.inhabitant)"
             :compact="false"
             :size="SIZES.standard.value.value"
             :ring-color="teamColor"
@@ -417,7 +417,7 @@ defineExpose({
           class="flex-1"
         >
           <UserListItem
-            :to-display="members.map(m => m.inhabitant)"
+            :inhabitants="members.map(m => m.inhabitant)"
             :compact="false"
             size="md"
             :ring-color="teamColor"

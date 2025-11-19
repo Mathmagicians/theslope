@@ -248,7 +248,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
           <!-- Power mode: show all family members in group -->
           <UserListItem
               v-if="row.original.isSynthetic"
-              :to-display="row.original.inhabitants"
+              :inhabitants="row.original.inhabitants"
               compact
               :property-check="() => false"
               ring-color="warning"
@@ -257,7 +257,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
           <!-- Regular mode: show single inhabitant -->
           <UserListItem
               v-else
-              :to-display="row.original"
+              :inhabitants="row.original"
               compact
               :property-check="() => false"
               ring-color="primary"

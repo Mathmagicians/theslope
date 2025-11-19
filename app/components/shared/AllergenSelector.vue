@@ -46,7 +46,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: number[]]
 }>()
 
-// Selected allergen IDs (reactive)
+// Selected allergen IDs (reactive Set for efficient lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
 
 // Sync with prop changes
@@ -70,7 +70,7 @@ const toggleAllergySelection = (allergyId: number) => {
 
 // Selected allergies (with details)
 const selectedAllergies = computed(() =>
-  allergyTypes.value.filter(at => at.id && selectedAllergyIds.value.has(at.id))
+  props.allergyTypes.filter(at => at.id && selectedAllergyIds.value.has(at.id))
 )
 
 // Statistics for selected allergies (allergy manager context)
@@ -108,45 +108,45 @@ const allergyStatistics = computed(() => {
         {{ showInhabitantStats ? 'Vælg allergener' : 'Allergener i menuen' }}
       </h3>
 
-      <Loader v-if="isAllergyTypesLoading" text="Indlæser allergener..." />
+      <Loader v-if="loading" text="Indlæser allergener..." />
 
       <!-- Allergen checkboxes (2-column grid on desktop) -->
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div
-          v-for="allergyType in allergyTypes"
-          :key="allergyType.id"
-          class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          :class="{
-            'bg-gray-50 dark:bg-gray-800': selectedAllergyIds.has(allergyType.id!),
-            'opacity-60 cursor-not-allowed': readonly
-          }"
-        >
-          <UCheckbox
-            :model-value="selectedAllergyIds.has(allergyType.id!)"
-            :name="`allergen-${allergyType.id}`"
-            :disabled="readonly"
-            color="secondary"
-            @change="toggleAllergySelection(allergyType.id!)"
-          />
+      <UFormField v-else name="allergen-selector">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div
+            v-for="allergyType in props.allergyTypes"
+            :key="allergyType.id"
+            class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            :class="{
+              'bg-gray-50 dark:bg-gray-800': selectedAllergyIds.has(allergyType.id!),
+              'opacity-60 cursor-not-allowed': readonly
+            }"
+          >
+            <!-- Icon -->
+            <div class="flex items-center justify-center w-8 h-8 flex-shrink-0">
+              <UIcon
+                v-if="allergyType.icon?.startsWith('i-')"
+                :name="allergyType.icon"
+                class="text-lg"
+              />
+              <span v-else class="text-lg">
+                {{ allergyType.icon || '🏷️' }}
+              </span>
+            </div>
 
-          <!-- Icon -->
-          <div class="flex items-center justify-center w-8 h-8 flex-shrink-0">
-            <UIcon
-              v-if="allergyType.icon?.startsWith('i-')"
-              :name="allergyType.icon"
-              class="text-lg"
+            <!-- Checkbox with built-in label -->
+            <UCheckbox
+              :model-value="selectedAllergyIds.has(allergyType.id!)"
+              :label="allergyType.name"
+              :name="`allergen-${allergyType.id}`"
+              :disabled="readonly"
+              color="secondary"
+              class="flex-1"
+              @update:model-value="() => toggleAllergySelection(allergyType.id!)"
             />
-            <span v-else class="text-lg">
-              {{ allergyType.icon || '🏷️' }}
-            </span>
           </div>
-
-          <!-- Name -->
-          <span class="text-sm font-medium flex-1">
-            {{ allergyType.name }}
-          </span>
         </div>
-      </div>
+      </UFormField>
 
       <!-- Statistics panel (allergy manager context only) -->
       <div v-if="showInhabitantStats && allergyStatistics" class="space-y-4 mt-6">
@@ -164,8 +164,7 @@ const allergyStatistics = computed(() => {
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Berørte beboere</h4>
           <UserListItem
             :inhabitants="allergyStatistics.uniqueInhabitantsList"
-            label="beboer"
-            label-plural="beboere"
+            label="beboere berørt af allergener"
           />
         </div>
 

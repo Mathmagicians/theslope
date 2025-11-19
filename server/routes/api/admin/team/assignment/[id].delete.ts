@@ -1,7 +1,7 @@
 // DELETE /api/admin/team/assignments/[assignmentId] - Remove team assignment
 
 import {defineEventHandler,  getValidatedRouterParams} from "h3"
-import * as z from 'zod'
+import {z} from 'zod'
 import {deleteCookingTeamAssignments} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
@@ -15,13 +15,13 @@ const paramSchema = z.object({
 export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    let id: number
+    let id!: number
 
     // Fail early input validation - season id must validate, and season must exist, assignmentid must validate
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
-        throwH3Error('👥 > ASSIGNMENT > [DELETE] Invalid assignment ID', error)
+        return throwH3Error('👥 > ASSIGNMENT > [DELETE] Invalid assignment ID', error)
     }
 
     try {
@@ -30,6 +30,6 @@ export default defineEventHandler(async (event): Promise<number> => {
         console.info(`👥 > ASSIGNMENT > [DELETE] Successfully removed assignment ${id}`)
         return deletedAssignment
     } catch (error) {
-        throwH3Error('👥 > ASSIGNMENT > [DELETE] Error removing assignment', error)
+        return throwH3Error('👥 > ASSIGNMENT > [DELETE] Error removing assignment', error)
     }
 })

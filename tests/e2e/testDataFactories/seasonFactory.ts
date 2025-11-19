@@ -167,8 +167,7 @@ export class SeasonFactory {
         }
 
         // Remember the currently active season (if any) before we deactivate it
-        const activeSeasonIdResponse = await context.request.get('/api/admin/season/active', { headers })
-        const currentActiveSeasonId = await activeSeasonIdResponse.json() as number | null
+        const currentActiveSeasonId = await this.getActiveSeasonId(context)
 
         if (currentActiveSeasonId) {
             const seasonResponse = await context.request.get(`/api/admin/season/${currentActiveSeasonId}`, { headers })
@@ -263,6 +262,26 @@ export class SeasonFactory {
         id: number,
         expectedStatus: number = 200
     ): Promise<Season | null> => {
+        // Delete all orders first (Order -> TicketPrice has onDelete: Restrict)
+        try {
+            const season = await this.getSeason(context, id)
+            if (season?.dinnerEvents) {
+                const {OrderFactory} = await import('./orderFactory')
+                for (const dinnerEvent of season.dinnerEvents) {
+                    const ordersResponse = await context.request.get(`/api/order?dinnerEventId=${dinnerEvent.id}`, { headers })
+                    if (ordersResponse.ok()) {
+                        const orders = await ordersResponse.json()
+                        for (const order of orders) {
+                            await OrderFactory.deleteOrder(context, order.id)
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            // If season doesn't exist, skip order cleanup
+            console.info(`Season ${id} not found for order cleanup, proceeding with delete`)
+        }
+
         const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
         expect(deleteResponse.status()).toBe(expectedStatus)
 
@@ -326,10 +345,13 @@ export class SeasonFactory {
         seasonId: number,
         expectedStatus: number = 201
     ): Promise<any> => {
-        const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`)
+        const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`, {
+            headers: headers
+        })
 
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             const responseBody = await response.json()
@@ -339,6 +361,25 @@ export class SeasonFactory {
             return responseBody
         }
 
+        return await response.json()
+    }
+
+    /**
+     * Get active season ID via API
+     * @returns number | null - Active season ID or null if none active
+     */
+    static readonly getActiveSeasonId = async (
+        context: BrowserContext
+    ): Promise<number | null> => {
+        const response = await context.request.get('/api/admin/season/active', { headers })
+
+        // 204 No Content = no active season (null)
+        if (response.status() === 204) {
+            return null
+        }
+
+        // 200 OK = active season ID
+        expect(response.status()).toBe(200)
         return await response.json()
     }
 

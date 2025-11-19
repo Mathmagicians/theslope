@@ -31,7 +31,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY (ADR-002)
-    let id: number
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
@@ -65,6 +65,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
         if (error.statusCode) throw error
 
         // Handle database errors
-        throwH3Error(`👥 > TEAM > [GET] Error fetching team with ID ${id}`, error)
+        return throwH3Error(`👥 > TEAM > [GET] Error fetching team with ID ${id}`, error)
     }
 })

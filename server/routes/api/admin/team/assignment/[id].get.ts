@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, createError} from "h3"
 import {fetchTeamAssignment} from "~~/server/data/prismaRepository"
 import type {CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -16,12 +16,12 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
+        return throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -39,6 +39,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         console.info(`👥🔗 > ASSIGNMENT > [GET] Returning assignment ${assignment.id}`)
         return assignment
     } catch (error) {
-        throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
     }
 })

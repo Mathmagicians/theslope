@@ -3,7 +3,7 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createTeamAssignment} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import type {CookingTeamAssignment} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamAssignment, CookingTeamAssignmentCreate} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
@@ -17,11 +17,11 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let assignmentData
+    let assignmentData!: CookingTeamAssignmentCreate
     try {
         assignmentData = await readValidatedBody(event, TeamAssignmentCreateSchema.parse)
     } catch (error) {
-        throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
+        return throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -32,6 +32,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         setResponseStatus(event, 201)
         return assignment
     } catch (error) {
-        throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
     }
 })

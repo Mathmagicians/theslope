@@ -252,7 +252,7 @@ const columns = [
           <!-- Inhabitant column -->
           <template #name-cell="{ row }">
             <UserListItem
-                :to-display="row.original"
+                :inhabitants="row.original"
                 compact
             />
           </template>

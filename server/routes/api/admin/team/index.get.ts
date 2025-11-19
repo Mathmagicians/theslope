@@ -19,21 +19,21 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let queryParams
+    let seasonId!: number | undefined
     try {
-        queryParams = await getValidatedQuery(event, querySchema.parse)
+        const queryParams = await getValidatedQuery(event, querySchema.parse)
+        seasonId = queryParams.seasonId
     } catch (error) {
-        throwH3Error('👥 > TEAM > [GET] Input validation error', error)
+        return throwH3Error('👥 > TEAM > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
     try {
-        const {seasonId} = queryParams
         console.info("👥 > TEAM > [GET] Fetching teams", "seasonId", seasonId)
         const teams = await fetchTeams(d1Client, seasonId)
         console.info("👥 > TEAM > [GET] Returning teams", "count", teams?.length || 0)
         return teams ?? []
     } catch (error) {
-        throwH3Error('👥 > TEAM > [GET] Error getting teams', error)
+        return throwH3Error('👥 > TEAM > [GET] Error getting teams', error)
     }
 })

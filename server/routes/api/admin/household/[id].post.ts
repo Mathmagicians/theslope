@@ -5,7 +5,7 @@ import {updateHousehold} from "~~/server/data/prismaRepository"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import type {HouseholdDetail, HouseholdUpdate} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -22,13 +22,13 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const {HouseholdUpdateSchema} = useCoreValidation()
 
     // Input validation try-catch - FAIL EARLY
-    let id: number
-    let householdData: Partial<HouseholdUpdate>
+    let id!: number
+    let householdData!: Partial<HouseholdUpdate>
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
         householdData = await readValidatedBody(event, HouseholdUpdateSchema.omit({id: true}).parse)
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -40,6 +40,6 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedHousehold
     } catch (error) {
-        throwH3Error(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
+        return throwH3Error(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
     }
 })

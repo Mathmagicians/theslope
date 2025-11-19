@@ -16,7 +16,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
@@ -36,6 +36,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
         return deletedTeam
     } catch (error) {
-        throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
+        return throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
     }
 })

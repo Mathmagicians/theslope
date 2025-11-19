@@ -3,7 +3,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchHousehold} from "~~/server/data/prismaRepository"
 import type {HouseholdDetail} from "~/composables/useCoreValidation"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 // Define schema for ID parameter
@@ -16,11 +16,11 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         ({id}  = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -33,7 +33,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
             return household
         }
     } catch (error: unknown) {
-        throwH3Error(`Error fetching household with id ${id}`, error)
+        return throwH3Error(`Error fetching household with id ${id}`, error)
     }
     console.info("🏠 > HOUSEHOLD > [GET] Household not found", "id", id)
     throw createError({

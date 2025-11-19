@@ -3,9 +3,9 @@
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import type {CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamWithMembers, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -33,7 +33,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id, teamData
+    let id!: number
+    let teamData!: CookingTeamUpdate
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
@@ -54,6 +55,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
+        return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
     }
 })

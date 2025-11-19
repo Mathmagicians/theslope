@@ -32,12 +32,12 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonId: number
+    let seasonId!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
+        return throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
     }
 
     // Business logic try-catch - separate concerns
@@ -47,7 +47,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         // Fetch season from database with teams (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
+            return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
         // Compute affinities for teams using composable
@@ -71,6 +71,6 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
             teams: updatedTeams
         }
     } catch (error) {
-        throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
+        return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
     }
 })

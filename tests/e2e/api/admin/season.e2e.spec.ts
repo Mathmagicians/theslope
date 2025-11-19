@@ -1,11 +1,14 @@
 import {test, expect} from '@playwright/test'
-import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '../../../../app/utils/date'
-import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
+import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~~/app/utils/date'
+import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
+import {useBookingValidation} from '~~/app/composables/useBookingValidation'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 const {headers, validatedBrowserContext} = testHelpers
 
 /**
@@ -381,9 +384,9 @@ test.describe('Season API Tests', () => {
                 expect(event.seasonId).toBe(season.id)
             })
 
-            // AND: All events have dinnerMode DINEIN (default)
+            // AND: All events have state SCHEDULED (default)
             result.events.forEach(event => {
-                expect(event.dinnerMode).toBe('DINEIN')
+                expect(event.state).toBe(DinnerState.SCHEDULED)
             })
 
             // AND: All events are on Monday (1), Wednesday (3), or Friday (5)
@@ -445,11 +448,9 @@ test.describe('Season API Tests', () => {
             // GIVEN: Invalid season ID
             const nonExistentSeasonId = 999999
 
-            // WHEN: POST /api/admin/season/999999/generate-dinner-events
-            const response = await context.request.post(`/api/admin/season/${nonExistentSeasonId}/generate-dinner-events`)
-
-            // THEN: Response status 404
-            expect(response.status()).toBe(404)
+            // WHEN: Attempt to generate dinner events for non-existent season
+            // THEN: Factory method expects 404
+            await SeasonFactory.generateDinnerEventsForSeason(context, nonExistentSeasonId, 404)
         })
 
         test("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async () => {
@@ -594,16 +595,12 @@ test.describe('Season API Tests', () => {
             expect(activeSeason.isActive).toBe(true)
             // No need to track - cleanupSeasons() automatically includes active season
 
-            // Call GET endpoint to get active season ID
-            const response = await context.request.get('/api/admin/season/active', { headers })
-            expect(response.status()).toBe(200)
-
-            const activeSeasonId = await response.json()
-            expect(typeof activeSeasonId).toBe('number')
+            // Call GET endpoint via factory to get active season ID
+            const activeSeasonId = await SeasonFactory.getActiveSeasonId(context)
             expect(activeSeasonId).toBe(activeSeason.id)
 
             // Verify full season via factory getSeason
-            const fullSeason = await SeasonFactory.getSeason(context, activeSeasonId)
+            const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id)
             expect(fullSeason.isActive).toBe(true)
             expect(fullSeason.id).toBe(activeSeason.id)
         })
