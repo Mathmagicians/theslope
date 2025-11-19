@@ -123,6 +123,16 @@ export const usePlanStore = defineStore("Plan", () => {
             (isNoSeasons.value || isSelectedSeasonInitialized.value)
         )
 
+        // Overall error state - true if ANY dependency failed (prevents infinite loading)
+        const isPlanStoreErrored = computed(() =>
+            isSeasonsErrored.value || isActiveSeasonIdErrored.value || isSelectedSeasonErrored.value
+        )
+
+        // First error encountered (for display)
+        const planStoreError = computed(() =>
+            seasonsError.value || activeSeasonIdError.value || selectedSeasonError.value
+        )
+
         // Active season - the community's currently active season (by activeSeasonId)
         const activeSeason = computed(() => {
             if (!activeSeasonId.value) return null
@@ -456,6 +466,8 @@ export const usePlanStore = defineStore("Plan", () => {
             isSelectedSeasonInitialized,
             selectedSeasonError,
             isPlanStoreReady,
+            isPlanStoreErrored,
+            planStoreError,
             activeSeason,
             myTeams,
             disabledModes,

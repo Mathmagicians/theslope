@@ -12,15 +12,11 @@ test.describe('Team API - My Teams', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Create singleton active season
+        // Create singleton active season (shared across workers, cleaned up by global teardown)
         activeSeason = await SeasonFactory.createActiveSeason(context)
     })
 
-    test.afterAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        // Clean up singleton active season
-        await SeasonFactory.cleanupActiveSeason(context)
-    })
+    // NOTE: Cleanup handled by global teardown (runs once after all workers finish)
 
     test.describe('GET /api/team/my', () => {
 

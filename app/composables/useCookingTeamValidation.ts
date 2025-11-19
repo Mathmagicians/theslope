@@ -194,10 +194,11 @@ export const useCookingTeamValidation = () => {
 
     /**
      * Transform team data for Prisma create operations
+     * Accepts: CookingTeamCreate (PUT input) or Partial<CookingTeamDetail> (generic)
      * Excludes: id (auto-generated), cookingDaysCount (computed), dinnerEvents (read-only)
      * Serializes: affinity (WeekDayMap → JSON string)
      */
-    const toPrismaCreateData = (team: Partial<CookingTeamDetail>) => {
+    const toPrismaCreateData = (team: CookingTeamCreate | Partial<CookingTeamDetail>) => {
         // Serialize domain types (WeekDayMap → JSON string)
         const serialized = serializeCookingTeam(team as CookingTeamDisplay)
 
@@ -209,9 +210,10 @@ export const useCookingTeamValidation = () => {
 
     /**
      * Transform team data for Prisma update operations
+     * Accepts: CookingTeamUpdate (POST input) or Partial<CookingTeamDetail> (generic)
      * Same as create but all fields optional
      */
-    const toPrismaUpdateData = (team: Partial<CookingTeamDetail>) => {
+    const toPrismaUpdateData = (team: CookingTeamUpdate | Partial<CookingTeamDetail>) => {
         return toPrismaCreateData(team)
     }
 

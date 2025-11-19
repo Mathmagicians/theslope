@@ -594,5 +594,42 @@ describe('useCookingTeamValidation', () => {
         expect(result.assignments).toHaveLength(assignmentCount)
       })
     })
+
+    describe('toPrismaCreateData with CookingTeamCreate input', () => {
+      it('should accept CookingTeamCreate type (no id, no computed fields)', () => {
+        const createInput = {
+          name: 'New Team',
+          seasonId: 1,
+          affinity: createDefaultWeekdayMap([true, true, false, false, false, false, false])
+        }
+        const result = toPrismaCreateData(createInput)
+
+        expect(result).toHaveProperty('name', 'New Team')
+        expect(result).toHaveProperty('seasonId', 1)
+        expect(result).toHaveProperty('affinity')
+        expect(result).not.toHaveProperty('id')
+        expect(result).not.toHaveProperty('cookingDaysCount')
+        expect(result).not.toHaveProperty('dinnerEvents')
+      })
+    })
+
+    describe('toPrismaUpdateData with CookingTeamUpdate input', () => {
+      it('should accept CookingTeamUpdate type (partial with required id)', () => {
+        // Update operations need base fields that serializeCookingTeam expects
+        const updateInput = {
+          id: 42,
+          name: 'Updated Team',
+          seasonId: 1,  // Required by CookingTeamDisplay schema
+          assignments: []  // Required by CookingTeamDisplay schema
+        }
+        const result = toPrismaUpdateData(updateInput)
+
+        expect(result).toHaveProperty('name', 'Updated Team')
+        expect(result).toHaveProperty('seasonId', 1)
+        expect(result).not.toHaveProperty('id')  // id excluded from Prisma data
+        expect(result).not.toHaveProperty('cookingDaysCount')
+        expect(result).not.toHaveProperty('dinnerEvents')
+      })
+    })
   })
 })

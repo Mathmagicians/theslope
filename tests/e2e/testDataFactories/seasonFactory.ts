@@ -213,14 +213,46 @@ export class SeasonFactory {
             }
         }
 
-        // Create new singleton season with fixed name (parallel-safe)
+        // Try to create new singleton season (race condition: another worker might create it first)
         console.info('🌞 > SEASON_FACTORY > Creating new singleton season:', this.E2E_SINGLETON_NAME)
-        const createdSeason = await this.createSeason(context, {
-            ...aSeason,
-            shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
-        })
+        let createdSeason: Season | null = null
 
-        // Activate it via the activation endpoint (this deactivates the previous active season)
+        try {
+            createdSeason = await this.createSeason(context, {
+                ...aSeason,
+                shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
+            })
+        } catch (error: any) {
+            // Unique constraint violation - another worker created the singleton first
+            console.info('🌞 > SEASON_FACTORY > Singleton already exists (created by another worker), fetching it')
+
+            // Fetch the existing singleton
+            const allSeasonsAfterError = await this.getAllSeasons(context)
+            const existingSingleton = allSeasonsAfterError.find(s => s.shortName === this.E2E_SINGLETON_NAME)
+
+            if (!existingSingleton) {
+                throw new Error('Failed to create singleton and could not find existing singleton season')
+            }
+
+            // Activate it if not already active
+            if (!existingSingleton.isActive) {
+                console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
+                const response = await context.request.post('/api/admin/season/active', {
+                    headers: headers,
+                    data: { seasonId: existingSingleton.id }
+                })
+                expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+                const activatedSeason = await response.json()
+                this.activeSeason = activatedSeason
+                return activatedSeason
+            } else {
+                console.info('🌞 > SEASON_FACTORY > Using existing active singleton season')
+                this.activeSeason = existingSingleton
+                return existingSingleton
+            }
+        }
+
+        // We successfully created the singleton - activate it
         const response = await context.request.post('/api/admin/season/active', {
             headers: headers,
             data: { seasonId: createdSeason.id }
@@ -240,12 +272,18 @@ export class SeasonFactory {
     /**
      * Clean up the cached active season singleton
      * Deletes the test season from database, clears the cache, and restores previously active season
+     * Gracefully handles parallel workers trying to delete the same singleton (ignores 404)
      * @param context BrowserContext for API requests
      */
     static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
         if (this.activeSeason) {
             console.info('🌞 > SEASON_FACTORY > Cleaning up cached active season:', this.activeSeason.shortName)
-            await this.deleteSeason(context, this.activeSeason.id!)
+            try {
+                await this.deleteSeason(context, this.activeSeason.id!)
+            } catch (error) {
+                // Ignore 404 errors - another worker already deleted the singleton
+                console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
+            }
             this.activeSeason = null
             console.info('🌞 > SEASON_FACTORY > Active season cache cleared')
         }

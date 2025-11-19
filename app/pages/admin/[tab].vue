@@ -5,15 +5,10 @@ const store = usePlanStore()
 const {initPlanStore} = store
 const {
   isPlanStoreReady,
-  isSeasonsErrored, seasonsError,
-  isActiveSeasonIdErrored, activeSeasonIdError,
-  isSelectedSeasonErrored, selectedSeasonError,
+  isPlanStoreErrored,
+  planStoreError,
   isSeasonsInitialized, isActiveSeasonIdInitialized, isSelectedSeasonInitialized, isNoSeasons
 } = storeToRefs(store)
-
-// Compute overall error state - show error if ANY dependency failed
-const hasStoreError = computed(() => isSeasonsErrored.value || isActiveSeasonIdErrored.value || isSelectedSeasonErrored.value)
-const storeError = computed(() => seasonsError.value || activeSeasonIdError.value || selectedSeasonError.value)
 
 // DEBUG: Log store ready conditions
 watch([isSeasonsInitialized, isActiveSeasonIdInitialized, isSelectedSeasonInitialized, isNoSeasons, isPlanStoreReady],
@@ -152,8 +147,8 @@ useHead({
     >
       <template #content="{ item }">
         <ViewError
-v-if="isSeasonsErrored" :error="seasonsError?.statusCode"
-                   :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`" :cause="seasonsError"/>
+v-if="isPlanStoreErrored" :error="planStoreError?.statusCode"
+                   :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`" :cause="planStoreError"/>
         <Loader v-else-if="!isPlanStoreReady" :text="activeTab"/>
         <component :is="asyncComponents[item.value]" v-else/>
       </template>
