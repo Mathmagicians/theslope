@@ -4,10 +4,13 @@ import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {OrderFactory} from '../../testDataFactories/orderFactory'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '../../testHelpers'
 
 const {validatedBrowserContext} = testHelpers
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
@@ -37,7 +40,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // THEN: Dinner event is created successfully
         expect(createdDinnerEvent.menuTitle).toBe(dinnerEventData.menuTitle)
-        expect(createdDinnerEvent.dinnerMode).toBe(dinnerEventData.dinnerMode)
+        expect(createdDinnerEvent.state).toBe(dinnerEventData.state)
         expect(createdDinnerEvent.seasonId).toBe(testSeasonId)
 
         // AND: Dinner event can be retrieved with full relations (ADR-009: detail endpoint includes comprehensive data)
@@ -124,9 +127,10 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // WHEN: Updating the dinner event
         const updatedData = {
+            id: createdDinnerEvent.id!,
             menuTitle: 'Updated Menu Title',
             menuDescription: 'Updated description',
-            dinnerMode: 'TAKEAWAY' as const
+            state: DinnerState.ANNOUNCED
         }
         const updatedDinnerEvent = await DinnerEventFactory.updateDinnerEvent(
             context,
@@ -138,13 +142,13 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(updatedDinnerEvent?.id).toBe(createdDinnerEvent.id)
         expect(updatedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
         expect(updatedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
-        expect(updatedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
+        expect(updatedDinnerEvent?.state).toBe(updatedData.state)
 
         // AND: Changes are persisted
         const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
         expect(retrievedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
         expect(retrievedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
-        expect(retrievedDinnerEvent?.dinnerMode).toBe(updatedData.dinnerMode)
+        expect(retrievedDinnerEvent?.state).toBe(updatedData.state)
     })
 
     test('GET /api/admin/dinner-event should return all dinner events', async ({browser}) => {
@@ -167,7 +171,8 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         const response = await context.request.get('/api/admin/dinner-event')
 
         // THEN: Should return 200 with array of dinner events
-        expect(response.status()).toBe(200)
+        const errorBody = response.status() !== 200 ? await response.text() : ''
+        expect(response.status(), `Expected 200. Response: ${errorBody}`).toBe(200)
         const events = await response.json()
         expect(Array.isArray(events)).toBe(true)
 

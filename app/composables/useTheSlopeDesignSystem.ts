@@ -222,10 +222,14 @@ export const TYPOGRAPHY = {
   heroTitle: 'text-2xl md:text-4xl font-extrabold uppercase',
   sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
   cardTitle: 'text-lg font-semibold',
+  sectionSubheading: 'text-sm font-semibold text-gray-700 dark:text-gray-300',
 
   // Body text
   bodyText: 'text-base',
   bodyTextSmall: 'text-sm',
+  bodyTextMedium: 'text-sm font-medium',
+  bodyTextMuted: 'text-sm text-gray-600 dark:text-gray-400',
+  bodyTextPlaceholder: 'text-sm text-gray-500',
 
   // Small text
   finePrint: 'text-xs',

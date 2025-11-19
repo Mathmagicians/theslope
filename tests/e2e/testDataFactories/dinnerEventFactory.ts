@@ -107,7 +107,8 @@ export class DinnerEventFactory {
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
 
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 200) {
             const responseBody = await response.json()
@@ -130,7 +131,8 @@ export class DinnerEventFactory {
         })
 
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 200) {
             const responseBody = await response.json()

@@ -11,12 +11,12 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let householdData: HouseholdCreate
+    let householdData!: HouseholdCreate
     try {
         const {HouseholdCreateSchema} = useCoreValidation()
         householdData = await readValidatedBody(event, HouseholdCreateSchema.parse)
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [PUT] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -27,6 +27,6 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         setResponseStatus(event, 201)
         return savedHousehold
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
     }
 })

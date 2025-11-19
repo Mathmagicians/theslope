@@ -1,4 +1,5 @@
 import type {D1Database} from '@cloudflare/workers-types'
+import {Prisma as PrismaFromClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 
@@ -135,56 +136,45 @@ export async function createOrders(d1Client: D1Database, ordersData: OrderCreate
         // Create price lookup map
         const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp]))
 
-        // Prepare data with priceAtBooking
-        const ordersWithPrices = ordersData.map(orderData => ({
-            ...orderData,
-            priceAtBooking: priceMap.get(orderData.ticketPriceId)!.price
-        }))
+        // Create orders individually to get IDs back (avoids race conditions)
+        // Note: Not using createMany since it doesn't return created records
+        const createdOrders = await Promise.all(
+            ordersData.map(async orderData => {
+                const priceAtBooking = priceMap.get(orderData.ticketPriceId)!.price
 
-        // Batch insert - Prisma createMany returns { count: number }, NOT the created records
-        const result = await prisma.order.createMany({
-            data: ordersWithPrices
-        })
-
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Inserted ${result.count} orders`)
-
-        // Fetch ALL orders for this household + dinner event (acceptable per business rules)
-        // This handles the fact that createMany doesn't return IDs
-        const dinnerEventId = ordersData[0].dinnerEventId // All orders for same dinner event
-        const householdInhabitantIds = inhabitants.map(i => i.id)
-
-        const createdOrders = await prisma.order.findMany({
-            where: {
-                dinnerEventId,
-                inhabitantId: { in: householdInhabitantIds }
-            },
-            select: {
-                id: true,
-                dinnerEventId: true,
-                inhabitantId: true,
-                bookedByUserId: true,
-                ticketPriceId: true,
-                priceAtBooking: true,
-                dinnerMode: true,
-                state: true,
-                releasedAt: true,
-                closedAt: true,
-                createdAt: true,
-                updatedAt: true,
-                ticketPrice: {
+                return await prisma.order.create({
+                    data: {
+                        ...orderData,
+                        priceAtBooking
+                    },
                     select: {
                         id: true,
-                        ticketType: true,
-                        price: true,
-                        description: true,
-                        maximumAgeLimit: true
+                        dinnerEventId: true,
+                        inhabitantId: true,
+                        bookedByUserId: true,
+                        ticketPriceId: true,
+                        priceAtBooking: true,
+                        dinnerMode: true,
+                        state: true,
+                        releasedAt: true,
+                        closedAt: true,
+                        createdAt: true,
+                        updatedAt: true,
+                        ticketPrice: {
+                            select: {
+                                id: true,
+                                ticketType: true,
+                                price: true,
+                                description: true,
+                                maximumAgeLimit: true
+                            }
+                        }
                     }
-                }
-            },
-            orderBy: { id: 'asc' }
-        })
+                })
+            })
+        )
 
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully fetched ${createdOrders.length} orders for household ${householdId}`)
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully created ${createdOrders.length} orders for household ${householdId}`)
 
         // Transform to domain type with ticketType (use included relation instead of priceMap)
         return createdOrders.map(order => {
@@ -378,7 +368,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
 
     try {
         const dinnerEvents = await prisma.dinnerEvent.findMany({
-            where: seasonId ? {seasonId} : undefined,
+            where: seasonId ? {seasonId} : PrismaFromClient.skip,
             include: {
                 Season: true,
                 chef: true,
@@ -435,9 +425,31 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
         })
 
         if (dinnerEvent) {
+            // Transform tickets to include flattened ticketType and dinnerEvent relation
+            const transformedTickets = dinnerEvent.tickets.map(ticket => ({
+                ...ticket,
+                ticketType: ticket.ticketPrice.ticketType,  // Flatten from nested relation
+                dinnerEvent: {  // Add the parent dinner event (excluding tickets to avoid circular ref)
+                    id: dinnerEvent.id,
+                    date: dinnerEvent.date,
+                    menuTitle: dinnerEvent.menuTitle,
+                    menuDescription: dinnerEvent.menuDescription,
+                    menuPictureUrl: dinnerEvent.menuPictureUrl,
+                    state: dinnerEvent.state,
+                    totalCost: dinnerEvent.totalCost,
+                    chefId: dinnerEvent.chefId,
+                    cookingTeamId: dinnerEvent.cookingTeamId,
+                    heynaboEventId: dinnerEvent.heynaboEventId,
+                    seasonId: dinnerEvent.seasonId,
+                    createdAt: dinnerEvent.createdAt,
+                    updatedAt: dinnerEvent.updatedAt
+                }
+            }))
+
             // Deserialize cookingTeam if present (affinity JSON string -> WeekDayMap object)
             const dinnerEventToValidate = {
                 ...dinnerEvent,
+                tickets: transformedTickets,
                 cookingTeam: dinnerEvent.cookingTeam ? deserializeCookingTeam(dinnerEvent.cookingTeam) : null
             }
 

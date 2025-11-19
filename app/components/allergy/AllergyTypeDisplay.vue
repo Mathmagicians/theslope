@@ -12,9 +12,9 @@ Props:
   - false: avatar only
 
 Examples:
-<AllergyTypeDisplay :allergy-type="allergyType" compact /> <!-- Avatar only, inline -->
-<AllergyTypeDisplay :allergy-type="allergyType" show-name /> <!-- Avatar + name -->
-<AllergyTypeDisplay /> <!-- No allergies: ☀️ (+ Ingen if showName) -->
+<AllergyTypeDisplay :allergy-type="allergyType" compact /> Avatar only, inline
+<AllergyTypeDisplay :allergy-type="allergyType" show-name /> Avatar + name
+<AllergyTypeDisplay />  No allergies: ☀️ (+ Ingen if showName) 
 -->
 
 <script setup lang="ts">

@@ -1,6 +1,7 @@
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import type {InhabitantDetail} from "~/composables/useCoreValidation"
+import type {InhabitantDetail, InhabitantUpdate} from "~/composables/useCoreValidation"
 import {updateInhabitant} from "~~/server/data/prismaRepository"
 import {z} from 'zod'
 
@@ -14,14 +15,15 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id, inhabitantData
+    let id!: number
+    let inhabitantData!: Partial<InhabitantUpdate>
     try {
         const {InhabitantUpdateSchema} = useCoreValidation()
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
         inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({householdId: true, id: true}).parse)
     } catch (error) {
-        throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
+        return throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
     }
 
     try {
@@ -31,6 +33,6 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedInhabitant
     } catch (error) {
-        throwH3Error(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
+        return throwH3Error(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
     }
 })

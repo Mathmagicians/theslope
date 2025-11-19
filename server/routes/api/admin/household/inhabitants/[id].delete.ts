@@ -1,6 +1,6 @@
 // DELETE /api/admin/household/inhabitants/:id - remove inhabitant
 
-import * as z from 'zod'
+import {z} from 'zod'
 import {getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteInhabitant} from "~~/server/data/prismaRepository"
 import type {InhabitantDetail} from "~/composables/useCoreValidation"
@@ -14,13 +14,13 @@ const paramSchema = z.object({
 export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    let id: number
+    let id!: number
 
     // Input validation try-catch - FAIL EARLY
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
-        throwH3Error('🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID] > Invalid inhabitant ID:', error)
+        return throwH3Error('🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID] > Invalid inhabitant ID:', error)
     }
 
     try {
@@ -30,6 +30,6 @@ export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
         setResponseStatus(event, 200)
         return deletedInhabitant
     } catch (error) {
-        throwH3Error(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Error deleting inhabitant with id ${id}`, error)
+        return throwH3Error(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Error deleting inhabitant with id ${id}`, error)
     }
 })
