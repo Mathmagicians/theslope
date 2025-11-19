@@ -199,4 +199,13 @@ const ticketTypeConfig = {
     </div>
     </div>
   </div>
+  <UAlert
+    v-else
+    icon="i-heroicons-calendar-days"
+    color="primary"
+    variant="subtle"
+    title="Ingen aktiv sæson"
+    description="Der er ingen aktiv fællesspisnings sæson i øjeblikket. Kontakt administratoren for at aktivere en sæson."
+    data-test-id="household-bookings-empty"
+  />
 </template>

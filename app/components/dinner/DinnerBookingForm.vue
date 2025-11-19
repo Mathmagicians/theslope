@@ -19,7 +19,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
-  household?: HouseholdWithInhabitants  // Optional - fetched if not provided
+  household?: HouseholdDetail  // Optional - fetched if not provided
   dinnerEvent: DinnerEventDisplay
   orders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]

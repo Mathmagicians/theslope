@@ -21,7 +21,8 @@ export default defineEventHandler(async (event): Promise<number> => {
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
-        return throwH3Error('👥 > ASSIGNMENT > [DELETE] Invalid assignment ID', error)
+        throwH3Error('👥 > ASSIGNMENT > [DELETE] Invalid assignment ID', error)
+        return 0 as never
     }
 
     try {
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event): Promise<number> => {
         console.info(`👥 > ASSIGNMENT > [DELETE] Successfully removed assignment ${id}`)
         return deletedAssignment
     } catch (error) {
-        return throwH3Error('👥 > ASSIGNMENT > [DELETE] Error removing assignment', error)
+        throwH3Error('👥 > ASSIGNMENT > [DELETE] Error removing assignment', error)
+        return 0 as never
     }
 })

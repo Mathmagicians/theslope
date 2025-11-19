@@ -21,7 +21,8 @@ export default defineEventHandler(async (event): Promise<AllergyDisplay> => {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
     } catch (error) {
-        return throwH3Error('🏥 > ALLERGY > [DELETE] Input validation error', error)
+        throwH3Error('🏥 > ALLERGY > [DELETE] Input validation error', error)
+        return undefined as never
     }
 
     // Delete allergy from database
@@ -32,6 +33,7 @@ export default defineEventHandler(async (event): Promise<AllergyDisplay> => {
         setResponseStatus(event, 200)
         return deletedAllergy
     } catch (error) {
-        return throwH3Error(`🏥 > ALLERGY > [DELETE] Error deleting allergy with ID ${allergyId}`, error)
+        throwH3Error(`🏥 > ALLERGY > [DELETE] Error deleting allergy with ID ${allergyId}`, error)
+        return undefined as never
     }
 })

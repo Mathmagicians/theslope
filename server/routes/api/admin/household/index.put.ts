@@ -16,7 +16,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         const {HouseholdCreateSchema} = useCoreValidation()
         householdData = await readValidatedBody(event, HouseholdCreateSchema.parse)
     } catch (error) {
-        return throwH3Error('🏠 > HOUSEHOLD > [PUT] Input validation error', error)
+        throwH3Error('🏠 > HOUSEHOLD > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -27,6 +27,6 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         setResponseStatus(event, 201)
         return savedHousehold
     } catch (error) {
-        return throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
+        throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
     }
 })

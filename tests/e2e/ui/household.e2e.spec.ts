@@ -49,8 +49,8 @@ test.describe('Household tab navigation', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Create season (required for bookings tab component to render)
-        const season = await SeasonFactory.createSeason(context, {holidays: [], isActive: true})
+        // Create active season (required for bookings tab component to render) - uses singleton to prevent parallel test conflicts
+        const season = await SeasonFactory.createActiveSeason(context, {holidays: []})
         seasonId = season.id!
 
         // Create household

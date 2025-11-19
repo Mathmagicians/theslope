@@ -476,3 +476,166 @@ describe('canEditDiningMode', () => {
         expect(result).toBe(false)
     })
 })
+
+describe('canAnnounceMenu', () => {
+    const { canAnnounceMenu } = useSeason()
+
+    it.each([
+        {
+            description: 'far in future (10 days)',
+            daysOffset: 10,
+            hoursOffset: 0,
+            expected: true
+        },
+        {
+            description: 'tomorrow',
+            daysOffset: 1,
+            hoursOffset: 0,
+            expected: true
+        },
+        {
+            description: 'same day before dinner time',
+            daysOffset: 0,
+            hoursOffset: 6,
+            expected: true
+        },
+        {
+            description: 'in the past (yesterday)',
+            daysOffset: -1,
+            hoursOffset: 0,
+            expected: false
+        },
+        {
+            description: 'after dinner started (2 hours ago)',
+            daysOffset: 0,
+            hoursOffset: -2,
+            expected: false
+        }
+    ])('should $expected menu announcement for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
+        // GIVEN: Dinner at calculated time
+        const now = new Date()
+        const dinnerDate = new Date(now)
+        dinnerDate.setDate(now.getDate() + daysOffset)
+        dinnerDate.setHours(now.getHours() + hoursOffset, 0, 0, 0)
+
+        // WHEN: Checking if menu can be announced
+        const result = canAnnounceMenu(dinnerDate)
+
+        // THEN: Returns expected result
+        expect(result).toBe(expected)
+    })
+})
+
+describe('isOnTeam', () => {
+    const { isOnTeam } = useSeason()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const TeamRole = TeamRoleSchema.enum
+
+    it.each([
+        {
+            description: 'inhabitant is on team as CHEF',
+            inhabitantId: 1,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            expected: true
+        },
+        {
+            description: 'inhabitant is on team as COOK',
+            inhabitantId: 2,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }] },
+            expected: true
+        },
+        {
+            description: 'inhabitant is on team as JUNIORHELPER',
+            inhabitantId: 3,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 3, cookingTeamId: 1, inhabitantId: 3, role: TeamRole.JUNIORHELPER, allocationPercentage: 100 }] },
+            expected: true
+        },
+        {
+            description: 'inhabitant is not on team',
+            inhabitantId: 99,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            expected: false
+        },
+        {
+            description: 'team is null',
+            inhabitantId: 1,
+            team: null,
+            expected: false
+        },
+        {
+            description: 'team has no assignments',
+            inhabitantId: 1,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [] },
+            expected: false
+        }
+    ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
+        // WHEN: Checking if inhabitant is on team
+        const result = isOnTeam(inhabitantId, team as any)
+
+        // THEN: Returns expected result
+        expect(result).toBe(expected)
+    })
+})
+
+describe('isChefFor', () => {
+    const { isChefFor } = useSeason()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const TeamRole = TeamRoleSchema.enum
+
+    it.each([
+        {
+            description: 'inhabitant is CHEF on team',
+            inhabitantId: 1,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            expected: true
+        },
+        {
+            description: 'inhabitant is COOK (not CHEF)',
+            inhabitantId: 2,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }] },
+            expected: false
+        },
+        {
+            description: 'inhabitant is JUNIORHELPER (not CHEF)',
+            inhabitantId: 3,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 3, cookingTeamId: 1, inhabitantId: 3, role: TeamRole.JUNIORHELPER, allocationPercentage: 100 }] },
+            expected: false
+        },
+        {
+            description: 'inhabitant is not on team',
+            inhabitantId: 99,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            expected: false
+        },
+        {
+            description: 'team is null',
+            inhabitantId: 1,
+            team: null,
+            expected: false
+        },
+        {
+            description: 'team has no assignments',
+            inhabitantId: 1,
+            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [] },
+            expected: false
+        },
+        {
+            description: 'multiple assignments, inhabitant is CHEF',
+            inhabitantId: 1,
+            team: {
+                id: 1, name: 'Team A', seasonId: 1,
+                assignments: [
+                    { id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 },
+                    { id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }
+                ]
+            },
+            expected: true
+        }
+    ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
+        // WHEN: Checking if inhabitant is chef for team
+        const result = isChefFor(inhabitantId, team as any)
+
+        // THEN: Returns expected result
+        expect(result).toBe(expected)
+    })
+})

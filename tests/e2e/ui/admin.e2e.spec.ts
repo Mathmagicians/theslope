@@ -4,7 +4,7 @@ import testHelpers from '../testHelpers'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext, pollUntil } = testHelpers
+const { validatedBrowserContext, pollUntil, doScreenshot } = testHelpers
 
 const tabs = [
   { name: 'Planlægning', path: 'planning', selector: '[data-test-id="admin-planning"]', hasFormModes: true },
@@ -239,28 +239,39 @@ test.describe('Admin season URL persistence', () => {
     }
   })
 
-  test('Invalid season redirects to active season', async ({ page, browser }) => {
+  test('Invalid season redirects to a valid season', async ({ page, browser }) => {
     const context = await validatedBrowserContext(browser)
-    const season = await SeasonFactory.createSeason(context)
-    createdSeasonIds.push(season.id!)
+    // Use singleton to ensure active season exists for redirect
+    await SeasonFactory.createActiveSeason(context)
 
     try {
       await page.goto('/admin/planning?season=invalid-123')
 
-      // Wait for child component to detect invalid season and update URL (may take several seconds for store + watcher to run)
+      // Debug: Screenshot before waiting for redirect
+      await doScreenshot(page, 'admin-invalid-season-before-redirect')
+
+      // Wait for URL to auto-correct to a valid season
       await pollUntil(
         async () => page.url(),
         (url) => url.includes('season=') && !url.includes('invalid-123'),
-        10,  // Standardized to 10 attempts (255.5s) for CI resilience
+        10,
         500
       )
 
       expect(page.url()).toContain('season=')
       expect(page.url()).not.toContain('invalid-123')
+
+      // Extract season shortName from URL and verify it exists
+      const url = new URL(page.url())
+      const seasonShortName = url.searchParams.get('season')
+      expect(seasonShortName).toBeTruthy()
+
+      // Verify the season actually exists via API
+      const seasons = await SeasonFactory.getSeasons(context)
+      const seasonExists = seasons.some(s => s.shortName === seasonShortName)
+      expect(seasonExists).toBe(true)
     } finally {
-      if (season.id) {
-        await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
-      }
+      // Singleton cleanup is automatic
     }
   })
 

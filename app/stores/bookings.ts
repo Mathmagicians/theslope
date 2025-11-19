@@ -102,7 +102,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             console.info(`🎟️ > BOOKINGS_STORE > Created order ${createdOrder.id}`)
             await refreshOrders()
             return createdOrder
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'createOrder')
             throw e
         }
@@ -115,7 +115,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             })
             console.info(`🎟️ > BOOKINGS_STORE > Deleted order ${orderId}`)
             await refreshOrders()
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'deleteOrder')
             throw e
         }
@@ -131,7 +131,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             console.info(`🎟️ > BOOKINGS_STORE > Updated order ${orderId}`)
             await refreshOrders()
             return updatedOrder
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'updateOrder')
             throw e
         }

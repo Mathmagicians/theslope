@@ -1,30 +1,22 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, updateTeam} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
-import {useCookingTeamValidation, type CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamDetail} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
 const {throwH3Error} = eventHandlerHelper
 const {assignAffinitiesToTeams} = useSeason()
-const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
-
-// Create input schema for assignments (omit read-only inhabitant field)
-const InputAssignmentSchema = CookingTeamAssignmentSchema.omit({ inhabitant: true })
-
-// Create input schema for team updates (use input assignments)
-const InputTeamSchema = CookingTeamSchema.extend({
-    assignments: z.array(InputAssignmentSchema).optional()
-})
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
 })
 
+// ADR-009: Mutations return Detail type (full team with all relations)
 type AssignAffinitiesResponse = {
     seasonId: number
     teamCount: number
-    teams: CookingTeamWithMembers[]
+    teams: CookingTeamDetail[]
 }
 
 export default defineEventHandler(async (event): Promise<AssignAffinitiesResponse> => {
@@ -37,7 +29,8 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        return throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
+        throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
+        return undefined as never
     }
 
     // Business logic try-catch - separate concerns
@@ -47,17 +40,22 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         // Fetch season from database with teams (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
+            throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
+            return undefined as never
         }
 
         // Compute affinities for teams using composable
         const teamsWithAffinities = assignAffinitiesToTeams(season)
 
         // Update each team with computed affinity
-        // Parse through InputTeamSchema to strip read-only inhabitant field from assignments
+        // Transform to CookingTeamUpdate format (strip read-only fields, keep only updateable fields)
         const updatedTeams = await Promise.all(
             teamsWithAffinities.map(team => {
-                const teamForUpdate = InputTeamSchema.parse(team)
+                // CookingTeamUpdate: only id (required) + optional updateable fields (name, seasonId, affinity)
+                const teamForUpdate = {
+                    id: team.id!,
+                    affinity: team.affinity
+                }
                 return updateTeam(d1Client, team.id!, teamForUpdate)
             })
         )
@@ -71,6 +69,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
             teams: updatedTeams
         }
     } catch (error) {
-        return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
+        throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
+        return undefined as never
     }
 })

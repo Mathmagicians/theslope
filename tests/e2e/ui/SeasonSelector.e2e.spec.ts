@@ -200,7 +200,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const activateButton = page.locator('button[name="activate-season"]')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).toBeDisabled()
-        await expect(activateButton).toContainText('Igangværende Sæson')
+        await expect(activateButton).toContainText('Fællesspisnings sæson er i gang')
 
         // Verify status text with emoji is visible (emoji appears in both selector and title, so check full text)
         await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()

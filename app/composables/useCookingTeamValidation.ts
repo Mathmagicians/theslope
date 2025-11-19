@@ -105,6 +105,26 @@ export const useCookingTeamValidation = () => {
         dinnerEvents: z.array(DinnerEventDisplayInlineSchema).default([])
     })
 
+    /**
+     * CookingTeamCreate - Input schema for creating teams (ADR-009)
+     * Omits id (auto-generated), includes optional assignments without ids
+     */
+    const CookingTeamCreateSchema = CookingTeamSchema.extend({
+        assignments: CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true }).array().optional()
+    }).omit({ id: true })
+
+    /**
+     * CookingTeamUpdate - Input schema for updating teams (ADR-009)
+     * Requires id, all other fields optional
+     */
+    const CookingTeamUpdateSchema = CookingTeamSchema.partial().required({ id: true })
+
+    /**
+     * CookingTeamAssignmentCreate - Input schema for creating assignments (ADR-009)
+     * Omits id (auto-generated) and cookingTeamId (from URL param)
+     */
+    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
+
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeam = z.infer<typeof CookingTeamSchema>
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
@@ -200,14 +220,17 @@ export const useCookingTeamValidation = () => {
         return CookingTeamDisplaySchema.parse(team)
     }
 
-    // Return schemas and utility functions - ONLY expose Display and Detail patterns
+    // Return schemas and utility functions
     return {
         // Client-facing schemas (ADR-009)
-        CookingTeamDisplaySchema,     // For lists (Season.CookingTeams)
-        CookingTeamDetailSchema,      // For detail views (CookingTeamCard)
-        CookingTeamAssignmentSchema,  // For nested assignments
-        TeamRoleSchema,               // For role enums
-        CookingTeamSchema,            // For create/update
+        CookingTeamDisplaySchema,            // For lists (Season.CookingTeams)
+        CookingTeamDetailSchema,             // For detail views (CookingTeamCard)
+        CookingTeamCreateSchema,             // For PUT operations (ADR-009)
+        CookingTeamUpdateSchema,             // For POST operations (ADR-009)
+        CookingTeamAssignmentSchema,         // For nested assignments
+        CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
+        TeamRoleSchema,                      // For role enums
+        CookingTeamSchema,                   // Base schema
         // Validation helper
         validateCookingTeam,
         // Utility functions
@@ -227,8 +250,11 @@ export const useCookingTeamValidation = () => {
     }
 }
 
-// Export types - ONLY Display and Detail patterns for entities (ADR-009)
+// Export types (ADR-009)
 export type CookingTeamDisplay = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamDisplaySchema']>
 export type CookingTeamDetail = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamDetailSchema']>
+export type CookingTeamCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamCreateSchema']>
+export type CookingTeamUpdate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamUpdateSchema']>
 export type CookingTeamAssignment = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentSchema']>
+export type CookingTeamAssignmentCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentCreateSchema']>
 export type TeamRole = z.infer<ReturnType<typeof useCookingTeamValidation>['TeamRoleSchema']>

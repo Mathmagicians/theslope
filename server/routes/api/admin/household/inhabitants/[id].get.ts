@@ -20,7 +20,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        return throwH3Error('🏠👤 > INHABITANT > [GET] Input validation error', error)
+        throwH3Error('🏠👤 > INHABITANT > [GET] Input validation error', error)
     }
 
     try {
@@ -32,7 +32,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
             return inhabitant
         }
     } catch (error) {
-        return throwH3Error(`🏠👤 > INHABITANT > [GET] Error fetching inhabitant with id ${id}`, error)
+        throwH3Error(`🏠👤 > INHABITANT > [GET] Error fetching inhabitant with id ${id}`, error)
     }
 
     throw createError({

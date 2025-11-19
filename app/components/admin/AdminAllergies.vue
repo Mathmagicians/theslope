@@ -28,7 +28,7 @@ FormModeSelector in header toggles VIEW/EDIT/CREATE modes.
 Multiselect mode shows statistics instead of single allergy detail.
 -->
 <script setup lang="ts">
-import type {AllergyType, AllergyTypeCreate, AllergyTypeUpdate} from '~/composables/useAllergyValidation'
+import type {AllergyType, AllergyTypeCreate, AllergyTypeUpdate as _AllergyTypeUpdate} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Design system

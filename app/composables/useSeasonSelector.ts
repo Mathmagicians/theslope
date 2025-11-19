@@ -59,7 +59,9 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
     // NAVIGATION GUARD: autosync when URL query is invalid - normalizes to valid season
     watchPostEffect(() => {
         if (seasons.value.length === 0) return // Wait for seasons to load
-        if (selectedSeasonId.value === null) return // Wait for initial season selection
+
+        // If no season selected yet, wait for initial season selection
+        if (selectedSeasonId.value === null) return
 
         if (shouldSyncSeason.value) {
             const validSeason = safeSeason(seasonQuery.value)

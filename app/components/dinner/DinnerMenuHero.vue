@@ -105,16 +105,56 @@
  * │ └───────────────────────────────┘ │
  * └───────────────────────────────────┘
  *
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * CHEF MODE - Menu editing with allergen selection:
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ UPageHero - 🍽️ Pasta Carbonara                                     │
+ * │ ┌─────────────────────────────────────────────────────────────────┐ │
+ * │ │   ┌───────────────────────────────────────────────────────┐    │ │
+ * │ │   │ ALLERGEN SECTION (VIEW MODE)                          │    │ │
+ * │ │   │                                                       │    │ │
+ * │ │   │ 🥛 Mælk   🌾 Gluten                                  │    │ │
+ * │ │   │ 👤 👤 👤   3 beboere berørt                          │    │ │
+ * │ │   │                                                       │    │ │
+ * │ │   │              [REDIGER ALLERGENER]                     │    │ │
+ * │ │   │                                                       │    │ │
+ * │ │   └───────────────────────────────────────────────────────┘    │ │
+ * │ └─────────────────────────────────────────────────────────────────┘ │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ ALLERGEN SECTION (EDIT MODE - follows AllergenMultiSelector)      │
+ * │ ┌─────────────────────────────────────────────────────────────────┐ │
+ * │ │ MASTER                        │  DETAIL                         │ │
+ * │ │ ┌──────────────────────────┐  │ ┌───────────────────────────┐  │ │
+ * │ │ │ ☑ Icon  Name     Count   │  │ │ 📊 Statistik              │  │ │
+ * │ │ ├──────────────────────────┤  │ │                           │  │ │
+ * │ │ │ ☑ 🥛  Mælk       2       │  │ │ Unikke beboere berørt: 3  │  │ │
+ * │ │ │ ☐ 🥜  Jordnødder 2       │  │ │ 👤 Anna, Bob, Clara       │  │ │
+ * │ │ │ ☑ 🌾  Gluten     1       │  │ │                           │  │ │
+ * │ │ └──────────────────────────┘  │ │ Fordeling pr. allergen:   │  │ │
+ * │ │                               │ │ 🥛 Mælk: 2                │  │ │
+ * │ │                               │ │ 🌾 Gluten: 1              │  │ │
+ * │ │                               │ └───────────────────────────┘  │ │
+ * │ └─────────────────────────────────────────────────────────────────┘ │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
  * Features:
  * - UPageHero for responsive hero structure
  * - Empty state when no dinner event
- * - VIEW mode: Show all household members with their bookings
- * - Prominent [ÆNDRE BOOKING] button (single click to edit)
- * - EDIT mode: Inline DinnerModeSelector (responsive: horizontal desktop, vertical mobile)
- * - Power mode for family-wide booking updates
- * - Total price calculation
- * - TODO: Add guest functionality
- * - TODO: Ticket price selection dropdown (when multiple prices per type)
+ * - Household mode: Booking interface + readonly allergen view
+ * - Chef mode: Allergen editing (view/edit modes) + NO booking section
+ * - AllergenMultiSelector integration with master-detail pattern
+ * - VIEW mode: Show all household members with their bookings (household mode only)
+ * - Prominent [ÆNDRE BOOKING] button (single click to edit, household mode only)
+ * - EDIT mode: Inline DinnerModeSelector (responsive: horizontal desktop, vertical mobile, household mode only)
+ * - Power mode for family-wide booking updates (household mode only)
+ * - Total price calculation (household mode only)
+ * - TODO: Add guest functionality (household mode)
+ * - TODO: Ticket price selection dropdown (when multiple prices per type, household mode)
+ * - TODO: Menu title/description inline editing (chef mode)
+ * - TODO: Picture upload modal (chef mode)
  */
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES} from '~/types/form'
@@ -136,11 +176,16 @@ const emit = defineEmits<{
   updateBooking: [inhabitantId: number, dinnerMode: string, ticketPriceId: number]
   updateAllBookings: [dinnerMode: string]
   addGuest: []
+  updateAllergens: [allergenIds: number[]]
 }>()
 
 // Use plan store for data fetching (ADR: Store responsibility)
 const planStore = usePlanStore()
 const {selectedDinnerEvent} = storeToRefs(planStore)
+
+// Use allergies store for allergen data
+const allergiesStore = useAllergiesStore()
+const {allergyTypes} = storeToRefs(allergiesStore)
 
 // Watch for dinnerEventId changes and load from store
 watch(() => props.dinnerEventId, (newId) => {
@@ -149,10 +194,18 @@ watch(() => props.dinnerEventId, (newId) => {
 
 // Data from dinner event
 const orders = computed(() => selectedDinnerEvent.value?.tickets ?? [])
-const allergies = computed(() => {
-  // TODO: Extract allergies from orders/inhabitants
-  return []
+
+// Extract selected allergen IDs from dinner event
+const selectedAllergenIds = computed(() => {
+  if (!selectedDinnerEvent.value?.allergens) return []
+  return selectedDinnerEvent.value.allergens.map((a: any) => a.allergyTypeId)
 })
+
+// Draft allergen selection for chef editing
+const draftAllergenIds = ref<number[]>([])
+watch(selectedAllergenIds, (newIds) => {
+  draftAllergenIds.value = [...newIds]
+}, {immediate: true})
 
 // Design system
 const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
@@ -178,6 +231,19 @@ const totalPrice = computed(() => {
 const bookedCount = computed(() => {
   if (!orders.value || !selectedDinnerEvent.value) return 0
   return orders.value.filter((o: any) => o.dinnerEventId === selectedDinnerEvent.value!.id).length
+})
+
+// Handle allergen selection updates (chef mode)
+const handleAllergenUpdate = (allergenIds: number[]) => {
+  draftAllergenIds.value = allergenIds
+  emit('updateAllergens', allergenIds)
+}
+
+// Determine allergen selector mode
+const allergenSelectorMode = computed(() => {
+  if (props.mode === 'household') return 'view'
+  // Chef mode: edit when in EDIT formMode
+  return formMode.value === FORM_MODES.EDIT ? 'edit' : 'view'
 })
 </script>
 
@@ -227,20 +293,28 @@ const bookedCount = computed(() => {
 
     <template #body>
       <div class="space-y-6">
-        <!-- Allergies -->
-        <div v-if="allergies.length > 0" class="flex flex-wrap justify-center gap-3 md:gap-4 text-sm md:text-base">
-          <span
-            v-for="allergy in allergies"
-            :key="allergy.id"
-            class="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-white"
-          >
-            <span v-if="allergy.allergyType.icon">{{ allergy.allergyType.icon }}</span>
-            <span>{{ allergy.allergyType.name }}</span>
-          </span>
+        <!-- Allergen Selector -->
+        <div v-if="allergyTypes.length > 0">
+          <AllergenMultiSelector
+            v-if="mode === 'chef'"
+            v-model="draftAllergenIds"
+            :allergy-types="allergyTypes"
+            :mode="allergenSelectorMode"
+            :show-statistics="allergenSelectorMode === 'edit'"
+            :readonly="formMode === FORM_MODES.VIEW"
+            @update:model-value="handleAllergenUpdate"
+          />
+          <AllergenMultiSelector
+            v-else
+            :model-value="selectedAllergenIds"
+            :allergy-types="allergyTypes"
+            mode="view"
+            readonly
+          />
         </div>
 
-        <!-- Booking Section -->
-        <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
+        <!-- Booking Section (household mode only) -->
+        <div v-if="mode === 'household'" class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
           <!-- Booking Form (handles household data fetching internally) -->
           <DinnerBookingForm
             :dinner-event="selectedDinnerEvent"

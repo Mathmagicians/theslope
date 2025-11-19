@@ -7,6 +7,7 @@ export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
         const {SeasonSchema} = useSeasonValidation()
+        const {getTeamsForInhabitant} = useSeason()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
@@ -116,12 +117,27 @@ export const usePlanStore = defineStore("Plan", () => {
         })
 
         // Convenience computed for components - true when store is fully initialized and ready to use
-        const isPlanStoreReady = computed(() => isSeasonsInitialized.value && (isNoSeasons.value || isSelectedSeasonInitialized.value))
+        const isPlanStoreReady = computed(() =>
+            isSeasonsInitialized.value &&
+            isActiveSeasonIdInitialized.value &&
+            (isNoSeasons.value || isSelectedSeasonInitialized.value)
+        )
 
         // Active season - the community's currently active season (by activeSeasonId)
         const activeSeason = computed(() => {
             if (!activeSeasonId.value) return null
             return seasons.value.find(s => s.id === activeSeasonId.value) ?? null
+        })
+
+        /**
+         * Get all cooking teams the logged-in user is assigned to in the active season
+         * Returns array of teams (empty if not on any team)
+         */
+        const myTeams = computed(() => {
+            const inhabitantId = authStore.user?.Inhabitant?.id
+            if (!inhabitantId) return []
+
+            return getTeamsForInhabitant(inhabitantId, activeSeason.value)
         })
 
         const disabledModes = computed(() => {
@@ -162,12 +178,30 @@ export const usePlanStore = defineStore("Plan", () => {
         console.info('🗓️ > PLAN_STORE > Loaded active season ID:', activeSeasonId.value)
     }
 
+        // Helper: Get default season ID (active season or first available)
+        const getDefaultSeasonId = (): number | null => {
+            if (activeSeasonId.value) {
+                console.info(LOG_CTX, `🗓️ > Using active season ID: ${activeSeasonId.value}`)
+                return activeSeasonId.value
+            } else if (seasons.value.length > 0) {
+                const {sortSeasonsByActivePriority} = useSeason()
+                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
+                const firstId = sortedSeasons[0]?.id ?? null
+                console.info(LOG_CTX, `🗓️ > No active season, using first sorted season ID: ${firstId}`)
+                return firstId
+            }
+            console.warn(LOG_CTX, '🗓️ > No seasons available, cannot determine default')
+            return null
+        }
+
         const loadSeasonByShortName = (shortName: string) => {
             const season = seasons.value.find(s => s.shortName === shortName)
             if (season?.id) {
-                loadSeason(season.id )
+                loadSeason(season.id)
             } else {
-                console.warn(`🗓️ > PLAN_STORE > No season found with shortName "${shortName}"`)
+                console.warn(LOG_CTX, `🗓️ > No season found with shortName "${shortName}", falling back to default`)
+                const defaultId = getDefaultSeasonId()
+                if (defaultId) loadSeason(defaultId)
             }
         }
 
@@ -185,7 +219,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 })
                 await loadSeasons()
                 return createdSeason
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'createSeason')
                 throw e
             }
@@ -202,7 +236,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 })
                 console.info(`🗓️ > PLAN_STORE > Generated ${result.eventCount} dinner events for season ${seasonId}`)
                 return result
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'generateDinnerEvents')
                 throw e
             }
@@ -238,7 +272,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     teamCount: affinityResult.teamCount,
                     eventCount: assignmentResult.eventCount
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'assignTeamAffinitiesAndEvents')
                 throw e
             }
@@ -257,7 +291,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'updateSeason')
                 throw e
             }
@@ -277,7 +311,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Switch to the newly activated season
                 loadSeason(seasonId)
                 console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'activateSeason')
                 throw e
             }
@@ -297,7 +331,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     await refreshSelectedSeason()
                 }
                 return createdTeam
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'createTeam')
                 throw e
             }
@@ -315,7 +349,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'updateTeam')
                 throw e
             }
@@ -331,7 +365,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'deleteTeam')
                 throw e
             }
@@ -351,7 +385,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     await refreshSelectedSeason()
                 }
                 return created
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'addTeamMember')
                 throw e
             }
@@ -367,7 +401,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 handleApiError(e, 'removeTeamMember')
                 throw e
             }
@@ -377,16 +411,10 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName,
                 'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
             if (shortName) {
-                loadSeasonByShortName(shortName)
-            } else if (activeSeasonId.value) {
-                loadSeason(activeSeasonId.value)
-            } else if (seasons.value.length > 0) {
-                // No active season - select first season from sorted list as fallback
-                const {sortSeasonsByActivePriority} = useSeason()
-                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
-                const first = sortedSeasons[0]!
-                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first from sorted seasons:', first?.shortName)
-                loadSeason(first.id!)
+                loadSeasonByShortName(shortName)  // Handles fallback if shortName is invalid
+            } else {
+                const defaultId = getDefaultSeasonId()
+                if (defaultId) loadSeason(defaultId)
             }
         }
 
@@ -429,6 +457,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonError,
             isPlanStoreReady,
             activeSeason,
+            myTeams,
             disabledModes,
             // actions
             initPlanStore,

@@ -222,6 +222,67 @@ export const useSeason = () => {
         return isBeforeDeadline(0, theslope.defaultSeason.diningModeIsEditableMinutesBefore)(dinnerStartTime)
     }
 
+    /**
+     * Check if a menu can be announced for a dinner event
+     * Chefs can announce menus up until the dinner starts (same day before dinner time)
+     * @param dinnerEventDate - Date of the dinner event
+     * @returns True if menu can still be announced
+     */
+    const canAnnounceMenu = (dinnerEventDate: Date): boolean => {
+        const dinnerStartHour = getDefaultDinnerStartTime()
+        const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
+        // Can announce until dinner starts (0 days, 0 minutes before)
+        return isBeforeDeadline(0, 0)(dinnerStartTime)
+    }
+
+    /**
+     * Helper: Check if an inhabitant has an assignment on a team (optionally with specific role)
+     * @param inhabitantId - ID of the inhabitant
+     * @param team - Team to check
+     * @param role - Optional role to match (if not provided, any role matches)
+     * @returns True if inhabitant has matching assignment
+     */
+    const hasAssignment = (inhabitantId: number, team: CookingTeam, role?: string): boolean => {
+        return team.assignments?.some(assignment =>
+            assignment.inhabitantId === inhabitantId && (!role || assignment.role === role)
+        ) ?? false
+    }
+
+    /**
+     * Get all cooking teams that an inhabitant is assigned to in a season
+     * @param inhabitantId - ID of the inhabitant
+     * @param season - Season containing cooking teams
+     * @returns Array of teams the inhabitant is assigned to (empty if none)
+     */
+    const getTeamsForInhabitant = (inhabitantId: number, season: Season | null): CookingTeam[] => {
+        if (!season) return []
+        const teams = season.cookingTeams ?? []
+        return teams.filter(team => hasAssignment(inhabitantId, team))
+    }
+
+    /**
+     * Check if an inhabitant is on a specific team (any role)
+     * @param inhabitantId - ID of the inhabitant to check
+     * @param team - Cooking team with assignments
+     * @returns True if inhabitant is assigned to this team in any role
+     */
+    const isOnTeam = (inhabitantId: number, team: CookingTeam | null): boolean => {
+        if (!team) return false
+        return hasAssignment(inhabitantId, team)
+    }
+
+    /**
+     * Check if an inhabitant is a chef for a specific team
+     * @param inhabitantId - ID of the inhabitant to check
+     * @param team - Cooking team with assignments
+     * @returns True if inhabitant is assigned as CHEF on this team
+     */
+    const isChefFor = (inhabitantId: number, team: CookingTeam | null): boolean => {
+        if (!team) return false
+        const {TeamRoleSchema} = useCookingTeamValidation()
+        return hasAssignment(inhabitantId, team, TeamRoleSchema.enum.CHEF)
+    }
+
     return {
         // Validation schemas
         SeasonStatusSchema,
@@ -250,6 +311,10 @@ export const useSeason = () => {
         splitDinnerEvents,
         canModifyOrders,
         canEditDiningMode,
+        canAnnounceMenu,
+        getTeamsForInhabitant,
+        isOnTeam,
+        isChefFor,
 
         // Active season management - pure functions
         isPast,

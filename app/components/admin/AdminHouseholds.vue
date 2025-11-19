@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const householdsStore = useHouseholdsStore()
-const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError, isNoHouseholds} = storeToRefs(householdsStore)
+const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
 // Initialize without await for SSR hydration consistency
 householdsStore.initHouseholdsStore()

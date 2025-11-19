@@ -18,7 +18,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         inhabitantData = await readValidatedBody(event, InhabitantCreateSchema.parse)
         householdId = inhabitantData.householdId
     } catch (error) {
-        return throwH3Error('👩‍🏠 > INHABITANT > [PUT] Input validation error', error)
+        throwH3Error('👩‍🏠 > INHABITANT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -29,6 +29,6 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         setResponseStatus(event, 201)
         return savedInhabitant
     } catch (error) {
-        return throwH3Error(`👩‍🏠 > INHABITANT > [PUT] Error creating inhabitant`, error)
+        throwH3Error(`👩‍🏠 > INHABITANT > [PUT] Error creating inhabitant`, error)
     }
 })

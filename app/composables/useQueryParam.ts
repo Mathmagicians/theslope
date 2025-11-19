@@ -1,4 +1,3 @@
-import type {WritableComputedRef, ComputedRef} from 'vue'
 
 export interface UseQueryParamOptions<T> {
   serialize?: (value: T) => string

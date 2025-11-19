@@ -20,7 +20,7 @@ export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
-        return throwH3Error('🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID] > Invalid inhabitant ID:', error)
+        throwH3Error('🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID] > Invalid inhabitant ID:', error)
     }
 
     try {
@@ -30,6 +30,6 @@ export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
         setResponseStatus(event, 200)
         return deletedInhabitant
     } catch (error) {
-        return throwH3Error(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Error deleting inhabitant with id ${id}`, error)
+        throwH3Error(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Error deleting inhabitant with id ${id}`, error)
     }
 })

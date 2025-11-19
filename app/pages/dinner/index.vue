@@ -60,6 +60,10 @@ const {selectedSeason, isActiveSeasonIdLoading,
 // Initialize without await for SSR hydration consistency
 planStore.initPlanStore()
 
+// Initialize allergies store for allergen data
+const allergiesStore = useAllergiesStore()
+allergiesStore.initAllergiesStore()
+
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
@@ -188,6 +192,7 @@ useHead({
         <DinnerMenuHero
           :dinner-event-id="selectedDinnerEvent?.id"
           :ticket-prices="selectedSeason?.ticketPrices ?? []"
+          mode="household"
         />
       </template>
 

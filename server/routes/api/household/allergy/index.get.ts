@@ -30,7 +30,8 @@ export default defineEventHandler(async (event): Promise<AllergyDetail[]> => {
         householdId = query.householdId
         inhabitantId = query.inhabitantId
     } catch (error) {
-        return throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
+        throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
+        return [] as never
     }
 
 
@@ -54,7 +55,8 @@ export default defineEventHandler(async (event): Promise<AllergyDetail[]> => {
             return []
         }
     } catch (error) {
-        return throwH3Error('🏥 > ALLERGY > [GET] Error fetching allergies', error)
+        throwH3Error('🏥 > ALLERGY > [GET] Error fetching allergies', error)
+        return [] as never
     }
 
 })

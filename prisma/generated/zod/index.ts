@@ -1925,15 +1925,24 @@ export const SeasonOrderByWithRelationInputSchema: z.ZodType<Prisma.SeasonOrderB
   dinnerEvents: z.lazy(() => DinnerEventOrderByRelationAggregateInputSchema).optional(),
 }).strict();
 
-export const SeasonWhereUniqueInputSchema: z.ZodType<Prisma.SeasonWhereUniqueInput> = z.object({
-  id: z.number().int(),
-})
+export const SeasonWhereUniqueInputSchema: z.ZodType<Prisma.SeasonWhereUniqueInput> = z.union([
+  z.object({
+    id: z.number().int(),
+    shortName: z.string(),
+  }),
+  z.object({
+    id: z.number().int(),
+  }),
+  z.object({
+    shortName: z.string(),
+  }),
+])
 .and(z.object({
   id: z.number().int().optional(),
+  shortName: z.string().optional(),
   AND: z.union([ z.lazy(() => SeasonWhereInputSchema), z.lazy(() => SeasonWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => SeasonWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => SeasonWhereInputSchema), z.lazy(() => SeasonWhereInputSchema).array() ]).optional(),
-  shortName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   seasonDates: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   isActive: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
   cookingDays: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),

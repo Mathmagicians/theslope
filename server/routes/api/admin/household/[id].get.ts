@@ -20,7 +20,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     try {
         ({id}  = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        return throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
+        throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -33,7 +33,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
             return household
         }
     } catch (error: unknown) {
-        return throwH3Error(`Error fetching household with id ${id}`, error)
+        throwH3Error(`Error fetching household with id ${id}`, error)
     }
     console.info("🏠 > HOUSEHOLD > [GET] Household not found", "id", id)
     throw createError({

@@ -22,6 +22,9 @@ export class SeasonFactory {
     static readonly today = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
     static readonly oneWeekLater = new Date(2025, 0, 7) // Jan 7, 2025 (Tue) - generates exactly 3 events with Mon/Wed/Fri
 
+    // Fixed singleton name for parallel-safe active season (shared across all test workers)
+    static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
+
     // Singleton cache for active season (only one can exist at a time)
     private static activeSeason: Season | null = null
     // Remember the previously active season before we activate our test season
@@ -150,10 +153,12 @@ export class SeasonFactory {
 
     /**
      * SINGLETON: Create and activate a season (only one active season allowed)
+     * Uses fixed singleton name (E2E_SINGLETON_NAME) for parallel-safe execution
      * Returns cached instance if already created, otherwise creates and activates new season
+     * If singleton season exists in DB, uses it (parallel-safe across workers)
      * Remembers the previously active season to restore after cleanup
      * @param context BrowserContext for API requests
-     * @param aSeason Partial season data (only used on first call)
+     * @param aSeason Partial season data (merged with defaults, shortName always overridden to E2E_SINGLETON_NAME)
      * @returns Active Season (singleton)
      */
     static readonly createActiveSeason = async (
@@ -166,17 +171,54 @@ export class SeasonFactory {
             return this.activeSeason
         }
 
-        // Remember the currently active season (if any) before we deactivate it
-        const currentActiveSeasonId = await this.getActiveSeasonId(context)
+        // Check if the singleton test season already exists in DB (parallel-safe)
+        const allSeasons = await this.getAllSeasons(context)
+        const existingSingleton = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)
 
-        if (currentActiveSeasonId) {
-            const seasonResponse = await context.request.get(`/api/admin/season/${currentActiveSeasonId}`, { headers })
-            this.previouslyActiveSeason = await seasonResponse.json()
-            console.info('🌞 > SEASON_FACTORY > Remembered previously active season:', this.previouslyActiveSeason.shortName)
+        if (existingSingleton) {
+            console.info('🌞 > SEASON_FACTORY > Found existing singleton season:', existingSingleton.shortName)
+
+            // If it's already active, use it
+            if (existingSingleton.isActive) {
+                this.activeSeason = existingSingleton
+                console.info('🌞 > SEASON_FACTORY > Singleton season is already active')
+                return existingSingleton
+            }
+
+            // Otherwise, activate it (this deactivates any other active season)
+            console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
+            const response = await context.request.post('/api/admin/season/active', {
+                headers: headers,
+                data: { seasonId: existingSingleton.id }
+            })
+
+            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+            const activatedSeason = await response.json()
+            expect(activatedSeason.isActive, 'Season should be active').toBe(true)
+
+            this.activeSeason = activatedSeason
+            return activatedSeason
         }
 
-        // Create the season (always creates with isActive: false per defaultSeason)
-        const createdSeason = await this.createSeason(context, aSeason)
+        // Remember the currently active season (if any) to restore later
+        const currentActiveSeasonId = await this.getActiveSeasonId(context)
+        if (currentActiveSeasonId) {
+            const seasonResponse = await context.request.get(`/api/admin/season/${currentActiveSeasonId}`, { headers })
+            const existingActiveSeason = await seasonResponse.json()
+
+            // Only remember it if it's not a test season (don't restore test seasons)
+            if (!existingActiveSeason.shortName?.startsWith('TestSeason')) {
+                this.previouslyActiveSeason = existingActiveSeason
+                console.info('🌞 > SEASON_FACTORY > Remembered previously active season:', existingActiveSeason.shortName)
+            }
+        }
+
+        // Create new singleton season with fixed name (parallel-safe)
+        console.info('🌞 > SEASON_FACTORY > Creating new singleton season:', this.E2E_SINGLETON_NAME)
+        const createdSeason = await this.createSeason(context, {
+            ...aSeason,
+            shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
+        })
 
         // Activate it via the activation endpoint (this deactivates the previous active season)
         const response = await context.request.post('/api/admin/season/active', {
@@ -190,7 +232,7 @@ export class SeasonFactory {
 
         // Cache the active season
         this.activeSeason = activatedSeason
-        console.info('🌞 > SEASON_FACTORY > Created and cached active season:', activatedSeason.shortName)
+        console.info('🌞 > SEASON_FACTORY > Created and cached singleton active season:', activatedSeason.shortName)
 
         return activatedSeason
     }

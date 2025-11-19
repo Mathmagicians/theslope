@@ -2,8 +2,8 @@
 
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
+import type {CookingTeamDetail, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import type {CookingTeamWithMembers, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from 'zod'
 
@@ -14,21 +14,13 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Team ID must be a positive integer')
 })
 
-// Get the validation utilities from our composable
-const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+// Get the validation schema from composable (ADR-009)
+const {CookingTeamUpdateSchema} = useCookingTeamValidation()
 
-// Create input schema for assignments (omit read-only inhabitant field)
-const InputAssignmentSchema = CookingTeamAssignmentSchema.omit({ inhabitant: true })
+// Create schema for POST operations (CookingTeamUpdate without id in body, id comes from URL)
+const PostTeamSchema = CookingTeamUpdateSchema.omit({ id: true })
 
-// Create input schema for team updates (use input assignments)
-const InputTeamSchema = CookingTeamSchema.extend({
-    assignments: z.array(InputAssignmentSchema).optional()
-})
-
-// Create a schema for POST operations (partial updates)
-const PostTeamSchema = InputTeamSchema.partial().omit({ id: true })
-
-export default defineEventHandler(async (event): Promise<CookingTeamWithMembers> => {
+export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -38,7 +30,9 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
-        teamData = await readValidatedBody(event, PostTeamSchema.parse)
+        const bodyData = await readValidatedBody(event, PostTeamSchema.parse)
+        // Construct CookingTeamUpdate with id from URL
+        teamData = { ...bodyData, id }
     } catch (error) {
         console.error("👥 > TEAM > [POST] Input validation error:", error)
         throw createError({
@@ -55,6 +49,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
+        throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
+        return undefined as never
     }
 })

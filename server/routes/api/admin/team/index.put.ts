@@ -2,18 +2,14 @@
 
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
-import {useCookingTeamValidation, type CookingTeamDetail, type CookingTeamCreate} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamDetail, CookingTeamCreate} from "~/composables/useCookingTeamValidation"
+import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
 
-// Get the validation utilities from our composable
-const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
-
-// Create schema for input validation - team without id, with optional assignments
-const CookingTeamCreateSchema = CookingTeamSchema.extend({
-    assignments: CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true }).array().optional()
-}).omit({ id: true })
+// Get the validation schema from composable (ADR-009)
+const {CookingTeamCreateSchema} = useCookingTeamValidation()
 
 export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const {cloudflare} = event.context
@@ -24,7 +20,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     try {
         teamData = await readValidatedBody(event, CookingTeamCreateSchema.parse)
     } catch (error) {
-        return throwH3Error("👥 > TEAM > [PUT] Input validation error", error)
+        throwH3Error("👥 > TEAM > [PUT] Input validation error", error)
+        return undefined as never
     }
 
     // Database operations try-catch - separate concerns
@@ -35,6 +32,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
         setResponseStatus(event, 201)
         return savedTeam
     } catch (error) {
-        return throwH3Error("👥 > TEAM > [PUT] Error creating team", error)
+        throwH3Error("👥 > TEAM > [PUT] Error creating team", error)
+        return undefined as never
     }
 })

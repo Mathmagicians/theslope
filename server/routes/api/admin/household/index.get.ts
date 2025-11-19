@@ -19,6 +19,7 @@ export default defineEventHandler<Promise<HouseholdDisplay[]>>(async (event) => 
         setResponseStatus(event, 200)
         return households ?? []
     } catch (error) {
-        return throwH3Error('Error fetching households', error)
+        throwH3Error('Error fetching households', error)
+        return [] as never
     }
 })

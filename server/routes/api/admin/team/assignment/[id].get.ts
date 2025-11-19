@@ -21,7 +21,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        return throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
+        throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
+        return undefined as never
     }
 
     // Database operations try-catch - separate concerns
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         console.info(`👥🔗 > ASSIGNMENT > [GET] Returning assignment ${assignment.id}`)
         return assignment
     } catch (error) {
-        return throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
+        throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
+        return undefined as never
     }
 })

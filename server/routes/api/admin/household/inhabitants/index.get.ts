@@ -18,7 +18,8 @@ export default defineEventHandler<Promise<InhabitantDetail[]>>(async (event) => 
         setResponseStatus(event, 200)
         return inhabitants
     } catch (error) {
-        return throwH3Error('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
+        throwH3Error('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
+        return [] as never
     }
 })
 

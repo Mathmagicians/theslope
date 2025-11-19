@@ -29,9 +29,8 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const season = await SeasonFactory.createSeason(context, {
-            isActive: true
-        })
+        // Use singleton to prevent parallel test conflicts with active seasons
+        const season = await SeasonFactory.createActiveSeason(context)
         seasonId = season.id!
 
         const household = await HouseholdFactory.createHousehold(context, {

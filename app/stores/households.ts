@@ -124,7 +124,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             if (selectedHouseholdId.value) {
                 await refreshSelectedHousehold()
             }
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'updateInhabitantPreferences')
             throw e
         }
@@ -163,7 +163,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             if (selectedHouseholdId.value === householdId) {
                 await refreshSelectedHousehold()
             }
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'updateAllInhabitantPreferences')
             throw e
         }

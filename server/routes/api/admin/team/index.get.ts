@@ -5,7 +5,7 @@ import {defineEventHandler, getValidatedQuery} from "h3"
 import {fetchTeams} from "~~/server/data/prismaRepository"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type {CookingTeamWithMembers} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -14,7 +14,8 @@ const querySchema = z.object({
     seasonId: z.coerce.number().int().positive().optional()
 })
 
-export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[]> => {
+// ADR-009: Index endpoints return Display type (list view, no dinnerEvents)
+export default defineEventHandler(async (event): Promise<CookingTeamDisplay[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -24,7 +25,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[
         const queryParams = await getValidatedQuery(event, querySchema.parse)
         seasonId = queryParams.seasonId
     } catch (error) {
-        return throwH3Error('👥 > TEAM > [GET] Input validation error', error)
+        throwH3Error('👥 > TEAM > [GET] Input validation error', error)
+        return [] as never
     }
 
     // Database operations try-catch - separate concerns
@@ -34,6 +36,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[
         console.info("👥 > TEAM > [GET] Returning teams", "count", teams?.length || 0)
         return teams ?? []
     } catch (error) {
-        return throwH3Error('👥 > TEAM > [GET] Error getting teams', error)
+        throwH3Error('👥 > TEAM > [GET] Error getting teams', error)
+        return [] as never
     }
 })

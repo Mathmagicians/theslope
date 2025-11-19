@@ -3,7 +3,24 @@
 // COMPONENT DEPENDENCIES
 const store = usePlanStore()
 const {initPlanStore} = store
-const {isPlanStoreReady, isSeasonsErrored, seasonsError} = storeToRefs(store)
+const {
+  isPlanStoreReady,
+  isSeasonsErrored, seasonsError,
+  isActiveSeasonIdErrored, activeSeasonIdError,
+  isSelectedSeasonErrored, selectedSeasonError,
+  isSeasonsInitialized, isActiveSeasonIdInitialized, isSelectedSeasonInitialized, isNoSeasons
+} = storeToRefs(store)
+
+// Compute overall error state - show error if ANY dependency failed
+const hasStoreError = computed(() => isSeasonsErrored.value || isActiveSeasonIdErrored.value || isSelectedSeasonErrored.value)
+const storeError = computed(() => seasonsError.value || activeSeasonIdError.value || selectedSeasonError.value)
+
+// DEBUG: Log store ready conditions
+watch([isSeasonsInitialized, isActiveSeasonIdInitialized, isSelectedSeasonInitialized, isNoSeasons, isPlanStoreReady],
+  ([seasons, activeId, selected, noSeasons, ready]) => {
+    console.info(LOG_CTX, '🔍 > Store ready check:', {seasons, activeId, selected, noSeasons, ready})
+  }
+)
 
 // UI - ITEMS
 const tabs = [
@@ -85,11 +102,26 @@ const {activeTab} = useTabNavigation({
   basePath: '/admin'
 })
 
-// INITIALIZATION - Read season from URL (invalid seasons handled by child components via useSeasonSelector)
-const route = useRoute()
-const seasonFromUrl = route.query.season as string | undefined
-initPlanStore(seasonFromUrl)
-console.info(LOG_CTX, '🔗 > Admin > initialized page with season:', seasonFromUrl ?? 'default')
+// INITIALIZATION - Initialize store to load seasons list
+initPlanStore()
+
+// SEASON QUERY PARAMETER - Auto-validates and corrects invalid season URLs
+const {seasons, selectedSeason} = storeToRefs(store)
+const {value: seasonShortName} = useQueryParam<string | undefined>('season', {
+  serialize: (name) => name ?? '',
+  deserialize: (s) => s || undefined,
+  validate: (name) => !name || seasons.value.some(s => s.shortName === name),
+  defaultValue: () => selectedSeason.value?.shortName,  // Use store's selected season
+  syncWhen: () => isPlanStoreReady.value  // Wait for seasons to load before auto-correcting
+})
+
+// Watch season query and initialize store with the selected season
+watch(seasonShortName, (shortName) => {
+  if (shortName && shortName !== selectedSeason.value?.shortName) {
+    initPlanStore(shortName)
+    console.info(LOG_CTX, '🔗 > Admin > Loading season from URL:', shortName)
+  }
+}, { immediate: true })
 
 // UI - CONTINUED
 

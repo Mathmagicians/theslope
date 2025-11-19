@@ -26,7 +26,7 @@
 
 ### Key UX Decisions
 
-1. **Route Structure**: `/chefing/[teamId]?dinner=123&mode=edit`
+1. **Route Structure**: `/chef/[teamId]?dinner=123&mode=edit`
 2. **Master View**: Team selector (all teams) + List/Calendar toggle
 3. **Detail View**: State-based (SCHEDULED = editor, ANNOUNCED = kitchen stats)
 4. **Permissions**: View = anyone on team, Edit = only assigned chef
@@ -37,7 +37,7 @@
 
 ## Component Architecture Overview
 
-### Component Reuse Matrix (REVISED - MAXIMUM REUSE FOCUS)
+### Component Reuse Matrix (MAXIMUM REUSE FOCUS)
 
 | Component | Status | Reuse Type | Purpose | Location |
 |-----------|--------|------------|---------|----------|
@@ -64,23 +64,17 @@
 | **STORE BOUNDARY** |
 | `useBookingsStore` | 🔧 EXTEND | Add dinner updates | updateDinnerField, announceDinner, cancelDinner | `stores/bookings.ts` |
 
-### Eliminated Components (Achieved via Reuse/Enhancement)
-
+### 
 **✅ DinnerStateIndicator** → Use DinnerEventDisplay.state with computed badge logic in ChefDinnerCard
 **🔄 AllergenSelector** → EXTRACT from AdminAllergies (lines 391-401) into shared component, then reuse in both AdminAllergies and DinnerMenuHero
 **✅ ChefMenuEditor** → Enhancement of DinnerMenuHero with mode="chef" prop
 **✅ ChefDinnerDetail** → Inline logic in page using DinnerMenuHero with mode switching
 **✅ ChefCalendarDisplay** → Enhancement of TeamCalendarDisplay with :deadlineMode prop
 **✅ useMenuPictureUpload** → Inline in DinnerMenuHero enhancement (picture edit modal)
-**✅ useChefDeadlines composable** → Add `canAnnounceMenu()` to useSeason (reuses existing `isBeforeDeadline` curried function)
-**✅ useChefPermissions composable** → Add permission helpers to `useAuthStore` (follows existing isAdmin, isAllergyManager pattern)
+**✅  Add `canAnnounceMenu()` to useSeason (reuses existing `isBeforeDeadline` curried function)
+**✅ Add permission helpers to `useAuthStore` (follows existing isAdmin, isAllergyManager pattern)
 
-### Component Count Reduction
-
-**Original Proposal:**
-- 🆕 6 new components (DinnerStateIndicator, AllergenSelector, ChefMenuEditor, ChefDinnerCard, ChefDinnerDetail, ChefCalendarDisplay)
-- 🆕 3 new composables (useChefDeadlines, useChefPermissions, useMenuPictureUpload)
-- **Total: 9 new entities**
+### Components
 
 **REVISED (Maximum Reuse):**
 - 🔄 1 extracted component (AllergenSelector - refactored from existing code)
@@ -88,7 +82,7 @@
 - 🔧 5 enhanced components (DinnerMenuHero, TeamCalendarDisplay, AdminAllergies, useSeason, useAuthStore)
 - **Total: 1 new entity** (7 eliminated via reuse/enhancement)
 
-**Reuse Strategies Used:**
+**Reuse Strategies that should be Used:**
 - ✅ Component mode props (DinnerMenuHero mode="chef", TeamCalendarDisplay :deadlineMode)
 - ✅ Pattern extraction (AllergenSelector from AdminAllergies)
 - ✅ Curried function reuse (canAnnounceMenu uses existing isBeforeDeadline)
@@ -172,54 +166,10 @@ COMPUTED:
 
 ---
 
-### 1.2 AllergenSelector Component
+### 1.2 ✅ AllergenMultiSelector Component
 
 **Purpose**: Multi-select checkbox list for allergens
-**File**: `app/components/shared/AllergenSelector.vue`
-
-```vue
-<!--
-┌─────────────────────────────────────┐
-│ AllergenSelector - Checkbox List    │
-├─────────────────────────────────────┤
-│                                     │
-│ ALLERGENER I MENU                   │
-│                                     │
-│ Vælg allergener i menuen:           │
-│ ┌─────────────────────────────────┐ │
-│ │ ☑️ 🥛 Laktose                   │ │ ← UCheckbox per allergyType
-│ │ ☑️ 🌾 Gluten                    │ │   from allergiesStore
-│ │ ☑️ 🥚 Æg                        │ │
-│ │ ☐ 🥜 Nødder                     │ │
-│ │ ☐ 🦐 Skaldyr                    │ │
-│ │ ☐ 🐟 Fisk                       │ │
-│ │                             💾  │ │ ← Save button (inline)
-│ └─────────────────────────────────┘ │
-│                                     │
-│ MOBILE: Vertical stack              │
-│ DESKTOP: 2-column grid              │
-│                                     │
-└─────────────────────────────────────┘
-
-PROPS:
-  - modelValue: number[] (selected allergyType IDs)
-  - readonly?: boolean (default: false)
-
-EMITS:
-  - update:modelValue: number[]
-  - save: number[] (when save button clicked)
-
-DATA SOURCE:
-  - useAllergiesStore().allergyTypes
-  - Shows icon + name from AllergyType
--->
-```
-
-**Implementation checklist**:
-- [ ] Fetch from `useAllergiesStore()` (already initialized)
-- [ ] Grid layout: `grid grid-cols-1 md:grid-cols-2 gap-2`
-- [ ] Inline save button with loading state
-- [ ] Emit events for parent handling
+**File**: `app/components/shared/AllergenMultiSelector.vue`
 
 ---
 
@@ -262,7 +212,7 @@ DATA SOURCE:
 
 ---
 
-### 2.2 useChefPermissions Composable
+### 2.2 ChefPermissions
 
 **Purpose**: Permission guards for chef actions
 **File**: `app/composables/useChefPermissions.ts`
@@ -478,7 +428,7 @@ USES:
 ### 3.2 ChefMenuEditor Component
 
 **Purpose**: Menu editing form with inline saves
-**File**: `app/components/chef/ChefMenuEditor.vue`
+**File**: `Dinnerhero` + chefmenueditor
 
 ```vue
 <!--

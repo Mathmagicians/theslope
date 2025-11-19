@@ -61,10 +61,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
         console.info(`👥 > TEAM > [GET] Successfully fetched team ${team.name} (ID: ${id})`)
         return team
     } catch (error: unknown) {
-        // Re-throw H3 errors (like 404)
-        if (error.statusCode) throw error
-
-        // Handle database errors
-        return throwH3Error(`👥 > TEAM > [GET] Error fetching team with ID ${id}`, error)
+        // throwH3Error already handles re-throwing H3Errors (line 54-57 in eventHandlerHelper)
+        throwH3Error(`👥 > TEAM > [GET] Error fetching team with ID ${id}`, error)
+        return undefined as never
     }
 })

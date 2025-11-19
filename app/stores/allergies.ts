@@ -141,7 +141,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await loadAllergyTypes()
             console.info(`🥜 > ALLERGY_STORE > Created allergy type: ${created.name}`)
             return created
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'createAllergyType')
             throw e
         }
@@ -157,7 +157,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await loadAllergyTypes()
             console.info(`🥜 > ALLERGY_STORE > Updated allergy type: ${updated.name}`)
             return updated
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'updateAllergyType')
             throw e
         }
@@ -170,7 +170,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             })
             await loadAllergyTypes()
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'deleteAllergyType')
             throw e
         }
@@ -205,7 +205,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
             return created
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'createAllergy')
             throw e
         }
@@ -222,7 +222,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
             return updated
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'updateAllergy')
             throw e
         }
@@ -236,7 +236,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             // Refresh allergies to get updated data
             await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
-        } catch (e: any) {
+        } catch (e: unknown) {
             handleApiError(e, 'deleteAllergy')
             throw e
         }

@@ -23,7 +23,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         id = params.id
         inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({householdId: true, id: true}).parse)
     } catch (error) {
-        return throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
+        throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
     }
 
     try {
@@ -33,6 +33,6 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedInhabitant
     } catch (error) {
-        return throwH3Error(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
+        throwH3Error(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
     }
 })

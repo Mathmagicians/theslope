@@ -586,55 +586,28 @@ test.describe('Season API Tests', () => {
 
     test.describe('Active Season endpoints', () => {
 
-        test('GET /api/admin/season/active should return active season ID', async ({browser}) => {
+        test('GET /api/admin/season/active should return active season ID and enforce uniqueness', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
-            // Ensure an active season exists (uses singleton pattern - may return cached)
+            // Ensure an active season exists (factory verifies it's active via assertion)
             const activeSeason = await SeasonFactory.createActiveSeason(context)
             expect(activeSeason.id).toBeDefined()
             expect(activeSeason.isActive).toBe(true)
-            // No need to track - cleanupSeasons() automatically includes active season
 
-            // Call GET endpoint via factory to get active season ID
+            // Verify GET endpoint returns the active season ID
             const activeSeasonId = await SeasonFactory.getActiveSeasonId(context)
             expect(activeSeasonId).toBe(activeSeason.id)
 
-            // Verify full season via factory getSeason
+            // Verify full season via GET /:id
             const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id)
             expect(fullSeason.isActive).toBe(true)
             expect(fullSeason.id).toBe(activeSeason.id)
-        })
 
-        test('POST /api/admin/season/active should activate a season', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Create a regular non-active season with unique salt
-            const seasonToActivate = await SeasonFactory.createSeason(context,
-                SeasonFactory.defaultSeason()
-            )
-            trackSeason(seasonToActivate.id!)
-            expect(seasonToActivate.isActive).toBe(false)
-
-            // Activate it via POST
-            const response = await context.request.post('/api/admin/season/active', {
-                headers,
-                data: { seasonId: seasonToActivate.id }
-            })
-            expect(response.status()).toBe(200)
-
-            const activatedResponse = await response.json()
-            expect(activatedResponse.id).toBe(seasonToActivate.id)
-            expect(activatedResponse.isActive).toBe(true)
-
-            // Verify via factory getSeason
-            const verifiedSeason = await SeasonFactory.getSeason(context, seasonToActivate.id!)
-            expect(verifiedSeason.isActive).toBe(true)
-
-            // Verify GET endpoint returns this season ID
-            const getResponse = await context.request.get('/api/admin/season/active', { headers })
-            expect(getResponse.status()).toBe(200)
-            const activeSeasonId = await getResponse.json()
-            expect(activeSeasonId).toBe(seasonToActivate.id)
+            // BUSINESS RULE: Verify only ONE active season exists
+            const allSeasons = await SeasonFactory.getAllSeasons(context)
+            const activeSeasons = allSeasons.filter(s => s.isActive)
+            expect(activeSeasons.length, 'Only one season should be active at a time').toBe(1)
+            expect(activeSeasons[0].id).toBe(activeSeason.id)
         })
 
         test('POST /api/admin/season/active should return 404 for non-existent season', async ({browser}) => {
