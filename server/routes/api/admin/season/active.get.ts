@@ -1,3 +1,4 @@
+import {createError, defineEventHandler, setResponseStatus} from "h3"
 import {fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 
 export default defineEventHandler(async (event): Promise<number | null> => {

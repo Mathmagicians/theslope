@@ -1,16 +1,16 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime'
+import { mountSuspended } from '@nuxt/test-utils/runtime'
 import { nextTick, ref } from 'vue'
 import AllergenSelector from '~/components/shared/AllergenSelector.vue'
-import { AllergyFactory } from '~/tests/e2e/testDataFactories/allergyFactory'
+import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 describe('AllergenSelector', () => {
   const ELEMENT_NAMES = {
     checkbox: (id: number) => `allergen-${id}`
   } as const
 
-  // Use factory mock data
+  // Mock allergy types data (passed as props)
   const mockAllergyTypes = AllergyFactory.createMockAllergyTypes()
 
   // Helper: Create wrapper with common setup
@@ -18,6 +18,7 @@ describe('AllergenSelector', () => {
     return await mountSuspended(AllergenSelector, {
       props: {
         modelValue: [],
+        allergyTypes: mockAllergyTypes, // Pass data as prop (single source of truth)
         mode: 'view',
         ...props
       },
@@ -29,18 +30,8 @@ describe('AllergenSelector', () => {
     })
   }
 
-  // Helper: Wait for store to load
-  const waitForLoad = async () => {
-    await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
-
   beforeEach(() => {
-    // Mock allergies endpoint
-    registerEndpoint('/api/admin/allergy-type', {
-      method: 'GET',
-      handler: () => mockAllergyTypes
-    })
+    // No store mocking needed - component receives data via props
   })
 
   describe('View Mode', () => {
@@ -53,8 +44,6 @@ describe('AllergenSelector', () => {
         modelValue: selected,
         mode: 'view'
       })
-
-      await waitForLoad()
 
       if (expectedBadges === 0) {
         const alert = wrapper.find('[class*="alert"]')
@@ -69,7 +58,6 @@ describe('AllergenSelector', () => {
   describe('Edit Mode', () => {
     it('renders checkbox for each allergen type', async () => {
       const wrapper = await createWrapper({ mode: 'edit' })
-      await waitForLoad()
 
       const checkboxes = wrapper.findAll('input[type="checkbox"]')
       expect(checkboxes.length).toBe(mockAllergyTypes.length)
@@ -84,8 +72,6 @@ describe('AllergenSelector', () => {
         modelValue: initial,
         mode: 'edit'
       })
-
-      await waitForLoad()
 
       const checkbox = wrapper.find(`[name="${ELEMENT_NAMES.checkbox(toggle)}"]`)
       await checkbox.setValue(!initial.includes(toggle))
@@ -107,8 +93,6 @@ describe('AllergenSelector', () => {
         mode: 'edit'
       })
 
-      await waitForLoad()
-
       const checkbox = wrapper.find(`[name="${ELEMENT_NAMES.checkbox(id)}"]`)
       expect((checkbox.element as HTMLInputElement).checked).toBe(shouldBeChecked)
     })
@@ -125,8 +109,6 @@ describe('AllergenSelector', () => {
         showInhabitantStats: showStats
       })
 
-      await waitForLoad()
-
       const statsTitle = wrapper.findAll('h3').find(h3 => h3.text().includes('Statistik'))
       expect(statsTitle !== undefined).toBe(shouldExist)
     })
@@ -139,8 +121,6 @@ describe('AllergenSelector', () => {
         readonly: true
       })
 
-      await waitForLoad()
-
       const checkboxes = wrapper.findAll('input[type="checkbox"]')
       checkboxes.forEach(checkbox => {
         expect((checkbox.element as HTMLInputElement).disabled).toBe(true)
@@ -152,8 +132,6 @@ describe('AllergenSelector', () => {
         mode: 'edit',
         readonly: true
       })
-
-      await waitForLoad()
 
       const firstCheckbox = wrapper.find(`[name="${ELEMENT_NAMES.checkbox(1)}"]`)
       await firstCheckbox.setValue(true)

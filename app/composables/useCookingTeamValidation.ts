@@ -151,6 +151,18 @@ export const useCookingTeamValidation = () => {
         return CookingTeamDisplaySchema.parse(deserialized)
     }
 
+    // Deserialize team Detail (for GET /api/admin/team/[id] endpoint)
+    const deserializeCookingTeamDetail = (serialized: any): CookingTeamDetail => {
+        const deserialized = {
+            ...serialized,
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
+            assignments: serialized.assignments?.map((assignment: any) => deserializeCookingTeamAssignment(assignment)) || [],
+            dinnerEvents: serialized.dinnerEvents || []
+        }
+
+        return CookingTeamDetailSchema.parse(deserialized)
+    }
+
     // Utility functions for team member counts
     const getTeamMemberCounts = (team: CookingTeamDisplay): number => {
         return team.assignments.length
@@ -203,6 +215,7 @@ export const useCookingTeamValidation = () => {
         getAssignmentIdsForRole,
         serializeCookingTeam,
         deserializeCookingTeam,
+        deserializeCookingTeamDetail,
         deserializeCookingTeamAssignment,
         // Prisma transformation functions
         toPrismaCreateData,

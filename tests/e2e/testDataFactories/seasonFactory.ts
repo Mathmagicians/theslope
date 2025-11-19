@@ -560,7 +560,9 @@ export class SeasonFactory {
 
     static readonly getAllCookingTeams = async (context: BrowserContext): Promise<any[]> => {
         const response = await context.request.get(ADMIN_TEAM_ENDPOINT)
-        expect(response.status()).toBe(200)
+        const status = response.status()
+        const errorBody = status !== 200 ? await response.text() : ''
+        expect(status, `Expected 200. Response: ${errorBody}`).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)

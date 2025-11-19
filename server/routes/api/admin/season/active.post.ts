@@ -1,3 +1,4 @@
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {activateSeason} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
@@ -21,11 +22,11 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch
-    let requestData
+    let requestData!: {seasonId: number}
     try {
         requestData = await readValidatedBody(event, activateSeasonSchema.parse)
     } catch (error) {
-        throwH3Error('🌞 > SEASON > [POST /active] Validation error', error)
+        return throwH3Error('🌞 > SEASON > [POST /active] Validation error', error)
     }
 
     // Database operations try-catch
@@ -35,6 +36,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 200)
         return activatedSeason
     } catch (error) {
-        throwH3Error(`🌞 > SEASON > [POST /active] Error activating season ${requestData.seasonId}`, error)
+        return throwH3Error(`🌞 > SEASON > [POST /active] Error activating season ${requestData.seasonId}`, error)
     }
 })

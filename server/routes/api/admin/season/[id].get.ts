@@ -1,3 +1,4 @@
+import {createError, defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
@@ -43,6 +44,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 200)
         return season
     } catch (error) {
-        throwH3Error(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)
+        return throwH3Error(`🌞 > SEASON > [GET] Error fetching season with id ${id}`, error)
     }
 })

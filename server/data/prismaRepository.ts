@@ -981,7 +981,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
 
     try {
         const teams = await prisma.cookingTeam.findMany({
-            where: seasonId ? {seasonId} : undefined,
+            where: seasonId ? {seasonId} : PrismaFromClient.skip,
             include: {
                 season: true,
                 assignments: {
@@ -1014,6 +1014,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
 export async function fetchTeam(id: number, d1Client: D1Database):Promise<CookingTeamDetail | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
 
     try {
         const team = await prisma.cookingTeam.findFirst({
@@ -1032,12 +1033,18 @@ export async function fetchTeam(id: number, d1Client: D1Database):Promise<Cookin
 
         if (team) {
             console.info(`👥 > TEAM > [GET] Found team ${team.name} (ID: ${team.id})`)
-            // Transform to include cookingDaysCount aggregate
+            // Transform to include cookingDaysCount aggregate and map dinners → dinnerEvents
+            // Exclude Prisma-only fields (season object, _count)
             const teamWithCount = {
-                ...team,
+                id: team.id,
+                seasonId: team.seasonId,
+                name: team.name,
+                affinity: team.affinity,
+                assignments: team.assignments,
+                dinnerEvents: team.dinners,  // Map Prisma 'dinners' relation to domain 'dinnerEvents'
                 cookingDaysCount: team._count.dinners
             }
-            return deserializeCookingTeam(teamWithCount)
+            return deserializeCookingTeamDetail(teamWithCount)
         } else {
             console.info(`👥 > TEAM > [GET] No team found with ID ${id}`)
             return null

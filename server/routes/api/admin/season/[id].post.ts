@@ -1,3 +1,4 @@
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {updateSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
@@ -30,17 +31,18 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch
-    let id, seasonData
+    let id!: number
+    let seasonData!: Season
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
         seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
     } catch (error) {
-        throwH3Error('🌞 > SEASON > [POST] Validation error', error)
+        return throwH3Error('🌞 > SEASON > [POST] Validation error', error)
     }
 
     if (!seasonData.id || seasonData.id !== id) {
-        throwH3Error('🌞 > SEASON > [POST] ID mismatch', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`), 400)
+        return throwH3Error('🌞 > SEASON > [POST] ID mismatch', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`), 400)
     }
     // Database operations try-catch
     try {
@@ -48,6 +50,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 200)
         return updatedSeason
     } catch (error) {
-        throwH3Error(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
+        return throwH3Error(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
     }
 })

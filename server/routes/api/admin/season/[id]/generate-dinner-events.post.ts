@@ -2,6 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import {saveDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
+import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
@@ -15,7 +16,7 @@ const idSchema = z.object({
 type GenerateDinnerEventsResponse = {
     seasonId: number
     eventCount: number
-    events: DinnerEvent[]
+    events: DinnerEventDetail[]
 }
 
 export default defineEventHandler(async (event): Promise<GenerateDinnerEventsResponse> => {
@@ -23,12 +24,12 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonId: number
+    let seasonId!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        throwH3Error('🗓️ > SEASON > [GENERATE_EVENTS] Input validation error', error)
+        return throwH3Error('🗓️ > SEASON > [GENERATE_EVENTS] Input validation error', error)
     }
 
     // Business logic try-catch - separate concerns
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
         // Fetch season from database (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            throwH3Error(`🗓️ > SEASON > [GENERATE_EVENTS] Season ${seasonId} not found`, new Error('Not found'), 404)
+            return throwH3Error(`🗓️ > SEASON > [GENERATE_EVENTS] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
         // Generate dinner event data using composable
@@ -58,6 +59,6 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
             events: savedEvents
         }
     } catch (error) {
-        throwH3Error(`🗓️ > SEASON > [GENERATE_EVENTS] Error generating dinner events for season ${seasonId}`, error)
+        return throwH3Error(`🗓️ > SEASON > [GENERATE_EVENTS] Error generating dinner events for season ${seasonId}`, error)
     }
 })

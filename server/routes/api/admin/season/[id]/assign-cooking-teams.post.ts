@@ -1,3 +1,4 @@
+import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import {updateDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
@@ -24,24 +25,24 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
     const d1Client = cloudflare.env.DB
 
     // Input validation - FAIL EARLY
-    let seasonId: number
+    let seasonId!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        throwH3Error('🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Input validation error', error)
+        return throwH3Error('🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Input validation error', error)
     }
 
     // Fetch season
-    let season: Season
+    let season!: Season
     try {
         const fetchedSeason = await fetchSeason(d1Client, seasonId)
         if (!fetchedSeason) {
-            throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Season ${seasonId} not found`, new Error('Not found'), 404)
+            return throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
         season = fetchedSeason
     } catch (error) {
-        throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error fetching season ${seasonId}`, error)
+        return throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error fetching season ${seasonId}`, error)
     }
 
     // Business logic
@@ -65,6 +66,6 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
             events: updatedEvents
         }
     } catch (error) {
-        throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error assigning teams to dinner events for season ${seasonId}`, error)
+        return throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error assigning teams to dinner events for season ${seasonId}`, error)
     }
 })

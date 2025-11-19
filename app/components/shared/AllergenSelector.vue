@@ -24,14 +24,17 @@ import type { AllergyTypeDetail } from '~/composables/useAllergyValidation'
 // Design system
 const { COLOR, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
 
-// Props
+// Props - Single source of truth via props (like SeasonSelector pattern)
 const props = withDefaults(defineProps<{
   modelValue: number[] // Selected allergen IDs
+  allergyTypes: AllergyTypeDisplay[] // REQUIRED: Parent passes data from store
+  loading?: boolean
   mode?: 'view' | 'edit'
   compact?: boolean // Compact view (no stats)
   showInhabitantStats?: boolean // Show affected users (allergy manager context)
   readonly?: boolean
 }>(), {
+  loading: false,
   mode: 'view',
   compact: false,
   showInhabitantStats: false,
@@ -42,13 +45,6 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: number[]]
 }>()
-
-// Store
-const allergiesStore = useAllergiesStore()
-const { allergyTypes, isAllergyTypesLoading } = storeToRefs(allergiesStore)
-
-// Initialize store
-allergiesStore.initAllergiesStore()
 
 // Selected allergen IDs (reactive)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))

@@ -1,3 +1,4 @@
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -21,11 +22,11 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonData
+    let seasonData!: Season
     try {
         seasonData = await readValidatedBody(event, PutSeasonSchema.parse)
     } catch (error) {
-        throwH3Error('🌞 > SEASON > [PUT] Input validation error', error)
+        return throwH3Error('🌞 > SEASON > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -34,6 +35,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 201)
         return savedSeason
     } catch (error) {
-        throwH3Error('🌞 > SEASON > [PUT] Error creating season', error)
+        return throwH3Error('🌞 > SEASON > [PUT] Error creating season', error)
     }
 })

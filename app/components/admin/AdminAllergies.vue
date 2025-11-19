@@ -349,14 +349,14 @@ const catalogEmptyState = {
               </UButton>
             </template>
 
-            <!-- Checkbox cell (multiselect mode) -->
+            <!-- Checkbox cell (multiselect mode) - delegates to AllergenSelector in detail panel -->
             <template #checkbox-cell="{ row }">
               <div class="flex items-center justify-center">
                 <UCheckbox
-                    :model-value="selectedAllergyIds.has(row.original.id!)"
+                    :model-value="selectedAllergyIds.includes(row.original.id!)"
                     :name="`select-allergy-${row.original.id}`"
                     color="secondary"
-                    @change="toggleAllergySelection(row.original.id!)"
+                    disabled
                 />
               </div>
             </template>
@@ -425,53 +425,13 @@ const catalogEmptyState = {
 
         <!-- DETAIL PANEL (Right) -->
         <div class="flex-1 border-l pl-6">
-          <!-- Statistics panel (multiselect mode with selections) -->
-          <div v-if="multiselectMode && allergyStatistics" class="space-y-4">
-            <h3 class="text-lg font-semibold">📊 Statistik</h3>
-
-            <UAlert
-                title="Unikke beboere berørt"
-                description="Disse bofæller kan ikke tåle denne kombination af allergener."
-                color="primary"
-                :avatar="{text: allergyStatistics.totalInhabitants.toString()}"
-            />
-
-            <!-- Show unique inhabitants -->
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Berørte beboere</h4>
-              <UserListItem
-                  :inhabitants="allergyStatistics.uniqueInhabitantsList"
-                  label="beboer"
-                  label-plural="beboere"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Fordeling pr. allergen</h4>
-              <div
-v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
-                   class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">{{ item.icon || '🏷️' }}</span>
-                  <span class="text-sm">{{ item.name }}</span>
-                </div>
-                <span class="text-sm font-medium">{{ item.count }}</span>
-              </div>
-            </div>
-
-            <!-- Show compact selected allergy cards -->
-            <div class="space-y-2">
-              <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Valgte allergier</h4>
-              <div class="space-y-2">
-                <AllergyTypeCard
-                    v-for="allergy in selectedAllergies"
-                    :key="allergy.id"
-                    :allergy-type="allergy"
-                    compact
-                />
-              </div>
-            </div>
-          </div>
+          <!-- AllergenSelector (multiselect mode with selections) -->
+          <AllergenSelector
+              v-if="multiselectMode"
+              v-model="selectedAllergyIds"
+              mode="edit"
+              :show-inhabitant-stats="true"
+          />
 
           <!-- No selection state (not multiselect or no selections) -->
           <div
