@@ -13,7 +13,8 @@ const allergyManagerInhabitants = computed(() => {
 
 <template>
   <Loader v-if="isAllergyManagersLoading" text="Henter allergi ansvarlige" />
-  <UAlert v-else
+  <UAlert
+v-else
     color="info"
     variant="subtle"
     icon="i-heroicons-question-mark-circle"

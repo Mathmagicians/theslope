@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { computed, ref, nextTick } from 'vue'
-import { type Season } from '~/composables/useSeasonValidation'
+import type { Season } from '~/composables/useSeasonValidation'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
 
 const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({

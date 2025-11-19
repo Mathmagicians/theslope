@@ -164,6 +164,8 @@ Unbounded (100+), heavy (nested), not essential, performance risk
 
 Mutations (PUT/POST/DELETE) return the same **Zod-validated Detail schema** as GET/:id endpoints, not a separate Response schema.
 
+**CRITICAL: Only 2 types per entity** - Display (lists) and Detail (detail + mutations). NO third type.
+
 **Schema pattern:**
 ```typescript
 // validation composable exports Zod schemas
@@ -176,6 +178,11 @@ export const useHouseholdValidation = () => {
   return { HouseholdDisplaySchema, HouseholdDetailSchema, ... }
 }
 
+// TypeScript types exported
+export type HouseholdDisplay = z.infer<...>  // Lists
+export type HouseholdDetail = z.infer<...>   // Detail + mutations
+// NO separate Household, HouseholdResponse, or similar third type
+
 // API endpoints use Zod types
 GET  /api/admin/household     → HouseholdDisplay[]
 GET  /api/admin/household/:id → HouseholdDetail
@@ -183,7 +190,7 @@ PUT  /api/admin/household     → HouseholdDetail  // Same as GET/:id
 POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
 ```
 
-**Rationale:** Small payloads make separate Response schemas unjustified complexity.
+**Rationale:** Small payloads make separate Response schemas unjustified complexity. Two types are sufficient and prevent type explosion.
 
 ### Compliance
 
@@ -192,7 +199,8 @@ POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
 3. Document criteria decisions in repository comments
 4. Index = display-ready, Detail = operation-ready
 5. Mutations MUST return Detail schema (same Zod type as GET/:id)
-6. Prisma types MUST NOT leave repository layer (ADR-010)
+6. **ONLY 2 types per entity:** `EntityDisplay` and `EntityDetail` - NO third type (Entity, EntityResponse, etc.)
+7. Prisma types MUST NOT leave repository layer (ADR-010)
 
 ---
 
@@ -262,7 +270,7 @@ watch([formMode, teamCount], () => {
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
 **Status:** Accepted | **Date:** 2025-01-28
-**Updated:** 2025-11-11 (prefer useAsyncData over useFetch)
+**Updated:** 2025-11-11 (prefer useAsyncData over useFetch; component-local data exception)
 
 ### Decision
 
@@ -467,9 +475,40 @@ seasonsError  // Ref<FetchError | undefined>
 7. MUST provide `refresh()` action wrapping the `refresh()` function from `useAsyncData`
 8. Init methods MUST be synchronous (no async/await)
 9. Stores MAY use internal watchers to auto-call init when data arrives
-10. Components MUST NOT contain server data state
+10. Components MUST NOT contain server data state (exception: component-local data, see below)
 11. Components MUST show loaders based on `isStoreReady` flag
 12. MUST have component tests covering store initialization, status computeds, and CRUD actions
+
+### Component-Local Data Exception
+
+Components MAY use `useAsyncData` directly for **component-specific** data with local status when:
+
+1. ✅ Data is component-specific (not shared across app)
+2. ✅ Multiple instances need separate data (e.g., card components)
+3. ✅ Fetch calls **store methods** (NEVER direct `$fetch`)
+4. ✅ Status tied to component lifecycle
+
+**Reference implementation:** `app/components/cooking-team/CookingTeamCard.vue`
+
+```typescript
+// Component-local fetch using store method
+const {data: team, status, error} = useAsyncData(
+  `cooking-team-detail-${props.teamId}`,  // Unique per instance
+  () => planStore.fetchTeamDetail(props.teamId),  // Store method (not $fetch)
+  { watch: [() => props.teamId], immediate: true }
+)
+```
+
+**When to use:**
+- ✅ Card/list item components fetching their own detail
+- ✅ Modal/dialog components fetching context-specific data
+- ✅ Tab components with independent data needs
+
+**When NOT to use (use store instead):**
+- ❌ Application-level state (selected season, active user)
+- ❌ Data shared across multiple components
+- ❌ Data needed for business logic computeds
+- ❌ Direct `$fetch` calls (always use store methods)
 
 ### Critical Pattern: Data Presence Check
 

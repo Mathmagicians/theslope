@@ -4,7 +4,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 import type {CookingTeamWithMembers} from '~/composables/useCookingTeamValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -36,8 +36,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
         return deletedTeam
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
-        console.error(`👥 > TEAM > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
     }
 })

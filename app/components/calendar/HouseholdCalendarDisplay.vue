@@ -118,13 +118,15 @@ const hasBookings = (eventLists: DayEventList[]) => {
       </UChip>
 
       <!-- Team cooking day -->
-      <div v-else-if="hasTeamCooking(eventLists)"
+      <div
+v-else-if="hasTeamCooking(eventLists)"
            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-orange-600 text-white">
         <span class="text-xs">◆</span>{{ day.day }}
       </div>
 
       <!-- Has bookings -->
-      <div v-else-if="hasBookings(eventLists)"
+      <div
+v-else-if="hasBookings(eventLists)"
            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-blue-600 text-white">
         <span class="text-xs">●</span>{{ day.day }}
       </div>

@@ -49,7 +49,7 @@ watch(() => route.path, () => {
     />
 
     <template #content>
-      <UCard class="cursor-pointer" @click="doClose()" variant="outline">
+      <UCard class="cursor-pointer" variant="outline" @click="doClose()">
         <template #header>
           <div class="flex justify-between items-center">
             <span class="text-sm font-semibold">{{ helpContent.title }}</span>

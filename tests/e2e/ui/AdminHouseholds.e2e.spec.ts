@@ -15,7 +15,7 @@ const {validatedBrowserContext} = testHelpers
  */
 test.describe('AdminHouseholds View', () => {
     const adminHouseholdsUrl = '/admin/households'
-    let createdHouseholdIds: number[] = []
+    const createdHouseholdIds: number[] = []
 
     test.use({storageState: adminUIFile})
 

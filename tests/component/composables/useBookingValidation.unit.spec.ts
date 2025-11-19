@@ -13,7 +13,6 @@ describe('useBookingValidation', () => {
     DinnerModeSchema: ExportedDinnerModeSchema,
     OrderStateSchema: ExportedOrderStateSchema,
     TicketTypeSchema: ExportedTicketTypeSchema,
-    OrderActionSchema,
     DinnerEventDisplaySchema,
     DinnerEventDetailSchema,
     DinnerEventCreateSchema,
@@ -21,8 +20,6 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     CreateOrdersRequestSchema,
-    SwapOrderRequestSchema,
-    OrderQuerySchema,
     OrderHistorySchema,
     serializeOrder,
     deserializeOrder,
@@ -32,8 +29,6 @@ describe('useBookingValidation', () => {
 
   const DinnerState = DinnerStateSchema.enum
   const DinnerMode = DinnerModeSchema.enum
-  const OrderState = OrderStateSchema.enum
-  const TicketType = TicketTypeSchema.enum
 
   describe('Enum Validation', () => {
     it.each([
@@ -113,11 +108,14 @@ describe('useBookingValidation', () => {
       })
 
       it.each([
-        {desc: 'empty menuTitle', override: {menuTitle: ''}},
-        {desc: 'menuTitle too long', override: {menuTitle: 'a'.repeat(201)}},
+        {desc: 'menuTitle too long (>500)', override: {menuTitle: 'a'.repeat(501)}},
         {desc: 'negative totalCost', override: {totalCost: -50}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
         expect(() => DinnerEventCreateSchema.parse({...baseCreate, ...override})).toThrow()
+      })
+
+      it('GIVEN empty menuTitle WHEN parsing THEN succeeds (no min validation)', () => {
+        expect(() => DinnerEventCreateSchema.parse({...baseCreate, menuTitle: ''})).not.toThrow()
       })
     })
 
@@ -221,35 +219,6 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each([1, 5, 10, 20].map(count => ({count})))(
-        'GIVEN $count orders WHEN parsing THEN succeeds',
-        ({count}) => {
-          const validInput = OrderFactory.defaultCreateOrdersRequest({
-            orders: Array(count).fill(null).map(() => ({
-              inhabitantId: 10,
-              ticketPriceId: 1,
-              dinnerMode: DinnerMode.DINEIN
-            }))
-          })
-          const result = CreateOrdersRequestSchema.safeParse(validInput)
-          expect(result.success, getValidationError(result)).toBe(true)
-        }
-      )
-
-      it.each([0, 21].map(count => ({count})))(
-        'GIVEN $count orders (invalid) WHEN parsing THEN rejects',
-        ({count}) => {
-          const validInput = OrderFactory.defaultCreateOrdersRequest({
-            orders: Array(count).fill(null).map(() => ({
-              inhabitantId: 10,
-              ticketPriceId: 1,
-              dinnerMode: DinnerMode.DINEIN
-            }))
-          })
-          const result = CreateOrdersRequestSchema.safeParse(validInput)
-          expect(result.success).toBe(false)
-        }
-      )
     })
 
     describe('OrderHistorySchema', () => {
@@ -259,9 +228,9 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderActionSchema.options.map(action => ({action})))(
+      it.each(OrderStateSchema.options.map(action => ({action})))(
         'GIVEN action $action WHEN parsing THEN succeeds',
-        ({action}) => {
+        ({action}: {action: z.infer<typeof OrderStateSchema>}) => {
           const history = OrderFactory.defaultOrderHistory(undefined, {action})
           const result = OrderHistorySchema.safeParse(history)
           expect(result.success, getValidationError(result)).toBe(true)

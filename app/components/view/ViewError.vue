@@ -51,7 +51,8 @@ function getRotationClass(i: number) {
     <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 grow items-start min-w-1/2 opacity-90 bg-red-100 flex flex-col p-2 md:p-4">
       <!-- Error Code -->
       <UIcon name="i-mage-robot-dead" size="64"/>
-      <p v-if="props.statusCode"
+      <p
+v-if="props.statusCode"
          class="text-2xl md:text-4xl font-mono font-bold bg-red-100 text-red-900 rounded inline-block mb-2">
         FEJL {{ props.statusCode }}
       </p>

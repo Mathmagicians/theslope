@@ -852,7 +852,8 @@ describe('Active Season Management utilities', () => {
             const result = splitDinnerEvents(events, nextDinnerDateRange)
 
             expect(result.nextDinner).toBeNull()
-            expect(result.otherDinnerDates).toHaveLength(expectedOtherCount)
+            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
+            expect(allOtherDates).toHaveLength(expectedOtherCount)
         })
     })
 
@@ -936,10 +937,10 @@ describe('Active Season Management utilities', () => {
             },
             {
                 scenario: 'minutes offset - after deadline',
-                dinnerStartTime: new Date(2025, 0, 15, 13, 0),  // Jan 15 at 13:00 (today)
+                dinnerStartTime: new Date(2025, 0, 15, 12, 0),  // Jan 15 at 12:00 (today, same as now)
                 offsetDays: 0,
                 offsetMinutes: 30,
-                expected: false  // Now (12:00) is after 12:30 (30 min before 13:00)
+                expected: false  // Now (12:00) is after 11:30 (30 min before 12:00), deadline passed
             },
             {
                 scenario: 'combined days and minutes - before deadline',
@@ -950,10 +951,10 @@ describe('Active Season Management utilities', () => {
             },
             {
                 scenario: 'combined days and minutes - after deadline',
-                dinnerStartTime: new Date(2025, 0, 16, 18, 0),  // Jan 16 at 18:00
+                dinnerStartTime: new Date(2025, 0, 16, 10, 0),  // Jan 16 at 10:00
                 offsetDays: 1,
-                offsetMinutes: 300,  // 5 hours
-                expected: false  // Now (Jan 15 12:00) is after Jan 15 13:00 (1 day + 5 hours before dinner)
+                offsetMinutes: 120,  // 2 hours
+                expected: false  // Now (Jan 15 12:00) is after Jan 15 08:00 (1 day + 2 hours before dinner), deadline passed
             },
             {
                 scenario: 'zero offsets - dinner in future',

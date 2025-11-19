@@ -3,7 +3,7 @@ import {useSeasonValidation, type Season} from "~/composables/useSeasonValidatio
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Get the validation utilities from our composable
 const {SeasonSchema} = useSeasonValidation()
@@ -36,15 +36,11 @@ export default defineEventHandler(async (event): Promise<Season> => {
         id = params.id
         seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
     } catch (error) {
-        const h3e = h3eFromCatch('Validation error', error)
-        console.error("🌞 > SEASON > [POST] Input validation error:", h3e.statusMessage)
-        throw h3e
+        throwH3Error('🌞 > SEASON > [POST] Validation error', error)
     }
 
     if (!seasonData.id || seasonData.id !== id) {
-        const h3e = h3eFromCatch('Invalid input', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`))
-        console.warn("🌞 > SEASON > [POST] ID mismatch:", h3e.statusMessage)
-        throw h3e
+        throwH3Error('🌞 > SEASON > [POST] ID mismatch', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`), 400)
     }
     // Database operations try-catch
     try {
@@ -52,8 +48,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 200)
         return updatedSeason
     } catch (error) {
-        const h3e = h3eFromCatch(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
-        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
     }
 })

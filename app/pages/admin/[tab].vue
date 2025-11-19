@@ -119,10 +119,11 @@ useHead({
         color="primary"
     >
       <template #content="{ item }">
-        <ViewError v-if="isSeasonsErrored" :error="seasonsError?.statusCode"
+        <ViewError
+v-if="isSeasonsErrored" :error="seasonsError?.statusCode"
                    :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`" :cause="seasonsError"/>
         <Loader v-else-if="!isPlanStoreReady" :text="activeTab"/>
-        <component v-else :is="asyncComponents[item.value]"/>
+        <component :is="asyncComponents[item.value]" v-else/>
       </template>
     </UTabs>
   </div>

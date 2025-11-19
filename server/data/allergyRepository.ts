@@ -370,7 +370,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
 
     try {
         // Remove allergyType from create data (it's a relation, not a field)
-        const {allergyType, ...createData} = allergyData as any
+        const {allergyType, ...createData} = allergyData as AllergyCreate & {allergyType?: unknown}
 
         const newAllergy = await prisma.allergy.create({
             data: createData,
@@ -408,7 +408,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
     const prisma = await getPrismaClientConnection(d1Client)
     const {AllergyDetailSchema} = useAllergyValidation()
 
-    const {id, allergyType, ...updateData} = allergyData as any
+    const {id, allergyType, ...updateData} = allergyData as AllergyUpdate & {allergyType?: unknown}
 
     try {
         const updatedAllergy = await prisma.allergy.update({

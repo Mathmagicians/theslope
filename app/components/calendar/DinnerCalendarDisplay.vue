@@ -227,13 +227,15 @@ const isSelected = (day: DateValue): boolean => {
         <!-- Dinner Time (Smaller) with blinking dot during dinner -->
         <div class="flex items-baseline justify-center gap-2">
           <span class="text-xs md:text-sm" :class="TEXT.peach[50]">spisning kl </span>
-          <span class="text-xl md:text-2xl font-medium"
+          <span
+class="text-xl md:text-2xl font-medium"
                 :class="TEXT.peach[300]">{{ dinnerStartHour.toString().padStart(2, '0') }}:00</span>
           <span class="text-xs md:text-sm invisible" aria-hidden="true">spisning kl </span>
-          <span v-if="isDuringDinner"
+          <span
+v-if="isDuringDinner"
                 class="w-3 h-3 rounded-full animate-pulse self-center"
                 :class="BG.peach[400]"
-                aria-label="Dinner is happening now"></span>
+                aria-label="Dinner is happening now"/>
         </div>
       </div>
 
@@ -258,7 +260,8 @@ const isSelected = (day: DateValue): boolean => {
               </UChip>
 
               <!-- Next dinner event (prominent - full color) -->
-              <div v-else-if="hasNextDinnerEvent(eventLists)"
+              <div
+v-else-if="hasNextDinnerEvent(eventLists)"
                    :data-testid="`calendar-dinner-date-${day.day}`"
                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold cursor-pointer hover:opacity-90"
                    :class="[BG.peach[400], isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
@@ -267,7 +270,8 @@ const isSelected = (day: DateValue): boolean => {
               </div>
 
               <!-- Future dinner event (rings - subtle) -->
-              <div v-else-if="hasFutureDinnerEvent(eventLists) && useRings"
+              <div
+v-else-if="hasFutureDinnerEvent(eventLists) && useRings"
                    :data-testid="`calendar-dinner-date-${day.day}`"
                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 cursor-pointer hover:opacity-90"
                    :class="[`${BORDER.peach[400]} ${TEXT.peach[600]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
@@ -276,7 +280,8 @@ const isSelected = (day: DateValue): boolean => {
               </div>
 
               <!-- Future dinner event (lighter fill - subtle) -->
-              <div v-else-if="hasFutureDinnerEvent(eventLists)"
+              <div
+v-else-if="hasFutureDinnerEvent(eventLists)"
                    :data-testid="`calendar-dinner-date-${day.day}`"
                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
                    :class="[`${BG.peach[200]} ${TEXT.peach[800]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
@@ -285,7 +290,8 @@ const isSelected = (day: DateValue): boolean => {
               </div>
 
               <!-- Past dinner event (mocha - discrete) -->
-              <div v-else-if="hasPastDinnerEvent(eventLists)"
+              <div
+v-else-if="hasPastDinnerEvent(eventLists)"
                    :data-testid="`calendar-dinner-date-${day.day}`"
                    class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
                    :class="[`${BG.mocha[100]} ${TEXT.mocha[900]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"

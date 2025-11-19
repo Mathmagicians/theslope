@@ -4,7 +4,7 @@ import {useCookingTeamValidation, type CookingTeamWithMembers} from "~/composabl
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {assignAffinitiesToTeams} = useSeason()
 const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
 
@@ -36,9 +36,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
-        console.error(`👥 > SEASON > [ASSIGN_AFFINITIES] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
     }
 
     // Business logic try-catch - separate concerns
@@ -48,9 +46,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         // Fetch season from database with teams (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            const h3e = h3eFromCatch(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'))
-            h3e.statusCode = 404
-            throw h3e
+            throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
         // Compute affinities for teams using composable
@@ -74,8 +70,6 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
             teams: updatedTeams
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
-        console.error(`👥 > SEASON > [ASSIGN_AFFINITIES] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
     }
 })

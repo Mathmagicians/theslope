@@ -103,17 +103,15 @@ const selectedDinnerEvent = computed(() => {
     })
 })
 
-// Data from selected dinner event
-const orders = computed(() => selectedDinnerEvent.value?.tickets ?? [])
-const allergies = computed(() => {
-    // TODO: Get allergies for inhabitants with orders for this event
-    return []
-})
-const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
-const teamAssignments = computed(() => {
-    // Get cooking team assignments from the selected event's cooking team
-    return selectedDinnerEvent.value?.cookingTeam?.assignments ?? []
-})
+// Load full dinner event detail when selected event changes (to get orders/tickets)
+watch(() => selectedDinnerEvent.value?.id, (eventId) => {
+  planStore.loadDinnerEvent(eventId ?? null)
+}, {immediate: true})
+
+// Get orders from selected dinner event detail
+const {selectedDinnerEvent: selectedDinnerEventDetail} = storeToRefs(planStore)
+const orders = computed(() => selectedDinnerEventDetail.value?.tickets ?? [])
+
 
 useHead({
   title: '🍽️ Fællesspisning',
@@ -188,10 +186,8 @@ useHead({
       <!-- Menu Hero in header slot (full bleed) -->
       <template #header>
         <DinnerMenuHero
-          :dinner-event="selectedDinnerEvent"
-          :allergies="allergies"
-          :orders="orders"
-          :ticket-prices="ticketPrices"
+          :dinner-event-id="selectedDinnerEvent?.id"
+          :ticket-prices="selectedSeason?.ticketPrices ?? []"
         />
       </template>
 
@@ -202,11 +198,9 @@ useHead({
 
           <!-- Cooking Team Display (Monitor Mode) -->
           <CookingTeamCard
-            v-if="selectedDinnerEvent?.cookingTeam"
-            :team-id="selectedDinnerEvent.cookingTeam.id"
-            :team-number="selectedDinnerEvent.cookingTeam.id"
-            :team-name="selectedDinnerEvent.cookingTeam.name"
-            :assignments="teamAssignments"
+            v-if="selectedDinnerEvent?.cookingTeamId"
+            :team-id="selectedDinnerEvent.cookingTeamId"
+            :team-number="selectedDinnerEvent.cookingTeamId"
             mode="monitor"
           />
 

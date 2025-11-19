@@ -4,7 +4,7 @@ import type {CookingTeamAssignment} from '~/composables/useCookingTeamValidation
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -21,9 +21,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -41,8 +39,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         console.info(`👥🔗 > ASSIGNMENT > [GET] Returning assignment ${assignment.id}`)
         return assignment
     } catch (error) {
-        const h3e = h3eFromCatch(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
     }
 })

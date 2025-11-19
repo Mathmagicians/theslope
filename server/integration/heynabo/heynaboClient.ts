@@ -41,7 +41,7 @@ async function getTokenFromHeynaboApi(username: string | undefined, password: st
             body: {email: username, password: password},
             headers: {ContentType: 'application/json'}
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         const h3e = h3eFromCatch(`Error fetching token from Heynabo API for username ${maskPassword(username)}: `, error)
         console.error(LOG, h3e.statusMessage, error)
         throw h3e
@@ -83,7 +83,7 @@ async function loadLocations(from: string, token: string): Promise<HeynaboLocati
                 ContentType: 'application/json'
             }
         }) || []
-    } catch (error: any) {
+    } catch (error: unknown) {
         const h3e = h3eFromCatch('Error loading locations from HeyNabo API: ', error)
         console.error(LOG, "LOCATIONS >", h3e.statusMessage, error)
         throw h3e
@@ -116,7 +116,7 @@ async function loadMembers(from: string, token: string): Promise<HeynaboMember[]
                 ContentType: 'application/json'
             }
         })
-    } catch (error: any) {
+    } catch (error: unknown) {
         const h3e = h3eFromCatch('Error loading members from HeyNabo API: ', error)
         console.error(LOG, "MEMBERS >", h3e.statusMessage, error)
         throw h3e

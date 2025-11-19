@@ -1,13 +1,17 @@
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
-import {
-    type CookingTeam,
-    type TeamRole
+import type {
+    CookingTeamDisplay,
+    CookingTeamDetail,
+    CookingTeamAssignment,
+    TeamRole
 } from "~/composables/useCookingTeamValidation"
+import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
 import {TicketFactory} from "./ticketFactory"
+import {DinnerEventFactory} from "./dinnerEventFactory"
 
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
@@ -51,7 +55,58 @@ export class SeasonFactory {
         diningModeIsEditableMinutesBefore: 90
     }
 
-    static readonly defaultSeason = (testSalt: string = temporaryAndRandom()): Season => {
+    // Default cooking team data for unit tests (no HTTP calls)
+    static readonly defaultCookingTeamData = {
+        seasonId: 1,
+        name: "TestTeam"
+    }
+
+    static readonly defaultCookingTeam = (overrides = {}): Partial<CookingTeamDisplay> => ({
+        ...SeasonFactory.defaultCookingTeamData,
+        ...overrides
+    })
+
+    static readonly defaultCookingTeamDisplay = (overrides = {}): CookingTeamDisplay => ({
+        id: 1,
+        seasonId: 1,
+        name: "TestTeam",
+        cookingDaysCount: 0,
+        assignments: [],
+        ...overrides
+    })
+
+    static readonly defaultCookingTeamDetail = (overrides = {}): CookingTeamDetail => ({
+        ...SeasonFactory.defaultCookingTeamDisplay(),
+        dinnerEvents: [
+            // Default includes sample dinner events for testing Detail pattern
+            {
+                id: 1,
+                date: new Date(2025, 0, 1),
+                menuTitle: 'Test Menu 1',
+                menuDescription: 'Test Description',
+                menuPictureUrl: null,
+                state: 'SCHEDULED' as const,
+                totalCost: 0,
+                chefId: null,
+                cookingTeamId: 1,
+                heynaboEventId: null,
+                seasonId: 1,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            } as DinnerEventDisplay
+        ],
+        ...overrides
+    })
+
+    static readonly defaultCookingTeamAssignment = (overrides = {}): CookingTeamAssignment => ({
+        cookingTeamId: 1,
+        inhabitantId: 42,
+        role: 'CHEF' as const,
+        allocationPercentage: 100,
+        ...overrides
+    })
+
+    static readonly defaultSeason = (testSalt: string = Date.now().toString()): Season => {
         return {
             ...this.defaultSeasonData,
             shortName: salt(this.defaultSeasonData.shortName, testSalt)
@@ -296,6 +351,20 @@ export class SeasonFactory {
     }
 
     /**
+     * Create a single dinner event for a season (convenience wrapper)
+     */
+    static readonly createDinnerEventForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        overrides: Partial<DinnerEventDisplay> = {}
+    ): Promise<DinnerEventDisplay> => {
+        return await DinnerEventFactory.createDinnerEvent(context, {
+            seasonId,
+            ...overrides
+        })
+    }
+
+    /**
      * Create season with teams and dinner events (for comprehensive test scenarios)
      */
     static readonly createSeasonWithTeamsAndDinners = async (
@@ -329,8 +398,9 @@ export class SeasonFactory {
             data: teamData
         })
         const status = response.status()
-        const responseBody = await response.json()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        const responseBody = status === expectedStatus ? await response.json() : null
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new team ID').toBeDefined()
             expect(responseBody.seasonId).toBe(seasonId)

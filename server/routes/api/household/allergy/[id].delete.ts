@@ -1,10 +1,10 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteAllergy} from "~~/server/data/allergyRepository"
-import {type AllergyDisplay} from "~/composables/useAllergyValidation"
+import type {AllergyDisplay} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -21,9 +21,7 @@ export default defineEventHandler(async (event): Promise<AllergyDisplay> => {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
     } catch (error) {
-        const h3e = h3eFromCatch('🏥 > ALLERGY > [DELETE] Input validation error', error)
-        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🏥 > ALLERGY > [DELETE] Input validation error', error)
     }
 
     // Delete allergy from database
@@ -34,8 +32,6 @@ export default defineEventHandler(async (event): Promise<AllergyDisplay> => {
         setResponseStatus(event, 200)
         return deletedAllergy
     } catch (error) {
-        const h3e = h3eFromCatch(`🏥 > ALLERGY > [DELETE] Error deleting allergy with ID ${allergyId}`, error)
-        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏥 > ALLERGY > [DELETE] Error deleting allergy with ID ${allergyId}`, error)
     }
 })

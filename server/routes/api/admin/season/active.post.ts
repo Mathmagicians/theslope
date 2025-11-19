@@ -3,7 +3,7 @@ import type {Season} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Schema for request body
 const activateSeasonSchema = z.object({
@@ -25,9 +25,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     try {
         requestData = await readValidatedBody(event, activateSeasonSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('Validation error', error)
-        console.error("🌞 > SEASON > [POST /active] Input validation error:", h3e.statusMessage)
-        throw h3e
+        throwH3Error('🌞 > SEASON > [POST /active] Validation error', error)
     }
 
     // Database operations try-catch
@@ -37,8 +35,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 200)
         return activatedSeason
     } catch (error) {
-        const h3e = h3eFromCatch(`Error activating season ${requestData.seasonId}`, error)
-        console.error(`🌞 > SEASON > [POST /active] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🌞 > SEASON > [POST /active] Error activating season ${requestData.seasonId}`, error)
     }
 })

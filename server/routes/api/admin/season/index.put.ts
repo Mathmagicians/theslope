@@ -2,14 +2,14 @@ import {createSeason} from "~~/server/data/prismaRepository"
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Get the validation utilities from our composable
 const {SeasonSchema} = useSeasonValidation()
 
 // Create a refined schema for PUT operations that rejects any season with an ID
 const PutSeasonSchema = SeasonSchema.refine(
-    (season: any) => !season.id,
+    (season: Season) => !season.id,
     {
         message: 'Cannot provide an ID when creating a new season. Use POST to update an existing season.',
         path: ['id']
@@ -25,9 +25,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     try {
         seasonData = await readValidatedBody(event, PutSeasonSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('Input validation error', error)
-        console.warn("🌞 > SEASON > [PUT] ", h3e.message)
-        throw h3e
+        throwH3Error('🌞 > SEASON > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -36,8 +34,6 @@ export default defineEventHandler(async (event): Promise<Season> => {
         setResponseStatus(event, 201)
         return savedSeason
     } catch (error) {
-        const h3e = h3eFromCatch('Error creating season', error)
-        console.error("🌞 > SEASON > ", h3e.message)
-        throw h3e
+        throwH3Error('🌞 > SEASON > [PUT] Error creating season', error)
     }
 })

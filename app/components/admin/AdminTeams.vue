@@ -120,7 +120,7 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {FORM_MODES} from "~/types/form"
-import type {CookingTeam, TeamRole} from "~/composables/useCookingTeamValidation"
+import type {CookingTeamDisplay, TeamRole} from "~/composables/useCookingTeamValidation"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
@@ -212,20 +212,17 @@ const selectedTeam = computed(() => {
   return displayedTeams.value[selectedTeamIndex.value] ?? null
 })
 
-// Filter dinner events to show only the selected team's events
-const selectedTeamDinnerEvents = computed(() => {
-  if (!selectedTeam.value?.id || !selectedSeason.value?.dinnerEvents) return []
-  return selectedSeason.value.dinnerEvents.filter(event => event.cookingTeamId === selectedTeam.value?.id)
-})
-
-// Team tabs for vertical navigation
+// Team tabs for vertical navigation - using CookingTeamBadges for consistent display
+// ADR-009: Use Display data with aggregated cookingDaysCount from DB
 const teamTabs = computed(() => {
   return displayedTeams.value.map((team, index) => ({
     label: team.name,
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
-    badge: team.assignments?.length || 0,
-    color: getTeamColor(index)
+    color: getTeamColor(index),
+    // Data for badges - all from Display entity
+    memberCount: team.assignments?.length ?? 0,
+    cookingDaysCount: team.cookingDaysCount ?? 0
   }))
 })
 
@@ -399,11 +396,11 @@ const columns = [
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
           <SeasonSelector
               :model-value="selectedSeasonId"
-              @update:model-value="handleSeasonChange"
               :seasons="seasons"
               :loading="isSeasonsLoading"
               class="w-full md:w-auto"
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+              @update:model-value="handleSeasonChange"
           />
           <FormModeSelector v-if="!isNoSeasons" v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
@@ -446,7 +443,7 @@ const columns = [
                 min="1"
                 max="20"
                 class="w-20 px-3 py-2 border rounded"
-            />
+            >
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div v-for="(team, index) in displayedTeams" :key="index" class="p-4 border rounded">
@@ -463,7 +460,7 @@ const columns = [
               v-model="selectedTeamIndex"
               :options="teamTabs.map((tab, index) => ({
                 value: index,
-                label: `${tab.label} (${tab.badge} medl.)`
+                label: `${tab.label} (${tab.memberCount} medl.)`
               }))"
               option-value="value"
               option-label="label"
@@ -485,14 +482,12 @@ const columns = [
                   size="xl"
               >
                 <template #item="{ item }">
-                  <CookingTeamCard
-                      :team-id="displayedTeams[item.value].id"
+                  <CookingTeamBadges
                       :team-number="item.value + 1"
                       :team-name="item.label"
-                      :assignments="displayedTeams[item.value].assignments || []"
+                      :member-count="item.memberCount"
+                      :cooking-days-count="item.cookingDaysCount"
                       compact
-                      :mode="FORM_MODES.VIEW"
-                      :show-members="false"
                   />
                 </template>
               </UTabs>
@@ -505,13 +500,9 @@ const columns = [
                     ref="cookingTeamCardRef"
                     :team-id="selectedTeam.id"
                     :team-number="displayedTeams.findIndex(t => t.id === selectedTeam.id) + 1"
-                    :team-name="selectedTeam.name"
                     :season-id="selectedSeason?.id"
-                    :assignments="selectedTeam.assignments || []"
-                    :affinity="selectedTeam.affinity"
                     :season-cooking-days="selectedSeason?.cookingDays"
                     :season-dates="selectedSeason?.seasonDates"
-                    :dinner-events="selectedTeamDinnerEvents"
                     :holidays="selectedSeason?.holidays"
                     :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
                     :mode="FORM_MODES.EDIT"
@@ -523,7 +514,8 @@ const columns = [
                 />
               </div>
 
-              <div v-else
+              <div
+v-else
                    class="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg text-gray-500">
                 <UIcon name="i-heroicons-arrow-left" class="text-4xl mb-2"/>
                 <p>Vælg et madhold for at redigere</p>
@@ -560,15 +552,14 @@ const columns = [
               />
             </template>
 
-            <!-- Team assignments column with compact CookingTeamCard -->
+            <!-- Team assignments column with CookingTeamBadges -->
             <template #assignments-cell="{ row }">
-              <CookingTeamCard
-                  :team-id="row.original.id"
+              <CookingTeamBadges
                   :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
                   :team-name="row.original.name"
-                  :assignments="row.original.assignments || []"
+                  :member-count="row.original.assignments?.length ?? 0"
+                  :cooking-days-count="row.original.cookingDaysCount ?? 0"
                   compact
-                  :mode="FORM_MODES.VIEW"
               />
             </template>
 

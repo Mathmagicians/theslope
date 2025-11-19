@@ -207,13 +207,13 @@ const table = useTemplateRef('table')
     <!-- Table -->
     <UTable
         ref="table"
+        v-model:sorting="sorting"
+        v-model:pagination="pagination"
         sticky
         :columns="columns"
         :data="filteredInhabitants"
         :loading="pending"
         :ui="{ td: 'py-2' }"
-        v-model:sorting="sorting"
-        v-model:pagination="pagination"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"
@@ -222,10 +222,10 @@ const table = useTemplateRef('table')
       <!-- Custom header for status column with sort button -->
       <template #status-header>
         <UButton
-            @click="toggleSortOrder"
             variant="outline"
             size="md"
             name="sort-by-status"
+            @click="toggleSortOrder"
         >
           <template #leading>
             <UIcon

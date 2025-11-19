@@ -54,7 +54,7 @@
  * - [Button] = Button groups (expanded EDIT mode)
  */
 import {FORM_MODES} from '~/types/form'
-import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
+import type {HouseholdWithInhabitants} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap, type WeekDay} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useBookingValidation'
 
@@ -200,7 +200,8 @@ const columns = [
 
 <template>
   <!-- Weekly Preferences Section -->
-  <UCard data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
+  <UCard
+data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
          :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <template #header>
       <h3 class="text-lg font-semibold">Husstandens ugentlige booking præferencer</h3>

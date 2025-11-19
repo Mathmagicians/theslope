@@ -98,10 +98,12 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
       <div class="flex flex-col-reverse xl:flex-row gap-2 md:gap-6">
         <!-- Form Section - Below on mobile, Left on desktop -->
         <div class="grow">
-          <UForm id="seasonForm" :schema="SeasonSchema" :state="model" class="space-y-4"
+          <UForm
+id="seasonForm" :schema="SeasonSchema" :state="model" class="space-y-4"
                  @submit.prevent="onSubmitSeason">
             <UFormGroup label="Sæson" name="shortName">
-              <UInput disabled
+              <UInput
+disabled
                       name="seasonShortName"
                       :model-value="shortName"/>
             </UFormGroup>
@@ -109,16 +111,18 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
             <!-- Season date picker -->
             <CalendarDateRangePicker
                 v-if="!isViewMode"
-                name="seasonDates"
-                v-model="model.seasonDates"/>
+                v-model="model.seasonDates"
+                name="seasonDates"/>
 
             <!-- Pick weekdays for cooking -->
-            <UFormGroup label="Hvilke ugedage skal der være fællesspisning?"
+            <UFormGroup
+label="Hvilke ugedage skal der være fællesspisning?"
                         name="cookingDaysGroup">
-              <UCheckbox v-for="day in WEEKDAYS"
+              <UCheckbox
+v-for="day in WEEKDAYS"
                          :key="day"
-                         :name="`cookingDay-${day}`"
                          v-model="model.cookingDays[day]"
+                         :name="`cookingDay-${day}`"
                          :label="day"
                          class="capitalize"
                          :disabled="isViewMode"/>
@@ -126,12 +130,13 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
 
             <!-- Pick holidays -->
             <UDivider/>
-            <UFormGroup label="Hvornår holder fællesspisning fri?"
+            <UFormGroup
+label="Hvornår holder fællesspisning fri?"
                         name="holidaysGroup">
 
               <CalendarDateRangeListPicker
-                  name="holidays"
                   v-model="holidays"
+                  name="holidays"
                   :disabled="isViewMode"
                   :season-dates="model.seasonDates"
               />
@@ -151,7 +156,8 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
                   :disabled="isViewMode"/>
             </UFormGroup>
 
-            <UFormGroup label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
+            <UFormGroup
+label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
                         name="editableGroup">
               <UInput
                   v-model="model.diningModeIsEditableMinutesBefore"
@@ -164,9 +170,10 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
 
         <!-- Calendar Section - Above on mobile, Right on desktop -->
         <div class="min-w-1/2 lg:w-1/2 grow-0">
-          <CalendarDisplay class="mx-auto"
-                           :seasonDates="model.seasonDates"
-                           :cookingDays="model.cookingDays as WeekDayMap"
+          <CalendarDisplay
+class="mx-auto"
+                           :season-dates="model.seasonDates"
+                           :cooking-days="model.cookingDays as WeekDayMap"
                            :holidays="model.holidays"/>
         </div>
       </div>

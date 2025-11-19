@@ -13,7 +13,7 @@
  * - Power mode: Bulk update all family members
  * - Responsive: Horizontal selectors (desktop), vertical (mobile)
  */
-import type {HouseholdWithInhabitants, Inhabitant} from '~/composables/useHouseholdValidation'
+import type {HouseholdDetail, Inhabitant} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'

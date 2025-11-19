@@ -113,23 +113,16 @@
  * - TODO: Add guest functionality
  * - TODO: Ticket price selection dropdown (when multiple prices per type)
  */
-import type {DinnerEventDetail, OrderDisplay} from '~/composables/useBookingValidation'
-import type {AllergyWithRelations} from '~/composables/useAllergyValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
-  dinnerEvent?: DinnerEventDetail
-  allergies?: AllergyWithRelations[]
-  // Booking section data (optional - for specific dinner event view)
-  orders?: OrderDisplay[]
+  dinnerEventId?: number
   ticketPrices?: TicketPrice[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  dinnerEvent: undefined,
-  allergies: () => [],
-  orders: () => [],
+  dinnerEventId: undefined,
   ticketPrices: () => []
 })
 
@@ -140,7 +133,21 @@ const emit = defineEmits<{
   addGuest: []
 }>()
 
-// No store integration needed - DinnerBookingForm handles its own data fetching
+// Use plan store for data fetching (ADR: Store responsibility)
+const planStore = usePlanStore()
+const {selectedDinnerEvent} = storeToRefs(planStore)
+
+// Watch for dinnerEventId changes and load from store
+watch(() => props.dinnerEventId, (newId) => {
+  planStore.loadDinnerEvent(newId ?? null)
+}, {immediate: true})
+
+// Data from dinner event
+const orders = computed(() => selectedDinnerEvent.value?.tickets ?? [])
+const allergies = computed(() => {
+  // TODO: Extract allergies from orders/inhabitants
+  return []
+})
 
 // Design system
 const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
@@ -156,23 +163,23 @@ const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMo
 
 // Calculate total price
 const totalPrice = computed(() => {
-  if (!props.orders || !props.dinnerEvent) return 0
-  return props.orders
-    .filter(o => o.dinnerEventId === props.dinnerEvent!.id)
-    .reduce((sum, order) => sum + order.priceAtBooking, 0)
+  if (!orders.value || !selectedDinnerEvent.value) return 0
+  return orders.value
+    .filter((o: any) => o.dinnerEventId === selectedDinnerEvent.value!.id)
+    .reduce((sum: number, order: any) => sum + order.priceAtBooking, 0)
 })
 
 // Count booked inhabitants
 const bookedCount = computed(() => {
-  if (!props.orders || !props.dinnerEvent) return 0
-  return props.orders.filter(o => o.dinnerEventId === props.dinnerEvent!.id).length
+  if (!orders.value || !selectedDinnerEvent.value) return 0
+  return orders.value.filter((o: any) => o.dinnerEventId === selectedDinnerEvent.value!.id).length
 })
 </script>
 
 <template>
   <!-- Empty state when no dinner event -->
   <UPageHero
-    v-if="!dinnerEvent"
+    v-if="!selectedDinnerEvent"
     :class="BACKGROUNDS.hero.mocha"
     class="min-h-[300px] md:min-h-[400px]"
   >
@@ -190,9 +197,9 @@ const bookedCount = computed(() => {
   <!-- Dinner event content -->
   <UPageHero
     v-else
-    :class="dinnerEvent.menuPictureUrl ? '' : BACKGROUNDS.hero.mocha"
-    :style="dinnerEvent.menuPictureUrl
-      ? `background-image: url(${dinnerEvent.menuPictureUrl}); background-size: cover; background-position: center;`
+    :class="selectedDinnerEvent.menuPictureUrl ? '' : BACKGROUNDS.hero.mocha"
+    :style="selectedDinnerEvent.menuPictureUrl
+      ? `background-image: url(${selectedDinnerEvent.menuPictureUrl}); background-size: cover; background-position: center;`
       : ''"
     class="min-h-[300px] md:min-h-[400px]"
     data-testid="dinner-menu-hero"
@@ -200,17 +207,17 @@ const bookedCount = computed(() => {
     <template #top>
       <!-- Overlay for better text readability when image is present -->
       <div
-        v-if="dinnerEvent.menuPictureUrl"
+        v-if="selectedDinnerEvent.menuPictureUrl"
         class="absolute inset-0 bg-black/40 -z-10"
       />
     </template>
 
     <template #title>
-      <span class="text-white" data-testid="dinner-menu-title">{{ dinnerEvent.menuTitle }}</span>
+      <span class="text-white" data-testid="dinner-menu-title">{{ selectedDinnerEvent.menuTitle }}</span>
     </template>
 
     <template #description>
-      <span v-if="dinnerEvent.menuDescription" class="text-white opacity-90">{{ dinnerEvent.menuDescription }}</span>
+      <span v-if="selectedDinnerEvent.menuDescription" class="text-white opacity-90">{{ selectedDinnerEvent.menuDescription }}</span>
     </template>
 
     <template #body>
@@ -231,7 +238,7 @@ const bookedCount = computed(() => {
         <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
           <!-- Booking Form (handles household data fetching internally) -->
           <DinnerBookingForm
-            :dinner-event="dinnerEvent"
+            :dinner-event="selectedDinnerEvent"
             :orders="orders"
             :ticket-prices="ticketPrices"
             :form-mode="formMode"
@@ -280,9 +287,10 @@ const bookedCount = computed(() => {
                 size="lg"
                 name="save-booking"
                 class="flex-1"
+                icon="i-heroicons-save"
                 @click="formMode = FORM_MODES.VIEW"
               >
-                💾 Gem
+                Gem
               </UButton>
             </div>
           </div> <!-- Close EDIT mode div -->

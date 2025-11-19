@@ -1,17 +1,17 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchInhabitant} from "~~/server/data/prismaRepository"
-import type {Inhabitant} from "~/composables/useHouseholdValidation"
+import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Inhabitant ID must be a positive integer')
 })
 
-export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
+export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -20,9 +20,7 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('🏠👤 > INHABITANT > [GET] Input validation error', error)
-        console.error(`🏠👤 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🏠👤 > INHABITANT > [GET] Input validation error', error)
     }
 
     try {
@@ -34,9 +32,7 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
             return inhabitant
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`🏠👤 > INHABITANT > [GET] Error fetching inhabitant with id ${id}`, error)
-        console.error(`🏠👤 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏠👤 > INHABITANT > [GET] Error fetching inhabitant with id ${id}`, error)
     }
 
     throw createError({

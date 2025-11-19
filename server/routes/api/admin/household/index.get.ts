@@ -1,14 +1,14 @@
 // GET /api/admin/household - List all households
-// Returns HouseholdSummary[] (lightweight list with InhabitantDisplay)
+// Returns HouseholdDisplay[] (lightweight list with basic inhabitant info) - ADR-009
 
 import {defineEventHandler, setResponseStatus} from "h3"
 import {fetchHouseholds} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type {HouseholdSummary} from "~/composables/useHouseholdValidation"
+import type {HouseholdDisplay} from "~/composables/useCoreValidation"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler<Promise<HouseholdSummary[]>>(async (event) => {
+export default defineEventHandler<Promise<HouseholdDisplay[]>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -19,8 +19,6 @@ export default defineEventHandler<Promise<HouseholdSummary[]>>(async (event) => 
         setResponseStatus(event, 200)
         return households ?? []
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching households', error)
-        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('Error fetching households', error)
     }
 })

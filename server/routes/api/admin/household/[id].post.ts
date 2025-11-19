@@ -2,33 +2,33 @@
 
 import {defineEventHandler, readValidatedBody, getValidatedRouterParams, setResponseStatus} from "h3"
 import {updateHousehold} from "~~/server/data/prismaRepository"
-import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
-import type {Household, HouseholdUpdate} from "~/composables/useHouseholdValidation"
+import {useCoreValidation} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdUpdate} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
-const {HouseholdUpdateSchema} = useHouseholdValidation()
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Household ID must be a positive integer')
 })
 
-export default defineEventHandler<Promise<Household>>(async (event) => {
+export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+
+    // Get schema inside handler to avoid circular dependency
+    const {HouseholdUpdateSchema} = useCoreValidation()
 
     // Input validation try-catch - FAIL EARLY
     let id: number
     let householdData: Partial<HouseholdUpdate>
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
-        householdData = await readValidatedBody(event, HouseholdUpdateSchema.partial().omit({id: true}).parse)
+        householdData = await readValidatedBody(event, HouseholdUpdateSchema.omit({id: true}).parse)
     } catch (error) {
-        const h3e = h3eFromCatch('🏠 > HOUSEHOLD > [POST] Input validation error', error)
-        console.warn(`🏠 > HOUSEHOLD > [POST] ${h3e.statusMessage}`)
-        throw h3e
+        throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -40,8 +40,6 @@ export default defineEventHandler<Promise<Household>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedHousehold
     } catch (error) {
-        const h3e = h3eFromCatch(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
     }
 })

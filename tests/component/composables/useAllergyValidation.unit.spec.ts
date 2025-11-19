@@ -1,33 +1,22 @@
 import {describe, it, expect} from 'vitest'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
+import {AllergyFactory} from '../../e2e/testDataFactories/allergyFactory'
 
 describe('useAllergyValidation', () => {
     const {
         AllergyTypeCreateSchema,
         AllergyTypeUpdateSchema,
-        AllergyTypeResponseSchema,
+        AllergyTypeDisplaySchema,
         AllergyCreateSchema,
         AllergyUpdateSchema,
-        AllergyResponseSchema,
-        AllergyWithTypeSchema,
-        AllergyTypeWithInhabitantsSchema,
+        AllergyDisplaySchema,
+        AllergyDetailSchema,
+        AllergyTypeDetailSchema,
         InhabitantWithAllergiesSchema
     } = useAllergyValidation()
 
-    // Helper functions for creating test data
-    const createValidAllergyTypeData = (overrides = {}) => ({
-        name: 'Peanuts',
-        description: 'Alvorlig allergi mod jordnødder. Kan forårsage anafylaktisk shock.',
-        icon: '🥜',
-        ...overrides
-    })
-
-    const createValidAllergyData = (overrides = {}) => ({
-        inhabitantId: 1,
-        allergyTypeId: 1,
-        inhabitantComment: 'Meget alvorlig - har EpiPen',
-        ...overrides
-    })
+    // Use factory helper functions
+    const {createValidAllergyTypeData, createValidAllergyData} = AllergyFactory
 
     describe('AllergyTypeCreateSchema', () => {
         it('should accept valid allergy type data', () => {
@@ -180,7 +169,7 @@ describe('useAllergyValidation', () => {
         })
     })
 
-    describe('AllergyTypeResponseSchema', () => {
+    describe('AllergyTypeDisplaySchema', () => {
         it('should accept complete allergy type response', () => {
             const response = {
                 id: 1,
@@ -189,7 +178,7 @@ describe('useAllergyValidation', () => {
                 icon: '🥜'
             }
 
-            const result = AllergyTypeResponseSchema.safeParse(response)
+            const result = AllergyTypeDisplaySchema.safeParse(response)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.id).toBe(1)
@@ -204,7 +193,7 @@ describe('useAllergyValidation', () => {
                 description: 'Test'
             }
 
-            const result = AllergyTypeResponseSchema.safeParse(invalidResponse)
+            const result = AllergyTypeDisplaySchema.safeParse(invalidResponse)
             expect(result.success).toBe(false)
         })
     })
@@ -342,7 +331,7 @@ describe('useAllergyValidation', () => {
         })
     })
 
-    describe('AllergyResponseSchema', () => {
+    describe('AllergyDisplaySchema', () => {
         it('should accept complete allergy response', () => {
             const response = {
                 id: 1,
@@ -350,10 +339,16 @@ describe('useAllergyValidation', () => {
                 allergyTypeId: 1,
                 inhabitantComment: 'Test comment',
                 createdAt: new Date(),
-                updatedAt: new Date()
+                updatedAt: new Date(),
+                allergyType: {
+                    id: 1,
+                    name: 'Peanuts',
+                    description: 'Test allergy',
+                    icon: '🥜'
+                }
             }
 
-            const result = AllergyResponseSchema.safeParse(response)
+            const result = AllergyDisplaySchema.safeParse(response)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.id).toBe(1)
@@ -368,12 +363,12 @@ describe('useAllergyValidation', () => {
                 inhabitantComment: 'Test'
             }
 
-            const result = AllergyResponseSchema.safeParse(invalidResponse)
+            const result = AllergyDisplaySchema.safeParse(invalidResponse)
             expect(result.success).toBe(false)
         })
     })
 
-    describe('AllergyWithTypeSchema', () => {
+    describe('AllergyDetailSchema', () => {
         it('should accept allergy with nested allergyType', () => {
             const allergyWithType = {
                 id: 1,
@@ -387,10 +382,18 @@ describe('useAllergyValidation', () => {
                     name: 'Peanuts',
                     description: 'Alvorlig allergi',
                     icon: '🥜'
+                },
+                inhabitant: {
+                    id: 1,
+                    heynaboId: 101,
+                    name: 'Test',
+                    lastName: 'User',
+                    pictureUrl: null,
+                    birthDate: null
                 }
             }
 
-            const result = AllergyWithTypeSchema.safeParse(allergyWithType)
+            const result = AllergyDetailSchema.safeParse(allergyWithType)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.allergyType).toBeDefined()
@@ -407,12 +410,12 @@ describe('useAllergyValidation', () => {
                 inhabitantComment: 'Test comment'
             }
 
-            const result = AllergyWithTypeSchema.safeParse(allergyWithoutType)
+            const result = AllergyDetailSchema.safeParse(allergyWithoutType)
             expect(result.success).toBe(false)
         })
     })
 
-    describe('AllergyTypeWithInhabitantsSchema', () => {
+    describe('AllergyTypeDetailSchema', () => {
         it('should accept allergy type with nested inhabitants array', () => {
             const allergyTypeWithInhabitants = {
                 id: 1,
@@ -443,7 +446,7 @@ describe('useAllergyValidation', () => {
                 ]
             }
 
-            const result = AllergyTypeWithInhabitantsSchema.safeParse(allergyTypeWithInhabitants)
+            const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithInhabitants)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.inhabitants).toHaveLength(2)
@@ -462,7 +465,7 @@ describe('useAllergyValidation', () => {
                 inhabitants: []
             }
 
-            const result = AllergyTypeWithInhabitantsSchema.safeParse(allergyTypeWithoutInhabitants)
+            const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithoutInhabitants)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.inhabitants).toHaveLength(0)
@@ -569,10 +572,16 @@ describe('useAllergyValidation', () => {
                 allergyTypeId: 1,
                 inhabitantComment: 'Test',
                 createdAt: '2024-01-01' as any,
-                updatedAt: '2024-01-02' as any
+                updatedAt: '2024-01-02' as any,
+                allergyType: {
+                    id: 1,
+                    name: 'Peanuts',
+                    description: 'Test allergy',
+                    icon: '🥜'
+                }
             }
 
-            const result = AllergyResponseSchema.safeParse(allergy)
+            const result = AllergyDisplaySchema.safeParse(allergy)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.createdAt).toBeInstanceOf(Date)

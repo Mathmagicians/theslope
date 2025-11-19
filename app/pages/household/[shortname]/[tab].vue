@@ -96,9 +96,11 @@ useHead({
 
 <template>
   <div>
-    <ViewError v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
+    <ViewError
+v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
                :message="`Kunne ikke hente husstande`" :cause="householdsError"/>
-    <ViewError v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
+    <ViewError
+v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ body: 'px-0 py-2 md:px-4 md:py-6' }">

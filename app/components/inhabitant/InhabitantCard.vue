@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {InhabitantDisplay} from '~/composables/useHouseholdValidation'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 
 interface Props {
     inhabitant: InhabitantDisplay

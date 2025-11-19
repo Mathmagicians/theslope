@@ -81,7 +81,8 @@ const hasGeneratedEvent = (eventLists: DayEventList[]) => {
       </UChip>
 
       <!-- Potential cooking day with optional generated event (filled vs ring) -->
-      <div v-else-if="hasPotentialCooking(eventLists)"
+      <div
+v-else-if="hasPotentialCooking(eventLists)"
            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
            :class="hasGeneratedEvent(eventLists) ? 'bg-pink-800 text-pink-50' : 'border-2 border-pink-300 text-pink-800'">
         {{ day.day }}

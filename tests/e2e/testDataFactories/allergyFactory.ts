@@ -15,6 +15,30 @@ const ALLERGY_ENDPOINT = '/api/household/allergy'
 
 export class AllergyFactory {
 
+    // === UNIT TEST HELPERS ===
+
+    /**
+     * Create valid AllergyType data for unit tests
+     * Can override any fields with custom values
+     */
+    static readonly createValidAllergyTypeData = (overrides = {}) => ({
+        name: 'Peanuts',
+        description: 'Alvorlig allergi mod jordnødder. Kan forårsage anafylaktisk shock.',
+        icon: '🥜',
+        ...overrides
+    })
+
+    /**
+     * Create valid Allergy data for unit tests
+     * Can override any fields with custom values
+     */
+    static readonly createValidAllergyData = (overrides = {}) => ({
+        inhabitantId: 1,
+        allergyTypeId: 1,
+        inhabitantComment: 'Meget alvorlig - har EpiPen',
+        ...overrides
+    })
+
     // === MOCK DATA GENERATORS (for unit tests) ===
 
     /**

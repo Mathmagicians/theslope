@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {useSeason} from '~/composables/useSeason'
-import {type Season} from '~/composables/useSeasonValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -312,10 +312,10 @@ describe('assignTeamsToEvents', () => {
                 { id: 2, name: 'Hold 2', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] }
             ],
             dinnerEvents: [
-                { id: 1, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 2, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 3, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 4, date: new Date(2025, 0, 13), menuTitle: 'TBD', state: 'SCHEDULED' as const, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
+                { id: 1, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 2, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 3, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 4, date: new Date(2025, 0, 13), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
             ]
         }
 
@@ -392,19 +392,25 @@ describe('canModifyOrders', () => {
     const { canModifyOrders } = useSeason()
 
     it('should allow modifications when dinner is far in future', () => {
-        // GIVEN: Dinner 10 days from now
-        const dinnerDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+        // GIVEN: Dinner 15 days from now (at start of day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() + 15)
 
         // WHEN: Checking if orders can be modified
         const result = canModifyOrders(dinnerDate)
 
-        // THEN: Should allow (10 days > default 2 days deadline)
+        // THEN: Should allow (15 days > default 10 days deadline)
         expect(result).toBe(true)
     })
 
     it('should not allow modifications when dinner is tomorrow', () => {
-        // GIVEN: Dinner tomorrow
-        const dinnerDate = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000)
+        // GIVEN: Dinner tomorrow (at start of day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() + 1)
 
         // WHEN: Checking if orders can be modified
         const result = canModifyOrders(dinnerDate)
@@ -414,8 +420,11 @@ describe('canModifyOrders', () => {
     })
 
     it('should not allow modifications when dinner is in the past', () => {
-        // GIVEN: Dinner yesterday
-        const dinnerDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+        // GIVEN: Dinner yesterday (at start of day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() - 1)
 
         // WHEN: Checking if orders can be modified
         const result = canModifyOrders(dinnerDate)
@@ -429,8 +438,11 @@ describe('canEditDiningMode', () => {
     const { canEditDiningMode } = useSeason()
 
     it('should allow editing when dinner is far in future', () => {
-        // GIVEN: Dinner 10 days from now
-        const dinnerDate = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+        // GIVEN: Dinner 10 days from now (at start of day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() + 10)
 
         // WHEN: Checking if dining mode can be edited
         const result = canEditDiningMode(dinnerDate)
@@ -440,8 +452,11 @@ describe('canEditDiningMode', () => {
     })
 
     it('should allow editing when dinner is tomorrow', () => {
-        // GIVEN: Dinner tomorrow at same time
-        const dinnerDate = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000)
+        // GIVEN: Dinner tomorrow (at start of day)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() + 1)
 
         // WHEN: Checking if dining mode can be edited
         const result = canEditDiningMode(dinnerDate)

@@ -1,11 +1,12 @@
-import {fetchSeason, updateDinnerEvent} from "~~/server/data/prismaRepository"
+import {fetchSeason} from "~~/server/data/prismaRepository"
+import {updateDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type {Season} from "~/composables/useSeasonValidation"
 import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {assignTeamsToEvents} = useSeason()
 
 const idSchema = z.object({
@@ -28,9 +29,7 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Input validation error', error)
-        console.error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Input validation error', error)
     }
 
     // Fetch season
@@ -38,15 +37,11 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
     try {
         const fetchedSeason = await fetchSeason(d1Client, seasonId)
         if (!fetchedSeason) {
-            const h3e = h3eFromCatch(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Season ${seasonId} not found`, new Error('Not found'))
-            h3e.statusCode = 404
-            throw h3e
+            throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
         season = fetchedSeason
     } catch (error) {
-        const h3e = h3eFromCatch(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error fetching season ${seasonId}`, error)
-        console.error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error fetching season ${seasonId}`, error)
     }
 
     // Business logic
@@ -70,8 +65,6 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
             events: updatedEvents
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error assigning teams to dinner events for season ${seasonId}`, error)
-        console.error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Error assigning teams to dinner events for season ${seasonId}`, error)
     }
 })

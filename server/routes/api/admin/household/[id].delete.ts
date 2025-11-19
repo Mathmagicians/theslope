@@ -3,17 +3,17 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteHousehold} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import type {Household} from "~/composables/useHouseholdValidation"
+import type {HouseholdDetail} from "~/composables/useCoreValidation"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Household ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<Household> => {
+export default defineEventHandler(async (event): Promise<HouseholdDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -23,9 +23,7 @@ export default defineEventHandler(async (event): Promise<Household> => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
-        console.warn(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}`)
-        throw h3e
+        throwH3Error('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -37,8 +35,6 @@ export default defineEventHandler(async (event): Promise<Household> => {
         setResponseStatus(event, 200)
         return deletedHousehold
     } catch (error) {
-        const h3e = h3eFromCatch(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
     }
 })

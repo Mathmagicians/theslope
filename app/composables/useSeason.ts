@@ -1,7 +1,8 @@
-import {type DateRange} from '~/types/dateTypes'
+import type {DateRange} from '~/types/dateTypes'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
+import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import { computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
@@ -124,15 +125,20 @@ export const useSeason = () => {
             season.seasonDates,
             season.holidays
         )
+        const now = new Date()
         return cookingDates.map(date => ({
             date,
             menuTitle: 'TBD',
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,
+            totalCost: 0,
+            heynaboEventId: null,
             chefId: null,
             cookingTeamId: null,
-            seasonId: season.id!
+            seasonId: season.id!,
+            createdAt: now,
+            updatedAt: now
         }))
     }
 

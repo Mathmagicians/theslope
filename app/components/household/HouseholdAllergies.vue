@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {calculateAge} from '~/utils/date'
-import type {HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
+import type {HouseholdWithInhabitants} from '~/composables/useCoreValidation'
 
 interface Props {
   household: HouseholdWithInhabitants
@@ -334,8 +334,8 @@ const columns = [
                                 icon="i-heroicons-check"
                                 size="xs"
                                 :padded="false"
-                                @click="handleCommentUpdate(allergy.allergyType.id)"
                                 aria-label="Gem kommentar"
+                                @click="handleCommentUpdate(allergy.allergyType.id)"
                             />
                           </template>
                         </UInput>
@@ -347,8 +347,8 @@ const columns = [
                         icon="i-heroicons-trash"
                         size="sm"
                         square
-                        @click="handleDeleteAllergy(allergy.id)"
                         aria-label="Slet allergi"
+                        @click="handleDeleteAllergy(allergy.id)"
                     />
                   </div>
                 </div>

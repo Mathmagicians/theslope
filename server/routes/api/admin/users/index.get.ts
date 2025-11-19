@@ -1,11 +1,11 @@
 import {defineEventHandler, getQuery} from "h3";
-import {fetchUsers, fetchUser, type UserWithInhabitant} from "~~/server/data/prismaRepository";
-import type {UserDisplay} from "~/composables/useUserValidation"
+import {fetchUsers, fetchUser} from "~~/server/data/prismaRepository";
+import type {UserDisplay, UserDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler(async (event): Promise<UserDisplay[] | UserWithInhabitant[]> => {
+export default defineEventHandler(async (event): Promise<UserDisplay[] | UserDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -21,9 +21,7 @@ export default defineEventHandler(async (event): Promise<UserDisplay[] | UserWit
             console.info("🪪 > USER > [GET] Found users:", users.length)
             return users
         } catch (error) {
-            const h3e = h3eFromCatch(`🪪 > USER > [GET] Error fetching user by email ${email}`, error)
-            console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
-            throw h3e
+            throwH3Error(`🪪 > USER > [GET] Error fetching user by email ${email}`, error)
         }
     }
 
@@ -34,8 +32,6 @@ export default defineEventHandler(async (event): Promise<UserDisplay[] | UserWit
         console.info("🪪 > USER > Got users:", users ? users.length : 0)
         return users
     } catch (error) {
-        const h3e = h3eFromCatch("🪪 > USER > [GET] Error fetching users", error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error("🪪 > USER > [GET] Error fetching users", error)
     }
 })

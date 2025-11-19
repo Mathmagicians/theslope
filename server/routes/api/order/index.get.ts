@@ -1,9 +1,9 @@
-import {fetchOrders} from "~~/server/data/prismaRepository"
+import {fetchOrders} from "~~/server/data/financesRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const querySchema = z.object({
     dinnerEventId: z.coerce.number().int().positive().optional()
@@ -18,9 +18,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         const query = await getValidatedQuery(event, querySchema.parse)
         dinnerId = query.dinnerEventId
     } catch (error) {
-        const h3e = h3eFromCatch('🎟️ > ORDER > [GET] Input validation error', error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
     }
 
     try {
@@ -30,9 +28,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         setResponseStatus(event, 200)
         return orders
     } catch (error) {
-        const h3e = h3eFromCatch('🎟️ > ORDER > [GET] Error fetching orders', error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🎟️ > ORDER > [GET] Error fetching orders', error)
     }
 
 })

@@ -1,8 +1,8 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import {createOrders} from "~~/server/data/prismaRepository"
-const {h3eFromCatch} = eventHandlerHelper
+import {createOrders} from "~~/server/data/financesRepository"
+const {throwH3Error} = eventHandlerHelper
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
@@ -13,9 +13,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     try {
         requestData = await readValidatedBody(event, CreateOrdersRequestSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('🎟️ > ORDER > [PUT] Input validation error', error)
-        console.error(`🎟️ > ORDER > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🎟️ > ORDER > [PUT] Input validation error', error)
     }
 
     try {
@@ -37,8 +35,6 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         setResponseStatus(event, 201)
         return createdOrders
     } catch (error) {
-        const h3e = h3eFromCatch(`🎟️ > ORDER > [PUT] Error creating orders`, error)
-        console.error(`🎟️ > ORDER > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🎟️ > ORDER > [PUT] Error creating orders`, error)
     }
 })

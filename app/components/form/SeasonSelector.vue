@@ -103,17 +103,17 @@ const selectedSeasonId = computed({
 
 <template>
   <USelect
+      v-model="selectedSeasonId"
       arrow
       data-testid="season-selector"
-      v-model="selectedSeasonId"
       color="secondary"
       :loading="props.loading"
       :placeholder="seasons?.length > 0 ? 'Vælg sæson' : '💤 Ingen sæsoner'"
       :items="sortedSeasonsWithIcons"
-      labelKey="shortName"
-      valueKey="id"
-      iconKey="icon"
-      suffixKey="suffix"
+      label-key="shortName"
+      value-key="id"
+      icon-key="icon"
+      suffix-key="suffix"
       leading
       trailing
       :disabled="props.disabled || props.seasons.length === 0"

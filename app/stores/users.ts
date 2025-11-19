@@ -1,12 +1,11 @@
 import type {InternalApi} from 'nitropack'
-import type {UserDisplay} from '~/composables/useUserValidation'
-import type {Household} from '~/composables/useHouseholdValidation'
+import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 
 export const useUsersStore = defineStore("Users", () => {
     const importing = ref(false)
 
     // Get SystemRole enum from validation composable
-    const {SystemRoleSchema} = useUserValidation()
+    const {SystemRoleSchema} = useCoreValidation()
     const SystemRole = SystemRoleSchema.enum
 
     const {
@@ -40,9 +39,9 @@ export const useUsersStore = defineStore("Users", () => {
         status: heynaboImportStatus,
         error: heynaboImportError,
         refresh: refreshHeynaboImport
-    } = useAsyncData<Household[]>(
+    } = useAsyncData<HouseholdDetail[]>(
         '/api/admin/heynabo/import',
-        () => $fetch<Household[]>('/api/admin/heynabo/import'),
+        () => $fetch<HouseholdDetail[]>('/api/admin/heynabo/import'),
         {
             default: () => [],
             immediate: false // only when triggered by admin, not on store creation

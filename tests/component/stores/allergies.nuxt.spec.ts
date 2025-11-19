@@ -9,6 +9,8 @@ import type {
 } from '~/composables/useAllergyValidation'
 import { AllergyFactory } from '../../e2e/testDataFactories/allergyFactory'
 
+import { useAllergiesStore } from '~/stores/allergies'
+
 // ========================================
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -22,8 +24,6 @@ const allergiesEndpoint = vi.fn()
 registerEndpoint('/api/admin/allergy-type/1', allergyTypeByIdEndpoint)
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
 registerEndpoint('/api/household/allergy', allergiesEndpoint)
-
-import { useAllergiesStore } from '~/stores/allergies'
 
 // ========================================
 // Test Helpers

@@ -3,7 +3,7 @@ import {fetchAllergyTypes} from "~~/server/data/allergyRepository"
 import type {AllergyTypeDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 export default defineEventHandler(async (event): Promise<AllergyTypeDetail[]> => {
     const {cloudflare} = event.context
@@ -16,8 +16,6 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDetail[]> =>
         setResponseStatus(event, 200)
         return allergyTypes
     } catch (error) {
-        const h3e = h3eFromCatch("🏥 > ALLERGY_TYPE > [GET] Error fetching allergy types", error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error("🏥 > ALLERGY_TYPE > [GET] Error fetching allergy types", error)
     }
 })

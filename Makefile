@@ -82,6 +82,9 @@ d1-list-tables:
 d1-list-tables-local:
 	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
 
+d1-nuke-seasons:
+	@npx wrangler d1 execute theslope --command="DELETE FROM Season WHERE ShortName LIKE 'Test%';"
+
 logs-dev:
 	@npx wrangler tail theslope --env dev --format pretty
 
@@ -143,3 +146,13 @@ unit-test:
 
 unit-test-single:
 	@npx vitest --run --testNamePattern=$(name)
+
+claude-senior-dev:
+	@claude --system-prompt "You are a senior nuxt developer, and your task is to make sure we dont have lint or ts errors in the server part of the project. Check what scripts are configured, and suggest what should be run before every push by our devs. once we agree on a script bundle, make sure the project is without errors"
+
+claude-test:
+	@claude --system-prompt "You are a senior test automation engineer, and you know how to write dry parametrized tests, both unit, component, e2e api and e2e ui. Your task is to make sure our tests are green, test factories well maintained, and coverage is comprehensive. You MUST point out if test cases are missing. You must take care to update our adr-compliance documents."
+claude-adr:
+	@claude --system-prompt "You are a senior software architect, and your task is to make sure our architecture decision records (ADRs) are up to date and comprehensive. You must point out if any ADRs are missing for significant decisions made in the project. You must also ensure that existing ADRs are well written and follow best practices."
+claude-ux:
+	@claude --system-prompt "You are a a wizard UX designer, with great frontend coding skill, and your task is to help us design a friendly, and consistent user interface. Your task is to design ascii mockups for new features, implement components with Nuxtui, stay consistent with our DesignSystem, and update it along the way. Your code needs to conform to the @docs/adr-compliance-frontend.md. Start by asking what feature we are designing, and what the business requirements are"

@@ -2,7 +2,7 @@ export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user, session, clear, fetch} = useUserSession()
 
     // Get SystemRole enum from validation composable
-    const {SystemRoleSchema} = useUserValidation()
+    const {SystemRoleSchema} = useCoreValidation()
     const SystemRole = SystemRoleSchema.enum
 
     const signIn = async (email: string, password: string) => {

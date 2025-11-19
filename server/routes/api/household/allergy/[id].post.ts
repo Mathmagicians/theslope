@@ -5,7 +5,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
 const {AllergyUpdateSchema} = useAllergyValidation()
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -26,9 +26,7 @@ export default defineEventHandler(async (event): Promise<AllergyWithRelations> =
         const body = await readValidatedBody(event, z.object({}).passthrough().parse)
         allergyData = AllergyUpdateSchema.parse({...body, id: allergyId})
     } catch (error) {
-        const h3e = h3eFromCatch('🏥 > ALLERGY > [POST] Input validation error', error)
-        console.error(`🏥 > ALLERGY > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)
     }
 
     // Update allergy in database
@@ -39,8 +37,6 @@ export default defineEventHandler(async (event): Promise<AllergyWithRelations> =
         setResponseStatus(event, 200)
         return updatedAllergy
     } catch (error) {
-        const h3e = h3eFromCatch(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
-        console.error(`🏥 > ALLERGY > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
     }
 })

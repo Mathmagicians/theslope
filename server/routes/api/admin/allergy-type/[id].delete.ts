@@ -4,7 +4,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 import {deleteAllergyType} from "~~/server/data/allergyRepository"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -16,14 +16,12 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
     const d1Client = cloudflare.env.DB
 
     // Input validation - FAIL EARLY
-    let id: number
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('🏥 > ALLERGY_TYPE > [DELETE] Input validation error', error)
-        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('🏥 > ALLERGY_TYPE > [DELETE] Input validation error', error)
     }
 
     // Business logic
@@ -35,8 +33,6 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
         setResponseStatus(event, 200)
         return deletedAllergyType
     } catch (error) {
-        const h3e = h3eFromCatch(`🏥 > ALLERGY_TYPE > [DELETE] Error deleting allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [DELETE] Error deleting allergy type with ID ${id}`, error)
     }
 })

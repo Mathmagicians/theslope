@@ -1,28 +1,30 @@
 <script setup lang="ts">
 /**
- * CookingTeamCard - Display cooking team in multiple modes
+ * CookingTeamCard - Display single cooking team in detail modes
  *
  * Display Modes:
  * - monitor: Large display for kitchen monitors (read-only, uses UserListItem)
- * - compact: Minimal display for tables (avatars + badges)
  * - regular: Standard display with role sections (view mode)
  * - edit: Full CRUD interface with member management
  *
+ * For list displays (tabs, tables), use CookingTeamBadges component instead.
+ *
  * ADR Compliance:
  * - ADR-001: Types from validation composables
+ * - ADR-009: Uses store for EDIT mode (Detail), accepts props for MONITOR (from store)
  * - Mobile-first responsive design
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
-import type { InhabitantDisplay } from '~/composables/useHouseholdValidation'
+import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, ICONS } = useTheSlopeDesignSystem()
 
-type DisplayMode = 'monitor' | 'compact' | 'regular' | 'edit'
+type DisplayMode = 'monitor' | 'regular' | 'edit'
 
 interface TeamMember {
   id: number
@@ -31,27 +33,19 @@ interface TeamMember {
 }
 
 interface Props {
-  teamId?: number          // Database ID (optional for create mode)
-  teamNumber: number       // Logical number 1..N in season (required)
-  teamName: string         // Team name (required)
-  seasonId?: number       // Required for EDIT mode (inhabitant selector)
-  assignments?: TeamMember[]
-  affinity?: WeekDayMap | null  // Team's weekday preferences
-  seasonCookingDays?: WeekDayMap | null  // Season's cooking days (parent restriction)
-  seasonDates?: DateRange  // Season date range (for calendar)
-  dinnerEvents?: DinnerEventDisplay[]  // All dinner events (will be filtered to this team)
-  holidays?: DateRange[]   // Holiday periods
-  teams?: Array<{ id: number, name: string }>  // All teams in season (for InhabitantSelector lookup)
-  mode?: DisplayMode       // Display mode: monitor, compact, regular, edit
-  showMembers?: boolean   // If false, only show count badge in compact mode
+  teamId: number           // Database ID - component fetches detail from store
+  teamNumber: number       // Logical number 1..N in season (for display/color)
+  mode?: DisplayMode       // Display mode
+  // EDIT mode only props:
+  seasonId?: number
+  seasonCookingDays?: WeekDayMap | null
+  seasonDates?: DateRange
+  holidays?: DateRange[]
+  teams?: Array<{ id: number, name: string }>
 }
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
-  assignments: () => [],
-  affinity: null,
-  showMembers: true,
-  dinnerEvents: () => [],
   holidays: () => []
 })
 
@@ -63,10 +57,31 @@ const emit = defineEmits<{
   'remove:member': [assignmentId: number]
 }>()
 
-const editedName = ref(props.teamName ?? '')
+// Store integration - use fetch function, not shared state
+const planStore = usePlanStore()
+const {selectedSeason} = storeToRefs(planStore)
 
-watch(() => props.teamName, (newName) => {
-  editedName.value = newName ?? ''
+// Each component instance fetches its own team detail (ADR: useAsyncData consistency)
+const {data: team, status, error} = useAsyncData(
+  `cooking-team-detail-${props.teamId}`,
+  () => planStore.fetchTeamDetail(props.teamId),
+  {
+    watch: [() => props.teamId],
+    immediate: true
+  }
+)
+
+// All data from fetched team Detail entity
+const teamName = computed(() => team.value?.name ?? `Madhold ${props.teamNumber}`)
+const assignments = computed(() => team.value?.assignments ?? [])
+const affinity = computed(() => team.value?.affinity ?? null)
+const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])  // From Detail entity
+const cookingDaysCount = computed(() => team.value?.cookingDaysCount ?? 0)  // From aggregate
+
+const editedName = ref(teamName.value)
+
+watch(teamName, (newName) => {
+  editedName.value = newName
 })
 
 const { getTeamColor } = useCookingTeam()
@@ -87,7 +102,7 @@ const roleGroups = computed(() => {
     JUNIORHELPER: [] as TeamMember[]
   }
 
-  props.assignments.forEach(assignment => {
+  assignments.value.forEach(assignment => {
     if (assignment.role in groups) {
       groups[assignment.role].push(assignment)
     }
@@ -107,10 +122,10 @@ const navigateToInhabitant = (inhabitantId: number) => {
 }
 
 const handleNameUpdate = () => {
-  if (editedName.value !== props.teamName && editedName.value.trim()) {
+  if (editedName.value !== teamName.value && editedName.value.trim()) {
     emit('update:teamName', editedName.value.trim())
   } else if (!editedName.value.trim()) {
-    editedName.value = props.teamName
+    editedName.value = teamName.value
   }
 }
 
@@ -119,8 +134,7 @@ const handleDelete = () => {
 }
 
 const isEditable = computed(() => props.mode === 'edit')
-const hasNoMembers = computed(() => props.assignments.length === 0)
-const cookingDaysCount = computed(() => props.dinnerEvents.length)
+const hasNoMembers = computed(() => assignments.value.length === 0)
 
 // Funny empty state messages (rotates based on team number for consistency)
 const emptyStateMessages = [
@@ -206,51 +220,6 @@ defineExpose({
     </UAlert>
   </div>
 
-  <!-- COMPACT MODE: Minimal display for tables -->
-  <div v-else-if="mode === 'compact'">
-    <!-- Show only count badge when showMembers is false -->
-    <div v-if="!showMembers" class="flex items-center gap-2">
-      <UBadge
-        :color="teamColor"
-        variant="soft"
-        :size="SIZES.small.value.value"
-      >
-        {{ teamName }}
-      </UBadge>
-      <UBadge
-        :color="teamColor"
-        variant="soft"
-        :size="SIZES.small.value.value"
-      >
-        👥 {{ assignments.length }}
-      </UBadge>
-      <UBadge
-        :color="teamColor"
-        variant="soft"
-        :size="SIZES.small.value.value"
-      >
-        📅 {{ cookingDaysCount }}
-      </UBadge>
-    </div>
-
-    <!-- Show full member details when showMembers is true -->
-    <div v-else class="flex flex-col md:flex-row gap-2">
-      <div
-        v-for="(members, role) in roleGroups"
-        :key="role"
-        v-show="members.length > 0"
-        class="flex flex-col gap-1"
-      >
-        <span class="text-xs text-gray-500 font-medium">{{ ROLE_LABELS[role] }}</span>
-        <UserListItem
-          :to-display="members.map(m => m.inhabitant)"
-          :compact="true"
-          size="sm"
-          :ring-color="teamColor"
-        />
-      </div>
-    </div>
-  </div>
 
   <!-- REGULAR/EDIT MODE: Full display with role sections -->
   <div v-else class="space-y-4">
@@ -443,8 +412,8 @@ defineExpose({
       <div v-if="!hasNoMembers" class="flex flex-col md:flex-row gap-4">
         <div
           v-for="(members, role) in roleGroups"
-          :key="role"
           v-show="members.length > 0"
+          :key="role"
           class="flex-1"
         >
           <UserListItem

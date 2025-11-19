@@ -80,8 +80,8 @@ const printPage = () => {
         </UButton>
         <UButton
             icon="i-heroicons-printer"
-            @click="printPage"
             color="primary"
+            @click="printPage"
         >
           Print
         </UButton>
@@ -156,7 +156,7 @@ const printPage = () => {
 
           <!-- QR Code (no-print on screen) -->
           <div v-if="qrCodeDataUrl" class="no-print">
-            <img :src="qrCodeDataUrl" alt="QR Code" class="w-40 h-40 border-2 border-gray-300"/>
+            <img :src="qrCodeDataUrl" alt="QR Code" class="w-40 h-40 border-2 border-gray-300">
             <p class="text-xs text-gray-600 mt-2 text-center">Scan for online version</p>
           </div>
         </div>

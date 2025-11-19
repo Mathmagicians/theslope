@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 // Get SystemRole enum from validation composable
-const {SystemRoleSchema} = useUserValidation()
+const {SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 
 const store = useUsersStore()
@@ -38,7 +38,8 @@ const userColumns = [
 
 
 <template>
-  <UCard id="admin-users" data-test-id="admin-users"
+  <UCard
+id="admin-users" data-test-id="admin-users"
          class="flex flex-col items-center text-secondary">
     <template #header>
       <UAlert
@@ -59,8 +60,9 @@ const userColumns = [
     </template>
 
     <!-- Show when users are loaded -->
-   <ViewError v-if="isUsersErrored"
-               :statusCode="usersError?.statusCode" :cause="usersError"
+   <ViewError
+v-if="isUsersErrored"
+               :status-code="usersError?.statusCode" :cause="usersError"
                message="Kunne ikke loade bruger data 🤖"
     />
     <UTable

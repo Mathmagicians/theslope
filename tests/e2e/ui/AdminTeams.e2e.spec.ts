@@ -9,7 +9,7 @@ const {validatedBrowserContext, pollUntil} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
-    let createdSeasonIds: number[] = []
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})
 

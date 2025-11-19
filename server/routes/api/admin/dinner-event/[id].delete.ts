@@ -1,27 +1,25 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
-import {deleteDinnerEvent} from "~~/server/data/prismaRepository"
+import {deleteDinnerEvent} from "~~/server/data/financesRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
-import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<DinnerEvent> => {
+export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        const h3e = h3eFromCatch('🍽️ > DINNER_EVENT > [DELETE] Input validation error', error)
-        console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('🍽️ > DINNER_EVENT > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -32,8 +30,6 @@ export default defineEventHandler(async (event): Promise<DinnerEvent> => {
         setResponseStatus(event, 200)
         return deletedDinnerEvent
     } catch (error) {
-        const h3e = h3eFromCatch(`🍽️ > DINNER_EVENT > [DELETE] Error deleting dinner event ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🍽️ > DINNER_EVENT > [DELETE] Error deleting dinner event ${id}`, error)
     }
 })

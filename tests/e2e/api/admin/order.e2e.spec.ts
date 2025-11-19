@@ -12,7 +12,7 @@ const { TicketTypeSchema } = useBookingValidation()
 const ORDER_ENDPOINT = '/api/order'
 
 // Shared variables for cleanup and test data across all test suites
-let testOrderIds: number[] = []
+const testOrderIds: number[] = []
 let testHouseholdId: number
 let testInhabitantId: number
 let testSeasonId: number
@@ -58,14 +58,14 @@ test.describe('Order/api/order CRUD operations', () => {
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Cleanup orders
+    // Cleanup orders first (Order → TicketPrice RESTRICT blocks Season deletion)
     await Promise.all(testOrderIds.map(id =>
       OrderFactory.deleteOrder(context, id).catch(() => {
         console.warn(`Failed to cleanup order ${id}`)
       })
     ))
 
-    // Cleanup season (cascades to dinner events via ADR-005)
+    // Cleanup season (cascades to ticket prices and dinner events via ADR-005)
     if (testSeasonId) {
       await SeasonFactory.deleteSeason(context, testSeasonId).catch(() => {
         console.warn(`Failed to cleanup season ${testSeasonId}`)

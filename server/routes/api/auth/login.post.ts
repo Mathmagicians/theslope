@@ -1,13 +1,14 @@
 import {defineEventHandler, readValidatedBody, createError} from "h3"
 import {loginUserIntoHeynabo} from "~~/server/integration/heynabo/heynaboClient"
 import {fetchUser} from "~~/server/data/prismaRepository"
-import {useUserValidation} from '~/composables/useUserValidation'
-
-const {LoginSchema, UserWithInhabitantSchema} = useUserValidation()
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+
+    // Get schemas inside handler to avoid circular dependency
+    const {LoginSchema, UserWithInhabitantSchema} = useCoreValidation()
 
     // Input validation  FAIL EARLY
     let loginData

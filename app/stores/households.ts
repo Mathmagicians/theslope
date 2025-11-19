@@ -1,12 +1,12 @@
 import type {
-    HouseholdSummary,
-    HouseholdWithInhabitants
-} from '~/composables/useHouseholdValidation'
+    HouseholdDisplay,
+    HouseholdDetail
+} from '~/composables/useCoreValidation'
 
 /**
  * Household store - manages household data and API operations
  * Following ADR-007: Store owns server data, component owns UI state
- * Following ADR-009: Index endpoint returns HouseholdSummary (lightweight), detail returns HouseholdWithInhabitants (comprehensive)
+ * Following ADR-009: Index endpoint returns HouseholdDisplay (lightweight), detail returns HouseholdDetail (comprehensive)
  */
 export const useHouseholdsStore = defineStore("Households", () => {
 
@@ -21,7 +21,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         status: householdsStatus,
         error: householdsError,
         refresh: refreshHouseholds
-    } = useFetch<HouseholdSummary[]>('/api/admin/household', {
+    } = useFetch<HouseholdDisplay[]>('/api/admin/household', {
         immediate: true,
         watch: false,
         default: () => []
@@ -30,14 +30,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // Use useAsyncData for detail endpoint - allows manual execute() without context issues
     const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
 
-    const {HouseholdWithInhabitantsSchema} = useHouseholdValidation()
+    const {HouseholdWithInhabitantsSchema} = useCoreValidation()
 
     const {
         data: selectedHousehold,
         status: selectedHouseholdStatus,
         error: selectedHouseholdError,
         refresh: refreshSelectedHousehold
-    } = useAsyncData<HouseholdWithInhabitants | null>(
+    } = useAsyncData<HouseholdDetail | null>(
         selectedHouseholdKey,
         () => {
             if (!selectedHouseholdId.value) return Promise.resolve(null)

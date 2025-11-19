@@ -1,4 +1,4 @@
-import {type OrderDisplay, type OrderCreate} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderCreate} from '~/composables/useBookingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES

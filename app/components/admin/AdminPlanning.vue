@@ -195,11 +195,11 @@ const handleActivateSeason = async () => {
         <div class="w-full md:w-auto flex flex-row items-center gap-2">
           <SeasonSelector
               :model-value="selectedSeasonId"
-              @update:model-value="handleSeasonChange"
               :seasons="seasons"
               :loading="isSeasonsLoading"
               class="w-full md:w-auto"
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+              @update:model-value="handleSeasonChange"
           />
           <FormModeSelector v-model="formMode" :disabled-modes="disabledModes"/>
         </div>
@@ -210,13 +210,14 @@ const handleActivateSeason = async () => {
         <!-- Season Status Display - Show in view and edit modes, not create -->
         <SeasonStatusDisplay
             v-if="selectedSeason && (formMode === FORM_MODES.VIEW || formMode === FORM_MODES.EDIT)"
-            :season="selectedSeason"
+            :season-id="selectedSeason.id ?? null"
             :show-activation-button="true"
-            @activate="handleActivateSeason"
             class="mb-6"
+            @activate="handleActivateSeason"
         />
 
-        <AdminPlanningSeason v-if="currentModel && showAdminSeason"
+        <AdminPlanningSeason
+v-if="currentModel && showAdminSeason"
                              v-model="currentModel"
                              :mode="formMode"
                              @update="handleSeasonUpdate"
@@ -225,12 +226,12 @@ const handleActivateSeason = async () => {
       </div>
       <Loader v-else-if="isSelectedSeasonLoading" text="Henter data for fællesspisningssæson"/>
       <AdminToCreateSeason v-else-if="isNoSeasons"/>
-      <UAlert v-else
+      <UAlert
+v-else
           :avatar="{text: '💤'}"
           color="info" class="space-y-4"
           title="Her ser lidt tomt ud!"
-          description="Vælg en fællesspisningssæson for at komme i gang">
-      </UAlert>
+          description="Vælg en fællesspisningssæson for at komme i gang"/>
     </template>
   </UCard>
 

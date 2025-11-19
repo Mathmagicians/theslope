@@ -2,10 +2,10 @@
 SeasonStatusDisplay - Intelligent season status display with activation controls
 
 Displays appropriate status badge and activation button based on season state.
-Component handles all logic internally - parent just passes season and enables button.
+Component is reactive to store changes - fetches season by ID and updates when activeSeasonId changes.
 
 Props:
-  - season: Season object to display status for
+  - seasonId: ID of season to display status for (number | null)
   - showActivationButton: Whether to show activation button (default: false)
 
 Events:
@@ -45,9 +45,12 @@ PAST SEASON:
 
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
+import {usePlanStore} from '~/stores/plan'
+
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 interface Props {
-  season: Season | null
+  seasonId: number | null
   showActivationButton?: boolean
 }
 
@@ -59,18 +62,26 @@ const emit = defineEmits<{
   activate: []
 }>()
 
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
-
+const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
 
 // Inject responsive breakpoint
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
+// Reactively get season from store - updates when store changes
+const season = computed(() => {
+  if (!props.seasonId) return null
+  return planStore.seasons.find(s => s.id === props.seasonId) ?? null
+})
+
+// Get loading state from store
+const isActiveSeasonIdLoading = computed(() => planStore.isActiveSeasonIdLoading)
+
 // Compute season status
 const status = computed(() => {
-  if (!props.season) return null
-  return getSeasonStatus(props.season)
+  if (!season.value) return null
+  return getSeasonStatus(season.value)
 })
 
 // Get status emoji circle (matching SeasonSelector)
@@ -99,7 +110,7 @@ const alertConfig = computed(() => {
       return {
         color: 'success' as const,
         icon: 'i-heroicons-check-circle-solid',
-        variant: 'subtle',
+        variant: 'subtle' as const,
         title: `Aktiv sæson ${emoji}`,
         description: 'Denne sæson er synlig for alle brugere, som kan se og booke fællesspisninger. Kun én sæson kan være aktiv ad gangen.'
       }
@@ -107,7 +118,7 @@ const alertConfig = computed(() => {
       return {
         color: 'success' as const,
         icon: 'i-heroicons-calendar',
-        variant: 'outline',
+        variant: 'outline' as const,
         title: `Fremtidig sæson ${emoji}`,
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
       }
@@ -115,7 +126,7 @@ const alertConfig = computed(() => {
       return {
         color: 'neutral' as const,
         icon: 'i-heroicons-archive-box-solid',
-        variant: 'outline',
+        variant: 'outline' as const,
         title: `Arkiveret sæson ${emoji}`,
         description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
       }
@@ -123,7 +134,7 @@ const alertConfig = computed(() => {
       return {
         color: 'success' as const,
         icon: 'i-heroicons-calendar',
-        variant: 'outline',
+        variant: 'outline' as const,
         title: `Inaktiv sæson ${emoji}`,
         description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
       }
@@ -132,14 +143,14 @@ const alertConfig = computed(() => {
 
 // Show button only if season is eligible (can be activated or already active)
 const showButton = computed(() => {
-  if (!props.showActivationButton || !props.season) return false
+  if (!props.showActivationButton || !season.value) return false
   // Show if already active (will be disabled) or if can be activated
-  return props.season.isActive || canSeasonBeActive(props.season)
+  return season.value.isActive || canSeasonBeActive(season.value)
 })
 
 // Disable button if already active
 const isActivateButtonDisabled = computed(() => {
-  return props.season?.isActive ?? false
+  return season.value?.isActive ?? false
 })
 
 const handleActivate = () => {
@@ -163,8 +174,9 @@ const handleActivate = () => {
         icon="i-heroicons-check-circle"
         :size="getIsMd ? 'md' : 'sm'"
         :disabled="isActivateButtonDisabled"
-        @click="handleActivate"
         :square="!getIsMd"
+        :loading="isActiveSeasonIdLoading"
+        @click="handleActivate"
       >
         <template v-if="getIsMd">
           {{ isActivateButtonDisabled ? 'Fællesspisnings sæson er i gang 🟢' : 'Aktiver Sæson' }}

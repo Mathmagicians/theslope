@@ -1,38 +1,34 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus, createError} from "h3"
-import {fetchDinnerEvent} from "~~/server/data/prismaRepository"
+import {fetchDinnerEvent} from "~~/server/data/financesRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
-import type {DinnerEvent} from "~/composables/useDinnerEventValidation"
+import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<DinnerEvent> => {
+export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        const h3e = h3eFromCatch('🍽️ > DINNER_EVENT > [GET] Input validation error', error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('🍽️ > DINNER_EVENT > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
-    let dinnerEvent
+    let dinnerEvent!: DinnerEventDetail | null
     try {
         console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event ${id}`)
         dinnerEvent = await fetchDinnerEvent(d1Client, id)
     } catch (error) {
-        const h3e = h3eFromCatch(`🍽️ > DINNER_EVENT > [GET] Error fetching dinner event ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🍽️ > DINNER_EVENT > [GET] Error fetching dinner event ${id}`, error)
     }
     if (!dinnerEvent) {
         throw createError({

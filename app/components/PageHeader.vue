@@ -54,7 +54,7 @@ const burgerLink = computed(() => ({
           <Logo/>
         </NuxtLink>
         <!-- Spacer to push navigation to the right -->
-        <div class="grow w-2 md:w-8"></div>
+        <div class="grow w-2 md:w-8"/>
         <!-- Desktop Navigation-->
         <UNavigationMenu
             :items="loggedIn ? navigationLinks: [loginLink]"

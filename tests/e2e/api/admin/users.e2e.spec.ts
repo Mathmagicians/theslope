@@ -1,18 +1,18 @@
 import {test, expect} from '@playwright/test'
 import {UserFactory} from '../../testDataFactories/userFactory'
 import testHelpers from '../../testHelpers'
-import {useUserValidation} from '~/composables/useUserValidation'
-import type {UserDisplay} from '~/composables/useUserValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+import type {UserDisplay} from '~/composables/useCoreValidation'
 
 const {validatedBrowserContext} = testHelpers
-const {UserDisplaySchema, SystemRoleSchema} = useUserValidation()
+const {UserDisplaySchema, SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 
 // Constants for seeded data
 const SEEDED_ADMIN_EMAIL = 'agata@mathmagicians.dk'
 
 // Variable to store ID for cleanup
-let createdUserIds: number[] = []
+const createdUserIds: number[] = []
 const newUser = UserFactory.defaultUser()
 
 // Test for creating and retrieving a user

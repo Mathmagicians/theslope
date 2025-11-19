@@ -1,11 +1,11 @@
 import type {BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {User, UserCreate} from "~/composables/useUserValidation"
-import {useUserValidation} from "~/composables/useUserValidation"
+import type {UserDetail, UserCreate} from "~/composables/useCoreValidation"
+import {useCoreValidation} from "~/composables/useCoreValidation"
 
 const {salt, headers} = testHelpers
-const {SystemRoleSchema} = useUserValidation()
+const {SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 
 export class UserFactory {
@@ -25,7 +25,7 @@ export class UserFactory {
         return saltedUser
     }
 
-    static readonly createUser = async (context: BrowserContext, aUser: UserCreate = this.defaultUser() ): Promise<User> => {
+    static readonly createUser = async (context: BrowserContext, aUser: UserCreate = this.defaultUser() ): Promise<UserDetail> => {
         // Users API uses request body (ADR-002 pattern)
         const response = await context.request.put('/api/admin/users', {
             headers: headers,
@@ -42,7 +42,7 @@ export class UserFactory {
         return responseBody
     }
 
-    static readonly deleteUser = async (context: BrowserContext, id: number): Promise<User> => {
+    static readonly deleteUser = async (context: BrowserContext, id: number): Promise<UserDetail> => {
         const deleteResponse = await context.request.delete(`/api/admin/users/${id}`)
         expect(deleteResponse.status()).toBe(200)
         const responseBody = await deleteResponse.json()

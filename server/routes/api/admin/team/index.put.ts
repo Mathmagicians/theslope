@@ -1,38 +1,32 @@
 // PUT /api/admin/teams - Create team (seasonId in body)
 
-import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
+import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
-import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import type {CookingTeamWithMembers} from "~/composables/useCookingTeamValidation"
+import {useCookingTeamValidation, type CookingTeamDetail} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Get the validation utilities from our composable
-const {CookingTeamWithMembersSchema} = useCookingTeamValidation()
+const {CookingTeamSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
 
-// Create a refined schema for PUT operations that rejects any team with an ID
-const PutTeamSchema = CookingTeamWithMembersSchema.refine(
-    team => !team.id,
-    {
-        message: 'Cannot provide an ID when creating a new team. Use POST to update an existing team.',
-        path: ['id']
-    }
-)
+// Create schema for input validation - team without id, with optional assignments
+const CookingTeamCreateSchema = CookingTeamSchema.extend({
+    assignments: CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true }).array().optional()
+}).omit({ id: true })
 
-export default defineEventHandler(async (event): Promise<CookingTeamWithMembers> => {
+export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
     let teamData
     try {
-        teamData = await readValidatedBody(event, PutTeamSchema.parse)
+        teamData = await readValidatedBody(event, CookingTeamCreateSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Input validation error", error)
-        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error("👥 > TEAM > [PUT] Input validation error", error)
     }
+
     // Database operations try-catch - separate concerns
     try {
         const savedTeam = await createTeam(d1Client, teamData)
@@ -41,8 +35,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         setResponseStatus(event, 201)
         return savedTeam
     } catch (error) {
-        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Error creating team", error)
-        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error("👥 > TEAM > [PUT] Error creating team", error)
     }
 })

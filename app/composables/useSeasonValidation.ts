@@ -38,7 +38,7 @@ export const useSeasonValidation = () => {
     })
     const {DinnerEventDisplaySchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
-    const {deserializeCookingTeam, CookingTeamWithMembersSchema} = useCookingTeamValidation()
+    const {deserializeCookingTeam, CookingTeamDisplaySchema} = useCookingTeamValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -56,9 +56,9 @@ export const useSeasonValidation = () => {
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
         diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),
         consecutiveCookingDays: z.number().int().min(1).max(7).default(1),
-        // Optional relations (from server)
+        // Optional relations (from server) - ADR-009: Lightweight Display data only
         dinnerEvents: z.array(DinnerEventDisplaySchema).optional(),
-        CookingTeams:  z.array(CookingTeamWithMembersSchema).optional(),
+        CookingTeams:  z.array(CookingTeamDisplaySchema).optional(),
         ticketPrices: TicketPricesArraySchema
     })
 

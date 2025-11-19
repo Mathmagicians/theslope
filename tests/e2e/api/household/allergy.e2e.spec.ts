@@ -8,7 +8,7 @@ const {validatedBrowserContext} = testHelpers
 // Variables to store IDs for cleanup
 // Only track root entities - CASCADE will delete children
 let createdAllergyTypeIds: number[] = []
-let createdHouseholdIds: number[] = []
+const createdHouseholdIds: number[] = []
 
 test.describe('Allergy API - CRUD Operations', () => {
 

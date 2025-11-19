@@ -99,17 +99,17 @@ const emptyStateMessage = computed(() => {
     <div class="flex gap-2">
       <UButton
           color="primary"
-          @click="handleSave"
           :disabled="!formData.name || !formData.description"
           name="save-allergy-type"
+          @click="handleSave"
       >
         Gem
       </UButton>
       <UButton
           color="neutral"
           variant="outline"
-          @click="handleCancel"
           name="cancel-allergy-type"
+          @click="handleCancel"
       >
         Annuller
       </UButton>

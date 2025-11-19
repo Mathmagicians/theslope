@@ -19,6 +19,5 @@ BY
     ]"
           color="info" class="space-y-4"
           title="Her ser lidt tomt ud!"
-          description="Bed din administrator om at oprette en fællespisningssæson">
-  </UAlert>
+          description="Bed din administrator om at oprette en fællespisningssæson"/>
 </template>

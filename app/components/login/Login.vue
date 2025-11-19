@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type {FormSubmitEvent} from '#ui/types'
-import type {LoginCredentials} from '~/composables/useUserValidation'
+import type {LoginCredentials} from '~/composables/useCoreValidation'
 
 const authStore = useAuthStore()
 const {loggedIn, greeting, name, lastName, avatar, email, phone, address} = storeToRefs(authStore)
 const {signIn, clear} = authStore
-const {LoginSchema} = useUserValidation()
+const {LoginSchema} = useCoreValidation()
 
 const fullName = computed(() => `${name.value} ${lastName.value}`.trim())
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
@@ -34,7 +34,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
   <div class="flex items-center justify-center bg-pink-50">
     <!-- Show login component if user is not logged in -->
     <div v-if="!loggedIn" class="max-w-md w-full p-6 ">
-      <UForm :state="state" :schema="LoginSchema" @submit="handleSubmit" class="space-y-6">
+      <UForm :state="state" :schema="LoginSchema" class="space-y-6" @submit="handleSubmit">
         <UCard >
           <template #header>
             <h2 class="text-xl font-bold">Log ind</h2>

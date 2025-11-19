@@ -1,6 +1,6 @@
-import {type Season} from '~/composables/useSeasonValidation'
-import {type CookingTeam, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
-import {type DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {Season} from '~/composables/useSeasonValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -64,6 +64,30 @@ export const usePlanStore = defineStore("Plan", () => {
                 transform: (data: any) => data ? SeasonSchema.parse(data) : null
             }
         )
+
+        // Fetch dinner event detail (ADR-009: Detail data for specific dinner event view)
+        const selectedDinnerEventId = ref<number | null>(null)
+        const selectedDinnerEventKey = computed(() => `/api/admin/dinner-event/${selectedDinnerEventId.value || 'null'}`)
+
+        const {
+            data: selectedDinnerEvent
+        } = useAsyncData<DinnerEventDetail | null>(
+            selectedDinnerEventKey,
+            () => {
+                if (!selectedDinnerEventId.value) return Promise.resolve(null)
+                return $fetch(`/api/admin/dinner-event/${selectedDinnerEventId.value}`)
+            },
+            {
+                default: () => null
+            }
+        )
+
+        // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
+        // No store state - components use useAsyncData with this function
+        // Pattern: Store provides fetch logic, components manage their own data
+        const fetchTeamDetail = (teamId: number): Promise<CookingTeamDetail> => {
+            return $fetch(`/api/admin/team/${teamId}`)
+        }
 
 
         // ========================================
@@ -140,8 +164,8 @@ export const usePlanStore = defineStore("Plan", () => {
 
         const loadSeasonByShortName = (shortName: string) => {
             const season = seasons.value.find(s => s.shortName === shortName)
-            if (season) {
-                loadSeason(season.id)
+            if (season?.id) {
+                loadSeason(season.id )
             } else {
                 console.warn(`🗓️ > PLAN_STORE > No season found with shortName "${shortName}"`)
             }
@@ -190,7 +214,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 const affinityResult = await $fetch<{
                     seasonId: number,
                     teamCount: number,
-                    teams: CookingTeam[]
+                    teams: CookingTeamDisplay[]
                 }>(`/api/admin/season/${seasonId}/assign-team-affinities`, {
                     method: 'POST'
                 })
@@ -260,9 +284,9 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (team: CookingTeam): Promise<CookingTeam> => {
+        const createTeam = async (team: CookingTeamDetail): Promise<CookingTeamDetail> => {
             try {
-                const createdTeam = await $fetch<CookingTeam>('/api/admin/team', {
+                const createdTeam = await $fetch<CookingTeamDetail>('/api/admin/team', {
                     method: 'PUT',
                     body: team,
                     headers: {'Content-Type': 'application/json'}
@@ -279,10 +303,10 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const updateTeam = async (team: CookingTeam) => {
+        const updateTeam = async (team: CookingTeamDetail) => {
             try {
                 await $fetch(`/api/admin/team/${team.id}`, {
-                    method: 'POST',
+                    method: 'post',
                     body: team,
                     headers: {'Content-Type': 'application/json'}
                 })
@@ -361,9 +385,15 @@ export const usePlanStore = defineStore("Plan", () => {
                 const {sortSeasonsByActivePriority} = useSeason()
                 const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
                 const first = sortedSeasons[0]!
-                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first from sorted seasons:', first.shortName)
-                loadSeason(first.id)
+                console.info(LOG_CTX, '🗓️ > PLAN_STORE > No active season, selecting first from sorted seasons:', first?.shortName)
+                loadSeason(first.id!)
             }
+        }
+
+        // DINNER EVENT ACTION
+        const loadDinnerEvent = (id: number | null) => {
+            console.info(LOG_CTX, '🍽️ > PLAN_STORE > loadDinnerEvent:', id)
+            selectedDinnerEventId.value = id
         }
 
         // AUTO-INITIALIZATION - Watch for data to load, then auto-select active season
@@ -382,6 +412,7 @@ export const usePlanStore = defineStore("Plan", () => {
             // state
             selectedSeason,
             seasons,
+            selectedDinnerEvent,
             // computed state
             isActiveSeasonIdLoading,
             isActiveSeasonIdErrored,
@@ -403,6 +434,8 @@ export const usePlanStore = defineStore("Plan", () => {
             initPlanStore,
             loadSeasons,
             onSeasonSelect,
+            loadDinnerEvent,
+            fetchTeamDetail,  // Fetch function, not state
             createSeason,
             updateSeason,
             activateSeason,

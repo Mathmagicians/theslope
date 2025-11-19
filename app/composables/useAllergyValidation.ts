@@ -73,10 +73,14 @@ export const useAllergyValidation = () => {
     // AllergyDisplay = BaseAllergySchema (already includes allergyType)
     const AllergyDisplaySchema = BaseAllergySchema
 
-    // Allergy with full relations (allergyType + inhabitant) - used by household/inhabitant endpoints
+    // Allergy with full relations (allergyType already included from Display + inhabitant) - used by household/inhabitant endpoints
     const AllergyDetailSchema = AllergyDisplaySchema.extend({
-        allergyType: AllergyTypeDisplaySchema,
         inhabitant: InhabitantDisplaySchema
+    })
+
+    // Inhabitant with allergies array - used for inhabitant detail view with allergies
+    const InhabitantWithAllergiesSchema = InhabitantDisplaySchema.extend({
+        allergies: z.array(AllergyDisplaySchema).default([])
     })
 
 
@@ -90,7 +94,9 @@ export const useAllergyValidation = () => {
         AllergyCreateSchema,
         AllergyUpdateSchema,
         AllergyDisplaySchema,
-        AllergyDetailSchema
+        AllergyDetailSchema,
+        // Inhabitant with allergies
+        InhabitantWithAllergiesSchema
     }
 }
 

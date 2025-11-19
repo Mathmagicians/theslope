@@ -4,7 +4,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
-import {type Season} from '~/composables/useSeasonValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
@@ -61,7 +61,7 @@ const generateUniqueSeasonDates = () => {
  */
 test.describe('AdminPlanningSeason Form UI', () => {
     const adminPlanningUrl = '/admin/planning'
-    let createdSeasonIds: number[] = []
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})
 

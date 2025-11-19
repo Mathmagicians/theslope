@@ -1,9 +1,9 @@
-import {deleteOrder} from "~~/server/data/prismaRepository"
+import {deleteOrder} from "~~/server/data/financesRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
 import {z} from "zod"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
@@ -18,9 +18,7 @@ export default defineEventHandler(async (event):Promise<OrderDisplay> => {
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        const h3e = h3eFromCatch('🎟️ > ORDER > [DELETE] Input validation error', error)
-        console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🎟️ > ORDER > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -30,8 +28,6 @@ export default defineEventHandler(async (event):Promise<OrderDisplay> => {
         console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id}`)
         return deletedOrder
     } catch (error) {
-        const h3e = h3eFromCatch(`🎟️ > ORDER > [DELETE] Error deleting order ${id}`, error)
-        console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🎟️ > ORDER > [DELETE] Error deleting order ${id}`, error)
     }
 })

@@ -1,13 +1,17 @@
 // Factory for Order test data
 import type { Order, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import { expect, BrowserContext } from '@playwright/test'
+import type { BrowserContext } from '@playwright/test';
+import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
+
+// Re-export SeasonFactory for date generation
+import { SeasonFactory } from './seasonFactory'
 
 const { headers, salt, temporaryAndRandom } = testHelpers
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderActionSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -41,6 +45,12 @@ export class OrderFactory {
     closedAt: null,
     createdAt: SeasonFactory.generateUniqueDate(),
     updatedAt: SeasonFactory.generateUniqueDate(),
+    ticketPrice: {
+      id: 1,
+      ticketType: TicketTypeSchema.enum.ADULT,
+      price: 45,
+      description: 'Adult ticket'
+    },
     ...overrides
   })
 
@@ -80,17 +90,37 @@ export class OrderFactory {
     ...overrides
   })
 
-  static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => ({
-    dinnerEventId: 5,
-    orders: [
-      {
-        inhabitantId: 10,
-        ticketPriceId: 1,
-        dinnerMode: DinnerModeSchema.enum.DINEIN
+  static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
+    const defaults = {
+      dinnerEventId: 5,
+      orders: [
+        {
+          inhabitantId: 10,
+          bookedByUserId: 1,
+          ticketPriceId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        }
+      ]
+    }
+
+    // Deep merge orders array to preserve default fields
+    if (overrides?.orders) {
+      return {
+        ...defaults,
+        ...overrides,
+        orders: overrides.orders.map(order => ({
+          bookedByUserId: defaults.orders[0].bookedByUserId,
+          dinnerMode: defaults.orders[0].dinnerMode,
+          ...order
+        }))
       }
-    ],
-    ...overrides
-  })
+    }
+
+    return {
+      ...defaults,
+      ...overrides
+    }
+  }
 
   static readonly defaultSwapOrderRequest = (overrides?: Partial<SwapOrderRequest>): SwapOrderRequest => ({
     inhabitantId: 10,
@@ -100,7 +130,7 @@ export class OrderFactory {
   static readonly defaultOrderHistory = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistory>): OrderHistory => ({
     id: 1,
     orderId: 1,
-    action: OrderActionSchema.enum.CREATED,
+    action: OrderStateSchema.enum.BOOKED,
     performedByUserId: 1,
     auditData: JSON.stringify({
       inhabitantId: 10,
@@ -255,6 +285,3 @@ export class OrderFactory {
     }
   }
 }
-
-// Re-export SeasonFactory for date generation
-import { SeasonFactory } from './seasonFactory'

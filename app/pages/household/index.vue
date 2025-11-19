@@ -4,5 +4,5 @@ await navigateTo('/admin/households', { redirectCode: 301 })
 </script>
 
 <template>
-  <div></div>
+  <div/>
 </template>

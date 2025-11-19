@@ -5,7 +5,7 @@ import testHelpers from '../../testHelpers'
 const {validatedBrowserContext, salt} = testHelpers
 
 // Variables to store IDs for cleanup
-let testHouseholdIds: number[] = []
+const testHouseholdIds: number[] = []
 
 test.describe('Household /api/admin/household CRUD operations', () => {
 
@@ -41,7 +41,8 @@ test.describe('Household /api/admin/household CRUD operations', () => {
             data: updatedData
         })
 
-        expect(response.status()).toBe(200)
+        const errorBody = response.status() !== 200 ? await response.text() : ''
+        expect(response.status(), `Expected 200 but got ${response.status()}. Error: ${errorBody}`).toBe(200)
         const updatedHousehold = await response.json()
         expect(updatedHousehold.name).toBe(updatedData.name)
         expect(updatedHousehold.address).toBe(updatedData.address)

@@ -2,10 +2,10 @@ import {defineEventHandler, getValidatedRouterParams} from "h3"
 import {fetchUsersByRole} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
-import type {SystemRole, UserDisplay} from "~/composables/useUserValidation"
+import type {SystemRole, UserDisplay} from "~/composables/useCoreValidation"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for role parameter
 const roleParamSchema = z.object({
@@ -22,9 +22,7 @@ export default defineEventHandler(async (event): Promise<UserDisplay[]> => {
         const params = await getValidatedRouterParams(event, roleParamSchema.parse)
         role = params.role
     } catch (error) {
-        const h3e = h3eFromCatch('🪪 > USER > [GET] Input validation error', error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🪪 > USER > [GET] Input validation error', error)
     }
 
     // Fetch users by role from database
@@ -34,8 +32,6 @@ export default defineEventHandler(async (event): Promise<UserDisplay[]> => {
         console.info(`🪪 > USER > [GET] Found ${users.length} users with role ${role}`)
         return users
     } catch (error) {
-        const h3e = h3eFromCatch(`🪪 > USER > [GET] Error fetching users by role ${role}`, error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🪪 > USER > [GET] Error fetching users by role ${role}`, error)
     }
 })

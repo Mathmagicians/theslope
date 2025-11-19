@@ -8,7 +8,7 @@ const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot, s
 
 test.describe('SeasonSelector UI - Status Indicators', () => {
     const adminPlanningUrl = '/admin/planning'
-    let createdSeasonIds: number[] = []
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})
 

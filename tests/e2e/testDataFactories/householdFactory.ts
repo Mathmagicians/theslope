@@ -1,8 +1,9 @@
 // Helpers to work with bdd tests for Household aggregate root and strongly related entities (Inhabitants)
 
-import {expect, BrowserContext} from "@playwright/test"
+import type { BrowserContext} from "@playwright/test"
+import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import {Household, Inhabitant} from "../../../app/composables/useHouseholdValidation";
+import type {Household, Inhabitant} from "../../../app/composables/useCoreValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
@@ -46,9 +47,10 @@ export class HouseholdFactory {
         })
 
         const status = response.status()
-        const responseBody = await response.json()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        const responseBody = status === expectedStatus ? await response.json() : null
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new household ID').toBeDefined()
@@ -132,8 +134,9 @@ export class HouseholdFactory {
         const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
         const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
 
+        // Generate unique testSalt for each inhabitant to avoid heynaboId collisions
         const inhabitantData = {
-            ...this.defaultInhabitantData(),
+            ...this.defaultInhabitantData(temporaryAndRandom()),
             name: firstName,
             lastName: lastName,
             birthDate: birthDate !== undefined ? birthDate : null,
@@ -146,9 +149,10 @@ export class HouseholdFactory {
         })
 
         const status = response.status()
-        const responseBody = await response.json()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        const responseBody = status === expectedStatus ? await response.json() : null
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new inhabitant ID').toBeDefined()
@@ -245,9 +249,10 @@ export class HouseholdFactory {
         })
 
         const status = response.status()
-        const responseBody = await response.json()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        const responseBody = status === expectedStatus ? await response.json() : null
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new inhabitant ID').toBeDefined()

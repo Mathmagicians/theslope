@@ -1,8 +1,8 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {fetchOrder} from "~~/server/data/prismaRepository"
+import {fetchOrder} from "~~/server/data/financesRepository"
 import {z} from "zod"
 import type { OrderDetail } from '~/composables/useBookingValidation'
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
@@ -16,9 +16,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {
-        const h3e = h3eFromCatch('🎟️ > ORDER > [GET] Input validation error', error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
     }
 
     try {
@@ -26,9 +24,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
         order = await fetchOrder(d1Client, id)
 
     } catch (error) {
-        const h3e = h3eFromCatch(`🎟️ > ORDER > [GET] Error fetching order ${id}`, error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🎟️ > ORDER > [GET] Error fetching order ${id}`, error)
     }
     if (!order) {
         throw createError({

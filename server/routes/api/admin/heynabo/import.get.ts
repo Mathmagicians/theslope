@@ -1,15 +1,15 @@
-import {defineEventHandler} from 'h3'
+import {defineEventHandler, setResponseStatus} from 'h3'
 import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import {saveHousehold} from '~~/server/data/prismaRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import type {Household} from '~/composables/useHouseholdValidation'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {createHouseholdsFromImport} = useHeynaboValidation()
 
 // Returns imported locations and members from HeyNabo
-export default defineEventHandler<Household[]>(async (event) => {
+export default defineEventHandler<HouseholdDetail[]>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -33,8 +33,6 @@ export default defineEventHandler<Household[]>(async (event) => {
         setResponseStatus(event, 200)
         return result
     } catch (error) {
-        const h3e = h3eFromCatch("🏠 > IMPORT > Import operation failed", error)
-        console.error(`🏠 > IMPORT > ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error("🏠 > IMPORT > Import operation failed", error)
     }
 })

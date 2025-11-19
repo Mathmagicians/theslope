@@ -1,10 +1,10 @@
-import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
+import {createError, defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchAllergy} from "~~/server/data/allergyRepository"
-import {type AllergyDetail} from "~/composables/useAllergyValidation"
+import type {AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -21,9 +21,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
     } catch (error) {
-        const h3e = h3eFromCatch('🏥 > ALLERGY > [GET] Input validation error', error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
     }
 
     // Fetch allergy from database
@@ -42,8 +40,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 200)
         return allergy
     } catch (error) {
-        const h3e = h3eFromCatch(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
     }
 })

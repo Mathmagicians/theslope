@@ -63,18 +63,18 @@ const onAddHolidayRange = () => {
           name="holidayPicker"
           :error="errors.get('_')?.[0] || errors.get('holidays')?.[0] || ''">
         <CalendarDateRangePicker
-            name="holidayRangeList"
-            v-model="addedRange"/>
+            v-model="addedRange"
+            name="holidayRangeList"/>
 
       </UFormField>
       <UButton
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
-          @click="onAddHolidayRange"
           name="holidayRangeAddToList"
           color="info"
           size="lg"
           icon="i-heroicons-sun"
-          variant="outline">
+          variant="outline"
+          @click="onAddHolidayRange">
         Tilføj ferie
       </UButton>
     </div>
@@ -100,18 +100,18 @@ const onAddHolidayRange = () => {
             </UInput>
             <UButton
                 v-if="!props.disabled"
-                @click="model.splice(index, 1)"
                 :name="`holidayRangeRemoveFromList-${index}`"
                 color="error"
                 icon="i-heroicons-trash"
                 size="sm"
-                variant="ghost">
-            </UButton>
+                variant="ghost"
+                @click="model.splice(index, 1)"/>
           </div>
         </UFormField>
       </li>
     </ul>
-    <h3 v-else
+    <h3
+v-else
         class="text-md mx-auto">Fællesspisning sæsonen har ingen ferier.</h3>
   </div>
 </template>

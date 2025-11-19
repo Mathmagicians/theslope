@@ -1,12 +1,12 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {saveInhabitant} from "~~/server/data/prismaRepository"
-import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
-import type {Inhabitant} from "~/composables/useHouseholdValidation"
+import {useCoreValidation} from "~/composables/useCoreValidation"
+import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
+export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -14,13 +14,11 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
     let inhabitantData
     let householdId:number
     try {
-        const {InhabitantCreateSchema} = useHouseholdValidation()
+        const {InhabitantCreateSchema} = useCoreValidation()
         inhabitantData = await readValidatedBody(event, InhabitantCreateSchema.parse)
         householdId = inhabitantData.householdId
     } catch (error) {
-        const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [PUT] Input validation error', error)
-        console.error(`👩‍🏠 > INHABITANT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👩‍🏠 > INHABITANT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -31,8 +29,6 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
         setResponseStatus(event, 201)
         return savedInhabitant
     } catch (error) {
-        const h3e = h3eFromCatch(`👩‍🏠 > INHABITANT > [PUT] Error creating inhabitant`, error)
-        console.error(`👩‍🏠 > INHABITANT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👩‍🏠 > INHABITANT > [PUT] Error creating inhabitant`, error)
     }
 })

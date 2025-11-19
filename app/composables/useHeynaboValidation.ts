@@ -1,7 +1,6 @@
 import {z} from "zod";
-import type { HouseholdCreateWithInhabitants, InhabitantCreate } from './useHouseholdValidation'
-import type { UserCreate } from './useUserValidation'
-import { useUserValidation } from './useUserValidation'
+import type { HouseholdCreateWithInhabitants, InhabitantCreate, UserCreate } from './useCoreValidation'
+import { useCoreValidation } from './useCoreValidation'
 
 export const useHeynaboValidation = () => {
 
@@ -53,8 +52,8 @@ export const useHeynaboValidation = () => {
     type HeynaboMember = z.infer<typeof HeynaboMemberSchema>
     type HeynaboLocation = z.infer<typeof HeynaboLocationSchema>
 
-    // Get SystemRole enum from useUserValidation (ADR-001 compliance)
-    const { SystemRoleSchema } = useUserValidation()
+    // Get SystemRole enum from useCoreValidation (ADR-001 compliance)
+    const { SystemRoleSchema } = useCoreValidation()
     const SystemRole = SystemRoleSchema.enum
 
     /**

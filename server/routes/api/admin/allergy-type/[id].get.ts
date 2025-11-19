@@ -4,7 +4,7 @@ import type {AllergyTypeDisplay} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -16,14 +16,12 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let allergyTypeId: number
+    let allergyTypeId!: number
     try {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyTypeId = id
     } catch (error) {
-        const h3e = h3eFromCatch('🏥 > ALLERGY_TYPE > [GET] Input validation error', error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('🏥 > ALLERGY_TYPE > [GET] Input validation error', error)
     }
 
     // Business logic
@@ -42,8 +40,6 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
         setResponseStatus(event, 200)
         return allergyType
     } catch (error) {
-        const h3e = h3eFromCatch(`🏥 > ALLERGY_TYPE > [GET] Error fetching allergy type with ID ${allergyTypeId}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [GET] Error fetching allergy type with ID ${allergyTypeId}`, error)
     }
 })

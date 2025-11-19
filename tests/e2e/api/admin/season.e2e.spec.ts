@@ -3,7 +3,7 @@ import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromIn
 import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import testHelpers from '../../testHelpers'
-import {type Season} from '~/composables/useSeasonValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {headers, validatedBrowserContext} = testHelpers

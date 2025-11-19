@@ -1,12 +1,11 @@
 import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMapFromSelection} from '~/types/dateTypes'
-import type {CookingTeam} from '~/composables/useCookingTeamValidation'
-import type {DinnerEvent} from '~/composables/useBookingValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
-    excludeDatesFromInterval,
-    DATE_SETTINGS
+    excludeDatesFromInterval
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
 import {subDays} from "date-fns/subDays"
@@ -58,7 +57,7 @@ function dateToWeekDay(firstDay: Date) {
  * @param firstDay - Starting date (should be a cooking day)
  * @returns Cooking teams with computed affinities, or unchanged if conditions are not met
  */
-export const computeAffinitiesForTeams = (teams: CookingTeam[], cookingDays: WeekDayMap, consecutiveCookingDays: number, firstDay: Date): CookingTeam[] => {
+export const computeAffinitiesForTeams = (teams: CookingTeamDisplay[], cookingDays: WeekDayMap, consecutiveCookingDays: number, firstDay: Date): CookingTeamDisplay[] => {
     const startDay = dateToWeekDay(firstDay)
     if (!startDay) return teams
     const weekdaysForRotation = weekDayMapToDays(cookingDays)
@@ -115,7 +114,7 @@ export const compareAffinities = (startDay: WeekDay) => (affinity1: NullableWeek
     return Math.sign(distance1 - distance2)
 }
 
-export const compareTeams = (startDay: WeekDay) => (team1: CookingTeam, team2: CookingTeam): number => {
+export const compareTeams = (startDay: WeekDay) => (team1: CookingTeamDisplay, team2: CookingTeamDisplay): number => {
     const compareTeamsByName = team1.name.localeCompare(team2.name)
     if (!team1.affinity && !team2.affinity) return compareTeamsByName
     if (!team1.affinity) return 1
@@ -126,23 +125,23 @@ export const compareTeams = (startDay: WeekDay) => (team1: CookingTeam, team2: C
 }
 
 
-export const createSortedAffinitiesToTeamsMap = (teams: CookingTeam[], weekDay: WeekDay = WEEKDAYS[0]): Map<WeekDay, CookingTeam[]> => {
+export const createSortedAffinitiesToTeamsMap = (teams: CookingTeamDisplay[], weekDay: WeekDay = WEEKDAYS[0]): Map<WeekDay, CookingTeamDisplay[]> => {
     const sortedKeys: WeekDay[] = teams
         .map(t => t.affinity)
         .toSorted(compareAffinities(weekDay))
         .map(a => getFirstTrueDay(a))
         .filter((d): d is WeekDay => !!d)
 
-    return sortedKeys.reduce<Map<WeekDay, CookingTeam[]>>((acc, key) => {
+    return sortedKeys.reduce<Map<WeekDay, CookingTeamDisplay[]>>((acc, key) => {
         const teamsWithThisFirstDayAffinity = teams
             .filter(t => getFirstTrueDay(t.affinity) === key)
             .toSorted((a, b) => a.name.localeCompare(b.name))
         acc.set(key, teamsWithThisFirstDayAffinity)
         return acc
-    }, new Map<WeekDay, CookingTeam[]>())
+    }, new Map<WeekDay, CookingTeamDisplay[]>())
 }
 
-export const createTeamRoster = (startDay: WeekDay, teams: CookingTeam[]): CookingTeam[] => {
+export const createTeamRoster = (startDay: WeekDay, teams: CookingTeamDisplay[]): CookingTeamDisplay[] => {
     const bucketWithTeams = createSortedAffinitiesToTeamsMap(teams.filter(t => t.affinity), startDay)
     const buckets = Array.from(bucketWithTeams.values())
 
@@ -163,7 +162,7 @@ export const createTeamRoster = (startDay: WeekDay, teams: CookingTeam[]): Cooki
  * @param events - Array of dinner events to assign teams to
  * @returns Array of DinnerEvents with computed team IDs assigned
  */
-export const computeTeamAssignmentsForEvents = (teams: CookingTeam[], cookingDays: WeekDayMap, consecutiveCookingDays: number, events: DinnerEvent[]): DinnerEvent[] => {
+export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], cookingDays: WeekDayMap, consecutiveCookingDays: number, events: DinnerEventDisplay[]): DinnerEventDisplay[] => {
     if (teams.length === 0 || events.length === 0 || consecutiveCookingDays < 1) return events
 
     const needsAssignment = events
@@ -299,7 +298,7 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
             [SEASON_STATUS.PAST]: 3
         }
 
-        const priorityDiff = statusPriority[statusA] - statusPriority[statusB]
+        const priorityDiff = statusPriority[statusA]! - statusPriority[statusB]!
         if (priorityDiff !== 0) return priorityDiff
 
         // Within same status, sort by distance to today
@@ -383,9 +382,8 @@ export const getNextDinnerDate = (dinnerDurationMinutes: number): (dinnerDates: 
             }
         }
 
-        // Dates are sorted - filter to future dates and take first
-        const upcoming = dinnerDates.filter(d => d > today)
-        const nextDate = upcoming[0]
+        // Dates are sorted - find first future date
+        const nextDate = dinnerDates.find(d => d > today)
 
         return nextDate ? getDinnerTimeRange(nextDate, dinnerStartTimeHour, dinnerDurationMinutes) : null
     }
@@ -415,12 +413,10 @@ export const splitDinnerEvents = <T extends { date: Date }>(
         (acc, event) => {
             if (isSameDay(event.date, nextDinnerDateRange.start)) {
                 acc.nextDinner = event
+            } else if (event.date < now) {
+                acc.pastDinnerDates.push(event.date)
             } else {
-                if (event.date < now) {
-                    acc.pastDinnerDates.push(event.date)
-                } else {
-                    acc.futureDinnerDates.push(event.date)
-                }
+                acc.futureDinnerDates.push(event.date)
             }
             return acc
         },

@@ -6,7 +6,7 @@ import {
     DinnerModeSchema, TicketPriceSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
@@ -19,8 +19,8 @@ import {useAllergyValidation} from '~/composables/useAllergyValidation'
  * - Detail ALWAYS EXTENDS Display
  */
 export const useBookingValidation = () => {
-    const {CookingTeamWithMembersSchema} = useCookingTeamValidation()
-    const {InhabitantDisplaySchema} = useHouseholdValidation()
+    const {CookingTeamDisplaySchema} = useCookingTeamValidation()
+    const {InhabitantDisplaySchema} = useCoreValidation()
     const {TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
@@ -31,7 +31,7 @@ export const useBookingValidation = () => {
     // all scalar fields
     const DinnerEventBaseSchema = z.object({
         date: z.coerce.date(),
-        menuTitle: z.string(),
+        menuTitle: z.string().max(500, "Menu titel må ikke være længere end 500 tegn"),
         menuDescription: z.string().max(500).nullable(),
         menuPictureUrl: z.string().url().nullable(),
         state: DinnerStateSchema,
@@ -46,8 +46,7 @@ export const useBookingValidation = () => {
     })
 
     const DinnerEventRelationsOnlySchema = z.object({
-        chef: InhabitantDisplaySchema.nullable(),
-        cookingTeam: CookingTeamWithMembersSchema.nullable(),
+        chef: InhabitantDisplaySchema.nullable(), cookingTeam: CookingTeamDisplaySchema.nullable(),
         tickets: z.array(z.lazy(() => OrderDetailSchema)).optional()
     })
 
@@ -90,7 +89,6 @@ export const useBookingValidation = () => {
         priceAtBooking: z.number().int(),
         dinnerMode: DinnerModeSchema,
         state: OrderStateSchema,
-        ticketPrice: TicketPriceSchema,
         releasedAt: z.coerce.date().nullable(),
         closedAt: z.coerce.date().nullable(),
         createdAt: z.coerce.date(),
@@ -99,7 +97,7 @@ export const useBookingValidation = () => {
 
     const OrderRelationsOnlySchema = z.object({
         chef: InhabitantDisplaySchema.nullable(),
-        cookingTeam: CookingTeamWithMembersSchema.nullable(),
+        cookingTeam: CookingTeamDisplaySchema.nullable(),
         tickets: z.array(z.lazy(() => OrderDetailSchema)).optional()
     })
 
@@ -109,6 +107,7 @@ export const useBookingValidation = () => {
      */
     const OrderDisplaySchema = OrderBaseSchema.extend({
         id: z.number().int().positive(),
+        ticketType: TicketTypeSchema // Flattened from ticketPrice relation (ADR-009)
     })
 
     /**

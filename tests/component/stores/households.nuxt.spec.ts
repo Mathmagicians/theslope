@@ -5,7 +5,9 @@ import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import type {
   HouseholdSummary,
   HouseholdWithInhabitants
-} from '~/composables/useHouseholdValidation'
+} from '~/composables/useCoreValidation'
+
+import { useHouseholdsStore } from '~/stores/households'
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -16,8 +18,6 @@ const householdByIdEndpoint = vi.fn()
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
-
-import { useHouseholdsStore } from '~/stores/households'
 
 // ========================================
 // Test Helpers

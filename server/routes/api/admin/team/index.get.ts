@@ -7,7 +7,7 @@ import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import type {CookingTeamWithMembers} from '~/composables/useCookingTeamValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for query parameters
 const querySchema = z.object({
@@ -23,9 +23,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[
     try {
         queryParams = await getValidatedQuery(event, querySchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('Input validation error', error)
-        console.error("👥 > TEAM > [GET]: " + h3e.message, h3e)
-        throw h3e
+        throwH3Error('👥 > TEAM > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -36,8 +34,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers[
         console.info("👥 > TEAM > [GET] Returning teams", "count", teams?.length || 0)
         return teams ?? []
     } catch (error) {
-        const h3e = h3eFromCatch('Error getting teams: ', error)
-        console.error("👥 > TEAM > [GET]: " + h3e.message, h3e)
-        throw h3e
+        throwH3Error('👥 > TEAM > [GET] Error getting teams', error)
     }
 })

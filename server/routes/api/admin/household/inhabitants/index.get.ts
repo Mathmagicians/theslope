@@ -2,12 +2,12 @@
 
 import {defineEventHandler, setResponseStatus} from "h3"
 import {fetchInhabitants} from "~~/server/data/prismaRepository"
-import type {Inhabitant} from "~/composables/useHouseholdValidation"
+import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler<Promise<Inhabitant[]>>(async (event) => {
+export default defineEventHandler<Promise<InhabitantDetail[]>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -18,8 +18,7 @@ export default defineEventHandler<Promise<Inhabitant[]>>(async (event) => {
         setResponseStatus(event, 200)
         return inhabitants
     } catch (error) {
-        const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
     }
 })
+

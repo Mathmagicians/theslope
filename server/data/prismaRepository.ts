@@ -1,54 +1,40 @@
 import type {D1Database} from '@cloudflare/workers-types'
-import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient, Prisma as PrismaFromClient} from "@prisma/client"
+import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
+import {getPrismaClientConnection} from "../utils/database"
 
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
-import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
-import type {InhabitantCreate, InhabitantUpdate, HouseholdCreate, Inhabitant, Household, HouseholdSummary, HouseholdWithInhabitants} from '~/composables/useHouseholdValidation'
-import {getHouseholdShortName, useHouseholdValidation} from '~/composables/useHouseholdValidation'
-import type {DinnerEventCreate, DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
-import type {OrderCreate, OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
-import type {CookingTeam as CookingTeamCreate, CookingTeamWithMembers, CookingTeamAssignment, SerializedCookingTeam, TeamRole as TeamRoleCreate} from '~/composables/useCookingTeamValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import type {UserCreate, UserDisplay, UserResponse, UserWithInhabitant, SystemRole} from '~/composables/useUserValidation'
-import {useUserValidation} from '~/composables/useUserValidation'
 import type {
-    AllergyTypeCreate,
-    AllergyTypeUpdate,
-    AllergyTypeDisplay,
-    AllergyTypeDetail,
-    AllergyCreate,
-    AllergyUpdate,
-    AllergyDisplay,
-    AllergyDetail
-} from '~/composables/useAllergyValidation'
-import {useAllergyValidation} from '~/composables/useAllergyValidation'
+    InhabitantCreate,
+    InhabitantUpdate,
+    InhabitantDetail,
+    HouseholdCreate,
+    HouseholdDisplay,
+    HouseholdDetail,
+    SystemRole,
+    UserCreate,
+    UserDisplay,
+    UserDetail
+} from '~/composables/useCoreValidation'
+import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
+import type {CookingTeamDetail, CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
 
-const {h3eFromCatch, h3eFromPrismaError} = eventHandlerHelper
-
-export async function getPrismaClientConnection(d1Client: D1Database) {
-    const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter})
-    await prisma.$connect()
-    return prisma
-}
+const {h3eFromCatch} = eventHandlerHelper
 
 /*** USERS ***/
 
 // Get serialization utilities
-const {serializeUserInput, deserializeUser, mergeUserRoles} = useUserValidation()
+const {serializeUserInput, deserializeUser, mergeUserRoles} = useCoreValidation()
 
-export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserResponse> {
+export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserDetail> {
     console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {UserResponseSchema} = useUserValidation()
 
     try {
         // Check if user exists to merge roles
@@ -74,9 +60,12 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         })
         console.info(`🪪 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
 
-        // Deserialize and validate before returning (ADR-010 pattern)
+        // ADR-009: Return UserDetail with Inhabitant: null (no relation fetched for mutation)
         const deserialized = deserializeUser(newUser)
-        return UserResponseSchema.parse(deserialized)
+        return {
+            ...deserialized,
+            Inhabitant: null
+        }
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving user ${user.email}`, error)
         console.error(`🪪 > USER > [SAVE] ${h3e.statusMessage}`, error)
@@ -105,9 +94,13 @@ const USER_DISPLAY_SELECT = {
     }
 } as const
 
+type UserWithInhabitantPayload = Prisma.UserGetPayload<{
+    select: typeof USER_DISPLAY_SELECT
+}>
+
 // Shared deserialization logic for UserDisplay
-function deserializeToUserDisplay(user: any): UserDisplay {
-    const {UserDisplaySchema} = useUserValidation()
+function deserializeToUserDisplay(user: UserWithInhabitantPayload): UserDisplay {
+    const {UserDisplaySchema} = useCoreValidation()
 
     // Let the schema do ALL the work - parse systemRoles JSON, validate fields, transform dates
     const userDisplay = {
@@ -168,10 +161,9 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
     }
 }
 
-export async function deleteUser(d1Client: D1Database, userId: number): Promise<UserResponse> {
+export async function deleteUser(d1Client: D1Database, userId: number): Promise<UserDetail> {
     console.info(`🪪 > USER > [DELETE] Deleting user with ID ${userId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {UserResponseSchema} = useUserValidation()
 
     try {
         const deletedUser = await prisma.user.delete({
@@ -180,9 +172,12 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
 
         console.info(`🪪 > USER > [DELETE] Successfully deleted user ${deletedUser.email}`)
 
-        // Deserialize and validate before returning (ADR-010 pattern)
+        // ADR-009: Return UserDetail with Inhabitant: null (no relation fetched for mutation)
         const deserialized = deserializeUser(deletedUser)
-        return UserResponseSchema.parse(deserialized)
+        return {
+            ...deserialized,
+            Inhabitant: null
+        }
     } catch (error) {
         const h3e = h3eFromCatch('Error deleting user', error)
         console.error(`🪪 > USER > [DELETE] ${h3e.statusMessage}`, error)
@@ -190,9 +185,10 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
     }
 }
 
-export async function fetchUser(email: string, d1Client: D1Database): Promise<UserWithInhabitant | null> {
+export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
     console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeUserWithInhabitant} = useCoreValidation()
 
     try {
         const user = await prisma.user.findUnique({
@@ -205,22 +201,16 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         })
 
         if (user) {
-            // Deserialize systemRoles (ADR-010 pattern)
-            const deserializedRoles = JSON.parse(user.systemRoles)
-
-            // Add computed shortName to household if inhabitant exists
-            if (user.Inhabitant?.household) {
-                user.Inhabitant.household.shortName = getHouseholdShortName(user.Inhabitant.household.address)
-            }
-
             console.info(`🪪 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
-            console.info(`🪪 > USER > [GET] Inhabitant: ${user.Inhabitant ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household ? user.Inhabitant.household.id : 'NULL'}` : 'NULL'}`)
 
-            // Return with deserialized roles
-            return {
-                ...user,
-                systemRoles: deserializedRoles
-            }
+            // Log inhabitant info (simplified to avoid nested template literals)
+            const inhabitantInfo = user.Inhabitant
+                ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household?.id ?? 'NULL'}`
+                : 'NULL'
+            console.info(`🪪 > USER > [GET] Inhabitant: ${inhabitantInfo}`)
+
+            // Use composable deserialization function (ADR-010)
+            return deserializeUserWithInhabitant(user)
         } else {
             console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
@@ -234,10 +224,10 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<Inhabitant> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitant} = useHouseholdValidation()
+    const {deserializeInhabitant} = useCoreValidation()
 
     try {
         const data = {
@@ -285,10 +275,10 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
     }
 }
 
-export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant[]> {
+export async function fetchInhabitants(d1Client: D1Database): Promise<InhabitantDetail[]> {
     console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeWeekDayMap} = useHouseholdValidation()
+    const {deserializeWeekDayMap} = useCoreValidation()
 
     try {
         const inhabitants = await prisma.inhabitant.findMany()
@@ -311,10 +301,10 @@ export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant
     }
 }
 
-export async function fetchInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant | null> {
+export async function fetchInhabitant(d1Client: D1Database, id: number): Promise<InhabitantDetail | null> {
     console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeWeekDayMap} = useHouseholdValidation()
+    const {deserializeWeekDayMap} = useCoreValidation()
 
     try {
         const inhabitant = await prisma.inhabitant.findFirst({
@@ -342,14 +332,14 @@ export async function fetchInhabitant(d1Client: D1Database, id: number): Promise
 }
 
 
-export async function updateInhabitant(d1Client: D1Database, id: number, inhabitantData: Partial<InhabitantUpdate>): Promise<Inhabitant> {
+export async function updateInhabitant(d1Client: D1Database, id: number, inhabitantData: Partial<InhabitantUpdate>): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [UPDATE] Updating inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const {serializeWeekDayMap, deserializeWeekDayMap} = useHouseholdValidation()
+        const {serializeWeekDayMap, deserializeWeekDayMap} = useCoreValidation()
 
-        const updateData: any = {...inhabitantData}
+        const updateData: Record<string, unknown> = {...inhabitantData}
 
         if (inhabitantData.dinnerPreferences !== undefined) {
             updateData.dinnerPreferences = inhabitantData.dinnerPreferences
@@ -375,10 +365,10 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
     }
 }
 
-export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<Inhabitant> {
+export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitant} = useHouseholdValidation()
+    const {deserializeInhabitant} = useCoreValidation()
 
     try {
 
@@ -399,396 +389,9 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
     }
 }
 
-/*** ALLERGY TYPES ***/
-
-export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeDetail[]> {
-    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types with inhabitants`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergyTypes = await prisma.allergyType.findMany({
-            include: {
-                Allergy: {
-                    include: {
-                        inhabitant: {
-                            select: {
-                                id: true,
-                                heynaboId: true,
-                                name: true,
-                                lastName: true,
-                                pictureUrl: true,
-                                birthDate: true,
-                                household: {
-                                    select: {
-                                        name: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        })
-
-        // Transform to AllergyTypeDetail format
-        const result = allergyTypes.map(allergyType => ({
-            id: allergyType.id,
-            name: allergyType.name,
-            description: allergyType.description,
-            icon: allergyType.icon,
-            inhabitants: allergyType.Allergy.map(allergy => ({
-                id: allergy.inhabitant.id,
-                heynaboId: allergy.inhabitant.heynaboId,
-                name: allergy.inhabitant.name,
-                lastName: allergy.inhabitant.lastName,
-                pictureUrl: allergy.inhabitant.pictureUrl,
-                birthDate: allergy.inhabitant.birthDate,
-                householdName: allergy.inhabitant.household.name,
-                inhabitantComment: allergy.inhabitantComment
-            }))
-        }))
-
-        // Sort by number of inhabitants (descending)
-        result.sort((a, b) => b.inhabitants.length - a.inhabitants.length)
-
-        console.info(`🏥 > ALLERGY_TYPE > [GET] Successfully fetched ${result.length} allergy types with inhabitants`)
-
-        // Validate before returning (ADR-010)
-        return result.map(at => AllergyTypeDetailSchema.parse(at))
-    } catch (error) {
-        const h3e = h3eFromCatch('Error fetching allergy types', error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay | null> {
-    console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeDisplaySchema} = useAllergyValidation()
-
-    try {
-        const allergyType = await prisma.allergyType.findUnique({
-            where: {id}
-        })
-
-        if (allergyType) {
-            console.info(`🏥 > ALLERGY_TYPE > [GET] Found allergy type ${allergyType.name} (ID: ${allergyType.id})`)
-            return AllergyTypeDisplaySchema.parse(allergyType)
-        } else {
-            console.info(`🏥 > ALLERGY_TYPE > [GET] No allergy type found with ID ${id}`)
-            return null
-        }
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> {
-    console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeDisplaySchema} = useAllergyValidation()
-
-    try {
-        const newAllergyType = await prisma.allergyType.create({
-            data: allergyTypeData
-        })
-
-        console.info(`🏥 > ALLERGY_TYPE > [CREATE] Successfully created allergy type ${newAllergyType.name} with ID ${newAllergyType.id}`)
-        return AllergyTypeDisplaySchema.parse(newAllergyType)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error creating allergy type ${allergyTypeData.name}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeDisplay> {
-    console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeDisplaySchema} = useAllergyValidation()
-
-    const {id, ...updateData} = allergyTypeData
-
-    try {
-        const updatedAllergyType = await prisma.allergyType.update({
-            where: {id},
-            data: updateData
-        })
-
-        console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Successfully updated allergy type ${updatedAllergyType.name}`)
-        return AllergyTypeDisplaySchema.parse(updatedAllergyType)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error updating allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [UPDATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay> {
-    console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyTypeDisplaySchema} = useAllergyValidation()
-
-    try {
-        // ADR-005: Single atomic delete - Prisma handles CASCADE deletion of related allergies
-        const deletedAllergyType = await prisma.allergyType.delete({
-            where: {id}
-        })
-
-        console.info(`🏥 > ALLERGY_TYPE > [DELETE] Successfully deleted allergy type ${deletedAllergyType.name}`)
-        return AllergyTypeDisplaySchema.parse(deletedAllergyType)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-/*** ALLERGIES ***/
-
-export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyDetail[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergies = await prisma.allergy.findMany({
-            where: {inhabitantId},
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for inhabitant ${inhabitantId}`)
-
-        // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyDetailSchema.parse(a))
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for inhabitant ${inhabitantId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyDetail[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergies = await prisma.allergy.findMany({
-            where: {
-                inhabitant: {
-                    householdId
-                }
-            },
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for household ${householdId}`)
-
-        // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyDetailSchema.parse(a))
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for household ${householdId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyDetail[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergies = await prisma.allergy.findMany({
-            where: {allergyTypeId},
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for allergy type ${allergyTypeId}`)
-
-        // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyDetailSchema.parse(a))
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for allergy type ${allergyTypeId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyDetail | null> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergy = await prisma.allergy.findFirst({
-            where: {id},
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        if (allergy) {
-            console.info(`🏥 > ALLERGY > [GET] Found allergy (ID: ${allergy.id})`)
-            // Validate before returning (ADR-010)
-            return AllergyDetailSchema.parse(allergy)
-        } else {
-            console.info(`🏥 > ALLERGY > [GET] No allergy found with ID ${id}`)
-            return null
-        }
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyDetail> {
-    console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const newAllergy = await prisma.allergy.create({
-            data: allergyData,
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [CREATE] Successfully created allergy with ID ${newAllergy.id}`)
-        // Validate before returning (ADR-010)
-        return AllergyDetailSchema.parse(newAllergy)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
-        console.error(`🏥 > ALLERGY > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyDetail> {
-    console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    const {id, ...updateData} = allergyData
-
-    try {
-        const updatedAllergy = await prisma.allergy.update({
-            where: {id},
-            data: updateData,
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [UPDATE] Successfully updated allergy with ID ${updatedAllergy.id}`)
-        // Validate before returning (ADR-010)
-        return AllergyDetailSchema.parse(updatedAllergy)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error updating allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [UPDATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyDisplay> {
-    console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDisplaySchema} = useAllergyValidation()
-
-    try {
-        const deletedAllergy = await prisma.allergy.delete({
-            where: {id},
-            include: {
-                allergyType: true
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [DELETE] Successfully deleted allergy with ID ${deletedAllergy.id}`)
-        // Validate before returning (ADR-010)
-        return AllergyDisplaySchema.parse(deletedAllergy)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
 /*** HOUSEHOLDS ***/
 
-export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<Household> {
+export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<HouseholdDetail> {
     console.info(`🏠 > HOUSEHOLD > [SAVE] Saving household at ${household.address} (Heynabo ID: ${household.heynaboId})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -797,7 +400,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             heynaboId: household.heynaboId,
             pbsId: household.pbsId,
             movedInDate: household.movedInDate,
-            moveOutDate: household.moveOutDate,
+            moveOutDate: household.moveOutDate ?? Prisma.skip,
             name: household.name,
             address: household.address,
         }
@@ -816,9 +419,13 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
 
+        // ADR-009: Return HouseholdDetail with empty inhabitants (client refetches if needed)
         return {
             ...newHousehold,
-            shortName: getHouseholdShortName(newHousehold.address)
+            movedInDate: new Date(newHousehold.movedInDate),
+            moveOutDate: newHousehold.moveOutDate ? new Date(newHousehold.moveOutDate) : null,
+            shortName: getHouseholdShortName(newHousehold.address),
+            inhabitants: []
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving household at ${household?.address}`, error)
@@ -827,11 +434,11 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
     }
 }
 
-// ADR-009 & ADR-010: Returns HouseholdSummary (all scalar fields + lightweight inhabitant relation)
-export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSummary[]> {
+// ADR-009 & ADR-010: Returns HouseholdDisplay (all scalar fields + lightweight inhabitant relation)
+export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDisplay[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeHouseholdSummary} = useHouseholdValidation()
+    const {deserializeHouseholdSummary} = useCoreValidation()
 
     try {
         const households = await prisma.household.findMany({
@@ -861,10 +468,10 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdSu
     }
 }
 
-export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdWithInhabitants | null> {
+export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdDetail | null> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeHouseholdWithInhabitants} = useHouseholdValidation()
+    const {deserializeHouseholdWithInhabitants} = useCoreValidation()
 
     try {
         const household = await prisma.household.findFirst({
@@ -896,26 +503,39 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
     }
 }
 
-export async function updateHousehold(d1Client: D1Database, id: number, householdData: Partial<HouseholdCreate>): Promise<Household> {
+export async function updateHousehold(d1Client: D1Database, id: number, householdData: Partial<HouseholdCreate>): Promise<HouseholdDetail> {
     console.info(`🏠 > HOUSEHOLD > [UPDATE] Updating household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Handle undefined values with Prisma.skip to satisfy strictUndefinedChecks
+        const data: Partial<HouseholdCreate> = {}
+        if (householdData.heynaboId !== undefined) data.heynaboId = householdData.heynaboId
+        if (householdData.pbsId !== undefined) data.pbsId = householdData.pbsId
+        if (householdData.movedInDate !== undefined) data.movedInDate = householdData.movedInDate
+        if (householdData.name !== undefined) data.name = householdData.name
+        if (householdData.address !== undefined) data.address = householdData.address
+        // Only set moveOutDate if provided (use Prisma.skip for null to avoid undefined)
+        if (householdData.moveOutDate !== undefined) {
+            data.moveOutDate = householdData.moveOutDate ?? Prisma.skip
+        }
+
         const updatedHousehold = await prisma.household.update({
             where: {id},
-            data: householdData
+            data
         })
 
-        // Add computed shortName field + deserialize dates
-        const householdWithShortName = {
+        // ADR-009: Return HouseholdDetail with empty inhabitants (client refetches if needed)
+        const householdDetail: HouseholdDetail = {
             ...updatedHousehold,
             movedInDate: new Date(updatedHousehold.movedInDate),
             moveOutDate: updatedHousehold.moveOutDate ? new Date(updatedHousehold.moveOutDate) : null,
-            shortName: getHouseholdShortName(updatedHousehold.address)
+            shortName: getHouseholdShortName(updatedHousehold.address),
+            inhabitants: []
         }
 
         console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${updatedHousehold.name} with ID ${id}`)
-        return householdWithShortName
+        return householdDetail
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}`, error)
@@ -923,7 +543,7 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
     }
 }
 
-export async function deleteHousehold(d1Client: D1Database, id: number): Promise<Household> {
+export async function deleteHousehold(d1Client: D1Database, id: number): Promise<HouseholdDetail> {
     console.info(`🏠 > HOUSEHOLD > [DELETE] Deleting household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -932,7 +552,15 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
             where: {id}
         })
         console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${deletedHousehold.name} with ID ${id}`)
-        return deletedHousehold
+
+        // ADR-009: Return HouseholdDetail with empty inhabitants
+        return {
+            ...deletedHousehold,
+            movedInDate: new Date(deletedHousehold.movedInDate),
+            moveOutDate: deletedHousehold.moveOutDate ? new Date(deletedHousehold.moveOutDate) : null,
+            shortName: getHouseholdShortName(deletedHousehold.address),
+            inhabitants: []
+        }
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting household with id ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}`, error)
@@ -1093,6 +721,11 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                     include: {
                         assignments: {
                             include: {inhabitant: true}
+                        },
+                        _count: {
+                            select: {
+                                dinners: true  // Aggregate count of dinners per team
+                            }
                         }
                     }
                 },
@@ -1102,7 +735,15 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id})`)
-            return deserializeSeason(season)
+            // Transform to include cookingDaysCount in team objects
+            const seasonWithCounts = {
+                ...season,
+                CookingTeams: season.CookingTeams?.map(team => ({
+                    ...team,
+                    cookingDaysCount: team._count.dinners
+                }))
+            }
+            return deserializeSeason(seasonWithCounts)
         } else {
             console.info(`🌞 > SEASON > [GET] No season found with ID ${id}`)
             return null
@@ -1113,6 +754,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
         throw h3e
     }
 }
+
 
 export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     console.info(`🌞 > SEASON > [GET] Fetching all seasons`)
@@ -1250,7 +892,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // Get serialization utilities for CookingTeam
 const {serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment} = useCookingTeamValidation()
 
-export async function createTeamAssignment(d1Client: D1Database, assignmentData: any): Promise<CookingTeamAssignment> {
+export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id'>): Promise<CookingTeamAssignment> {
     console
         .info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${assignmentData.inhabitantId} in team ${assignmentData.cookingTeamId} with role ${assignmentData.role}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -1333,7 +975,7 @@ export async function deleteCookingTeamAssignments(d1Client: D1Database, assignm
     }
 }
 
-export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<any[]> {
+export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<CookingTeamDetail[]> {
     console.info(`👥 > TEAM > [GET] Fetching teams${seasonId ? ` for season ${seasonId}` : ''}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1365,7 +1007,11 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
     }
 }
 
-export async function fetchTeam(d1Client: D1Database, id: number): Promise<any | null> {
+/**
+* Fetch single cooking team with Detail data (ADR-009)
+* Includes: assignments (with inhabitants), dinnerEvents array, cookingDaysCount aggregate
+*/
+export async function fetchTeam(id: number, d1Client: D1Database):Promise<CookingTeamDetail | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -1375,39 +1021,42 @@ export async function fetchTeam(d1Client: D1Database, id: number): Promise<any |
             include: {
                 season: true,
                 assignments: {
-                    include: {
-                        inhabitant: true
-                    }
+                    include: {inhabitant: true}
                 },
-                dinners: true
+                dinners: true,  // Include full dinners array for Detail
+                _count: {
+                    select: {dinners: true}
+                }
             }
         })
 
         if (team) {
             console.info(`👥 > TEAM > [GET] Found team ${team.name} (ID: ${team.id})`)
-
-            // Deserialize from database format
-            return deserializeCookingTeam(team)
+            // Transform to include cookingDaysCount aggregate
+            const teamWithCount = {
+                ...team,
+                cookingDaysCount: team._count.dinners
+            }
+            return deserializeCookingTeam(teamWithCount)
         } else {
             console.info(`👥 > TEAM > [GET] No team found with ID ${id}`)
+            return null
         }
-        return null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [GET] ${h3e.message}`, error)
+        console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
 
-export async function createTeam(d1Client: D1Database, teamData: CookingTeamWithMembers): Promise<CookingTeamWithMembers> {
+
+export async function createTeam(d1Client: D1Database, teamData: CookingTeamDetail): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [CREATE] Creating team ${teamData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {toPrismaCreateData} = useCookingTeamValidation()
 
-    // Serialize domain object to database format
-    const serialized = serializeCookingTeam(teamData)
-
-    // Exclude id and read-only relation fields from create
-    const {id, assignments, affinity, ...createData} = serialized
+    // Transform domain object to Prisma create format (excludes computed fields, serializes WeekDayMap)
+    const {assignments, affinity, ...createData} = toPrismaCreateData(teamData)
 
     try {
         const newTeam = await prisma.cookingTeam.create({
@@ -1415,7 +1064,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamWith
                 ...createData,
                 // Use Prisma.skip to omit field entirely when affinity is null/undefined
                 affinity: affinity ?? PrismaFromClient.skip,
-                assignments: assignments?.length ? { create: assignments } : undefined
+                assignments: assignments?.length ? { create: assignments } : PrismaFromClient.skip
             },
             include: {
                 season: true,
@@ -1429,8 +1078,8 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamWith
 
         console.info(`👥 > TEAM > [CREATE] Successfully created team ${newTeam.name} with ID ${newTeam.id}`)
 
-        // Deserialize before returning
-        return deserializeCookingTeam(newTeam)
+        // Deserialize before returning - add default cookingDaysCount since not from query
+        return deserializeCookingTeam({...newTeam, _count: {dinnerEvents: 0}})
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating team ${teamData.name}`, error)
         console.error(`👥 > TEAM > [CREATE] ${h3e.message}`, error)
@@ -1438,15 +1087,13 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamWith
     }
 }
 
-export async function updateTeam(d1Client: D1Database, id: number, teamData: Partial<CookingTeamWithMembers>): Promise<CookingTeamWithMembers> {
+export async function updateTeam(d1Client: D1Database, id: number, teamData: Partial<CookingTeamDetail>): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [UPDATE] Updating team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {toPrismaUpdateData} = useCookingTeamValidation()
 
-    // Serialize domain object to database format
-    const serialized = serializeCookingTeam(teamData)
-
-    // Exclude id and read-only relation fields from update
-    const {id: teamId, assignments, affinity, ...updateData} = serialized
+    // Transform domain object to Prisma update format (excludes computed fields, serializes WeekDayMap)
+    const {assignments, affinity, ...updateData} = toPrismaUpdateData(teamData)
 
     try {
         const updatedTeam = await prisma.cookingTeam.update({
@@ -1464,7 +1111,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
                         ...assignment,
                         affinity: affinity ?? PrismaFromClient.skip
                     }))
-                } : undefined
+                } : PrismaFromClient.skip
             },
             include: {
                 season: true,
@@ -1477,8 +1124,8 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
         })
         console.info(`👥 > TEAM > [UPDATE] Successfully updated team ${updatedTeam.name} (ID: ${updatedTeam.id})`)
 
-        // Deserialize before returning
-        return deserializeCookingTeam(updatedTeam)
+        // Deserialize before returning - add default cookingDaysCount since not from query
+        return deserializeCookingTeam({...updatedTeam, _count: {dinnerEvents: 0}})
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating team with ID ${id}`, error)
         console.error(`👥 > TEAM > [UPDATE] ${h3e.message}`, error)
@@ -1486,7 +1133,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Par
     }
 }
 
-export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamWithMembers> {
+export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     try {
@@ -1497,8 +1144,8 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
 
-        // ADR-010: Deserialize to domain type before returning (add empty assignments for deserializer)
-        return deserializeCookingTeam({...deletedTeam, assignments: []})
+        // ADR-010: Deserialize to domain type before returning (add empty assignments and _count for deserializer)
+        return deserializeCookingTeam({...deletedTeam, assignments: [], _count: {dinnerEvents: 0}})
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting team with ID ${id}`, error)
         console.error(`👥 > TEAM > [DELETE] ${h3e.message}`, error)
@@ -1506,453 +1153,10 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
     }
 }
 
-/*** SEASON > DINNER EVENTS ***/
-
-// ADR-005: DinnerEvent relationships:
-// - Strong to Season (events are part of season's dining schedule)
-// - Weak to CookingTeam (event can exist without assigned team)
-// - Weak to Inhabitant chef (event can exist without assigned chef)
-
-export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEventDisplay> {
-    console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
-
-    try {
-        const newDinnerEvent = await prisma.dinnerEvent.create({
-            data: dinnerEvent
-        })
-
-        console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
-        return DinnerEventDisplaySchema.parse(newDinnerEvent)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [SAVE] ${h3e.message}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number): Promise<DinnerEventDisplay[]> {
-    console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
-
-    try {
-        const dinnerEvents = await prisma.dinnerEvent.findMany({
-            where: seasonId ? {seasonId} : undefined,
-            include: {
-                Season: true,
-                chef: true,
-                cookingTeam: {
-                    include: {
-                        season: true
-                    }
-                }
-            },
-            orderBy: {
-                date: 'asc'
-            }
-        })
-
-        console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
-        return dinnerEvents.map(de => DinnerEventDisplaySchema.parse(de))
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDetail | null> {
-    console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
-
-    try {
-        const dinnerEvent = await prisma.dinnerEvent.findFirst({
-            where: {id},
-            include: {
-                Season: true,
-                chef: true,
-                cookingTeam: {
-                    include: {
-                        season: true,
-                        assignments: {
-                            include: {
-                                inhabitant: true
-                            }
-                        }
-                    }
-                },
-                tickets: {
-                    include: {
-                        inhabitant: true,
-                        bookedByUser: true,
-                        ticketPrice: true
-                    }
-                }
-            }
-        })
-
-        if (dinnerEvent) {
-            console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
-            return DinnerEventDetailSchema.parse(dinnerEvent)
-        } else {
-            console.info(`🍽️ > DINNER_EVENT > [GET] No dinner event found with ID ${id}`)
-            return null
-        }
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
-        throw h3e
-    }
-}
-
-export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEvent> {
-    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
-
-    try {
-        const updatedDinnerEvent = await prisma.dinnerEvent.update({
-            where: {id},
-            data: dinnerEventData,
-            include: {
-                Season: true,
-                chef: true,
-                cookingTeam: true
-            }
-        })
-
-        console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)
-        return DinnerEventDetailSchema.parse(updatedDinnerEvent)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error updating dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [UPDATE] ${h3e.message}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDisplay> {
-    console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting dinner event with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
-
-    try {
-        const deletedDinnerEvent = await prisma.dinnerEvent.delete({
-            where: {id}
-        })
-
-        console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${deletedDinnerEvent.menuTitle}`)
-        return DinnerEventDisplaySchema.parse(deletedDinnerEvent)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.message}`, error)
-        throw h3e
-    }
-}
-
-/*** ORDERS ***/
-
-// ADR-005: Order relationships:
-// - Strong to DinnerEvent (order cannot exist without dinner event)
-// - Strong to Inhabitant (order cannot exist without inhabitant)
-// - Weak to Transaction (order can exist without transaction)
-
-export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const ticketPrice = await prisma.ticketPrice.findUnique({
-            where: { id: orderData.ticketPriceId }
-        })
-
-        if (!ticketPrice) {
-            throw createError({
-                statusCode: 404,
-                message: `Ticket price with ID ${orderData.ticketPriceId} not found`
-            })
-        }
-
-        const newOrder = await prisma.order.create({
-            data: {
-                ...orderData,
-                priceAtBooking: ticketPrice.price
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
-
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const domainOrder = {
-            ...newOrder,
-            ticketType: ticketPrice.ticketType
-        }
-
-        return OrderDisplaySchema.parse(domainOrder)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
-        console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
 /**
- * Batch create multiple orders for a household (parent booking for family + guests)
- * Business rules:
- * - ONE user (bookedByUserId) books for entire family
- * - Can have different inhabitantIds from same household
- * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
- * - All orders must have same bookedByUserId
- * - All inhabitants must be from same household
- * @param d1Client - D1 database client
- * @param ordersData - Array of order creation data
- * @returns Promise<OrderDisplay[]> - All orders for this dinner from this household
+ * DINNER EVENTS and ORDERS moved to financesRepository.ts
+ * See: server/data/financesRepository.ts
+ *
+ * DinnerEvent functions: saveDinnerEvent, fetchDinnerEvents, fetchDinnerEvent, updateDinnerEvent, deleteDinnerEvent
+ * Order functions: createOrder, createOrders, fetchOrder, fetchOrders, deleteOrder
  */
-export async function createOrders(d1Client: D1Database, ordersData: OrderCreate[]): Promise<OrderDisplay[]> {
-    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        // Business validation: All inhabitants must be from same household (requires DB lookup)
-        const inhabitantIds = [...new Set(ordersData.map(o => o.inhabitantId))]
-        const inhabitants = await prisma.inhabitant.findMany({
-            where: { id: { in: inhabitantIds } },
-            select: { id: true, householdId: true }
-        })
-
-        if (inhabitants.length !== inhabitantIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some inhabitants not found`
-            })
-        }
-
-        const householdIds = [...new Set(inhabitants.map(i => i.householdId))]
-        if (householdIds.length > 1) {
-            throw createError({
-                statusCode: 400,
-                message: `All inhabitants must be from the same household. Found ${householdIds.length} different households.`
-            })
-        }
-
-        const householdId = householdIds[0]
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Validated: All ${inhabitantIds.length} inhabitants from household ${householdId}`)
-
-        // Validate all ticket prices exist
-        const ticketPriceIds = [...new Set(ordersData.map(o => o.ticketPriceId))]
-        const ticketPrices = await prisma.ticketPrice.findMany({
-            where: { id: { in: ticketPriceIds } }
-        })
-
-        if (ticketPrices.length !== ticketPriceIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some ticket prices not found`
-            })
-        }
-
-        // Create price lookup map
-        const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp]))
-
-        // Prepare data with priceAtBooking
-        const ordersWithPrices = ordersData.map(orderData => ({
-            ...orderData,
-            priceAtBooking: priceMap.get(orderData.ticketPriceId)!.price
-        }))
-
-        // Batch insert - Prisma createMany returns { count: number }, NOT the created records
-        const result = await prisma.order.createMany({
-            data: ordersWithPrices
-        })
-
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Inserted ${result.count} orders`)
-
-        // Fetch ALL orders for this household + dinner event (acceptable per business rules)
-        // This handles the fact that createMany doesn't return IDs
-        const dinnerEventId = ordersData[0].dinnerEventId // All orders for same dinner event
-        const householdInhabitantIds = inhabitants.map(i => i.id)
-
-        const createdOrders = await prisma.order.findMany({
-            where: {
-                dinnerEventId,
-                inhabitantId: { in: householdInhabitantIds }
-            },
-            select: {
-                id: true,
-                dinnerEventId: true,
-                inhabitantId: true,
-                bookedByUserId: true,
-                ticketPriceId: true,
-                priceAtBooking: true,
-                dinnerMode: true,
-                state: true,
-                releasedAt: true,
-                closedAt: true,
-                createdAt: true,
-                updatedAt: true,
-                ticketPrice: {
-                    select: {
-                        id: true,
-                        ticketType: true,
-                        price: true,
-                        description: true,
-                        maximumAgeLimit: true
-                    }
-                }
-            },
-            orderBy: { id: 'asc' }
-        })
-
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully fetched ${createdOrders.length} orders for household ${householdId}`)
-
-        // Transform to domain type with ticketType
-        return createdOrders.map(order => {
-            const ticketPrice = priceMap.get(order.ticketPriceId)!
-            return OrderDisplaySchema.parse({
-                ...order,
-                ticketType: ticketPrice.ticketType
-            })
-        })
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error batch creating ${ordersData.length} orders`, error)
-        console.error(`🎟️ > ORDER > [BATCH CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchOrder(d1Client: D1Database, id: number): Promise<OrderDetail | null> {
-    console.info(`🎟️ > ORDER > [GET] Fetching order with ID ${id}`)
-    const {OrderDetailSchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const order = await prisma.order.findFirst({
-            where: {id},
-            include: {
-                dinnerEvent: {
-                    select: {
-                        id: true,
-                        date: true,
-                        menuTitle: true,
-                        dinnerMode: true
-                    }
-                },
-                inhabitant: {
-                    select: {
-                        id: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true
-                    }
-                },
-                bookedByUser: {
-                    select: {
-                        id: true,
-                        email: true
-                    }
-                },
-                ticketPrice: {
-                    select: {
-                        id: true,
-                        ticketType: true,
-                        price: true,
-                        description: true
-                    }
-                }
-            }
-        })
-
-        if (!order) {
-            console.info(`🎟️ > ORDER > [GET] No order found with ID ${id}`)
-            return null
-        }
-
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
-
-        // Domain type matches Prisma result structure for detail endpoint (ADR-009)
-        return OrderDetailSchema.parse(order)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function deleteOrder(d1Client: D1Database, id: number): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        // Delete order - cascade handles strong associations (Transaction) automatically
-        const deletedOrder = await prisma.order.delete({
-            where: {id},
-            include: {
-                ticketPrice: {
-                    select: {
-                        ticketType: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order with ID ${deletedOrder.id}`)
-
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const {ticketPrice, ...orderWithoutRelation} = deletedOrder
-        const domainOrder = {
-            ...orderWithoutRelation,
-            ticketType: ticketPrice.ticketType
-        }
-
-        return OrderDisplaySchema.parse(domainOrder)
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting order with ID ${id}`, error)
-        console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}
-
-export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<OrderDisplay[]> {
-    console.info(`🎟️ > ORDER > [GET] Fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const orders = await prisma.order.findMany({
-            where: dinnerEventId ? {dinnerEventId} : undefined,
-            include: {
-                ticketPrice: {
-                    select: {
-                        ticketType: true
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: 'asc'
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched ${orders.length} orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
-
-        // Transform Prisma types to domain types and validate (ADR-010)
-        const domainOrders = orders.map(order => {
-            const {ticketPrice, ...orderWithoutRelation} = order
-            const domainOrder = {
-                ...orderWithoutRelation,
-                ticketType: ticketPrice.ticketType
-            }
-            return OrderDisplaySchema.parse(domainOrder)
-        })
-
-        return domainOrders
-    } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`, error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
-    }
-}

@@ -28,13 +28,15 @@ const columns = [
 
 <template>
   <div>
-    <ViewError v-if="isHouseholdsErrored"
+    <ViewError
+v-if="isHouseholdsErrored"
                text="Kan ikke hente data for husstande"
                :error="householdsError?.statusCode"
       :cause="householdsError"
     />
 
-  <UCard class="w-full px-0"
+  <UCard
+class="w-full px-0"
          data-test-id="admin-households">
     <template #header>
       Husstande på Skråningen

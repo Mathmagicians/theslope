@@ -5,6 +5,8 @@ import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
 import { pollFor } from '../testHelpers'
 
+import { usePlanStore } from '~/stores/plan'
+
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
 // Order matters: specific endpoints FIRST, generic endpoints LAST
@@ -23,8 +25,6 @@ registerEndpoint('/api/admin/season/active', activeSeasonIdEndpoint)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
-
-import { usePlanStore } from '~/stores/plan'
 
 // Test helpers
 const setupStore = async (initStore = false, shortName?: string) => {

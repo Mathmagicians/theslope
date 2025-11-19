@@ -7,7 +7,7 @@ import type {CookingTeamWithMembers} from "~/composables/useCookingTeamValidatio
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
@@ -54,8 +54,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamWithMembers>
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
-        console.error(`👥 > TEAM > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
     }
 })

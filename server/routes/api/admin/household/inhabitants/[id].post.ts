@@ -1,29 +1,27 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {useHouseholdValidation} from "~/composables/useHouseholdValidation"
-import type {Inhabitant} from "~/composables/useHouseholdValidation"
+import {useCoreValidation} from "~/composables/useCoreValidation"
+import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import {updateInhabitant} from "~~/server/data/prismaRepository"
 import {z} from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive()
 })
 
-export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
+export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     let id, inhabitantData
     try {
-        const {InhabitantUpdateSchema} = useHouseholdValidation()
+        const {InhabitantUpdateSchema} = useCoreValidation()
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
         inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({householdId: true, id: true}).parse)
     } catch (error) {
-        const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
-        console.warn(`👩‍🏠 > INHABITANT > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
     }
 
     try {
@@ -33,8 +31,6 @@ export default defineEventHandler<Promise<Inhabitant>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedInhabitant
     } catch (error) {
-        const h3e = h3eFromCatch(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👩‍🏠 > INHABITANT > [POST] Error updating inhabitant with ID ${id}`, error)
     }
 })

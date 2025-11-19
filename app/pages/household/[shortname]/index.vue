@@ -5,5 +5,5 @@ await navigateTo(`/household/${shortname}/bookings`, {replace: true})
 </script>
 
 <template>
-  <div></div>
+  <div/>
 </template>

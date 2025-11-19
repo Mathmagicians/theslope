@@ -6,7 +6,7 @@ import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {CookingTeamAssignment} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Get schema from composable and refine for create operation (remove optional id)
 const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
@@ -21,9 +21,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     try {
         assignmentData = await readValidatedBody(event, TeamAssignmentCreateSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
-        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -34,8 +32,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         setResponseStatus(event, 201)
         return assignment
     } catch (error) {
-        const h3e = h3eFromCatch(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
     }
 })
