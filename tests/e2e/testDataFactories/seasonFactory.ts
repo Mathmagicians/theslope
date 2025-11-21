@@ -109,7 +109,7 @@ export class SeasonFactory {
         ...overrides
     })
 
-    static readonly defaultSeason = (testSalt: string = Date.now().toString()): Season => {
+    static readonly defaultSeason = (testSalt: string = temporaryAndRandom()): Season => {
         return {
             ...this.defaultSeasonData,
             shortName: salt(this.defaultSeasonData.shortName, testSalt)

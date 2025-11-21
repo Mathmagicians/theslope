@@ -1,5 +1,6 @@
 import type {InternalApi} from 'nitropack'
 import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
+import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 
 export const useUsersStore = defineStore("Users", () => {
     const importing = ref(false)
@@ -13,10 +14,11 @@ export const useUsersStore = defineStore("Users", () => {
         status: allergyManagersStatus,
         error: allergyManagersError,
         refresh: refreshAllergyManagers
-    } = useAsyncData<UserDisplay[]>(
-        'allergyManagers',
-        () => $fetch<UserDisplay[]>(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`),
+    } = useFetch<UserDisplay[]>(
+        `/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`,
         {
+            key: 'allergyManagers',
+            immediate: true,
             default: () => []
         }
     )
@@ -26,10 +28,11 @@ export const useUsersStore = defineStore("Users", () => {
         status: usersStatus,
         error: usersError,
         refresh: refreshUsers
-    } = useAsyncData<UserDisplay[]>(
+    } = useFetch<UserDisplay[]>(
         '/api/admin/users',
-        () => $fetch<UserDisplay[]>('/api/admin/users'),
         {
+            key: 'users',
+            immediate: true,
             default: () => []
         }
     )
@@ -48,6 +51,34 @@ export const useUsersStore = defineStore("Users", () => {
         }
     )
 
+    // My teams - cooking teams the logged-in user is assigned to in active season
+    // HTTP JSON converts Date objects to ISO strings during transport
+    // CookingTeamDetailSchema.parse() handles date coercion via z.coerce.date()
+    const {CookingTeamDetailSchema} = useCookingTeamValidation()
+    const {
+        data: myTeams,
+        status: myTeamsStatus,
+        error: myTeamsError,
+        refresh: refreshMyTeams
+    } = useFetch<CookingTeamDetail[]>(
+        '/api/team/my',
+        {
+            key: 'users-store-my-teams',
+            default: () => [],
+            immediate: true,
+            transform: (data: any[]) => {
+                try {
+                    // Parse through schema to coerce ISO date strings to Date objects
+                    // Affinity is already an object (HTTP deserialized it), no manual JSON.parse needed
+                    return data.map(team => CookingTeamDetailSchema.parse(team))
+                } catch (e) {
+                    console.error('🪪 > USERS_STORE > Error parsing my teams:', e)
+                    throw e
+                }
+            }
+        }
+    )
+
 
     // ========================================
     // Computed - Public API (derived from status)
@@ -58,6 +89,11 @@ export const useUsersStore = defineStore("Users", () => {
     const isImportHeynaboErrored = computed(() => heynaboImportStatus.value === 'error')
     const isUsersLoading = computed(() => usersStatus.value === 'pending')
     const isUsersErrored = computed(() => usersStatus.value === 'error')
+    const isMyTeamsLoading = computed(() => myTeamsStatus.value === 'pending')
+    const isMyTeamsErrored = computed(() => myTeamsStatus.value === 'error')
+    const isMyTeamsInitialized = computed(() =>
+        myTeamsStatus.value === 'success' && myTeams.value !== null
+    )
 
     // ========================================
     // Store Actions
@@ -82,6 +118,15 @@ export const useUsersStore = defineStore("Users", () => {
         loadUsers()
     }
 
+    const loadMyTeams = async () => {
+        await refreshMyTeams()
+        if (myTeamsError.value) {
+            console.error('🪪 > USERS_STORE > loadMyTeams > Error loading my teams', myTeamsError.value)
+            throw myTeamsError.value
+        }
+        console.info(`🪪 > USERS_STORE > loadMyTeams > Loaded ${myTeams.value.length} teams`)
+    }
+
     return {
         importHeynaboData,
         isImportHeynaboLoading,
@@ -94,7 +139,13 @@ export const useUsersStore = defineStore("Users", () => {
         allergyManagers,
         isAllergyManagersLoading,
         isAllergyManagersErrored,
-        allergyManagersError
+        allergyManagersError,
+        myTeams,
+        loadMyTeams,
+        isMyTeamsLoading,
+        isMyTeamsErrored,
+        isMyTeamsInitialized,
+        myTeamsError
     };
 });
 

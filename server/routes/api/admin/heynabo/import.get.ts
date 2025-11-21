@@ -9,7 +9,7 @@ const {throwH3Error} = eventHandlerHelper
 const {createHouseholdsFromImport} = useHeynaboValidation()
 
 // Returns imported locations and members from HeyNabo
-export default defineEventHandler<HouseholdDetail[]>(async (event) => {
+export default defineEventHandler(async (event): Promise<HouseholdDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -33,6 +33,6 @@ export default defineEventHandler<HouseholdDetail[]>(async (event) => {
         setResponseStatus(event, 200)
         return result
     } catch (error) {
-        throwH3Error("🏠 > IMPORT > Import operation failed", error)
+        return throwH3Error("🏠 > IMPORT > Import operation failed", error)
     }
 })

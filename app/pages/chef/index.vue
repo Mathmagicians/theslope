@@ -35,21 +35,30 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
+import {formatDate, parseDate} from '~/utils/date'
 
 // Design system
 const { COLOR, TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
-const {isPlanStoreReady, selectedSeason, selectedDinnerEvent: selectedDinnerEventDetail, myTeams} = storeToRefs(planStore)
+const {isPlanStoreReady, selectedSeason} = storeToRefs(planStore)
 planStore.initPlanStore()
+
+const usersStore = useUsersStore()
+const {myTeams, isMyTeamsInitialized} = storeToRefs(usersStore)
+usersStore.loadMyTeams()
 
 const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
-// Permission helpers
-const { isChefFor } = useSeason()
+// Page ready when both plan store and myTeams are initialized
+const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
+
+// Permission helpers and date utilities
+const { isChefFor, getDefaultDinnerStartTime, getNextDinnerDate } = useSeason()
 const authStore = useAuthStore()
+const dinnerStartTime = getDefaultDinnerStartTime()
 
 // Team selection via query parameter
 const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<number>('team', {
@@ -64,7 +73,7 @@ const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<numbe
   defaultValue: () => {
     return myTeams.value[0]?.id ?? 0
   },
-  syncWhen: () => isPlanStoreReady.value && myTeams.value.length > 0
+  syncWhen: () => isPageReady.value && myTeams.value.length > 0
 })
 
 // Selected team
@@ -72,29 +81,29 @@ const selectedTeam = computed(() => {
   return myTeams.value.find(t => t.id === selectedTeamId.value) || null
 })
 
-// Derive dinner events from selected team
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
+const teamDinnerDates = computed(() => teamDinnerEvents.value.map(e => new Date(e.date)))
 
-// Dinner selection via query parameter
-const {value: selectedDinnerId, setValue: setSelectedDinnerId} = useQueryParam<number>('dinner', {
-  serialize: (id) => id.toString(),
+const getDefaultDate = (): Date => {
+  const nextDinner = getNextDinnerDate(teamDinnerDates.value, dinnerStartTime)
+  return nextDinner?.start ?? new Date()
+}
+
+const {value: selectedDate, setValue: setSelectedDate} = useQueryParam<Date>('date', {
+  serialize: formatDate,
   deserialize: (s) => {
-    const parsed = parseInt(s)
-    return !isNaN(parsed) ? parsed : null
+    const parsed = parseDate(s)
+    return parsed && !isNaN(parsed.getTime()) ? parsed : null
   },
-  validate: (id) => {
-    // Check if this dinner belongs to this team
-    return teamDinnerEvents.value.some(e => e.id === id)
+  validate: (date) => {
+    // Check if this date has a dinner event for this team
+    return teamDinnerEvents.value.some(e => {
+      const eventDate = new Date(e.date)
+      return eventDate.toDateString() === date.toDateString()
+    })
   },
-  defaultValue: () => {
-    // Default to first upcoming dinner
-    const now = new Date()
-    const upcoming = teamDinnerEvents.value
-      .filter(e => new Date(e.date) >= now)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    return upcoming[0]?.id ?? teamDinnerEvents.value[0]?.id ?? 0
-  },
-  syncWhen: () => isPlanStoreReady.value && teamDinnerEvents.value.length > 0
+  defaultValue: getDefaultDate,
+  syncWhen: () => isPageReady.value && teamDinnerEvents.value.length > 0
 })
 
 // DinnerMenuHero mode based on chef permission
@@ -105,18 +114,46 @@ const dinnerMenuHeroMode = computed(() => {
   return isChefFor(inhabitantId, selectedTeam.value) ? 'chef' : 'view'
 })
 
-// Load full dinner event detail when selection changes
-watch(selectedDinnerId, (dinnerId) => {
-  planStore.loadDinnerEvent(dinnerId ?? null)
-}, {immediate: true})
-
-// Selected dinner event
 const selectedDinnerEvent = computed(() => {
-  return teamDinnerEvents.value.find(e => e.id === selectedDinnerId.value)
+  return teamDinnerEvents.value.find(e => {
+    const eventDate = new Date(e.date)
+    return eventDate.toDateString() === selectedDate.value.toDateString()
+  })
 })
 
-// Get orders from selected dinner event detail
+// Validation schema for parsing dinner event detail
+const { DinnerEventDetailSchema } = useBookingValidation()
+
+// Component-local data: Fetch dinner detail with orders when selection changes (ADR-007)
+const {data: selectedDinnerEventDetail} = useAsyncData(
+  computed(() => `chef-dinner-${selectedDinnerEvent.value?.id || 'none'}`),
+  () => selectedDinnerEvent.value?.id
+    ? planStore.fetchDinnerEventDetail(selectedDinnerEvent.value.id)
+    : Promise.resolve(null),
+  {
+    watch: [() => selectedDinnerEvent.value?.id],
+    immediate: true,
+    transform: (data: any) => {
+      if (!data) return null
+      try {
+        return DinnerEventDetailSchema.parse(data)
+      } catch (e) {
+        console.error('Error parsing dinner event detail:', e)
+        throw e
+      }
+    }
+  }
+)
+
 const orders = computed(() => selectedDinnerEventDetail.value?.tickets ?? [])
+
+// Bridge between date-based page state and ID-based component selection
+const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
+
+const handleDinnerSelect = (dinnerId: number) => {
+  const dinner = teamDinnerEvents.value.find(e => e.id === dinnerId)
+  if (dinner) setSelectedDate(new Date(dinner.date))
+}
 
 // Handle allergen updates
 const handleAllergenUpdate = async (allergenIds: number[]) => {
@@ -125,7 +162,7 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
 }
 
 useHead({
-  title: '👨‍🍳 Kokkeværksted',
+  title: '👨‍🍳 Madlavning',
   meta: [
     {
       name: 'Chef Dashboard',
@@ -145,7 +182,7 @@ useHead({
         </template>
 
         <!-- Loading teams -->
-        <Loader v-if="!isPlanStoreReady" text="Henter madholdsdata..." />
+        <Loader v-if="!isPageReady" text="Henter madholdsdata..." />
 
         <!-- Team selector and calendar -->
         <div v-else class="space-y-4">
@@ -158,7 +195,15 @@ useHead({
             />
           </div>
 
-          <!-- Team calendar (dinner list) -->
+          <!-- Team role status -->
+          <div v-if="selectedTeam && authStore.user?.Inhabitant?.id" class="px-4">
+            <TeamRoleStatus
+              :team="selectedTeam"
+              :inhabitant-id="authStore.user.Inhabitant.id"
+            />
+          </div>
+
+          <!-- Team calendar with agenda/calendar views -->
           <div v-if="teamDinnerEvents.length === 0" class="px-4">
             <UAlert
               type="info"
@@ -175,13 +220,16 @@ useHead({
             </UAlert>
           </div>
 
-          <div v-else class="space-y-2">
-            <ChefDinnerCard
-              v-for="dinner in teamDinnerEvents"
-              :key="dinner.id"
-              :dinner-event="dinner"
-              :selected="selectedDinnerId === dinner.id"
-              @select="setSelectedDinnerId"
+          <div v-else class="px-4">
+            <TeamCalendarDisplay
+              v-if="selectedSeason"
+              :season-dates="selectedSeason.seasonDates"
+              :teams="[selectedTeam].filter(Boolean)"
+              :dinner-events="teamDinnerEvents"
+              :holidays="selectedSeason.holidays"
+              :selected-dinner-id="selectedDinnerId"
+              :show-selection="true"
+              @select="handleDinnerSelect"
             />
           </div>
         </div>
@@ -191,9 +239,9 @@ useHead({
     <!-- Detail: Dinner view (default slot = right side) -->
     <UCard :ui="{ rounded: '', header: { padding: 'p-0' }, body: { padding: 'p-0' } }">
       <!-- Menu Hero in header slot (chef mode if isChefFor, else view mode) -->
-      <template v-if="isPlanStoreReady && selectedDinnerEvent" #header>
+      <template v-if="isPageReady && selectedDinnerEventDetail" #header>
         <DinnerMenuHero
-          :dinner-event-id="selectedDinnerEvent.id"
+          :dinner-event="selectedDinnerEventDetail"
           :ticket-prices="selectedSeason?.ticketPrices ?? []"
           :mode="dinnerMenuHeroMode"
           @update-allergens="handleAllergenUpdate"
@@ -201,7 +249,7 @@ useHead({
       </template>
 
       <!-- Loading -->
-      <Loader v-if="!isPlanStoreReady" text="Henter fællesspisning..." />
+      <Loader v-if="!isPageReady" text="Henter fællesspisning..." />
 
       <!-- No dinner selected -->
       <UAlert

@@ -1,123 +1,114 @@
 # 🎯 Chef/Team Management Feature - Implementation Workplan
 
-**Status**: Approved
-**Date**: 2025-01-15
-**Architecture Review**: ✅ Approved by themathmagician
+**Status**: Phase 4 Complete (Page Integration) | **Started**: 2025-01-15 | **Last Updated**: 2025-01-18
 
 ---
 
-## Executive Summary
+## 📊 Implementation Status
 
-**Feature**: Team-based cooking management interface for viewing assignments and editing menus
-**Route**: `/chefing/[teamId]?dinner=X&mode=edit`
-**Users**: All cooking team members (chefs can edit, others view-only)
-**Architecture**: Extends `usePlanStore()`, reuses existing components, follows ADR patterns
+### ✅ COMPLETED (Phase 1-4)
+
+**Route Architecture:**
+- ✅ `/chef/index.vue` - Team home with master/detail layout
+- ✅ Query params: `?team=3&date=09/12/2025` (date-based, not ID-based)
+- ✅ Component-local data fetching (ADR-007)
+
+**Components:**
+- ✅ `MyTeamSelector` - Mobile dropdown, desktop tabs
+- ✅ `TeamCalendarDisplay` - Agenda/calendar views with selection, pagination
+- ✅ `TeamRoleStatus` - Shows role (CHEF/COOK/JUNIORHELPER) and responsibilities
+- ✅ `DinnerMenuHero` - Enhanced with `mode='chef'` for editing
+- ✅ `CookingTeamCard` - Reused in `mode='monitor'`
+- ✅ `KitchenPreparation` - Reused for order statistics
+- ✅ `CookingTeamBadges` - Team member display badges
+
+**Backend:**
+- ✅ `/api/team/my` - Get logged-in user's teams with dinner events
+- ✅ Repository: `fetchMyTeams()` with CookingTeamDetail schema
+- ✅ Store: `useUsersStore().myTeams` with reactive initialization
+
+**Business Logic:**
+- ✅ Permission check: `isChefFor()` in `useSeason` composable
+- ✅ Smart defaults: `getNextDinnerDate()` for team's next cooking day
+- ✅ Date utilities: `formatDanishWeekdayDate()` for discrete date display
+
+### ⏳ OUTSTANDING (Phase 5+)
+
+**Menu Editing:**
+- ❌ Allergen selection (checkboxes)
+- ❌ Picture upload modal
+- ❌ Inline field saves (title, description, allergens)
+
+**State Transitions:**
+- ❌ SCHEDULED → ANNOUNCED (announce menu)
+- ❌ Any state → CANCELLED (with refund logic)
+- ❌ Auto-consumed batch script
+
+**Deadline System:**
+- ❌ `useChefDeadlines()` composable
+- ❌ Deadline warnings (⚠️ < 3 days, 🚨 overdue)
+- ❌ Calendar deadline overlays
+
+**Testing:**
+- ⚠️ Component tests for MyTeamSelector, TeamCalendarDisplay
+- ⚠️ E2E tests for chef workflow, team switching
+
+---
+
+## 📝 Executive Summary
+
+**Feature**: Team home for cooking team members with calendar and menu management
+**Route**: `/chef` with query params `?team=X&date=Y`
+**Users**: All team members (view), chefs (edit when mode='chef')
+**Architecture**: Reuses existing components, follows ADR-007 component-local data pattern
 
 ### Business Requirements
 
-- **Team members** can view their cooking team's schedule and dinner assignments
-- **Chefs** can edit menu details (title, description, picture, allergens) for dinners they're assigned to
-- **Deadline tracking** shows warnings when announce deadline is approaching or overdue
-- **Shift swapping** enabled by allowing users to view all teams' schedules
-- **Inline saves** like admin teams page (no "save all" button)
-- **Picture upload** conditional - use Heynabo URL if available, otherwise allow file upload
-- **Allergen selection** via checkbox list from allergy store
-- **Auto-consumed** dinners transition via batch script (dev button for manual testing)
+- ✅ Team members view their cooking team's schedule and dinner assignments
+- ⚠️ Chefs edit menu details (title, description, picture, allergens) - *Partial: viewing only*
+- ❌ Deadline tracking with warnings (⚠️ < 3 days, 🚨 overdue)
+- ❌ Inline saves for menu fields
+- ❌ Picture upload
+- ❌ State transitions (SCHEDULED → ANNOUNCED → CONSUMED)
 
-### Key UX Decisions
+### Key Architecture Decisions
 
-1. **Route Structure**: `/chef/[teamId]?dinner=123&mode=edit`
-2. **Master View**: Team selector (all teams) + List/Calendar toggle
-3. **Detail View**: State-based (SCHEDULED = editor, ANNOUNCED = kitchen stats)
-4. **Permissions**: View = anyone on team, Edit = only assigned chef
-5. **Color Harmony**: Mocha theme (chef-focused), deadline warnings (yellow/red)
-6. **Calendar**: Deadline-focused with overlay badges (yellow warning, red overdue)
+1. **Route**: `/chef?team=3&date=09/12/2025` (date-based, not ID)
+2. **Master/Detail**: TeamCalendarDisplay (left) + DinnerMenuHero (right)
+3. **Permissions**: `isChefFor()` determines mode='chef' vs mode='view'
+4. **Data Fetching**: Component-local `useAsyncData` watching dinner selection (ADR-007)
+5. **Reuse**: Maximum component reuse (TeamCalendarDisplay, DinnerMenuHero, CookingTeamCard, KitchenPreparation)
 
 ---
 
-## Component Architecture Overview
+## Implementation Plan (Condensed)
 
-### Component Reuse Matrix (MAXIMUM REUSE FOCUS)
+### Phase 5: Menu Editing (Next)
+- [ ] `AllergenMultiSelector` - Extract from AdminAllergies, reuse in DinnerMenuHero
+- [ ] Inline field saves - Title, description with optimistic updates
+- [ ] Picture upload modal - Conditional (Heynabo URL vs file upload)
+- [ ] State transition: SCHEDULED → ANNOUNCED
 
-| Component | Status | Reuse Type | Purpose | Location |
-|-----------|--------|------------|---------|----------|
-| **REUSED (No Changes)** |
-| `CookingTeamCard` | ✅ REUSE | mode="monitor" | Team member display | `components/cooking-team/` |
-| `KitchenPreparation` | ✅ REUSE | Full component | Kitchen stats panel | `components/dinner/` |
-| `TeamCalendarDisplay` | ✅ REUSE | Base calendar | Calendar view in master | `components/calendar/` |
-| `DinnerBookingForm` | ✅ REUSE | Booking UI | Reused by DinnerMenuHero | `components/dinner/` |
-| **EXTRACTED (Refactor for Reusability)** |
-| `AllergenSelector` | 🔄 EXTRACT | From AdminAllergies | Extract checkbox pattern (lines 391-401) to shared component | `components/shared/` |
-| **ENHANCED (Add Features)** |
-| `DinnerMenuHero` | 🔧 ENHANCE | Add mode="chef" | Chef menu editing (title, desc, picture, allergens) | `components/dinner/` |
-| `TeamCalendarDisplay` | 🔧 ENHANCE | Add :deadlineMode | Deadline badge overlays when true | `components/calendar/` |
-| `AdminAllergies` | 🔧 ENHANCE | Use AllergenSelector | Refactor to use extracted shared component | `components/admin/` |
-| **NEW COMPONENTS (Minimal - Only What's Truly Needed)** |
-| `ChefDinnerCard` | 🆕 CREATE | Chef-specific | Master list item with deadline badges | `components/chef/` |
-| **ENHANCED COMPOSABLES** |
-| `useSeason` | 🔧 ENHANCE | Add semantic wrapper | canAnnounceMenu (reuses existing isBeforeDeadline) | `composables/` |
-| **ENHANCED STORES** |
-| `useAuthStore` | 🔧 ENHANCE | Add permission helpers | isChefFor, isOnTeam (follows isAdmin, isAllergyManager pattern) | `stores/` |
-| **NEW PAGES** |
-| `/chefing/index.vue` | 🆕 CREATE | Page | Auto-redirect to team or team selector | `pages/chefing/` |
-| `/chefing/[teamId].vue` | 🆕 CREATE | Page | Master/detail layout | `pages/chefing/` |
-| **STORE BOUNDARY** |
-| `useBookingsStore` | 🔧 EXTEND | Add dinner updates | updateDinnerField, announceDinner, cancelDinner | `stores/bookings.ts` |
+### Phase 6: Deadline System
+- [ ] `useChefDeadlines()` - Calculate deadlines, warning thresholds
+- [ ] Deadline badges - ⚠️ Warning (< 3 days), 🚨 Overdue (past deadline)
+- [ ] Calendar overlays - Show deadline status on calendar dates
 
-### 
-**✅ DinnerStateIndicator** → Use DinnerEventDisplay.state with computed badge logic in ChefDinnerCard
-**🔄 AllergenSelector** → EXTRACT from AdminAllergies (lines 391-401) into shared component, then reuse in both AdminAllergies and DinnerMenuHero
-**✅ ChefMenuEditor** → Enhancement of DinnerMenuHero with mode="chef" prop
-**✅ ChefDinnerDetail** → Inline logic in page using DinnerMenuHero with mode switching
-**✅ ChefCalendarDisplay** → Enhancement of TeamCalendarDisplay with :deadlineMode prop
-**✅ useMenuPictureUpload** → Inline in DinnerMenuHero enhancement (picture edit modal)
-**✅  Add `canAnnounceMenu()` to useSeason (reuses existing `isBeforeDeadline` curried function)
-**✅ Add permission helpers to `useAuthStore` (follows existing isAdmin, isAllergyManager pattern)
-
-### Components
-
-**REVISED (Maximum Reuse):**
-- 🔄 1 extracted component (AllergenSelector - refactored from existing code)
-- 🆕 1 new component (ChefDinnerCard - truly unique)
-- 🔧 5 enhanced components (DinnerMenuHero, TeamCalendarDisplay, AdminAllergies, useSeason, useAuthStore)
-- **Total: 1 new entity** (7 eliminated via reuse/enhancement)
-
-**Reuse Strategies that should be Used:**
-- ✅ Component mode props (DinnerMenuHero mode="chef", TeamCalendarDisplay :deadlineMode)
-- ✅ Pattern extraction (AllergenSelector from AdminAllergies)
-- ✅ Curried function reuse (canAnnounceMenu uses existing isBeforeDeadline)
-- ✅ Store pattern extension (permission helpers in useAuthStore)
-- ✅ Inline logic (picture upload modal, detail view switching)
+### Phase 7: Testing & Polish
+- [ ] Component tests: MyTeamSelector, TeamCalendarDisplay
+- [ ] E2E tests: Chef workflow, team switching, permission guards
+- [ ] UX polish: Loading states, error handling, mobile responsiveness
 
 ---
 
-## Architectural Decisions (REVISED - Maximum Reuse)
+## Original Detailed Plan (Archive)
 
-### 1. Store Strategy
-**Decision**: Extend `usePlanStore()` with chef-specific methods
-**Rationale**: DinnerEvent data already lives in plan store, avoids data duplication
+<details>
+<summary>Click to expand original detailed implementation plan (800+ lines)</summary>
 
-### 2. Inline Save Pattern
-**Decision**: Field-level saves with optimistic updates + error rollback
-**Rationale**: Matches admin teams pattern, better UX than "save all" button
+### Phase 1: Foundation Components
 
-### 3. Calendar Enhancement
-**Decision**: Wrapper component `ChefCalendarDisplay` around `TeamCalendarDisplay`
-**Rationale**: Safest approach - doesn't break existing dinner page calendar
-
-### 4. Permission Guards
-**Decision**: Composable `useChefPermissions()` for reusable permission logic
-**Rationale**: Testable, consistent, follows composable pattern
-
-### 5. Deadline Calculations
-**Decision**: Utility composable `useChefDeadlines()` for deadline logic
-**Rationale**: Reusable, testable, centralizes business rules
-
----
-
-## Phase 1: Foundation Components (Simple, No Dependencies)
-
-### 1.1 DinnerStateIndicator Component
+#### 1.1 DinnerStateIndicator Component
 
 **Purpose**: Status badge with deadline warnings
 **File**: `app/components/shared/DinnerStateIndicator.vue`
@@ -926,15 +917,23 @@ LOGIC:
 - **Page theme**: `COLOR.mocha` (Pantone 2025 - warm, chef-focused)
 - **Accents**: `COLOR.peach` (consistency with member-facing dinner page)
 
-### Status Colors
-- 🟡 SCHEDULED: `COLOR.mocha` (warm - "ready to plan")
-- 🟢 ANNOUNCED: `COLOR.success` (green - "published, bookable")
-- ⚪ CONSUMED: `COLOR.neutral` (gray - "done, archived")
-- 🔴 CANCELLED: `COLOR.error` (red - "problem")
+### Status Colors (Dinner State Badges)
+- 🟡 **SCHEDULED**: `COLOR.mocha` - Warm amber (ready to plan menu)
+- 🟢 **ANNOUNCED**: `COLOR.success` - Green (published, bookable by members)
+- ⚪ **CONSUMED**: `COLOR.neutral` - Gray (dinner completed, archived)
+- ⚫ **CANCELLED**: `'neutral'` with dark variant - Black/dark gray (cancelled event, NOT red - red is reserved for overdue deadlines)
 
-### Deadline Warnings
-- ⚠️ Coming soon (< 3 days): `COLOR.warning` (amber)
-- 🚨 Overdue: `COLOR.error` (red)
+### Deadline Warnings (Separate from State - Additional Indicators)
+**Three deadline types:**
+1. **Menu Announcement** (chef responsibility): Must announce before booking deadline
+2. **Booking Deadline** (member action): `season.ticketIsCancellableDaysBefore` days before dinner (typically 10 days)
+3. **Grocery Shopping** (chef action): Before dinner date
+
+**Warning levels:**
+- ⚠️ **Coming Soon** (< 3 days to deadline): `COLOR.warning` - Amber badge
+- 🚨 **Overdue** (past deadline): `COLOR.error` - Red badge (ONLY use of red in this feature)
+
+**Display principle:** Deadlines are additive warnings, not state replacements. A dinner can be SCHEDULED (mocha badge) AND have an overdue warning (red badge) simultaneously.
 
 ### Kitchen Stats
 - Keep existing vibrant Pantone colors: `COMPONENTS.kitchenPanel.*`

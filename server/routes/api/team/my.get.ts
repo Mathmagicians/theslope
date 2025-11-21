@@ -16,6 +16,7 @@
  */
 import {fetchMyTeams, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
+import type {UserDetail} from '~~/app/composables/useCoreValidation'
 
 export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> => {
     const {cloudflare} = event.context
@@ -23,7 +24,9 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> =>
 
     // Get authenticated user's inhabitant ID from session
     const session = await getUserSession(event)
-    const inhabitantId = session?.user?.Inhabitant?.id
+    // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
+    const user = session?.user as UserDetail | undefined
+    const inhabitantId = user?.Inhabitant?.id
 
     if (!inhabitantId) {
         console.warn('👥 > [team/my] > GET > User has no inhabitant - returning empty array')

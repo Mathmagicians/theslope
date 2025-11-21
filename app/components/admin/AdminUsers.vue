@@ -39,8 +39,8 @@ const userColumns = [
 
 <template>
   <UCard
-id="admin-users" data-test-id="admin-users"
-         class="flex flex-col items-center text-secondary">
+      id="admin-users" data-test-id="admin-users"
+      class="flex flex-col items-center text-secondary">
     <template #header>
       <UAlert
           title=" Brugere"
@@ -60,10 +60,10 @@ id="admin-users" data-test-id="admin-users"
     </template>
 
     <!-- Show when users are loaded -->
-   <ViewError
-v-if="isUsersErrored"
-               :status-code="usersError?.statusCode" :cause="usersError"
-               message="Kunne ikke loade bruger data 🤖"
+    <ViewError
+        v-if="isUsersErrored"
+        :status-code="usersError?.statusCode" :cause="usersError"
+        message="Kunne ikke loade bruger data 🤖"
     />
     <UTable
         :data="formattedUsers"

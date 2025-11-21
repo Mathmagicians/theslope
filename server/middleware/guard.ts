@@ -1,5 +1,6 @@
 import {defineEventHandler} from "h3"
-import {maskPassword} from "~/utils/utils";
+import {maskPassword} from "~/utils/utils"
+import type {UserDetail} from "~/composables/useCoreValidation"
 
 // list of endpoints that we want dont need to protect
 const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon"]
@@ -14,6 +15,8 @@ export default defineEventHandler( async(event) => {
         console.log("🔒 > GUARD > Protected route: ", pathname)
         // ensure user is logged in before getting a response
         const session = await requireUserSession(event)
-        console.log(`🔒 > GUARD > Available User session data: token - ${maskPassword(session.user.passwordHash)}, mail - ${session.user.email}, roles - ${session.user.systemRoles}`)
+        // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
+        const user = session.user as UserDetail & {passwordHash: string}
+        console.log(`🔒 > GUARD > Available User session data: token - ${maskPassword(user.passwordHash)}, mail - ${user.email}, roles - ${user.systemRoles}`)
     }
 })

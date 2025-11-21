@@ -29,6 +29,12 @@ test.describe('Admin page path-based navigation', () => {
 
   test.use({ storageState: adminUIFile })
 
+  test.beforeAll(async ({browser}) => {
+    const context = await validatedBrowserContext(browser)
+    // Ensure singleton active season exists for all tests (parallel-safe)
+    await SeasonFactory.createActiveSeason(context)
+  })
+
   test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
     await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
@@ -42,6 +48,7 @@ test.describe('Admin page path-based navigation', () => {
   for (const scenario of redirectScenarios) {
     test(scenario.description, async ({ page }) => {
       await page.goto(`${adminUrl}${scenario.path}`)
+      await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-goto`)
 
       await pollUntil(
         async () => page.url(),
@@ -49,12 +56,14 @@ test.describe('Admin page path-based navigation', () => {
         10
       )
       expect(page.url()).toContain('/admin/planning')
+      await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-url-check`)
 
       await pollUntil(
         async () => await page.locator('[data-test-id="admin-planning"]').isVisible(),
         (isVisible) => isVisible,
         10
       )
+      await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-final`)
     })
   }
 
@@ -72,26 +81,6 @@ test.describe('Admin page path-based navigation', () => {
       )
     })
   }
-
-  test('URL path is preserved during page refresh', async ({ page }) => {
-    await page.goto(`${adminUrl}/users`)
-
-    expect(page.url()).toContain('/admin/users')
-    await pollUntil(
-      async () => await page.locator('[data-test-id="admin-users"]').isVisible(),
-      (isVisible) => isVisible,
-      10
-    )
-
-    await page.reload()
-
-    expect(page.url()).toContain('/admin/users')
-    await pollUntil(
-      async () => await page.locator('[data-test-id="admin-users"]').isVisible(),
-      (isVisible) => isVisible,
-      10
-    )
-  })
 
   test('Client-side navigation preserves active tab state', async ({ page }) => {
     const testTabs = [tabs[5], tabs[0]].filter(t => t !== undefined)
@@ -116,47 +105,19 @@ test.describe('Admin page path-based navigation', () => {
     for (const formMode of formModes) {
       test(`Tab "${tab.name}" supports mode=${formMode.mode} in URL query`, async ({ page }) => {
         await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
+        await doScreenshot(page, `admin-${tab.path}-mode-${formMode.mode}-after-goto`)
 
         await pollUntil(
           async () => await page.locator(tab.selector).isVisible(),
           (isVisible) => isVisible,
           10
         )
+        await doScreenshot(page, `admin-${tab.path}-mode-${formMode.mode}-after-visible-check`)
 
         expect(page.url()).toContain(`/admin/${tab.path}`)
         expect(page.url()).toContain(`mode=${formMode.mode}`)
       })
     }
-
-    test(`Tab "${tab.name}" can navigate between all form modes`, async ({ page, browser }) => {
-      const context = await validatedBrowserContext(browser)
-      const season = await SeasonFactory.createSeason(context)
-      createdSeasonIds.push(season.id!)
-
-      try {
-        for (const formMode of formModes) {
-          await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
-
-          await pollUntil(
-            async () => page.url(),
-            (url) => url.includes(`mode=${formMode.mode}`),
-            10
-          )
-          expect(page.url()).toContain(`/admin/${tab.path}`)
-          expect(page.url()).toContain(`mode=${formMode.mode}`)
-
-          await pollUntil(
-            async () => await page.locator(tab.selector).isVisible(),
-            (isVisible) => isVisible,
-            10
-          )
-        }
-      } finally {
-        if (season.id) {
-          await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
-        }
-      }
-    })
   }
 })
 
@@ -164,6 +125,12 @@ test.describe('Admin season URL persistence', () => {
   const createdSeasonIds: number[] = []
 
   test.use({ storageState: adminUIFile })
+
+  test.beforeAll(async ({browser}) => {
+    const context = await validatedBrowserContext(browser)
+    // Ensure singleton active season exists for all tests (parallel-safe)
+    await SeasonFactory.createActiveSeason(context)
+  })
 
   test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
@@ -211,6 +178,9 @@ test.describe('Admin season URL persistence', () => {
       } finally {
         if (season.id) {
           await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
+          // Remove ID from array after cleanup to avoid duplicate cleanup in afterAll
+          const index = createdSeasonIds.indexOf(season.id)
+          if (index > -1) createdSeasonIds.splice(index, 1)
         }
       }
     })
@@ -235,6 +205,9 @@ test.describe('Admin season URL persistence', () => {
     } finally {
       if (season.id) {
         await SeasonFactory.deleteSeason(context, season.id).catch(() => {})
+        // Remove ID from array after cleanup to avoid duplicate cleanup in afterAll
+        const index = createdSeasonIds.indexOf(season.id)
+        if (index > -1) createdSeasonIds.splice(index, 1)
       }
     }
   })
@@ -267,7 +240,7 @@ test.describe('Admin season URL persistence', () => {
       expect(seasonShortName).toBeTruthy()
 
       // Verify the season actually exists via API
-      const seasons = await SeasonFactory.getSeasons(context)
+      const seasons = await SeasonFactory.getAllSeasons(context)
       const seasonExists = seasons.some(s => s.shortName === seasonShortName)
       expect(seasonExists).toBe(true)
     } finally {

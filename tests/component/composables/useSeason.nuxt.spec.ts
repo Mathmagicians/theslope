@@ -477,49 +477,49 @@ describe('canEditDiningMode', () => {
     })
 })
 
-describe('canAnnounceMenu', () => {
-    const { canAnnounceMenu } = useSeason()
+describe('isAnnounceMenuPastDeadline', () => {
+    const { isAnnounceMenuPastDeadline } = useSeason()
 
     it.each([
         {
-            description: 'far in future (10 days)',
-            daysOffset: 10,
+            description: 'far in future (11 days)',
+            daysOffset: 11,
             hoursOffset: 0,
-            expected: true
+            expected: false  // Not past 10-day deadline
         },
         {
             description: 'tomorrow',
             daysOffset: 1,
             hoursOffset: 0,
-            expected: true
+            expected: true  // Past 10-day deadline
         },
         {
             description: 'same day before dinner time',
             daysOffset: 0,
             hoursOffset: 6,
-            expected: true
+            expected: true  // Past 10-day deadline
         },
         {
             description: 'in the past (yesterday)',
             daysOffset: -1,
             hoursOffset: 0,
-            expected: false
+            expected: true  // Past deadline
         },
         {
             description: 'after dinner started (2 hours ago)',
             daysOffset: 0,
             hoursOffset: -2,
-            expected: false
+            expected: true  // Past deadline
         }
-    ])('should $expected menu announcement for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
+    ])('should return $expected for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
         // GIVEN: Dinner at calculated time
         const now = new Date()
         const dinnerDate = new Date(now)
         dinnerDate.setDate(now.getDate() + daysOffset)
         dinnerDate.setHours(now.getHours() + hoursOffset, 0, 0, 0)
 
-        // WHEN: Checking if menu can be announced
-        const result = canAnnounceMenu(dinnerDate)
+        // WHEN: Checking if announce menu deadline has passed
+        const result = isAnnounceMenuPastDeadline(dinnerDate)
 
         // THEN: Returns expected result
         expect(result).toBe(expected)

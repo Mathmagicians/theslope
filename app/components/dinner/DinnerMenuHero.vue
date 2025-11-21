@@ -160,13 +160,13 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
-  dinnerEventId?: number
+  dinnerEvent?: any // DinnerEventDetail with tickets (parsed by schema in parent)
   ticketPrices?: TicketPrice[]
-  mode?: 'household' | 'chef'
+  mode?: 'household' | 'chef' | 'view'
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  dinnerEventId: undefined,
+  dinnerEvent: undefined,
   ticketPrices: () => [],
   mode: 'household'
 })
@@ -179,18 +179,12 @@ const emit = defineEmits<{
   updateAllergens: [allergenIds: number[]]
 }>()
 
-// Use plan store for data fetching (ADR: Store responsibility)
-const planStore = usePlanStore()
-const {selectedDinnerEvent} = storeToRefs(planStore)
-
 // Use allergies store for allergen data
 const allergiesStore = useAllergiesStore()
 const {allergyTypes} = storeToRefs(allergiesStore)
 
-// Watch for dinnerEventId changes and load from store
-watch(() => props.dinnerEventId, (newId) => {
-  planStore.loadDinnerEvent(newId ?? null)
-}, {immediate: true})
+// Use dinner event from props (component-local data pattern - ADR-007)
+const selectedDinnerEvent = computed(() => props.dinnerEvent)
 
 // Data from dinner event
 const orders = computed(() => selectedDinnerEvent.value?.tickets ?? [])
@@ -208,7 +202,7 @@ watch(selectedAllergenIds, (newIds) => {
 }, {immediate: true})
 
 // Design system
-const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
+const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS, ICONS } = useTheSlopeDesignSystem()
 
 // UI state for booking section
 const formMode = ref(FORM_MODES.VIEW)
@@ -244,6 +238,12 @@ const allergenSelectorMode = computed(() => {
   if (props.mode === 'household') return 'view'
   // Chef mode: edit when in EDIT formMode
   return formMode.value === FORM_MODES.EDIT ? 'edit' : 'view'
+})
+
+// Formatted date (formatDate auto-imported from ~/utils/date)
+const formattedDinnerDate = computed(() => {
+  if (!selectedDinnerEvent.value?.date) return ''
+  return formatDate(selectedDinnerEvent.value.date)
 })
 </script>
 
@@ -284,6 +284,12 @@ const allergenSelectorMode = computed(() => {
     </template>
 
     <template #title>
+      <!-- Date - discrete with design system -->
+      <div :class="`${TYPOGRAPHY.caption} text-white/70 mb-2 flex items-center gap-1.5 justify-center`">
+        <UIcon :name="ICONS.calendar" class="w-3.5 h-3.5" />
+        <span>{{ formattedDinnerDate }}</span>
+      </div>
+      <!-- Menu title -->
       <span class="text-white" data-testid="dinner-menu-title">{{ selectedDinnerEvent.menuTitle }}</span>
     </template>
 

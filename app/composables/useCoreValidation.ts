@@ -324,12 +324,15 @@ export const useCoreValidation = () => {
     /**
      * Serialize user for database input (create/update)
      * Converts domain UserCreate to database format (JSON stringified systemRoles)
+     * Uses schema validation to strip unwanted fields (defensive programming)
      */
     const serializeUserInput = (user: UserCreate): SerializedUserInput => {
-        return {
-            ...user,
+        return SerializedUserInputSchema.parse({
+            email: user.email,
+            phone: user.phone ?? null,
+            passwordHash: user.passwordHash,
             systemRoles: JSON.stringify(user.systemRoles)
-        }
+        })
     }
 
     /**

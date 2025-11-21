@@ -95,13 +95,13 @@ describe('ChefDinnerCard', () => {
             },
             {
                 description: 'warning for dinner within 3 days',
-                date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-                expectedWarning: 'dage tilbage'
+                date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now (+ dinner start time = ~3 days)
+                expectedWarning: 'Om 3 dage'
             },
             {
                 description: 'urgent warning for dinner within 24 hours',
                 date: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours from now
-                expectedWarning: 'timer tilbage'
+                expectedWarning: 'Om 1'
             },
             {
                 description: 'critical warning for past deadline',
@@ -120,7 +120,7 @@ describe('ChefDinnerCard', () => {
             if (expectedWarning) {
                 expect(wrapper.text()).toContain(expectedWarning)
             } else {
-                expect(wrapper.text()).not.toContain('tilbage')
+                expect(wrapper.text()).not.toContain('Om ')
                 expect(wrapper.text()).not.toContain('overskredet')
             }
         })
@@ -135,7 +135,7 @@ describe('ChefDinnerCard', () => {
             })
 
             expect(wrapper.text()).not.toContain('Deadline overskredet')
-            expect(wrapper.text()).not.toContain('tilbage')
+            expect(wrapper.text()).not.toContain('Om ')
         })
     })
 

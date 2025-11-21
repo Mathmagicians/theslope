@@ -75,7 +75,7 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving user ${user.email}`, error)
-        console.error(`🪪 > USER > [SAVE] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
+        console.error(`🪪 > USER > [SAVE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -136,7 +136,7 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
         return deserializedUsers
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching users', error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -163,7 +163,7 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
         return deserializedUsers
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching users with role ${systemRole}`, error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -187,7 +187,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
         }
     } catch (error) {
         const h3e = h3eFromCatch('Error deleting user', error)
-        console.error(`🪪 > USER > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🪪 > USER > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -224,7 +224,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         return null
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching user for email ${email}`, error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -277,7 +277,7 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
         return deserializeInhabitant(newInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👩‍🏠 > INHABITANT > [SAVE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -303,7 +303,7 @@ export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant
         return deserializedInhabitants
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching inhabitants', error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -333,7 +333,7 @@ export async function fetchInhabitant(d1Client: D1Database, id: number): Promise
         return deserializedInhabitant
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -367,7 +367,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
         return updatedInhabitant
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [UPDATE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👩‍🏠 > INHABITANT > [UPDATE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -391,7 +391,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
         return deserializeInhabitant(deletedInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -421,7 +421,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 
         if (household.inhabitants) {
             const inhabitantIds = await Promise.all(
-                household.inhabitants.map((inhabitant: InhabitantCreate) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
+                household.inhabitants.map(inhabitant => saveInhabitant(d1Client, inhabitant, newHousehold.id))
             )
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
@@ -436,7 +436,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving household at ${household?.address}`, error)
-        console.error(`🏠 > HOUSEHOLD > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🏠 > HOUSEHOLD > [SAVE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -470,7 +470,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
         return validatedHouseholds
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching households', error)
-        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -505,7 +505,7 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         return validatedHousehold
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -545,7 +545,7 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
         return householdDetail
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -570,7 +570,7 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -605,7 +605,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching season for range ${start} to ${end}`, error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -630,7 +630,7 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
         }
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching current active season', error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -710,7 +710,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
         return deserializeSeason(activatedSeason)
     } catch (error) {
         const h3e = h3eFromCatch('Error activating season', error)
-        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -757,7 +757,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -786,7 +786,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
         })
     } catch (error) {
         const h3e = h3eFromCatch('Error fetching seasons', error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -794,26 +794,20 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
 export async function deleteSeason(d1Client: D1Database, id: number): Promise<Season> {
     console.info(`🌞 > SEASON > [DELETE] Deleting season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {SeasonSchema} = useSeasonValidation()
-
     try {
         // Delete CookingTeamAssignments (strong relation to teams) - handled by cascade
         // Delete CookingTeams (strong relation to season) - handled by cascade
         // Delete DinnerEvents (strong relation to season - part of season schedule) - handled by cascade
 
         const deletedSeason = await prisma.season.delete({
-            where: {id},
-            include: {
-                ticketPrices: true
-            }
+            where: {id}
         })
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
-        const deserialized = deserializeSeason(deletedSeason)
-        return SeasonSchema.parse(deserialized)
+        return deletedSeason
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [DELETE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -853,7 +847,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
         return deserializeSeason(newSeason)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating season ${seasonData?.shortName}`, error)
-        console.error(`🌞 > SEASON > [CREATE] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`🌞 > SEASON > [CREATE] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -891,7 +885,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
         return deserializeSeason(updatedSeason)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [UPDATE] ${h3e.message}`)
+        console.error(`🌞 > SEASON > [UPDATE] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -922,10 +916,8 @@ export async function createTeamAssignment(d1Client: D1Database, assignmentData:
     try {
         const assignment = await prisma.cookingTeamAssignment.create({
             data: {
-                cookingTeamId: createData.cookingTeamId,
-                inhabitantId: createData.inhabitantId,
-                role: createData.role,
-                allocationPercentage: createData.allocationPercentage,
+                ...createData,
+                // Serialize affinity (WeekDayMap) to JSON string for database
                 affinity: affinity ? serializeWeekDayMap(affinity) : PrismaFromClient.skip
             },
             include: {
@@ -940,7 +932,7 @@ export async function createTeamAssignment(d1Client: D1Database, assignmentData:
         return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating team assignment for inhabitant ${assignmentData.inhabitantId}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [CREATE] ${h3e.message}`)
+        console.error(`👥🔗 > ASSIGNMENT > [CREATE] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -968,7 +960,7 @@ export async function fetchTeamAssignment(d1Client: D1Database, id: number): Pro
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching team assignment with ID ${id}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.message}`)
+        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -991,7 +983,7 @@ export async function deleteCookingTeamAssignments(d1Client: D1Database, assignm
         return result.count
     } catch (error) {
         const h3e = h3eFromCatch('Error deleting team assignments', error)
-        console.error(`👥🔗 > ASSIGNMENT > [DELETE] ${h3e.message}`)
+        console.error(`👥🔗 > ASSIGNMENT > [DELETE] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -1041,7 +1033,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
         return deserializedTeams
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching teams for season ${seasonId}`, error)
-        console.error(`👥 > TEAM > [GET] ${h3e.message}`)
+        console.error(`👥 > TEAM > [GET] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -1090,7 +1082,7 @@ export async function fetchTeam(id: number, d1Client: D1Database):Promise<Cookin
         }
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}: ${h3e.message}`)
+        console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}`, error)
         throw h3e
     }
 }
@@ -1151,7 +1143,7 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
         return deserializedTeams
     } catch (error) {
         const h3e = h3eFromCatch(`Error fetching teams for inhabitant ${inhabitantId} in season ${seasonId}`, error)
-        console.error(`👥 > TEAM > [GET MY] ${h3e.message}`)
+        console.error(`👥 > TEAM > [GET MY] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -1208,7 +1200,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
         return deserializeCookingTeamDetail(teamWithCount)
     } catch (error) {
         const h3e = h3eFromCatch(`Error creating team ${teamData.name}`, error)
-        console.error(`👥 > TEAM > [CREATE] ${h3e.message}`)
+        console.error(`👥 > TEAM > [CREATE] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -1231,21 +1223,17 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
             where: {id},
             data: {
                 ...updateData,
-                // affinity already serialized by toPrismaUpdateData (string | null | undefined)
-                // undefined = omit from update, null = set to NULL, string = set value
-                ...(affinity !== undefined && {affinity}),
+                // Use Prisma.skip to omit field entirely when affinity is null/undefined
+                affinity: affinity ?? PrismaFromClient.skip,
                 // Replace all assignments (delete existing, create new)
                 assignments: assignments?.length ? {
                     deleteMany: {},  // Delete all existing assignments for this team
                     // Strip id and cookingTeamId - Prisma auto-generates id and sets cookingTeamId from relation
                     // Handle affinity: null using Prisma.skip to omit field entirely
-                    create: assignments.map((item: CookingTeamAssignment) => {
-                        const {id, cookingTeamId, affinity, ...assignment} = item
-                        return {
-                            ...assignment,
-                            affinity: affinity ?? PrismaFromClient.skip
-                        }
-                    })
+                    create: assignments.map(({id, cookingTeamId, affinity, ...assignment}) => ({
+                        ...assignment,
+                        affinity: affinity ?? PrismaFromClient.skip
+                    }))
                 } : PrismaFromClient.skip
             },
             include: {
@@ -1278,7 +1266,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
         return deserializeCookingTeamDetail(teamWithCount)
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [UPDATE] ${h3e.message}`)
+        console.error(`👥 > TEAM > [UPDATE] ${h3e.message}`, error)
         throw h3e
     }
 }
@@ -1315,7 +1303,15 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         return deserializeCookingTeamDetail(teamWithEmptyRelations)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [DELETE] ${h3e.message}`)
+        console.error(`👥 > TEAM > [DELETE] ${h3e.message}`, error)
         throw h3e
     }
 }
+
+/**
+ * DINNER EVENTS and ORDERS moved to financesRepository.ts
+ * See: server/data/financesRepository.ts
+ *
+ * DinnerEvent functions: saveDinnerEvent, fetchDinnerEvents, fetchDinnerEvent, updateDinnerEvent, deleteDinnerEvent
+ * Order functions: createOrder, createOrders, fetchOrder, fetchOrders, deleteOrder
+ */

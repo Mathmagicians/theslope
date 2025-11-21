@@ -503,6 +503,32 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
 })
 
 /**
+ * createPagination - Responsive pagination configuration
+ *
+ * Provides responsive sibling count for UPagination components.
+ * Pattern used in people finder (InhabitantSelector) and agenda views.
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Pagination configuration
+ *
+ * @example
+ * ```vue
+ * <UPagination
+ *   :sibling-count="PAGINATION.siblingCount.value"
+ *   @update:page="handlePage"
+ * />
+ * ```
+ */
+const createPagination = (isMd: Ref<boolean>) => ({
+  /**
+   * Responsive sibling count:
+   * - Desktop (isMd): 1 sibling (shows 3 pages: prev, current, next)
+   * - Mobile (!isMd): 0 siblings (shows 1 page: current only)
+   */
+  siblingCount: computed(() => isMd.value ? 1 : 0)
+})
+
+/**
  * useTheSlopeDesignSystem Composable
  *
  * TheSlope's centralized design system - single source of truth for colors, typography,
@@ -529,6 +555,43 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
  * </UBadge>
  * ```
  */
+/**
+ * DINNER_STATE_BADGES - Shared dinner state badge configuration
+ *
+ * Used for consistent dinner state display across:
+ * - TeamCalendarDisplay (agenda view)
+ * - ChefDinnerCard (master view)
+ * - DinnerEvent components
+ *
+ * Colors follow feature proposal:
+ * - SCHEDULED: mocha (warm - "ready to plan")
+ * - ANNOUNCED: success (green - "published, bookable")
+ * - CONSUMED: neutral (gray - "done, archived")
+ * - CANCELLED: neutral (black/dark - NOT red, red is for deadline warnings)
+ */
+export const DINNER_STATE_BADGES = {
+  SCHEDULED: {
+    label: 'Planlagt',
+    color: COLOR.mocha,
+    icon: 'i-heroicons-calendar'
+  },
+  ANNOUNCED: {
+    label: 'Annonceret',
+    color: COLOR.success,
+    icon: 'i-heroicons-megaphone'
+  },
+  CANCELLED: {
+    label: 'Aflyst',
+    color: COLOR.neutral,
+    icon: 'i-heroicons-x-circle'
+  },
+  CONSUMED: {
+    label: 'Afholdt',
+    color: COLOR.neutral,
+    icon: 'i-heroicons-check-circle'
+  }
+} as const
+
 export const useTheSlopeDesignSystem = () => {
   // Inject responsive breakpoint from layout
   const isMd = inject<Ref<boolean>>('isMd', ref(false))
@@ -537,6 +600,7 @@ export const useTheSlopeDesignSystem = () => {
     // For NuxtUI components
     COLOR,
     TICKET_TYPE_COLORS,
+    DINNER_STATE_BADGES,
     ICONS,
 
     // Semantic design patterns (USE THESE!)
@@ -553,6 +617,9 @@ export const useTheSlopeDesignSystem = () => {
 
     // Weekday display helpers
     WEEKDAY: createWeekdayDisplay(isMd),
+
+    // Pagination configuration
+    PAGINATION: createPagination(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,

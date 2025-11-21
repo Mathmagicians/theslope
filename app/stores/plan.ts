@@ -7,7 +7,6 @@ export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
         const {SeasonSchema} = useSeasonValidation()
-        const {getTeamsForInhabitant} = useSeason()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
@@ -22,11 +21,13 @@ export const usePlanStore = defineStore("Plan", () => {
         const {
             data: activeSeasonId, status: activeSeasonIdStatus,
             error: activeSeasonIdError, refresh: refreshActiveSeasonId
-        } = useAsyncData<number | null>(
-            'plan-store-active-season-id',
-            () => $fetch('/api/admin/season/active'),
+        } = useFetch<number | null>(
+            '/api/admin/season/active',
             {
-                default: () => null
+                key: 'plan-store-active-season-id',
+                immediate: true,
+                default: () => null,
+                transform: (value) => value ?? null  // Explicit null coercion to silence Nuxt warning
             }
         )
 
@@ -71,7 +72,10 @@ export const usePlanStore = defineStore("Plan", () => {
         const selectedDinnerEventKey = computed(() => `/api/admin/dinner-event/${selectedDinnerEventId.value || 'null'}`)
 
         const {
-            data: selectedDinnerEvent
+            data: selectedDinnerEvent,
+            status: selectedDinnerEventStatus,
+            error: selectedDinnerEventError,
+            refresh: refreshSelectedDinnerEvent
         } = useAsyncData<DinnerEventDetail | null>(
             selectedDinnerEventKey,
             () => {
@@ -137,17 +141,6 @@ export const usePlanStore = defineStore("Plan", () => {
         const activeSeason = computed(() => {
             if (!activeSeasonId.value) return null
             return seasons.value.find(s => s.id === activeSeasonId.value) ?? null
-        })
-
-        /**
-         * Get all cooking teams the logged-in user is assigned to in the active season
-         * Returns array of teams (empty if not on any team)
-         */
-        const myTeams = computed(() => {
-            const inhabitantId = authStore.user?.Inhabitant?.id
-            if (!inhabitantId) return []
-
-            return getTeamsForInhabitant(inhabitantId, activeSeason.value)
         })
 
         const disabledModes = computed(() => {
@@ -469,7 +462,6 @@ export const usePlanStore = defineStore("Plan", () => {
             isPlanStoreErrored,
             planStoreError,
             activeSeason,
-            myTeams,
             disabledModes,
             // actions
             initPlanStore,

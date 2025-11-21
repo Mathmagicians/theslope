@@ -107,13 +107,30 @@ const selectedDinnerEvent = computed(() => {
     })
 })
 
-// Load full dinner event detail when selected event changes (to get orders/tickets)
-watch(() => selectedDinnerEvent.value?.id, (eventId) => {
-  planStore.loadDinnerEvent(eventId ?? null)
-}, {immediate: true})
+// Validation schema for parsing dinner event detail
+const { DinnerEventDetailSchema } = useBookingValidation()
 
-// Get orders from selected dinner event detail
-const {selectedDinnerEvent: selectedDinnerEventDetail} = storeToRefs(planStore)
+// Component-local data: Fetch dinner detail with orders when selection changes (ADR-007)
+const {data: selectedDinnerEventDetail} = useAsyncData(
+    computed(() => `dinner-detail-${selectedDinnerEvent.value?.id || 'none'}`),
+    () => selectedDinnerEvent.value?.id
+        ? planStore.fetchDinnerEventDetail(selectedDinnerEvent.value.id)
+        : Promise.resolve(null),
+    {
+        watch: [() => selectedDinnerEvent.value?.id],
+        immediate: true,
+        transform: (data: any) => {
+            if (!data) return null
+            try {
+                return DinnerEventDetailSchema.parse(data)
+            } catch (e) {
+                console.error('Error parsing dinner event detail:', e)
+                throw e
+            }
+        }
+    }
+)
+
 const orders = computed(() => selectedDinnerEventDetail.value?.tickets ?? [])
 
 
@@ -188,9 +205,9 @@ useHead({
     <!-- Detail: Dinner info (default slot = right side) -->
     <UCard :ui="{ rounded: '', header: { padding: 'p-0' }, body: { padding: 'p-0' } }">
       <!-- Menu Hero in header slot (full bleed) -->
-      <template #header>
+      <template v-if="selectedDinnerEventDetail" #header>
         <DinnerMenuHero
-          :dinner-event-id="selectedDinnerEvent?.id"
+          :dinner-event="selectedDinnerEventDetail"
           :ticket-prices="selectedSeason?.ticketPrices ?? []"
           mode="household"
         />

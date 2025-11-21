@@ -29,7 +29,6 @@ test.describe('Season API Tests', () => {
 
 // Variable to store ID for cleanup
     let createdSeasonIds: number[] = []
-    const newSeason = SeasonFactory.defaultSeason()
 
     // Helper: Verify ticket prices exist 
     const assertTicketPrices = (season: any, expectedCount = 4) => {
@@ -46,6 +45,7 @@ test.describe('Season API Tests', () => {
 // Test for creating and retrieving a season
         test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
+            const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
             expect(created.id).toBeDefined()
             trackSeason(created.id!)
@@ -67,8 +67,8 @@ test.describe('Season API Tests', () => {
         })
 
         test("GET /api/admin/season (index) should include ticketPrices", async ({browser}) => {
-            // GIVEN: A season with ticket prices
             const context = await validatedBrowserContext(browser)
+            const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
             expect(created.id).toBeDefined()
             trackSeason(created.id!)
@@ -124,24 +124,22 @@ test.describe('Season API Tests', () => {
 // Test for updating a season
         test("POST should update an existing season", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
+            const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
             expect(created.id).toBeDefined()
-            // Save ID for cleanup
             createdSeasonIds.push(created.id!)
             const seasonId = created.id!
 
             const initialHolidayCount = newSeason.holidays?.length
 
-            // Add an extra holiday period within the season date range
-            // Default season is Jan 1-7, 2025, so holiday must be within that range
-            const holidayStart = new Date(2025, 0, 3) // Jan 3, 2025
-            const holidayEnd = new Date(2025, 0, 4)   // Jan 4, 2025
+            const holidayStart = new Date(2025, 0, 3)
+            const holidayEnd = new Date(2025, 0, 4)
 
             const updatedData = {
                 ...newSeason,
                 id: seasonId,
                 holidays: [
-                    ...newSeason.holidays, // Keep existing holidays
+                    ...newSeason.holidays,
                     {
                         start: holidayStart,
                         end: holidayEnd

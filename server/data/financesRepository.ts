@@ -347,16 +347,19 @@ export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerE
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDisplaySchema} = useBookingValidation()
 
+    // Exclude relation fields that Prisma doesn't accept in create data
+    const {allergens, ...createData} = dinnerEvent
+
     try {
         const newDinnerEvent = await prisma.dinnerEvent.create({
-            data: dinnerEvent
+            data: createData
         })
 
         console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
         return DinnerEventDisplaySchema.parse(newDinnerEvent)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [SAVE] ${h3e.message}`, error)
+        console.error(`🍽️ > DINNER_EVENT > [SAVE] ${h3e.message}`)
         throw h3e
     }
 }
@@ -470,12 +473,15 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
     console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDetailSchema} = useBookingValidation()
-    const {deserializeCookingTeam} = useCookingTeamValidation()
+    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
+
+    // Exclude relation fields that Prisma doesn't accept in update data
+    const {allergens, ...updateData} = dinnerEventData
 
     try {
         const updatedDinnerEvent = await prisma.dinnerEvent.update({
             where: {id},
-            data: dinnerEventData,
+            data: updateData,
             include: {
                 Season: true,
                 chef: true,
@@ -486,6 +492,10 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                             include: {
                                 inhabitant: true
                             }
+                        },
+                        dinners: true,
+                        _count: {
+                            select: {dinners: true}
                         }
                     }
                 }
@@ -495,7 +505,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
         // Deserialize cookingTeam if present (affinity JSON string -> WeekDayMap object)
         const dinnerEventToValidate = {
             ...updatedDinnerEvent,
-            cookingTeam: updatedDinnerEvent.cookingTeam ? deserializeCookingTeam(updatedDinnerEvent.cookingTeam) : null
+            cookingTeam: updatedDinnerEvent.cookingTeam ? deserializeCookingTeamDetail(updatedDinnerEvent.cookingTeam) : null
         }
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)

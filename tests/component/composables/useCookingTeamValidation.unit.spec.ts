@@ -614,19 +614,52 @@ describe('useCookingTeamValidation', () => {
     })
 
     describe('toPrismaUpdateData with CookingTeamUpdate input', () => {
-      it('should accept CookingTeamUpdate type (partial with required id)', () => {
-        // Update operations need base fields that serializeCookingTeam expects
+      it('should handle partial update with only affinity', () => {
+        const affinity = createDefaultWeekdayMap([true, true, false, false, false, false, false])
+        const updateInput = {
+          id: 42,
+          affinity
+        }
+        const result = toPrismaUpdateData(updateInput)
+
+        expect(result).toHaveProperty('affinity')
+        expect(typeof result.affinity).toBe('string')  // Should be serialized
+        expect(result).not.toHaveProperty('id')  // id excluded from Prisma data
+        expect(result).not.toHaveProperty('cookingDaysCount')
+        expect(result).not.toHaveProperty('dinnerEvents')
+      })
+
+      it('should handle affinity: null (set to NULL)', () => {
+        const updateInput = {
+          id: 42,
+          affinity: null
+        }
+        const result = toPrismaUpdateData(updateInput)
+
+        expect(result).toHaveProperty('affinity', null)  // null should be passed through
+      })
+
+      it('should handle affinity: undefined (omit from update)', () => {
+        const updateInput = {
+          id: 42,
+          affinity: undefined
+        }
+        const result = toPrismaUpdateData(updateInput)
+
+        expect(result).toHaveProperty('affinity', undefined)  // undefined should be passed through
+      })
+
+      it('should handle full update with name and seasonId', () => {
         const updateInput = {
           id: 42,
           name: 'Updated Team',
-          seasonId: 1,  // Required by CookingTeamDisplay schema
-          assignments: []  // Required by CookingTeamDisplay schema
+          seasonId: 1
         }
         const result = toPrismaUpdateData(updateInput)
 
         expect(result).toHaveProperty('name', 'Updated Team')
         expect(result).toHaveProperty('seasonId', 1)
-        expect(result).not.toHaveProperty('id')  // id excluded from Prisma data
+        expect(result).not.toHaveProperty('id')
         expect(result).not.toHaveProperty('cookingDaysCount')
         expect(result).not.toHaveProperty('dinnerEvents')
       })

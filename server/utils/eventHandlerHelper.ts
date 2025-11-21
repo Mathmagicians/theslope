@@ -22,6 +22,7 @@ const getSerializableCause = (error: unknown): SerializableError => {
         // Extract only serializable parts of ZodError
         return {
             name: 'ZodError',
+            message: error.message,
             issues: error.issues.map(issue => ({
                 code: issue.code,
                 path: issue.path,
@@ -56,12 +57,18 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statu
         throw error
     }
 
-    if (error instanceof ZodError || error?.cause?.status === 400 || error?.cause?.statusMessage==='Validation Error') return createError({
-        statusCode: 400,
-        statusMessage: 'Bad Request',
-        message: `${prepend}: Invalid parameters: ${error?.cause?.message}`,
-        cause: getSerializableCause(error)
-    })
+    const hasValidationCause = error && typeof error === 'object' && 'cause' in error
+    const errorCause = hasValidationCause ? (error.cause as any) : null
+
+    if (error instanceof ZodError || errorCause?.status === 400 || errorCause?.statusMessage === 'Validation Error') {
+        const causeMessage = errorCause?.message || ''
+        return createError({
+            statusCode: 400,
+            statusMessage: 'Bad Request',
+            message: `${prepend}: Invalid parameters: ${causeMessage}`,
+            cause: getSerializableCause(error)
+        })
+    }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) return h3eFromPrismaError(prepend, error)
 

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 const {loggedIn, greeting} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
-const {myTeams} = storeToRefs(usePlanStore())
 
 const householdLink = computed(() => myHousehold.value ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings` : '/household')
 

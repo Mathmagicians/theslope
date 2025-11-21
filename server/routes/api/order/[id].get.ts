@@ -13,7 +13,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
     const d1Client = cloudflare.env.DB
 
     let id!: number
-    let order!: OrderDetail
+    let order: OrderDetail | null
     try {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
     } catch (error) {

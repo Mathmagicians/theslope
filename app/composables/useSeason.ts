@@ -223,16 +223,16 @@ export const useSeason = () => {
     }
 
     /**
-     * Check if a menu can be announced for a dinner event
-     * Chefs can announce menus up until the dinner starts (same day before dinner time)
+     * Check if menu announcement deadline has passed for a dinner event
+     * Menu must be announced before booking deadline (members need menu to book)
      * @param dinnerEventDate - Date of the dinner event
-     * @returns True if menu can still be announced
+     * @returns True if deadline has passed (can no longer announce)
      */
-    const canAnnounceMenu = (dinnerEventDate: Date): boolean => {
+    const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean => {
         const dinnerStartHour = getDefaultDinnerStartTime()
         const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-        // Can announce until dinner starts (0 days, 0 minutes before)
-        return isBeforeDeadline(0, 0)(dinnerStartTime)
+        // Menu deadline is same as booking deadline (ticketIsCancellableDaysBefore before dinner)
+        return !isBeforeDeadline(theslope.defaultSeason.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
     }
 
     /**
@@ -311,7 +311,7 @@ export const useSeason = () => {
         splitDinnerEvents,
         canModifyOrders,
         canEditDiningMode,
-        canAnnounceMenu,
+        isAnnounceMenuPastDeadline,
         getTeamsForInhabitant,
         isOnTeam,
         isChefFor,

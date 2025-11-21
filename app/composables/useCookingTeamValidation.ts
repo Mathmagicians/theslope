@@ -177,7 +177,8 @@ export const useCookingTeamValidation = () => {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
             assignments: serialized.assignments?.map((assignment: any) => deserializeCookingTeamAssignment(assignment)) || [],
-            dinnerEvents: serialized.dinnerEvents || []
+            // Parse dinner events through inline schema to convert ISO date strings to Date objects
+            dinnerEvents: serialized.dinnerEvents?.map((event: any) => DinnerEventDisplayInlineSchema.parse(event)) || []
         }
 
         return CookingTeamDetailSchema.parse(deserialized)
@@ -211,10 +212,15 @@ export const useCookingTeamValidation = () => {
     /**
      * Transform team data for Prisma update operations
      * Accepts: CookingTeamUpdate (POST input) or Partial<CookingTeamDetail> (generic)
-     * Same as create but all fields optional
+     * Handles partial updates - only serializes fields that are present
      */
     const toPrismaUpdateData = (team: CookingTeamUpdate | Partial<CookingTeamDetail>) => {
-        return toPrismaCreateData(team)
+        const { id, cookingDaysCount, dinnerEvents, affinity, ...rest } = team as any
+
+        return {
+            ...rest,
+            affinity: affinity ? serializeWeekDayMap(affinity) : affinity
+        }
     }
 
     // Validation helper for tests

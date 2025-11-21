@@ -4,12 +4,17 @@
  *
  * Features:
  * - Shows teams user is member of (any role)
- * - Simple USelect dropdown
+ * - Uses UTabs with CookingTeamBadges for consistent display
+ * - Responsive: horizontal tabs (mobile), vertical tabs (desktop)
  * - Emits selection changes via v-model
  * - Handles empty state internally
  *
  * Used in:
  * - /chef/index.vue (master panel)
+ *
+ * Pattern:
+ * - Matches AdminTeams tab display with CookingTeamBadges
+ * - Reusable TeamListItem display (team name, color, member count, cooking days)
  *
  * ADR Compliance:
  * - ADR-001: Types from useCookingTeamValidation
@@ -31,13 +36,39 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
+const { getTeamColor } = useCookingTeam()
 
-// Select options
-const selectOptions = computed(() => {
-  return props.teams.map(team => ({
+// Tab orientation: vertical on desktop, horizontal on mobile (inverted from standard responsive)
+const tabOrientation = computed(() =>
+  ORIENTATIONS.responsive.value === 'horizontal' ? 'vertical' : 'horizontal'
+)
+
+// Find selected team index from team ID
+const selectedTeamIndex = computed({
+  get: () => {
+    if (props.modelValue === null || props.teams.length === 0) return 0
+    const index = props.teams.findIndex(t => t.id === props.modelValue)
+    return index >= 0 ? index : 0
+  },
+  set: (index: number) => {
+    const team = props.teams[index]
+    if (team) {
+      emit('update:modelValue', team.id!)
+    }
+  }
+})
+
+// Tab items with CookingTeamBadges data (matches AdminTeams pattern)
+const teamTabs = computed(() => {
+  return props.teams.map((team, index) => ({
     label: team.name,
-    value: team.id
+    value: index,
+    icon: 'i-fluent-mdl2-team-favorite',
+    color: getTeamColor(index),
+    // Data for CookingTeamBadges
+    memberCount: team.assignments?.length ?? 0,
+    cookingDaysCount: team.cookingDaysCount ?? 0
   }))
 })
 </script>
@@ -60,15 +91,25 @@ const selectOptions = computed(() => {
       </template>
     </UAlert>
 
-    <!-- Team selector -->
-    <USelect
+    <!-- Team tabs with CookingTeamBadges (matches AdminTeams pattern) -->
+    <!-- Mobile: horizontal tabs, Desktop: vertical tabs -->
+    <UTabs
       v-else
-      :model-value="modelValue"
-      :options="selectOptions"
-      placeholder="Vælg madhold"
-      value-attribute="value"
-      option-attribute="label"
-      @update:model-value="(value) => emit('update:modelValue', value)"
-    />
+      v-model="selectedTeamIndex"
+      :items="teamTabs"
+      :orientation="tabOrientation"
+      variant="link"
+      :size="SIZES.large.value"
+    >
+      <template #item="{ item }">
+        <CookingTeamBadges
+          :team-number="item.value + 1"
+          :team-name="item.label"
+          :member-count="item.memberCount"
+          :cooking-days-count="item.cookingDaysCount"
+          compact
+        />
+      </template>
+    </UTabs>
   </div>
 </template>
