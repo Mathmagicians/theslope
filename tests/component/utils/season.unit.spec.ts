@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {z} from 'zod'
 import {
+    calculateDeadlineUrgency,
     canSeasonBeActive,
     compareAffinities,
     computeAffinitiesForTeams,
@@ -989,6 +990,88 @@ describe('Active Season Management utilities', () => {
 
             // THEN: Checks against dinner time directly (no offset)
             expect(result).toBe(true)  // Now (Jan 15 12:00) is before Jan 16 18:00
+        })
+    })
+
+    describe('calculateDeadlineUrgency', () => {
+        it.each([
+            {
+                scenario: 'on track - 80 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 15, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // > 72h = on track
+            },
+            {
+                scenario: 'warning - 48 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 13, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 1  // 24h < x < 72h = warning
+            },
+            {
+                scenario: 'critical - 12 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 12, 6, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 2  // < 24h = critical
+            },
+            {
+                scenario: 'boundary - exactly 24 hours (critical threshold)',
+                dinnerStartTime: new Date(2025, 0, 12, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 1  // Exactly 24h = warning (not critical)
+            },
+            {
+                scenario: 'boundary - exactly 72 hours (warning threshold)',
+                dinnerStartTime: new Date(2025, 0, 14, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // Exactly 72h = on track
+            },
+            {
+                scenario: 'past event - negative hours',
+                dinnerStartTime: new Date(2025, 0, 10, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // Past events = on track (no urgency)
+            }
+        ])('$scenario', ({ dinnerStartTime, criticalHours, warningHours, expected }) => {
+            // GIVEN: Fixed reference time (Jan 11, 2025 at 18:00)
+            const referenceTime = new Date(2025, 0, 11, 18, 0)
+
+            // WHEN: Calculating deadline urgency
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+
+            // THEN: Returns expected urgency level
+            expect(urgency).toBe(expected)
+        })
+
+        it.each([
+            {
+                scenario: 'custom thresholds - 12h critical, 36h warning',
+                dinnerStartTime: new Date(2025, 0, 12, 6, 0),
+                criticalHours: 12,
+                warningHours: 36,
+                expectedUrgency: 1  // 12h < time < 36h = warning
+            },
+            {
+                scenario: 'custom thresholds - 6 hours before (critical)',
+                dinnerStartTime: new Date(2025, 0, 12, 0, 0),
+                criticalHours: 12,
+                warningHours: 36,
+                expectedUrgency: 2  // < 12h = critical
+            }
+        ])('$scenario', ({ dinnerStartTime, criticalHours, warningHours, expectedUrgency }) => {
+            // GIVEN: Fixed reference time (Jan 11, 2025 at 18:00)
+            const referenceTime = new Date(2025, 0, 11, 18, 0)
+
+            // WHEN: Calculating with custom thresholds
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+
+            // THEN: Respects custom threshold values
+            expect(urgency).toBe(expectedUrgency)
         })
     })
 })

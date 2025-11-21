@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, selectDropdownOption, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, selectDropdownOption, pollUntil} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season

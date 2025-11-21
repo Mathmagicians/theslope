@@ -396,6 +396,27 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        // DINNER EVENT ACTIONS
+        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role']): Promise<DinnerEventDetail> => {
+            try {
+                const roleEmoji = role === 'CHEF' ? '👨‍🍳' : role === 'COOK' ? '👥' : '🌱'
+                const updated = await $fetch<DinnerEventDetail>(`/api/admin/dinner-event/${dinnerEventId}/assign-role`, {
+                    method: 'POST',
+                    body: { inhabitantId, role },
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(`${roleEmoji} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
+                // Refresh selected season to get updated dinner events and team assignments
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                return updated
+            } catch (e: unknown) {
+                handleApiError(e, 'assignRoleToDinner')
+                throw e
+            }
+        }
+
         const initPlanStore = (shortName?: string) => {
             console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName,
                 'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
@@ -457,7 +478,8 @@ export const usePlanStore = defineStore("Plan", () => {
             updateTeam,
             deleteTeam,
             addTeamMember,
-            removeTeamMember
+            removeTeamMember,
+            assignRoleToDinner
         }
     }
 )

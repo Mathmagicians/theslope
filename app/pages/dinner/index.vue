@@ -107,31 +107,8 @@ const selectedDinnerEvent = computed(() => {
     })
 })
 
-// Validation schema for parsing dinner event detail
-const { DinnerEventDetailSchema } = useBookingValidation()
-
-// Component-local data: Fetch dinner detail with orders when selection changes (ADR-007)
-const {data: selectedDinnerEventDetail} = useAsyncData(
-    computed(() => `dinner-detail-${selectedDinnerEvent.value?.id || 'none'}`),
-    () => selectedDinnerEvent.value?.id
-        ? planStore.fetchDinnerEventDetail(selectedDinnerEvent.value.id)
-        : Promise.resolve(null),
-    {
-        watch: [() => selectedDinnerEvent.value?.id],
-        immediate: true,
-        transform: (data: any) => {
-            if (!data) return null
-            try {
-                return DinnerEventDetailSchema.parse(data)
-            } catch (e) {
-                console.error('Error parsing dinner event detail:', e)
-                throw e
-            }
-        }
-    }
-)
-
-const orders = computed(() => selectedDinnerEventDetail.value?.tickets ?? [])
+// Selected dinner ID for DinnerDetailPanel
+const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
 
 useHead({
@@ -183,67 +160,28 @@ useHead({
   <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
     <!-- Master: Calendar (left slot) -->
     <template #left>
-      <UCard :ui="{ rounded: '', base: 'flex flex-col flex-1' }">
-        <template #header>
-          <h3 :class="TYPOGRAPHY.cardTitle">Fællesspisningens kalender</h3>
+      <CalendarMasterPanel title="Fællesspisningens kalender">
+        <template #calendar>
+          <DinnerCalendarDisplay
+            v-if="seasonDates && selectedDate"
+            :season-dates="seasonDates"
+            :cooking-days="cookingDays"
+            :holidays="holidays"
+            :dinner-events="dinnerEvents"
+            :show-countdown="true"
+            :color="COLOR.peach"
+            :selected-date="selectedDate"
+            @date-selected="setValue"
+          />
         </template>
-
-        <DinnerCalendarDisplay
-          v-if="seasonDates && selectedDate"
-          :season-dates="seasonDates"
-          :cooking-days="cookingDays"
-          :holidays="holidays"
-          :dinner-events="dinnerEvents"
-          :show-countdown="true"
-          :color="COLOR.peach"
-          :selected-date="selectedDate"
-          @date-selected="setValue"
-        />
-      </UCard>
+      </CalendarMasterPanel>
     </template>
 
     <!-- Detail: Dinner info (default slot = right side) -->
-    <UCard :ui="{ rounded: '', header: { padding: 'p-0' }, body: { padding: 'p-0' } }">
-      <!-- Menu Hero in header slot (full bleed) -->
-      <template v-if="selectedDinnerEventDetail" #header>
-        <DinnerMenuHero
-          :dinner-event="selectedDinnerEventDetail"
-          :ticket-prices="selectedSeason?.ticketPrices ?? []"
-          mode="household"
-        />
-      </template>
-
-      <!-- Kitchen Preparation in body -->
-      <div :class="LAYOUTS.sectionDivider">
-        <div class="px-0 py-4 md:py-6 space-y-4">
-          <h3 :class="`px-4 md:px-0 ${TYPOGRAPHY.cardTitle}`">Hvem laver maden?</h3>
-
-          <!-- Cooking Team Display (Monitor Mode) -->
-          <CookingTeamCard
-            v-if="selectedDinnerEvent?.cookingTeamId"
-            :team-id="selectedDinnerEvent.cookingTeamId"
-            :team-number="selectedDinnerEvent.cookingTeamId"
-            mode="monitor"
-          />
-
-          <!-- No cooking team assigned -->
-          <UAlert
-            v-else
-            variant="soft"
-            :color="COLOR.neutral"
-            :avatar="{ text: '🏃‍♀️🏃‍♂️', size: SIZES.emptyStateAvatar.value }"
-            :ui="COMPONENTS.emptyStateAlert"
-          >
-            <template #title>
-              👥 Køkkenholdet er løbet ud at lege
-            </template>
-            <template #description>
-              Intet madhold tildelt endnu
-            </template>
-          </UAlert>
-        </div>
-        <KitchenPreparation :orders="orders" />
-      </div>
-    </UCard>
+    <DinnerDetailPanel
+      :dinner-event-id="selectedDinnerId"
+      :ticket-prices="selectedSeason?.ticketPrices ?? []"
+      mode="household"
+    />
   </UPage>
 </template>

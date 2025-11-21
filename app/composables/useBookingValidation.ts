@@ -3,7 +3,9 @@ import {
     TicketTypeSchema,
     OrderStateSchema,
     DinnerStateSchema,
-    DinnerModeSchema, TicketPriceSchema
+    DinnerModeSchema,
+    TicketPriceSchema,
+    RoleSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -190,6 +192,15 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * Assign role to dinner event (POST /api/admin/dinner-event/[id]/assign-role)
+     * Used for "Bliv chefkok", "Bliv kok", "Bliv kokkespire" buttons
+     */
+    const AssignRoleSchema = z.object({
+        inhabitantId: z.number().int().positive('Inhabitant ID must be a positive integer'),
+        role: RoleSchema
+    })
+
+    /**
      * Order query filters (GET /api/order?...)
      */
     const OrderQuerySchema = z.object({
@@ -278,6 +289,7 @@ export const useBookingValidation = () => {
         OrderCreateSchema,
         CreateOrdersRequestSchema,
         SwapOrderRequestSchema,
+        AssignRoleSchema,
         OrderQuerySchema,
         OrderHistorySchema,
 
@@ -313,6 +325,7 @@ export type OrderDetail = z.infer<ReturnType<typeof useBookingValidation>['Order
 export type OrderCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateSchema']>
 export type CreateOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersRequestSchema']>
 export type SwapOrderRequest = z.infer<ReturnType<typeof useBookingValidation>['SwapOrderRequestSchema']>
+export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQuerySchema']>
 export type OrderHistory = z.infer<ReturnType<typeof useBookingValidation>['OrderHistorySchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>

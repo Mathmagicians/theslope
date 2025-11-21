@@ -21,7 +21,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Get or create active season (singleton - may be cached from parallel test)
-        const activeSeason = await SeasonFactory.createActiveSeason(context)
+        const _activeSeason = await SeasonFactory.createActiveSeason(context)
 
         // Create test-specific future and past seasons
         const testSalt = Date.now().toString()
@@ -85,7 +85,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Get or create active season (singleton)
-        const activeSeason = await SeasonFactory.createActiveSeason(context)
+        await SeasonFactory.createActiveSeason(context)
 
         // Create test-specific future season
         const testSalt = Date.now().toString()

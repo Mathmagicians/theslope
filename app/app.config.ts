@@ -21,7 +21,11 @@ export default defineAppConfig({
             consecutiveCookingDays: 2
         },
         defaultDinnerStartTime: 18,
-        holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage'
+        holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
+        cookingDeadlines: {
+            criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
+            warningHours: 72    // Warning urgency: 24-72h before dinner event (yellow)
+        }
     },
     ui: {
         colors: {

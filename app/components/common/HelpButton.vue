@@ -13,7 +13,7 @@ const helpContent = computed(() => {
   const paramValues = Object.values(route.params).flat()
 
   // Traverse HELP_TEXTS using path segments, skipping dynamic params
-  let current: any = HELP_TEXTS
+  let current: Record<string, unknown> = HELP_TEXTS
   for (const segment of pathSegments) {
     // Skip dynamic param values (e.g., shortname like 'abc-123')
     if (paramValues.includes(segment) && !current[segment]) {

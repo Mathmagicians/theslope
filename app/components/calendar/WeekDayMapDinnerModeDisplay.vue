@@ -46,8 +46,10 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  modelValue: null,
   formMode: FORM_MODES.VIEW,
   disabled: false,
+  name: undefined,
   parentRestriction: null,
   showLabels: true
 })
@@ -57,7 +59,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { ORIENTATIONS, WEEKDAY } = useTheSlopeDesignSystem()
+const { WEEKDAY } = useTheSlopeDesignSystem()
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum

@@ -2,5 +2,10 @@
 import withNuxt from './.nuxt/eslint.config.mjs'
 
 export default withNuxt(
-  // Your custom configs here
+  {
+    rules: {
+      // Factory pattern is acceptable for test data factories (ADR-003)
+      '@typescript-eslint/no-extraneous-class': 'off'
+    }
+  }
 )

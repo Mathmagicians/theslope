@@ -13,6 +13,12 @@ type SerializableError = {
     issues?: Array<{code: string, path: Array<string | number>, message: string}>
 } | string
 
+interface ErrorCause {
+    status?: number
+    statusMessage?: string
+    message?: string
+}
+
 /**
  * Extract serializable error info to avoid "Cannot stringify arbitrary non-POJOs" errors
  * Zod schemas and Prisma error internals are not POJOs and break Nuxt's devalue serialization
@@ -58,7 +64,7 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statu
     }
 
     const hasValidationCause = error && typeof error === 'object' && 'cause' in error
-    const errorCause = hasValidationCause ? (error.cause as any) : null
+    const errorCause: ErrorCause | null = hasValidationCause ? (error as {cause: ErrorCause}).cause : null
 
     if (error instanceof ZodError || errorCause?.status === 400 || errorCause?.statusMessage === 'Validation Error') {
         const causeMessage = errorCause?.message || ''

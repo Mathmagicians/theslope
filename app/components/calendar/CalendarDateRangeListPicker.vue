@@ -13,7 +13,8 @@ const props = withDefaults(defineProps<{
   disabled?: boolean,
   seasonDates?: DateRange
 }>(), {
-  disabled: false
+  disabled: false,
+  seasonDates: undefined
 })
 
 // STATE

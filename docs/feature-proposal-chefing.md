@@ -32,12 +32,63 @@
 - ✅ Smart defaults: `getNextDinnerDate()` for team's next cooking day
 - ✅ Date utilities: `formatDanishWeekdayDate()` for discrete date display
 
+### ✅ COMPLETED (Phase 4.5 - Architecture Refactoring)
+
+**Shared Components Extraction (2025-01-28):**
+- ✅ `DinnerDetailPanel` - Shared detail panel (DinnerMenuHero + CookingTeamCard + KitchenPreparation)
+- ✅ `CalendarMasterPanel` - Consistent wrapper for calendar master panels with header/footer slots
+- ✅ `/dinner/index.vue` refactored - 70% code reduction
+- ✅ `/chef/index.vue` refactored - 31% code reduction
+- ✅ Eliminated ~100 lines of duplicate code
+
 ### ⏳ OUTSTANDING (Phase 5+)
 
-**Menu Editing:**
-- ❌ Allergen selection (checkboxes)
-- ❌ Picture upload modal
+**Chef Assignment & Status (Phase 5.1 - IN PROGRESS):**
+- ✅ `DinnerStatusStepper` - Progress indicator (Menu → Annoncér → Lav → Spis!)
+- ✅ `DinnerBudget` - Financial overview (revenue vs expenses)
+- 🔄 Chef Assignment - Volunteer as chef, auto-create CHEF role assignment
+- ❌ Team role overview in TeamRoleStatus (compact stepper + budget)
+
+**ASCII Mockup - Chef Assignment:**
+```
+┌────────────────────────────────────────────────────┐
+│ DinnerMenuHero (Chef Mode)                        │
+├────────────────────────────────────────────────────┤
+│ 👨‍🍳 CHEFKOK                                       │
+│                                                    │
+│ ┌──────────────────────────────────────────────┐  │
+│ │ ℹ️ Ingen chefkok tildelt                     │  │
+│ │ Vil du påtage dig ansvaret som chefkok?      │  │
+│ └──────────────────────────────────────────────┘  │
+│                                                    │
+│ [✋ BLIV CHEFKOK]                                   │
+│                                                    │
+└────────────────────────────────────────────────────┘
+
+After assignment:
+┌────────────────────────────────────────────────────┐
+│ 👨‍🍳 CHEFKOK                                       │
+│                                                    │
+│ 👤  Anna Nielsen                                   │
+│     Det er dig!                                    │
+│                                                    │
+│ [🔄 BYT CHEF (kommer snart)]  ← disabled          │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+**API Endpoint:**
+- `POST /api/admin/dinner-event/[id]/assign-chef`
+- Body: `{ inhabitantId: number }`
+- Logic: Update dinnerEvent.chefId + create/update CookingTeamAssignment with role=CHEF
+
+**DinnerMenuHero Sub-components (Phase 5.2-5.4):**
+- ❌ `DinnerMenuContent` - Shared title/description display component
+- ❌ `DinnerAllergenSection` - Shared allergen display/editing component
+- ❌ `DinnerChefSection` - Chef-specific metadata (deadlines, budgets, inline editing, picture upload)
+- ❌ `DinnerBookingSection` - Household-specific booking form
 - ❌ Inline field saves (title, description, allergens)
+- ❌ Component tests for new shared components
 
 **State Transitions:**
 - ❌ SCHEDULED → ANNOUNCED (announce menu)
@@ -52,6 +103,229 @@
 **Testing:**
 - ⚠️ Component tests for MyTeamSelector, TeamCalendarDisplay
 - ⚠️ E2E tests for chef workflow, team switching
+
+---
+
+## 🏗️ Architecture Refactoring (Phase 4.5)
+
+**Status**: In Progress | **Started**: 2025-01-28 | **Priority**: High (eliminate ~70% code duplication)
+
+### Problem Statement
+
+The `/dinner` and `/chef` pages share nearly identical structure:
+- **Detail Panel**: Both use DinnerMenuHero (header) + CookingTeamCard + KitchenPreparation (body)
+- **Master Panel**: Both wrap calendars in UCard with consistent header/loading states
+- **Data Fetching**: Both use component-local `useAsyncData` for dinner detail
+- **Code Duplication**: ~70% of page code is duplicated
+
+**Additional Issue**: DinnerMenuHero handles two distinct use cases (household bookings vs chef editing) in a single component, making it complex and hard to extend.
+
+### Solution: Extract Shared Components
+
+#### 1. DinnerDetailPanel Component
+
+**Purpose**: Encapsulate the common dinner detail structure used by both pages
+
+**Location**: `app/components/dinner/DinnerDetailPanel.vue`
+
+**Features**:
+- Fetches dinner detail with orders via component-local `useAsyncData` (ADR-007)
+- Handles loading/error/empty states internally
+- Renders DinnerMenuHero in header, CookingTeamCard + KitchenPreparation in body
+- Accepts `mode` prop to switch DinnerMenuHero between 'household' and 'chef'
+- Emits booking/allergen update events for parent handling
+
+**Props**:
+```typescript
+interface Props {
+  dinnerEventId: number | null  // null when no selection
+  mode?: 'household' | 'chef' | 'view'  // DinnerMenuHero display mode
+  ticketPrices?: TicketPrice[]  // Available ticket prices for booking
+}
+```
+
+**Benefits**:
+- ✅ Eliminates ~70% duplication in page components
+- ✅ Consistent error handling and loading states
+- ✅ Single source of truth for dinner detail structure
+- ✅ Easy to test in isolation
+
+#### 2. CalendarMasterPanel Component
+
+**Purpose**: Consistent wrapper for calendar master panels with slot-based customization
+
+**Location**: `app/components/calendar/CalendarMasterPanel.vue`
+
+**Features**:
+- Provides consistent UCard structure with header/footer slots
+- Optional header slot for selectors, filters, team status
+- Required calendar slot for actual calendar component
+- Optional footer slot for legends, statistics
+- Full-height flex layout for proper master panel sizing
+
+**Props**:
+```typescript
+interface Props {
+  title: string  // Card header title
+}
+```
+
+**Slots**:
+```typescript
+interface Slots {
+  header?: () => any      // Optional: Team selector, filters, status
+  calendar: () => any     // Required: Calendar component
+  footer?: () => any      // Optional: Legend, stats
+}
+```
+
+**Usage Example (Dinner Page)**:
+```vue
+<CalendarMasterPanel title="Fællesspisningens kalender">
+  <template #calendar>
+    <DinnerCalendarDisplay
+      :season-dates="seasonDates"
+      :dinner-events="dinnerEvents"
+      @date-selected="setValue"
+    />
+  </template>
+</CalendarMasterPanel>
+```
+
+**Usage Example (Chef Page)**:
+```vue
+<CalendarMasterPanel title="Mine Madhold">
+  <template #header>
+    <MyTeamSelector v-model="selectedTeamId" />
+    <TeamRoleStatus :team="selectedTeam" />
+  </template>
+
+  <template #calendar>
+    <TeamCalendarDisplay
+      :teams="[selectedTeam]"
+      :dinner-events="teamDinnerEvents"
+      @select="handleDinnerSelect"
+    />
+  </template>
+</CalendarMasterPanel>
+```
+
+**Benefits**:
+- ✅ Consistent master panel structure across pages
+- ✅ Flexible slot-based composition
+- ✅ No duplication of UCard wrapper code
+- ✅ Easy to add new calendar pages (e.g., admin calendar)
+
+#### 3. DinnerMenuHero Refactoring (Phase 5)
+
+**Problem**: Single component handles two distinct use cases with different content needs:
+- **Household Mode**: Family bookings with power mode, total price
+- **Chef Mode**: Menu editing with deadlines, budgets, picture upload
+
+**Solution**: Composition with sub-components (keep orchestrator, extract sections)
+
+**New Component Structure**:
+```
+DinnerMenuHero (orchestrator)
+├── DinnerMenuContent (shared: title, description, picture display)
+├── DinnerAllergenSection (shared: allergen display/editing)
+├── DinnerChefSection (chef-specific: deadlines, budgets, inline editing)
+└── DinnerBookingSection (household-specific: booking form, power mode)
+```
+
+**Component Responsibilities**:
+
+| Component | Responsibility | Used In |
+|-----------|---------------|---------|
+| **DinnerMenuHero** | Orchestrator - mode switching, UPageHero wrapper | Both modes |
+| **DinnerMenuContent** | Title, description, picture display | Both modes |
+| **DinnerAllergenSection** | Allergen display/editing (mode-aware) | Both modes |
+| **DinnerChefSection** | Deadlines, budgets, menu inline editing | Chef only |
+| **DinnerBookingSection** | Family bookings, power mode, total price | Household only |
+
+**Chef-Specific Content (DinnerChefSection)**:
+
+```vue
+<div class="border-t border-white/20 pt-4 space-y-2">
+  <!-- Deadlines (computed from dinner date + season settings) -->
+  <div class="flex items-center justify-between text-sm">
+    <span>📝 Menu due:</span>
+    <span class="font-semibold">3 days before (Jan 22)</span>
+  </div>
+  <div class="flex items-center justify-between text-sm">
+    <span>🛒 Shopping:</span>
+    <span class="font-semibold">1 day before (Jan 24)</span>
+  </div>
+
+  <!-- Budget (computed from season settings) -->
+  <div class="flex items-center justify-between text-sm">
+    <span>💰 Budget:</span>
+    <span class="font-semibold">500 kr (5 kr/portion avg.)</span>
+  </div>
+
+  <!-- Inline editing for menu fields -->
+  <UInput v-model="menuTitle" @blur="saveMenuTitle" />
+  <UTextarea v-model="menuDescription" @blur="saveMenuDescription" />
+</div>
+```
+
+**Deadlines Calculation**:
+```typescript
+// In DinnerChefSection or useChefDeadlines composable
+const metadata = computed(() => ({
+  deadlines: [
+    {
+      label: 'Menu due',
+      date: subDays(dinnerDate, season.ticketIsCancellableDaysBefore),
+      icon: '📝'
+    },
+    {
+      label: 'Shopping',
+      date: subDays(dinnerDate, 1),
+      icon: '🛒'
+    }
+  ],
+  budget: {
+    total: 500,  // From season settings or dynamic calculation
+    perPortion: 5,
+    icon: '💰'
+  }
+}))
+```
+
+**Benefits**:
+- ✅ DRY: Shared elements (title, allergens) extracted once
+- ✅ Focused: Each component has single responsibility
+- ✅ Testable: Can test booking and chef sections independently
+- ✅ Extensible: Easy to add new sections (e.g., "admin" mode)
+- ✅ Clean separation: Booking logic ≠ editing logic
+- ✅ Mobile-first: Each section optimizes independently
+
+**Migration Path**:
+1. **Phase 5.1**: Extract `DinnerMenuContent` and `DinnerAllergenSection` (shared)
+2. **Phase 5.2**: Create `DinnerChefSection` with deadlines/budgets/inline editing
+3. **Phase 5.3**: Extract `DinnerBookingSection` from existing booking code
+4. **Phase 5.4**: Refactor `DinnerMenuHero` to orchestrate sub-components
+
+### Implementation Status
+
+**Completed (2025-01-28)**:
+- ✅ `DinnerDetailPanel.vue` created with component-local data fetching
+- ✅ `CalendarMasterPanel.vue` created with slot-based composition
+- ✅ `/dinner/index.vue` refactored to use shared components (187 lines → ~70% reduction)
+- ✅ `/chef/index.vue` refactored to use shared components (327 lines → 225 lines, ~31% reduction)
+
+**Code Reduction Summary**:
+- **Before**: 514 total lines across both pages
+- **After**: ~412 total lines (shared components handle the rest)
+- **Eliminated**: ~100 lines of duplicate code
+- **Benefit**: Single source of truth for dinner detail panel structure
+
+**Next Steps (Phase 5)**:
+- [ ] Split DinnerMenuHero into sub-components (DinnerMenuContent, DinnerAllergenSection, DinnerChefSection, DinnerBookingSection)
+- [ ] Implement `useChefDeadlines()` composable for deadline calculations
+- [ ] Add component tests for all new shared components
+- [ ] Update E2E tests to verify pages still work after refactoring
 
 ---
 

@@ -122,19 +122,6 @@ const formatLabel = (key: keyof DateRange): string => {
   }
 }
 
-const attrs = {
-  'transparent': false,
-  'borderless': false,
-  'color': 'pink',
-  'is-dark': {selector: 'html', darkClass: 'dark'},
-  'first-day-of-week': 2
-}
-
-function onDayClick(_: any, event: MouseEvent): void {
-  const target = event.target as HTMLElement
-  target.blur() //unfocus the clicked element
-}
-
 const togglePopover = () => {
   console.log("toggle popover")
 }

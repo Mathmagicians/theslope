@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ text?: string }>()
+defineProps<{ text?: string }>()
 </script>
 <template>
   <UCard class="w-full px-0">

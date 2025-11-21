@@ -122,8 +122,13 @@ export const BG = {
   },
   ocean: {
     50: 'bg-ocean-50',
+    200: 'bg-ocean-200',    // Chef calendar - future cookings
+    300: 'bg-ocean-300',    // Chef calendar - countdown
+    400: 'bg-ocean-400',    // Chef calendar - next cooking
     500: 'bg-ocean-500',    // Landing section
-    600: 'bg-ocean-600'
+    600: 'bg-ocean-600',
+    700: 'bg-ocean-700',
+    800: 'bg-ocean-800'
   },
   gray: {
     50: 'bg-gray-50',
@@ -176,7 +181,11 @@ export const TEXT = {
     50: 'text-party-50'
   },
   ocean: {
-    50: 'text-ocean-50'
+    50: 'text-ocean-50',
+    300: 'text-ocean-300',    // Chef calendar - countdown timer
+    400: 'text-ocean-400',    // Chef calendar - countdown timer
+    600: 'text-ocean-600',    // Chef calendar - rings
+    800: 'text-ocean-800'     // Chef calendar - future cookings
   },
   gray: {
     600: 'text-gray-600',
@@ -203,8 +212,18 @@ export const BORDER = {
   peach: {
     400: 'border-peach-400'    // Calendar - countdown, rings
   },
+  ocean: {
+    400: 'border-ocean-400',   // Chef calendar - countdown, rings
+    700: 'border-ocean-700'    // Chef calendar - selected state
+  },
   orange: {
     500: 'border-orange-500'
+  },
+  red: {
+    500: 'border-red-500'      // Deadline - critical
+  },
+  amber: {
+    500: 'border-amber-500'    // Deadline - warning
   }
 } as const
 
@@ -592,6 +611,74 @@ export const DINNER_STATE_BADGES = {
   }
 } as const
 
+/**
+ * CHEF_CALENDAR - Chef cooking schedule color system
+ *
+ * Professional ocean palette (vs warm peach for household booking).
+ * Temporal states (next/future/past) + deadline urgency overlays.
+ *
+ * Visual hierarchy:
+ * - Ocean blue = Professional chef context
+ * - Deadline rings = Urgency (red critical, amber warning)
+ * - Mocha = Completed (same as household for consistency)
+ */
+export const CHEF_CALENDAR = {
+  // Base temporal states
+  base: {
+    next: BG.ocean[400],      // Bold ocean - next cooking
+    future: BG.ocean[200],    // Light ocean - future cookings
+    past: BG.mocha[100]       // Mocha (consistent with household)
+  },
+  text: {
+    next: TEXT.ocean[400],
+    future: TEXT.ocean[800],
+    past: TEXT.mocha[900]
+  },
+  countdown: {
+    container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2 border-ocean-400',
+    title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
+    date: 'text-sm font-medium uppercase text-ocean-400',
+    number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-ocean-400',
+    numberPrefix: 'opacity-75 text-amber-50',
+    timeLabel: 'text-xs md:text-sm text-ocean-50',
+    timeValue: 'text-xl md:text-2xl font-medium text-ocean-300',
+    dot: 'w-3 h-3 rounded-full animate-pulse bg-ocean-400'
+  },
+  // Deadline urgency rings (overlay on base)
+  deadline: {
+    critical: 'ring-2 ring-red-500',      // < 24h - act NOW!
+    warning: 'ring-2 ring-amber-500',     // 24-72h - prepare soon
+    onTrack: ''                            // > 72h - all good (no ring)
+  },
+  selection: {
+    ring: `ring-2 md:ring-4 ring-ocean-700`  // Selected dinner
+  }
+} as const
+
+/**
+ * DEADLINE_BADGES - Chef deadline indicator badges
+ *
+ * Small colored chips showing deadline types and urgency in agenda view.
+ * Complements calendar ring indicators with specific deadline info.
+ */
+export const DEADLINE_BADGES = {
+  CRITICAL: {
+    color: COLOR.error,
+    label: 'Kritisk',
+    icon: 'i-heroicons-exclamation-circle'
+  },
+  WARNING: {
+    color: COLOR.warning,
+    label: 'Snart',
+    icon: 'i-heroicons-clock'
+  },
+  ON_TRACK: {
+    color: COLOR.success,
+    label: 'OK',
+    icon: 'i-heroicons-check-circle'
+  }
+} as const
+
 export const useTheSlopeDesignSystem = () => {
   // Inject responsive breakpoint from layout
   const isMd = inject<Ref<boolean>>('isMd', ref(false))
@@ -601,6 +688,8 @@ export const useTheSlopeDesignSystem = () => {
     COLOR,
     TICKET_TYPE_COLORS,
     DINNER_STATE_BADGES,
+    CHEF_CALENDAR,
+    DEADLINE_BADGES,
     ICONS,
 
     // Semantic design patterns (USE THESE!)

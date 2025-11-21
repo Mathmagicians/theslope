@@ -9,7 +9,7 @@ interface Props {
   words: string[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   words: () => ['marque test']
 })
 

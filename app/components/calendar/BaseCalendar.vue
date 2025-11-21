@@ -26,8 +26,9 @@ interface Props {
 }
 
 interface Slots {
-  day?: (props: { day: DateValue, eventLists: DayEventList[] }) => any
-  'week-day'?: (props: { day: string }) => any
+  day?: (props: { day: DateValue, eventLists: DayEventList[] }) => unknown
+  'week-day'?: (props: { day: string }) => unknown
+  legend?: () => unknown  // Optional legend slot (only shown if defined)
 }
 
 const props = defineProps<Props>()
@@ -95,4 +96,7 @@ const calendarUi = {
       </slot>
     </template>
   </UCalendar>
+
+  <!-- Legend slot - only shown if defined -->
+  <slot v-if="$slots.legend" name="legend" />
 </template>

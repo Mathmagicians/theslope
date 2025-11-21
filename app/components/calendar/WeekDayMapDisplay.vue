@@ -14,9 +14,12 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  modelValue: null,
+  parentRestriction: null,
   compact: false,
   disabled: false,
   label: '',
+  name: undefined,
   color: 'success'
 })
 
@@ -37,14 +40,6 @@ const selectedDays = computed(() => {
 const formatDayCompact = (day: WeekDay) => {
   return day.substring(0, 3)
 }
-
-// Computed display text for compact mode
-const compactDisplay = computed(() => {
-  if (!props.modelValue || selectedDays.value.length === 0) {
-    return '💤'
-  }
-  return selectedDays.value.map(formatDayCompact)
-})
 
 const isRestricted = (day: WeekDay) => {
   return props.parentRestriction ? !props.parentRestriction[day] : false

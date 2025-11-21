@@ -120,15 +120,13 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {FORM_MODES} from "~/types/form"
-import type {CookingTeamDisplay, TeamRole} from "~/composables/useCookingTeamValidation"
+import type {TeamRole, WeekdayMap} from "~/composables/useCookingTeamValidation"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
   isSelectedSeasonLoading,
-  isSeasonsInitialized,
-  isSelectedSeasonInitialized,
   isPlanStoreReady,
   isNoSeasons,
   selectedSeason,
@@ -140,7 +138,6 @@ const {
   createTeam,
   updateTeam,
   deleteTeam,
-  onSeasonSelect,
   addTeamMember,
   removeTeamMember,
   assignTeamAffinitiesAndEvents
@@ -158,7 +155,7 @@ const {formMode, onModeChange} = useEntityFormManager<CookingTeam[]>({
 
 // SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
 const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
-const {onSeasonChange, season} = useSeasonSelector({
+const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
   activeSeason: computed(() => activeSeason.value || null),
@@ -322,7 +319,7 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
 }
 
 // EDIT MODE: Update team affinity (IMMEDIATE SAVE)
-const handleUpdateTeamAffinity = async (teamId: number, affinity: any) => {
+const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekdayMap<boolean>) => {
   const team = teams.value.find(t => t.id === teamId)
   if (!team) return
 

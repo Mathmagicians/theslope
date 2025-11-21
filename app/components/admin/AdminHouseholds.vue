@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type {HouseholdDisplay} from '~/composables/useHouseholdValidation'
+
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
@@ -17,7 +19,7 @@ const columns = [
   {
     accessorKey: 'inhabitants',
     header: 'Inhabitants',
-    cell: ({row}: any) =>
+    cell: ({row}: {row: {original: HouseholdDisplay}}) =>
       h(resolveComponent('HouseholdListItem'), {
         household: row.original,
         compact: true

@@ -49,6 +49,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  dinnerEvents: () => [],
   numberOfMonths: 1,
   showCountdown: false,
   color: 'peach',
@@ -302,20 +303,22 @@ v-else-if="hasPastDinnerEvent(eventLists)"
               <!-- Regular day -->
               <span v-else class="text-sm">{{ day.day }}</span>
             </template>
-          </BaseCalendar>
-        </div>
 
-        <!-- Legend -->
-        <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
-          <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-            <div v-if="legendItem.type === 'chip'" class="w-8 h-8 flex items-center justify-center">
-              <UChip show size="md" color="success">1</UChip>
-            </div>
-            <div v-else :class="legendItem.circleClass">
-              1
-            </div>
-            <span>{{ legendItem.label }}</span>
-          </div>
+            <!-- Legend -->
+            <template #legend>
+              <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
+                <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
+                  <div v-if="legendItem.type === 'chip'" class="w-8 h-8 flex items-center justify-center">
+                    <UChip show size="md" color="success">1</UChip>
+                  </div>
+                  <div v-else :class="legendItem.circleClass">
+                    1
+                  </div>
+                  <span>{{ legendItem.label }}</span>
+                </div>
+              </div>
+            </template>
+          </BaseCalendar>
         </div>
       </template>
     </UAccordion>

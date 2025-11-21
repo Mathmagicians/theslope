@@ -3,7 +3,8 @@
  *
  * Used for cleaning up singleton test season that's shared across parallel workers
  */
-import { chromium, FullConfig } from '@playwright/test'
+import type { FullConfig } from '@playwright/test';
+import { chromium } from '@playwright/test'
 import { SeasonFactory } from './testDataFactories/seasonFactory'
 import testHelpers from './testHelpers'
 

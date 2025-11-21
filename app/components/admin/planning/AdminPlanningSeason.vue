@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
-import type {FormSubmitEvent} from "#ui/types"
-import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
 //COMPONENT DEPENDENCIES
@@ -46,8 +44,8 @@ const formTitle = computed(() => {
 })
 
 // ACTIONS
-const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
-  // Use model.value directly instead of event.data to ensure v-model changes are included
+const onSubmitSeason = () => {
+  // Use model.value directly to ensure v-model changes are included
   emit('update', model.value)
 }
 

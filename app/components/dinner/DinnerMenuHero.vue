@@ -183,6 +183,14 @@ const emit = defineEmits<{
 const allergiesStore = useAllergiesStore()
 const {allergyTypes} = storeToRefs(allergiesStore)
 
+// Use plan store for role assignment
+const planStore = usePlanStore()
+
+// Use auth store to get current user's inhabitant
+const authStore = useAuthStore()
+const {user} = storeToRefs(authStore)
+const currentInhabitant = computed(() => user.value?.Inhabitant)
+
 // Use dinner event from props (component-local data pattern - ADR-007)
 const selectedDinnerEvent = computed(() => props.dinnerEvent)
 
@@ -212,6 +220,39 @@ const isPowerModeActive = ref(false)
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMode.DINEIN)
+
+// Role assignment (for volunteering buttons)
+const {TeamRoleSchema} = useCookingTeamValidation()
+const TeamRole = TeamRoleSchema.enum
+
+// Check if user can volunteer for cooking roles
+const canVolunteer = computed(() => {
+  if (!currentInhabitant.value) return false
+  if (!selectedDinnerEvent.value?.cookingTeamId) return false
+  // TODO: Check if already assigned to this team
+  return true
+})
+
+// Handle role assignment (volunteer as chef/cook/helper)
+const isAssigningRole = ref(false)
+const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]) => {
+  if (!selectedDinnerEvent.value?.id || !currentInhabitant.value?.id) return
+
+  isAssigningRole.value = true
+  try {
+    await planStore.assignRoleToDinner(
+      selectedDinnerEvent.value.id,
+      currentInhabitant.value.id,
+      role
+    )
+    // Success feedback could be added here
+  } catch (error) {
+    console.error('Failed to assign role:', error)
+    // Error feedback could be added here
+  } finally {
+    isAssigningRole.value = false
+  }
+}
 
 // Calculate total price
 const totalPrice = computed(() => {
@@ -301,15 +342,28 @@ const formattedDinnerDate = computed(() => {
       <div class="space-y-6">
         <!-- Allergen Selector -->
         <div v-if="allergyTypes.length > 0">
-          <AllergenMultiSelector
-            v-if="mode === 'chef'"
-            v-model="draftAllergenIds"
-            :allergy-types="allergyTypes"
-            :mode="allergenSelectorMode"
-            :show-statistics="allergenSelectorMode === 'edit'"
-            :readonly="formMode === FORM_MODES.VIEW"
-            @update:model-value="handleAllergenUpdate"
-          />
+          <div v-if="mode === 'chef'">
+            <AllergenMultiSelector
+              v-model="draftAllergenIds"
+              :allergy-types="allergyTypes"
+              :mode="allergenSelectorMode"
+              :show-statistics="allergenSelectorMode === 'edit'"
+              :readonly="formMode === FORM_MODES.VIEW"
+              @update:model-value="handleAllergenUpdate"
+            />
+            <!-- Edit button below allergen display when in view mode -->
+            <div v-if="formMode === FORM_MODES.VIEW" class="flex justify-center mt-3">
+              <UButton
+                color="white"
+                variant="outline"
+                size="md"
+                icon="i-heroicons-pencil"
+                @click="formMode = FORM_MODES.EDIT"
+              >
+                Rediger allergener
+              </UButton>
+            </div>
+          </div>
           <AllergenMultiSelector
             v-else
             :model-value="selectedAllergenIds"
@@ -318,6 +372,54 @@ const formattedDinnerDate = computed(() => {
             readonly
           />
         </div>
+
+        <!-- Volunteer Buttons (always visible in all modes) -->
+        <UFieldGroup
+          label="🍽️ Vil du hjælpe til med madlavningen?"
+          class="bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20"
+        >
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <UButton
+              color="primary"
+              variant="solid"
+              size="md"
+              name="volunteer-chef"
+              icon="i-heroicons-plus"
+              :loading="isAssigningRole"
+              :disabled="isAssigningRole || !canVolunteer"
+              block
+              @click="handleRoleAssignment(TeamRole.CHEF)"
+            >
+              Bliv chefkok 👨‍🍳
+            </UButton>
+            <UButton
+              color="primary"
+              variant="solid"
+              size="md"
+              name="volunteer-cook"
+              icon="i-heroicons-plus"
+              :loading="isAssigningRole"
+              :disabled="isAssigningRole || !canVolunteer"
+              block
+              @click="handleRoleAssignment(TeamRole.COOK)"
+            >
+              Bliv kok 👥
+            </UButton>
+            <UButton
+              color="primary"
+              variant="solid"
+              size="md"
+              name="volunteer-helper"
+              icon="i-heroicons-plus"
+              :loading="isAssigningRole"
+              :disabled="isAssigningRole || !canVolunteer"
+              block
+              @click="handleRoleAssignment(TeamRole.JUNIORHELPER)"
+            >
+              Bliv kokkespire 🌱
+            </UButton>
+          </div>
+        </UFieldGroup>
 
         <!-- Booking Section (household mode only) -->
         <div v-if="mode === 'household'" class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">

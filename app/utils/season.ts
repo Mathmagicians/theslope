@@ -442,3 +442,49 @@ export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number =
         freezeTime = subMinutes(freezeTime, offsetMinutes)
         return isBefore(now, freezeTime)
     }
+
+/**
+ * Deadline urgency levels
+ * 0 = On track (> warningHours before event)
+ * 1 = Warning (between criticalHours and warningHours)
+ * 2 = Critical (< criticalHours before event)
+ */
+export type DeadlineUrgency = 0 | 1 | 2
+
+/**
+ * Convert hours to days and minutes for isBeforeDeadline
+ */
+const hoursToOffset = (hours: number): { days: number; minutes: number } => ({
+    days: Math.floor(hours / 24),
+    minutes: (hours % 24) * 60
+})
+
+/**
+ * Pure function to calculate deadline urgency
+ * Uses isBeforeDeadline internally for consistent deadline logic
+ *
+ * @param dinnerStartTime - The dinner event start time
+ * @param criticalHours - Hours threshold for critical urgency
+ * @param warningHours - Hours threshold for warning urgency
+ * @returns Urgency level: 0 (on track) | 1 (warning) | 2 (critical)
+ */
+export const calculateDeadlineUrgency = (
+    dinnerStartTime: Date,
+    criticalHours: number,
+    warningHours: number
+): DeadlineUrgency => {
+    const criticalOffset = hoursToOffset(criticalHours)
+    const warningOffset = hoursToOffset(warningHours)
+
+    const isBeforeCritical = isBeforeDeadline(criticalOffset.days, criticalOffset.minutes)
+    const isBeforeWarning = isBeforeDeadline(warningOffset.days, warningOffset.minutes)
+
+    // Critical: NOT before critical deadline (within critical window)
+    if (!isBeforeCritical(dinnerStartTime)) return 2
+
+    // Warning: NOT before warning deadline BUT before critical deadline
+    if (!isBeforeWarning(dinnerStartTime)) return 1
+
+    // On track: before warning deadline
+    return 0
+}

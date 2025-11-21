@@ -1,7 +1,6 @@
 // @vitest-environment nuxt
 import { describe, it, expect, vi } from 'vitest'
-import { mountSuspended } from "@nuxt/test-utils/runtime"
-import { mockNuxtImport, mockComponent } from '@nuxt/test-utils/runtime'
+import { mountSuspended, mockNuxtImport, mockComponent  } from "@nuxt/test-utils/runtime"
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
 import { ref, h } from 'vue'
 import { AllergyFactory } from '../../../e2e/testDataFactories/allergyFactory'

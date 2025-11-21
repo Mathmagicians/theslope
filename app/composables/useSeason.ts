@@ -4,10 +4,10 @@ import {type Season, useSeasonValidation} from '~/composables/useSeasonValidatio
 import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import { computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
+import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason} from "~/utils/season"
+    selectMostAppropriateActiveSeason, type DeadlineUrgency} from "~/utils/season"
 
 /**
  * Business logic for working with seasons
@@ -283,6 +283,16 @@ export const useSeason = () => {
         return hasAssignment(inhabitantId, team, TeamRoleSchema.enum.CHEF)
     }
 
+    /**
+     * Calculate deadline urgency for cooking tasks using thresholds from app.config.ts
+     * @param dinnerStartTime - The dinner event start time
+     * @returns 0 (on track) | 1 (warning) | 2 (critical)
+     */
+    const getDeadlineUrgency = (dinnerStartTime: Date): DeadlineUrgency => {
+        const { criticalHours, warningHours } = theslope.cookingDeadlines
+        return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+    }
+
     return {
         // Validation schemas
         SeasonStatusSchema,
@@ -315,6 +325,7 @@ export const useSeason = () => {
         getTeamsForInhabitant,
         isOnTeam,
         isChefFor,
+        getDeadlineUrgency,
 
         // Active season management - pure functions
         isPast,

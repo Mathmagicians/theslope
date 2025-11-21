@@ -91,7 +91,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createSeason, updateSeason, generateDinnerEvents, onSeasonSelect, activateSeason} = store
+const {createSeason, updateSeason, generateDinnerEvents, activateSeason} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
 const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
@@ -101,7 +101,7 @@ const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
 
 // SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
 const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
-const {onSeasonChange, season} = useSeasonSelector({
+const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
   activeSeason: computed(() => activeSeason.value),
@@ -143,6 +143,8 @@ const showSuccessToast = (title: string, description?: string) => {
 }
 
 // SEASON-SPECIFIC BUSINESS LOGIC
+const {handleApiError} = useApiHandler()
+
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   if (formMode.value === FORM_MODES.CREATE) {
     // Step 1: Create season
@@ -153,9 +155,10 @@ const handleSeasonUpdate = async (updatedSeason: Season) => {
       try {
         const eventResult = await generateDinnerEvents(createdSeason.id)
         showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
-      } catch (eventError) {
-        // Season created but event generation failed
-        showSuccessToast('Sæson oprettet', 'Fællesspisninger kunne ikke genereres automatisk')
+      } catch (error) {
+        // Season created but event generation failed - show proper error
+        handleApiError(error, 'generering af fællesspisninger')
+        showSuccessToast('Sæson oprettet', 'Men fællesspisninger kunne ikke genereres')
       }
     }
   } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {

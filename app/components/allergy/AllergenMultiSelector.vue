@@ -218,10 +218,10 @@ const columns = computed(() => {
           <div class="flex items-center justify-center">
             <UCheckbox
                 :model-value="selectedAllergyIds.has(row.original.id!)"
-                @change="toggleAllergySelection(row.original.id!)"
                 :name="`select-allergen-${row.original.id}`"
                 :disabled="readonly"
                 :color="COLOR.secondary"
+                @change="toggleAllergySelection(row.original.id!)"
             />
           </div>
         </template>
@@ -229,12 +229,12 @@ const columns = computed(() => {
         <!-- Icon cell -->
         <template #icon-cell="{ row }">
           <div
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
               :class="[
                 'flex items-center justify-center p-2 rounded-lg transition-colors',
                 !readonly && COMPONENTS.table.clickableCell,
                 selectedAllergyIds.has(row.original.id!) && COMPONENTS.table.selectedRow
               ]"
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
             <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
               <UIcon
@@ -252,11 +252,11 @@ const columns = computed(() => {
         <!-- Name cell -->
         <template #name-cell="{ row }">
           <div
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
               :class="[
                 'font-medium',
                 !readonly && COMPONENTS.table.clickableCell
               ]"
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
             {{ row.original.name }}
           </div>
@@ -265,11 +265,11 @@ const columns = computed(() => {
         <!-- Count cell -->
         <template #count-cell="{ row }">
           <div
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
               :class="[
                 'text-center',
                 !readonly && COMPONENTS.table.clickableCell
               ]"
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
             {{ row.original.inhabitants?.length || 0 }}
           </div>
@@ -278,11 +278,11 @@ const columns = computed(() => {
         <!-- New badge cell -->
         <template v-if="showNewBadge" #new-cell="{ row }">
           <div
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
               :class="[
                 'text-center',
                 !readonly && COMPONENTS.table.clickableCell
               ]"
+              @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
             <span v-if="isNew(row.original.createdAt || '')">🆕</span>
           </div>
@@ -309,13 +309,14 @@ const columns = computed(() => {
           <UserListItem
               :inhabitants="allergyStatistics.uniqueInhabitantsList"
               label="beboer"
-              labelPlural="beboere"
+              label-plural="beboere"
           />
         </div>
 
         <div class="space-y-2">
           <h4 :class="TYPOGRAPHY.sectionSubheading">Fordeling pr. allergen</h4>
-          <div v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
+          <div
+v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
                class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
             <div class="flex items-center gap-2">
               <span class="text-lg">{{ item.icon || '�️' }}</span>

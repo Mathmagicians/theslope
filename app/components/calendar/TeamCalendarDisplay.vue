@@ -1,29 +1,24 @@
 <script setup lang="ts">
 /**
- * TeamCalendarDisplay - Displays cooking team assignments with calendar/agenda views
+ * TeamCalendarDisplay - Displays cooking team assignments in calendar view
  *
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
- * - Agenda view: Shows dinner events in table with pagination, sorting, filtering
- * - View toggle: Horizontal tabs to switch between views
  * - Selection support: Click to select dinner event (optional via emit)
- * - Responsive: Adapts pagination and display based on screen size
+ * - Multi-team support: Shows all teams with distinct colors
+ * - Holiday awareness: Displays holidays as green chips
  *
- * Uses BaseCalendar for calendar view and UTable for agenda view.
- * Tanstack Table API for pagination management.
+ * Uses BaseCalendar for consistent calendar structure.
  *
  * Used in:
- * - /admin/teams (view mode - no selection)
- * - /chef/index (selection mode - emit select events)
+ * - /admin/teams (admin overview - no selection)
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
-import { getPaginationRowModel } from '@tanstack/vue-table'
 import { isSameDay } from 'date-fns'
-// formatDate is auto-imported from ~/utils/date
 
 interface Props {
   seasonDates: DateRange
@@ -35,6 +30,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  holidays: () => [],
   selectedDinnerId: null,
   showSelection: false
 })
@@ -46,87 +42,6 @@ const emit = defineEmits<{
 const {getTeamColor} = useCookingTeam()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const { COLOR, ICONS, SIZES, DINNER_STATE_BADGES, PAGINATION } = useTheSlopeDesignSystem()
-
-// View state with horizontal tabs
-const viewTabs = [
-  { label: 'Agenda', value: 'agenda', icon: 'i-heroicons-list-bullet' },
-  { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
-]
-const selectedViewIndex = ref(0)
-const viewMode = computed(() => viewTabs[selectedViewIndex.value].value as 'agenda' | 'calendar')
-
-// Validation schemas
-const { DinnerStateSchema } = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
-
-// State badge configuration (from design system)
-const getStateBadge = (state: string) => {
-  return DINNER_STATE_BADGES[state as keyof typeof DINNER_STATE_BADGES] || DINNER_STATE_BADGES.SCHEDULED
-}
-
-// Agenda view - sorted dinner events
-const sortedDinnerEvents = computed(() => {
-  return [...props.dinnerEvents].sort((a, b) =>
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
-})
-
-// Pagination (Tanstack Table API)
-const pagination = ref({
-  pageIndex: 0,
-  pageSize: 10
-})
-
-const table = useTemplateRef('table')
-
-// Table columns for agenda view
-const columns = [
-  {
-    accessorKey: 'date',
-    header: 'Dato',
-    enableSorting: false
-  },
-  {
-    accessorKey: 'state',
-    header: '',
-    enableSorting: false
-  },
-  {
-    accessorKey: 'team',
-    header: 'Madhold',
-    enableSorting: false
-  }
-]
-
-// Get team for dinner event
-const getTeamForEvent = (event: DinnerEventDisplay) => {
-  return props.teams.find(t => t.id === event.cookingTeamId)
-}
-
-// Row selection (UTable v-model)
-const selectedRows = ref<DinnerEventDisplay[]>([])
-
-// Sync external selectedDinnerId prop with internal selection
-watch(() => props.selectedDinnerId, (newId) => {
-  if (newId !== null && newId !== undefined) {
-    const dinner = sortedDinnerEvents.value.find(d => d.id === newId)
-    selectedRows.value = dinner ? [dinner] : []
-  } else {
-    selectedRows.value = []
-  }
-}, { immediate: true })
-
-// Handle row selection (UTable @select event)
-const handleRowSelect = (row: DinnerEventDisplay) => {
-  if (props.showSelection) {
-    emit('select', row.id)
-  }
-}
-
-// ========================================
-// Calendar view logic (existing)
-// ========================================
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -188,92 +103,7 @@ const getCalendarDayClasses = (day: DateValue) => [
 </script>
 
 <template>
-  <div class="space-y-4">
-    <!-- View tabs (horizontal orientation on both mobile and desktop) -->
-    <UTabs
-      v-model="selectedViewIndex"
-      :items="viewTabs"
-      orientation="horizontal"
-      variant="link"
-      :size="SIZES.standard.value"
-    />
-
-    <!-- Agenda view -->
-    <div v-if="viewMode === 'agenda'" class="space-y-4">
-      <!-- Pagination controls -->
-      <div class="flex justify-end">
-        <UPagination
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-          :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          :size="SIZES.small.value"
-          :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
-        />
-      </div>
-
-      <!-- Table -->
-      <UTable
-        ref="table"
-        v-model="selectedRows"
-        v-model:pagination="pagination"
-        :columns="columns"
-        :data="sortedDinnerEvents"
-        :single-select="true"
-        :pagination-options="{
-          getPaginationRowModel: getPaginationRowModel()
-        }"
-        :ui="{
-          tbody: 'divide-y divide-gray-200 dark:divide-gray-800'
-        }"
-        @select="handleRowSelect"
-      >
-        <!-- Date column -->
-        <template #date-cell="{ row }">
-          <div class="flex items-center gap-2">
-            <UIcon :name="ICONS.calendar" class="text-gray-500" />
-            <span class="font-medium">{{ formatDate(row.original.date) }}</span>
-          </div>
-        </template>
-
-        <!-- State column (color indicator only) -->
-        <template #state-cell="{ row }">
-          <div class="flex items-center justify-center">
-            <UBadge
-              :color="getStateBadge(row.original.state).color"
-              variant="solid"
-              :size="SIZES.small.value"
-              class="w-3 h-3 p-0 min-w-0"
-            />
-          </div>
-        </template>
-
-        <!-- Team column -->
-        <template #team-cell="{ row }">
-          <UBadge
-            v-if="getTeamForEvent(row.original)"
-            :color="getTeamColor(teams.findIndex(t => t.id === row.original.cookingTeamId))"
-            variant="soft"
-            :size="SIZES.small.value"
-          >
-            {{ getTeamForEvent(row.original)?.name }}
-          </UBadge>
-          <span v-else class="text-gray-500 italic text-sm">Ikke tildelt</span>
-        </template>
-
-        <!-- Empty state -->
-        <template #empty-state>
-          <div class="flex flex-col items-center justify-center py-6 gap-3">
-            <UIcon name="i-heroicons-calendar-days" class="w-8 h-8 text-gray-400"/>
-            <p class="text-sm text-gray-500">Ingen fællesspisninger i denne sæson</p>
-          </div>
-        </template>
-      </UTable>
-    </div>
-
-    <!-- Calendar view -->
-    <div v-else-if="viewMode === 'calendar'">
-      <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
+  <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
         <template #day="{ day, eventLists }">
           <!-- Holiday takes precedence -->
           <UChip v-if="isHoliday(day)" show size="md" color="success">
@@ -299,7 +129,31 @@ const getCalendarDayClasses = (day: DateValue) => [
           <!-- Regular day -->
           <span v-else class="text-sm">{{ day.day }}</span>
         </template>
-      </BaseCalendar>
-    </div>
-  </div>
+
+        <!-- Legend -->
+        <template #legend>
+          <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto text-sm">
+            <!-- Teams -->
+            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-4">
+              <UBadge
+                :color="getTeamColor(index)"
+                variant="solid"
+                size="md"
+                class="w-8 h-8 flex items-center justify-center"
+              >
+                1
+              </UBadge>
+              <span>{{ team.name }}</span>
+            </div>
+
+            <!-- Holidays -->
+            <div v-if="holidays && holidays.length > 0" class="flex items-center gap-4">
+              <div class="w-8 h-8 flex items-center justify-center">
+                <UChip show size="md" color="success">1</UChip>
+              </div>
+              <span>Ferie</span>
+            </div>
+          </div>
+    </template>
+  </BaseCalendar>
 </template>

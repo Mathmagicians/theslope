@@ -201,12 +201,14 @@ const handlePowerModeUpdate = () => {
       <!-- Ticket Type Column -->
       <template #ticketType-cell="{ row }">
         <UBadge
+          v-if="row.ticketConfig"
           :color="row.ticketConfig.color"
           variant="subtle"
           size="sm"
         >
           {{ row.ticketConfig.label }}
         </UBadge>
+        <span v-else class="text-gray-400 text-sm">-</span>
       </template>
 
       <!-- Name Column -->

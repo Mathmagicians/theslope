@@ -106,46 +106,12 @@ const {value: selectedDate, setValue: setSelectedDate} = useQueryParam<Date>('da
   syncWhen: () => isPageReady.value && teamDinnerEvents.value.length > 0
 })
 
-// DinnerMenuHero mode based on chef permission
-const dinnerMenuHeroMode = computed(() => {
-  if (!selectedTeam.value) return 'view'
-  const inhabitantId = authStore.user?.Inhabitant?.id
-  if (!inhabitantId) return 'view'
-  return isChefFor(inhabitantId, selectedTeam.value) ? 'chef' : 'view'
-})
-
 const selectedDinnerEvent = computed(() => {
   return teamDinnerEvents.value.find(e => {
     const eventDate = new Date(e.date)
     return eventDate.toDateString() === selectedDate.value.toDateString()
   })
 })
-
-// Validation schema for parsing dinner event detail
-const { DinnerEventDetailSchema } = useBookingValidation()
-
-// Component-local data: Fetch dinner detail with orders when selection changes (ADR-007)
-const {data: selectedDinnerEventDetail} = useAsyncData(
-  computed(() => `chef-dinner-${selectedDinnerEvent.value?.id || 'none'}`),
-  () => selectedDinnerEvent.value?.id
-    ? planStore.fetchDinnerEventDetail(selectedDinnerEvent.value.id)
-    : Promise.resolve(null),
-  {
-    watch: [() => selectedDinnerEvent.value?.id],
-    immediate: true,
-    transform: (data: any) => {
-      if (!data) return null
-      try {
-        return DinnerEventDetailSchema.parse(data)
-      } catch (e) {
-        console.error('Error parsing dinner event detail:', e)
-        throw e
-      }
-    }
-  }
-)
-
-const orders = computed(() => selectedDinnerEventDetail.value?.tickets ?? [])
 
 // Bridge between date-based page state and ID-based component selection
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
@@ -154,6 +120,14 @@ const handleDinnerSelect = (dinnerId: number) => {
   const dinner = teamDinnerEvents.value.find(e => e.id === dinnerId)
   if (dinner) setSelectedDate(new Date(dinner.date))
 }
+
+// DinnerMenuHero mode based on chef permission
+const dinnerMenuHeroMode = computed(() => {
+  if (!selectedTeam.value) return 'view'
+  const inhabitantId = authStore.user?.Inhabitant?.id
+  if (!inhabitantId) return 'view'
+  return isChefFor(inhabitantId, selectedTeam.value) ? 'chef' : 'view'
+})
 
 // Handle allergen updates
 const handleAllergenUpdate = async (allergenIds: number[]) => {
@@ -176,35 +150,38 @@ useHead({
   <UPage>
     <!-- Master: Team selector and calendar (left slot) -->
     <template #left>
-      <UCard :ui="{ rounded: '', base: 'flex flex-col flex-1' }">
+      <CalendarMasterPanel title="Mine Madhold">
+        <!-- Header: Team selector and status -->
         <template #header>
-          <h3 :class="TYPOGRAPHY.cardTitle">Mine Madhold</h3>
-        </template>
+          <!-- Loading teams -->
+          <Loader v-if="!isPageReady" text="Henter madholdsdata..." />
 
-        <!-- Loading teams -->
-        <Loader v-if="!isPageReady" text="Henter madholdsdata..." />
-
-        <!-- Team selector and calendar -->
-        <div v-else class="space-y-4">
-          <!-- Team selector (always visible, handles own empty state) -->
-          <div class="px-4 pt-4">
+          <!-- Team selector and status -->
+          <div v-else class="space-y-4">
+            <!-- Team selector (always visible, handles own empty state) -->
             <MyTeamSelector
               :model-value="selectedTeamId"
               :teams="myTeams"
               @update:model-value="setSelectedTeamId"
             />
-          </div>
 
-          <!-- Team role status -->
-          <div v-if="selectedTeam && authStore.user?.Inhabitant?.id" class="px-4">
+            <!-- Team role status -->
             <TeamRoleStatus
+              v-if="selectedTeam && authStore.user?.Inhabitant?.id"
               :team="selectedTeam"
               :inhabitant-id="authStore.user.Inhabitant.id"
             />
           </div>
+        </template>
 
-          <!-- Team calendar with agenda/calendar views -->
-          <div v-if="teamDinnerEvents.length === 0" class="px-4">
+        <!-- Calendar: Team calendar with agenda/calendar views -->
+        <template #calendar>
+          <!-- No events for team -->
+          <div v-if="!isPageReady" class="px-4">
+            <Loader text="Henter kalender..." />
+          </div>
+
+          <div v-else-if="teamDinnerEvents.length === 0" class="px-4">
             <UAlert
               type="info"
               variant="soft"
@@ -220,107 +197,28 @@ useHead({
             </UAlert>
           </div>
 
-          <div v-else class="px-4">
-            <TeamCalendarDisplay
-              v-if="selectedSeason"
+          <div v-else>
+            <ChefCalendarDisplay
+              v-if="selectedSeason && selectedTeam"
               :season-dates="selectedSeason.seasonDates"
-              :teams="[selectedTeam].filter(Boolean)"
+              :team="selectedTeam"
               :dinner-events="teamDinnerEvents"
-              :holidays="selectedSeason.holidays"
               :selected-dinner-id="selectedDinnerId"
               :show-selection="true"
+              :color="'cyan'"
               @select="handleDinnerSelect"
             />
           </div>
-        </div>
-      </UCard>
+        </template>
+      </CalendarMasterPanel>
     </template>
 
-    <!-- Detail: Dinner view (default slot = right side) -->
-    <UCard :ui="{ rounded: '', header: { padding: 'p-0' }, body: { padding: 'p-0' } }">
-      <!-- Menu Hero in header slot (chef mode if isChefFor, else view mode) -->
-      <template v-if="isPageReady && selectedDinnerEventDetail" #header>
-        <DinnerMenuHero
-          :dinner-event="selectedDinnerEventDetail"
-          :ticket-prices="selectedSeason?.ticketPrices ?? []"
-          :mode="dinnerMenuHeroMode"
-          @update-allergens="handleAllergenUpdate"
-        />
-      </template>
-
-      <!-- Loading -->
-      <Loader v-if="!isPageReady" text="Henter fællesspisning..." />
-
-      <!-- No dinner selected -->
-      <UAlert
-        v-else-if="!selectedDinnerEvent"
-        type="info"
-        variant="soft"
-        :color="COLOR.info"
-        icon="i-heroicons-arrow-left"
-      >
-        <template #title>
-          Vælg en fællesspisning
-        </template>
-        <template #description>
-          Vælg en fællesspisning fra listen til venstre for at se detaljer.
-        </template>
-      </UAlert>
-
-      <!-- Kitchen Preparation in body -->
-      <div v-else :class="LAYOUTS.sectionDivider">
-        <div class="px-0 py-4 md:py-6 space-y-4">
-          <h3 :class="`px-4 md:px-0 ${TYPOGRAPHY.cardTitle}`">Hvem laver maden?</h3>
-
-          <!-- Cooking Team Display -->
-          <CookingTeamCard
-            v-if="selectedDinnerEvent.cookingTeamId"
-            :team-id="selectedDinnerEvent.cookingTeamId"
-            :team-number="selectedDinnerEvent.cookingTeamId"
-            mode="monitor"
-          />
-
-          <!-- No cooking team assigned -->
-          <UAlert
-            v-else
-            type="info"
-            variant="soft"
-            :color="COLOR.info"
-            icon="i-heroicons-user-group"
-          >
-            <template #title>
-              Intet madhold tildelt
-            </template>
-            <template #description>
-              Der er endnu ikke tildelt et madhold til denne fællesspisning.
-            </template>
-          </UAlert>
-        </div>
-
-        <!-- Kitchen stats section -->
-        <div class="px-4 md:px-6 py-4 md:py-6 space-y-4">
-          <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
-
-          <!-- No orders yet -->
-          <UAlert
-            v-if="orders.length === 0"
-            type="info"
-            variant="soft"
-            :color="COLOR.info"
-            icon="i-heroicons-ticket"
-          >
-            <template #title>
-              Ingen billetter endnu
-            </template>
-            <template #description>
-              Der er endnu ikke bestilt nogen billetter til denne fællesspisning.
-            </template>
-          </UAlert>
-
-          <!-- Kitchen statistics -->
-          <KitchenPreparation v-else :orders="orders" />
-        </div>
-      </div>
-    </UCard>
+    <!-- Detail: Dinner management -->
+    <DinnerDetailPanel
+      :dinner-event-id="selectedDinnerId"
+      :ticket-prices="selectedSeason?.ticketPrices ?? []"
+      :mode="dinnerMenuHeroMode"
+      @update-allergens="handleAllergenUpdate"
+    />
   </UPage>
 </template>

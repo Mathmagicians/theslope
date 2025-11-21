@@ -288,8 +288,8 @@ const catalogEmptyState = {
               <UButton
                   color="secondary"
                   variant="outline"
-                  @click="toggleMultiselectMode"
                   name="multiselect-toggle"
+                  @click="toggleMultiselectMode"
               >
                 <template #leading>
                   <UIcon name="i-heroicons-x-mark"/>
@@ -298,10 +298,10 @@ const catalogEmptyState = {
               </UButton>
 
               <UButton
-                  @click="toggleSortOrder"
                   variant="outline"
                   name="sort-by-count"
                   color="secondary"
+                  @click="toggleSortOrder"
               >
                 <template #leading>
                   <UIcon
@@ -328,10 +328,10 @@ const catalogEmptyState = {
           <!-- MASTER PANEL (Left) -->
           <div class="w-1/3">
             <UTable
+                v-model:row-selection="rowSelection"
                 :columns="columns"
                 :data="sortedAllergyTypes"
                 :loading="isAllergyTypesLoading"
-                v-model:row-selection="rowSelection"
                 :ui="{ td: 'py-3' }"
             >
               <template #icon-header>
@@ -339,9 +339,9 @@ const catalogEmptyState = {
                     v-if="formMode === FORM_MODES.VIEW"
                     color="secondary"
                     variant="outline"
-                    @click="toggleMultiselectMode"
                     name="multiselect-toggle"
                     size="lg"
+                    @click="toggleMultiselectMode"
                 >
                   <template #leading>
                     <UIcon name="i-heroicons-rectangle-stack"/>
@@ -353,11 +353,11 @@ const catalogEmptyState = {
               <!-- Custom header for count column with sort icon -->
               <template #count-header>
                 <UButton
-                    @click="toggleSortOrder"
                     variant="outline"
                     size="lg"
                     name="sort-by-count"
                     color="secondary"
+                    @click="toggleSortOrder"
                 >
                   <template #leading>
                     <UIcon
@@ -373,12 +373,12 @@ const catalogEmptyState = {
               <!-- Icon cell -->
               <template #icon-cell="{ row }">
                 <div
-                    @click="handleRowClick(row.original)"
                     :class="[
                     'flex items-center justify-center p-2 rounded-lg transition-colors',
                     COMPONENTS.table.clickableCell,
                     isRowSelected(row.original.id!) && COMPONENTS.table.selectedRow
                   ]"
+                    @click="handleRowClick(row.original)"
                 >
                   <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
                     <UIcon
@@ -396,8 +396,8 @@ const catalogEmptyState = {
               <!-- Name cell -->
               <template #name-cell="{ row }">
                 <div
-                    @click="handleRowClick(row.original)"
                     :class="['font-medium', COMPONENTS.table.clickableCell]"
+                    @click="handleRowClick(row.original)"
                 >
                   {{ row.original.name }}
                 </div>
@@ -406,8 +406,8 @@ const catalogEmptyState = {
               <!-- Count cell -->
               <template #count-cell="{ row }">
                 <div
-                    @click="handleRowClick(row.original)"
                     :class="['text-center', COMPONENTS.table.clickableCell]"
+                    @click="handleRowClick(row.original)"
                 >
                   {{ row.original.inhabitants?.length || 0 }}
                 </div>
@@ -416,8 +416,8 @@ const catalogEmptyState = {
               <!-- New badge cell -->
               <template #new-cell="{ row }">
                 <div
-                    @click="handleRowClick(row.original)"
                     :class="['text-center', COMPONENTS.table.clickableCell]"
+                    @click="handleRowClick(row.original)"
                 >
                   <span v-if="isNew(row.original.createdAt || '')">🆕</span>
                 </div>
@@ -445,7 +445,8 @@ const catalogEmptyState = {
           <!-- DETAIL PANEL (Right) -->
           <div class="flex-1 border-l pl-6">
             <!-- No selection state -->
-            <div v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
+            <div
+v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
                  class="flex flex-col items-center justify-center py-12 text-gray-500">
               <UIcon name="i-heroicons-arrow-left" class="w-8 h-8 mb-2"/>
               <p class="text-sm">Vælg en allergi for at se detaljer</p>
@@ -499,17 +500,17 @@ const catalogEmptyState = {
                 <div class="flex gap-2">
                   <UButton
                       color="primary"
-                      @click="handleSubmit"
                       :disabled="!formData.name || !formData.description"
                       name="submit-allergy-type"
+                      @click="handleSubmit"
                   >
                     Opret
                   </UButton>
                   <UButton
                       color="neutral"
                       variant="outline"
-                      @click="cancelEdit"
                       name="cancel-allergy-type"
+                      @click="cancelEdit"
                   >
                     Annuller
                   </UButton>
@@ -543,8 +544,8 @@ const catalogEmptyState = {
               v-if="formMode === FORM_MODES.VIEW"
               icon="i-heroicons-plus-circle"
               :color="COLOR.primary"
-              @click="startCreate"
               name="create-first-allergy-type"
+              @click="startCreate"
             >
               Tilføj allergi
             </UButton>
@@ -591,16 +592,16 @@ const catalogEmptyState = {
                     size="xs"
                     color="primary"
                     variant="ghost"
-                    @click="startEdit(allergyType)"
                     :name="`edit-allergy-type-${allergyType.id}`"
+                    @click="startEdit(allergyType)"
                 />
                 <UButton
                     icon="i-heroicons-trash"
                     size="xs"
                     color="red"
                     variant="ghost"
-                    @click="handleDelete(allergyType.id!, allergyType.name)"
                     :name="`delete-allergy-type-${allergyType.id}`"
+                    @click="handleDelete(allergyType.id!, allergyType.name)"
                 />
               </div>
             </div>
