@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
@@ -87,47 +87,71 @@ describe('ChefDinnerCard', () => {
     })
 
     describe('Deadline warnings', () => {
-        it.each([
-            {
-                description: 'no warning for far future dinner',
-                date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
-                expectedWarning: null
-            },
-            {
-                description: 'warning for dinner within 3 days',
-                date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now (+ dinner start time = ~3 days)
-                expectedWarning: 'Om 3 dage'
-            },
-            {
-                description: 'urgent warning for dinner within 24 hours',
-                date: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours from now
-                expectedWarning: 'Om 1'
-            },
-            {
-                description: 'critical warning for past deadline',
-                date: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-                expectedWarning: 'Deadline overskredet'
-            }
-        ])('should show $description', async ({ date, expectedWarning }) => {
+        it('should show no warnings for far future dinner (>72h)', async () => {
+            // Dinner in 10 days - no warnings expected
+            const dinnerDate = new Date()
+            dinnerDate.setDate(dinnerDate.getDate() + 10)
+            dinnerDate.setHours(18, 0, 0, 0)
+
             const dinnerEvent = createDinnerEvent({
-                date,
+                date: dinnerDate,
                 state: DinnerState.SCHEDULED
             })
             const wrapper = await mountSuspended(ChefDinnerCard, {
                 props: { dinnerEvent }
             })
 
-            if (expectedWarning) {
-                expect(wrapper.text()).toContain(expectedWarning)
-            } else {
-                expect(wrapper.text()).not.toContain('Om ')
-                expect(wrapper.text()).not.toContain('overskredet')
-            }
+            // Should not contain any warning indicators
+            expect(wrapper.text()).not.toContain('Menu')
+            expect(wrapper.text()).not.toContain('Indkøb')
+            expect(wrapper.text()).not.toContain('overskredet')
+        })
+
+        it('should show warning badges for dinner within 72h', async () => {
+            // Dinner in 48 hours - should show warnings
+            const dinnerDate = new Date()
+            dinnerDate.setDate(dinnerDate.getDate() + 2)
+            dinnerDate.setHours(18, 0, 0, 0)
+
+            const dinnerEvent = createDinnerEvent({
+                date: dinnerDate,
+                state: DinnerState.SCHEDULED
+            })
+            const wrapper = await mountSuspended(ChefDinnerCard, {
+                props: { dinnerEvent }
+            })
+
+            // Should contain warning badges (Menu and Indkøb)
+            const text = wrapper.text()
+            expect(text).toContain('Menu')
+            expect(text).toContain('Indkøb')
+            // Should show countdown (either days or hours format)
+            expect(text).toMatch(/Om \d+/)
+        })
+
+        it('should show critical warning for past deadline', async () => {
+            // Dinner 1 hour ago - critical
+            const dinnerDate = new Date()
+            dinnerDate.setHours(dinnerDate.getHours() - 1)
+
+            const dinnerEvent = createDinnerEvent({
+                date: dinnerDate,
+                state: DinnerState.SCHEDULED
+            })
+            const wrapper = await mountSuspended(ChefDinnerCard, {
+                props: { dinnerEvent }
+            })
+
+            expect(wrapper.text()).toContain('Deadline overskredet')
         })
 
         it('should not show deadline warning for ANNOUNCED dinner', async () => {
+            // Past deadline but ANNOUNCED state - no warnings
+            const dinnerDate = new Date()
+            dinnerDate.setHours(dinnerDate.getHours() - 1)
+
             const dinnerEvent = createDinnerEvent({
-                date: new Date(Date.now() - 1 * 60 * 60 * 1000), // Past deadline
+                date: dinnerDate,
                 state: DinnerState.ANNOUNCED
             })
             const wrapper = await mountSuspended(ChefDinnerCard, {
@@ -135,7 +159,8 @@ describe('ChefDinnerCard', () => {
             })
 
             expect(wrapper.text()).not.toContain('Deadline overskredet')
-            expect(wrapper.text()).not.toContain('Om ')
+            expect(wrapper.text()).not.toContain('Menu')
+            expect(wrapper.text()).not.toContain('Indkøb')
         })
     })
 

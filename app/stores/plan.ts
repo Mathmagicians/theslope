@@ -67,31 +67,17 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
-        // Fetch dinner event detail (ADR-009: Detail data for specific dinner event view)
-        const selectedDinnerEventId = ref<number | null>(null)
-        const selectedDinnerEventKey = computed(() => `/api/admin/dinner-event/${selectedDinnerEventId.value || 'null'}`)
-
-        const {
-            data: selectedDinnerEvent,
-            status: selectedDinnerEventStatus,
-            error: selectedDinnerEventError,
-            refresh: refreshSelectedDinnerEvent
-        } = useAsyncData<DinnerEventDetail | null>(
-            selectedDinnerEventKey,
-            () => {
-                if (!selectedDinnerEventId.value) return Promise.resolve(null)
-                return $fetch(`/api/admin/dinner-event/${selectedDinnerEventId.value}`)
-            },
-            {
-                default: () => null
-            }
-        )
-
         // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
         // No store state - components use useAsyncData with this function
         // Pattern: Store provides fetch logic, components manage their own data
         const fetchTeamDetail = (teamId: number): Promise<CookingTeamDetail> => {
             return $fetch(`/api/admin/team/${teamId}`)
+        }
+
+        // Fetch dinner event detail (ADR-007: Component-local data pattern)
+        // No store state - components use useAsyncData with this function
+        const fetchDinnerEventDetail = (dinnerEventId: number): Promise<DinnerEventDetail> => {
+            return $fetch(`/api/admin/dinner-event/${dinnerEventId}`)
         }
 
 
@@ -421,12 +407,6 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        // DINNER EVENT ACTION
-        const loadDinnerEvent = (id: number | null) => {
-            console.info(LOG_CTX, '🍽️ > PLAN_STORE > loadDinnerEvent:', id)
-            selectedDinnerEventId.value = id
-        }
-
         // AUTO-INITIALIZATION - Watch for data to load, then auto-select active season
         // Don't call initPlanStore immediately - wait for both data sources to load
         watch([isSeasonsInitialized, isActiveSeasonIdInitialized], () => {
@@ -443,7 +423,6 @@ export const usePlanStore = defineStore("Plan", () => {
             // state
             selectedSeason,
             seasons,
-            selectedDinnerEvent,
             // computed state
             isActiveSeasonIdLoading,
             isActiveSeasonIdErrored,
@@ -467,8 +446,8 @@ export const usePlanStore = defineStore("Plan", () => {
             initPlanStore,
             loadSeasons,
             onSeasonSelect,
-            loadDinnerEvent,
             fetchTeamDetail,  // Fetch function, not state
+            fetchDinnerEventDetail,  // Fetch function, not state
             createSeason,
             updateSeason,
             activateSeason,

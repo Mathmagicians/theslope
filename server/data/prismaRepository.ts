@@ -24,8 +24,7 @@ import type {
     CookingTeamDetail,
     CookingTeamCreate,
     CookingTeamUpdate,
-    CookingTeamAssignment,
-    CookingTeamAssignmentCreate
+    CookingTeamAssignment
 } from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 

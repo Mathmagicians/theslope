@@ -13,6 +13,37 @@
 
 ---
 
+## 🔴 CRITICAL: Make Heynabo Import Resilient to Email Changes
+
+**Status:** Bug Identified - Needs Fix
+
+**Context:** Heynabo is our master data system. Users can lose their email addresses (email becomes null). Currently, the import succeeds for most users but fails for users who previously had emails that are now null in Heynabo.
+
+**Problem:**
+- D1 has User records with emails from previous imports
+- Heynabo now returns `email: null` for those same members
+- Inhabitant in D1 still has `userId` pointing to the old User record
+- Import doesn't handle this gracefully - needs to either:
+  - Disconnect Inhabitant from User (set userId to NULL), OR
+  - Delete orphaned User records, OR
+  - Handle the case where User exists but Heynabo member has no email
+
+**Affected Example (from investigation):**
+- Heynabo IDs: 217 (Camille), 219 (Daniel), 221 (Emma), 222 (Mogens), 223 (Børge), 224 (Flemming), 227 (Yvonne)
+- All had emails in D1, now have `email: null` in Heynabo
+
+**Files to Fix:**
+- `/app/composables/useHeynaboValidation.ts` (createHouseholdsFromImport logic)
+- `/server/data/prismaRepository.ts` (saveInhabitant - handle userId disconnection)
+- Possibly: Make User.email nullable in schema if we want to preserve user records
+
+**Test:**
+- `/tests/e2e/api/admin/heynabo.e2e.spec.ts` - currently passes with clean DB but needs to handle stale data
+
+**Priority:** CRITICAL - affects production imports when Heynabo master data changes
+
+---
+
 ## 🎨 HIGH PRIORITY: Active Season Management Feature (UX Design Phase)
 
 **Status:** UX Design Complete ✅
