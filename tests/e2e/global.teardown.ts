@@ -12,7 +12,9 @@ async function globalTeardown(config: FullConfig) {
     console.info('🧹 > GLOBAL TEARDOWN > Starting cleanup...')
 
     const browser = await chromium.launch()
-    const context = await testHelpers.validatedBrowserContext(browser)
+    // Use webServer URL from config (where dev server is running)
+    const baseURL = config.webServer?.url
+    const context = await testHelpers.validatedBrowserContext(browser, baseURL)
 
     try {
         // Clean up singleton active season (TestSeason-E2E-Singleton)

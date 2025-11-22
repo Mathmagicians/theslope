@@ -55,6 +55,7 @@ const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
 const inhabitantsPromise = useInhabitantsWithAssignments()
 
 // Capture refresh function for exposure (before await)
+// eslint-disable-next-line prefer-const
 let refreshFunc: (() => Promise<void>) | undefined
 
 // Expose refresh method to parent (must be before any await)

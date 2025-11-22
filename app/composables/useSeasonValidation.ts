@@ -116,7 +116,8 @@ export const useSeasonValidation = () => {
         if (serialized.dinnerEvents || serialized.CookingTeams || serialized.ticketPrices) {
             return {
                 ...baseSeason,
-                dinnerEvents: serialized.dinnerEvents,
+                // Parse dinner events to ensure dates are Date objects (not strings from JSON)
+                dinnerEvents: serialized.dinnerEvents?.map((event: any) => DinnerEventDisplaySchema.parse(event)),
                 // Deserialize nested CookingTeams (including affinity fields)
                 CookingTeams: serialized.CookingTeams?.map((team: any) => deserializeCookingTeam(team)),
                 ticketPrices: serialized.ticketPrices

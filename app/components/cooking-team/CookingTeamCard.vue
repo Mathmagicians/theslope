@@ -156,14 +156,6 @@ const emptyStateMessage = computed(() => {
   const index = (props.teamNumber - 1) % emptyStateMessages.length
   return emptyStateMessages[index]
 })
-
-const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
-
-defineExpose({
-  refreshInhabitants: async () => {
-    await inhabitantSelectorRef.value?.refresh()
-  }
-})
 </script>
 
 <template>

@@ -433,14 +433,15 @@ export const splitDinnerEvents = <T extends { date: Date }>(
  *
  * @param offsetDays - Number of days before dinner (default: 0)
  * @param offsetMinutes - Number of minutes before dinner (default: 0)
+ * @param referenceTime - Optional reference time for testing (defaults to current time)
  * @returns Function that checks if now is before the deadline for a given dinner start time
  */
-export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number = 0) =>
+export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number = 0, referenceTime?: Date) =>
     (dinnerStartTime: Date): boolean => {
-        const now = new Date()
+        const now = referenceTime ?? new Date()
         let freezeTime = subDays(dinnerStartTime, offsetDays)
         freezeTime = subMinutes(freezeTime, offsetMinutes)
-        return isBefore(now, freezeTime)
+        return isBefore(now, freezeTime)  // Strict <: before but not equal
     }
 
 /**
@@ -466,25 +467,37 @@ const hoursToOffset = (hours: number): { days: number; minutes: number } => ({
  * @param dinnerStartTime - The dinner event start time
  * @param criticalHours - Hours threshold for critical urgency
  * @param warningHours - Hours threshold for warning urgency
+ * @param referenceTime - Optional reference time for testing (defaults to current time)
  * @returns Urgency level: 0 (on track) | 1 (warning) | 2 (critical)
  */
 export const calculateDeadlineUrgency = (
     dinnerStartTime: Date,
     criticalHours: number,
-    warningHours: number
+    warningHours: number,
+    referenceTime?: Date
 ): DeadlineUrgency => {
+    const now = referenceTime ?? new Date()
+
+    // Past events have no urgency
+    if (isAfter(now, dinnerStartTime)) return 0
+
     const criticalOffset = hoursToOffset(criticalHours)
     const warningOffset = hoursToOffset(warningHours)
 
-    const isBeforeCritical = isBeforeDeadline(criticalOffset.days, criticalOffset.minutes)
-    const isBeforeWarning = isBeforeDeadline(warningOffset.days, warningOffset.minutes)
+    // Calculate freeze times (deadlines)
+    let criticalFreezeTime = subDays(dinnerStartTime, criticalOffset.days)
+    criticalFreezeTime = subMinutes(criticalFreezeTime, criticalOffset.minutes)
 
-    // Critical: NOT before critical deadline (within critical window)
-    if (!isBeforeCritical(dinnerStartTime)) return 2
+    let warningFreezeTime = subDays(dinnerStartTime, warningOffset.days)
+    warningFreezeTime = subMinutes(warningFreezeTime, warningOffset.minutes)
 
-    // Warning: NOT before warning deadline BUT before critical deadline
-    if (!isBeforeWarning(dinnerStartTime)) return 1
+    // Use !isAfter to include boundary (<=)
+    // On track: now <= warningFreezeTime (more than warningHours remaining)
+    if (!isAfter(now, warningFreezeTime)) return 0
 
-    // On track: before warning deadline
-    return 0
+    // Warning: now <= criticalFreezeTime BUT now > warningFreezeTime
+    if (!isAfter(now, criticalFreezeTime)) return 1
+
+    // Critical: now > criticalFreezeTime (less than criticalHours remaining)
+    return 2
 }

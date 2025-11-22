@@ -376,11 +376,11 @@ const formattedDinnerDate = computed(() => {
         <!-- Volunteer Buttons (always visible in all modes) -->
         <UFieldGroup
           label="🍽️ Vil du hjælpe til med madlavningen?"
-          class="bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20"
+          :class="COMPONENTS.heroPanel.light.container"
         >
           <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
             <UButton
-              color="primary"
+              :color="COMPONENTS.heroPanel.light.primaryButton"
               variant="solid"
               size="md"
               name="volunteer-chef"
@@ -393,7 +393,7 @@ const formattedDinnerDate = computed(() => {
               Bliv chefkok 👨‍🍳
             </UButton>
             <UButton
-              color="primary"
+              :color="COMPONENTS.heroPanel.light.primaryButton"
               variant="solid"
               size="md"
               name="volunteer-cook"
@@ -406,7 +406,7 @@ const formattedDinnerDate = computed(() => {
               Bliv kok 👥
             </UButton>
             <UButton
-              color="primary"
+              :color="COMPONENTS.heroPanel.light.primaryButton"
               variant="solid"
               size="md"
               name="volunteer-helper"
@@ -422,7 +422,7 @@ const formattedDinnerDate = computed(() => {
         </UFieldGroup>
 
         <!-- Booking Section (household mode only) -->
-        <div v-if="mode === 'household'" class="bg-white/10 backdrop-blur-sm rounded-lg p-4 text-white">
+        <div v-if="mode === 'household'" :class="`${COMPONENTS.heroPanel.subtle.container} text-white`">
           <!-- Booking Form (handles household data fetching internally) -->
           <DinnerBookingForm
             :dinner-event="selectedDinnerEvent"

@@ -1042,7 +1042,7 @@ describe('Active Season Management utilities', () => {
             const referenceTime = new Date(2025, 0, 11, 18, 0)
 
             // WHEN: Calculating deadline urgency
-            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, referenceTime)
 
             // THEN: Returns expected urgency level
             expect(urgency).toBe(expected)
@@ -1068,7 +1068,7 @@ describe('Active Season Management utilities', () => {
             const referenceTime = new Date(2025, 0, 11, 18, 0)
 
             // WHEN: Calculating with custom thresholds
-            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, referenceTime)
 
             // THEN: Respects custom threshold values
             expect(urgency).toBe(expectedUrgency)

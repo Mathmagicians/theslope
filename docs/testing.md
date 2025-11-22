@@ -47,10 +47,21 @@
   }
   ```
 
-- **Factories**: Use factory pattern for test data creation (E2E only)
+- **Factories**: Use factory pattern for test data creation
   ```typescript
   const season = await SeasonFactory.createSeason(context, { holidays: [] })
+  const inhabitant = HouseholdFactory.defaultInhabitantData('test-salt')
   ```
+
+**CRITICAL: Always use factories for mock data** - Manually constructed objects often miss required fields, causing silent schema validation failures. Factories ensure all required fields are present and match current schemas.
+
+```typescript
+// ❌ BAD: Manual construction - missing householdId causes Zod validation error
+const inhabitant = { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null }
+
+// ✅ GOOD: Factory includes all required fields (householdId, heynaboId, etc.)
+const inhabitant = { ...HouseholdFactory.defaultInhabitantData('test'), id: 1, name: 'Anna' }
+```
 
 ### Parallel Execution: Test Isolation
 

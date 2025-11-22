@@ -29,10 +29,12 @@ const saltedId = (base: number = 0, testSalt?: string): number => {
 }
 
 const headers = {'Content-Type': 'application/json'}
-const validatedBrowserContext = async (browser:Browser) => {
-    return await browser.newContext({
-        storageState: adminFile
-    })
+const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
+    const options: any = { storageState: adminFile }
+    if (baseURL) {
+        options.baseURL = baseURL
+    }
+    return await browser.newContext(options)
 }
 
 /**

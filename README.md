@@ -135,17 +135,10 @@ When using Prisma's D1 adapter, implicit & explicit transactions will be ignored
 - Status markers (✅ ⚠️ ❌) provide quick overview without verbose explanations
 
 ### NPM
-There is an error about preflight, that can be removed by adding to package.json: (but it conflicts with new installs!)
-```json
- "overrides": {
-    "//": [
-      "COMMENT:Temporary solution for:error of packages(inflight@1.0.6, rimraf@3.0.2, glob@7.2.31) https://github.com/vercel/next.js/issues/66239"
-    ],
-    "glob": "9.0.0",
-    "rimraf": "^4.0.0"
-  }
-```
-
+We have the standard npm scripts defined in `package.json`. Here are some key ones:
+- `npm run dev` - Start local development server
+- `npm run test:e2e` - Run end-to-end tests
+- `npm run lint:all` - Run linter and ts checker
 ### Database - schemas, ORM, migrations
 We use D1 - a cloudflare database built on top of SQLite with Prisma ORM for the repository client.
 

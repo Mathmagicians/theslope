@@ -279,6 +279,11 @@ export const LAYOUTS = {
   gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
   gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
 
+  // Section content (card body sections)
+  sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
+  sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
+  sectionContentCompact: 'px-4 py-3 space-y-3',                    // Compact variant
+
   // Dividers
   sectionDivider: 'border-t border-gray-200 dark:border-gray-800'
 } as const
@@ -359,6 +364,29 @@ export const COMPONENTS = {
   table: {
     selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
     clickableCell: 'cursor-pointer'
+  },
+
+  // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
+  // Curated defaults for maximum readability on warm hero backgrounds
+  heroPanel: {
+    // High-contrast light panel (for CTAs, forms, important actions)
+    light: {
+      container: 'bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-white/50',
+      primaryButton: 'orange' as const,    // Warm Pantone accent (complements mocha)
+      secondaryButton: 'neutral' as const  // Neutral for cancel/secondary actions
+    },
+    // Subtle panel (for supplementary content, less prominent)
+    subtle: {
+      container: 'bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20',
+      primaryButton: 'mocha' as const,     // Subtle, matches hero
+      secondaryButton: 'neutral' as const
+    },
+    // Dark panel (for contrast variation on light heroes)
+    dark: {
+      container: 'bg-gray-900/80 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50',
+      primaryButton: 'peach' as const,     // Warm accent on dark
+      secondaryButton: 'neutral' as const
+    }
   }
 } as const
 

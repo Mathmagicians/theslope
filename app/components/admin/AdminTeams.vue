@@ -330,9 +330,6 @@ const handleDeleteTeam = async (teamId: number) => {
   // teams reactively updates from store refresh - no manual update needed
 }
 
-// Ref to InhabitantSelector for refreshing after operations
-const inhabitantSelectorRef = ref<{ refresh: () => Promise<void> } | null>(null)
-
 // EDIT MODE: Add member to team (IMMEDIATE SAVE)
 const handleAddMember = async (inhabitantId: number, role: TeamRole) => {
   if (!selectedTeam.value?.id) return
@@ -344,16 +341,12 @@ const handleAddMember = async (inhabitantId: number, role: TeamRole) => {
     allocationPercentage: 100
   })
   showSuccessToast('Medlem tilføjet til hold')
-  // Refresh inhabitant selector after store refresh
-  await inhabitantSelectorRef.value?.refresh()
 }
 
 // EDIT MODE: Remove member from team (IMMEDIATE DELETE)
 const handleRemoveMember = async (assignmentId: number) => {
   await removeTeamMember(assignmentId)
   showSuccessToast('Medlem fjernet fra hold')
-  // Refresh inhabitant selector after store refresh
-  await inhabitantSelectorRef.value?.refresh()
 }
 
 const handleCancel = async () => {
@@ -602,7 +595,7 @@ v-else
             data-testid="add-team-button"
             color="secondary"
             icon="i-heroicons-plus-circle"
-            :loading="isAddingTeam"
+            :loading="isCreatingTeams"
             @click="handleAddTeam"
         >
           Tilføj madhold

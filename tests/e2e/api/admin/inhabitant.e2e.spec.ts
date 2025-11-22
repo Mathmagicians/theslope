@@ -10,6 +10,7 @@ const {headers, validatedBrowserContext, pollUntil, salt} = testHelpers
 // Variables to store IDs for cleanup
 // Only track household - CASCADE will delete all inhabitants (ADR-005)
 let testHouseholdId: number
+const createdSeasonIds: number[] = []
 
 test.describe('Admin Inhabitant API', () => {
 
@@ -118,6 +119,7 @@ test.describe('Admin Inhabitant API', () => {
 
             // Create a season for the team
             const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id as number)
 
             // Create a cooking team with 1 member (creates its own household + inhabitant)
             const team = await SeasonFactory.createCookingTeamWithMembersForSeason(
@@ -228,6 +230,9 @@ test.describe('Admin Inhabitant API', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+
+        // Clean up seasons created in individual tests (CASCADE deletes teams and assignments per ADR-005)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 
         // Clean up the test household (CASCADE deletes all inhabitants automatically per ADR-005)
         if (testHouseholdId) {

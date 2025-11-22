@@ -278,17 +278,23 @@ export class SeasonFactory {
      * @param context BrowserContext for API requests
      */
     static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
-        if (this.activeSeason) {
-            console.info('🌞 > SEASON_FACTORY > Cleaning up cached active season:', this.activeSeason.shortName)
+        // Look up singleton in database (don't rely on in-memory cache - global teardown runs in separate process)
+        const allSeasons = await this.getAllSeasons(context)
+        const singleton = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)
+
+        if (singleton) {
+            console.info('🌞 > SEASON_FACTORY > Cleaning up singleton season:', singleton.shortName)
             try {
-                await this.deleteSeason(context, this.activeSeason.id!)
+                await this.deleteSeason(context, singleton.id!)
+                console.info('🌞 > SEASON_FACTORY > Singleton season deleted')
             } catch (error) {
                 // Ignore 404 errors - another worker already deleted the singleton
                 console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
             }
-            this.activeSeason = null
-            console.info('🌞 > SEASON_FACTORY > Active season cache cleared')
         }
+
+        // Clear in-memory cache (may be null if global teardown process)
+        this.activeSeason = null
 
         // Restore the previously active season if one existed
         if (this.previouslyActiveSeason) {
