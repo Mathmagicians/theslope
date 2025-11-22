@@ -48,6 +48,8 @@ export const UserFragmentSchema = z.object({
 export const InhabitantFragmentSchema = z.object({
     id: z.number().int().positive(),
     heynaboId: z.number().int().positive(),
+    userId: z.number().int().positive().nullable().optional(),
+    householdId: z.number().int().positive(),
     name: z.string(),
     lastName: z.string(),
     pictureUrl: z.string().nullable().optional(),

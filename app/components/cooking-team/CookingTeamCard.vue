@@ -16,7 +16,6 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
@@ -46,7 +45,11 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
-  holidays: () => []
+  seasonId: undefined,
+  seasonCookingDays: undefined,
+  seasonDates: undefined,
+  holidays: () => [],
+  teams: undefined
 })
 
 const emit = defineEmits<{
@@ -59,17 +62,22 @@ const emit = defineEmits<{
 
 // Store integration - use fetch function, not shared state
 const planStore = usePlanStore()
-const {selectedSeason} = storeToRefs(planStore)
 
-// Each component instance fetches its own team detail (ADR: useAsyncData consistency)
+// Each component instance fetches its own team detail (ADR-007)
 const {data: team, status, error} = useAsyncData(
   `cooking-team-detail-${props.teamId}`,
   () => planStore.fetchTeamDetail(props.teamId),
   {
+    default: () => null,
     watch: [() => props.teamId],
     immediate: true
   }
 )
+
+// Status-derived computed (ADR-007)
+const isLoading = computed(() => status.value === 'pending')
+const isErrored = computed(() => status.value === 'error')
+const isNoTeam = computed(() => status.value === 'success' && team.value === null)
 
 // All data from fetched team Detail entity
 const teamName = computed(() => team.value?.name ?? `Madhold ${props.teamNumber}`)
@@ -159,8 +167,30 @@ defineExpose({
 </script>
 
 <template>
+  <!-- Loading state -->
+  <Loader v-if="isLoading" text="Henter madhold..." />
+
+  <!-- Error state -->
+  <ViewError v-else-if="isErrored" :error="error?.statusCode" :cause="error" />
+
+  <!-- No team state (funny message) -->
+  <UAlert
+    v-else-if="isNoTeam"
+    variant="soft"
+    :color="COLOR.neutral"
+    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+    :ui="COMPONENTS.emptyStateAlert"
+  >
+    <template #title>
+      {{ emptyStateMessage.text }}
+    </template>
+    <template #description>
+      Hold ikke fundet
+    </template>
+  </UAlert>
+
   <!-- MONITOR MODE: Large display for kitchen monitors -->
-  <div v-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
+  <div v-else-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">

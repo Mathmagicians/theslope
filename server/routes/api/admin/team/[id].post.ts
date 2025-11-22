@@ -49,7 +49,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
-        return undefined as never
+        return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
     }
 })

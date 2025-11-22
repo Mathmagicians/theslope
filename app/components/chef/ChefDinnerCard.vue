@@ -49,7 +49,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
 
 // Validation schemas
 const { DinnerStateSchema } = useBookingValidation()

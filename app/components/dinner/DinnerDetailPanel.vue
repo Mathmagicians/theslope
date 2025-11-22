@@ -61,7 +61,7 @@ const {
   error: dinnerEventDetailError,
   refresh: refreshDinnerEventDetail
 } = useAsyncData(
-  computed(() => props.dinnerEventId ? `dinner-detail-${props.dinnerEventId}` : undefined),
+  computed(() => `dinner-detail-${props.dinnerEventId}`),
   () => props.dinnerEventId
     ? planStore.fetchDinnerEventDetail(props.dinnerEventId)
     : Promise.resolve(null),
@@ -125,6 +125,22 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEventId)
       </template>
       <template #description>
         Vælg en fællesspisning fra listen til venstre for at se detaljer.
+      </template>
+    </UAlert>
+
+    <!-- No data returned (successful fetch but null) -->
+    <UAlert
+      v-else-if="isNoDinnerEventDetail"
+      type="info"
+      variant="soft"
+      :color="COLOR.info"
+      icon="i-heroicons-exclamation-circle"
+    >
+      <template #title>
+        Fællesspisning ikke fundet
+      </template>
+      <template #description>
+        Kunne ikke finde data for den valgte fællesspisning.
       </template>
     </UAlert>
 

@@ -80,6 +80,21 @@ export const usePlanStore = defineStore("Plan", () => {
             return $fetch(`/api/admin/dinner-event/${dinnerEventId}`)
         }
 
+        // Create team operation - useAsyncData pattern for mutations
+        const createTeamData = ref<CookingTeamDetail | CookingTeamDetail[]>([])
+        const {
+            status: createTeamStatus,
+            error: createTeamError,
+            execute: executeCreateTeam
+        } = useAsyncData(
+            'plan-store-create-team',
+            () => Promise.resolve(createTeamData.value),
+            {
+                immediate: false,
+                default: () => []
+            }
+        )
+
 
         // ========================================
         // Computed - Public API (derived from status)
@@ -128,6 +143,9 @@ export const usePlanStore = defineStore("Plan", () => {
             if (!activeSeasonId.value) return null
             return seasons.value.find(s => s.id === activeSeasonId.value) ?? null
         })
+
+        // Team creation status
+        const isCreatingTeams = computed(() => createTeamStatus.value === 'pending')
 
         const disabledModes = computed(() => {
             const disabledSet: Set<FormMode> = new Set()
@@ -307,23 +325,29 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (team: CookingTeamDetail): Promise<CookingTeamDetail> => {
-            try {
-                const createdTeam = await $fetch<CookingTeamDetail>('/api/admin/team', {
-                    method: 'PUT',
-                    body: team,
-                    headers: {'Content-Type': 'application/json'}
-                })
-                console.info(`👥 > PLAN_STORE > Created team "${team.name}" for season ${team.seasonId}`)
-                // Refresh selected season to get updated teams
-                if (selectedSeasonId.value) {
-                    await refreshSelectedSeason()
-                }
-                return createdTeam
-            } catch (e: unknown) {
-                handleApiError(e, 'createTeam')
-                throw e
+        const createTeam = async (teamOrTeams: CookingTeamDetail | CookingTeamDetail[]): Promise<CookingTeamDetail[]> => {
+            const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
+
+            createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
+                method: 'PUT',
+                body: teams,
+                headers: {'Content-Type': 'application/json'}
+            })
+
+            await executeCreateTeam()
+
+            if (createTeamError.value) {
+                handleApiError(createTeamError.value, 'createTeam')
+                throw createTeamError.value
             }
+
+            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.length} team(s)`)
+
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
+            }
+
+            return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
         }
 
         const updateTeam = async (team: CookingTeamDetail) => {
@@ -463,6 +487,7 @@ export const usePlanStore = defineStore("Plan", () => {
             planStoreError,
             activeSeason,
             disabledModes,
+            isCreatingTeams,
             // actions
             initPlanStore,
             loadSeasons,

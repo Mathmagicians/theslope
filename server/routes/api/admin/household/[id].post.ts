@@ -28,7 +28,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         ({id} = await getValidatedRouterParams(event, idSchema.parse))
         householdData = await readValidatedBody(event, HouseholdUpdateSchema.omit({id: true}).parse)
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -40,6 +40,6 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         setResponseStatus(event, 200)
         return updatedHousehold
     } catch (error) {
-        throwH3Error(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
+        return throwH3Error(`🏠 > HOUSEHOLD > [POST] Error updating household with id ${id}`, error)
     }
 })

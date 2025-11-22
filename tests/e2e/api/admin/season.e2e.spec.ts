@@ -580,6 +580,28 @@ test.describe('Season API Tests', () => {
             expect(assignmentResult2.eventCount).toBe(3)
             expectEventsHaveTeams(assignmentResult2.events)
         })
+
+        test("POST /season/[id]/assign-team-affinities should work when NO dinner events exist", async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            const seasonData = {
+                ...SeasonFactory.defaultSeason(),
+                seasonDates: {start: new Date(2025, 0, 13), end: new Date(2025, 0, 17)},
+                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+                consecutiveCookingDays: 1
+            }
+            const {season} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
+            expect(season.id).toBeDefined()
+            createdSeasonIds.push(season.id!)
+
+            // Assign affinities WITHOUT generating dinner events first
+            // This tests the code path where dinnerEvents.length === 0
+            const affinityResult = await SeasonFactory.assignTeamAffinities(context, season.id)
+            expect(affinityResult.teamCount).toBe(3)
+            expect(affinityResult.teams.filter(t => t.affinity.mandag).length).toBe(1)
+            expect(affinityResult.teams.filter(t => t.affinity.onsdag).length).toBe(1)
+            expect(affinityResult.teams.filter(t => t.affinity.fredag).length).toBe(1)
+        })
     })
 
     test.describe('Active Season endpoints', () => {

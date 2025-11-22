@@ -8,7 +8,6 @@ import type {Season} from "~/composables/useSeasonValidation"
 import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
-const {assignTeamsToEvents} = useSeason()
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
@@ -49,6 +48,8 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
     try {
         console.info(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Assigning teams to dinner events for season ${seasonId}`)
 
+        // Compute team assignments using composable (call at request time, not module load time)
+        const {assignTeamsToEvents} = useSeason()
         const eventsWithAssignments = assignTeamsToEvents(season)
 
         const updatedEvents = await Promise.all(

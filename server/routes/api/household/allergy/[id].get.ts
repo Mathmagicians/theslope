@@ -21,8 +21,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
-        return undefined as never
+        return throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)
     }
 
     // Fetch allergy from database
@@ -41,7 +40,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 200)
         return allergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
-        return undefined as never
+        return throwH3Error(`🏥 > ALLERGY > [GET] Error fetching allergy with ID ${allergyId}`, error)
     }
 })

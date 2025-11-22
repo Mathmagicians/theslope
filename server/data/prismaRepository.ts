@@ -425,14 +425,17 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
 
-        // ADR-009: Return HouseholdDetail with empty inhabitants (client refetches if needed)
-        return {
-            ...newHousehold,
-            movedInDate: new Date(newHousehold.movedInDate),
-            moveOutDate: newHousehold.moveOutDate ? new Date(newHousehold.moveOutDate) : null,
-            shortName: getHouseholdShortName(newHousehold.address),
-            inhabitants: []
+        // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations
+        const householdDetail = await fetchHousehold(d1Client, newHousehold.id)
+        if (!householdDetail) {
+            throw createError({
+                statusCode: 500,
+                message: `Failed to fetch household after creation: ${newHousehold.id}`
+            })
         }
+
+        console.info(`🏠 > HOUSEHOLD > [SAVE] Successfully saved household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
+        return householdDetail
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving household at ${household?.address}`, error)
         console.error(`🏠 > HOUSEHOLD > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
@@ -453,10 +456,13 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
-                        birthDate: true
+                        birthDate: true,
+                        dinnerPreferences: true
                     }
                 }
             }
@@ -526,21 +532,21 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
             data.moveOutDate = householdData.moveOutDate ?? Prisma.skip
         }
 
-        const updatedHousehold = await prisma.household.update({
+        await prisma.household.update({
             where: {id},
             data
         })
 
-        // ADR-009: Return HouseholdDetail with empty inhabitants (client refetches if needed)
-        const householdDetail: HouseholdDetail = {
-            ...updatedHousehold,
-            movedInDate: new Date(updatedHousehold.movedInDate),
-            moveOutDate: updatedHousehold.moveOutDate ? new Date(updatedHousehold.moveOutDate) : null,
-            shortName: getHouseholdShortName(updatedHousehold.address),
-            inhabitants: []
+        // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations
+        const householdDetail = await fetchHousehold(d1Client, id)
+        if (!householdDetail) {
+            throw createError({
+                statusCode: 404,
+                message: `Household not found after update: ${id}`
+            })
         }
 
-        console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${updatedHousehold.name} with ID ${id}`)
+        console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
         return householdDetail
     } catch (error) {
         const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
@@ -552,21 +558,30 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
 export async function deleteHousehold(d1Client: D1Database, id: number): Promise<HouseholdDetail> {
     console.info(`🏠 > HOUSEHOLD > [DELETE] Deleting household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeHouseholdWithInhabitants} = useCoreValidation()
 
     try {
+        // ADR-009: Include relations in delete response (same structure as GET/:id)
         const deletedHousehold = await prisma.household.delete({
-            where: {id}
+            where: {id},
+            include: {
+                inhabitants: {
+                    include: {
+                        allergies: {
+                            include: {
+                                allergyType: true
+                            }
+                        }
+                    }
+                }
+            }
         })
-        console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${deletedHousehold.name} with ID ${id}`)
 
-        // ADR-009: Return HouseholdDetail with empty inhabitants
-        return {
-            ...deletedHousehold,
-            movedInDate: new Date(deletedHousehold.movedInDate),
-            moveOutDate: deletedHousehold.moveOutDate ? new Date(deletedHousehold.moveOutDate) : null,
-            shortName: getHouseholdShortName(deletedHousehold.address),
-            inhabitants: []
-        }
+        // ADR-010: Repository validates data after deserialization
+        const householdDetail = deserializeHouseholdWithInhabitants(deletedHousehold)
+
+        console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
+        return householdDetail
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting household with id ${id}`, error)
         console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)

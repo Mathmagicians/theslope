@@ -205,7 +205,6 @@ useHead({
               :dinner-events="teamDinnerEvents"
               :selected-dinner-id="selectedDinnerId"
               :show-selection="true"
-              :color="'cyan'"
               @select="handleDinnerSelect"
             />
           </div>

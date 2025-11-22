@@ -150,11 +150,11 @@ export const useCoreValidation = () => {
 
     // Base Inhabitant schema for API operations (extends fragment)
     const BaseInhabitantSchema = InhabitantFragmentSchema.extend({
+        // Override with more specific validation
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
         pictureUrl: z.string().url().optional().nullable(),
-        userId: z.number().int().positive().optional().nullable(),
-        householdId: z.number().int().positive(),
+        // Add domain-specific field
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
 

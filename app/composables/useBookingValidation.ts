@@ -12,6 +12,10 @@ import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
+export const DinnerMode = DinnerModeSchema.enum
+export const DinnerState = DinnerStateSchema.enum
+export const OrderState = OrderStateSchema.enum
+
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
  *

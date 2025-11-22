@@ -33,7 +33,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
             return household
         }
     } catch (error: unknown) {
-        throwH3Error(`Error fetching household with id ${id}`, error)
+        return throwH3Error(`Error fetching household with id ${id}`, error)
     }
     console.info("🏠 > HOUSEHOLD > [GET] Household not found", "id", id)
     throw createError({

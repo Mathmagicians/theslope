@@ -27,8 +27,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     try {
         assignmentData = await readValidatedBody(event, AssignmentCreateSchema.parse)
     } catch (error) {
-        throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
-        return undefined as never
+        return throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -39,7 +38,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
         setResponseStatus(event, 201)
         return assignment
     } catch (error) {
-        throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
-        return undefined as never
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
     }
 })

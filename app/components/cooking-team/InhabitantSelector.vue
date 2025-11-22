@@ -10,7 +10,7 @@
  * - Immediate save on add/remove
  * - UTable for consistent UI
  */
-import { getPaginationRowModel, getSortedRowModel } from '@tanstack/vue-table'
+import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
 
 interface Inhabitant {
@@ -45,18 +45,29 @@ const emit = defineEmits<{
   'remove:member': [assignmentId: number]
 }>()
 
+// Design system
+const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+
 // Business logic: Fetch inhabitants with assignments (ADR-009 compliant)
 const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
-const {inhabitants: inhabitantsWithAssignments, pending, error, refresh} = await useInhabitantsWithAssignments()
 
-// Expose refresh method to parent
+// Call composable to get promise
+const inhabitantsPromise = useInhabitantsWithAssignments()
+
+// Capture refresh function for exposure (before await)
+let refreshFunc: (() => Promise<void>) | undefined
+
+// Expose refresh method to parent (must be before any await)
 defineExpose({
-  refresh
+  refresh: () => refreshFunc?.()
 })
 
-// Inject responsive breakpoint from parent
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
+// Now await the promise after defineExpose
+const {inhabitants: inhabitantsWithAssignments, pending, error, refresh} = await inhabitantsPromise
+refreshFunc = refresh
+
+// Status-derived computeds (ADR-007)
+const isErrored = computed(() => !!error.value)
 
 // Import Role enum for use in template (ADR-001 compliance)
 const { TeamRoleSchema } = useCookingTeamValidation()
@@ -64,12 +75,6 @@ const Role = TeamRoleSchema.enum
 
 // Search and filtering
 const searchQuery = ref('')
-
-const roleLabels = {
-  [Role.CHEF]: 'Chefkok',
-  [Role.COOK]: 'Kok',
-  [Role.JUNIORHELPER]: 'Kokkespire'
-}
 
 // Filter inhabitants by search query
 const filteredInhabitants = computed(() => {
@@ -112,7 +117,7 @@ const getTeamInfo = (inhabitant: Inhabitant) => {
 }
 
 // Custom sort function for status column
-const sortByStatusTeamAndName = (rowA: any, rowB: any): number => {
+const sortByStatusTeamAndName = (rowA: { original: Inhabitant }, rowB: { original: Inhabitant }): number => {
   const a = rowA.original
   const b = rowB.original
 
@@ -183,7 +188,11 @@ const table = useTemplateRef('table')
 </script>
 
 <template>
-  <div class="space-y-3">
+  <!-- Error state -->
+  <ViewError v-if="isErrored" :error="error?.statusCode" :cause="error" />
+
+  <!-- Main content (UTable handles loading state) -->
+  <div v-else class="space-y-3">
     <!-- Search and Pagination Row -->
     <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
       <!-- Search -->
@@ -198,8 +207,8 @@ const table = useTemplateRef('table')
           :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
           :items-per-page="table?.tableApi?.getState().pagination.pageSize"
           :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          :size="getIsMd ? 'md' : 'sm'"
-          :sibling-count="getIsMd ? 2 : 0"
+          :size="SIZES.standard.value.value"
+          :sibling-count="PAGINATION.siblingCount.value"
           @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
       />
     </div>
@@ -223,13 +232,14 @@ const table = useTemplateRef('table')
       <template #status-header>
         <UButton
             variant="outline"
-            size="md"
+            :size="SIZES.standard.value.value"
             name="sort-by-status"
             @click="toggleSortOrder"
         >
           <template #leading>
             <UIcon
                 :name="sorting[0].desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+                :size="SIZES.standard.iconSize.value"
             />
           </template>
           Status

@@ -1,5 +1,6 @@
 import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
+import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
@@ -16,6 +17,7 @@ import {DinnerEventFactory} from "./dinnerEventFactory"
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
+const {CookingTeamDetailSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -516,17 +518,20 @@ export class SeasonFactory {
         }
         const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
             headers: headers,
-            data: teamData
+            data: [teamData]
         })
         const status = response.status()
         const errorBody = status !== expectedStatus ? await response.text() : ''
-        const responseBody = status === expectedStatus ? await response.json() : null
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
         if (expectedStatus === 201) {
-            expect(responseBody.id, 'Response should contain the new team ID').toBeDefined()
-            expect(responseBody.seasonId).toBe(seasonId)
+            const responseBody = await response.json()
+            const validatedTeams = CookingTeamDetailSchema.array().parse(responseBody)
+            expect(validatedTeams[0].id, 'Response should contain the new team ID').toBeDefined()
+            expect(validatedTeams[0].seasonId).toBe(seasonId)
+            return validatedTeams[0]
         }
-        return responseBody
+        return null
     }
 
     static readonly createCookingTeamWithMembersForSeason = async (

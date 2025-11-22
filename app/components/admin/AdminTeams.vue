@@ -132,7 +132,8 @@ const {
   selectedSeason,
   activeSeason,
   seasons,
-  disabledModes
+  disabledModes,
+  isCreatingTeams
 } = storeToRefs(store)
 const {
   createTeam,
@@ -172,10 +173,6 @@ const handleSeasonChange = (id: number) => {
 // CREATE MODE - Component owns draft (dynamic generation based on teamCount)
 const teamCount = ref(1)
 const createDraft = ref<CookingTeam[]>([])
-
-// LOADING STATES - Component orchestrates multi-step operations
-const isCreatingTeams = ref(false)
-const isAddingTeam = ref(false)
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
@@ -254,12 +251,9 @@ const showSuccessToast = (title: string, description?: string) => {
 const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
-  isCreatingTeams.value = true
   try {
-    // Step 1: Create all teams
-    for (const team of createDraft.value) {
-      await createTeam(team)
-    }
+    // Step 1: Create all teams in batch
+    await createTeam(createDraft.value)
 
     // Step 2: Assign affinities and teams to events
     try {
@@ -272,8 +266,9 @@ const handleBatchCreateTeams = async () => {
     }
 
     await onModeChange(FORM_MODES.VIEW)
-  } finally {
-    isCreatingTeams.value = false
+  } catch (error) {
+    console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
+    throw error
   }
 }
 
@@ -281,7 +276,6 @@ const handleBatchCreateTeams = async () => {
 const handleAddTeam = async () => {
   if (!selectedSeason.value?.id) return
 
-  isAddingTeam.value = true
   try {
     const newTeam = getDefaultCookingTeam(
         selectedSeason.value.id,
@@ -303,8 +297,9 @@ const handleAddTeam = async () => {
     }
 
     // teams reactively updates from store refresh - no manual update needed
-  } finally {
-    isAddingTeam.value = false
+  } catch (error) {
+    console.error('👥 > ADMIN_TEAMS > [ADD] Error adding team:', error)
+    throw error
   }
 }
 

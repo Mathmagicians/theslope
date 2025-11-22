@@ -15,8 +15,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     try {
         allergyData = await readValidatedBody(event, AllergyCreateSchema.parse)
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [PUT] Input validation error', error)
-        return undefined as never
+        return throwH3Error('🏥 > ALLERGY > [PUT] Input validation error', error)
     }
 
     // Create allergy in database
@@ -27,7 +26,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 201)
         return newAllergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [PUT] Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
-        return undefined as never
+        return throwH3Error(`🏥 > ALLERGY > [PUT] Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
     }
 })

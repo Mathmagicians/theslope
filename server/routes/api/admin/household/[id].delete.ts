@@ -23,7 +23,7 @@ export default defineEventHandler(async (event): Promise<HouseholdDetail> => {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [DELETE] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -35,6 +35,6 @@ export default defineEventHandler(async (event): Promise<HouseholdDetail> => {
         setResponseStatus(event, 200)
         return deletedHousehold
     } catch (error) {
-        throwH3Error(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
+        return throwH3Error(`🏠 > HOUSEHOLD > [DELETE] Error deleting household with id ${id}`, error)
     }
 })

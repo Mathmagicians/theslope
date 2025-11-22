@@ -26,8 +26,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         const body = await readValidatedBody(event, z.object({}).passthrough().parse)
         allergyData = AllergyUpdateSchema.parse({...body, id: allergyId})
     } catch (error) {
-        throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)
-        return undefined as never
+        return throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)
     }
 
     // Update allergy in database
@@ -38,7 +37,6 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         setResponseStatus(event, 200)
         return updatedAllergy
     } catch (error) {
-        throwH3Error(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
-        return undefined as never
+        return throwH3Error(`🏥 > ALLERGY > [POST] Error updating allergy with ID ${allergyId}`, error)
     }
 })

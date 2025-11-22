@@ -6,7 +6,6 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
 const {throwH3Error} = eventHandlerHelper
-const {assignAffinitiesToTeams} = useSeason()
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
@@ -29,8 +28,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
-        return undefined as never
+        return throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
     }
 
     // Business logic try-catch - separate concerns
@@ -40,11 +38,11 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
         // Fetch season from database with teams (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
-            return undefined as never
+            return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
-        // Compute affinities for teams using composable
+        // Compute affinities for teams using composable (call at request time, not module load time)
+        const {assignAffinitiesToTeams} = useSeason()
         const teamsWithAffinities = assignAffinitiesToTeams(season)
 
         // Update each team with computed affinity
@@ -69,7 +67,6 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
             teams: updatedTeams
         }
     } catch (error) {
-        throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
-        return undefined as never
+        return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
     }
 })

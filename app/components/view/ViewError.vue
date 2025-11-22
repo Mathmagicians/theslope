@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 export interface ViewErrorProps {
-  statusCode?: number
+  error?: number  // HTTP status code (renamed from statusCode to match usage)
   message?: string
   cause?: {
     stack?: string
@@ -52,9 +52,9 @@ function getRotationClass(i: number) {
       <!-- Error Code -->
       <UIcon name="i-mage-robot-dead" size="64"/>
       <p
-v-if="props.statusCode"
+v-if="props.error"
          class="text-2xl md:text-4xl font-mono font-bold bg-red-100 text-red-900 rounded inline-block mb-2">
-        FEJL {{ props.statusCode }}
+        FEJL {{ props.error }}
       </p>
 
       <!-- Error Message -->

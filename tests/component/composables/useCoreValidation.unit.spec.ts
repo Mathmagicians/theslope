@@ -95,16 +95,15 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
     } = useCoreValidation()
 
     describe.each([
-        {schema: 'BaseInhabitantSchema', schemaObj: BaseInhabitantSchema, withId: true, withHouseholdId: true},
-        {schema: 'InhabitantCreateSchema', schemaObj: InhabitantCreateSchema, withId: false, withHouseholdId: true},
-        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true, withHouseholdId: false}
-    ])('$schema', ({schemaObj, withId, withHouseholdId}) => {
+        {schema: 'BaseInhabitantSchema', schemaObj: BaseInhabitantSchema, withId: true},
+        {schema: 'InhabitantCreateSchema', schemaObj: InhabitantCreateSchema, withId: false},
+        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true}
+    ])('$schema', ({schemaObj, withId}) => {
         it('should parse inhabitant from factory', () => {
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
             const inhabitant = {
                 ...inhabitantData,
-                ...(withId && {id: 1}),
-                ...(withHouseholdId && {householdId: 1})
+                ...(withId && {id: 1})
             }
             const result = schemaObj.parse(inhabitant)
 

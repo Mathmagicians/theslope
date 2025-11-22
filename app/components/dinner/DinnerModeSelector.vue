@@ -27,7 +27,7 @@
  * │           inactive (ghost, neutral)                  │
  * └──────────────────────────────────────────────────────┘
  */
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import {DinnerMode} from '~/composables/useBookingValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type Badge from '#ui/components/Badge.vue'
@@ -41,7 +41,7 @@ const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border bord
 const WEEKDAY_BADGE_CONTENT_SIZE = 'size-4 md:size-8'
 
 interface Props {
-  modelValue: WeekDay | DinnerMode
+  modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
   formMode?: FormMode
   disabled?: boolean
   name?: string
@@ -50,6 +50,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  modelValue: DinnerMode.NONE, // Default when no order exists
   formMode: FORM_MODES.VIEW,
   disabled: false,
   showLabel: false,
@@ -62,10 +63,6 @@ const emit = defineEmits<{
 
 // Design system
 const { WEEKDAY, ORIENTATIONS } = useTheSlopeDesignSystem()
-
-// Dinner mode validation
-const {DinnerModeSchema} = useBookingValidation()
-const DinnerMode = DinnerModeSchema.enum
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))

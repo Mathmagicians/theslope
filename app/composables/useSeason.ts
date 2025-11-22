@@ -8,6 +8,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, type DeadlineUrgency} from "~/utils/season"
+import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
 
 /**
  * Business logic for working with seasons

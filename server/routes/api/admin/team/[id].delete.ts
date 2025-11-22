@@ -36,7 +36,6 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
         return deletedTeam
     } catch (error) {
-        throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
-        return undefined as never
+        return throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
     }
 })

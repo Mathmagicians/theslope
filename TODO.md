@@ -13,6 +13,78 @@
 
 ---
 
+## 🔴 HIGH PRIORITY: Cloudflare WAF Configuration via Terraform Cloud
+
+**Status:** Scoped - Ready for Implementation
+
+**Context:** Currently bot scanner traffic (WordPress, PHP admin, etc.) hits our Cloudflare Worker middleware, consuming Worker invocations and creating log noise. WAF rules should block these requests at the edge BEFORE they reach the Worker.
+
+**Current State:**
+- ✅ Worker middleware implemented (`server/middleware/0.block-bots.ts`) - blocks 30+ bot patterns
+- ✅ Tested locally - working correctly
+- ❌ WAF rules not configured - bots still consume Worker resources
+
+**Goal:** Implement Terraform Cloud infrastructure-as-code for Cloudflare WAF configuration.
+
+**Benefits:**
+- Zero Worker invocations for bot traffic (saves money)
+- Faster blocking at edge (before Worker)
+- Cleaner production logs (less noise)
+- Infrastructure versioned in git (IaC best practice)
+- Secure state management (Terraform Cloud)
+
+**Implementation Plan:**
+
+1. **Setup Terraform Cloud**
+   - Create workspace: `theslope-cloudflare`
+   - Configure variables (API token, Zone ID)
+
+2. **Create Terraform Configuration** (`terraform/` directory)
+   - `main.tf` - Provider config with Terraform Cloud backend
+   - `variables.tf` - Input variables (cloudflare_api_token, zone_id)
+   - `waf.tf` - WAF custom rules (4 rulesets: WordPress, PHP, configs, other CMS)
+   - `rate-limiting.tf` - Optional rate limiting (disabled by default)
+   - `outputs.tf` - Ruleset IDs and status
+   - `README.md` - Setup and usage documentation
+
+3. **WAF Rules to Implement**
+   - Rule 1: Block WordPress scanners (wp-*, xmlrpc, wlwmanifest, etc.)
+   - Rule 2: Block PHP admin panels (phpmyadmin, admin.php, etc.)
+   - Rule 3: Block config files (.env, .git, .sql, backup)
+   - Rule 4: Block other CMS (Joomla, Drupal, Typo3)
+
+4. **Optional: CI/CD Integration**
+   - GitHub Actions workflow for automated Terraform apply
+   - Runs on push to `main` when `terraform/` files change
+
+**Files to Create:**
+```
+terraform/
+├── main.tf                  # TF Cloud backend + Cloudflare provider
+├── variables.tf             # Input variables
+├── waf.tf                  # WAF custom rules
+├── rate-limiting.tf        # Rate limiting (optional)
+├── outputs.tf              # Exported values
+├── .gitignore              # Terraform state/variable files
+└── README.md               # Setup and usage docs
+```
+
+**Security:**
+- ✅ No local state files (Terraform Cloud manages state)
+- ✅ Secrets in Terraform Cloud workspace (not in git)
+- ✅ Encrypted state storage (AES-256)
+- ✅ Audit logs (who changed what when)
+
+**Testing:**
+- Deploy Terraform configuration to Terraform Cloud
+- Verify WAF rules created in Cloudflare dashboard
+- Monitor production logs for reduced bot traffic
+- Verify Worker invocations decrease
+
+**Priority:** HIGH - Production logs currently flooded with bot traffic, consuming Worker resources unnecessarily.
+
+---
+
 ## 🔴 CRITICAL: Make Heynabo Import Resilient to Email Changes
 
 **Status:** Bug Identified - Needs Fix

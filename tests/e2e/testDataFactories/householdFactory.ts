@@ -70,7 +70,11 @@ export class HouseholdFactory {
             const inhabitant = await this.createInhabitantForHousehold(context, household.id, `Donald${i} Duck`)
             inhabitants.push(inhabitant)
         }
-        return {household, inhabitants}
+
+        // Refetch household to include newly created inhabitants (ADR-009: mutations return Detail with relations)
+        const householdWithInhabitants = await this.getHouseholdById(context, household.id)
+
+        return {household: householdWithInhabitants, inhabitants}
     }
 
 
@@ -111,6 +115,7 @@ export class HouseholdFactory {
     static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): Inhabitant => {
         return {
             heynaboId: saltedId(3000, testSalt),  // Base 3000 for inhabitant heynabo IDs
+            householdId: 1,  // Default household ID for test data
             name: salt('Anders', testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,
