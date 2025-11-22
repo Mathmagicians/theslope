@@ -139,6 +139,12 @@ watch(() => model.value, (newModelValue) => {
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
+// Expose for testing
+defineExpose({
+  errors,
+  updateDateRange
+})
+
 </script>
 
 <template>

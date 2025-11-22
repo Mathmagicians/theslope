@@ -146,7 +146,7 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEventId)
 
     <!-- Kitchen Preparation in body -->
     <div v-else :class="LAYOUTS.sectionDivider">
-      <div class="px-0 py-4 md:py-6 space-y-4">
+      <div :class="LAYOUTS.sectionContentNoPadX">
         <h3 :class="`px-4 md:px-0 ${TYPOGRAPHY.cardTitle}`">Hvem laver maden?</h3>
 
         <!-- Cooking Team Display (Monitor Mode) -->
@@ -175,7 +175,7 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEventId)
       </div>
 
       <!-- Kitchen statistics section -->
-      <div class="px-4 md:px-6 py-4 md:py-6 space-y-4">
+      <div :class="LAYOUTS.sectionContent">
         <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
 
         <!-- No orders yet -->
