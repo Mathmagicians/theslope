@@ -105,12 +105,12 @@ test.describe('DinnerEvent API - Assign Role', () => {
                     inhabitant.id,
                     role
                 )
-
+                expect(updatedDinner).toBeDefined()
                 // Verify chefId behavior based on role
                 if (shouldUpdateChefId) {
-                    expect(updatedDinner.chefId, 'Dinner event should have chefId assigned').toBe(inhabitant.id)
+                    expect(updatedDinner!.chefId, 'Dinner event should have chefId assigned').toBe(inhabitant.id)
                 } else {
-                    expect(updatedDinner.chefId, `chefId should remain null for ${role} role`).toBeNull()
+                    expect(updatedDinner!.chefId, `chefId should remain null for ${role} role`).toBeNull()
                 }
 
                 // Verify CookingTeamAssignment was created with correct role
