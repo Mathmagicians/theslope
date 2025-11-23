@@ -116,18 +116,17 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
 
             expect(createdSeason).toBeDefined()
-            if (createdSeason) {
-                createdSeasonIds.push(createdSeason.id!)
+            // Track immediately for cleanup (even if test fails later)
+            createdSeasonIds.push(createdSeason!.id!)
 
-                // Verify dinner events auto-generated
-                const expectedEventCount = calculateExpectedEventCount(createdSeason)
-                const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
-                    context,
-                    createdSeason.id!,
-                    expectedEventCount
-                )
-                expect(dinnerEvents.length).toBe(expectedEventCount)
-            }
+            // Verify dinner events auto-generated
+            const expectedEventCount = calculateExpectedEventCount(createdSeason!)
+            const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
+                context,
+                createdSeason!.id!,
+                expectedEventCount
+            )
+            expect(dinnerEvents.length).toBe(expectedEventCount)
         })
 
     test('GIVEN season exists WHEN user switches to edit mode THEN form shows season data',

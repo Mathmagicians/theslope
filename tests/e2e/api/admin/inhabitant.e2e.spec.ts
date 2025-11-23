@@ -5,7 +5,7 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '../../testHelpers'
 
-const {headers, validatedBrowserContext, pollUntil, salt} = testHelpers
+const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
 // Only track household - CASCADE will delete all inhabitants (ADR-005)
@@ -17,7 +17,10 @@ test.describe('Admin Inhabitant API', () => {
     // Setup test household before all tests
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const created = await HouseholdFactory.createHousehold(context, {name: 'Test-Household-for-Inhabitant-Tests'})
+        const testSalt = temporaryAndRandom()
+        const created = await HouseholdFactory.createHousehold(context, {
+            name: salt('Test-Household-for-Inhabitant-Tests', testSalt)
+        })
         testHouseholdId = created.id as number
         console.info(`Created test household ${created.name} with ID ${testHouseholdId}`)
     })

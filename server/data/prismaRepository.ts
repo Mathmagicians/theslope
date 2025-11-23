@@ -18,7 +18,7 @@ import type {
     UserDisplay,
     UserDetail
 } from '~/composables/useCoreValidation'
-import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
@@ -31,7 +31,7 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 /*** USERS ***/
 
@@ -73,9 +73,7 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
             Inhabitant: null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error saving user ${user.email}`, error)
-        console.error(`🪪 > USER > [SAVE] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🪪 > USER > [SAVE]: Error saving user ${user.email}`, error)
     }
 }
 
@@ -134,9 +132,7 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users`)
         return deserializedUsers
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching users', error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('🪪 > USERS > [GET]: Error fetching users', error)
     }
 }
 
@@ -161,9 +157,7 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)
         return deserializedUsers
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching users with role ${systemRole}`, error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🪪 > USER > [FETCH BY ROLE]: Error fetching users with role ${systemRole}`, error)
     }
 }
 
@@ -185,9 +179,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
             Inhabitant: null
         }
     } catch (error) {
-        const h3e = h3eFromCatch('Error deleting user', error)
-        console.error(`🪪 > USER > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('🪪 > USER > [DELETE]: Error deleting user', error)
     }
 }
 
@@ -201,7 +193,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
             where: {email},
             include: {
                 Inhabitant: {
-                    include: { household: true }
+                    include: {household: true}
                 }
             }
         })
@@ -222,9 +214,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         }
         return null
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching user for email ${email}`, error)
-        console.error(`🪪 > USER > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🪪 > USER > [GET]: Error fetching user for email ${email}`, error)
     }
 }
 
@@ -275,9 +265,7 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
         // ADR-010: Deserialize to domain type before returning
         return deserializeInhabitantDisplay(newInhabitant)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👩‍🏠 > INHABITANT > [SAVE]: Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
     }
 }
 
@@ -301,9 +289,7 @@ export async function fetchInhabitants(d1Client: D1Database): Promise<Inhabitant
         console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched ${inhabitants.length} inhabitants`)
         return deserializedInhabitants
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching inhabitants', error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('👩‍🏠 > INHABITANT > [GET]: Error fetching inhabitants', error)
     }
 }
 
@@ -331,9 +317,7 @@ export async function fetchInhabitant(d1Client: D1Database, id: number): Promise
         console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched inhabitant ${inhabitant.name} with ID ${id}`)
         return deserializedInhabitant
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👩‍🏠 > INHABITANT > [GET]: Error fetching inhabitant with ID ${id}`, error)
     }
 }
 
@@ -365,9 +349,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
         console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName} with ID ${id}`)
         return updatedInhabitant
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [UPDATE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`\`👩‍🏠 > INHABITANT > [UPDATE]: Error updating inhabitant with ID ${id}`, error)
     }
 }
 
@@ -389,9 +371,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
         // ADR-010: Deserialize to domain type before returning
         return deserializeInhabitantDisplay(deletedInhabitant)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting inhabitant with ID ${id}`, error)
-        console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👩‍🏠 > INHABITANT > [DELETE]: Error deleting inhabitant with ID ${id}`, error)
     }
 }
 
@@ -437,9 +417,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
         console.info(`🏠 > HOUSEHOLD > [SAVE] Successfully saved household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
         return householdDetail
     } catch (error) {
-        const h3e = h3eFromCatch(`Error saving household at ${household?.address}`, error)
-        console.error(`🏠 > HOUSEHOLD > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🏠 > HOUSEHOLD > [SAVE]: Error saving household at ${household?.address}`, error)
     }
 }
 
@@ -474,9 +452,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
         return validatedHouseholds
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching households', error)
-        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('🏠 > HOUSEHOLDS > [GET]: Error fetching households', error)
     }
 }
 
@@ -509,9 +485,7 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
         return validatedHousehold
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching household with ID ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🏠 > HOUSEHOLD > [GET]: Error fetching household with ID ${id}`, error)
     }
 }
 
@@ -549,9 +523,7 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
         console.info(`🏠 > HOUSEHOLD > [UPDATE] Successfully updated household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
         return householdDetail
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [UPDATE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🏠 > HOUSEHOLD > [UPDATE]: Error updating household with id ${id}`, error)
     }
 }
 
@@ -583,9 +555,7 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
         console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
         return householdDetail
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting household with id ${id}`, error)
-        console.error(`🏠 > HOUSEHOLD > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`Error deleting household with id ${id}`, error)
     }
 }
 
@@ -618,9 +588,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching season for range ${start} to ${end}`, error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [FETCH FOR RANGE]: Error fetching season for range ${start} to ${end}`, error)
     }
 }
 
@@ -643,9 +611,7 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching current active season', error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('🌞 > SEASON > [FETCH CURRENT]: Error fetching current active season', error)
     }
 }
 
@@ -659,19 +625,23 @@ export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season |
 export async function fetchActiveSeasonId(d1Client: D1Database): Promise<number | null> {
     console.info(`🌞 > SEASON > [GET] Fetching active season ID`)
     const prisma = await getPrismaClientConnection(d1Client)
-
-    // Get all active seasons to validate uniqueness
-    const activeSeasons = await prisma.season.findMany({
-        where: { isActive: true },
-        select: { id: true }
-    })
+    let activeSeasons
+    try {
+        // Get all active seasons to validate uniqueness
+        activeSeasons = await prisma.season.findMany({
+            where: {isActive: true},
+            select: {id: true}
+        })
+    } catch (error) {
+        return throwH3Error('🌞> SEASON > [FETCH ACTIVE]: Error fetching active season ID', error)
+    }
 
     // Validate uniqueness - should only be one active season
     if (activeSeasons.length > 1) {
-        console.error(`🌞 > SEASON > [GET] Data integrity error: ${activeSeasons.length} active seasons found`)
+        console.error(`🌞 > SEASON > [FETCH ACTIVE] Data integrity error: ${activeSeasons.length} active seasons found`)
         throw createError({
             statusCode: 500,
-            message: `Data integrity error: Multiple active seasons found (${activeSeasons.length})`
+            message: `[FETCH ACTIVE]: Data integrity error: Multiple active seasons found (${activeSeasons.length}):`
         })
     }
 
@@ -694,7 +664,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
     try {
         // First, verify the season exists
         const seasonToActivate = await prisma.season.findUnique({
-            where: { id: seasonId }
+            where: {id: seasonId}
         })
 
         if (!seasonToActivate) {
@@ -709,15 +679,15 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
 
         // Deactivate all currently active seasons
         await prisma.season.updateMany({
-            where: { isActive: true },
-            data: { isActive: false }
+            where: {isActive: true},
+            data: {isActive: false}
         })
         console.info(`🌞 > SEASON > [POST] Deactivated all previously active seasons`)
 
         // Activate the requested season
         const activatedSeason = await prisma.season.update({
-            where: { id: seasonId },
-            data: { isActive: true },
+            where: {id: seasonId},
+            data: {isActive: true},
             include: {
                 dinnerEvents: true,
                 CookingTeams: {
@@ -739,9 +709,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
         console.info(`🌞 > SEASON > [POST] Activated season ${activatedSeason.shortName} (ID: ${seasonId})`)
         return deserializeSeason(activatedSeason)
     } catch (error) {
-        const h3e = h3eFromCatch('Error activating season', error)
-        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(' > SEASON > [POST]: Error activating season', error)
     }
 }
 
@@ -786,9 +754,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [GET]: Error fetching season with ID ${id}`, error)
     }
 }
 
@@ -815,9 +781,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
             return SeasonSchema.parse(deserialized)
         })
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching seasons', error)
-        console.error(`🌞 > SEASON > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error('🌞 > SEASON > [GET]: Error fetching seasons', error)
     }
 }
 
@@ -842,9 +806,7 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
         const deserialized = deserializeSeason(deletedSeason)
         return SeasonSchema.parse(deserialized)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [DELETE]: Error deleting season with ID ${id}`, error)
     }
 }
 
@@ -868,7 +830,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
         const newSeason = await prisma.season.create({
             data: {
                 ...createData,
-                ticketPrices: { create: ticketPricesForCreate }
+                ticketPrices: {create: ticketPricesForCreate}
             },
             include: {
                 ticketPrices: true,
@@ -882,9 +844,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
         // Deserialize before returning
         return deserializeSeason(newSeason)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating season ${seasonData?.shortName}`, error)
-        console.error(`🌞 > SEASON > [CREATE] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [CREATE]: Error creating season ${seasonData?.shortName}`, error)
     }
 }
 
@@ -920,9 +880,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
         // Deserialize before returning
         return deserializeSeason(updatedSeason)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating season with ID ${id}`, error)
-        console.error(`🌞 > SEASON > [UPDATE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [UPDATE]: Error updating season with ID ${id}`, error)
     }
 }
 
@@ -933,7 +891,11 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // - Weak to DinnerEvents (events can exist without assigned team)
 
 // Get serialization utilities for CookingTeam
-const {serializeCookingTeam: _serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment} = useCookingTeamValidation()
+const {
+    serializeCookingTeam: _serializeCookingTeam,
+    deserializeCookingTeam,
+    deserializeCookingTeamAssignment
+} = useCookingTeamValidation()
 
 /**
  * Create team assignment (ADR-009)
@@ -969,9 +931,7 @@ export async function createTeamAssignment(d1Client: D1Database, assignmentData:
         // ADR-010: Deserialize to domain type before returning
         return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating team assignment for inhabitant ${assignmentData.inhabitantId}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [CREATE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [CREATE]: Error creating team assignment for inhabitant ${assignmentData.inhabitantId}`, error)
     }
 }
 
@@ -997,9 +957,93 @@ export async function fetchTeamAssignment(d1Client: D1Database, id: number): Pro
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching team assignment with ID ${id}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [GET]: Error fetching team assignment with ID ${id}`, error)
+    }
+}
+
+/**
+ * Find a CookingTeamAssignment by cookingTeamId and inhabitantId
+ *
+ * ADR-010: Returns domain type (CookingTeamAssignment), not Prisma type
+ * Returns: CookingTeamAssignment | null
+ */
+export async function findTeamAssignmentByTeamAndInhabitant(
+    d1Client: D1Database,
+    cookingTeamId: number,
+    inhabitantId: number
+): Promise<CookingTeamAssignment | null> {
+    console.info(`👥🔗 > ASSIGNMENT > [FIND] Finding assignment for team ${cookingTeamId} and inhabitant ${inhabitantId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {CookingTeamAssignmentSchema, deserializeWeekDayMap} = useCookingTeamValidation()
+
+    try {
+        const assignment = await prisma.cookingTeamAssignment.findFirst({
+            where: {
+                cookingTeamId,
+                inhabitantId
+            },
+            include: {
+                inhabitant: true
+            }
+        })
+
+        if (!assignment) {
+            console.info(`👥🔗 > ASSIGNMENT > [FIND] No assignment found for team ${cookingTeamId} and inhabitant ${inhabitantId}`)
+            return null
+        }
+
+        // ADR-010: Deserialize affinity if present
+        const deserializedAssignment = {
+            ...assignment,
+            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
+        }
+
+        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+    } catch (error) {
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [FIND]: Error finding team assignment`, error)
+    }
+}
+
+/**
+ * Update a CookingTeamAssignment
+ *
+ * ADR-010: Accepts and returns domain types, handles serialization internally
+ * Returns: CookingTeamAssignment (with inhabitant relation)
+ */
+export async function updateTeamAssignment(
+    d1Client: D1Database,
+    id: number,
+    updateData: Partial<Omit<CookingTeamAssignment, 'id' | 'inhabitant'>>
+): Promise<CookingTeamAssignment> {
+    console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Updating team assignment ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {CookingTeamAssignmentSchema, serializeWeekDayMap, deserializeWeekDayMap} = useCookingTeamValidation()
+
+    try {
+        // Extract affinity for serialization if present
+        const {affinity, ...restData} = updateData
+
+        const assignment = await prisma.cookingTeamAssignment.update({
+            where: {id},
+            data: {
+                ...restData,
+                affinity: affinity ? serializeWeekDayMap(affinity) : undefined
+            },
+            include: {
+                inhabitant: true
+            }
+        })
+
+        // ADR-010: Deserialize affinity if present
+        const deserializedAssignment = {
+            ...assignment,
+            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
+        }
+
+        console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Successfully updated assignment ${id}`)
+        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+    } catch (error) {
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [UPDATE]: Error updating team assignment ${id}`, error)
     }
 }
 
@@ -1020,9 +1064,7 @@ export async function deleteCookingTeamAssignments(d1Client: D1Database, assignm
         console.info(`👥🔗 > ASSIGNMENT > [DELETE] Successfully deleted ${result.count} team assignments`)
         return result.count
     } catch (error) {
-        const h3e = h3eFromCatch('Error deleting team assignments', error)
-        console.error(`👥🔗 > ASSIGNMENT > [DELETE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error('👥🔗 > ASSIGNMENT > [DELETE]: Error deleting team assignments: ', error)
     }
 }
 
@@ -1070,17 +1112,15 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
         console.info(`👥 > TEAM > [GET] Successfully fetched ${teams.length} teams`, 'Season: ', seasonId ? ` for season ${seasonId}` : '')
         return deserializedTeams
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching teams for season ${seasonId}`, error)
-        console.error(`👥 > TEAM > [GET] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [GET]: Error fetching teams for season ${seasonId}: `, error)
     }
 }
 
 /**
-* Fetch single cooking team with Detail data (ADR-009)
-* Includes: assignments (with inhabitants), dinnerEvents array, cookingDaysCount aggregate
-*/
-export async function fetchTeam(id: number, d1Client: D1Database):Promise<CookingTeamDetail | null> {
+ * Fetch single cooking team with Detail data (ADR-009)
+ * Includes: assignments (with inhabitants), dinnerEvents array, cookingDaysCount aggregate
+ */
+export async function fetchTeam(id: number, d1Client: D1Database): Promise<CookingTeamDetail | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeCookingTeamDetail} = useCookingTeamValidation()
@@ -1119,9 +1159,7 @@ export async function fetchTeam(id: number, d1Client: D1Database):Promise<Cookin
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [GET] ${h3e.statusMessage}: ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [GET]: Error fetching team with ID ${id}: `, error)
     }
 }
 
@@ -1180,9 +1218,7 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
         console.info(`👥 > TEAM > [GET MY] Found ${teams.length} teams for inhabitant ${inhabitantId}`)
         return deserializedTeams
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching teams for inhabitant ${inhabitantId} in season ${seasonId}`, error)
-        console.error(`👥 > TEAM > [GET MY] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [GET MY]: Error fetching teams for inhabitant ${inhabitantId} in season ${seasonId}: `, error)
     }
 }
 
@@ -1205,7 +1241,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
                 ...createData,
                 // Use Prisma.skip to omit field entirely when affinity is null/undefined
                 affinity: affinity ?? PrismaFromClient.skip,
-                assignments: assignments?.length ? { create: assignments } : PrismaFromClient.skip
+                assignments: assignments?.length ? {create: assignments} : PrismaFromClient.skip
             },
             include: {
                 season: true,
@@ -1237,9 +1273,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
         // Deserialize before returning (ADR-010)
         return deserializeCookingTeamDetail(teamWithCount)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating team ${teamData.name}`, error)
-        console.error(`👥 > TEAM > [CREATE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [CREATE]: Error creating team ${teamData.name}: `, error)
     }
 }
 
@@ -1307,9 +1341,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
         // Deserialize before returning (ADR-010)
         return deserializeCookingTeamDetail(teamWithCount)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [UPDATE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [UPDATE] > Error updating team with ID ${id}`, error)
     }
 }
 
@@ -1344,8 +1376,6 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         // ADR-010: Deserialize to domain type before returning
         return deserializeCookingTeamDetail(teamWithEmptyRelations)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting team with ID ${id}`, error)
-        console.error(`👥 > TEAM > [DELETE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [DELETE] > Error deleting team with ID ${id}`, error)
     }
 }

@@ -75,6 +75,7 @@
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
 | `/api/team/my.get.ts` | ❌ | ✅ | |
+| `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ❌ | **FULLY COMPLIANT** - Uses repository functions only (ADR-001, ADR-010) |
 | **Other** |
 | `/api/chefing/team.ts` | ❌ | ✅ | |
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |
@@ -105,3 +106,4 @@ Reference these endpoints for correct ADR-002 implementation:
 - ✅ `/api/admin/allergy-type/[id].get.ts` - ID validation + return type + error handling
 - ✅ `/api/admin/household/[id].get.ts` - Complete pattern
 - ✅ `/api/order/[id].delete.ts` - DELETE pattern with validation
+- ✅ `/api/team/cooking/[id]/assign-role.post.ts` - Full ADR-001 & ADR-010 compliance with repository pattern

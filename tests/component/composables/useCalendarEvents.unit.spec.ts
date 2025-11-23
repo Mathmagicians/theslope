@@ -202,24 +202,7 @@ describe('useCalendarEvents', () => {
             const {createEventList, createEventMap, getEventsForDay} = useCalendarEvents()
             const jsDate = createTestDate(day, month, year)
             const calendarDate = toCalendarDate(jsDate)!
-
-            // Debug: Understand the conversion behavior
-            console.log(`\nTest case: day=${day}, month=${month}, year=${year}`)
-            console.log('jsDate ISO:', jsDate.toISOString())
-            console.log('jsDate local components:', {
-                day: jsDate.getDate(),
-                month: jsDate.getMonth() + 1,
-                year: jsDate.getFullYear()
-            })
-            console.log('CalendarDate:', { year: calendarDate.year, month: calendarDate.month, day: calendarDate.day })
-
             const roundTripDate = toDate(calendarDate)
-            console.log('roundTripDate ISO:', roundTripDate.toISOString())
-            console.log('roundTripDate local components:', {
-                day: roundTripDate.getDate(),
-                month: roundTripDate.getMonth() + 1,
-                year: roundTripDate.getFullYear()
-            })
 
             // Verify round-trip preserves date (timezone-independent checks)
             expect(isSameDay(roundTripDate, jsDate)).toBe(true)

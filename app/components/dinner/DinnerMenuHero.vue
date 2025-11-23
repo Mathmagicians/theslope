@@ -195,6 +195,9 @@ const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 const currentInhabitant = computed(() => user.value?.Inhabitant)
 
+// Use season composable for permission checks
+const {isChefFor} = useSeason()
+
 // Use dinner event from props (component-local data pattern - ADR-007)
 const selectedDinnerEvent = computed(() => props.dinnerEvent)
 
@@ -235,6 +238,14 @@ const canVolunteer = computed(() => {
   if (!selectedDinnerEvent.value?.cookingTeamId) return false
   // TODO: Check if already assigned to this team
   return true
+})
+
+// Check if current user is a chef for this dinner's team (edit guard for all menu editing)
+const canEditMenu = computed(() => {
+  if (props.mode !== 'chef') return false
+  if (!currentInhabitant.value?.id) return false
+  if (!selectedDinnerEvent.value?.cookingTeam) return false
+  return isChefFor(currentInhabitant.value.id, selectedDinnerEvent.value.cookingTeam)
 })
 
 // Handle role assignment (volunteer as chef/cook/helper)
@@ -347,6 +358,10 @@ const formattedDinnerDate = computed(() => {
         <!-- Allergen Selector -->
         <div v-if="allergyTypes.length > 0">
           <UFieldGroup v-if="mode === 'chef'" :class="COMPONENTS.heroPanel.light.container">
+            <template #header>
+              <span :class="TYPOGRAPHY.cardTitle">Allergener i menuen</span>
+            </template>
+
             <AllergenMultiSelector
               v-model="draftAllergenIds"
               :allergy-types="allergyTypes"
@@ -356,45 +371,52 @@ const formattedDinnerDate = computed(() => {
               @update:model-value="handleAllergenUpdate"
             />
 
-            <!-- VIEW mode: Edit button -->
-            <div v-if="formMode === FORM_MODES.VIEW" class="flex justify-center mt-4">
-              <UButton
-                :color="COMPONENTS.heroPanel.light.primaryButton"
-                variant="ghost"
-                size="md"
-                icon="i-heroicons-pencil"
-                name="edit-allergens"
-                square
-                @click="formMode = FORM_MODES.EDIT"
-              />
-            </div>
+            <template #footer>
+              <!-- VIEW mode: Edit button -->
+              <UFormField v-if="formMode === FORM_MODES.VIEW">
+                <div class="flex justify-center">
+                  <UButton
+                    :color="COMPONENTS.heroPanel.light.primaryButton"
+                    variant="outline"
+                    :size="SIZES.standard.value"
+                    icon="i-heroicons-pencil"
+                    name="edit-allergens"
+                    :disabled="!canEditMenu"
+                    @click="formMode = FORM_MODES.EDIT"
+                  >
+                    Rediger allergener
+                  </UButton>
+                </div>
+              </UFormField>
 
-            <!-- EDIT mode: Save/Cancel buttons -->
-            <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2 mt-4">
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="md"
-                name="cancel-allergens"
-                :disabled="isUpdatingAllergens"
-                @click="() => { draftAllergenIds = [...selectedAllergenIds]; formMode = FORM_MODES.VIEW }"
-              >
-                Annuller
-              </UButton>
-              <UButton
-                :color="COMPONENTS.heroPanel.light.primaryButton"
-                variant="solid"
-                size="md"
-                class="flex-1"
-                icon="i-heroicons-check"
-                name="save-allergens"
-                :loading="isUpdatingAllergens"
-                :disabled="isUpdatingAllergens"
-                @click="() => { handleAllergenUpdate(draftAllergenIds); formMode = FORM_MODES.VIEW }"
-              >
-                Gem
-              </UButton>
-            </div>
+              <!-- EDIT mode: Save/Cancel buttons -->
+              <UFormField v-else-if="formMode === FORM_MODES.EDIT">
+                <div class="flex gap-2 justify-end">
+                  <UButton
+                    :color="COMPONENTS.heroPanel.light.secondaryButton"
+                    variant="ghost"
+                    :size="SIZES.standard.value"
+                    name="cancel-allergens"
+                    :disabled="isUpdatingAllergens"
+                    @click="() => { draftAllergenIds = [...selectedAllergenIds]; formMode = FORM_MODES.VIEW }"
+                  >
+                    Annuller
+                  </UButton>
+                  <UButton
+                    :color="COMPONENTS.heroPanel.light.primaryButton"
+                    variant="solid"
+                    :size="SIZES.standard.value"
+                    icon="i-heroicons-check"
+                    name="save-allergens"
+                    :loading="isUpdatingAllergens"
+                    :disabled="isUpdatingAllergens"
+                    @click="() => { handleAllergenUpdate(draftAllergenIds); formMode = FORM_MODES.VIEW }"
+                  >
+                    Gem
+                  </UButton>
+                </div>
+              </UFormField>
+            </template>
           </UFieldGroup>
           <AllergenMultiSelector
             v-else

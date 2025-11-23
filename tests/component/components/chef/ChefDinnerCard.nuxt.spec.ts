@@ -88,9 +88,10 @@ describe('ChefDinnerCard', () => {
 
     describe('Deadline warnings', () => {
         it('should show no warnings for far future dinner (>72h)', async () => {
-            // Dinner in 10 days - no warnings expected
+            // Dinner in 15 days - no warnings expected
+            // Note: Must be > ticketIsCancellableDaysBefore (10 days) to avoid deadline warnings
             const dinnerDate = new Date()
-            dinnerDate.setDate(dinnerDate.getDate() + 10)
+            dinnerDate.setDate(dinnerDate.getDate() + 15)
             dinnerDate.setHours(18, 0, 0, 0)
 
             const dinnerEvent = createDinnerEvent({

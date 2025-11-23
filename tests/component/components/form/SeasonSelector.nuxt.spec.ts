@@ -2,7 +2,7 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
-import {nextTick} from 'vue'
+import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
 import type {Season} from '~/composables/useSeasonValidation'
 
@@ -31,7 +31,14 @@ describe('SeasonSelector', () => {
         loading?: boolean
         disabled?: boolean
     }) => {
-        return await mountSuspended(SeasonSelector, {props})
+        return await mountSuspended(SeasonSelector, {
+            props,
+            global: {
+                provide: {
+                    isMd: ref(false) // Provide isMd injection for responsive breakpoint
+                }
+            }
+        })
     }
 
     const getDropdown = (wrapper: any) => {

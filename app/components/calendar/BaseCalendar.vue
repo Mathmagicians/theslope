@@ -66,37 +66,39 @@ const calendarUi = {
 </script>
 
 <template>
-  <UCalendar
-      :size="getIsMd ? 'xl': 'sm'"
-      :number-of-months="monthsToDisplay"
-      :min-value="seasonDatesAsCalendarDates.start"
-      :max-value="seasonDatesAsCalendarDates.end"
-      :week-starts-on="1"
-      :fixed-weeks="false"
-      :disable-days-outside-current-view="true"
-      :ui="calendarUi"
-      weekday-format="short"
-      readonly
-  >
-    <!-- Day slot - pass day and event lists to wrapper for custom rendering -->
-    <template #day="{ day }">
-      <slot name="day" :day="day" :event-lists="getEventListsForDay(day)">
-        <!-- Default: Just show day number -->
-        <span class="text-sm">{{ day.day }}</span>
-      </slot>
-    </template>
+  <div>
+    <UCalendar
+        :size="getIsMd ? 'xl': 'sm'"
+        :number-of-months="monthsToDisplay"
+        :min-value="seasonDatesAsCalendarDates.start"
+        :max-value="seasonDatesAsCalendarDates.end"
+        :week-starts-on="1"
+        :fixed-weeks="false"
+        :disable-days-outside-current-view="true"
+        :ui="calendarUi"
+        weekday-format="short"
+        readonly
+    >
+      <!-- Day slot - pass day and event lists to wrapper for custom rendering -->
+      <template #day="{ day }">
+        <slot name="day" :day="day" :event-lists="getEventListsForDay(day)">
+          <!-- Default: Just show day number -->
+          <span class="text-sm">{{ day.day }}</span>
+        </slot>
+      </template>
 
-    <!-- Week day slot - pass day for custom weekday labels -->
-    <template #week-day="{ day }">
-      <slot name="week-day" :day="day">
-        <!-- Default: Danish abbreviated weekday -->
-        <span class="text-sm text-muted uppercase">
-          {{ translateToDanish(day) }}
-        </span>
-      </slot>
-    </template>
-  </UCalendar>
+      <!-- Week day slot - pass day for custom weekday labels -->
+      <template #week-day="{ day }">
+        <slot name="week-day" :day="day">
+          <!-- Default: Danish abbreviated weekday -->
+          <span class="text-sm text-muted uppercase">
+            {{ translateToDanish(day) }}
+          </span>
+        </slot>
+      </template>
+    </UCalendar>
 
-  <!-- Legend slot - only shown if defined -->
-  <slot v-if="$slots.legend" name="legend" />
+    <!-- Legend slot - only shown if defined -->
+    <slot v-if="$slots.legend" name="legend" />
+  </div>
 </template>
