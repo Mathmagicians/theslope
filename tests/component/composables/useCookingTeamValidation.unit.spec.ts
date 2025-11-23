@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
+import { useCoreValidation } from '~/composables/useCoreValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
@@ -354,6 +356,29 @@ describe('useCookingTeamValidation', () => {
         expect(deserialized.role).toBe(serialized.role)
         expect(deserialized.allocationPercentage).toBe(serialized.allocationPercentage)
         expect(deserialized.affinity).toEqual(expectedAffinity)
+      })
+
+      it('should deserialize assignment with nested inhabitant (dinnerPreferences as JSON string)', () => {
+        const { serializeWeekDayMap } = useWeekDayMapValidation()
+
+        // Use factory for inhabitant data (has dinnerPreferences as object)
+        const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42 }
+
+        // Simulate database response: assignment with serialized inhabitant
+        const serialized = {
+          ...SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF' }),
+          inhabitant: {
+            ...inhabitant,
+            dinnerPreferences: serializeWeekDayMap(inhabitant.dinnerPreferences!)
+          }
+        }
+
+        const deserialized = deserializeCookingTeamAssignment(serialized)
+
+        expect(deserialized.inhabitant).toBeDefined()
+        expect(deserialized.inhabitant?.dinnerPreferences).toBeDefined()
+        expect(typeof deserialized.inhabitant?.dinnerPreferences).toBe('object')
+        expect(deserialized.inhabitant?.dinnerPreferences).toEqual(inhabitant.dinnerPreferences)
       })
     })
 

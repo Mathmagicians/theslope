@@ -233,7 +233,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitant} = useCoreValidation()
+    const {deserializeInhabitantDisplay} = useCoreValidation()
 
     try {
         const data = {
@@ -267,13 +267,13 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
             // ADR-010: Deserialize to domain type before returning
-            return deserializeInhabitant(updatedInhabitant)
+            return deserializeInhabitantDisplay(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
         }
 
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitant(newInhabitant)
+        return deserializeInhabitantDisplay(newInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
         console.error(`👩‍🏠 > INHABITANT > [SAVE] ${h3e.statusMessage}: ${h3e.message}`)
@@ -374,7 +374,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitant} = useCoreValidation()
+    const {deserializeInhabitantDisplay} = useCoreValidation()
 
     try {
 
@@ -387,7 +387,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
         console.info(`👩‍🏠 > INHABITANT > [DELETE] Successfully deleted inhabitant ${deletedInhabitant.name} ${deletedInhabitant.lastName}`)
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitant(deletedInhabitant)
+        return deserializeInhabitantDisplay(deletedInhabitant)
     } catch (error) {
         const h3e = h3eFromCatch(`Error deleting inhabitant with ID ${id}`, error)
         console.error(`👩‍🏠 > INHABITANT > [DELETE] ${h3e.statusMessage}: ${h3e.message}`)
@@ -717,7 +717,23 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
         // Activate the requested season
         const activatedSeason = await prisma.season.update({
             where: { id: seasonId },
-            data: { isActive: true }
+            data: { isActive: true },
+            include: {
+                dinnerEvents: true,
+                CookingTeams: {
+                    include: {
+                        assignments: {
+                            include: {inhabitant: true}
+                        },
+                        _count: {
+                            select: {
+                                dinners: true  // Aggregate count of dinners per team
+                            }
+                        }
+                    }
+                },
+                ticketPrices: true
+            }
         })
 
         console.info(`🌞 > SEASON > [POST] Activated season ${activatedSeason.shortName} (ID: ${seasonId})`)

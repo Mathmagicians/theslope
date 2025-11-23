@@ -13,6 +13,54 @@
 
 ---
 
+## 🟡 MEDIUM PRIORITY: Standardize Success Toast Pattern Across Store Mutations
+
+**Status:** Pattern Identified - Needs Consistency
+
+**Context:** Store mutation methods have inconsistent user feedback patterns. Error handling is consistent (all use `handleApiError`), but success feedback varies.
+
+**Current State:**
+- ✅ All mutation methods have proper error handling with `handleApiError()`
+- ❌ NO mutation methods have success toasts in store
+- ⚠️ Success feedback inconsistent across components (some show toasts, some don't)
+
+**Established Pattern (from allergen update):**
+- **Store**: Handles API call, error handling with `handleApiError`, loading state with `useAsyncData`
+- **Component**: Shows success toast in try block, catches and relies on store's `handleApiError` for errors
+- **Example**: `chef/index.vue` + `plan.ts` (allergen update implementation)
+
+**Affected Store Methods (plan.ts):**
+1. `createSeason` (L219)
+2. `generateDinnerEvents` (L235)
+3. `assignTeamAffinitiesAndEvents` (L252)
+4. `updateSeason` (L288)
+5. `activateSeason` (L307)
+6. `createTeam` (L328) - Different pattern with `useAsyncData`
+7. `updateTeam` (L353)
+8. `deleteTeam` (L371)
+9. `addTeamMember` (L388)
+10. `removeTeamMember` (L407)
+11. `assignRoleToDinner` (L424)
+
+**Decision Needed:**
+- **Option A**: Add success toasts in store (centralized feedback)
+- **Option B**: Document pattern for components to handle success (decentralized feedback, allows context-specific messages)
+
+**Recommended Approach (Option B):**
+- Keep error handling in store (consistent error messages via `handleApiError`)
+- Components handle success toasts (allows context-specific success messages)
+- Document pattern in ADR-007 or create new ADR for user feedback
+
+**Action Items:**
+- [ ] Audit all components calling store mutations - ensure they show success toasts
+- [ ] Document the pattern in ADR or testing.md
+- [ ] Create reusable success message helpers if needed (DRY toast messages)
+- [ ] Add component tests verifying success toast display
+
+**Priority:** MEDIUM - Affects UX consistency but not functionality
+
+---
+
 ## 🔴 HIGH PRIORITY: Cloudflare WAF Configuration via Terraform Cloud
 
 **Status:** Scoped - Ready for Implementation

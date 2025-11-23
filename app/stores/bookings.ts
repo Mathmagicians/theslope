@@ -1,9 +1,11 @@
-import type {OrderDisplay, OrderCreate} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate} from '~/composables/useBookingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerState} = useBookingValidation()
+
+    const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
 
     // ========================================
     // State - useFetch with status exposed internally
@@ -40,8 +42,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 try {
                     return data.map(order => OrderDisplaySchema.parse(order))
                 } catch (e) {
-                    console.error('🎟️ > BOOKINGS_STORE > Error parsing orders:', e)
-                    console.error('🎟️ > BOOKINGS_STORE > Raw data:', data)
+                    console.error(CTX, 'Error parsing orders:', e)
+                    console.error(CTX, 'Raw data:', data)
                     throw e
                 }
             }
@@ -77,19 +79,19 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const loadOrdersForDinner = (dinnerEventId: number) => {
         selectedDinnerEventId.value = dinnerEventId
         selectedInhabitantId.value = null
-        console.info(`🎟️ > BOOKINGS_STORE > Loading orders for dinner event: ${dinnerEventId}`)
+        console.info(CTX, `Loading orders for dinner event: ${dinnerEventId}`)
     }
 
     const loadOrdersForInhabitant = (inhabitantId: number) => {
         selectedInhabitantId.value = inhabitantId
         selectedDinnerEventId.value = null
-        console.info(`🎟️ > BOOKINGS_STORE > Loading orders for inhabitant: ${inhabitantId}`)
+        console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}`)
     }
 
     const loadAllOrders = () => {
         selectedDinnerEventId.value = null
         selectedInhabitantId.value = null
-        console.info(`🎟️ > BOOKINGS_STORE > Loading all orders`)
+        console.info(CTX, 'Loading all orders')
     }
 
     const createOrder = async (orderData: OrderCreate): Promise<OrderDisplay> => {
@@ -99,11 +101,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 body: orderData,
                 headers: {'Content-Type': 'application/json'}
             })
-            console.info(`🎟️ > BOOKINGS_STORE > Created order ${createdOrder.id}`)
+            console.info(CTX, `Created order ${createdOrder.id}`)
             await refreshOrders()
             return createdOrder
         } catch (e: unknown) {
-            handleApiError(e, 'createOrder')
+            handleApiError(e, 'Kunne ikke oprette bestilling')
             throw e
         }
     }
@@ -113,10 +115,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
             await $fetch(`/api/order/${orderId}`, {
                 method: 'DELETE'
             })
-            console.info(`🎟️ > BOOKINGS_STORE > Deleted order ${orderId}`)
+            console.info(CTX, `Deleted order ${orderId}`)
             await refreshOrders()
         } catch (e: unknown) {
-            handleApiError(e, 'deleteOrder')
+            handleApiError(e, 'Kunne ikke slette bestilling')
             throw e
         }
     }
@@ -128,21 +130,132 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 body: orderData,
                 headers: {'Content-Type': 'application/json'}
             })
-            console.info(`🎟️ > BOOKINGS_STORE > Updated order ${orderId}`)
+            console.info(CTX, `Updated order ${orderId}`)
             await refreshOrders()
             return updatedOrder
         } catch (e: unknown) {
-            handleApiError(e, 'updateOrder')
+            handleApiError(e, 'Kunne ikke opdatere bestilling')
             throw e
         }
     }
 
     const initBookingsStore = (dinnerEventId?: number, inhabitantId?: number) => {
-        console.info('🎟️ > BOOKINGS_STORE > initBookingsStore', {dinnerEventId, inhabitantId})
+        console.info(CTX, 'initBookingsStore', {dinnerEventId, inhabitantId})
         if (dinnerEventId) {
             loadOrdersForDinner(dinnerEventId)
         } else if (inhabitantId) {
             loadOrdersForInhabitant(inhabitantId)
+        }
+    }
+
+    // ========================================
+    // DINNER EVENT ACTIONS
+    // ========================================
+
+    /**
+     * Fetch dinner event detail with tickets/orders
+     * Used by chef/dinner pages for component-local data
+     */
+    const fetchDinnerEventDetail = async (dinnerEventId: number): Promise<DinnerEventDetail | null> => {
+        try {
+            return await $fetch<DinnerEventDetail>(`/api/admin/dinner-event/${dinnerEventId}`)
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke hente fællesspisning')
+            throw e
+        }
+    }
+
+    // Allergen update state (mutation operation - ADR-007)
+    const allergenUpdateParams = ref<{dinnerEventId: number, allergenIds: number[]} | null>(null)
+    const {
+        status: allergenUpdateStatus,
+        execute: executeAllergenUpdate
+    } = useAsyncData(
+        'bookings-store-update-allergens',
+        async () => {
+            if (!allergenUpdateParams.value) return null
+            const {dinnerEventId, allergenIds} = allergenUpdateParams.value
+            try {
+                const updated = await $fetch<DinnerEventDetail>(`/api/chef/dinner/${dinnerEventId}/allergens`, {
+                    method: 'POST',
+                    body: {allergenIds},
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(CTX, `Updated allergens for dinner event ${dinnerEventId} (${allergenIds.length} allergens)`)
+                return updated
+            } catch (e: unknown) {
+                handleApiError(e, 'Kunne ikke gemme allergeninformation til menuen')
+                throw e
+            }
+        },
+        { immediate: false }
+    )
+
+    const isUpdatingAllergens = computed(() => allergenUpdateStatus.value === 'pending')
+
+    const updateDinnerEventAllergens = async (dinnerEventId: number, allergenIds: number[]): Promise<void> => {
+        allergenUpdateParams.value = {dinnerEventId, allergenIds}
+        await executeAllergenUpdate()
+    }
+
+    // Dinner event field update state (mutation operation - ADR-007)
+    const dinnerEventUpdateParams = ref<{dinnerEventId: number, updates: Partial<DinnerEventUpdate>} | null>(null)
+    const {
+        status: dinnerEventUpdateStatus,
+        execute: executeDinnerEventUpdate
+    } = useAsyncData(
+        'bookings-store-update-dinner-event',
+        async () => {
+            if (!dinnerEventUpdateParams.value) return null
+            const {dinnerEventId, updates} = dinnerEventUpdateParams.value
+            try {
+                const updated = await $fetch<DinnerEventDetail>(`/api/admin/dinner-event/${dinnerEventId}`, {
+                    method: 'POST',
+                    body: {id: dinnerEventId, ...updates},
+                    headers: {'Content-Type': 'application/json'}
+                })
+                console.info(CTX, `Updated dinner event ${dinnerEventId}:`, Object.keys(updates).join(', '))
+                return updated
+            } catch (e: unknown) {
+                handleApiError(e, 'Kunne ikke gemme ændringer til menuen')
+                throw e
+            }
+        },
+        { immediate: false }
+    )
+
+    const isUpdatingDinnerEvent = computed(() => dinnerEventUpdateStatus.value === 'pending')
+
+    const updateDinnerEventField = async (dinnerEventId: number, updates: Partial<DinnerEventUpdate>): Promise<void> => {
+        dinnerEventUpdateParams.value = {dinnerEventId, updates}
+        await executeDinnerEventUpdate()
+    }
+
+    /**
+     * Announce dinner (state transition SCHEDULED → ANNOUNCED)
+     * Publishes menu to members for booking
+     */
+    const announceDinner = async (dinnerEventId: number): Promise<void> => {
+        try {
+            await updateDinnerEventField(dinnerEventId, {state: DinnerState.ANNOUNCED})
+            console.info(CTX, `Announced dinner event ${dinnerEventId}`)
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke annoncere menuen til beboerne')
+            throw e
+        }
+    }
+
+    /**
+     * Cancel dinner (state transition → CANCELLED)
+     * Marks dinner as cancelled with refund handling
+     */
+    const cancelDinner = async (dinnerEventId: number): Promise<void> => {
+        try {
+            await updateDinnerEventField(dinnerEventId, {state: DinnerState.CANCELLED})
+            console.info(CTX, `Cancelled dinner event ${dinnerEventId}`)
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke aflyse fællesspisningen')
+            throw e
         }
     }
 
@@ -164,6 +277,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         totalOrdersCount,
         ordersByTicketType,
 
+        // dinner event state
+        isUpdatingAllergens,
+        isUpdatingDinnerEvent,
+
         // actions
         loadOrdersForDinner,
         loadOrdersForInhabitant,
@@ -171,6 +288,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         createOrder,
         deleteOrder,
         updateOrder,
-        initBookingsStore
+        initBookingsStore,
+
+        // dinner event actions
+        fetchDinnerEventDetail,
+        updateDinnerEventField,
+        updateDinnerEventAllergens,
+        announceDinner,
+        cancelDinner
     }
 })

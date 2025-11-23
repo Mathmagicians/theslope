@@ -1,53 +1,50 @@
 # 🎯 Chef/Team Management Feature - Implementation Workplan
 
-**Status**: Phase 4 Complete (Page Integration) | **Started**: 2025-01-15 | **Last Updated**: 2025-01-18
+**Status**: 95% Complete - Final Polish | **Started**: 2025-01-15 | **Last Updated**: 2025-01-29
+
+---
+endpoints
+
+| Directory       | Actor             | Authority               | When                     |
+  |-----------------|-------------------|-------------------------|--------------------------|
+| /api/admin/     | Admins            | System configuration    | Always                   |
+| /api/team/      | Team members      | Self-service operations | Pre-event (planning)     |
+| /api/chef/      | Assigned chef     | Dinner management       | During event (execution) |
+| /api/household/ | Household members | Participation           | Booking/allergies        |
 
 ---
 
-## 📊 Implementation Status
+## 🎯 REMAINING WORK (2-3 hours)
 
-### ✅ COMPLETED (Phase 1-4)
+| # | Task | File | Time | Type |
+|---|------|------|------|------|
+| 1 | Integrate `ChefDinnerCard` in agenda | `ChefCalendarDisplay.vue` L294-309 | 15min | DRY |
+| 2 | Create allergen endpoint | `server/routes/api/chef/dinner/[id]/allergens.post.ts` | 1h | API |
+| 3 | Add allergen save/cancel buttons | `DinnerMenuHero.vue` (chef mode) | 30min | UX |
+| 4 | Wire allergen save handler | `chef/index.vue` + `plan.ts` | 30min | Integration |
 
-**Route Architecture:**
-- ✅ `/chef/index.vue` - Team home with master/detail layout
-- ✅ Query params: `?team=3&date=09/12/2025` (date-based, not ID-based)
-- ✅ Component-local data fetching (ADR-007)
+**After completion:** Feature 100% functional, production-ready.
 
-**Components:**
-- ✅ `MyTeamSelector` - Mobile dropdown, desktop tabs
-- ✅ `TeamCalendarDisplay` - Agenda/calendar views with selection, pagination
-- ✅ `TeamRoleStatus` - Shows role (CHEF/COOK/JUNIORHELPER) and responsibilities
-- ✅ `DinnerMenuHero` - Enhanced with `mode='chef'` for editing
-- ✅ `CookingTeamCard` - Reused in `mode='monitor'`
-- ✅ `KitchenPreparation` - Reused for order statistics
-- ✅ `CookingTeamBadges` - Team member display badges
+---
 
-**Backend:**
-- ✅ `/api/team/my` - Get logged-in user's teams with dinner events
-- ✅ Repository: `fetchMyTeams()` with CookingTeamDetail schema
-- ✅ Store: `useUsersStore().myTeams` with reactive initialization
+## ✅ COMPLETED (Phases 1-5)
 
-**Business Logic:**
-- ✅ Permission check: `isChefFor()` in `useSeason` composable
-- ✅ Smart defaults: `getNextDinnerDate()` for team's next cooking day
-- ✅ Date utilities: `formatDanishWeekdayDate()` for discrete date display
+**All Components Built:**
+- ✅ `ChefDinnerCard`, `TeamRoleStatus`, `DinnerStatusStepper`, `DinnerBudget`
+- ✅ `MyTeamSelector`, `ChefCalendarDisplay`, `DinnerDetailPanel`, `CalendarMasterPanel`
+- ✅ `DinnerMenuHero` (chef + household modes), `AllergenMultiSelector`
 
-### ✅ COMPLETED (Phase 4.5 - Architecture Refactoring)
+**All Backend Complete:**
+- ✅ `/api/team/my`, `/api/admin/dinner-event/[id]/assign-role.post.ts`
+- ✅ Store: `loadMyTeams()`, `fetchDinnerEventDetail()`, `assignRoleToDinner()`
 
-**Shared Components Extraction (2025-01-28):**
-- ✅ `DinnerDetailPanel` - Shared detail panel (DinnerMenuHero + CookingTeamCard + KitchenPreparation)
-- ✅ `CalendarMasterPanel` - Consistent wrapper for calendar master panels with header/footer slots
-- ✅ `/dinner/index.vue` refactored - 70% code reduction
-- ✅ `/chef/index.vue` refactored - 31% code reduction
-- ✅ Eliminated ~100 lines of duplicate code
+**Known Issues:**
+- ⚠️ Agenda view uses inline markup (should use `ChefDinnerCard`)
+- ⚠️ Allergen updates not persisted (missing endpoint + save button)
 
-### ⏳ OUTSTANDING (Phase 5+)
+---
 
-**Chef Assignment & Status (Phase 5.1 - IN PROGRESS):**
-- ✅ `DinnerStatusStepper` - Progress indicator (Menu → Annoncér → Lav → Spis!)
-- ✅ `DinnerBudget` - Financial overview (revenue vs expenses)
-- 🔄 Chef Assignment - Volunteer as chef, auto-create CHEF role assignment
-- ❌ Team role overview in TeamRoleStatus (compact stepper + budget)
+## 📋 ARCHIVED STATUS (Phase 1-4.5)
 
 **ASCII Mockup - Chef Assignment:**
 ```

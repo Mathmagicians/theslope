@@ -1,5 +1,5 @@
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import {useCoreValidation, type Inhabitant} from './useCoreValidation'
+import {useCoreValidation, type InhabitantDetail} from './useCoreValidation'
 import {useBookingValidation} from './useBookingValidation'
 
 /**
@@ -24,7 +24,7 @@ export const useHousehold = () => {
      * @returns WeekDayMap with consensus values or null for mixed days
      */
     const computeAggregatedPreferences = (
-        inhabitants: Pick<Inhabitant, 'dinnerPreferences'>[]
+        inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[]
     ): WeekDayMap<DinnerMode | null> => {
         if (inhabitants.length === 0) {
             return createDefaultWeekdayMap(null)

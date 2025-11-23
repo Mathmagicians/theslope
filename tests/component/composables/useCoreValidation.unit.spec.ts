@@ -89,7 +89,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         BaseInhabitantSchema,
         InhabitantCreateSchema,
         InhabitantDisplaySchema,
-        deserializeInhabitant,
+        deserializeInhabitantDisplay,
         createDefaultWeekdayMap,
         serializeWeekDayMap
     } = useCoreValidation()
@@ -117,7 +117,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         })
     })
 
-    describe('deserializeInhabitant', () => {
+    describe('deserializeInhabitantDisplay', () => {
         it.each([
             {
                 testCase: 'with birthDate',
@@ -148,7 +148,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
                 birthDate,
                 dinnerPreferences
             }
-            const deserialized = deserializeInhabitant(serialized)
+            const deserialized = deserializeInhabitantDisplay(serialized)
 
             if (expectBirthDate) {
                 expect(deserialized.birthDate).toBeInstanceOf(Date)
@@ -1006,14 +1006,14 @@ describe('getHouseholdShortName - Additional Test Cases', () => {
 
 describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => {
     const {
-        deserializeInhabitant,
+        deserializeInhabitantDisplay,
         deserializeHouseholdSummary,
         deserializeHouseholdWithInhabitants,
         serializeWeekDayMap,
         createDefaultWeekdayMap
     } = useCoreValidation()
 
-    describe('deserializeInhabitant additional tests', () => {
+    describe('deserializeInhabitantDisplay additional tests', () => {
         it('should deserialize inhabitant from factory data', () => {
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
             const dinnerPrefs = createDefaultWeekdayMap(DinnerMode.DINEIN)
@@ -1027,7 +1027,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 dinnerPreferences: serializeWeekDayMap(dinnerPrefs)
             }
 
-            const result = deserializeInhabitant(serialized)
+            const result = deserializeInhabitantDisplay(serialized)
 
             expect(result.birthDate).toBeInstanceOf(Date)
             expect(result.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
@@ -1036,7 +1036,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
     })
 
     describe('deserializeHouseholdSummary additional tests', () => {
-        it('should deserialize household summary from factory data', () => {
+        it('should deserialize household summary from factory data with dinnerPreferences', () => {
             const householdData = HouseholdFactory.defaultHouseholdData()
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
 
@@ -1049,7 +1049,8 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     {
                         ...inhabitantData,
                         id: 10,
-                        birthDate: '1990-01-15'
+                        birthDate: inhabitantData.birthDate?.toISOString(),
+                        dinnerPreferences: serializeWeekDayMap(inhabitantData.dinnerPreferences!)
                     }
                 ]
             }
@@ -1060,6 +1061,8 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
             expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
             expect(result.movedInDate).toBeInstanceOf(Date)
             expect(result.inhabitants[0].birthDate).toBeInstanceOf(Date)
+            expect(result.inhabitants[0].dinnerPreferences).toBeDefined()
+            expect(result.inhabitants[0].dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
         })
 
         it.each([
@@ -1133,7 +1136,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     birthDate: data.birthDate.toISOString(),
                     dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)
                 }),
-                deserialize: deserializeInhabitant,
+                deserialize: deserializeInhabitantDisplay,
                 checkFields: (original: any, deserialized: any) => {
                     expect(deserialized.birthDate).toBeInstanceOf(Date)
                     expect(deserialized.birthDate.getTime()).toBe(original.birthDate.getTime())
@@ -1161,7 +1164,8 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     moveOutDate: data.moveOutDate?.toISOString(),
                     inhabitants: data.inhabitants.map((i: any) => ({
                         ...i,
-                        birthDate: i.birthDate?.toISOString()
+                        birthDate: i.birthDate?.toISOString(),
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
                     }))
                 }),
                 deserialize: deserializeHouseholdSummary,
@@ -1170,6 +1174,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
                     expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
                     expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
+                    expect(deserialized.inhabitants[0].dinnerPreferences).toEqual(original.inhabitants[0].dinnerPreferences)
                 }
             },
             {

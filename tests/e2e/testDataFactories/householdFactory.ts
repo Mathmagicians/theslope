@@ -3,9 +3,14 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, Inhabitant} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, InhabitantDetail} from "~/composables/useCoreValidation"
+import {useCoreValidation} from "~/composables/useCoreValidation"
+import {useBookingValidation} from "~/composables/useBookingValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
+const {createDefaultWeekdayMap} = useCoreValidation()
+const {DinnerModeSchema} = useBookingValidation()
+const DinnerMode = DinnerModeSchema.enum
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
 const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
 
@@ -30,6 +35,8 @@ export class HouseholdFactory {
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         expectedStatus: number = 201
     ): Promise<any> => {
+        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+
         // Merge partial with defaults to create full Household object
         const householdData = {
             ...this.defaultHouseholdData(),  // Auto-generates unique salt
@@ -54,6 +61,12 @@ export class HouseholdFactory {
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new household ID').toBeDefined()
+
+            // Validate API returns data conforming to HouseholdDetail schema
+            const result = HouseholdWithInhabitantsSchema.safeParse(responseBody)
+            expect(result.success, `API should return valid HouseholdDetail object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+            return result.data!
         }
 
         return responseBody
@@ -83,13 +96,20 @@ export class HouseholdFactory {
         householdId: number,
         expectedStatus: number = 200
     ): Promise<any> => {
+        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
         const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json()
+            const rawData = await response.json()
+
+            // Validate API returns data conforming to HouseholdDetail schema
+            const result = HouseholdWithInhabitantsSchema.safeParse(rawData)
+            expect(result.success, `API should return valid HouseholdDetail object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+            return result.data!
         }
         return null
     }
@@ -112,14 +132,15 @@ export class HouseholdFactory {
 
     // === INHABITANT METHODS ===
 
-    static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): Inhabitant => {
+    static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): InhabitantDetail => {
         return {
             heynaboId: saltedId(3000, testSalt),  // Base 3000 for inhabitant heynabo IDs
             householdId: 1,  // Default household ID for test data
             name: salt('Anders', testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,
-            birthDate: null
+            birthDate: new Date('1990-01-15'),
+            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
         }
     }
 
@@ -289,7 +310,7 @@ export class HouseholdFactory {
     static readonly updateInhabitant = async (
         context: BrowserContext,
         inhabitantId: number,
-        updates: Partial<Inhabitant>,
+        updates: Partial<InhabitantDetail>,
         expectedStatus: number = 200
     ): Promise<any> => {
         const response = await context.request.post(`${INHABITANT_ENDPOINT}/${inhabitantId}`, {

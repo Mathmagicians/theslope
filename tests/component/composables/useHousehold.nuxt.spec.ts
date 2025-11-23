@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { useHousehold } from '~/composables/useHousehold'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import type { Inhabitant } from '~/composables/useHouseholdValidation'
+import type { InhabitantDetail } from '~/composables/useCoreValidation'
 import { WEEKDAYS } from '~/types/dateTypes'
 
 describe('useHousehold', () => {
@@ -26,7 +26,7 @@ describe('useHousehold', () => {
       })
 
       it('returns default (DINEIN) when all inhabitants have null preferences', () => {
-        const inhabitants: Pick<Inhabitant, 'dinnerPreferences'>[] = [
+        const inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[] = [
           { dinnerPreferences: null },
           { dinnerPreferences: null }
         ]

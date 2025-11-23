@@ -36,23 +36,23 @@ const { TYPOGRAPHY } = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UCard :ui="{ rounded: '', base: 'flex flex-col flex-1' }">
+  <UCard :ui="{ rounded: '', base: 'flex flex-col h-full' }">
     <template #header>
       <h3 :class="TYPOGRAPHY.cardTitle">{{ title }}</h3>
     </template>
 
     <!-- Optional header content (selectors, filters) -->
-    <div v-if="$slots.header" class="px-4 pt-4">
+    <div v-if="$slots.header" class="px-4 pt-4 pb-4 md:pb-6">
       <slot name="header" />
     </div>
 
     <!-- Main calendar (required) -->
-    <div class="flex-1">
+    <div class="flex-1 overflow-auto py-2 md:py-4">
       <slot name="calendar" />
     </div>
 
     <!-- Optional footer (legend, etc.) -->
-    <div v-if="$slots.footer" class="px-4 pb-4">
+    <div v-if="$slots.footer" class="px-4 pb-4 pt-4 md:pt-6">
       <slot name="footer" />
     </div>
   </UCard>

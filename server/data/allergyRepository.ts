@@ -14,7 +14,7 @@ import type {
 } from '~/composables/useAllergyValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {h3eFromCatch, throwH3Error} = eventHandlerHelper
 
 /**
  * Get Prisma client connection to D1 database
@@ -89,9 +89,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
         // Validate before returning (ADR-010)
         return result.map(at => AllergyTypeDetailSchema.parse(at))
     } catch (error) {
-        const h3e = h3eFromCatch('Error fetching allergy types', error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('`🏥 > ALLERGY_TYPE > [GET] > Error fetching allergy types', error)
     }
 }
 
@@ -117,14 +115,12 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [GET]: Error fetching allergy type with ID ${id}`, error)
     }
 }
 
 /**
- * Create new allergy type (admin only)
+ * Create new allergy type (allergymanager)
  * Returns AllergyTypeDisplay
  */
 export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> {
@@ -140,9 +136,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
         console.info(`🏥 > ALLERGY_TYPE > [CREATE] Successfully created allergy type ${newAllergyType.name} with ID ${newAllergyType.id}`)
         return AllergyTypeDisplaySchema.parse(newAllergyType)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating allergy type ${allergyTypeData.name}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [CREATE]: Error creating allergy type ${allergyTypeData.name}`, error)
     }
 }
 
@@ -166,14 +160,11 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
         console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Successfully updated allergy type ${updatedAllergyType.name}`)
         return AllergyTypeDisplaySchema.parse(updatedAllergyType)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [UPDATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [UPDATE]: Error updating allergy type with ID ${id}`, error)
     }
 }
 
 /**
- * Delete allergy type (admin only)
  * ADR-005: Cascade deletes related Allergy records automatically
  * Returns AllergyTypeDisplay
  */
@@ -191,9 +182,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
         console.info(`🏥 > ALLERGY_TYPE > [DELETE] Successfully deleted allergy type ${deletedAllergyType.name}`)
         return AllergyTypeDisplaySchema.parse(deletedAllergyType)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting allergy type with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY_TYPE > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY_TYPE > [DELETE]: Error deleting allergy type with ID ${id}`, error)
     }
 }
 
@@ -231,9 +220,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
         // Validate before returning (ADR-010)
         return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for inhabitant ${inhabitantId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for inhabitant ${inhabitantId}`, error)
     }
 }
 
@@ -273,9 +260,7 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
         // Validate before returning (ADR-010)
         return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for household ${householdId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for household ${householdId}`, error)
     }
 }
 
@@ -311,9 +296,7 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
         // Validate before returning (ADR-010)
         return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergies for allergy type ${allergyTypeId}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for allergy type ${allergyTypeId}`, error)
     }
 }
 
@@ -353,9 +336,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergy with ID ${id}`, error)
     }
 }
 
@@ -370,7 +351,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
 
     try {
         // Remove allergyType from create data (it's a relation, not a field)
-        const {allergyType, ...createData} = allergyData as AllergyCreate & {allergyType?: unknown}
+        const {allergyType, ...createData} = allergyData as AllergyCreate & { allergyType?: unknown }
 
         const newAllergy = await prisma.allergy.create({
             data: createData,
@@ -393,9 +374,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
         // Validate before returning (ADR-010)
         return AllergyDetailSchema.parse(newAllergy)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
-        console.error(`🏥 > ALLERGY > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [CREATE]: Error creating allergy for inhabitant ${allergyData.inhabitantId}`, error)
     }
 }
 
@@ -408,7 +387,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
     const prisma = await getPrismaClientConnection(d1Client)
     const {AllergyDetailSchema} = useAllergyValidation()
 
-    const {id, allergyType, ...updateData} = allergyData as AllergyUpdate & {allergyType?: unknown}
+    const {id, allergyType, ...updateData} = allergyData as AllergyUpdate & { allergyType?: unknown }
 
     try {
         const updatedAllergy = await prisma.allergy.update({
@@ -433,9 +412,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
         // Validate before returning (ADR-010)
         return AllergyDetailSchema.parse(updatedAllergy)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [UPDATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [UPDATE]: Error updating allergy with ID ${id}`, error)
     }
 }
 
@@ -460,8 +437,6 @@ export async function deleteAllergy(d1Client: D1Database, id: number): Promise<A
         // Validate before returning (ADR-010)
         return AllergyDisplaySchema.parse(deletedAllergy)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting allergy with ID ${id}`, error)
-        console.error(`🏥 > ALLERGY > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🏥 > ALLERGY > [DELETE] : Error deleting allergy with ID ${id}`, error)
     }
 }

@@ -4,6 +4,7 @@ import {
     type DinnerEventCreate,
     useBookingValidation
 } from "~/composables/useBookingValidation"
+import { type TeamRole } from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
@@ -177,6 +178,31 @@ export class DinnerEventFactory {
         }
 
         return []
+    }
+
+    static readonly assignRoleToDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        inhabitantId: number,
+        role: TeamRole,
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail | null> => {
+        const response = await context.request.post(
+            `/api/team/cooking/${dinnerEventId}/assign-role`,
+            {
+                headers: headers,
+                data: { inhabitantId, role }
+            }
+        )
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `POST assign-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return await response.json()
+        }
+        return null
     }
 
     /**

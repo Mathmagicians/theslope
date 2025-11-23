@@ -49,7 +49,7 @@ const emit = defineEmits<{
 const { COLOR, TYPOGRAPHY, LAYOUTS, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
 // Store integration for fetching
-const planStore = usePlanStore()
+const bookingsStore = useBookingsStore()
 
 // Validation schema for parsing dinner event detail
 const { DinnerEventDetailSchema } = useBookingValidation()
@@ -63,7 +63,7 @@ const {
 } = useAsyncData(
   computed(() => `dinner-detail-${props.dinnerEventId}`),
   () => props.dinnerEventId
-    ? planStore.fetchDinnerEventDetail(props.dinnerEventId)
+    ? bookingsStore.fetchDinnerEventDetail(props.dinnerEventId)
     : Promise.resolve(null),
   {
     default: () => null,

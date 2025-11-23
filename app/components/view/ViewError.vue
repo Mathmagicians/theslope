@@ -37,8 +37,8 @@ function getRotationClass(i: number) {
 </script>
 
 <template>
-  <div class="relative w-screen h-screen min-w-screen min-h-screen">
-    <div class="flex flex-wrap gap-4  md:gap-8">
+  <div class="relative w-full h-full overflow-hidden">
+    <div class="flex flex-wrap gap-4 md:gap-8">
       <UIcon
           v-for="(item,i) in icons"
           :key="i"
@@ -48,7 +48,7 @@ function getRotationClass(i: number) {
     </div>
 
     <!-- Error Content -->
-    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 grow items-start min-w-1/2 opacity-90 bg-red-100 flex flex-col p-2 md:p-4">
+    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 right-10 md:right-20 opacity-90 bg-red-100 flex flex-col p-2 md:p-4 rounded-lg">
       <!-- Error Code -->
       <UIcon name="i-mage-robot-dead" size="64"/>
       <p

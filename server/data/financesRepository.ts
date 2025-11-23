@@ -27,7 +27,7 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
  * ADR-002: Separate validation vs business logic error handling
  */
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 /*** ORDERS ***/
 
@@ -71,9 +71,7 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
 
         return OrderDisplaySchema.parse(domainOrder)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error creating order for inhabitant ${orderData.inhabitantId}`, error)
-        console.error(`🎟️ > ORDER > [CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`️🎟️ > ORDER > [CREATE]: Error creating order for inhabitant ${orderData.inhabitantId}`, error)
     }
 }
 
@@ -142,7 +140,7 @@ export async function createOrders(d1Client: D1Database, ordersData: OrderCreate
             ordersData.map(async orderData => {
                 const priceAtBooking = priceMap.get(orderData.ticketPriceId)!.price
 
-                return await prisma.order.create({
+                return prisma.order.create({
                     data: {
                         ...orderData,
                         priceAtBooking
@@ -184,9 +182,7 @@ export async function createOrders(d1Client: D1Database, ordersData: OrderCreate
             })
         })
     } catch (error) {
-        const h3e = h3eFromCatch(`Error batch creating ${ordersData.length} orders`, error)
-        console.error(`🎟️ > ORDER > [BATCH CREATE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🎟️ > ORDER > [CREATE]: Error batch creating ${ordersData.length} orders`, error)
     }
 }
 
@@ -254,9 +250,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
             ticketType: order.ticketPrice.ticketType
         })
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching order with ID ${id}`, error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
     }
 }
 
@@ -289,9 +283,7 @@ export async function deleteOrder(d1Client: D1Database, id: number): Promise<Ord
 
         return OrderDisplaySchema.parse(domainOrder)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting order with ID ${id}`, error)
-        console.error(`🎟️ > ORDER > [DELETE] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🎟️ > ORDER > [DELETE] : Error deleting order with ID ${id}`, error)
     }
 }
 
@@ -329,9 +321,7 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
 
         return domainOrders
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`, error)
-        console.error(`🎟️ > ORDER > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🍽️ > DINNER_EVENT > [GET] : Error fetching orders for dinner event ${dinnerEventId}`, error)
     }
 }
 
@@ -358,9 +348,7 @@ export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerE
         console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
         return DinnerEventDisplaySchema.parse(newDinnerEvent)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [SAVE] ${h3e.message}`)
-        throw h3e
+        return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
     }
 }
 
@@ -389,16 +377,14 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
         console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
         return dinnerEvents.map(de => DinnerEventDisplaySchema.parse(de))
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
-        throw h3e
+        return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`, error)
     }
 }
 
 export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDetail | null> {
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
+    const {DinnerEventDetailSchema, deserializeDinnerEvent} = useBookingValidation()
     const {deserializeCookingTeam} = useCookingTeamValidation()
 
     try {
@@ -422,6 +408,11 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                         inhabitant: true,
                         bookedByUser: true,
                         ticketPrice: true
+                    }
+                },
+                allergens: {
+                    include: {
+                        allergyType: true
                     }
                 }
             }
@@ -449,9 +440,12 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                 }
             }))
 
+            // Deserialize dinner event (transform allergens from join table - ADR-010)
+            const deserializedEvent = deserializeDinnerEvent(dinnerEvent)
+
             // Deserialize cookingTeam if present (affinity JSON string -> WeekDayMap object)
             const dinnerEventToValidate = {
-                ...dinnerEvent,
+                ...deserializedEvent,
                 tickets: transformedTickets,
                 cookingTeam: dinnerEvent.cookingTeam ? deserializeCookingTeam(dinnerEvent.cookingTeam) : null
             }
@@ -463,9 +457,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
             return null
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`Error fetching dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [GET] ${h3e.message}`, error)
-        throw h3e
+        return throwH3Error(`️ > DINNER_EVENT > [GET]: Error fetching dinner event with ID ${id}`, error)
     }
 }
 
@@ -511,9 +503,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)
         return DinnerEventDetailSchema.parse(dinnerEventToValidate)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error updating dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [UPDATE] ${h3e.message}`, error)
-        throw h3e
+        return throwH3Error(`️ > DINNER_EVENT > [UPDATE]: Error updating dinner event with ID ${id}`, error)
     }
 }
 
@@ -530,9 +520,48 @@ export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promi
         console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${deletedDinnerEvent.menuTitle}`)
         return DinnerEventDisplaySchema.parse(deletedDinnerEvent)
     } catch (error) {
-        const h3e = h3eFromCatch(`Error deleting dinner event with ID ${id}`, error)
-        console.error(`🍽️ > DINNER_EVENT > [DELETE] ${h3e.message}`, error)
-        throw h3e
+        return throwH3Error(`️ > DINNER_EVENT > [DELETE]: Error deleting dinner event with ID ${id}`, error)
+    }
+}
+
+/**
+ * Update allergens for a dinner event (chef operation)
+ * Replaces existing allergens with new list
+ * ADR-005: CASCADE on delete (DinnerEventAllergen deleted when DinnerEvent deleted)
+ */
+export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEventId: number, allergenIds: number[]): Promise<DinnerEventDetail> {
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE_ALLERGENS] Updating allergens for dinner event ${dinnerEventId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Delete existing allergen assignments
+        await prisma.dinnerEventAllergen.deleteMany({
+            where: { dinnerEventId }
+        })
+
+        // Create new allergen assignments
+        if (allergenIds.length > 0) {
+            await prisma.dinnerEventAllergen.createMany({
+                data: allergenIds.map(allergyTypeId => ({
+                    dinnerEventId,
+                    allergyTypeId
+                }))
+            })
+        }
+
+        console.info(`🍽️ > DINNER_EVENT > [UPDATE_ALLERGENS] Successfully updated allergens for dinner event ${dinnerEventId}`)
+
+        // Fetch and return updated dinner event with all relations
+        const updatedEvent = await fetchDinnerEvent(d1Client, dinnerEventId)
+        if (!updatedEvent) {
+            throw createError({
+                statusCode: 404,
+                message: `Dinner event ${dinnerEventId} not found after allergen update`
+            })
+        }
+        return updatedEvent
+    } catch (error) {
+        return throwH3Error(`🍽️ > DINNER_EVENT > [UPDATE_ALLERGENS]: Error updating allergens for dinner event ${dinnerEventId}`, error)
     }
 }
 

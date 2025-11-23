@@ -42,15 +42,17 @@ const { COLOR, TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
-const {isPlanStoreReady, selectedSeason} = storeToRefs(planStore)
+const {isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason} = storeToRefs(planStore)
 planStore.initPlanStore()
 
 const usersStore = useUsersStore()
-const {myTeams, isMyTeamsInitialized} = storeToRefs(usersStore)
+const {myTeams, isMyTeamsLoading, isMyTeamsErrored, isMyTeamsInitialized, myTeamsError} = storeToRefs(usersStore)
 usersStore.loadMyTeams()
 
 const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
+
+const bookingsStore = useBookingsStore()
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
@@ -58,6 +60,7 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 // Permission helpers and date utilities
 const { isChefFor, getDefaultDinnerStartTime, getNextDinnerDate } = useSeason()
 const authStore = useAuthStore()
+const {handleApiError} = useApiHandler()
 const dinnerStartTime = getDefaultDinnerStartTime()
 
 // Team selection via query parameter
@@ -130,9 +133,25 @@ const dinnerMenuHeroMode = computed(() => {
 })
 
 // Handle allergen updates
+const toast = useToast()
 const handleAllergenUpdate = async (allergenIds: number[]) => {
-  console.info('Chef allergen update:', allergenIds)
-  // TODO: Implement allergen update API call
+  if (!selectedDinnerEvent.value?.id) return
+
+  try {
+    await bookingsStore.updateDinnerEventAllergens(selectedDinnerEvent.value.id, allergenIds)
+    const message = allergenIds.length > 0
+      ? 'Beboerne kan nu se allergenerne i menuen'
+      : 'Menuen er markeret uden allergener'
+    toast.add({
+      title: 'Allergeninformation gemt',
+      description: message,
+      icon: 'i-heroicons-check-circle',
+      color: 'success'
+    })
+  } catch (error) {
+    // Error already handled by store with handleApiError
+    console.error('Failed to update allergens:', error)
+  }
 }
 
 useHead({
@@ -154,7 +173,15 @@ useHead({
         <!-- Header: Team selector and status -->
         <template #header>
           <!-- Loading teams -->
-          <Loader v-if="!isPageReady" text="Henter madholdsdata..." />
+          <Loader v-if="isMyTeamsLoading" text="Henter dine madhold..." />
+
+          <!-- Error loading teams -->
+          <ViewError
+            v-else-if="isMyTeamsErrored"
+            :error="myTeamsError?.statusCode"
+            message="Vi kan ikke hente dine madhold. Prøv at genindlæse siden."
+            :cause="myTeamsError"
+          />
 
           <!-- Team selector and status -->
           <div v-else class="space-y-4">
@@ -176,11 +203,20 @@ useHead({
 
         <!-- Calendar: Team calendar with agenda/calendar views -->
         <template #calendar>
-          <!-- No events for team -->
-          <div v-if="!isPageReady" class="px-4">
+          <!-- Loading calendar -->
+          <div v-if="!isPlanStoreReady && !isPlanStoreErrored" class="px-4">
             <Loader text="Henter kalender..." />
           </div>
 
+          <!-- Error loading calendar -->
+          <ViewError
+            v-else-if="isPlanStoreErrored"
+            :error="planStoreError?.statusCode"
+            message="Vi kan ikke hente sæsondata for kalenderen. Prøv at genindlæse siden."
+            :cause="planStoreError"
+          />
+
+          <!-- No events for team -->
           <div v-else-if="teamDinnerEvents.length === 0" class="px-4">
             <UAlert
               type="info"
@@ -189,14 +225,15 @@ useHead({
               icon="i-heroicons-calendar-days"
             >
               <template #title>
-                Ingen fællesspisninger
+                Holdet har ingen fællesspisninger
               </template>
               <template #description>
-                Dette madhold har ingen fællesspisninger i den aktive sæson.
+                Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
               </template>
             </UAlert>
           </div>
 
+          <!-- Calendar display -->
           <div v-else>
             <ChefCalendarDisplay
               v-if="selectedSeason && selectedTeam"

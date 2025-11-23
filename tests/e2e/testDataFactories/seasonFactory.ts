@@ -123,6 +123,8 @@ export class SeasonFactory {
         aSeason: Partial<Season> = {},
         expectedStatus: number = 201
     ): Promise<Season> => {
+        const {SeasonSchema} = useSeasonValidation()
+
         // Merge partial with defaults to create full Season object
         const fullSeason: Season = {
             ...this.defaultSeason(),
@@ -145,9 +147,15 @@ export class SeasonFactory {
 
         expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
-        // Only check for ID on successful creation
+        // Only validate and check for ID on successful creation
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new season ID').toBeDefined()
+
+            // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
+            const result = SeasonSchema.safeParse(responseBody)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+            return result.data!
         }
 
         return responseBody
@@ -195,7 +203,14 @@ export class SeasonFactory {
             })
 
             expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-            const activatedSeason = await response.json()
+            const rawSeason = await response.json()
+
+            // Validate response
+            const {SeasonSchema} = useSeasonValidation()
+            const result = SeasonSchema.safeParse(rawSeason)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            const activatedSeason = result.data!
+
             expect(activatedSeason.isActive, 'Season should be active').toBe(true)
 
             this.activeSeason = activatedSeason
@@ -244,7 +259,14 @@ export class SeasonFactory {
                     data: { seasonId: existingSingleton.id }
                 })
                 expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-                const activatedSeason = await response.json()
+                const rawSeason = await response.json()
+
+                // Validate response
+                const {SeasonSchema} = useSeasonValidation()
+                const result = SeasonSchema.safeParse(rawSeason)
+                expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+                const activatedSeason = result.data!
+
                 this.activeSeason = activatedSeason
                 return activatedSeason
             } else {
@@ -261,7 +283,14 @@ export class SeasonFactory {
         })
 
         expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-        const activatedSeason = await response.json()
+        const rawSeason = await response.json()
+
+        // Validate response
+        const {SeasonSchema} = useSeasonValidation()
+        const result = SeasonSchema.safeParse(rawSeason)
+        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        const activatedSeason = result.data!
+
         expect(activatedSeason.isActive, 'Season should be active').toBe(true)
 
         // Cache the active season
@@ -616,7 +645,9 @@ export class SeasonFactory {
         const teamAssignmentData = {
             cookingTeamId: teamId,  // Schema expects 'cookingTeamId' not 'teamId'
             inhabitantId: inhabitantId,
-            role: role
+            role: role,
+            allocationPercentage: 100,
+            affinity: null
         }
         const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/assignment`, {
             headers: headers,
@@ -624,7 +655,8 @@ export class SeasonFactory {
         })
 
         const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             return await response.json()

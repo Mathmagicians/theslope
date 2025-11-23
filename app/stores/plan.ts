@@ -74,12 +74,6 @@ export const usePlanStore = defineStore("Plan", () => {
             return $fetch(`/api/admin/team/${teamId}`)
         }
 
-        // Fetch dinner event detail (ADR-007: Component-local data pattern)
-        // No store state - components use useAsyncData with this function
-        const fetchDinnerEventDetail = (dinnerEventId: number): Promise<DinnerEventDetail> => {
-            return $fetch(`/api/admin/dinner-event/${dinnerEventId}`)
-        }
-
         // Create team operation - useAsyncData pattern for mutations
         const createTeamData = ref<CookingTeamDetail | CookingTeamDetail[]>([])
         const {
@@ -424,7 +418,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role']): Promise<DinnerEventDetail> => {
             try {
                 const roleEmoji = role === 'CHEF' ? '👨‍🍳' : role === 'COOK' ? '👥' : '🌱'
-                const updated = await $fetch<DinnerEventDetail>(`/api/admin/dinner-event/${dinnerEventId}/assign-role`, {
+                const updated = await $fetch<DinnerEventDetail>(`/api/team/cooking/${dinnerEventId}/assign-role`, {
                     method: 'POST',
                     body: { inhabitantId, role },
                     headers: {'Content-Type': 'application/json'}
@@ -493,7 +487,6 @@ export const usePlanStore = defineStore("Plan", () => {
             loadSeasons,
             onSeasonSelect,
             fetchTeamDetail,  // Fetch function, not state
-            fetchDinnerEventDetail,  // Fetch function, not state
             createSeason,
             updateSeason,
             activateSeason,

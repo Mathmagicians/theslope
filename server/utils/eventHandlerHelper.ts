@@ -67,7 +67,16 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statu
     const errorCause: ErrorCause | null = hasValidationCause ? (error as {cause: ErrorCause}).cause : null
 
     if (error instanceof ZodError || errorCause?.status === 400 || errorCause?.statusMessage === 'Validation Error') {
-        const causeMessage = errorCause?.message || ''
+        let causeMessage = errorCause?.message || ''
+
+        // If ZodError, extract detailed validation issues
+        if (error instanceof ZodError) {
+            const issueDetails = error.issues.map(issue =>
+                `${issue.path.join('.')}: ${issue.message}`
+            ).join(', ')
+            causeMessage = issueDetails || error.message
+        }
+
         return createError({
             statusCode: 400,
             statusMessage: 'Bad Request',

@@ -372,19 +372,19 @@ export const COMPONENTS = {
     // High-contrast light panel (for CTAs, forms, important actions)
     light: {
       container: 'bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-white/50',
-      primaryButton: 'orange' as const,    // Warm Pantone accent (complements mocha)
+      primaryButton: 'warning' as const,   // NuxtUI 'warning' → orange palette (warm Pantone accent)
       secondaryButton: 'neutral' as const  // Neutral for cancel/secondary actions
     },
     // Subtle panel (for supplementary content, less prominent)
     subtle: {
       container: 'bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20',
-      primaryButton: 'mocha' as const,     // Subtle, matches hero
+      primaryButton: 'primary' as const,   // NuxtUI 'primary' → amber palette (mocha color)
       secondaryButton: 'neutral' as const
     },
     // Dark panel (for contrast variation on light heroes)
     dark: {
       container: 'bg-gray-900/80 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50',
-      primaryButton: 'peach' as const,     // Warm accent on dark
+      primaryButton: 'peach' as const,     // Custom color mapped in app.config.ts → peach palette
       secondaryButton: 'neutral' as const
     }
   }

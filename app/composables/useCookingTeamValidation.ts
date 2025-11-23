@@ -153,9 +153,13 @@ export const useCookingTeamValidation = () => {
 
     // Deserialize individual assignment
     const deserializeCookingTeamAssignment = (serialized: any): CookingTeamAssignment => {
+        const {deserializeInhabitantDisplay} = useCoreValidation()
+
         const deserialized = {
             ...serialized,
-            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
+            // Deserialize nested inhabitant if present
+            inhabitant: serialized.inhabitant ? deserializeInhabitantDisplay(serialized.inhabitant) : undefined
         }
         return CookingTeamAssignmentSchema.parse(deserialized)
     }

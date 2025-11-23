@@ -347,10 +347,10 @@ export const useCoreValidation = () => {
     }
 
     /**
-     * ADR-010: Deserialize Inhabitant from database format to domain format
+     * ADR-010: Deserialize InhabitantDisplay from database format to domain format
      * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
      */
-    const deserializeInhabitant = (serialized: any): Inhabitant => {
+    const deserializeInhabitantDisplay = (serialized: any): InhabitantDisplay => {
         const deserialized = {
             ...serialized,
             birthDate: serialized.birthDate ? new Date(serialized.birthDate) : null,
@@ -358,7 +358,7 @@ export const useCoreValidation = () => {
                 ? deserializeWeekDayMap(serialized.dinnerPreferences)
                 : null
         }
-        return BaseInhabitantSchema.parse(deserialized)
+        return InhabitantDisplaySchema.parse(deserialized)
     }
 
     /**
@@ -370,7 +370,7 @@ export const useCoreValidation = () => {
             ...serializedUser,
             systemRoles: JSON.parse(serializedUser.systemRoles),
             Inhabitant: serializedUser.Inhabitant ? {
-                ...deserializeInhabitant(serializedUser.Inhabitant),
+                ...deserializeInhabitantDisplay(serializedUser.Inhabitant),
                 household: serializedUser.Inhabitant.household ? {
                     ...serializedUser.Inhabitant.household,
                     shortName: getHouseholdShortName(serializedUser.Inhabitant.household.address)
@@ -387,7 +387,10 @@ export const useCoreValidation = () => {
             shortName: getHouseholdShortName(serialized.address),
             inhabitants: serialized.inhabitants?.map((inhabitant: any) => ({
                 ...inhabitant,
-                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null
+                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+                dinnerPreferences: inhabitant.dinnerPreferences
+                    ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                    : null
             }))
         }
         return HouseholdSummarySchema.parse(deserialized)
@@ -399,7 +402,7 @@ export const useCoreValidation = () => {
             movedInDate: new Date(serialized.movedInDate),
             moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
             shortName: getHouseholdShortName(serialized.address),
-            inhabitants: serialized.inhabitants?.map((inhabitant: any) => deserializeInhabitant(inhabitant))
+            inhabitants: serialized.inhabitants?.map((inhabitant: any) => deserializeInhabitantDisplay(inhabitant))
         }
         return HouseholdWithInhabitantsSchema.parse(deserialized)
     }
@@ -450,7 +453,7 @@ export const useCoreValidation = () => {
         deserializeUserWithInhabitant,
         mergeUserRoles,
         // Functions - Inhabitant
-        deserializeInhabitant,
+        deserializeInhabitantDisplay,
         // Functions - Household
         deserializeHouseholdSummary,
         deserializeHouseholdWithInhabitants,

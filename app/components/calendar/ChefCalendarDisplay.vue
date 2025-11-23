@@ -291,22 +291,13 @@ const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
 
     <!-- Agenda View -->
     <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-      <div v-for="dinner in sortedDinnerEvents" :key="dinner.id">
-        <!-- TODO: Use ChefDinnerCard component with deadline badges -->
-        <div
-          class="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900"
-          :class="{ 'ring-2 ring-primary': dinner.id === selectedDinnerId }"
-          @click="emit('select', dinner.id)"
-        >
-          <div class="flex justify-between items-start">
-            <div>
-              <div class="font-medium">{{ formatDate(dinner.date) }}</div>
-              <div class="text-sm text-gray-500">{{ dinner.menuTitle || 'Ingen menu endnu' }}</div>
-            </div>
-            <!-- Deadline badges will go here -->
-          </div>
-        </div>
-      </div>
+      <ChefDinnerCard
+        v-for="dinner in sortedDinnerEvents"
+        :key="dinner.id"
+        :dinner-event="dinner"
+        :selected="dinner.id === selectedDinnerId"
+        @select="emit('select', $event)"
+      />
     </div>
 
     <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->

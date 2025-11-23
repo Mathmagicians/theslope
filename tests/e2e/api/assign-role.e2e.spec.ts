@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import { HouseholdFactory } from '../testDataFactories/householdFactory'
+import { DinnerEventFactory } from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
 
@@ -97,17 +98,13 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 expect(dinnerEvent.chefId).toBeNull()
                 expect(dinnerEvent.cookingTeamId).toBe(team.id)
 
-                // Assign role
-                const response = await context.request.post(
-                    `/api/admin/dinner-event/${dinnerEvent.id}/assign-role`,
-                    {
-                        headers: testHelpers.headers,
-                        data: { inhabitantId: inhabitant.id, role }
-                    }
+                // Assign role using factory
+                const updatedDinner = await DinnerEventFactory.assignRoleToDinnerEvent(
+                    context,
+                    dinnerEvent.id,
+                    inhabitant.id,
+                    role
                 )
-                expect(response.status(), 'POST assign-role should return 200').toBe(200)
-
-                const updatedDinner = await response.json()
 
                 // Verify chefId behavior based on role
                 if (shouldUpdateChefId) {
@@ -164,15 +161,13 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 { chefId: null, cookingTeamId: team.id }
             )
 
-            // Assign as chef
-            const response = await context.request.post(
-                `/api/admin/dinner-event/${dinnerEvent.id}/assign-role`,
-                {
-                    headers: testHelpers.headers,
-                    data: { inhabitantId: inhabitant.id, role: TeamRole.CHEF }
-                }
+            // Assign as chef using factory
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                dinnerEvent.id,
+                inhabitant.id,
+                TeamRole.CHEF
             )
-            expect(response.status()).toBe(200)
 
             // Verify role was updated to CHEF
             const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id)
@@ -206,15 +201,14 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 { chefId: null, cookingTeamId: null }
             )
 
-            // Attempt to assign role
-            const response = await context.request.post(
-                `/api/admin/dinner-event/${dinnerEvent.id}/assign-role`,
-                {
-                    headers: testHelpers.headers,
-                    data: { inhabitantId: inhabitant.id, role: TeamRole.CHEF }
-                }
+            // Attempt to assign role - should fail with 400
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                dinnerEvent.id,
+                inhabitant.id,
+                TeamRole.CHEF,
+                400  // Expected status
             )
-            expect(response.status(), 'Should return 400 when no cooking team assigned').toBe(400)
         })
 
         test('GIVEN non-existent dinner event WHEN assigning role THEN returns 404 error', async ({ browser }) => {
@@ -235,14 +229,13 @@ test.describe('DinnerEvent API - Assign Role', () => {
 
             // Attempt to assign role to non-existent dinner
             const nonExistentId = 999999
-            const response = await context.request.post(
-                `/api/admin/dinner-event/${nonExistentId}/assign-role`,
-                {
-                    headers: testHelpers.headers,
-                    data: { inhabitantId: inhabitant.id, role: TeamRole.CHEF }
-                }
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                nonExistentId,
+                inhabitant.id,
+                TeamRole.CHEF,
+                404  // Expected status
             )
-            expect(response.status(), 'Should return 404 for non-existent dinner').toBe(404)
         })
 
         test('GIVEN invalid inhabitantId WHEN assigning role THEN returns 400 validation error', async ({ browser }) => {
@@ -259,14 +252,13 @@ test.describe('DinnerEvent API - Assign Role', () => {
             )
 
             // Attempt to assign with invalid inhabitantId
-            const response = await context.request.post(
-                `/api/admin/dinner-event/${dinnerEvent.id}/assign-role`,
-                {
-                    headers: testHelpers.headers,
-                    data: { inhabitantId: -1, role: TeamRole.CHEF } // Invalid ID
-                }
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                dinnerEvent.id,
+                -1,  // Invalid inhabitantId
+                TeamRole.CHEF,
+                400  // Expected status
             )
-            expect(response.status(), 'Should return 400 for invalid inhabitantId').toBe(400)
         })
     })
 })

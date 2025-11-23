@@ -274,6 +274,17 @@ export const useBookingValidation = () => {
         }
     }
 
+    /**
+     * Transform DinnerEvent from Prisma format to domain format (ADR-010)
+     * Handles join table flattening for allergens
+     */
+    function deserializeDinnerEvent(prismaEvent: any): any {
+        return {
+            ...prismaEvent,
+            allergens: prismaEvent.allergens ? prismaEvent.allergens.map((a: any) => a.allergyType) : []
+        }
+    }
+
     return {
         // Enums
         OrderStateSchema,
@@ -303,7 +314,10 @@ export const useBookingValidation = () => {
         serializeOrder,
         deserializeOrder,
         serializeOrderHistory,
-        deserializeOrderHistory
+        deserializeOrderHistory,
+
+        // Transformation
+        deserializeDinnerEvent
     }
 }
 
