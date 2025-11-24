@@ -65,6 +65,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
     test.use({storageState: adminUIFile})
 
+    test.beforeAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        // Create singleton active season once for all tests (shared across workers)
+        // NOTE: Cleaned up by global teardown, not by this test suite
+        await SeasonFactory.createActiveSeason(context)
+    })
+
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
@@ -133,25 +140,23 @@ test.describe('AdminPlanningSeason Form UI', () => {
         async ({page, browser}) => {
             const context = await validatedBrowserContext(browser)
 
-            // GIVEN: Create season via API
-            const season = await SeasonFactory.createSeason(context, {holidays: []})
-            createdSeasonIds.push(season.id!)
+            // GIVEN: Get singleton active season (created in beforeAll, read-only test)
+            const allSeasons = await SeasonFactory.getAllSeasons(context)
+            const season = allSeasons.find(s => s.shortName === SeasonFactory.E2E_SINGLETON_NAME)
+            expect(season, 'Singleton active season should exist').toBeDefined()
 
-            await page.goto(adminPlanningUrl)
+            // Navigate directly to season in edit mode (no need to test dropdown here)
+            await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season!.shortName)}&mode=edit`)
+
+            // WHEN/THEN: Form in edit mode with season data
             await pollUntil(
-                async () => await page.getByTestId('season-selector').isVisible(),
+                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await selectDropdownOption(page, 'season-selector', season.shortName)
-
-            // WHEN: Switch to edit mode
-            await page.locator('button[name="form-mode-edit"]').click()
-
-            // THEN: Form in edit mode with season data
             await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
-            await expect(page.getByTestId('season-selector')).toContainText(season.shortName)
+            await expect(page.getByTestId('season-selector')).toContainText(season!.shortName)
             await expect(page.locator('button[name="submit-season"]')).toBeVisible()
         })
 
@@ -215,16 +220,15 @@ test.describe('AdminPlanningSeason Form UI', () => {
             })
             createdSeasonIds.push(season.id!)
 
-            await page.goto(adminPlanningUrl)
+            // Navigate directly to season in edit mode (no need to test dropdown here)
+            await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
+
+            // WHEN: Wait for form and remove holiday
             await pollUntil(
-                async () => await page.getByTestId('season-selector').isVisible(),
+                async () => await page.locator('form#seasonForm').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await selectDropdownOption(page, 'season-selector', season.shortName)
-
-            // WHEN: Switch to edit mode and remove holiday
-            await page.locator('button[name="form-mode-edit"]').click()
             await expect(page).toHaveURL(/.*mode=edit/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
