@@ -218,8 +218,8 @@ model Invoice {
   billingPeriod String // stringified date range with formatDateRange function
   amount        Int
   createdAt     DateTime      @default(now())
-  householdId   Int
-  houseHold     Household     @relation(fields: [householdId], references: [id])
+  householdId   Int?
+  houseHold     Household?    @relation(fields: [householdId], references: [id], onDelete: SetNull)
 
   @@index([householdId])
   @@index([billingPeriod])

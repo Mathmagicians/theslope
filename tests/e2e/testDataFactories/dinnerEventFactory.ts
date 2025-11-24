@@ -166,6 +166,7 @@ export class DinnerEventFactory {
         seasonId: number,
         expectedStatus: number = 200
     ): Promise<DinnerEventDisplay[]> => {
+        const {DinnerEventDisplaySchema} = useBookingValidation()
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}?seasonId=${seasonId}`)
 
         const status = response.status()
@@ -173,8 +174,10 @@ export class DinnerEventFactory {
 
         if (expectedStatus === 200) {
             const responseBody = await response.json()
-            expect(Array.isArray(responseBody)).toBe(true)
-            return responseBody
+            expect(Array.isArray(responseBody), 'Response should be an array').toBe(true)
+
+            // Deserialize dates from ISO strings to Date objects
+            return responseBody.map((event: any) => DinnerEventDisplaySchema.parse(event))
         }
 
         return []

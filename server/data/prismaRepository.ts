@@ -443,6 +443,9 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
                         dinnerPreferences: true
                     }
                 }
+            },
+            orderBy: {
+                address: 'asc'  // Sort alphabetically by address for consistent UI ordering
             }
         })
 
@@ -803,6 +806,7 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
         })
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
+        // ADR-010: Repository MUST validate returned data
         const deserialized = deserializeSeason(deletedSeason)
         return SeasonSchema.parse(deserialized)
     } catch (error) {
@@ -814,9 +818,13 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
     console.info(`🌞 > SEASON > [CREATE] Creating season ${seasonData.shortName}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {CreateTicketPricesArraySchema} = useTicketPriceValidation()
+    const {SeasonSchema} = useSeasonValidation()
+
+    // ADR-010: Validate input BEFORE writing to database
+    const validatedSeasonData = SeasonSchema.parse(seasonData)
 
     // Serialize domain object to database format
-    const serialized = serializeSeason(seasonData)
+    const serialized = serializeSeason(validatedSeasonData)
 
     // Exclude id and read-only relation fields from create
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...createData} = serialized
@@ -841,8 +849,9 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
 
         console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id} and ${newSeason.ticketPrices.length} ticket prices`)
 
-        // Deserialize before returning
-        return deserializeSeason(newSeason)
+        // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
+        const deserialized = deserializeSeason(newSeason)
+        return SeasonSchema.parse(deserialized)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [CREATE]: Error creating season ${seasonData?.shortName}`, error)
     }
@@ -851,16 +860,20 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
 export async function updateSeason(d1Client: D1Database, seasonData: Season): Promise<Season> {
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
+    const {SeasonSchema} = useSeasonValidation()
+
+    // ADR-010: Validate input BEFORE writing to database
+    const validatedSeasonData = SeasonSchema.parse(seasonData)
 
     // Serialize domain object to database format
-    const serialized = serializeSeason(seasonData)
+    const serialized = serializeSeason(validatedSeasonData)
 
     // Exclude id and read-only relation fields from update
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
 
         const updatedSeason = await prisma.season.update({
-            where: {id: seasonData.id},
+            where: {id: validatedSeasonData.id},
             data: {
                 ...updateData,
                 // Replace all ticket prices (delete existing, create new)
@@ -877,8 +890,9 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 
         console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id}) with ${updatedSeason.ticketPrices.length} ticket prices`)
 
-        // Deserialize before returning
-        return deserializeSeason(updatedSeason)
+        // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
+        const deserialized = deserializeSeason(updatedSeason)
+        return SeasonSchema.parse(deserialized)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [UPDATE]: Error updating season with ID ${id}`, error)
     }

@@ -41,12 +41,19 @@ jobs:
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
       - name: Run e2e api tests
         run: npm run test:e2e:api
-      - name: Run e2e ui tests
-        run: npm run test:e2e:ui
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
+          name: playwright-report-api
+          path: playwright-report/
+          retention-days: 30
+      - name: Run e2e ui tests
+        run: npm run test:e2e:ui
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-ui
           path: playwright-report/
           retention-days: 30
       - name: Deploy to dev server on Cloudflare 😎

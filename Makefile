@@ -79,6 +79,21 @@ d1-nuke-seasons:
 	@npx wrangler d1 execute theslope --command="DELETE FROM Season WHERE ShortName LIKE 'Test%';"
 	@ npx wrangler d1 execute theslope --command="SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%'"
 
+d1-nuke-households:
+	@echo "🧹 Cleaning up test households and related data..."
+	@echo "📊 Current test household count:"
+	@npx wrangler d1 execute theslope --command="SELECT COUNT(id) as count FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
+	@echo "🗑️  Deleting orders, cooking team assignments, and allergies for test inhabitants..."
+	@npx wrangler d1 execute theslope --command="DELETE FROM 'Order' WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
+	@npx wrangler d1 execute theslope --command="DELETE FROM CookingTeamAssignment WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
+	@npx wrangler d1 execute theslope --command="DELETE FROM Allergy WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
+	@echo "🗑️  Deleting test inhabitants..."
+	@npx wrangler d1 execute theslope --command="DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%');" --local
+	@echo "🗑️  Deleting test households..."
+	@npx wrangler d1 execute theslope --command="DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
+	@echo "✅ Cleanup complete!"
+	@echo "📊 Remaining test household count:"
+	@npx wrangler d1 execute theslope --command="SELECT COUNT(id) as count FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
 
 logs-dev:
 	@npx wrangler tail theslope --env dev --format pretty

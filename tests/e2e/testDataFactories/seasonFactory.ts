@@ -21,8 +21,12 @@ const {CookingTeamDetailSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
-    static readonly today = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
-    static readonly oneWeekLater = new Date(2025, 0, 7) // Jan 7, 2025 (Tue) - generates exactly 3 events with Mon/Wed/Fri
+    static readonly today = new Date() // Current date for realistic deadline testing
+    static readonly oneWeekLater = (() => {
+        const date = new Date()
+        date.setDate(date.getDate() + 7)
+        return date
+    })() // 7 days from today - short season for fast tests
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
@@ -44,7 +48,7 @@ export class SeasonFactory {
     }
 
     // Default season data for tests
-    // Jan 1-7, 2025 with Mon/Wed/Fri = exactly 3 events (Wed Jan 1, Fri Jan 3, Mon Jan 6)
+    // 7-day season starting from current date with Mon/Wed/Fri cooking days for fast, realistic testing
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
@@ -297,7 +301,51 @@ export class SeasonFactory {
         this.activeSeason = activatedSeason
         console.info('🌞 > SEASON_FACTORY > Created and cached singleton active season:', activatedSeason.shortName)
 
+        // Create default dinner events for the singleton season
+        await this.createDefaultDinnerEvents(context, activatedSeason)
+
         return activatedSeason
+    }
+
+    /**
+     * Create default dinner events for the singleton season on all cooking days
+     * This is called automatically when creating a new singleton season
+     * Uses computeCookingDates helper to find all cooking days in the 7-day season
+     * @param context BrowserContext for API requests
+     * @param season The season to create dinner events for
+     */
+    private static readonly createDefaultDinnerEvents = async (
+        context: BrowserContext,
+        season: Season
+    ): Promise<void> => {
+        // Check if dinner events already exist using DinnerEventFactory
+        const existingEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
+
+        if (existingEvents.length > 0) {
+            return
+        }
+
+        // Use computeCookingDates helper to find all cooking days in the season
+        const {computeCookingDates} = await import('~/utils/season')
+        const cookingDates = computeCookingDates(
+            season.cookingDays,
+            season.seasonDates,
+            season.holidays
+        )
+
+        // Create dinner events for all cooking days using DinnerEventFactory
+        for (let i = 0; i < cookingDates.length; i++) {
+            await DinnerEventFactory.createDinnerEvent(context, {
+                seasonId: season.id!,
+                date: cookingDates[i],
+                menuTitle: `Singleton Test Menu ${i + 1}`,
+                menuDescription: `Test meal for day ${i + 1}`
+            })
+        }
+
+        // Verify all dinner events were created successfully
+        const createdEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
+        expect(createdEvents.length, `Singleton season should have ${cookingDates.length} dinner events (one per cooking day)`).toBe(cookingDates.length)
     }
 
     /**
@@ -568,8 +616,8 @@ export class SeasonFactory {
         seasonId: number,
         teamName: string = 'TestTeam',
         expectedStatus: number = 201,
-        overrides: Partial<CookingTeam> = {}
-    ): Promise<CookingTeam> => {
+        overrides: Partial<CookingTeamDetail> = {}
+    ): Promise<CookingTeamDetail> => {
         const teamData = {
             // Only salt for success cases (201) - validation tests need exact invalid data
             name: expectedStatus === 201 ? salt(teamName) : teamName,

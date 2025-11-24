@@ -116,32 +116,65 @@ export class HouseholdFactory {
         return null
     }
 
+    /**
+     * Delete household(s) - accepts single ID or array of IDs
+     * Returns: HouseholdDetail for single ID, HouseholdDetail[] for array
+     * For cleanup (afterAll): Don't pass expectedStatus - silent on success, logs only failures
+     * For API tests: Pass expectedStatus (e.g. 200) - validates status for each deletion
+     */
     static readonly deleteHousehold = async (
         context: BrowserContext,
-        householdId: number,
-        expectedStatus: number = 200
-    ): Promise<any> => {
-        try {
-            const response = await context.request.delete(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
-            const status = response.status()
+        householdIds: number | number[],
+        expectedStatus?: number
+    ): Promise<HouseholdDetail | HouseholdDetail[]> => {
+        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+        const ids = Array.isArray(householdIds) ? householdIds : [householdIds]
+        const isSingleId = !Array.isArray(householdIds)
 
-            if (status === expectedStatus) {
-                if (expectedStatus === 200) {
-                    return await response.json()
+        // Delete households (repository handles Invoice cleanup + cascades for inhabitants, orders, allergies, assignments)
+        const results = await Promise.all(
+            ids.map(async (id) => {
+                try {
+                    const response = await context.request.delete(`${HOUSEHOLD_ENDPOINT}/${id}`)
+                    const status = response.status()
+
+                    // Cleanup mode - silent on success, log only failures
+                    if (expectedStatus === undefined) {
+                        if (status === 200) {
+                            return await response.json()
+                        } else if (status === 404) {
+                            return null // Already deleted
+                        } else {
+                            const body = await response.json()
+                            console.error(`❌ Failed to delete household ${id} (status ${status}): ${body.message || body.statusMessage}`)
+                            return null
+                        }
+                    }
+
+                    // API test mode - validate expectedStatus
+                    if (status === expectedStatus) {
+                        return status === 200 ? await response.json() : null
+                    } else if (status === 404 && expectedStatus === 200) {
+                        return null
+                    } else {
+                        const body = await response.json()
+                        console.warn(`❌ Household ${id} deletion returned ${status} (expected ${expectedStatus}): ${body.message || body.statusMessage}`)
+                        return null
+                    }
+                } catch (error) {
+                    console.error(`❌ Failed to delete household ${id}:`, error)
+                    return null
                 }
-                return null
-            } else if (status === 404 && expectedStatus === 200) {
-                // Already deleted - silent success for cleanup
-                return null
-            } else {
-                const errorBody = await response.text()
-                console.warn(`❌ Cleanup failed: Household ${householdId} deletion returned ${status} (expected ${expectedStatus}):`, errorBody)
-                return null
-            }
-        } catch (deleteError) {
-            console.warn(`❌ Cleanup failed: Exception deleting household ${householdId}:`, deleteError)
-            return null
-        }
+            })
+        )
+
+        // Validate and return
+        const validResults = results.filter(r => r !== null).map(r => {
+            const result = HouseholdWithInhabitantsSchema.safeParse(r)
+            return result.success ? result.data : null
+        }).filter(r => r !== null) as HouseholdDetail[]
+
+        return isSingleId ? validResults[0] : validResults
     }
 
     // === INHABITANT METHODS ===
@@ -343,32 +376,23 @@ export class HouseholdFactory {
     }
 
     /**
-     * Delete inhabitant (for 4a test scenarios)
+     * Delete inhabitant (for API test scenarios)
      */
     static readonly deleteInhabitant = async (
         context: BrowserContext,
         inhabitantId: number,
         expectedStatus: number = 200
     ): Promise<any> => {
-        try {
-            const response = await context.request.delete(`${INHABITANT_ENDPOINT}/${inhabitantId}`)
-            const status = response.status()
+        const response = await context.request.delete(`${INHABITANT_ENDPOINT}/${inhabitantId}`)
+        const status = response.status()
 
-            if (status === expectedStatus) {
-                if (expectedStatus === 200) {
-                    return await response.json()
-                }
-                return null
-            } else if (status === 404 && expectedStatus === 200) {
-                // Already deleted - silent success for cleanup
-                return null
-            } else {
-                const errorBody = await response.text()
-                console.warn(`❌ Cleanup failed: Inhabitant ${inhabitantId} deletion returned ${status} (expected ${expectedStatus}):`, errorBody)
-                return null
-            }
-        } catch (deleteError) {
-            console.warn(`❌ Cleanup failed: Exception deleting inhabitant ${inhabitantId}:`, deleteError)
+        if (status === expectedStatus) {
+            return status === 200 ? await response.json() : null
+        } else if (status === 404 && expectedStatus === 200) {
+            return null
+        } else {
+            const body = await response.text()
+            console.warn(`❌ Inhabitant ${inhabitantId} deletion returned ${status} (expected ${expectedStatus}):`, body)
             return null
         }
     }

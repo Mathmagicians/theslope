@@ -244,7 +244,9 @@ export const useSeason = () => {
      * @returns True if inhabitant has matching assignment
      */
     const hasAssignment = (inhabitantId: number, team: CookingTeam, role?: string): boolean => {
-        return team.assignments?.some(assignment =>
+        const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
+        type Assignment = typeof CookingTeamAssignmentSchema._type
+        return team.assignments?.some((assignment: Assignment) =>
             assignment.inhabitantId === inhabitantId && (!role || assignment.role === role)
         ) ?? false
     }
@@ -257,8 +259,8 @@ export const useSeason = () => {
      */
     const getTeamsForInhabitant = (inhabitantId: number, season: Season | null): CookingTeam[] => {
         if (!season) return []
-        const teams = season.cookingTeams ?? []
-        return teams.filter(team => hasAssignment(inhabitantId, team))
+        const teams = season.CookingTeams ?? []
+        return teams.filter((team: CookingTeam) => hasAssignment(inhabitantId, team))
     }
 
     /**

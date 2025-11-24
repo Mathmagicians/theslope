@@ -1,11 +1,34 @@
 <script setup lang="ts">
-import type {HouseholdDisplay} from '~/composables/useHouseholdValidation'
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
 // Initialize without await for SSR hydration consistency
 householdsStore.initHouseholdsStore()
+
+// Design system
+const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+
+// Search/filter state
+const searchQuery = ref('')
+
+// Filter households by search query (same pattern as InhabitantSelector)
+const filteredHouseholds = computed(() => {
+  if (!searchQuery.value) return households.value
+
+  const query = searchQuery.value.toLowerCase()
+  return households.value.filter(household =>
+    household.address?.toLowerCase().includes(query) ||
+    household.shortName?.toLowerCase().includes(query) ||
+    household.name?.toLowerCase().includes(query) ||
+    household.inhabitants?.some((i: any) =>
+      i.name?.toLowerCase().includes(query) ||
+      i.lastName?.toLowerCase().includes(query)
+    )
+  )
+})
 
 const columns = [
   {
@@ -26,6 +49,14 @@ const columns = [
       })
   }
 ]
+
+// Pagination
+const pagination = ref({
+  pageIndex: 0,
+  pageSize: 10
+})
+
+const table = useTemplateRef<any>('table')
 </script>
 
 <template>
@@ -41,14 +72,41 @@ v-if="isHouseholdsErrored"
 class="w-full px-0"
          data-test-id="admin-households">
     <template #header>
-      Husstande på Skråningen
+      <div>Husstande på Skråningen</div>
     </template>
 
+    <!-- Search and Pagination Row -->
+    <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between px-6 py-3">
+      <!-- Search -->
+      <UInput
+          v-model="searchQuery"
+          trailing-icon="i-heroicons-magnifying-glass"
+          placeholder="Søg efter adresse, navn eller person..."
+          data-test-id="household-search"
+          class="flex-1 md:max-w-md"
+      />
+      <!-- Pagination -->
+      <UPagination
+          v-if="filteredHouseholds.length > pagination.pageSize"
+          :default-page="((table as any)?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+          :items-per-page="(table as any)?.tableApi?.getState().pagination.pageSize"
+          :total="filteredHouseholds.length"
+          :size="SIZES.standard.value.value"
+          :sibling-count="PAGINATION.siblingCount.value"
+          @update:page="(p: number) => (table as any)?.tableApi?.setPageIndex(p - 1)"
+      />
+    </div>
+
     <UTable
+        ref="table"
+        v-model:pagination="pagination"
         :columns="columns"
-        :data="households"
+        :data="filteredHouseholds"
         :loading="isHouseholdsLoading"
         :ui="{ td: 'py-2' }"
+        :pagination-options="{
+          getPaginationRowModel: getPaginationRowModel()
+        }"
     >
       <!-- Custom shortName cell with link -->
       <template #shortName-cell="{ row }">
@@ -60,10 +118,18 @@ class="w-full px-0"
         </NuxtLink>
       </template>
 
+      <!-- Custom address cell with test-id for easier test selection -->
+      <template #address-cell="{ row }">
+        <span :data-test-id="`household-address-${row.original.id}`">
+          {{ row.original.address }}
+        </span>
+      </template>
+
       <template #empty-state>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
           <UIcon name="i-heroicons-home" class="w-8 h-8 text-gray-400"/>
-          <p class="text-sm text-gray-500">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
+          <p v-if="searchQuery" class="text-sm text-gray-500">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>
+          <p v-else class="text-sm text-gray-500">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
         </div>
       </template>
     </UTable>

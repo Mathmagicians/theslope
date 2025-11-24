@@ -15,7 +15,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDisplay[]> =
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonId!: number | undefined
+    let seasonId: number | undefined
     try {
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId

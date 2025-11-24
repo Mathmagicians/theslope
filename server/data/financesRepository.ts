@@ -1,5 +1,4 @@
 import type {D1Database} from '@cloudflare/workers-types'
-import {Prisma as PrismaFromClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 
@@ -293,8 +292,11 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Build where clause explicitly - field name must be specified
+        const whereClause = dinnerEventId ? { dinnerEventId: dinnerEventId } : {}
+
         const orders = await prisma.order.findMany({
-            where: dinnerEventId ? {dinnerEventId} : undefined,
+            where: whereClause,
             include: {
                 ticketPrice: {
                     select: {
@@ -310,7 +312,7 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
         console.info(`🎟️ > ORDER > [GET] Successfully fetched ${orders.length} orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
 
         // Transform Prisma types to domain types and validate (ADR-010)
-        const domainOrders = orders.map(order => {
+        return orders.map(order => {
             const {ticketPrice, ...orderWithoutRelation} = order
             const domainOrder = {
                 ...orderWithoutRelation,
@@ -318,8 +320,6 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
             }
             return OrderDisplaySchema.parse(domainOrder)
         })
-
-        return domainOrders
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [GET] : Error fetching orders for dinner event ${dinnerEventId}`, error)
     }
@@ -358,8 +358,11 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
     const {DinnerEventDisplaySchema} = useBookingValidation()
 
     try {
+        // Build where clause explicitly - field name must be specified
+        const whereClause = seasonId ? { seasonId: seasonId } : {}
+
         const dinnerEvents = await prisma.dinnerEvent.findMany({
-            where: seasonId ? {seasonId} : PrismaFromClient.skip,
+            where: whereClause,
             include: {
                 Season: true,
                 chef: true,

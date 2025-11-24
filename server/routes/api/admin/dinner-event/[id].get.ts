@@ -15,9 +15,10 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id!: number
+    let id: number
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        const params = await getValidatedRouterParams(event, idSchema.parse)
+        id = params.id
     } catch (error) {
         return throwH3Error('🍽️ > DINNER_EVENT > [GET] Input validation error', error)
     }

@@ -151,9 +151,9 @@
  * - EDIT mode: Inline DinnerModeSelector (responsive: horizontal desktop, vertical mobile, household mode only)
  * - Power mode for family-wide booking updates (household mode only)
  * - Total price calculation (household mode only)
+ * - Menu title/description inline editing with pencil icon (chef mode) ✅
  * - TODO: Add guest functionality (household mode)
  * - TODO: Ticket price selection dropdown (when multiple prices per type, household mode)
- * - TODO: Menu title/description inline editing (chef mode)
  * - TODO: Picture upload modal (chef mode)
  */
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -177,6 +177,7 @@ const emit = defineEmits<{
   updateAllBookings: [dinnerMode: string]
   addGuest: []
   updateAllergens: [allergenIds: number[]]
+  updateMenu: [data: { dinnerEventId: number, menuTitle: string, menuDescription: string }]
 }>()
 
 // Use allergies store for allergen data
@@ -216,12 +217,43 @@ watch(selectedAllergenIds, (newIds) => {
   draftAllergenIds.value = [...newIds]
 }, {immediate: true})
 
+// Draft state for menu editing (chef mode)
+const draftMenuTitle = ref('')
+const draftMenuDescription = ref('')
+const isEditingMenu = ref(false)
+
+// Initialize draft menu fields when dinner event changes
+watch(selectedDinnerEvent, (newEvent) => {
+  if (newEvent) {
+    draftMenuTitle.value = newEvent.menuTitle || ''
+    draftMenuDescription.value = newEvent.menuDescription || ''
+  }
+}, {immediate: true})
+
 // Design system
 const { BACKGROUNDS, TYPOGRAPHY, SIZES, COMPONENTS, ICONS } = useTheSlopeDesignSystem()
 
 // UI state for booking section
 const formMode = ref(FORM_MODES.VIEW)
 const isPowerModeActive = ref(false)
+
+// Handle menu save (emit to parent for API update)
+const handleMenuSave = () => {
+  if (!selectedDinnerEvent.value?.id) return
+  emit('updateMenu', {
+    dinnerEventId: selectedDinnerEvent.value.id,
+    menuTitle: draftMenuTitle.value,
+    menuDescription: draftMenuDescription.value
+  })
+  isEditingMenu.value = false
+}
+
+// Handle menu cancel
+const handleMenuCancel = () => {
+  draftMenuTitle.value = selectedDinnerEvent.value?.menuTitle || ''
+  draftMenuDescription.value = selectedDinnerEvent.value?.menuDescription || ''
+  isEditingMenu.value = false
+}
 
 // Draft state for editing
 const {DinnerModeSchema} = useBookingValidation()
@@ -345,12 +377,78 @@ const formattedDinnerDate = computed(() => {
         <UIcon :name="ICONS.calendar" class="w-3.5 h-3.5" />
         <span>{{ formattedDinnerDate }}</span>
       </div>
-      <!-- Menu title -->
-      <span class="text-white" data-testid="dinner-menu-title">{{ selectedDinnerEvent.menuTitle }}</span>
+
+      <!-- Menu title - VIEW mode (chef can edit, others read-only) -->
+      <div v-if="!isEditingMenu" class="flex items-center justify-center gap-2">
+        <span class="text-white" data-testid="dinner-menu-title">{{ selectedDinnerEvent.menuTitle }}</span>
+        <UButton
+          v-if="mode === 'chef' && canEditMenu"
+          :icon="ICONS.edit"
+          color="white"
+          variant="ghost"
+          size="xs"
+          name="edit-menu-title"
+          @click="isEditingMenu = true"
+        />
+      </div>
+
+      <!-- Menu title - EDIT mode (chef only) -->
+      <UFormField v-else>
+        <UInput
+          v-model="draftMenuTitle"
+          placeholder="Menu titel"
+          size="xl"
+          color="white"
+          variant="outline"
+          data-testid="dinner-menu-title-input"
+        />
+      </UFormField>
     </template>
 
     <template #description>
-      <span v-if="selectedDinnerEvent.menuDescription" class="text-white opacity-90">{{ selectedDinnerEvent.menuDescription }}</span>
+      <!-- Menu description - VIEW mode -->
+      <div v-if="!isEditingMenu">
+        <span v-if="selectedDinnerEvent.menuDescription" class="text-white opacity-90" data-testid="dinner-menu-description">
+          {{ selectedDinnerEvent.menuDescription }}
+        </span>
+      </div>
+
+      <!-- Menu description - EDIT mode (chef only) -->
+      <div v-else>
+        <UFormField>
+          <UInput
+            v-model="draftMenuDescription"
+            placeholder="Menu beskrivelse (valgfri)"
+            size="lg"
+            color="white"
+            variant="outline"
+            data-testid="dinner-menu-description-input"
+          />
+        </UFormField>
+
+        <!-- Save/Cancel buttons for menu editing -->
+        <div class="flex gap-2 justify-center mt-4">
+          <UButton
+            color="white"
+            variant="ghost"
+            :size="SIZES.standard.value"
+            name="cancel-menu-edit"
+            @click="handleMenuCancel"
+          >
+            Annuller
+          </UButton>
+          <UButton
+            color="white"
+            variant="solid"
+            :size="SIZES.standard.value"
+            icon="i-heroicons-check"
+            name="save-menu-edit"
+            @click="handleMenuSave"
+          >
+            Gem
+          </UButton>
+        </div>
+      </div>
     </template>
 
     <template #body>
