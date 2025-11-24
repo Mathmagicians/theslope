@@ -10,7 +10,6 @@ const {validatedBrowserContext, pollUntil} = testHelpers
 test.describe('Household tab navigation', () => {
     let householdId: number
     let shortName: string
-    let seasonId: number
 
     const tabs = [
         {name: 'Tilmeldinger', path: 'bookings', selector: '[data-test-id="household-bookings"]'},
@@ -50,8 +49,8 @@ test.describe('Household tab navigation', () => {
         const context = await validatedBrowserContext(browser)
 
         // Create active season (required for bookings tab component to render) - uses singleton to prevent parallel test conflicts
-        const season = await SeasonFactory.createActiveSeason(context, {holidays: []})
-        seasonId = season.id!
+        // NOTE: Singleton is cleaned up by global teardown, not by this test
+        await SeasonFactory.createActiveSeason(context, {holidays: []})
 
         // Create household
         const household = await HouseholdFactory.createHousehold(context, {name: 'TestHousehold-TabNav'})
@@ -65,9 +64,7 @@ test.describe('Household tab navigation', () => {
         if (householdId) {
             await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
         }
-        if (seasonId) {
-            await SeasonFactory.cleanupSeasons(context, [seasonId]).catch(() => {})
-        }
+        // NOTE: Singleton active season is cleaned up by global teardown, not here
     })
 
 

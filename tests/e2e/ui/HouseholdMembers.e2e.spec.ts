@@ -16,7 +16,6 @@ const {deserializeWeekDayMap} = useWeekDayMapValidation({
 
 test.describe('Household members display', () => {
     let householdId: number
-    let seasonId: number
     let shortName: string
     let babyId: number
     let donaldId: number
@@ -28,8 +27,8 @@ test.describe('Household members display', () => {
         const context = await validatedBrowserContext(browser)
 
         // Use singleton to prevent parallel test conflicts with active seasons
-        const season = await SeasonFactory.createActiveSeason(context)
-        seasonId = season.id!
+        // NOTE: Singleton is cleaned up by global teardown, not by this test
+        await SeasonFactory.createActiveSeason(context)
 
         const household = await HouseholdFactory.createHousehold(context, {name: 'MembersTest'})
         householdId = household.id
@@ -67,9 +66,7 @@ test.describe('Household members display', () => {
         if (householdId) {
             await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
         }
-        if (seasonId) {
-            await SeasonFactory.cleanupSeasons(context, [seasonId]).catch(() => {})
-        }
+        // NOTE: Singleton active season is cleaned up by global teardown, not here
     })
 
     test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {

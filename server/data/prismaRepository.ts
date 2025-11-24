@@ -868,7 +868,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                     deleteMany: {},  // Delete all existing ticket prices for this season
                     // Strip id and seasonId - Prisma auto-generates id and sets seasonId from relation
                     create: ticketPrices.map(({id, seasonId, ...price}) => price)
-                } : undefined
+                } : Prisma.skip
             },
             include: {
                 ticketPrices: true
@@ -1027,7 +1027,8 @@ export async function updateTeamAssignment(
             where: {id},
             data: {
                 ...restData,
-                affinity: affinity ? serializeWeekDayMap(affinity) : undefined
+                // Use Prisma.skip to omit field entirely when not being updated
+                affinity: affinity === undefined ? Prisma.skip : serializeWeekDayMap(affinity)
             },
             include: {
                 inhabitant: true
@@ -1297,7 +1298,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                 ...updateData,
                 // affinity already serialized by toPrismaUpdateData (string | null | undefined)
                 // undefined = omit from update, null = set to NULL, string = set value
-                ...(affinity !== undefined && {affinity}),
+                affinity: affinity === undefined ? Prisma.skip : affinity,
                 // Replace all assignments (delete existing, create new)
                 assignments: assignments?.length ? {
                     deleteMany: {},  // Delete all existing assignments for this team

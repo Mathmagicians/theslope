@@ -5,6 +5,18 @@ import type {UserDetail} from "~/composables/useCoreValidation"
 // list of endpoints that we want dont need to protect
 const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon"]
 
+/**
+ * Authentication Guard Middleware
+ *
+ * Protects routes from unauthorized access:
+ * - API routes (/api/*): Returns 401 Unauthorized error
+ * - Page routes: Redirects to /login with 302 status
+ *
+ * Unprotected routes:
+ * - / (home/landing page)
+ * - /login
+ * - /api/auth, /api/calendar/feed, /api/_auth, /api/_nuxt_icon
+ */
 export default defineEventHandler(async (event) => {
     const url = getRequestURL(event)
     const {pathname} = new URL(url)
@@ -19,10 +31,10 @@ export default defineEventHandler(async (event) => {
 
     console.info("🔒 > [GUARD] > Protected route: ", pathname)
 
-    // Check for user session - getUserSession returns null if no session exists
+    // Check for user session - getUserSession returns empty object if no session exists
     const session = await getUserSession(event)
 
-    if (!session) {
+    if (!session?.user) {
         // Handle API routes differently from page routes
         if (pathname.startsWith("/api/")) {
             // For API routes, return 401 Unauthorized
@@ -37,11 +49,6 @@ export default defineEventHandler(async (event) => {
     }
 
     // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
-    // Check if user exists in session before accessing properties
-    if (session.user) {
-        const user = session.user as UserDetail & {passwordHash: string}
-        console.info(`🔒 > [GUARD] > Available User session data: token - ${maskPassword(user.passwordHash)}, mail - ${user.email}, roles - ${user.systemRoles}`)
-    } else {
-        console.warn("🔒 > [GUARD] > Session exists but no user data available, pathname:", pathname)
-    }
+    const user = session.user as UserDetail & {passwordHash: string}
+    console.info(`🔒 > [GUARD] > Available User session data: token - ${maskPassword(user.passwordHash)}, mail - ${user.email}, roles - ${user.systemRoles}`)
 })

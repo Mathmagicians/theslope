@@ -21,10 +21,14 @@ publicPages.forEach(pageName => {
 })
 
 protectedPages.forEach(pageName => {
-    test(`All protected pages give 401 unauthorized error when not logged in - /${pageName}`, async ({page}) => {
+    test(`All protected pages redirect to login when not logged in - /${pageName}`, async ({page}) => {
         for (const pageName of protectedPages) {
-            const response = await page.goto(`/${pageName}`);
-            expect(response.status()).toBe(401)
+            // Navigate to protected page (Playwright automatically follows redirects)
+            const response = await page.goto(`/${pageName}`)
+
+            // Should redirect to /login and return 200 for login page
+            expect(page.url()).toContain('/login')
+            expect(response.status()).toBe(200)
         }
     })
 })

@@ -434,23 +434,33 @@ export class SeasonFactory {
 
     /**
      * Cleanup multiple seasons by ID (for test afterAll hooks)
-     * Automatically includes singleton active season if it exists
+     * NOTE: Does NOT delete singleton active season - that's cleaned up by global teardown
+     * Worker-safe: Filters out singleton by name (E2E_SINGLETON_NAME) not by ID
      * Gracefully handles 404 errors for already-deleted seasons
      */
     static readonly cleanupSeasons = async (
         context: BrowserContext,
         seasonIds: number[]
     ): Promise<void> => {
-        // Add active season to cleanup list if it exists
-        const allSeasonIds = this.activeSeason?.id
-            ? [...seasonIds, this.activeSeason.id]
-            : seasonIds
+        if (seasonIds.length === 0) return
 
-        if (allSeasonIds.length === 0) return
+        // Fetch all seasons to identify singleton by name (worker-safe)
+        const allSeasons = await this.getAllSeasons(context)
+        const singletonId = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)?.id
+
+        // Filter out singleton season ID if present
+        const filteredIds = seasonIds.filter(id => id !== singletonId)
+
+        if (filteredIds.length === 0) {
+            console.info('🌞 > SEASON_FACTORY > No seasons to cleanup (singleton excluded)')
+            return
+        }
+
+        console.info(`🌞 > SEASON_FACTORY > Cleaning up ${filteredIds.length} test season(s)`)
 
         // Delete all seasons in parallel
         await Promise.all(
-            allSeasonIds.map(async (id) => {
+            filteredIds.map(async (id) => {
                 try {
                     await this.deleteSeason(context, id)
                 } catch (error) {
@@ -458,12 +468,6 @@ export class SeasonFactory {
                 }
             })
         )
-
-        // Clear singleton cache
-        if (this.activeSeason) {
-            console.info('🌞 > SEASON_FACTORY > Cleared cached active season')
-            this.activeSeason = null
-        }
     }
 
     static readonly createSeasonWithTeams = async (

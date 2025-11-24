@@ -19,7 +19,6 @@ const {createDefaultWeekdayMap, createWeekDayMapFromSelection, deserializeWeekDa
 
 test.describe('HouseholdCard - Weekday Preferences', () => {
     let householdId: number
-    let seasonId: number
     let shortName: string
     let scroogeId: number
     const testSalt = temporaryAndRandom()
@@ -30,8 +29,8 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         const context = await validatedBrowserContext(browser)
 
         // Use singleton to prevent parallel test conflicts with active seasons
-        const season = await SeasonFactory.createActiveSeason(context)
-        seasonId = season.id!
+        // NOTE: Singleton is cleaned up by global teardown, not by this test
+        await SeasonFactory.createActiveSeason(context)
 
         const household = await HouseholdFactory.createHousehold(context, {
             name: salt('Duckburg', testSalt)
@@ -55,9 +54,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         if (householdId) {
             await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
         }
-        if (seasonId) {
-            await SeasonFactory.cleanupSeasons(context, [seasonId]).catch(() => {})
-        }
+        // NOTE: Singleton active season is cleaned up by global teardown, not here
     })
 
     test('GIVEN inhabitant with preferences WHEN editing via UI THEN changes persist and display correctly', async ({page, browser}) => {

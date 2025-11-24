@@ -2,6 +2,50 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-012: Prisma.skip for Optional Field Updates
+
+**Status:** Accepted | **Date:** 2025-11-24
+
+### Decision
+
+**Use `Prisma.skip` to omit optional fields from mutations** - Never pass explicit `undefined` to Prisma's `data` object in create/update/upsert operations.
+
+**Pattern:**
+```typescript
+// ✅ CORRECT - Use Prisma.skip
+await prisma.entity.update({
+  where: { id },
+  data: {
+    requiredField: value,
+    optionalField: field === undefined ? Prisma.skip : serializeField(field)
+  }
+})
+
+// ❌ INCORRECT - Explicit undefined causes runtime error
+await prisma.entity.update({
+  where: { id },
+  data: {
+    requiredField: value,
+    optionalField: field ? serializeField(field) : undefined  // ERROR!
+  }
+})
+```
+
+### Rationale
+
+1. **Prisma constraint**: Explicitly `undefined` values violate Prisma's type system
+2. **Intent clarity**: `Prisma.skip` explicitly means "omit this field from operation"
+3. **Null semantics**: Distinguishes between "don't update" (skip) vs "set to NULL" (null)
+
+### Compliance
+
+1. MUST use `Prisma.skip` (or `PrismaFromClient.skip`) when conditionally omitting fields
+2. MUST NOT use spread patterns like `...(condition && {field})` - use ternary with `Prisma.skip`
+3. Repository layer MUST handle all optional field serialization (ADR-010)
+4. `undefined` in `where` clauses is acceptable (means "no filter")
+
+---
+
 ## ADR-011: Booking System Schema Design
 
 **Status:** Accepted | **Date:** 2025-11-08
@@ -643,6 +687,7 @@ export class EntityFactory {
 
 - **E2E tests:** GIVEN/WHEN/THEN structure, use factories, cleanup in afterAll
 - **Factory methods:** `defaultEntity()`, `createEntity()`, `deleteEntity()`, `getEntity()`
+- **Singleton pattern:** Shared test data (e.g., active season) cleaned up by global teardown only
 
 ### Compliance
 
@@ -650,6 +695,8 @@ export class EntityFactory {
 2. Use Factory pattern in `/tests/e2e/testDataFactories/`
 3. Implement code only after tests are written
 4. Include cleanup using factories in `afterAll` blocks
+5. Singleton test data (shared across parallel tests) MUST be cleaned up by global teardown only
+6. Individual test `afterAll` hooks MUST NOT delete singleton test data
 
 ## ADR-002: Event Handler Error Handling and Validation Patterns
 
