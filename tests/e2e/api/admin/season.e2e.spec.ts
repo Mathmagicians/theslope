@@ -132,12 +132,16 @@ test.describe('Season API Tests', () => {
 
             const initialHolidayCount = newSeason.holidays?.length
 
-            const holidayStart = new Date(2025, 0, 3)
-            const holidayEnd = new Date(2025, 0, 4)
+            // Create holiday dates within the season's date range
+            const holidayStart = new Date(created.seasonDates.start)
+            holidayStart.setDate(holidayStart.getDate() + 1) // Day after season start
+            const holidayEnd = new Date(holidayStart)
+            holidayEnd.setDate(holidayEnd.getDate() + 1) // 2-day holiday
 
             const updatedData = {
                 ...newSeason,
                 id: seasonId,
+                seasonDates: created.seasonDates, // Use created season's dates
                 holidays: [
                     ...newSeason.holidays,
                     {

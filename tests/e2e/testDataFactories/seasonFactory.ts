@@ -21,12 +21,19 @@ const {CookingTeamDetailSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
-    static readonly today = new Date() // Current date for realistic deadline testing
+    // Pure dates (midnight) for serialization roundtrip stability
+    static readonly today = (() => {
+        const date = new Date()
+        date.setHours(0, 0, 0, 0)
+        return date
+    })() // Current date at midnight for realistic deadline testing
+
     static readonly oneWeekLater = (() => {
         const date = new Date()
         date.setDate(date.getDate() + 7)
+        date.setHours(0, 0, 0, 0)
         return date
-    })() // 7 days from today - short season for fast tests
+    })() // 7 days from today at midnight - short season for fast tests
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'

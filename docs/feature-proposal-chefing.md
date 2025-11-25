@@ -79,13 +79,7 @@ After assignment:
 - Body: `{ inhabitantId: number }`
 - Logic: Update dinnerEvent.chefId + create/update CookingTeamAssignment with role=CHEF
 
-**DinnerMenuHero Sub-components (Phase 5.2-5.4):**
-- ❌ `DinnerMenuContent` - Shared title/description display component
-- ❌ `DinnerAllergenSection` - Shared allergen display/editing component
-- ❌ `DinnerChefSection` - Chef-specific metadata (deadlines, budgets, inline editing, picture upload)
-- ❌ `DinnerBookingSection` - Household-specific booking form
-- ❌ Inline field saves (title, description, allergens)
-- ❌ Component tests for new shared components
+**Detail Panel Refactoring (Phase 6):** See Section 3 below for mockups and status table.
 
 **State Transitions:**
 - ❌ SCHEDULED → ANNOUNCED (announce menu)
@@ -213,96 +207,101 @@ interface Slots {
 - ✅ No duplication of UCard wrapper code
 - ✅ Easy to add new calendar pages (e.g., admin calendar)
 
-#### 3. DinnerMenuHero Refactoring (Phase 5)
+#### 3. DinnerMenuHero Refactoring (Phase 6)
 
-**Problem**: Single component handles two distinct use cases with different content needs:
-- **Household Mode**: Family bookings with power mode, total price
-- **Chef Mode**: Menu editing with deadlines, budgets, picture upload
+**Principle**: DinnerMenuHero = about the food (shared). Chef management = separate components.
 
-**Solution**: Composition with sub-components (keep orchestrator, extract sections)
+**Component Status**:
 
-**New Component Structure**:
+| Component | Location | Status | Work Needed |
+|-----------|----------|--------|-------------|
+| `DinnerMenuHero` | `dinner/` | ✅ Exists | Extract sub-components, add cancelled stripe |
+| `DinnerMenuContent` | `dinner/` | New | Title/description display+edit |
+| `DinnerAllergenSection` | `dinner/` | New | Allergen chips + edit modal |
+| `DinnerBookingForm` | `dinner/` | ✅ Exists | Already extracted, verify integration |
+| `ChefMenuCard` | `chef/` | ✅ Exists | Update: 5-step stepper (no AFLYST), deadlines, actions |
+| `DinnerStatusStepper` | `chef/` | ✅ Exists | Update: Remove AFLYST, add computed states |
+| `DinnerBudget` | `chef/` | ✅ Exists | Refactor: 3-box layout with expandable details |
+| `CookingTeamCard` | `cooking-team/` | ✅ Exists | Add volunteer buttons (move from hero) |
+
+---
+
+**DinnerMenuHero (Orchestrator)**
 ```
-DinnerMenuHero (orchestrator)
-├── DinnerMenuContent (shared: title, description, picture display)
-├── DinnerAllergenSection (shared: allergen display/editing)
-├── DinnerChefSection (chef-specific: deadlines, budgets, inline editing)
-└── DinnerBookingSection (household-specific: booking form, power mode)
-```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ UPageHero - Menu Photo or Mocha Gradient                                    │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ DinnerMenuContent                                                     │  │
+│  │ 📅 Fredag 24. januar 2025                                             │  │
+│  │ 🍝 SPAGHETTI CARBONARA  [✏️] ← chef can edit                          │  │
+│  │ Cremet pasta med bacon og parmesan                                    │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ DinnerAllergenSection                                                 │  │
+│  │ ALLERGENER: [🥛 Mælk] [🌾 Gluten] [🥚 Æg]   [REDIGER] ← chef only     │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ DinnerBookingSection (household mode ONLY)                            │  │
+│  │ [Voksen] 👤 Anna 🍽️  |  [Voksen] 👤 Bob 🛍️  |  Total: 90 kr         │  │
+│  │                           [ÆNDRE BOOKING]                             │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-**Component Responsibilities**:
-
-| Component | Responsibility | Used In |
-|-----------|---------------|---------|
-| **DinnerMenuHero** | Orchestrator - mode switching, UPageHero wrapper | Both modes |
-| **DinnerMenuContent** | Title, description, picture display | Both modes |
-| **DinnerAllergenSection** | Allergen display/editing (mode-aware) | Both modes |
-| **DinnerChefSection** | Deadlines, budgets, menu inline editing | Chef only |
-| **DinnerBookingSection** | Family bookings, power mode, total price | Household only |
-
-**Chef-Specific Content (DinnerChefSection)**:
-
-```vue
-<div class="border-t border-white/20 pt-4 space-y-2">
-  <!-- Deadlines (computed from dinner date + season settings) -->
-  <div class="flex items-center justify-between text-sm">
-    <span>📝 Menu due:</span>
-    <span class="font-semibold">3 days before (Jan 22)</span>
-  </div>
-  <div class="flex items-center justify-between text-sm">
-    <span>🛒 Shopping:</span>
-    <span class="font-semibold">1 day before (Jan 24)</span>
-  </div>
-
-  <!-- Budget (computed from season settings) -->
-  <div class="flex items-center justify-between text-sm">
-    <span>💰 Budget:</span>
-    <span class="font-semibold">500 kr (5 kr/portion avg.)</span>
-  </div>
-
-  <!-- Inline editing for menu fields -->
-  <UInput v-model="menuTitle" @blur="saveMenuTitle" />
-  <UTextarea v-model="menuDescription" @blur="saveMenuDescription" />
-</div>
+CANCELLED STATE: Red diagonal stripe overlay "AFLYST" (not in state stepper)
 ```
 
-**Deadlines Calculation**:
-```typescript
-// In DinnerChefSection or useChefDeadlines composable
-const metadata = computed(() => ({
-  deadlines: [
-    {
-      label: 'Menu due',
-      date: subDays(dinnerDate, season.ticketIsCancellableDaysBefore),
-      icon: '📝'
-    },
-    {
-      label: 'Shopping',
-      date: subDays(dinnerDate, 1),
-      icon: '🛒'
-    }
-  ],
-  budget: {
-    total: 500,  // From season settings or dynamic calculation
-    perPortion: 5,
-    icon: '💰'
-  }
-}))
+---
+
+**ChefMenuCard (State + Deadlines + Actions)**
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ADMINISTRER MIDDAGEN                                                     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
+│ PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                        │
+│    ▲                  LUKKET    DONE                                     │
+│                       (computed) (computed)                              │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ⚠️ Menu: Om 2 dage  |  ⚠️ Indkøb: Om 4 dage  |  ✅ Bestilling: Åben      │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [📢 ANNONCER MENU]                              [❌ AFLYS] (discrete)    │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits**:
-- ✅ DRY: Shared elements (title, allergens) extracted once
-- ✅ Focused: Each component has single responsibility
-- ✅ Testable: Can test booking and chef sections independently
-- ✅ Extensible: Easy to add new sections (e.g., "admin" mode)
-- ✅ Clean separation: Booking logic ≠ editing logic
-- ✅ Mobile-first: Each section optimizes independently
+---
 
-**Migration Path**:
-1. **Phase 5.1**: Extract `DinnerMenuContent` and `DinnerAllergenSection` (shared)
-2. **Phase 5.2**: Create `DinnerChefSection` with deadlines/budgets/inline editing
-3. **Phase 5.3**: Extract `DinnerBookingSection` from existing booking code
-4. **Phase 5.4**: Refactor `DinnerMenuHero` to orchestrate sub-components
+**DinnerBudget (3-Box Layout)**
+```
+┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
+│ 💰 INDTÆGTER       │  │ 🛒 RÅDIGHEDSBELØB  │  │ 🏠 KØKKENBIDRAG    │
+│     1.875 kr       │  │     1.781 kr       │  │       94 kr        │
+│  45 billetter      │  │   (inkl. moms)     │  │    5% af salg      │
+│      [▼]           │  │     1.425 kr       │  │      [▼]           │
+│                    │  │   (ex moms)  [▼]   │  │                    │
+└────────────────────┘  └────────────────────┘  └────────────────────┘
+
+Formula: Indtægter (no VAT) - Køkkenbidrag (5%) = Rådighedsbeløb
+         Rådighedsbeløb / 1.25 = ex moms (for grocery shopping)
+Config:  app.config.ts → useSeason: kitchenBaseRatePercent=5, vatPercent=25
+```
+
+---
+
+**CookingTeamCard (+ Volunteer Buttons)**
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ HVEM LAVER MADEN?                                                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│ 👨‍🍳 Chefkok: Anna Nielsen (DIG!)                                         │
+│ 👥 Kokke: Bob Jensen, Clara Hansen                                       │
+│ 🌱 Hjælpere: (ingen)                                                     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [👨‍🍳 BLIV CHEFKOK]  [👥 BLIV KOK]  [🌱 BLIV HJÆLPER]  ← mode='manage'   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
 ### Implementation Status
 
@@ -318,11 +317,14 @@ const metadata = computed(() => ({
 - **Eliminated**: ~100 lines of duplicate code
 - **Benefit**: Single source of truth for dinner detail panel structure
 
-**Next Steps (Phase 5)**:
-- [ ] Split DinnerMenuHero into sub-components (DinnerMenuContent, DinnerAllergenSection, DinnerChefSection, DinnerBookingSection)
-- [ ] Implement `useChefDeadlines()` composable for deadline calculations
-- [ ] Add component tests for all new shared components
-- [ ] Update E2E tests to verify pages still work after refactoring
+**Next Steps (Phase 6 - Detail Panel Refactoring)**:
+- [ ] Extract `DinnerMenuContent` and `DinnerAllergenSection` from DinnerMenuHero
+- [ ] Refactor `ChefMenuCard` with 5-step stepper (no AFLYST), deadlines, action buttons
+- [ ] Refactor `DinnerBudget` to 3-box layout with expandable details
+- [ ] Add volunteer buttons to `CookingTeamCard` (mode='manage')
+- [ ] Add config to `app.config.ts` (kitchenBaseRatePercent, vatPercent)
+- [ ] Add budget helpers to `useSeason`
+- [ ] Component tests for refactored components
 
 ---
 
