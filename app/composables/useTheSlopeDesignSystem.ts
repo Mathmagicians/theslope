@@ -1,4 +1,5 @@
-1
+import type {WeekDay} from '~/types/dateTypes'
+
 /**
  * Color System - TheSlope Design System
  *
@@ -44,20 +45,20 @@
  * ```
  */
 export const COLOR = {
-  // Semantic colors (standard NuxtUI)
-  primary: 'primary',       // Blue - main actions, links
-  secondary: 'secondary',   // Blue variant - secondary actions
+  // Semantic colors (mapped in app.config.ts → ui.colors)
+  primary: 'primary',       // Amber (mocha/brown) - brand color, use for non-hero contexts
+  secondary: 'secondary',   // Pink - secondary actions
   success: 'success',       // Green - success states, active
   error: 'error',           // Red - errors, cancellations
-  warning: 'warning',       // Amber - warnings, takeaway
-  info: 'info',             // Blue - information messages
-  neutral: 'neutral',       // Gray - neutral/disabled
+  warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
+  info: 'info',             // Violet - information messages
+  neutral: 'neutral',       // Sky - neutral/disabled
 
-  // Brand Pantone colors (custom)
-  mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025
+  // Brand Pantone colors (custom palettes in app.config.ts)
+  mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
   peach: 'peach',          // Warm, countdown timers
   pink: 'pink',            // Pink Lemonade - vibrant
-  orange: 'orange',        // Mandarin Orange - energetic
+  orange: 'orange',        // Mandarin Orange - energetic (same as warning)
   party: 'party',          // Party Punch - deep burgundy
   ocean: 'ocean',          // Ocean/Sky - cool blue
   winery: 'winery',        // Winery - deep red
@@ -435,10 +436,38 @@ export const TICKET_TYPE_COLORS = {
  * ```
  */
 export const ICONS = {
+  // Navigation & entities
   team: 'i-fluent-mdl2-team-favorite',
   calendar: 'i-heroicons-calendar',
   user: 'i-heroicons-user',
-  users: 'i-heroicons-users'
+  users: 'i-heroicons-users',
+
+  // Actions & feedback
+  edit: 'i-heroicons-pencil',
+  checkCircle: 'i-heroicons-check-circle',
+  megaphone: 'i-heroicons-megaphone',
+  exclamationCircle: 'i-heroicons-exclamation-circle',
+  xMark: 'i-heroicons-x-mark'
+} as const
+
+/**
+ * IMG - Image assets for brand logos and external services
+ *
+ * Use with UButton avatar prop or img src.
+ *
+ * @example
+ * ```vue
+ * <UButton :avatar="{ src: IMG.heynabo }" />
+ * <div :style="{ backgroundImage: `url(${IMG.defaultDinnerPicture})` }" />
+ * ```
+ */
+export const IMG = {
+  heynabo: '~/assets/heynabo.jpeg',
+  /**
+   * Default dinner picture for heroes without custom menu pictures
+   * Located in public/ folder (ADR-013), accessible from root URL
+   */
+  defaultDinnerPicture: '/fællesspisning_0.jpeg'
 } as const
 
 /**
@@ -719,6 +748,7 @@ export const useTheSlopeDesignSystem = () => {
     CHEF_CALENDAR,
     DEADLINE_BADGES,
     ICONS,
+    IMG,
 
     // Semantic design patterns (USE THESE!)
     TYPOGRAPHY,

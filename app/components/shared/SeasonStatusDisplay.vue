@@ -44,9 +44,7 @@ PAST SEASON:
 -->
 
 <script setup lang="ts">
-import type {Season} from '~/composables/useSeasonValidation'
 import {usePlanStore} from '~/stores/plan'
-
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 interface Props {
@@ -122,14 +120,6 @@ const alertConfig = computed(() => {
         title: `Fremtidig sæson ${emoji}`,
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
       }
-    case SEASON_STATUS.PAST:
-      return {
-        color: 'neutral' as const,
-        icon: 'i-heroicons-archive-box-solid',
-        variant: 'outline' as const,
-        title: `Arkiveret sæson ${emoji}`,
-        description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
-      }
     case SEASON_STATUS.CURRENT:
       return {
         color: 'success' as const,
@@ -137,6 +127,15 @@ const alertConfig = computed(() => {
         variant: 'outline' as const,
         title: `Inaktiv sæson ${emoji}`,
         description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
+      }
+    case SEASON_STATUS.PAST:
+    default:
+      return {
+        color: 'neutral' as const,
+        icon: 'i-heroicons-archive-box-solid',
+        variant: 'outline' as const,
+        title: `Arkiveret sæson ${emoji}`,
+        description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
       }
   }
 })

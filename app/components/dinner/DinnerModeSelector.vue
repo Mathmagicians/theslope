@@ -5,7 +5,7 @@
  * THE atomic component for dinner mode display - extracted from WeekDayMapDinnerModeDisplay
  * for DRY reuse across:
  * - Weekly preferences (WeekDayMapDinnerModeDisplay uses this 5 times)
- * - Single event booking (DinnerMenuHero booking rows)
+ * - Single event booking (ChefMenuCard booking rows)
  * - Table headers (weekday title badges)
  *
  * TITLE MODE (modelValue is WeekDay):
@@ -53,6 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: DinnerMode.NONE, // Default when no order exists
   formMode: FORM_MODES.VIEW,
   disabled: false,
+  name: 'dinner-mode-selector',
   showLabel: false,
   size: 'md'
 })

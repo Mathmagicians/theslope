@@ -45,7 +45,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         ({ id } = await getValidatedRouterParams(event, idSchema.parse))
         allergenData = await readValidatedBody(event, UpdateAllergensSchema.parse)
     } catch (error) {
-        return throwH3Error(PREFIX, 'Input validation error', error)
+        return throwH3Error(`${PREFIX}Input validation error`, error, 400)
     }
 
     // Business logic try-catch
@@ -58,6 +58,6 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         setResponseStatus(event, 200)
         return updatedDinner
     } catch (error) {
-        return throwH3Error(PREFIX, `Error updating allergens for dinner event ${id}`, error)
+        return throwH3Error(`${PREFIX}Error updating allergens for dinner event ${id}`, error)
     }
 })

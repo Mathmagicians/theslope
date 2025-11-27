@@ -2,6 +2,69 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-013: External System Integration Pattern
+
+**Status:** Accepted | **Date:** 2025-01-30
+**Updated:** 2025-11-26 (Heynabo API specifics, credential separation)
+
+### Decision
+
+**TheSlope is source of truth; external systems are sync targets.**
+
+| Principle | Rule |
+|-----------|------|
+| **Ownership** | Chef operations use user's token; admin operations use system credentials |
+| **Sync Direction** | Push on state change; lazy fetch for inbound data |
+| **Idempotency** | Store external system IDs (e.g., `heynaboEventId`) to prevent duplicates |
+| **Error Handling** | Chef ops: fail and show error. Admin ops: best-effort (warn, don't fail) |
+| **Logging** | Log external API failures with full context (ADR-004) |
+
+### Heynabo API Specifics (verified 2025-11-26)
+
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| POST | `/members/events/` | ✅ Create event |
+| GET | `/members/events/` | ✅ List events |
+| GET | `/members/events/{id}` | ✅ Get single event |
+| **PATCH** | `/members/events/{id}` | ✅ Update event (partial) |
+| DELETE | `/members/events/{id}` | ✅ Delete event |
+| POST | `/members/events/{id}/files` | ✅ Upload image (FormData with `file` field) |
+| PUT | `/members/events/{id}` | ❌ 501 Not Implemented |
+
+**Important:** Heynabo uses American spelling `CANCELED` (one L), not `CANCELLED`.
+
+### Default Event Pictures
+
+Default dinner pictures are stored in `public/` (Nuxt static assets) and uploaded to Heynabo on announce:
+
+| File | Location | Access |
+|------|----------|--------|
+| `fællesspisning_0.jpeg` | `public/` | Root URL (`/fællesspisning_0.jpeg`) |
+| `fællesspisning_1.jpeg` | `public/` | Root URL (`/fællesspisning_1.jpeg`) |
+
+**Pattern:** Random rotation via `getRandomDefaultDinnerPicture()` in `heynaboClient.ts`. Image upload is non-blocking (warn on failure, don't fail announce).
+
+### Credential Separation
+
+| Operation | Credentials | Rationale |
+|-----------|-------------|-----------|
+| Chef announce/cancel | User's Heynabo token | User owns event in Heynabo |
+| Admin update/delete | System credentials | Admin may not have chef's token |
+
+### Compliance
+
+1. External IDs MUST be nullable fields on domain entities
+2. Chef sync operations MUST use user's session token
+3. Admin sync operations MUST use system credentials (best-effort, warn on failure)
+4. External failures on chef operations MUST return error to user
+5. External failures on admin operations MUST NOT block local state changes
+6. Inbound sync MUST be lazy (on fetch, not scheduled)
+7. Heynabo updates MUST use PATCH (not PUT)
+8. Image uploads MUST be non-blocking (warn on failure, don't fail parent operation)
+9. Static assets for external upload MUST be in `public/` directory (Nuxt convention)
+
+---
+
 ## ADR-012: Prisma.skip for Optional Field Updates
 
 **Status:** Accepted | **Date:** 2025-11-24

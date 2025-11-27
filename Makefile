@@ -126,7 +126,26 @@ heynabo-get-admin:
 	@curl $(HEY_NABO_API)/admin/users/154 -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
 
 heynabo-post-event:
-	curl -v "$(HEY_NABO_API)/members/events/" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d "@docs/heynabo.json"
+	curl -v "$(HEY_NABO_API)/members/events/" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d "@docs/heynabo_api_samples/heynabo.json"
+
+# HEYNABO EVENT API (verified 2025-11-26) - Usage: EVENT_ID=123 make heynabo-get-event
+heynabo-get-event:
+	@curl -s "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
+
+heynabo-patch-event:
+	@curl -s -X PATCH "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d '{"status": "CANCELED"}' | jq
+
+heynabo-delete-event:
+	@curl -s -X DELETE "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
+
+# Upload image to Heynabo event - Usage: EVENT_ID=123 make heynabo-upload-image
+heynabo-upload-image:
+	@curl -v -X POST "$(HEY_NABO_API)/members/events/$(EVENT_ID)/files" \
+		-H "Authorization: Bearer $(HEY_TOKEN)" \
+		-F "file=@public/fællesspisning_0.jpeg"
+
+heynabo-get-events:
+	@curl -s "$(HEY_NABO_API)/members/events/" -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
 
 #logs into heynabo (-i show headers, -s silent, -d implies POST and sends data, -c saves the session cookie into .cookies.txt
 theslope-login:

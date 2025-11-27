@@ -387,8 +387,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
 export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDetail | null> {
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema, deserializeDinnerEvent} = useBookingValidation()
-    const {deserializeCookingTeam} = useCookingTeamValidation()
+    const {DinnerEventDetailSchema, deserializeDinnerEventDetail} = useBookingValidation()
 
     try {
         const dinnerEvent = await prisma.dinnerEvent.findFirst({
@@ -443,15 +442,15 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                 }
             }))
 
-            // Deserialize dinner event (transform allergens from join table - ADR-010)
-            const deserializedEvent = deserializeDinnerEvent(dinnerEvent)
-
-            // Deserialize cookingTeam if present (affinity JSON string -> WeekDayMap object)
-            const dinnerEventToValidate = {
-                ...deserializedEvent,
-                tickets: transformedTickets,
-                cookingTeam: dinnerEvent.cookingTeam ? deserializeCookingTeam(dinnerEvent.cookingTeam) : null
-            }
+            // ADR-010: Deserialize all nested relations with JSON string fields
+            // - allergens: flatten join table
+            // - chef: Inhabitant with dinnerPreferences JSON string
+            // - cookingTeam: CookingTeam with affinity and assignments JSON strings
+            // - tickets: Order with nested inhabitant's dinnerPreferences
+            const dinnerEventToValidate = deserializeDinnerEventDetail({
+                ...dinnerEvent,
+                tickets: transformedTickets
+            })
 
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
             return DinnerEventDetailSchema.parse(dinnerEventToValidate)
@@ -467,8 +466,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEventDetail> {
     console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
-    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {DinnerEventDetailSchema, deserializeDinnerEventDetail} = useBookingValidation()
 
     // Exclude relation fields that Prisma doesn't accept in update data
     const {allergens, ...updateData} = dinnerEventData
@@ -493,15 +491,23 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                             select: {dinners: true}
                         }
                     }
+                },
+                tickets: {
+                    include: {
+                        inhabitant: true,
+                        ticketPrice: true
+                    }
+                },
+                allergens: {
+                    include: {
+                        allergyType: true
+                    }
                 }
             }
         })
 
-        // Deserialize cookingTeam if present (affinity JSON string -> WeekDayMap object)
-        const dinnerEventToValidate = {
-            ...updatedDinnerEvent,
-            cookingTeam: updatedDinnerEvent.cookingTeam ? deserializeCookingTeamDetail(updatedDinnerEvent.cookingTeam) : null
-        }
+        // ADR-010: Deserialize all nested JSON string fields (chef.dinnerPreferences, cookingTeam.affinity, ticket.inhabitant.dinnerPreferences)
+        const dinnerEventToValidate = deserializeDinnerEventDetail(updatedDinnerEvent)
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)
         return DinnerEventDetailSchema.parse(dinnerEventToValidate)

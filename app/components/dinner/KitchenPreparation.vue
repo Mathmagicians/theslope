@@ -32,7 +32,7 @@ import type {OrderDetail} from '~/composables/useBookingValidation'
 // Import DinnerMode from validation composable (ADR-001)
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
-const TicketType = TicketTypeSchema.enum
+const _TicketType = TicketTypeSchema.enum
 
 // Extended order detail for mock data (diningMode will come from inhabitant preferences in real implementation)
 interface OrderDetailWithDiningMode extends OrderDetail {
@@ -41,7 +41,7 @@ interface OrderDetailWithDiningMode extends OrderDetail {
 }
 
 // Statistics for one dining mode
-interface DiningModeStats {
+interface _DiningModeStats {
   key: typeof DinnerMode[keyof typeof DinnerMode] | 'RELEASED'
   label: string
   percentage: number
@@ -53,8 +53,8 @@ interface DiningModeStats {
 }
 
 // Ticket price breakdown (dynamic, not hardcoded)
-interface TicketPriceBreakdown {
-  ticketType: typeof TicketType[keyof typeof TicketType]
+interface _TicketPriceBreakdown {
+  ticketType: typeof _TicketType[keyof typeof _TicketType]
   description: string
   count: number
   portions: number
@@ -79,10 +79,9 @@ const ticketTypeGroups = computed(() => groupByTicketType(activeOrders.value))
 // Calculate total portions using business logic (dynamic based on ticket prices)
 const totalPortions = computed(() => calculateTotalPortionsFromPrices(activeOrders.value))
 
-// Calculate dining mode statistics
+// Calculate dining mode statistics - always returns all modes with fallback 0 values
 const diningModeStats = computed(() => {
-  const total = props.orders.length
-  if (total === 0) return []
+  const total = props.orders.length || 1 // Avoid division by zero, use 1 as divisor for empty
 
   // Active dining modes (people eating)
   const modes = [DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.DINEINLATE]
@@ -122,23 +121,26 @@ const diningModeStats = computed(() => {
         return acc
       }, [] as Array<{ icon: string; name: string; portions: number }>)
 
+    // Calculate percentage (0 if no orders)
+    const percentage = props.orders.length > 0 ? Math.round((count / total) * 100) : 0
+
     return {
       key: mode,
       label: labels[mode],
-      percentage: Math.round((count / total) * 100),
+      percentage,
       count,
       portions: Math.round(portions),
       chairs,
       plates,
       allergies
     }
-  }).filter(stat => stat.count > 0)
+  })
 
   // Add released tickets panel if any exist (rightmost panel for tickets for sale)
   if (releasedOrders.value.length > 0) {
     const count = releasedOrders.value.length
     stats.push({
-      key: 'RELEASED' as any,
+      key: 'RELEASED' as const,
       label: 'TIL SALG',
       percentage: Math.round((count / total) * 100),
       count,
@@ -153,12 +155,27 @@ const diningModeStats = computed(() => {
 })
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
   return getKitchenPanelClasses(key as 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED')
 }
+
+// Normalize percentages: minimum 10% each, sum always equals 100%
+const normalizedWidths = computed(() => {
+  const MIN_WIDTH = 10
+  const stats = diningModeStats.value
+  if (stats.length === 0) return {}
+
+  // Apply minimum, track how much we've used
+  const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, MIN_WIDTH) }))
+  const total = withMin.reduce((sum, s) => sum + s.width, 0)
+
+  // Scale to 100% if needed
+  const scale = total > 0 ? 100 / total : 1
+  return Object.fromEntries(withMin.map(s => [s.key, s.width * scale]))
+})
 </script>
 
 <template>
@@ -181,12 +198,12 @@ const getModeClasses = (key: string) => {
       </div>
     </div>
 
-    <!-- Bottom bar: Dining mode distribution - Proportional widths -->
+    <!-- Bottom bar: Dining mode distribution - Proportional widths (min 10%, sum 100%) -->
     <div class="flex overflow-hidden">
       <div
         v-for="mode in diningModeStats"
         :key="mode.key"
-        :style="{ width: `${mode.percentage}%` }"
+        :style="{ width: `${normalizedWidths[mode.key]}%` }"
         class="border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border"
         :class="getModeClasses(mode.key)"
       >

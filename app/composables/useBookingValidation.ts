@@ -4,7 +4,7 @@ import {
     OrderStateSchema,
     DinnerStateSchema,
     DinnerModeSchema,
-    TicketPriceSchema,
+    TicketPriceSchema as _TicketPriceSchema,
     RoleSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -25,8 +25,8 @@ export const OrderState = OrderStateSchema.enum
  * - Detail ALWAYS EXTENDS Display
  */
 export const useBookingValidation = () => {
-    const {CookingTeamDisplaySchema} = useCookingTeamValidation()
-    const {InhabitantDisplaySchema} = useCoreValidation()
+    const {CookingTeamDisplaySchema, deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
@@ -78,10 +78,9 @@ export const useBookingValidation = () => {
 
     /**
      * DinnerEvent Update - For API input validation (POST /api/admin/dinner-event/[id])
+     * Note: id is optional in body since it comes from URL path
      */
-    const DinnerEventUpdateSchema = DinnerEventCreateSchema.partial().extend({
-        id: z.number().int().positive()
-    })
+    const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
 
     // ============================================================================
     // ORDER
@@ -101,7 +100,7 @@ export const useBookingValidation = () => {
         updatedAt: z.coerce.date()
     })
 
-    const OrderRelationsOnlySchema = z.object({
+    const _OrderRelationsOnlySchema = z.object({
         chef: InhabitantDisplaySchema.nullable(),
         cookingTeam: CookingTeamDisplaySchema.nullable(),
         tickets: z.array(z.lazy(() => OrderDetailSchema)).optional()
@@ -276,14 +275,99 @@ export const useBookingValidation = () => {
 
     /**
      * Transform DinnerEvent from Prisma format to domain format (ADR-010)
-     * Handles join table flattening for allergens
+     * Handles join table flattening for allergens only (for Display schema)
      */
-    function deserializeDinnerEvent(prismaEvent: any): any {
+    function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): Record<string, unknown> {
+        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
         return {
             ...prismaEvent,
-            allergens: prismaEvent.allergens ? prismaEvent.allergens.map((a: any) => a.allergyType) : []
+            allergens: allergens ? allergens.map((a) => a.allergyType) : []
         }
     }
+
+    /**
+     * Transform DinnerEventDetail from Prisma format to domain format (ADR-010)
+     * Handles all nested relations:
+     * - allergens: Flatten join table to array of AllergyType
+     * - chef: Deserialize Inhabitant with dinnerPreferences JSON string
+     * - cookingTeam: Deserialize CookingTeam with affinity and assignments
+     * - tickets: Deserialize Order with nested inhabitant's dinnerPreferences
+     */
+    function deserializeDinnerEventDetail(prismaEvent: Record<string, unknown>): Record<string, unknown> {
+        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
+        const chef = prismaEvent.chef as Record<string, unknown> | null | undefined
+        const cookingTeam = prismaEvent.cookingTeam as Record<string, unknown> | null | undefined
+        const tickets = prismaEvent.tickets as Array<Record<string, unknown>> | undefined
+
+        return {
+            ...prismaEvent,
+            allergens: allergens ? allergens.map((a) => a.allergyType) : [],
+            chef: chef ? deserializeInhabitantDisplay(chef) : null,
+            cookingTeam: cookingTeam ? deserializeCookingTeamDetail(cookingTeam) : null,
+            tickets: tickets?.map(ticket => ({
+                ...ticket,
+                inhabitant: ticket.inhabitant
+                    ? deserializeInhabitantDisplay(ticket.inhabitant as Record<string, unknown>)
+                    : ticket.inhabitant
+            })) ?? []
+        }
+    }
+
+    // ============================================================================
+    // HEYNABO EVENT SYNC (ADR-013)
+    // ============================================================================
+
+    /**
+     * Heynabo event price structure
+     */
+    const HeynaboEventPriceSchema = z.object({
+        adult: z.number().int().min(0),
+        child: z.number().int().min(0),
+        taxIncluded: z.boolean()
+    })
+
+    /**
+     * Heynabo event status - maps to their API
+     * NOTE: Heynabo uses American spelling "CANCELED" (one L) per ADR-013
+     */
+    const HeynaboEventStatusSchema = z.enum(['PUBLISHED', 'DRAFT', 'CANCELED'])
+
+    /**
+     * Schema for creating/updating a Heynabo event (outgoing payload)
+     * Based on Heynabo API structure from docs/heynabo_api_samples/heynabo.json
+     */
+    const HeynaboEventCreateSchema = z.object({
+        name: z.string().max(200),
+        type: z.string().nullable(),
+        description: z.string().max(2000),
+        start: z.string(), // ISO 8601 datetime with timezone
+        end: z.string(),   // ISO 8601 datetime with timezone
+        status: HeynaboEventStatusSchema,
+        groupId: z.number().int().positive().nullable(),
+        price: HeynaboEventPriceSchema,
+        public: z.boolean(),
+        locationText: z.string().max(100),
+        locationId: z.number().int().positive().nullable(),
+        minParticipants: z.number().int().positive().nullable(),
+        maxParticipants: z.number().int().positive().nullable(),
+        guestsAllowed: z.boolean(),
+        takeAwayAllowed: z.boolean(),
+        vegetarian: z.boolean(),
+        commentsAllowed: z.boolean(),
+        visibleToEveryone: z.boolean()
+    })
+
+    /**
+     * Schema for Heynabo event response (incoming from API)
+     * Note: API returns id as string, some fields may be omitted
+     */
+    const HeynaboEventResponseSchema = z.object({
+        id: z.coerce.number().int().positive(),
+        name: z.string().optional(),
+        imageUrl: z.string().url().nullable().optional(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional()
+    })
 
     return {
         // Enums
@@ -316,8 +400,14 @@ export const useBookingValidation = () => {
         serializeOrderHistory,
         deserializeOrderHistory,
 
-        // Transformation
-        deserializeDinnerEvent
+        // Transformation (ADR-010)
+        deserializeDinnerEvent,
+        deserializeDinnerEventDetail,
+
+        // Heynabo Event Sync (ADR-013)
+        HeynaboEventCreateSchema,
+        HeynaboEventResponseSchema,
+        HeynaboEventStatusSchema
     }
 }
 
@@ -348,3 +438,8 @@ export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQ
 export type OrderHistory = z.infer<ReturnType<typeof useBookingValidation>['OrderHistorySchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>
 export type SerializedOrderHistory = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistorySchema']>
+
+// Heynabo Event Sync (ADR-013)
+export type HeynaboEventCreate = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventCreateSchema']>
+export type HeynaboEventResponse = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventResponseSchema']>
+export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventStatusSchema']>

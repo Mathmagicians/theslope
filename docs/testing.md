@@ -514,20 +514,98 @@ await doScreenshot(page, 'admin/admin-planning-loaded', true)
 - Debug screenshots help troubleshoot failing tests (temporary)
 - Documentation screenshots capture UI state for README/docs (permanent)
 
+#### Waiting for Store/Component Readiness
+
+**CRITICAL**: API response ≠ Component ready. The store needs time to process data and Vue needs to re-render.
+
+**Pattern 1: Pages with Loaders (planning, teams tabs)**
+
+Some tabs show a `<Loader>` until the store is ready. The `data-test-id` element only renders AFTER the Loader disappears.
+
+```typescript
+// ✅ CORRECT: Wait for API, then wait for Loader to disappear
+const responsePromise = page.waitForResponse(
+    (response) => response.url().match(/\/api\/admin\/season\/\d+$/),  // Detail endpoint
+    {timeout: 10000}
+)
+await page.goto(`/admin/planning`)
+const response = await responsePromise
+expect(response.status()).toBe(200)
+
+// Wait for Loader text to disappear (store is processing)
+await pollUntil(
+    async () => await page.locator('text=Vi venter på data').isVisible(),
+    (isVisible) => !isVisible,
+    10
+)
+
+// NOW check for the component
+await expect(page.locator('[data-test-id="admin-planning"]')).toBeVisible()
+```
+
+**Pattern 2: Paginated tables**
+
+Tables may show "No data" or a loading state before data arrives. Don't wait for specific row counts - be resilient to different data volumes.
+
+```typescript
+// ✅ CORRECT: Wait for loading to complete, not specific data
+// Check component's custom empty state text (look in the component!)
+await pollUntil(
+    async () => {
+        // Either data rows appear OR custom empty state shows
+        const hasEmptyState = await page.getByText('Ingen er flyttet ind i appen endnu').count() > 0
+        const hasDataRows = await page.locator('[data-test-id="admin-households"] tbody tr td').count() > 1
+        return hasEmptyState || hasDataRows
+    },
+    (ready) => ready,
+    10
+)
+
+// ❌ WRONG: Assumes specific row count
+await pollUntil(
+    async () => await page.locator('tbody tr').count(),
+    (count) => count > 5,  // What if CI only has 1 row?
+    10
+)
+```
+
+**Key insight**: Always check the component's actual empty state text - don't assume "No data". NuxtUI's default may differ from custom `#empty-state` templates.
+
 #### Playwright Best Practices
 
 **❌ AVOID: `waitForLoadState('networkidle')`** - Flaky and slow
 
-**✅ USE: `page.waitForResponse()` for API data loading**
+**✅ USE: `page.waitForResponse()` BEFORE navigation**
 
 ```typescript
-// ✅ Wait for specific API response
-await page.goto('/admin/teams?mode=edit')
-await page.waitForResponse(
-  (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-  { timeout: 10000 }
+// ✅ Setup response wait BEFORE goto to catch the API call
+const responsePromise = page.waitForResponse(
+    (response) => response.url().match(/\/api\/admin\/season\/\d+$/),
+    {timeout: 10000}
 )
-await selectDropdownOption(page, 'season-selector', season.shortName)
+await page.goto('/admin/planning')
+const response = await responsePromise
+expect(response.status()).toBe(200)  // Assert status, don't filter by it
+```
+
+**❌ WRONG: Filter by status in waitForResponse**
+```typescript
+// This times out silently if status isn't 200
+await page.waitForResponse(
+    (response) => response.url().includes('/api/admin/season') && response.status() === 200,
+    {timeout: 10000}
+)
+```
+
+**✅ CORRECT: Match URL only, assert status separately**
+```typescript
+const responsePromise = page.waitForResponse(
+    (response) => response.url().includes('/api/admin/season'),
+    {timeout: 10000}
+)
+await page.goto(url)
+const response = await responsePromise
+expect(response.status()).toBe(200)  // Clear error if status wrong
 ```
 
 **✅ USE: URL parameters + explicit waits**

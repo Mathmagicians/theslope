@@ -23,9 +23,9 @@ const filteredHouseholds = computed(() => {
     household.address?.toLowerCase().includes(query) ||
     household.shortName?.toLowerCase().includes(query) ||
     household.name?.toLowerCase().includes(query) ||
-    household.inhabitants?.some((i: any) =>
-      i.name?.toLowerCase().includes(query) ||
-      i.lastName?.toLowerCase().includes(query)
+    household.inhabitants?.some((inhabitant) =>
+      inhabitant.name?.toLowerCase().includes(query) ||
+      inhabitant.lastName?.toLowerCase().includes(query)
     )
   )
 })
@@ -56,7 +56,7 @@ const pagination = ref({
   pageSize: 10
 })
 
-const table = useTemplateRef<any>('table')
+const _table = useTemplateRef<{ tableApi?: { getState(): { pagination: { pageIndex: number; pageSize: number } }; setPageIndex(index: number): void } }>('table')
 </script>
 
 <template>
@@ -88,12 +88,12 @@ class="w-full px-0"
       <!-- Pagination -->
       <UPagination
           v-if="filteredHouseholds.length > pagination.pageSize"
-          :default-page="((table as any)?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="(table as any)?.tableApi?.getState().pagination.pageSize"
+          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
           :total="filteredHouseholds.length"
           :size="SIZES.standard.value.value"
           :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p: number) => (table as any)?.tableApi?.setPageIndex(p - 1)"
+          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
       />
     </div>
 

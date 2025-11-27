@@ -1,4 +1,4 @@
-import {useCookingTeamValidation, type CookingTeam} from './useCookingTeamValidation'
+import {useCookingTeamValidation, type CookingTeamDisplay} from './useCookingTeamValidation'
 import type Badge from '#ui/components/Badge.vue'
 
 const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary',  'caramel'] as const
@@ -23,8 +23,8 @@ export const useCookingTeam = () => {
         seasonId: number,
         seasonShortName: string,
         teamNumber: number = 1,
-        overrides?: Partial<CookingTeam>
-    ): CookingTeam => {
+        overrides?: Partial<CookingTeamDisplay>
+    ): CookingTeamDisplay => {
         return {
             seasonId,
             name: createDefaultTeamName(seasonShortName, teamNumber),

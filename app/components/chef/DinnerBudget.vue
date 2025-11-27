@@ -2,9 +2,37 @@
 /**
  * DinnerBudget - Financial overview for dinner event
  *
- * Two display modes:
- * - compact: Just result (💰 +450 kr ✅) for TeamRoleStatus
- * - full: Detailed breakdown for DinnerMenuHero
+ * Compact mode (in ChefMenuCard summary line):
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ 💰 1.781 kr                                                              │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * Full mode (expanded - 3-box with expandable table):
+ * ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
+ * │ 💰 INDTÆGTER       │  │ 🛒 RÅDIGHEDSBELØB  │  │ 🏠 KØKKENBIDRAG    │
+ * │     1.875 kr       │  │     1.781 kr       │  │       94 kr        │
+ * │  (45 billetter)    │  │   (inkl. moms)     │  │    (5% af salg)    │
+ * └────────────────────┘  └────────────────────┘  └────────────────────┘
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ DETALJER                                                            [▲] │
+ * ├──────────────────────────────────────────────────────────────────────────┤
+ * │ Billettype        │ Antal │ Stk pris │ Total                            │
+ * │ Voksen            │    30 │   50 kr  │ 1.500 kr                         │
+ * │ Barn              │    12 │   25 kr  │   300 kr                         │
+ * │ Baby              │     3 │    0 kr  │     0 kr                         │
+ * ├──────────────────────────────────────────────────────────────────────────┤
+ * │ Indtægter (inkl. moms)                              1.875 kr            │
+ * │ Køkkenbidrag (5%)                                    -94 kr             │
+ * │ Rådighedsbeløb (inkl. moms)                        1.781 kr             │
+ * │ Rådighedsbeløb (ex moms /1.25)                     1.425 kr ← indkøb    │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * Formula: Indtægter - Køkkenbidrag (5%) = Rådighedsbeløb
+ *          Rådighedsbeløb / 1.25 = ex moms (for grocery shopping)
+ * Config:  app.config.ts → theslope.kitchen.baseRatePercent=5, vatPercent=25
+ *
+ * Used in:
+ * - ChefMenuCard (compact: summary, full: expanded details)
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables
@@ -15,28 +43,29 @@ import type { OrderDetail } from '~/composables/useBookingValidation'
 
 interface Props {
   orders: OrderDetail[]
-  totalCost: number
   mode?: 'compact' | 'full'
-  editable?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'compact',
-  editable: false
+  mode: 'compact'
 })
 
-const emit = defineEmits<{
-  'update:totalCost': [value: number]
-}>()
-
 // Design system
-const { COLOR, SIZES, TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, TYPOGRAPHY, BACKGROUNDS } = useTheSlopeDesignSystem()
+
+// Kitchen config from app.config.ts
+const appConfig = useAppConfig()
+const kitchenBaseRatePercent = appConfig.theslope?.kitchen?.baseRatePercent ?? 5
+const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 
 // Business logic from useOrder
 const { getActiveOrders, groupByTicketType } = useOrder()
 
 // Price formatting utility
 const { formatPrice } = usePriceFormat()
+
+// Expandable details state
+const showDetails = ref(false)
 
 // Active orders (excluding RELEASED)
 const activeOrders = computed(() => getActiveOrders(props.orders))
@@ -52,152 +81,149 @@ const revenueByType = computed(() => {
   }))
 })
 
-// Totals
+// 3-box calculations (all default to 0 when no orders)
 const totalRevenue = computed(() => activeOrders.value.reduce((sum, o) => sum + o.priceAtBooking, 0))
-const balance = computed(() => totalRevenue.value - props.totalCost)
-const isProfit = computed(() => balance.value >= 0)
+const kitchenContribution = computed(() => Math.round(totalRevenue.value * kitchenBaseRatePercent / 100))
+const availableBudget = computed(() => totalRevenue.value - kitchenContribution.value)
+const availableBudgetExVat = computed(() => Math.round(availableBudget.value / (1 + vatPercent / 100)))
 
-// Budget status for UI
-const budgetStatus = computed(() => ({
-  color: isProfit.value ? COLOR.success : COLOR.error,
-  label: isProfit.value ? 'Overskud' : 'Underskud',
-  emoji: isProfit.value ? '✅' : '❌',
-  prefix: isProfit.value ? '+' : ''
-}))
-
-// Editable cost state
-const localCost = ref(props.totalCost / 100) // Store in kr for input
-watch(() => props.totalCost, (val) => { localCost.value = val / 100 })
-const saveCost = () => emit('update:totalCost', localCost.value * 100)
+// Ticket count
+const ticketCount = computed(() => activeOrders.value.length)
 </script>
 
 <template>
   <!-- Compact Mode -->
   <div v-if="mode === 'compact'" :class="`inline-flex items-center gap-1 ${TYPOGRAPHY.body}`">
     <span>💰</span>
-    <span v-if="!activeOrders.length" class="text-neutral-500">
-      0 kr (ingen salg)
-    </span>
-    <span v-else :class="['font-medium', isProfit ? 'text-success' : 'text-error']">
-      {{ budgetStatus.prefix }}{{ formatPrice(balance) }} kr {{ budgetStatus.emoji }}
-    </span>
+    <span class="font-medium">{{ formatPrice(availableBudget) }} kr</span>
   </div>
 
-  <!-- Full Mode -->
-  <UCard v-else :ui="{ body: { padding: LAYOUTS.cardPadding } }">
-    <!-- Revenue -->
-    <div class="space-y-3">
-      <div :class="`flex items-center gap-2 ${TYPOGRAPHY.cardTitle}`">
-        <span>💰</span>
-        <span>Indtægter (Billetsalg)</span>
-      </div>
-
-      <div v-if="!activeOrders.length" :class="`${TYPOGRAPHY.body} text-neutral-500 italic py-2`">
-        Ingen billetter solgt endnu
-      </div>
-
-      <div v-else class="space-y-2">
-        <div
-          v-for="group in revenueByType"
-          :key="group.ticketType"
-          :class="`flex justify-between ${TYPOGRAPHY.body}`"
-        >
-          <span class="text-neutral-600 dark:text-neutral-400">
-            {{ group.ticketType }}: <span class="font-medium">{{ group.count }} × {{ formatPrice(group.unitPrice) }} kr</span>
-          </span>
-          <span class="font-medium">{{ formatPrice(group.revenue) }} kr</span>
+  <!-- Full Mode: 3-Box Layout -->
+  <div v-else class="space-y-4">
+    <!-- 3 Summary Boxes -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <!-- Box 1: Indtægter (Revenue) -->
+      <UCard :ui="{ body: { padding: 'p-3' } }">
+        <div class="text-center">
+          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} text-neutral-500 mb-1`">
+            <span>💰</span>
+            <span>INDTÆGTER</span>
+          </div>
+          <div :class="`${TYPOGRAPHY.cardTitle} font-bold`">
+            {{ formatPrice(totalRevenue) }} kr
+          </div>
+          <div :class="`${TYPOGRAPHY.caption} text-neutral-500`">
+            ({{ ticketCount }} billetter)
+          </div>
         </div>
+      </UCard>
 
-        <div :class="`border-t pt-2 flex justify-between font-medium ${TYPOGRAPHY.body}`">
-          <span>I alt: {{ activeOrders.length }} billetter</span>
-          <span>{{ formatPrice(totalRevenue) }} kr</span>
+      <!-- Box 2: Rådighedsbeløb (Available Budget) -->
+      <UCard :ui="{ body: { padding: 'p-3' } }" :class="BACKGROUNDS.hero.success">
+        <div class="text-center">
+          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} text-neutral-500 mb-1`">
+            <span>🛒</span>
+            <span>RÅDIGHEDSBELØB</span>
+          </div>
+          <div :class="`${TYPOGRAPHY.cardTitle} font-bold text-success`">
+            {{ formatPrice(availableBudget) }} kr
+          </div>
+          <div :class="`${TYPOGRAPHY.caption} text-neutral-500`">
+            (inkl. moms)
+          </div>
         </div>
-      </div>
+      </UCard>
+
+      <!-- Box 3: Køkkenbidrag (Kitchen Contribution) -->
+      <UCard :ui="{ body: { padding: 'p-3' } }">
+        <div class="text-center">
+          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} text-neutral-500 mb-1`">
+            <span>🏠</span>
+            <span>KØKKENBIDRAG</span>
+          </div>
+          <div :class="`${TYPOGRAPHY.cardTitle} font-bold`">
+            {{ formatPrice(kitchenContribution) }} kr
+          </div>
+          <div :class="`${TYPOGRAPHY.caption} text-neutral-500`">
+            ({{ kitchenBaseRatePercent }}% af salg)
+          </div>
+        </div>
+      </UCard>
     </div>
 
-    <!-- Expenses -->
-    <div :class="`mt-4 ${LAYOUTS.sectionSpacing} space-y-3`">
-      <div :class="`flex items-center gap-2 ${TYPOGRAPHY.cardTitle}`">
-        <span>🛒</span>
-        <span>Udgifter (Indkøb)</span>
-      </div>
-
-      <UFormField v-if="editable" label="Indkøbsomkostninger" name="totalCost">
-        <UInput
-          v-model.number="localCost"
-          type="number"
-          min="0"
-          :size="SIZES.medium.value"
-          @blur="saveCost"
-        >
-          <template #trailing>
-            <span :class="TYPOGRAPHY.caption">kr</span>
-          </template>
-        </UInput>
-      </UFormField>
-
-      <div v-else :class="`flex justify-between ${TYPOGRAPHY.body}`">
-        <span class="text-neutral-600 dark:text-neutral-400">Indkøbsomkostninger:</span>
-        <span class="font-medium">{{ formatPrice(totalCost) }} kr</span>
-      </div>
-    </div>
-
-    <!-- Result -->
-    <div :class="`mt-4 pt-4 border-t space-y-3 ${LAYOUTS.sectionSpacing}`">
-      <div :class="`flex items-center gap-2 ${TYPOGRAPHY.cardTitle}`">
-        <span>📊</span>
-        <span>Resultat</span>
-      </div>
-
-      <div :class="`space-y-2 ${TYPOGRAPHY.body}`">
-        <div class="flex justify-between">
-          <span class="text-neutral-600 dark:text-neutral-400">Indtægter:</span>
-          <span class="font-medium">{{ formatPrice(totalRevenue) }} kr</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-neutral-600 dark:text-neutral-400">Udgifter:</span>
-          <span class="font-medium">{{ formatPrice(totalCost) }} kr</span>
-        </div>
-        <div :class="`border-t pt-2 flex justify-between font-semibold ${TYPOGRAPHY.cardTitle}`">
-          <span>{{ budgetStatus.label }}:</span>
-          <span :class="isProfit ? 'text-success' : 'text-error'">
-            {{ budgetStatus.prefix }}{{ formatPrice(balance) }} kr {{ budgetStatus.emoji }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Status alerts -->
-      <UAlert
-        v-if="!activeOrders.length"
-        :color="COLOR.info"
-        variant="soft"
-        icon="i-heroicons-information-circle"
-        :size="SIZES.small.value"
+    <!-- Expandable Details Section -->
+    <UCard :ui="{ body: { padding: 'p-0' } }">
+      <!-- Details Header (clickable) -->
+      <button
+        type="button"
+        class="w-full p-3 flex items-center justify-between hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+        name="toggle-budget-details"
+        @click="showDetails = !showDetails"
       >
-        <template #title>Afventer bestillinger</template>
-        <template #description>Budgettet opdateres automatisk når der kommer bestillinger</template>
-      </UAlert>
+        <span :class="TYPOGRAPHY.cardTitle">DETALJER</span>
+        <UIcon
+          :name="showDetails ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+          class="w-5 h-5"
+        />
+      </button>
 
-      <UAlert
-        v-else-if="!isProfit"
-        :color="COLOR.warning"
-        variant="soft"
-        icon="i-heroicons-exclamation-triangle"
-        :size="SIZES.small.value"
-      >
-        <template #title>Underskud på {{ formatPrice(-balance) }} kr</template>
-        <template #description>Overvej at reducere indkøb eller tilskynde flere bestillinger</template>
-      </UAlert>
+      <!-- Expandable Content -->
+      <div v-if="showDetails" class="border-t">
+        <!-- Ticket breakdown table -->
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b bg-neutral-50 dark:bg-neutral-800">
+                <th :class="`px-4 py-2 text-left ${TYPOGRAPHY.caption} font-medium text-neutral-500`">Billettype</th>
+                <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} font-medium text-neutral-500`">Antal</th>
+                <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} font-medium text-neutral-500`">Stk pris</th>
+                <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} font-medium text-neutral-500`">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="group in revenueByType"
+                :key="group.ticketType"
+                class="border-b last:border-b-0"
+              >
+                <td :class="`px-4 py-2 ${TYPOGRAPHY.body}`">{{ group.ticketType }}</td>
+                <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.body}`">{{ group.count }}</td>
+                <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.body}`">{{ formatPrice(group.unitPrice) }} kr</td>
+                <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.body} font-medium`">{{ formatPrice(group.revenue) }} kr</td>
+              </tr>
+              <!-- Empty state row when no tickets -->
+              <tr v-if="revenueByType.length === 0">
+                <td :class="`px-4 py-4 text-center text-neutral-500 italic ${TYPOGRAPHY.body}`" colspan="4">
+                  Ingen billetter solgt endnu
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      <UAlert
-        v-else-if="balance > 0"
-        :color="COLOR.success"
-        variant="soft"
-        icon="i-heroicons-check-circle"
-        :size="SIZES.small.value"
-      >
-        <template #title>Flot! Overskud på {{ formatPrice(balance) }} kr</template>
-      </UAlert>
-    </div>
-  </UCard>
+        <!-- Summary lines -->
+        <div class="border-t p-4 space-y-2">
+          <div :class="`flex justify-between ${TYPOGRAPHY.body}`">
+            <span class="text-neutral-600 dark:text-neutral-400">Indtægter (inkl. moms)</span>
+            <span class="font-medium">{{ formatPrice(totalRevenue) }} kr</span>
+          </div>
+          <div :class="`flex justify-between ${TYPOGRAPHY.body}`">
+            <span class="text-neutral-600 dark:text-neutral-400">Køkkenbidrag ({{ kitchenBaseRatePercent }}%)</span>
+            <span class="font-medium text-neutral-500">-{{ formatPrice(kitchenContribution) }} kr</span>
+          </div>
+          <div :class="`flex justify-between ${TYPOGRAPHY.body} pt-2 border-t font-semibold`">
+            <span>Rådighedsbeløb (inkl. moms)</span>
+            <span class="text-success">{{ formatPrice(availableBudget) }} kr</span>
+          </div>
+          <div :class="`flex justify-between ${TYPOGRAPHY.body} items-center`">
+            <span class="text-neutral-600 dark:text-neutral-400">Rådighedsbeløb (ex moms /{{ 1 + vatPercent / 100 }})</span>
+            <div class="flex items-center gap-2">
+              <span class="font-medium">{{ formatPrice(availableBudgetExVat) }} kr</span>
+              <UBadge :color="COLOR.info" variant="soft" :size="SIZES.small.value">← indkøb</UBadge>
+            </div>
+          </div>
+        </div>
+      </div>
+    </UCard>
+  </div>
 </template>

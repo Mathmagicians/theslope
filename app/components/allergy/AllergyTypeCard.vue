@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type {AllergyType} from '~/composables/useAllergyValidation'
+import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
 // PROPS
 const props = defineProps<{
-  allergyType: AllergyType
+  allergyType: AllergyTypeDisplay
   mode?: 'view' | 'edit'
   compact?: boolean
 }>()

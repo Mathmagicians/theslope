@@ -2,7 +2,7 @@ import {z} from 'zod'
 import {RoleSchema, DinnerStateSchema} from '~~/prisma/generated/zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
-import type {WeekDayMap} from '~/types/dateTypes'
+import type {WeekDayMap as _WeekDayMap} from '~/types/dateTypes'
 
 /**
  * Role display labels (Danish)
@@ -126,7 +126,7 @@ export const useCookingTeamValidation = () => {
     const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
 
     // Type definitions (inside composable to avoid circular reference)
-    type CookingTeam = z.infer<typeof CookingTeamSchema>
+    type _CookingTeam = z.infer<typeof CookingTeamSchema>
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
     type CookingTeamDetail = z.infer<typeof CookingTeamDetailSchema>
     type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
@@ -152,7 +152,7 @@ export const useCookingTeamValidation = () => {
     }
 
     // Deserialize individual assignment
-    const deserializeCookingTeamAssignment = (serialized: any): CookingTeamAssignment => {
+    const deserializeCookingTeamAssignment = (serialized: Record<string, unknown>): CookingTeamAssignment => {
         const {deserializeInhabitantDisplay} = useCoreValidation()
 
         const deserialized = {
@@ -176,13 +176,15 @@ export const useCookingTeamValidation = () => {
     }
 
     // Deserialize team Detail (for GET /api/admin/team/[id] endpoint)
-    const deserializeCookingTeamDetail = (serialized: any): CookingTeamDetail => {
+    const deserializeCookingTeamDetail = (serialized: Record<string, unknown>): CookingTeamDetail => {
+        const assignments = serialized.assignments as Record<string, unknown>[] | undefined
+        const dinnerEvents = serialized.dinnerEvents as Record<string, unknown>[] | undefined
         const deserialized = {
             ...serialized,
-            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
-            assignments: serialized.assignments?.map((assignment: any) => deserializeCookingTeamAssignment(assignment)) || [],
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
+            assignments: assignments?.map((assignment) => deserializeCookingTeamAssignment(assignment)) || [],
             // Parse dinner events through inline schema to convert ISO date strings to Date objects
-            dinnerEvents: serialized.dinnerEvents?.map((event: any) => DinnerEventDisplayInlineSchema.parse(event)) || []
+            dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplayInlineSchema.parse(event)) || []
         }
 
         return CookingTeamDetailSchema.parse(deserialized)
@@ -219,7 +221,7 @@ export const useCookingTeamValidation = () => {
      * Handles partial updates - only serializes fields that are present
      */
     const toPrismaUpdateData = (team: CookingTeamUpdate | Partial<CookingTeamDetail>) => {
-        const { id, cookingDaysCount, dinnerEvents, affinity, ...rest } = team as any
+        const { id: _id, cookingDaysCount: _cookingDaysCount, dinnerEvents: _dinnerEvents, affinity, ...rest } = team as Record<string, unknown>
 
         return {
             ...rest,

@@ -3,7 +3,8 @@ import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate} fr
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerState} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema} = useBookingValidation()
+    const DinnerState = DinnerStateSchema.enum
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
 
@@ -42,8 +43,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 try {
                     return data.map(order => OrderDisplaySchema.parse(order))
                 } catch (e) {
-                    console.error(CTX, 'Error parsing orders:', e)
-                    console.error(CTX, 'Raw data:', data)
+                    handleApiError(e, 'parseOrders')
                     throw e
                 }
             }

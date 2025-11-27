@@ -46,17 +46,43 @@
  */
 
 import {formatDate, parseDate} from '~/utils/date'
-import type {DateRange} from '~/types/dateTypes'
 import {useQueryParam} from '~/composables/useQueryParam'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Design system
-const { COLOR, TYPOGRAPHY, BACKGROUNDS, LAYOUTS, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS } = useTheSlopeDesignSystem()
+
+// Booking form state
+const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
+
+// Toast for user feedback
+const toast = useToast()
+
+// Booking handlers
+const handleBookingUpdate = (inhabitantId: number, dinnerMode: string, ticketPriceId: number) => {
+  // TODO: Implement booking update via bookings store
+  console.info('Booking update:', { inhabitantId, dinnerMode, ticketPriceId })
+}
+
+const handleAllBookingsUpdate = (dinnerMode: string) => {
+  // TODO: Implement bulk booking update via bookings store
+  console.info('All bookings update:', { dinnerMode })
+}
+
+const handleSaveBooking = () => {
+  // TODO: Commit pending booking changes
+  bookingFormMode.value = FORM_MODES.VIEW
+  toast.add({
+    title: 'Booking gemt',
+    description: 'Din booking er blevet opdateret',
+    icon: 'i-heroicons-check-circle',
+    color: COLOR.success
+  })
+}
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
-const {selectedSeason, isActiveSeasonIdLoading,
-  isPlanStoreReady,
-  isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
+const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelectedSeasonErrored} = storeToRefs(planStore)
 // Initialize without await for SSR hydration consistency
 planStore.initPlanStore()
 
@@ -107,9 +133,40 @@ const selectedDinnerEvent = computed(() => {
     })
 })
 
-// Selected dinner ID for DinnerDetailPanel
+// Selected dinner ID for data fetching
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
+// Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
+const bookingsStore = useBookingsStore()
+const { DinnerEventDetailSchema } = useBookingValidation()
+
+const {
+  data: dinnerEventDetail,
+  status: dinnerEventDetailStatus,
+  refresh: _refreshDinnerEventDetail
+} = useAsyncData(
+  computed(() => `dinner-detail-${selectedDinnerId.value || 'null'}`),
+  () => selectedDinnerId.value
+    ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
+    : Promise.resolve(null),
+  {
+    default: () => null,
+    watch: [selectedDinnerId],
+    immediate: true,
+    transform: (data: unknown) => {
+      if (!data) return null
+      try {
+        return DinnerEventDetailSchema.parse(data)
+      } catch (e) {
+        console.error('Error parsing dinner event detail:', e)
+        throw e
+      }
+    }
+  }
+)
+
+const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
+const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
 
 useHead({
   title: '🍽️ Fællesspisning',
@@ -177,11 +234,71 @@ useHead({
       </CalendarMasterPanel>
     </template>
 
-    <!-- Detail: Dinner info (default slot = right side) -->
+    <!-- Detail: Dinner info (page owns data, passes to pure layout) -->
     <DinnerDetailPanel
-      :dinner-event-id="selectedDinnerId"
+      :dinner-event="dinnerEventDetail"
       :ticket-prices="selectedSeason?.ticketPrices ?? []"
-      mode="household"
-    />
+      :is-loading="isDinnerDetailLoading"
+      :is-error="isDinnerDetailError"
+    >
+      <!-- #hero: ChefMenuCard in VIEW mode with DinnerBookingForm -->
+      <template #hero>
+        <ChefMenuCard
+          v-if="dinnerEventDetail"
+          :dinner-event="dinnerEventDetail"
+          :form-mode="FORM_MODES.VIEW"
+          :show-state-controls="false"
+          :show-allergens="true"
+        >
+          <!-- Household booking form in ChefMenuCard's slot -->
+          <DinnerBookingForm
+            :dinner-event="dinnerEventDetail"
+            :orders="dinnerEventDetail.tickets"
+            :ticket-prices="selectedSeason?.ticketPrices ?? []"
+            :form-mode="bookingFormMode"
+            @update-booking="handleBookingUpdate"
+            @update-all-bookings="handleAllBookingsUpdate"
+          />
+
+          <!-- Booking action button -->
+          <div class="mt-4">
+            <UButton
+              v-if="bookingFormMode === FORM_MODES.VIEW"
+              color="primary"
+              variant="solid"
+              size="lg"
+              name="edit-booking"
+              block
+              @click="bookingFormMode = FORM_MODES.EDIT"
+            >
+              ÆNDRE BOOKING
+            </UButton>
+
+            <div v-else class="flex gap-2">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="lg"
+                name="cancel-booking"
+                @click="bookingFormMode = FORM_MODES.VIEW"
+              >
+                Annuller
+              </UButton>
+              <UButton
+                color="primary"
+                variant="solid"
+                size="lg"
+                name="save-booking"
+                class="flex-1"
+                icon="i-heroicons-check"
+                @click="handleSaveBooking"
+              >
+                Gem booking
+              </UButton>
+            </div>
+          </div>
+        </ChefMenuCard>
+      </template>
+    </DinnerDetailPanel>
   </UPage>
 </template>

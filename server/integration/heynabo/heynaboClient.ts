@@ -2,6 +2,8 @@ import {z} from 'zod'
 import {maskPassword} from '~/utils/utils'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import type {HeynaboMember, LoggedInHeynaboUser, HeynaboLocation} from '~/composables/useHeynaboValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import type {HeynaboEventCreate, HeynaboEventResponse} from '~/composables/useBookingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 // Load environment variables - for some undocumented reason, they are not passed to nitro from .env automatically
@@ -148,4 +150,249 @@ async function importFromHeyNaboForSystemUser(user: string, password: string, ap
  */
 export async function importFromHeynabo() {
     return await importFromHeyNaboForSystemUser(heyNaboUserName, heyNaboPassword, heyNaboApi)
+}
+
+/* ==== EVENT MANAGEMENT (ADR-013) ==== */
+
+const {HeynaboEventResponseSchema} = useBookingValidation()
+
+/**
+ * Create a new event in Heynabo (POST /members/events/)
+ * @param token - User's Heynabo auth token (chef owns the event)
+ * @param payload - Event data conforming to HeynaboEventCreate schema
+ * @returns Created event with id
+ */
+export async function createHeynaboEvent(token: string, payload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
+    const url = `${heyNaboApi}/members/events/`
+
+    let response: HeynaboEventResponse
+    try {
+        response = await $fetch<HeynaboEventResponse>(url, {
+            method: 'POST',
+            body: payload,
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+    } catch (error: unknown) {
+        const h3e = h3eFromCatch('Error creating event in Heynabo: ', error)
+        console.error(LOG, 'EVENT CREATE >', h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        return HeynaboEventResponseSchema.parse(response)
+    } catch (e: unknown) {
+        const h3e = h3eFromCatch('Error validating created event from Heynabo: ', e)
+        console.error(LOG, 'EVENT CREATE >', h3e.statusMessage, e)
+        throw h3e
+    }
+}
+
+/**
+ * Update an existing event in Heynabo (PATCH /members/events/{id})
+ * NOTE: Heynabo uses PATCH for partial updates, PUT returns 501 Not Implemented
+ * @param token - User's Heynabo auth token
+ * @param eventId - Heynabo event ID
+ * @param payload - Updated event data (partial update supported)
+ * @returns Updated event
+ */
+export async function updateHeynaboEvent(token: string, eventId: number, payload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
+    const url = `${heyNaboApi}/members/events/${eventId}`
+
+    let response: HeynaboEventResponse
+    try {
+        response = await $fetch<HeynaboEventResponse>(url, {
+            method: 'PATCH',
+            body: payload,
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+    } catch (error: unknown) {
+        const h3e = h3eFromCatch(`Error updating event ${eventId} in Heynabo: `, error)
+        console.error(LOG, 'EVENT UPDATE >', h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        return HeynaboEventResponseSchema.parse(response)
+    } catch (e: unknown) {
+        const h3e = h3eFromCatch('Error validating updated event from Heynabo: ', e)
+        console.error(LOG, 'EVENT UPDATE >', h3e.statusMessage, e)
+        throw h3e
+    }
+}
+
+/**
+ * Cancel an event in Heynabo (sets status to CANCELED)
+ * NOTE: Heynabo uses American spelling "CANCELED" (one L), not "CANCELLED"
+ * @param token - User's Heynabo auth token
+ * @param eventId - Heynabo event ID
+ * @param currentPayload - Current event data (PATCH supports partial update)
+ * @returns Cancelled event
+ */
+export async function cancelHeynaboEvent(token: string, eventId: number, currentPayload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
+    return updateHeynaboEvent(token, eventId, {...currentPayload, status: 'CANCELED'})
+}
+
+/**
+ * Default dinner pictures for Heynabo events (random rotation)
+ */
+const DEFAULT_DINNER_PICTURES = [
+    'fællesspisning_0.jpeg',
+    'fællesspisning_1.jpeg'
+]
+
+/**
+ * Get a random default dinner picture filename
+ */
+export function getRandomDefaultDinnerPicture(): string {
+    const index = Math.floor(Math.random() * DEFAULT_DINNER_PICTURES.length)
+    return DEFAULT_DINNER_PICTURES[index]
+}
+
+/**
+ * Upload image to a Heynabo event (POST /members/events/{id}/files)
+ * @param token - User's Heynabo auth token
+ * @param eventId - Heynabo event ID
+ * @param imageBlob - Image data as Blob
+ * @param filename - Filename for the upload
+ * @returns Uploaded file info with CDN URL
+ */
+export async function uploadHeynaboEventImage(
+    token: string,
+    eventId: number,
+    imageBlob: Blob,
+    filename: string
+): Promise<{id: number, url: string}> {
+    const url = `${heyNaboApi}/members/events/${eventId}/files`
+
+    const formData = new FormData()
+    formData.append('file', imageBlob, filename)
+
+    let response: {list: Array<{id: number, url: string}>}
+    try {
+        response = await $fetch(url, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        })
+    } catch (error: unknown) {
+        const h3e = h3eFromCatch(`Error uploading image to event ${eventId} in Heynabo: `, error)
+        console.error(LOG, 'EVENT IMAGE >', h3e.statusMessage, error)
+        throw h3e
+    }
+
+    if (!response.list?.[0]) {
+        throw createError({statusCode: 500, message: 'Heynabo image upload returned empty response'})
+    }
+
+    console.info(LOG, 'EVENT IMAGE > Uploaded to event', eventId, 'url:', response.list[0].url)
+    return response.list[0]
+}
+
+/**
+ * Fetch an event from Heynabo (GET /members/events/{id})
+ * Used for lazy-fetching picture URL
+ * @param token - User's Heynabo auth token
+ * @param eventId - Heynabo event ID
+ * @returns Event with imageUrl
+ */
+export async function fetchHeynaboEvent(token: string, eventId: number): Promise<HeynaboEventResponse> {
+    const url = `${heyNaboApi}/members/events/${eventId}`
+
+    let response: HeynaboEventResponse
+    try {
+        response = await $fetch<HeynaboEventResponse>(url, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+    } catch (error: unknown) {
+        const h3e = h3eFromCatch(`Error fetching event ${eventId} from Heynabo: `, error)
+        console.error(LOG, 'EVENT FETCH >', h3e.statusMessage, error)
+        throw h3e
+    }
+
+    try {
+        return HeynaboEventResponseSchema.parse(response)
+    } catch (e: unknown) {
+        const h3e = h3eFromCatch('Error validating fetched event from Heynabo: ', e)
+        console.error(LOG, 'EVENT FETCH >', h3e.statusMessage, e)
+        throw h3e
+    }
+}
+
+/**
+ * Delete events from Heynabo (for test cleanup)
+ * @param token - System token with admin permissions
+ * @param eventIds - Array of event IDs to delete
+ * @returns Number of successfully deleted events
+ */
+export async function deleteHeynaboEvents(token: string, eventIds: number[]): Promise<number> {
+    const results = await Promise.all(
+        eventIds.map(async (eventId) => {
+            try {
+                await $fetch(`${heyNaboApi}/members/events/${eventId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                return true
+            } catch {
+                console.warn(LOG, 'EVENT CLEANUP > Failed to delete event', eventId)
+                return false
+            }
+        })
+    )
+    return results.filter(Boolean).length
+}
+
+/* ==== SYSTEM CREDENTIAL OPERATIONS (ADR-013: for admin endpoints) ==== */
+
+/**
+ * Get system Heynabo token (cached for reuse)
+ */
+let cachedSystemToken: string | null = null
+let tokenExpiry: number = 0
+
+async function getSystemToken(): Promise<string> {
+    const now = Date.now()
+    if (cachedSystemToken && now < tokenExpiry) {
+        return cachedSystemToken
+    }
+    cachedSystemToken = await getApiToken(heyNaboUserName, heyNaboPassword, heyNaboApi)
+    tokenExpiry = now + 50 * 60 * 1000 // 50 minutes
+    return cachedSystemToken
+}
+
+/**
+ * Update Heynabo event using system credentials (admin update)
+ */
+export async function updateHeynaboEventAsSystem(eventId: number, payload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
+    const token = await getSystemToken()
+    return updateHeynaboEvent(token, eventId, payload)
+}
+
+/**
+ * Delete Heynabo event using system credentials (admin delete)
+ */
+export async function deleteHeynaboEventAsSystem(eventId: number): Promise<void> {
+    const token = await getSystemToken()
+    await $fetch(`${heyNaboApi}/members/events/${eventId}`, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    })
 }

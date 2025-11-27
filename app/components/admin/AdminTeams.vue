@@ -120,7 +120,8 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {FORM_MODES} from "~/types/form"
-import type {TeamRole, WeekdayMap} from "~/composables/useCookingTeamValidation"
+import type {TeamRole} from "~/composables/useCookingTeamValidation"
+import type {WeekDayMap} from "~/types/dateTypes"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
@@ -314,7 +315,7 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
 }
 
 // EDIT MODE: Update team affinity (IMMEDIATE SAVE)
-const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekdayMap<boolean>) => {
+const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boolean>) => {
   const team = teams.value.find(t => t.id === teamId)
   if (!team) return
 

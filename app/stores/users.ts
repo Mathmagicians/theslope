@@ -3,6 +3,9 @@ import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation
 import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 
 export const useUsersStore = defineStore("Users", () => {
+    // DEPENDENCIES
+    const {handleApiError} = useApiHandler()
+
     const importing = ref(false)
 
     // Get SystemRole enum from validation composable
@@ -72,7 +75,7 @@ export const useUsersStore = defineStore("Users", () => {
                     // Affinity is already an object (HTTP deserialized it), no manual JSON.parse needed
                     return data.map(team => CookingTeamDetailSchema.parse(team))
                 } catch (e) {
-                    console.error('🪪 > USERS_STORE > Error parsing my teams:', e)
+                    handleApiError(e, 'parseMyTeams')
                     throw e
                 }
             }
@@ -101,7 +104,7 @@ export const useUsersStore = defineStore("Users", () => {
     const loadUsers = async () => {
         await refreshUsers()
         if (usersError.value) {
-            console.error(LOG_CTX, '🪪 > USERS_STORE > loadUsers > Error loading users', usersError.value)
+            handleApiError(usersError.value, 'loadUsers')
             throw usersError.value
         }
         console.info(LOG_CTX, `🪪 > USERS_STORE > loadUsers > Loaded ${users.value.length} users`)
@@ -111,7 +114,7 @@ export const useUsersStore = defineStore("Users", () => {
     const importHeynaboData = async () => {
         await refreshHeynaboImport()
         if (heynaboImportError.value) {
-            console.error(LOG_CTX, '🪪 > USERS_STORE > importHeynaboData > Error importing users from Heynabo', heynaboImportError.value)
+            handleApiError(heynaboImportError.value, 'importHeynaboData')
             throw heynaboImportError.value
         }
         console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Loaded ${heynaboImport.value?.length} households from Heynabo`)
@@ -121,7 +124,7 @@ export const useUsersStore = defineStore("Users", () => {
     const loadMyTeams = async () => {
         await refreshMyTeams()
         if (myTeamsError.value) {
-            console.error('🪪 > USERS_STORE > loadMyTeams > Error loading my teams', myTeamsError.value)
+            handleApiError(myTeamsError.value, 'loadMyTeams')
             throw myTeamsError.value
         }
         console.info(`🪪 > USERS_STORE > loadMyTeams > Loaded ${myTeams.value.length} teams`)

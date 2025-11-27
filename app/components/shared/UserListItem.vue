@@ -39,7 +39,11 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  compact: false
+  compact: false,
+  size: undefined,
+  ringColor: undefined,
+  label: undefined,
+  propertyCheck: undefined
 })
 
 // Child detection (under 18 years old)

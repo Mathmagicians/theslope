@@ -6,17 +6,18 @@
  * - Master (Calendar): 1/3 width on large screens, shows 1 month
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
-import type {DateRange} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
 import {formatDate, formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
+import type {WeekDayMap} from '~/types/dateTypes'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 
 interface Inhabitant {
   id: number
   name: string
   lastName: string
   birthDate?: Date | null
-  dinnerPreferences?: any
+  dinnerPreferences?: WeekDayMap<DinnerMode> | null
 }
 
 interface Household {
@@ -26,23 +27,11 @@ interface Household {
   inhabitants: Inhabitant[]
 }
 
-interface DinnerEvent {
-  id: number
-  date: Date
-  cookingTeamId: number | null
-}
-
-interface Order {
-  id: number
-  dinnerEventId: number
-  inhabitantId: number
-}
-
 interface Props {
   household: Household
 }
 
-const props = defineProps<Props>()
+const _props = defineProps<Props>()
 
 // Extract ticket type enum constants from Zod schema
 const {TicketTypeSchema} = useBookingValidation()

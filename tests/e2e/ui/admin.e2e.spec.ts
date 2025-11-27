@@ -86,8 +86,34 @@ test.describe('Admin page path-based navigation', () => {
     const testTabs = [tabs[5], tabs[0]].filter(t => t !== undefined)
     expect(testTabs).toHaveLength(2)
 
+    // Tabs that depend on plan store need API wait (planning, teams show Loader until ready)
+    // The store needs: /api/admin/season (list), /api/admin/season/active, AND /api/admin/season/{id} (detail)
+    const tabsNeedingSeasonApi = ['planning', 'teams']
+
     for (const tab of testTabs) {
+      // Setup response wait BEFORE navigation for tabs that depend on plan store
+      // Wait for the season DETAIL endpoint (e.g. /api/admin/season/123) which is the last to load
+      const needsApiWait = tabsNeedingSeasonApi.includes(tab.path)
+      const responsePromise = needsApiWait
+        ? page.waitForResponse(
+            (response: any) => response.url().match(/\/api\/admin\/season\/\d+$/),
+            {timeout: 10000}
+          )
+        : null
+
       await page.goto(`${adminUrl}/${tab.path}`)
+
+      if (responsePromise) {
+        const response = await responsePromise
+        expect(response.status()).toBe(200)
+        // Wait for Loader to disappear after API response (store needs time to update)
+        await pollUntil(
+          async () => await page.locator('text=Vi venter på data').isVisible(),
+          (isVisible) => !isVisible,
+          10
+        )
+      }
+
       expect(page.url()).toContain(`/admin/${tab.path}`)
 
       await pollUntil(

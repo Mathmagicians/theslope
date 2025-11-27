@@ -157,7 +157,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const loadSeasons = async () => {
             await refreshSeasons()
             if (seasonsError.value) {
-                console.error(`🗓️ > PLAN_STORE > Error loading seasons:`, seasonsError.value)
+                handleApiError(seasonsError.value, 'loadSeasons')
                 throw seasonsError.value
             }
             console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
@@ -173,7 +173,7 @@ export const usePlanStore = defineStore("Plan", () => {
     const loadActiveSeason = async () => {
         await refreshActiveSeasonId()
         if (activeSeasonIdError.value) {
-            console.error('🗓️ > PLAN_STORE > Error loading active season ID:', activeSeasonIdError.value)
+            handleApiError(activeSeasonIdError.value, 'loadActiveSeason')
             throw activeSeasonIdError.value
         }
         console.info('🗓️ > PLAN_STORE > Loaded active season ID:', activeSeasonId.value)

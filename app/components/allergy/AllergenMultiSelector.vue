@@ -37,7 +37,7 @@ Allergy Manager (AdminAllergies):
     :show-new-badge="true"
   />
 
-Chef (DinnerMenuHero - readonly view):
+Chef (ChefMenuCard - readonly view):
   <AllergenMultiSelector
     :model-value="dinner.allergenIds"
     :allergy-types="allergyTypes"
@@ -45,7 +45,7 @@ Chef (DinnerMenuHero - readonly view):
     readonly
   />
 
-Chef (DinnerMenuHero - editing):
+Chef (ChefMenuCard - editing):
   <AllergenMultiSelector
     v-model="dinner.allergenIds"
     :allergy-types="allergyTypes"

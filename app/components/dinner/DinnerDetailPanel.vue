@@ -1,202 +1,112 @@
 <script setup lang="ts">
 /**
- * DinnerDetailPanel - Shared detail panel for dinner display
+ * DinnerDetailPanel - Pure layout component for dinner detail pages
  *
- * Encapsulates the common structure used by both /dinner and /chef pages:
- * - DinnerMenuHero in header (with mode switching)
- * - "Hvem laver maden?" section with CookingTeamCard
- * - Kitchen statistics section with KitchenPreparation
+ * ARCHITECTURE: Pure layout - receives data via props, pages own the data
+ * No data fetching, no slot props - just layout structure
  *
- * ADR Compliance:
+ * PROPS:
+ * - dinnerEvent: DinnerEventDetail | null - the dinner data (page owns this)
+ * - ticketPrices: TicketPrice[] - ticket prices for the season
+ * - isLoading: boolean - loading state
+ * - isError: boolean - error state
+ *
+ * SLOTS (pure layout, no props):
+ * - #top   - Header bar area
+ * - #hero  - Menu hero area
+ * - #team  - Cooking team section
+ * - #stats - Kitchen statistics section
+ *
+ * ADR COMPLIANCE:
  * - ADR-001: Types from validation composables
- * - ADR-007: Component-local useAsyncData for dinner detail
+ * - ADR-007: Page owns data, layout receives via props
  * - ADR-010: Domain types throughout
- * - Mobile-first responsive design
- *
- * Props:
- * - dinnerEventId: ID of dinner to display (null when no selection)
- * - mode: DinnerMenuHero display mode ('household' | 'chef' | 'view')
- * - ticketPrices: Available ticket prices for booking
- *
- * Features:
- * - Fetches dinner detail with orders when dinnerEventId changes
- * - Handles loading/error states
- * - Shows appropriate empty states for no selection / no team / no orders
- * - Emits events for booking updates (household mode)
- * - Emits events for allergen updates (chef mode)
  */
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 
 interface Props {
-  dinnerEventId: number | null
-  mode?: 'household' | 'chef' | 'view'
+  dinnerEvent: DinnerEventDetail | null
   ticketPrices?: TicketPrice[]
+  isLoading?: boolean
+  isError?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'household',
-  ticketPrices: () => []
+  ticketPrices: () => [],
+  isLoading: false,
+  isError: false
 })
 
-const emit = defineEmits<{
-  updateBooking: [inhabitantId: number, dinnerMode: string, ticketPriceId: number]
-  updateAllBookings: [dinnerMode: string]
-  addGuest: []
-  updateAllergens: [allergenIds: number[]]
-}>()
-
 // Design system
-const { COLOR, TYPOGRAPHY, LAYOUTS, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, TYPOGRAPHY, IMG } = useTheSlopeDesignSystem()
 
-// Store integration for fetching
-const bookingsStore = useBookingsStore()
-
-// Validation schema for parsing dinner event detail
-const { DinnerEventDetailSchema } = useBookingValidation()
-
-// Component-local data: Fetch dinner detail with orders when selection changes (ADR-007)
-const {
-  data: dinnerEventDetail,
-  status: dinnerEventDetailStatus,
-  error: dinnerEventDetailError,
-  refresh: refreshDinnerEventDetail
-} = useAsyncData(
-  computed(() => `dinner-detail-${props.dinnerEventId}`),
-  () => props.dinnerEventId
-    ? bookingsStore.fetchDinnerEventDetail(props.dinnerEventId)
-    : Promise.resolve(null),
-  {
-    default: () => null,
-    watch: [() => props.dinnerEventId],
-    immediate: true,
-    transform: (data: any) => {
-      if (!data) return null
-      try {
-        return DinnerEventDetailSchema.parse(data)
-      } catch (e) {
-        console.error('Error parsing dinner event detail:', e)
-        throw e
-      }
-    }
-  }
+// Effective picture URL: use menu picture if available, otherwise default dinner picture
+const effectivePictureUrl = computed(() =>
+  props.dinnerEvent?.menuPictureUrl || IMG.defaultDinnerPicture
 )
 
-const orders = computed(() => dinnerEventDetail.value?.tickets ?? [])
-
-// Status-derived computeds (ADR-007 pattern)
-const isDinnerEventDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
-const isDinnerEventDetailErrored = computed(() => dinnerEventDetailStatus.value === 'error')
-const isDinnerEventDetailInitialized = computed(() => dinnerEventDetailStatus.value === 'success')
-const isNoDinnerEventDetail = computed(() => isDinnerEventDetailInitialized.value && !dinnerEventDetail.value)
-const hasNoDinnerSelected = computed(() => !props.dinnerEventId)
+// Derived states
+const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoading && !props.isError)
 </script>
 
 <template>
-  <UCard :ui="{ rounded: '', header: { padding: 'p-0' }, body: { padding: 'p-0' } }">
-    <!-- Menu Hero in header slot (full bleed) -->
-    <template v-if="dinnerEventDetail" #header>
-      <DinnerMenuHero
-        :dinner-event="dinnerEventDetail"
-        :ticket-prices="ticketPrices"
-        :mode="mode"
-        @update-booking="emit('updateBooking', $event)"
-        @update-all-bookings="emit('updateAllBookings', $event)"
-        @add-guest="emit('addGuest')"
-        @update-allergens="emit('updateAllergens', $event)"
-      />
-    </template>
-
+  <UPageBody data-testid="dinner-detail-panel">
     <!-- Loading state -->
-    <Loader v-if="isDinnerEventDetailLoading" text="Henter fællesspisning..." />
+    <UPageCard v-if="isLoading">
+      <Loader text="Henter fællesspisning..." />
+    </UPageCard>
 
     <!-- Error state -->
-    <ViewError v-else-if="isDinnerEventDetailErrored" text="Kan ikke hente fællesspisning" />
+    <UPageCard v-else-if="isError">
+      <ViewError text="Kan ikke hente fællesspisning" />
+    </UPageCard>
 
     <!-- No dinner selected -->
-    <UAlert
+    <UPageCard
       v-else-if="hasNoDinnerSelected"
-      type="info"
-      variant="soft"
-      :color="COLOR.info"
       icon="i-heroicons-arrow-left"
-    >
-      <template #title>
-        Vælg en fællesspisning
-      </template>
-      <template #description>
-        Vælg en fællesspisning fra listen til venstre for at se detaljer.
-      </template>
-    </UAlert>
+      title="Vælg en fællesspisning"
+      description="Vælg en fællesspisning fra kalenderen for at se detaljer."
+    />
 
-    <!-- No data returned (successful fetch but null) -->
-    <UAlert
-      v-else-if="isNoDinnerEventDetail"
-      type="info"
-      variant="soft"
-      :color="COLOR.info"
-      icon="i-heroicons-exclamation-circle"
-    >
-      <template #title>
-        Fællesspisning ikke fundet
-      </template>
-      <template #description>
-        Kunne ikke finde data for den valgte fællesspisning.
-      </template>
-    </UAlert>
+    <!-- Main content when dinner is loaded -->
+    <template v-else-if="dinnerEvent">
+      <!-- #top: Header bar area -->
+      <slot name="top" />
 
-    <!-- Kitchen Preparation in body -->
-    <div v-else :class="LAYOUTS.sectionDivider">
-      <div :class="LAYOUTS.sectionContentNoPadX">
-        <h3 :class="`px-4 md:px-0 ${TYPOGRAPHY.cardTitle}`">Hvem laver maden?</h3>
+      <!-- #hero: Menu content with background image -->
+      <UPageHero
+        :ui="{
+          root: 'relative bg-cover bg-center min-h-[300px] md:min-h-[400px]'
+        }"
+        :style="{ backgroundImage: `url(${effectivePictureUrl})` }"
+      >
+        <!-- Dark gradient overlay for text readability (pointer-events-none to allow clicks through) -->
+        <template #top>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20 pointer-events-none" />
+        </template>
 
-        <!-- Cooking Team Display (Monitor Mode) -->
-        <CookingTeamCard
-          v-if="dinnerEventDetail?.cookingTeamId"
-          :team-id="dinnerEventDetail.cookingTeamId"
-          :team-number="dinnerEventDetail.cookingTeamId"
-          mode="monitor"
-        />
+        <slot name="hero" />
+      </UPageHero>
 
-        <!-- No cooking team assigned -->
-        <UAlert
-          v-else
-          variant="soft"
-          :color="COLOR.neutral"
-          :avatar="{ text: '🏃‍♀️🏃‍♂️', size: SIZES.emptyStateAvatar.value }"
-          :ui="COMPONENTS.emptyStateAlert"
-        >
-          <template #title>
-            👥 Køkkenholdet er løbet ud at lege
-          </template>
-          <template #description>
-            Intet madhold tildelt endnu
-          </template>
-        </UAlert>
-      </div>
+      <!-- #team: Cooking team section -->
+      <UPageCard class="mt-6">
+        <template #title>
+          <h3 :class="TYPOGRAPHY.cardTitle">Hvem laver maden?</h3>
+        </template>
 
-      <!-- Kitchen statistics section -->
-      <div :class="LAYOUTS.sectionContent">
-        <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
+        <slot name="team" />
+      </UPageCard>
 
-        <!-- No orders yet -->
-        <UAlert
-          v-if="orders.length === 0"
-          type="info"
-          variant="soft"
-          :color="COLOR.info"
-          icon="i-heroicons-ticket"
-        >
-          <template #title>
-            Ingen billetter endnu
-          </template>
-          <template #description>
-            Der er endnu ikke bestilt nogen billetter til denne fællesspisning.
-          </template>
-        </UAlert>
+      <!-- #stats: Kitchen statistics section -->
+      <UPageCard class="mt-6">
+        <template #title>
+          <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
+        </template>
 
-        <!-- Kitchen statistics -->
-        <KitchenPreparation v-else :orders="orders" />
-      </div>
-    </div>
-  </UCard>
+        <slot name="stats" />
+      </UPageCard>
+    </template>
+  </UPageBody>
 </template>

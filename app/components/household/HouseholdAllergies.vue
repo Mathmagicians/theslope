@@ -41,15 +41,11 @@ const props = defineProps<Props>()
 
 const UButton = resolveComponent('UButton')
 
-const householdStore = useHouseholdsStore()
-
 const allergyStore = useAllergiesStore()
 const {
   allergyTypes,
   allergies,
-  isAllergyTypesLoading,
-  isAllergyTypesInitialized,
-  isAllergiesLoading
+  isAllergyTypesLoading
 } = storeToRefs(allergyStore)
 const {loadAllergiesForHousehold} = allergyStore
 
@@ -70,8 +66,9 @@ const editingInhabitantId = ref<number | null>(null)
 const selectedAllergyIds = ref<number[]>([])
 const allergyComments = ref<Record<number, string>>({})
 
-// Initialize form when expanding a row
-const onRowExpand = (inhabitantId: number, allergies: any[]) => {
+// Initialize form when expanding a row - allergies param is typed as array of allergy objects with allergyType
+interface AllergyWithType { allergyType: { id: number }; inhabitantComment?: string | null }
+const onRowExpand = (inhabitantId: number, allergies: AllergyWithType[]) => {
   editingInhabitantId.value = inhabitantId
   selectedAllergyIds.value = allergies.map(a => a.allergyType.id)
   allergyComments.value = allergies.reduce((acc, a) => {
@@ -199,11 +196,15 @@ watch(expanded, (newExpanded, oldExpanded) => {
   }
 })
 
-// Table columns
+// Table columns - row type comes from UTable
+interface TableRow {
+  getIsExpanded: () => boolean
+  toggleExpanded: () => void
+}
 const columns = [
   {
     id: 'expand',
-    cell: ({row}: any) =>
+    cell: ({row}: {row: TableRow}) =>
         h(UButton, {
           color: 'neutral',
           variant: 'ghost',
@@ -275,7 +276,7 @@ const columns = [
           </template>
 
           <!-- Expanded row: Allergy edit form -->
-          <template #expanded="{ row }">
+          <template #expanded>
             <Loader v-if="isAllergyTypesLoading" text="Indlæser allergi typer..."/>
             <div v-else class="p-4 space-y-4">
               <!-- Add new allergy selector -->

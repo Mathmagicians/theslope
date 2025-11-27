@@ -7,8 +7,9 @@ interface Props {
     label?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
-    compact: false
+withDefaults(defineProps<Props>(), {
+    compact: false,
+    label: undefined
 })
 </script>
 

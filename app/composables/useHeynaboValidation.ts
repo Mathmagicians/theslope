@@ -1,5 +1,5 @@
 import {z} from "zod";
-import type { HouseholdCreateWithInhabitants, InhabitantCreate, UserCreate } from './useCoreValidation'
+import type { HouseholdDetail, InhabitantCreate, UserCreate } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
 
 export const useHeynaboValidation = () => {
@@ -7,7 +7,7 @@ export const useHeynaboValidation = () => {
     const HeynaboMemberSchema = z.object({
         id: z.number(),
         type: z.string(),
-        email: z.string().email().or(z.string().transform((val) => null)).or(z.null()),
+        email: z.string().email().or(z.string().transform(() => null)).or(z.null()),
         firstName: z.string(),
         lastName: z.string(),
         phone: z.string().nullable(),
@@ -128,9 +128,9 @@ export const useHeynaboValidation = () => {
      * @param members - Array of HeynaboMember data from API
      * @returns Array of HouseholdCreateWithInhabitants ready for database creation
      */
-    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreateWithInhabitants[] => {
+    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): Omit<HouseholdDetail, 'id'>[] => {
         const households = locations.map(location => {
-            const newHousehold: HouseholdCreateWithInhabitants = {
+            const newHousehold: Omit<HouseholdDetail, 'id'> = {
                 heynaboId: location.id,
                 movedInDate: new Date('2019-06-25'),
                 pbsId: location.id, // FIXME - import pbs from csv file

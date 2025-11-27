@@ -283,39 +283,39 @@ export const useCoreValidation = () => {
 
     // USER TYPES
     // Display: Minimal user info for lists (allergy managers, etc.)
-    type UserDisplay = z.infer<typeof UserDisplaySchema>
+    type _UserDisplay = z.infer<typeof UserDisplaySchema>
     // Detail: Full user with nested inhabitant & household (auth context)
-    type UserDetail = z.infer<typeof UserWithInhabitantSchema>
+    type _UserDetail = z.infer<typeof UserWithInhabitantSchema>
     // Mutations: Create/update operations
     type UserCreate = z.infer<typeof UserCreateSchema>
-    type UserUpdate = z.infer<typeof UserUpdateSchema>
+    type _UserUpdate = z.infer<typeof UserUpdateSchema>
     // Auth
-    type LoginCredentials = z.infer<typeof LoginSchema>
+    type _LoginCredentials = z.infer<typeof LoginSchema>
 
     // INHABITANT TYPES
     // Display: Minimal inhabitant info for lists (team assignments, bookings)
     type InhabitantDisplay = z.infer<typeof InhabitantDisplaySchema>
     // Detail: Full inhabitant data (same as Display for now, may grow)
-    type InhabitantDetail = z.infer<typeof InhabitantResponseSchema>
+    type _InhabitantDetail = z.infer<typeof InhabitantResponseSchema>
     // Mutations: Create/update operations
-    type InhabitantCreate = z.infer<typeof InhabitantCreateSchema>
-    type InhabitantUpdate = z.infer<typeof InhabitantUpdateSchema>
+    type _InhabitantCreate = z.infer<typeof InhabitantCreateSchema>
+    type _InhabitantUpdate = z.infer<typeof InhabitantUpdateSchema>
 
     // HOUSEHOLD TYPES
     // Display: Household summary for lists (index endpoint)
-    type HouseholdDisplay = z.infer<typeof HouseholdSummarySchema>
+    type _HouseholdDisplay = z.infer<typeof HouseholdSummarySchema>
     // Detail: Full household with inhabitants (detail endpoint)
-    type HouseholdDetail = z.infer<typeof HouseholdWithInhabitantsSchema>
+    type _HouseholdDetail = z.infer<typeof HouseholdWithInhabitantsSchema>
     // Mutations: Create/update operations
-    type HouseholdCreate = z.infer<typeof HouseholdCreateSchema>
-    type HouseholdUpdate = z.infer<typeof HouseholdUpdateSchema>
+    type _HouseholdCreate = z.infer<typeof HouseholdCreateSchema>
+    type _HouseholdUpdate = z.infer<typeof HouseholdUpdateSchema>
 
     // Internal types (not exported)
     type User = z.infer<typeof BaseUserSchema>
     type SerializedUserInput = z.infer<typeof SerializedUserInputSchema>
     type SerializedUser = z.infer<typeof SerializedUserSchema>
-    type Inhabitant = z.infer<typeof BaseInhabitantSchema>
-    type Household = z.infer<typeof BaseHouseholdSchema>
+    type _Inhabitant = z.infer<typeof BaseInhabitantSchema>
+    type _Household = z.infer<typeof BaseHouseholdSchema>
 
     // ========================================================================
     // SERIALIZATION FUNCTIONS (ADR-010)
@@ -350,12 +350,12 @@ export const useCoreValidation = () => {
      * ADR-010: Deserialize InhabitantDisplay from database format to domain format
      * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
      */
-    const deserializeInhabitantDisplay = (serialized: any): InhabitantDisplay => {
+    const deserializeInhabitantDisplay = (serialized: Record<string, unknown>): InhabitantDisplay => {
         const deserialized = {
             ...serialized,
-            birthDate: serialized.birthDate ? new Date(serialized.birthDate) : null,
+            birthDate: serialized.birthDate ? new Date(serialized.birthDate as string | number | Date) : null,
             dinnerPreferences: serialized.dinnerPreferences
-                ? deserializeWeekDayMap(serialized.dinnerPreferences)
+                ? deserializeWeekDayMap(serialized.dinnerPreferences as string)
                 : null
         }
         return InhabitantDisplaySchema.parse(deserialized)
@@ -365,7 +365,7 @@ export const useCoreValidation = () => {
      * Deserialize UserWithInhabitant from database output
      * Handles nested inhabitant with household and computes household.shortName
      */
-    const deserializeUserWithInhabitant = (serializedUser: any): UserWithInhabitant => {
+    const deserializeUserWithInhabitant = (serializedUser: Record<string, unknown>): UserWithInhabitant => {
         return {
             ...serializedUser,
             systemRoles: JSON.parse(serializedUser.systemRoles),

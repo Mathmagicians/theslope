@@ -1,11 +1,11 @@
 import type {
-    AllergyType,
+    AllergyTypeDisplay,
     AllergyTypeCreate,
     AllergyTypeUpdate,
-    Allergy,
+    AllergyDisplay,
     AllergyCreate,
     AllergyUpdate,
-    AllergyWithRelations
+    AllergyDetail
 } from '~/composables/useAllergyValidation'
 
 /**
@@ -28,7 +28,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         status: allergyTypesStatus,
         error: allergyTypesError,
         refresh: refreshAllergyTypes
-    } = useFetch<AllergyType[]>('/api/admin/allergy-type', {
+    } = useFetch<AllergyTypeDisplay[]>('/api/admin/allergy-type', {
         key: 'allergy-store-types',
         immediate: true,
         watch: false,
@@ -43,7 +43,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         data: selectedAllergyType,
         status: selectedAllergyTypeStatus,
         error: selectedAllergyTypeError
-    } = useAsyncData<AllergyType | null>(
+    } = useAsyncData<AllergyTypeDisplay | null>(
         selectedAllergyTypeKey,
         () => {
             if (!selectedAllergyTypeId.value) return Promise.resolve(null)
@@ -73,7 +73,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         status: allergiesStatus,
         error: allergiesError,
         refresh: refreshAllergies
-    } = useAsyncData<AllergyWithRelations[]>(
+    } = useAsyncData<AllergyDetail[]>(
         allergiesQueryKey,
         () => {
             if (!filterInhabitantId.value && !filterHouseholdId.value) {
@@ -120,7 +120,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const loadAllergyTypes = async () => {
         await refreshAllergyTypes()
         if (allergyTypesError.value) {
-            console.error(`🥜 > ALLERGY_STORE > Error loading allergy types:`, allergyTypesError.value)
+            handleApiError(allergyTypesError.value, 'loadAllergyTypes')
             throw allergyTypesError.value
         }
         console.info(`🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
@@ -131,9 +131,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         console.info(`🥜 > ALLERGY_STORE > Loading allergy type ID: ${id}`)
     }
 
-    const createAllergyType = async (allergyTypeData: AllergyTypeCreate): Promise<AllergyType> => {
+    const createAllergyType = async (allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> => {
         try {
-            const created = await $fetch<AllergyType>('/api/admin/allergy-type', {
+            const created = await $fetch<AllergyTypeDisplay>('/api/admin/allergy-type', {
                 method: 'PUT',
                 body: allergyTypeData,
                 headers: {'Content-Type': 'application/json'}
@@ -147,9 +147,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         }
     }
 
-    const updateAllergyType = async (id: number, allergyTypeData: AllergyTypeUpdate): Promise<AllergyType> => {
+    const updateAllergyType = async (id: number, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeDisplay> => {
         try {
-            const updated = await $fetch<AllergyType>(`/api/admin/allergy-type/${id}`, {
+            const updated = await $fetch<AllergyTypeDisplay>(`/api/admin/allergy-type/${id}`, {
                 method: 'POST',
                 body: allergyTypeData,
                 headers: {'Content-Type': 'application/json'}
@@ -194,9 +194,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         await refreshAllergies()
     }
 
-    const createAllergy = async (allergyData: AllergyCreate): Promise<Allergy> => {
+    const createAllergy = async (allergyData: AllergyCreate): Promise<AllergyDisplay> => {
         try {
-            const created = await $fetch<Allergy>('/api/household/allergy', {
+            const created = await $fetch<AllergyDisplay>('/api/household/allergy', {
                 method: 'PUT',
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}
@@ -211,9 +211,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         }
     }
 
-    const updateAllergy = async (id: number, allergyData: AllergyUpdate): Promise<Allergy> => {
+    const updateAllergy = async (id: number, allergyData: AllergyUpdate): Promise<AllergyDisplay> => {
         try {
-            const updated = await $fetch<Allergy>(`/api/household/allergy/${id}`, {
+            const updated = await $fetch<AllergyDisplay>(`/api/household/allergy/${id}`, {
                 method: 'POST',
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}

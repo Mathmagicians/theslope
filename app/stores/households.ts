@@ -10,6 +10,9 @@ import type {
  */
 export const useHouseholdsStore = defineStore("Households", () => {
 
+    // DEPENDENCIES
+    const {handleApiError} = useApiHandler()
+
     // STATE - Server data only
     const selectedHouseholdId = ref<number | null>(null)
 
@@ -87,7 +90,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const loadHouseholds = async () => {
         await refreshHouseholds()
         if (householdsError.value) {
-            console.error(`🏠 > HOUSEHOLDS_STORE > Error loading households:`, householdsError.value)
+            handleApiError(householdsError.value, 'loadHouseholds')
             throw householdsError.value
         }
         console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)

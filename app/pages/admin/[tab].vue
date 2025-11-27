@@ -21,12 +21,12 @@ watch([isSeasonsInitialized, isActiveSeasonIdInitialized, isSelectedSeasonInitia
 watch([isPlanStoreErrored, planStoreError], ([errored, error]) => {
   if (errored) {
     const {isSeasonsErrored, isActiveSeasonIdErrored, isSelectedSeasonErrored} = storeToRefs(store)
-    console.error(LOG_CTX, '❌ > Plan store error detected:', {
-      isSeasonsErrored: isSeasonsErrored.value,
-      isActiveSeasonIdErrored: isActiveSeasonIdErrored.value,
-      isSelectedSeasonErrored: isSelectedSeasonErrored.value,
-      error: error
-    })
+    console.error(LOG_CTX, '❌ > Plan store error detected:',
+      'seasons:', isSeasonsErrored.value,
+      'activeId:', isActiveSeasonIdErrored.value,
+      'selected:', isSelectedSeasonErrored.value,
+      'status:', error?.statusCode,
+      'message:', error?.message)
   }
 })
 

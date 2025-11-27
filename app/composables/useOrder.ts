@@ -3,9 +3,7 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import type {Order} from '~/composables/useBookingValidation'
-import type {DinnerEvent} from '~/composables/useBookingValidation'
-import type {Season} from '~/composables/useSeasonValidation'
+import type {OrderDisplay} from '~/composables/useBookingValidation'
 
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
@@ -17,28 +15,28 @@ export const useOrder = () => {
    * Check if order is active (counts for kitchen preparation)
    * Active = BOOKED or CLOSED (not released for sale)
    */
-  const isActiveOrder = (order: Order): boolean => {
+  const isActiveOrder = (order: OrderDisplay): boolean => {
     return order.state !== OrderState.RELEASED
   }
 
   /**
    * Check if order is released (available for sale/swap)
    */
-  const isReleasedOrder = (order: Order): boolean => {
+  const isReleasedOrder = (order: OrderDisplay): boolean => {
     return order.state === OrderState.RELEASED
   }
 
   /**
    * Filter orders by active state
    */
-  const getActiveOrders = (orders: Order[]): Order[] => {
+  const getActiveOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
     return orders.filter(isActiveOrder)
   }
 
   /**
    * Filter orders by released state
    */
-  const getReleasedOrders = (orders: Order[]): Order[] => {
+  const getReleasedOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
     return orders.filter(isReleasedOrder)
   }
 
@@ -79,7 +77,7 @@ export const useOrder = () => {
   /**
    * Calculate total portions from orders
    */
-  const calculateTotalPortions = (orders: Order[]): number => {
+  const calculateTotalPortions = (orders: OrderDisplay[]): number => {
     return orders.reduce((sum, order) => {
       return sum + getPortionsForTicketType(order.ticketType)
     }, 0)

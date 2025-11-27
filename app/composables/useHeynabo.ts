@@ -21,15 +21,25 @@ export function useHeynabo() {
      */
     const getUserUrl = (heynaboId: number): string  => {
         const apiUrl = config.public.HEY_NABO_API
-        const url = apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
-        //FIXME cleanup
-        console.log("DEBUG, heynabo url:", url)
-        return url
+        return apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
     }
 
-
+    /**
+     * Construct URL to a Heynabo event page
+     * @param heynaboEventId - The Heynabo event ID
+     * @returns Full URL to event page in Heynabo
+     * @example
+     * // Input: heynaboEventId = 123
+     * // API URL: https://skraaningeni.spaces.heynabo.com/api
+     * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/events/123
+     */
+    const getEventUrl = (heynaboEventId: number): string => {
+        const apiUrl = config.public.HEY_NABO_API
+        return apiUrl.replace('/api', `/desktop/events/${heynaboEventId}`)
+    }
 
     return {
-        getUserUrl
+        getUserUrl,
+        getEventUrl
     }
 }

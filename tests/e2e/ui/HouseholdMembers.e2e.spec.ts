@@ -7,7 +7,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const {deserializeWeekDayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
@@ -15,6 +15,8 @@ const {deserializeWeekDayMap} = useWeekDayMapValidation({
 })
 
 test.describe('Household members display', () => {
+    // Generate unique test salt per worker to avoid parallel test conflicts
+    const testSalt = temporaryAndRandom()
     let householdId: number
     let shortName: string
     let babyId: number
@@ -30,7 +32,7 @@ test.describe('Household members display', () => {
         // NOTE: Singleton is cleaned up by global teardown, not by this test
         await SeasonFactory.createActiveSeason(context)
 
-        const household = await HouseholdFactory.createHousehold(context, {name: 'MembersTest'})
+        const household = await HouseholdFactory.createHousehold(context, {name: salt('MembersTest', testSalt)})
         householdId = household.id
         shortName = household.shortName
 
@@ -70,12 +72,15 @@ test.describe('Household members display', () => {
     })
 
     test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
-
-        await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+        // Setup response wait BEFORE navigation to catch the API call
+        const responsePromise = page.waitForResponse(
+            (response: any) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
+
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        const response = await responsePromise
+        expect(response.status()).toBe(200)
 
         await pollUntil(
             async () => await page.locator('[data-test-id="household-members"]').isVisible(),
@@ -99,12 +104,15 @@ test.describe('Household members display', () => {
     test('GIVEN household member WHEN editing weekday preference THEN change is persisted to database', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
-
-        await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+        // Setup response wait BEFORE navigation to catch the API call
+        const responsePromise = page.waitForResponse(
+            (response: any) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
+
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        const response = await responsePromise
+        expect(response.status()).toBe(200)
 
         await pollUntil(
             async () => await page.locator('[data-test-id="household-members"]').isVisible(),
@@ -112,20 +120,28 @@ test.describe('Household members display', () => {
             10
         )
 
-        const editButton = page.locator('[data-test-id="household-members-edit-toggle"]')
+        // Click the edit button (pencil icon) for Donald's row to expand it
+        const donaldRow = page.getByRole('row').filter({hasText: 'Donald'}).first()
+        const editButton = donaldRow.getByRole('button', {name: 'Rediger præferencer'})
         await editButton.click()
 
+        // Wait for edit panel to be visible
+        const editPanel = page.getByRole('heading', {name: /Opdater fællesspisning præferencer for Donald/})
         await pollUntil(
-            async () => {
-                const button = page.locator(`button[name="inhabitant-${donaldId}-preferences-mandag-TAKEAWAY"]`)
-                return await button.count() > 0
-            },
-            (count) => count,
+            async () => await editPanel.isVisible(),
+            (isVisible) => isVisible,
             10
         )
 
-        const mondayTakeawayButton = page.locator(`button[name="inhabitant-${donaldId}-preferences-mandag-TAKEAWAY"]`)
-        await mondayTakeawayButton.click()
+        // Find Monday's button group (data-testid contains the pattern) and click TAKEAWAY (3rd button)
+        // Button order: DINEIN(0), DINEINLATE(1), TAKEAWAY(2), NONE(3)
+        const mondayGroup = page.locator(`[data-testid="inhabitant-${donaldId}-preferences-edit-mandag"]`)
+        const takeawayButton = mondayGroup.locator('button').nth(2)
+        await takeawayButton.click()
+
+        // Click the Save button to persist changes
+        const saveButton = page.getByRole('button', {name: 'Gem'})
+        await saveButton.click()
 
         // Poll until preferences are updated in database
         const household = await pollUntil(

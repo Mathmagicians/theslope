@@ -1032,6 +1032,59 @@ display.
 
 ---
 
+## 🔴 HIGH PRIORITY: Define Serialized Input Schemas for All Deserialize Functions
+
+**Status:** Scoped - Ready for Implementation
+
+**Context:** Deserialize functions across composables use `any` for input types, losing compile-time type safety. ESLint flags these as `@typescript-eslint/no-explicit-any` violations.
+
+**Affected Composables (6 `any` types):**
+1. `useCoreValidation.ts:382` - `deserializeHouseholdSummary(serialized: any)`
+2. `useSeasonValidation.ts:94` - `deserializeSeason(serialized: any)`
+3. `useSeason.ts:196` - deserialize helper
+4. `useWeekDayMapValidation.ts:52` - `deserializeWeekDayMap(serialized: any)`
+5. `useQueryParam.ts:100` - param parsing
+6. `useApiHandler.ts:54` - error handling
+
+**Pattern to Follow (ADR-010):**
+```typescript
+// Define input schema matching database format
+const SerializedHouseholdInputSchema = z.object({
+    id: z.number(),
+    movedInDate: z.string(),  // ISO date string from DB
+    inhabitants: z.array(z.object({
+        birthDate: z.string().nullable(),
+        dinnerPreferences: z.string().nullable()  // JSON string
+    })).optional()
+})
+type SerializedHouseholdInput = z.infer<typeof SerializedHouseholdInputSchema>
+
+// Type-safe deserialize
+const deserializeHouseholdSummary = (serialized: SerializedHouseholdInput): HouseholdSummary => {
+    // Transform and parse to domain type
+}
+```
+
+**Estimated Effort:** ~30 min per composable (6 total = ~3 hours)
+
+**Benefits:**
+- Compile-time type safety for all deserialize inputs
+- ESLint compliance (no `any` types)
+- Better documentation of DB ↔ Domain contract
+- Catch schema drift earlier
+
+**Action Items:**
+- [ ] `useSeasonValidation.ts` - Create `SerializedSeasonInputSchema`
+- [ ] `useCoreValidation.ts` - Create `SerializedHouseholdInputSchema`, `SerializedInhabitantInputSchema`
+- [ ] `useWeekDayMapValidation.ts` - Type the input (string | WeekDayMap<T>)
+- [ ] `useSeason.ts` - Use typed schema from validation composable
+- [ ] `useQueryParam.ts` - Type param parsing
+- [ ] `useApiHandler.ts` - Type error object properly
+
+**Priority:** HIGH - Affects code quality, maintainability, and ESLint compliance
+
+---
+
 ## Medium priority: Type-safe deserializeSeason (ADR-010 alignment)
 
 ### Issue

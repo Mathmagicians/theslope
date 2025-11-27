@@ -61,7 +61,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {toDate} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
 
@@ -291,10 +291,11 @@ const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
 
     <!-- Agenda View -->
     <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-      <ChefDinnerCard
+      <ChefMenuCard
         v-for="dinner in sortedDinnerEvents"
         :key="dinner.id"
         :dinner-event="dinner"
+        mode="compact"
         :selected="dinner.id === selectedDinnerId"
         @select="emit('select', $event)"
       />

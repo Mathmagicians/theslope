@@ -1,8 +1,11 @@
 import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema} from '~~/prisma/generated/zod'
-import {OrderFactory} from '../../e2e/testDataFactories/orderFactory'
-import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 const getValidationError = (result: any) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
@@ -24,7 +27,9 @@ describe('useBookingValidation', () => {
     serializeOrder,
     deserializeOrder,
     serializeOrderHistory,
-    deserializeOrderHistory
+    deserializeOrderHistory,
+    deserializeDinnerEvent,
+    deserializeDinnerEventDetail
   } = useBookingValidation()
 
   const DinnerState = DinnerStateSchema.enum
@@ -120,13 +125,15 @@ describe('useBookingValidation', () => {
     })
 
     describe('DinnerEventUpdateSchema', () => {
-      it('GIVEN update with id WHEN parsing THEN succeeds', () => {
-        const result = DinnerEventUpdateSchema.parse({id: 1, menuTitle: 'Updated'})
-        expect(result.id).toBe(1)
+      // Note: id comes from URL path, not body (ADR-013)
+      it('GIVEN partial update with menuTitle WHEN parsing THEN succeeds', () => {
+        const result = DinnerEventUpdateSchema.parse({menuTitle: 'Updated'})
+        expect(result.menuTitle).toBe('Updated')
       })
 
-      it('GIVEN update without id WHEN parsing THEN throws', () => {
-        expect(() => DinnerEventUpdateSchema.parse({menuTitle: 'Updated'})).toThrow()
+      it('GIVEN empty update WHEN parsing THEN succeeds (all fields optional)', () => {
+        const result = DinnerEventUpdateSchema.parse({})
+        expect(result).toEqual({})
       })
 
       it.each([
@@ -134,7 +141,7 @@ describe('useBookingValidation', () => {
         {field: 'state', value: DinnerState.CANCELLED},
         {field: 'totalCost', value: 50000}
       ])('GIVEN partial update with $field WHEN parsing THEN succeeds', ({field, value}) => {
-        const result = DinnerEventUpdateSchema.parse({id: 1, [field]: value})
+        const result = DinnerEventUpdateSchema.parse({[field]: value})
         expect(result[field as keyof typeof result]).toBe(value)
       })
     })
@@ -294,6 +301,90 @@ describe('useBookingValidation', () => {
         const serialized = serializeOrderHistory(history)
         const deserialized = deserializeOrderHistory(serialized)
         expect(deserialized.timestamp).toBeInstanceOf(Date)
+      })
+    })
+
+    describe('deserializeDinnerEvent', () => {
+      it('GIVEN allergens as join table WHEN deserializing THEN flattens to array', () => {
+        const prismaEvent = {
+          id: 1,
+          allergens: [
+            {allergyType: {id: 1, name: 'Gluten'}},
+            {allergyType: {id: 2, name: 'Dairy'}}
+          ]
+        }
+        const result = deserializeDinnerEvent(prismaEvent)
+        expect(result.allergens).toHaveLength(2)
+        expect(result.allergens[0]).toEqual({id: 1, name: 'Gluten'})
+      })
+
+      it('GIVEN null allergens WHEN deserializing THEN returns empty array', () => {
+        const result = deserializeDinnerEvent({id: 1, allergens: null})
+        expect(result.allergens).toEqual([])
+      })
+    })
+
+    describe('deserializeDinnerEventDetail', () => {
+      // Use real serialize methods to generate test data (ADR-010)
+      const {serializeWeekDayMap, createDefaultWeekdayMap} = useCoreValidation()
+      const {serializeWeekDayMap: serializeAffinity, createDefaultWeekdayMap: createDefaultAffinity} = useWeekDayMapValidation()
+
+      const SERIALIZED_PREFERENCES = serializeWeekDayMap(createDefaultWeekdayMap())
+      const SERIALIZED_AFFINITY = serializeAffinity(createDefaultAffinity())
+
+      // This parametrized test would have caught the bug: JSON string not deserialized to object
+      it.each([
+        {
+          desc: 'chef with dinnerPreferences JSON string',
+          input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
+            chef: DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES)
+          }),
+          assertion: (result: Record<string, unknown>) => {
+            expect(typeof (result.chef as Record<string, unknown>).dinnerPreferences).toBe('object')
+            expect((result.chef as Record<string, unknown>).dinnerPreferences).toHaveProperty('mandag')
+          }
+        },
+        {
+          desc: 'chef with null dinnerPreferences',
+          input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
+            chef: DinnerEventFactory.serializedInhabitant(null)
+          }),
+          assertion: (result: Record<string, unknown>) => {
+            expect((result.chef as Record<string, unknown>).dinnerPreferences).toBeNull()
+          }
+        },
+        {
+          desc: 'null chef',
+          input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({chef: null}),
+          assertion: (result: Record<string, unknown>) => {
+            expect(result.chef).toBeNull()
+          }
+        },
+        {
+          desc: 'cookingTeam with affinity JSON string',
+          input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
+            cookingTeam: DinnerEventFactory.serializedCookingTeam(SERIALIZED_AFFINITY)
+          }),
+          assertion: (result: Record<string, unknown>) => {
+            expect(typeof (result.cookingTeam as Record<string, unknown>).affinity).toBe('object')
+            expect((result.cookingTeam as Record<string, unknown>).affinity).toHaveProperty('mandag')
+          }
+        },
+        {
+          desc: 'ticket inhabitant with dinnerPreferences JSON string',
+          input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
+            tickets: [{id: 1, inhabitant: DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES)}]
+          }),
+          assertion: (result: Record<string, unknown>) => {
+            const tickets = result.tickets as Array<Record<string, unknown>>
+            const inhabitant = tickets[0].inhabitant as Record<string, unknown>
+            expect(typeof inhabitant.dinnerPreferences).toBe('object')
+            expect(inhabitant.dinnerPreferences).toHaveProperty('mandag')
+          }
+        }
+      ])('GIVEN $desc WHEN deserializing THEN converts JSON strings to objects', ({input, assertion}) => {
+        const result = deserializeDinnerEventDetail(input())
+        assertion(result)
       })
     })
   })

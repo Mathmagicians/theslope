@@ -3,7 +3,7 @@ import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
 
 const authStore = useAuthStore()
-const {loggedIn, greeting, name, lastName, avatar, email, phone, address} = storeToRefs(authStore)
+const {loggedIn, greeting, name, lastName, avatar, email, phone} = storeToRefs(authStore)
 const {signIn, clear} = authStore
 const {LoginSchema} = useCoreValidation()
 
@@ -22,7 +22,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     isLoading.value = true
     await signIn(event.data.email, event.data.password)
     console.log('🔑> Login >lykkedes')
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
   } finally {
     isLoading.value = false

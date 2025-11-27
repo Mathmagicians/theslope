@@ -73,6 +73,62 @@ export class DinnerEventFactory {
         tickets: []
     })
 
+    /**
+     * Create a Prisma-format dinner event detail with JSON strings for testing deserialization (ADR-010)
+     * Simulates what comes directly from the database before deserialization
+     */
+    static readonly defaultSerializedDinnerEventDetail = (overrides: {
+        chef?: Record<string, unknown> | null,
+        cookingTeam?: Record<string, unknown> | null,
+        tickets?: Array<Record<string, unknown>>,
+        allergens?: Array<{allergyType: Record<string, unknown>}>
+    } = {}) => ({
+        id: 1,
+        date: this.tomorrow,
+        menuTitle: 'Test Menu',
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
+        state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
+        chefId: overrides.chef ? 1 : null,
+        cookingTeamId: overrides.cookingTeam ? 1 : null,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today,
+        chef: overrides.chef ?? null,
+        cookingTeam: overrides.cookingTeam ?? null,
+        tickets: overrides.tickets ?? [],
+        allergens: overrides.allergens ?? []
+    })
+
+    /**
+     * Create a serialized inhabitant (chef/ticket holder) with dinnerPreferences as JSON string
+     * Used for testing deserialization
+     */
+    static readonly serializedInhabitant = (dinnerPreferences: string | null = null) => ({
+        id: 1,
+        heynaboId: 12345,
+        householdId: 1,
+        name: 'Test',
+        lastName: 'Chef',
+        pictureUrl: null,
+        birthDate: null,
+        dinnerPreferences
+    })
+
+    /**
+     * Create a serialized cooking team with affinity as JSON string
+     * Used for testing deserialization
+     */
+    static readonly serializedCookingTeam = (affinity: string | null = null) => ({
+        id: 1,
+        seasonId: 1,
+        name: 'Test Team',
+        affinity,
+        assignments: []
+    })
+
     static readonly createDinnerEvent = async (
         context: BrowserContext,
         dinnerEventData: Partial<DinnerEventCreate> = this.defaultDinnerEvent(),
@@ -190,6 +246,7 @@ export class DinnerEventFactory {
         role: TeamRole,
         expectedStatus: number = 200
     ): Promise<DinnerEventDetail | null> => {
+        const {DinnerEventDetailSchema} = useBookingValidation()
         const response = await context.request.post(
             `/api/team/cooking/${dinnerEventId}/assign-role`,
             {
@@ -203,7 +260,9 @@ export class DinnerEventFactory {
         expect(status, `POST assign-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json()
+            // ADR-010: Validate response through schema to catch deserialization issues
+            const responseBody = await response.json()
+            return DinnerEventDetailSchema.parse(responseBody)
         }
         return null
     }
@@ -233,5 +292,64 @@ export class DinnerEventFactory {
             maxAttempts,
             initialDelayMs
         )
+    }
+
+    /**
+     * Clean up Heynabo events created during testing
+     * Uses Heynabo API to delete events (requires system credentials)
+     *
+     * @param context - Browser context for API requests
+     * @param heynaboEventIds - Array of Heynabo event IDs to delete
+     * @throws Error if cleanup fails (logged but doesn't fail tests)
+     */
+    static readonly cleanupHeynaboEvents = async (
+        context: BrowserContext,
+        heynaboEventIds: number[]
+    ): Promise<void> => {
+        console.info(`Cleaning up ${heynaboEventIds.length} Heynabo events...`)
+
+        // Call cleanup endpoint (to be implemented in GREEN phase)
+        // This endpoint will use system credentials to delete Heynabo events
+        const response = await context.request.post('/api/test/heynabo/cleanup', {
+            headers: headers,
+            data: { eventIds: heynaboEventIds }
+        })
+
+        const status = response.status()
+        if (status !== 200) {
+            const errorBody = await response.text()
+            console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
+            // Don't throw - cleanup failures shouldn't fail tests
+        } else {
+            const result = await response.json()
+            console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)
+        }
+    }
+
+    /**
+     * Update allergens for a dinner event (chef operation)
+     *
+     * @param context - Browser context for API requests
+     * @param dinnerEventId - Dinner event ID
+     * @param allergenIds - Array of allergen type IDs to assign
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns Promise<DinnerEventDetail> - Updated dinner event with allergens
+     */
+    static readonly updateDinnerEventAllergens = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        allergenIds: number[],
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail> => {
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}/allergens`, {
+            headers: headers,
+            data: {allergenIds}
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return await response.json()
     }
 }

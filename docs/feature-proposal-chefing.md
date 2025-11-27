@@ -97,209 +97,463 @@ After assignment:
 
 ---
 
-## 🏗️ Architecture Refactoring (Phase 4.5)
+## 🏗️ Architecture Refactoring (Phase 6) - FINAL
 
-**Status**: In Progress | **Started**: 2025-01-28 | **Priority**: High (eliminate ~70% code duplication)
+**Status**: Architecture Decided | **Updated**: 2025-01-30 | **Priority**: High
 
-### Problem Statement
+### Senior Architect Decision: DELETE DinnerMenuHero
 
-The `/dinner` and `/chef` pages share nearly identical structure:
-- **Detail Panel**: Both use DinnerMenuHero (header) + CookingTeamCard + KitchenPreparation (body)
-- **Master Panel**: Both wrap calendars in UCard with consistent header/loading states
-- **Data Fetching**: Both use component-local `useAsyncData` for dinner detail
-- **Code Duplication**: ~70% of page code is duplicated
+**Problem**: DinnerMenuHero was an unnecessary abstraction layer causing duplication:
+- Menu title/description/date logic duplicated between DinnerMenuHero and ChefMenuCard
+- Mode prop explosion ('household', 'chef', 'view') made component complex
+- Chef decides the menu - so menu content belongs in ChefMenuCard, not a separate hero
 
-**Additional Issue**: DinnerMenuHero handles two distinct use cases (household bookings vs chef editing) in a single component, making it complex and hard to extend.
+**Solution**: Slot-based composition with ChefMenuCard as the content provider
 
-### Solution: Extract Shared Components
+```
+BEFORE (complex, duplicated):
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DinnerDetailPanel                                                       │
+│ ├── #header: DinnerMenuHero (menu, allergens, booking - DUPLICATED)    │
+│ ├── ChefMenuCard mode="edit" (menu, state, deadlines - DUPLICATED)     │
+│ ├── CookingTeamCard                                                     │
+│ └── KitchenPreparation                                                  │
+└─────────────────────────────────────────────────────────────────────────┘
 
-#### 1. DinnerDetailPanel Component
-
-**Purpose**: Encapsulate the common dinner detail structure used by both pages
-
-**Location**: `app/components/dinner/DinnerDetailPanel.vue`
-
-**Features**:
-- Fetches dinner detail with orders via component-local `useAsyncData` (ADR-007)
-- Handles loading/error/empty states internally
-- Renders DinnerMenuHero in header, CookingTeamCard + KitchenPreparation in body
-- Accepts `mode` prop to switch DinnerMenuHero between 'household' and 'chef'
-- Emits booking/allergen update events for parent handling
-
-**Props**:
-```typescript
-interface Props {
-  dinnerEventId: number | null  // null when no selection
-  mode?: 'household' | 'chef' | 'view'  // DinnerMenuHero display mode
-  ticketPrices?: TicketPrice[]  // Available ticket prices for booking
-}
+AFTER (DRY, slot-based):
+┌─────────────────────────────────────────────────────────────────────────┐
+│ DinnerDetailPanel (LAYOUT CONTAINER)                                    │
+│ ├── #top: Date, State badge, Heynabo link                              │
+│ ├── #main: ChefMenuCard + slot content                                 │
+│ │   ├── ChefMenuCard (menu, allergens, state, deadlines, budget)       │
+│ │   └── <slot> for page-specific: DinnerBookingForm (household only)   │
+│ ├── #team: CookingTeamCard                                             │
+│ └── #stats: KitchenPreparation                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits**:
-- ✅ Eliminates ~70% duplication in page components
-- ✅ Consistent error handling and loading states
-- ✅ Single source of truth for dinner detail structure
-- ✅ Easy to test in isolation
+---
 
-#### 2. CalendarMasterPanel Component
+### Component Architecture
 
-**Purpose**: Consistent wrapper for calendar master panels with slot-based customization
+#### 1. DinnerDetailPanel (LAYOUT CONTAINER)
 
-**Location**: `app/components/calendar/CalendarMasterPanel.vue`
-
-**Features**:
-- Provides consistent UCard structure with header/footer slots
-- Optional header slot for selectors, filters, team status
-- Required calendar slot for actual calendar component
-- Optional footer slot for legends, statistics
-- Full-height flex layout for proper master panel sizing
+**Purpose**: Layout container with slots for dinner detail pages
+**Location**: `app/components/dinner/DinnerDetailPanel.vue`
+**Role**: Fetches dinner data, provides layout structure, handles loading/error states
 
 **Props**:
 ```typescript
 interface Props {
-  title: string  // Card header title
+  dinnerEventId: number | null
+  ticketPrices?: TicketPrice[]
+  formMode?: FORM_MODES  // VIEW or EDIT (from ~/types/form)
 }
 ```
 
 **Slots**:
 ```typescript
 interface Slots {
-  header?: () => any      // Optional: Team selector, filters, status
-  calendar: () => any     // Required: Calendar component
-  footer?: () => any      // Optional: Legend, stats
+  top?: () => any       // Date, state badge, Heynabo link
+  main?: () => any      // ChefMenuCard + page-specific content
+  team?: () => any      // CookingTeamCard
+  stats?: () => any     // KitchenPreparation
 }
 ```
 
-**Usage Example (Dinner Page)**:
-```vue
-<CalendarMasterPanel title="Fællesspisningens kalender">
-  <template #calendar>
-    <DinnerCalendarDisplay
-      :season-dates="seasonDates"
-      :dinner-events="dinnerEvents"
-      @date-selected="setValue"
-    />
-  </template>
-</CalendarMasterPanel>
-```
-
-**Usage Example (Chef Page)**:
-```vue
-<CalendarMasterPanel title="Mine Madhold">
-  <template #header>
-    <MyTeamSelector v-model="selectedTeamId" />
-    <TeamRoleStatus :team="selectedTeam" />
-  </template>
-
-  <template #calendar>
-    <TeamCalendarDisplay
-      :teams="[selectedTeam]"
-      :dinner-events="teamDinnerEvents"
-      @select="handleDinnerSelect"
-    />
-  </template>
-</CalendarMasterPanel>
-```
-
-**Benefits**:
-- ✅ Consistent master panel structure across pages
-- ✅ Flexible slot-based composition
-- ✅ No duplication of UCard wrapper code
-- ✅ Easy to add new calendar pages (e.g., admin calendar)
-
-#### 3. DinnerMenuHero Refactoring (Phase 6)
-
-**Principle**: DinnerMenuHero = about the food (shared). Chef management = separate components.
-
-**Component Status**:
-
-| Component | Location | Status | Work Needed |
-|-----------|----------|--------|-------------|
-| `DinnerMenuHero` | `dinner/` | ✅ Exists | Extract sub-components, add cancelled stripe |
-| `DinnerMenuContent` | `dinner/` | New | Title/description display+edit |
-| `DinnerAllergenSection` | `dinner/` | New | Allergen chips + edit modal |
-| `DinnerBookingForm` | `dinner/` | ✅ Exists | Already extracted, verify integration |
-| `ChefMenuCard` | `chef/` | ✅ Exists | Update: 5-step stepper (no AFLYST), deadlines, actions |
-| `DinnerStatusStepper` | `chef/` | ✅ Exists | Update: Remove AFLYST, add computed states |
-| `DinnerBudget` | `chef/` | ✅ Exists | Refactor: 3-box layout with expandable details |
-| `CookingTeamCard` | `cooking-team/` | ✅ Exists | Add volunteer buttons (move from hero) |
+**Provides**: `dinnerEvent` via inject for child components
 
 ---
 
-**DinnerMenuHero (Orchestrator)**
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ UPageHero - Menu Photo or Mocha Gradient                                    │
-│                                                                             │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ DinnerMenuContent                                                     │  │
-│  │ 📅 Fredag 24. januar 2025                                             │  │
-│  │ 🍝 SPAGHETTI CARBONARA  [✏️] ← chef can edit                          │  │
-│  │ Cremet pasta med bacon og parmesan                                    │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ DinnerAllergenSection                                                 │  │
-│  │ ALLERGENER: [🥛 Mælk] [🌾 Gluten] [🥚 Æg]   [REDIGER] ← chef only     │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ DinnerBookingSection (household mode ONLY)                            │  │
-│  │ [Voksen] 👤 Anna 🍽️  |  [Voksen] 👤 Bob 🛍️  |  Total: 90 kr         │  │
-│  │                           [ÆNDRE BOOKING]                             │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
+#### 2. ChefMenuCard (CONTENT PROVIDER)
 
-CANCELLED STATE: Red diagonal stripe overlay "AFLYST" (not in state stepper)
+**Purpose**: ALL dinner content display and editing
+**Location**: `app/components/chef/ChefMenuCard.vue`
+**Role**: Menu display/editing, allergens, state stepper, deadlines, budget, action buttons
+
+**Props**:
+```typescript
+interface Props {
+  dinnerEvent: DinnerEventDetail
+  formMode?: FORM_MODES          // VIEW or EDIT
+  showStateControls?: boolean    // Show stepper, deadlines, budget, actions (chef only)
+  showAllergens?: boolean        // Show allergen section
+}
+```
+
+**Slots**:
+```typescript
+interface Slots {
+  default?: () => any   // Page-specific content (DinnerBookingForm for household)
+}
+```
+
+**Modes via formMode + showStateControls**:
+| formMode | showStateControls | Use Case |
+|----------|-------------------|----------|
+| VIEW | false | Household viewing menu |
+| VIEW | true | Team member viewing chef's dinner |
+| EDIT | true | Chef managing their dinner |
+
+**Emits**:
+```typescript
+interface Emits {
+  'update:menu': [{ menuTitle: string, menuDescription: string }]
+  'update:allergens': [allergenIds: number[]]
+  'advance-state': [newState: DinnerState]
+  'cancel-dinner': []
+}
 ```
 
 ---
 
-**ChefMenuCard (State + Deadlines + Actions)**
+#### 3. DinnerBookingForm (HOUSEHOLD BOOKING)
+
+**Purpose**: Household booking interface
+**Location**: `app/components/dinner/DinnerBookingForm.vue`
+**Role**: Booking form, power mode, total price calculation
+
+**Props**:
+```typescript
+interface Props {
+  dinnerEvent: DinnerEventDetail
+  orders: Order[]
+  ticketPrices: TicketPrice[]
+  formMode: FORM_MODES
+}
 ```
+
+**Emits**:
+```typescript
+interface Emits {
+  'update-booking': [inhabitantId: number, dinnerMode: string, ticketPriceId: number]
+  'update-all-bookings': [dinnerMode: string]
+}
+```
+
+---
+
+#### 4. Supporting Components
+
+| Component | Location | Role |
+|-----------|----------|------|
+| `DinnerStatusStepper` | `chef/` | 5-step progress (PLANLAGT→ANNONCERET→BOOKING LUKKET→INDKØB→AFHOLDT) |
+| `DinnerBudget` | `chef/` | 3-box layout (Indtægter, Rådighedsbeløb, Køkkenbidrag) + expandable |
+| `CookingTeamCard` | `cooking-team/` | Team display with volunteer buttons |
+| `KitchenPreparation` | `kitchen/` | Ticket statistics by dining mode |
+| `AllergenMultiSelector` | `shared/` | Allergen checkbox list with statistics |
+
+---
+
+### Page Composition
+
+#### /dinner page (Household Booking)
+
+```vue
+<DinnerDetailPanel :dinner-event-id="selectedDinnerId" :ticket-prices="ticketPrices">
+  <template #main>
+    <ChefMenuCard
+      :dinner-event="dinnerEvent"
+      :form-mode="FORM_MODES.VIEW"
+      :show-state-controls="false"
+      :show-allergens="true"
+    >
+      <!-- Household-specific: Booking form in slot -->
+      <DinnerBookingForm
+        :dinner-event="dinnerEvent"
+        :orders="orders"
+        :ticket-prices="ticketPrices"
+        :form-mode="bookingFormMode"
+        @update-booking="handleBookingUpdate"
+      />
+    </ChefMenuCard>
+  </template>
+</DinnerDetailPanel>
+```
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📅 Fredag 24. januar 2025          [🟢 ANNONCERET]        [Heynabo →]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  🍝 SPAGHETTI CARBONARA                                                │
+│  Cremet pasta med bacon og parmesan                                    │
+│                                                                         │
+│  ALLERGENER: [🥛 Mælk] [🌾 Gluten] [🥚 Æg]                             │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  BOOKING (via slot - DinnerBookingForm)                                │
+│  [Voksen] 👤 Anna 🍽️  |  [Voksen] 👤 Bob 🛍️  |  Total: 90 kr         │
+│                           [ÆNDRE BOOKING]                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Hvem laver maden?                                                      │
+│  <CookingTeamCard mode="monitor" />                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Køkkenstatistik                                                        │
+│  <KitchenPreparation :orders="orders" />                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### /chef page (Chef is Chef)
+
+```vue
+<DinnerDetailPanel :dinner-event-id="selectedDinnerId" :ticket-prices="ticketPrices">
+  <template #main>
+    <ChefMenuCard
+      :dinner-event="dinnerEvent"
+      :form-mode="FORM_MODES.EDIT"
+      :show-state-controls="true"
+      :show-allergens="true"
+      @update:menu="handleMenuUpdate"
+      @update:allergens="handleAllergenUpdate"
+      @advance-state="handleAdvanceState"
+      @cancel-dinner="handleCancelDinner"
+    />
+    <!-- No slot content - chef controls are all inside ChefMenuCard -->
+  </template>
+</DinnerDetailPanel>
+```
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📅 Fredag 24. januar 2025          [🟡 PLANLAGT]          [Heynabo →]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ADMINISTRER MIDDAGEN                                                   │
+│                                                                         │
+│  Menu titel: [Spaghetti Carbonara___________]  [✏️]                    │
+│  Beskrivelse: [Cremet pasta med bacon_______]                          │
+│  Billede: [Upload / URL]                                               │
+│                                                                         │
+│  ALLERGENER: [🥛 Mælk] [🌾 Gluten]              [REDIGER ALLERGENER]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                 │
+│  PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben            │
+├─────────────────────────────────────────────────────────────────────────┤
+│  💰 1.781 kr (rådighedsbeløb)                                     [▼]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  [📢 ANNONCER MENU]                                    [❌ AFLYS]      │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Hvem laver maden?                                                      │
+│  <CookingTeamCard mode="monitor" />                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Køkkenstatistik                                                        │
+│  <KitchenPreparation :orders="orders" />                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### /chef page (Team Member - Not Chef)
+
+```vue
+<DinnerDetailPanel :dinner-event-id="selectedDinnerId" :ticket-prices="ticketPrices">
+  <template #main>
+    <ChefMenuCard
+      :dinner-event="dinnerEvent"
+      :form-mode="FORM_MODES.VIEW"
+      :show-state-controls="true"
+      :show-allergens="true"
+    />
+  </template>
+</DinnerDetailPanel>
+```
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📅 Fredag 24. januar 2025          [🟡 PLANLAGT]          [Heynabo →]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  MIDDAG                                                                 │
+│                                                                         │
+│  🍝 Spaghetti Carbonara                                                │
+│  Cremet pasta med bacon og parmesan                                    │
+│                                                                         │
+│  ALLERGENER: [🥛 Mælk] [🌾 Gluten]                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                 │
+│  PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben            │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Hvem laver maden?                                                      │
+│  <CookingTeamCard mode="monitor" />                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Køkkenstatistik                                                        │
+│  <KitchenPreparation :orders="orders" />                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Component Status
+
+| Component | Status | Action |
+|-----------|--------|--------|
+| `DinnerMenuHero` | ⚠️ DELETE | Remove - functionality moved to ChefMenuCard |
+| `DinnerDetailPanel` | ✅ REFACTOR | Update to slot-based layout container |
+| `ChefMenuCard` | ✅ REFACTOR | Add menu content, allergens, make it THE content provider |
+| `DinnerBookingForm` | ✅ EXISTS | Use in slot for household pages |
+| `DinnerStatusStepper` | ✅ EXISTS | Use inside ChefMenuCard |
+| `DinnerBudget` | ⚠️ REFACTOR | 3-box layout with expandable details |
+| `CookingTeamCard` | ⚠️ REFACTOR | Add volunteer buttons in monitor mode |
+| `CalendarMasterPanel` | ✅ EXISTS | Keep as-is |
+
+---
+
+### Key Principles
+
+1. **ChefMenuCard is THE content provider** - all dinner info lives here
+2. **DinnerDetailPanel is THE layout container** - slots for composition
+3. **formMode from ~/types/form** - VIEW or EDIT, not custom mode strings
+4. **Slot-based composition** - page-specific content via slots, not props
+5. **DELETE DinnerMenuHero** - unnecessary abstraction layer
+
+---
+
+**ChefMenuCard (3 Modes: edit, view, compact)**
+
+Merged from ChefMenuCard + ChefDinnerCard into ONE DRY component.
+
+**Deadline Types** (SCHEDULED state only):
+1. **Menu** - Chef must announce before booking deadline (⚠️ <72h, 🚨 overdue)
+2. **Indkøb** - Chef must shop before dinner (⚠️ <72h, 🚨 <24h)
+3. **Bestilling** - Informational: booking window open/closed
+
+```
+MODE: 'edit' (Detail Panel - Chef's cockpit)
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ADMINISTRER MIDDAGEN                                                     │
+│ ADMINISTRER MIDDAGEN                                        🟡 PLANLAGT │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Menu titel: [Spaghetti Carbonara___________]  [✏️]                       │
+│ Beskrivelse: [Cremet pasta med bacon_______]                             │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
 │ PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                        │
-│    ▲                  LUKKET    DONE                                     │
-│                       (computed) (computed)                              │
+│                       LUKKET    DONE                                     │
+│                      (computed) (computed)                               │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ ⚠️ Menu: Om 2 dage  |  ⚠️ Indkøb: Om 4 dage  |  ✅ Bestilling: Åben      │
+│ DEADLINES:                                                               │
+│ [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben   💰 1.500 kr │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ [📢 ANNONCER MENU]                              [❌ AFLYS] (discrete)    │
+│ [📢 ANNONCER MENU]                                    [❌ AFLYS]         │
+└──────────────────────────────────────────────────────────────────────────┘
+
+MODE: 'view' (Detail Panel - Team member read-only)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ MIDDAG                                                      🟡 PLANLAGT │
+├──────────────────────────────────────────────────────────────────────────┤
+│ 🍝 Spaghetti Carbonara                                                   │
+│ Cremet pasta med bacon                                                   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
+│ PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben               │
+└──────────────────────────────────────────────────────────────────────────┘
+
+MODE: 'compact' (Master Panel - Ledger/Agenda list item)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 24/01 │ 🍝 Spaghetti Carbonara │ 🟡 PLANLAGT │ [Menu]⚠️2d │ 💰 1.500 kr │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Deadline colors: ✅ green (OK), ⚠️ warning (<72h), 🚨 error (overdue/<24h)
+```
+
+---
+
+**DinnerStatusStepper (5 States)**
+
+Shows chef's progress through dinner lifecycle. **AFLYST is NOT a step** - cancelled dinners get red stripe overlay on the card instead.
+
+```
+DB States:        PLANLAGT → ANNONCERET →                              → AFHOLDT
+Computed States:                          BOOKING LUKKET → INDKØB DONE
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                   │
+│  1        2        3        4        5                                   │
+│                                                                          │
+│  PLANLAGT   ANNONCERET   BOOKING    INDKØB     AFHOLDT                   │
+│  (DB)       (DB)         LUKKET     DONE       (DB)                      │
+│                          (computed)  (computed)                          │
+│                                                                          │
+│  Step logic:                                                             │
+│  1. PLANLAGT: state=SCHEDULED, no menu                                   │
+│  2. ANNONCERET: state=ANNOUNCED                                          │
+│  3. BOOKING LUKKET: canModifyOrders()=false (computed from date)         │
+│  4. INDKØB DONE: chef marks groceries purchased (future: checkbox)       │
+│  5. AFHOLDT: state=CONSUMED                                              │
+└──────────────────────────────────────────────────────────────────────────┘
+
+CANCELLED DINNER (separate visual, not in stepper):
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ████████████████████████████████████████████████████████████████████████ │
+│ ██  A F L Y S T  ██  Red diagonal stripe overlay on entire card     ██  │
+│ ████████████████████████████████████████████████████████████████████████ │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-**DinnerBudget (3-Box Layout)**
+**DinnerBudget (3-Box Layout with Expandable Table)**
+
+Used in ChefMenuCard (NOT in TeamRoleStatus).
+
 ```
+Compact mode (collapsed):
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 💰 1.781 kr                                                         [▼] │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Full mode (expanded - 3-box with table):
 ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
 │ 💰 INDTÆGTER       │  │ 🛒 RÅDIGHEDSBELØB  │  │ 🏠 KØKKENBIDRAG    │
 │     1.875 kr       │  │     1.781 kr       │  │       94 kr        │
-│  45 billetter      │  │   (inkl. moms)     │  │    5% af salg      │
-│      [▼]           │  │     1.425 kr       │  │      [▼]           │
-│                    │  │   (ex moms)  [▼]   │  │                    │
+│  (45 billetter)    │  │   (inkl. moms)     │  │    (5% af salg)    │
 └────────────────────┘  └────────────────────┘  └────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ DETALJER                                                            [▲] │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Billettype        │ Antal │ Stk pris │ Total                            │
+│ Voksen            │    30 │   50 kr  │ 1.500 kr                         │
+│ Barn              │    12 │   25 kr  │   300 kr                         │
+│ Baby              │     3 │    0 kr  │     0 kr                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Indtægter (inkl. moms)                              1.875 kr            │
+│ Køkkenbidrag (5%)                                    -94 kr             │
+│ Rådighedsbeløb (inkl. moms)                        1.781 kr             │
+│ Rådighedsbeløb (ex moms /1.25)                     1.425 kr ← indkøb    │
+└──────────────────────────────────────────────────────────────────────────┘
 
-Formula: Indtægter (no VAT) - Køkkenbidrag (5%) = Rådighedsbeløb
+Formula: Indtægter - Køkkenbidrag (5%) = Rådighedsbeløb
          Rådighedsbeløb / 1.25 = ex moms (for grocery shopping)
 Config:  app.config.ts → useSeason: kitchenBaseRatePercent=5, vatPercent=25
 ```
 
 ---
 
-**CookingTeamCard (+ Volunteer Buttons)**
+**CookingTeamCard (Volunteer Buttons in Monitor Mode)**
+
+Volunteer buttons always visible in `monitor` mode (used in /chef and /dinner pages).
+
 ```
+MODE: 'monitor' (with volunteer buttons - always visible)
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ HVEM LAVER MADEN?                                                        │
+│ 🍳 Team A   👥 4   📅 12                                                 │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ 👨‍🍳 Chefkok: Anna Nielsen (DIG!)                                         │
-│ 👥 Kokke: Bob Jensen, Clara Hansen                                       │
-│ 🌱 Hjælpere: (ingen)                                                     │
+│ 👨‍🍳 Chef: [Anna H]                                                       │
+│ 🥄 Kokke: [Lars B] [Maria S] [Peter J]                                   │
+│ 👶 Hjælpere: (ingen)                                                     │
 ├──────────────────────────────────────────────────────────────────────────┤
-│ [👨‍🍳 BLIV CHEFKOK]  [👥 BLIV KOK]  [🌱 BLIV HJÆLPER]  ← mode='manage'   │
+│ [👨‍🍳 BLIV CHEFKOK]  [🥄 BLIV KOK]  [👶 BLIV HJÆLPER]                     │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Already volunteered:
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ✅ Du er tilmeldt som KOK                              [❌ AFMELD]       │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

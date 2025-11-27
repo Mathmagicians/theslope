@@ -14,7 +14,7 @@
  * - /admin/teams (admin overview - no selection)
  */
 import type {DateRange} from '~/types/dateTypes'
-import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
@@ -22,7 +22,7 @@ import { isSameDay } from 'date-fns'
 
 interface Props {
   seasonDates: DateRange
-  teams: CookingTeam[]
+  teams: CookingTeamDisplay[]
   dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
   selectedDinnerId?: number | null // For chef page selection

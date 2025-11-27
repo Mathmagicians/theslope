@@ -5,9 +5,11 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 
 test.describe('Household tab navigation', () => {
+    // Unique salt per worker to avoid parallel test conflicts
+    const testSalt = temporaryAndRandom()
     let householdId: number
     let shortName: string
 
@@ -37,8 +39,20 @@ test.describe('Household tab navigation', () => {
         )
     }
 
+    /**
+     * Navigate to tab with API wait to ensure store is ready
+     */
     const navigateToTab = async (page: any, tab: Tab) => {
+        // Setup response wait BEFORE navigation
+        const responsePromise = page.waitForResponse(
+            (response: any) => response.url().includes('/api/admin/household/'),
+            {timeout: 10000}
+        )
+
         await page.goto(buildUrl(tab.path))
+        const response = await responsePromise
+        expect(response.status()).toBe(200)
+
         await expect(page).toHaveURL(buildUrl(tab.path))
         await waitForTabVisible(page, tab)
     }
@@ -52,8 +66,8 @@ test.describe('Household tab navigation', () => {
         // NOTE: Singleton is cleaned up by global teardown, not by this test
         await SeasonFactory.createActiveSeason(context, {holidays: []})
 
-        // Create household
-        const household = await HouseholdFactory.createHousehold(context, {name: 'TestHousehold-TabNav'})
+        // Create household with salted name for parallel safety
+        const household = await HouseholdFactory.createHousehold(context, {name: salt('TabNav', testSalt)})
         householdId = household.id
         shortName = household.shortName
     })
@@ -99,7 +113,17 @@ test.describe('Household tab navigation', () => {
     test('URL path preserved on refresh', async ({page}) => {
         const testTab = tabs[1]!
         await navigateToTab(page, testTab)
+
+        // Setup response wait BEFORE reload
+        const responsePromise = page.waitForResponse(
+            (response: any) => response.url().includes('/api/admin/household/'),
+            {timeout: 10000}
+        )
+
         await page.reload()
+        const response = await responsePromise
+        expect(response.status()).toBe(200)
+
         await expect(page).toHaveURL(buildUrl(testTab.path))
         await waitForTabVisible(page, testTab)
     })

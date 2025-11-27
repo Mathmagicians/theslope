@@ -55,7 +55,7 @@
  */
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdWithInhabitants} from '~/composables/useCoreValidation'
-import {WEEKDAYS, type WeekDayMap, type WeekDay} from '~/types/dateTypes'
+import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useBookingValidation'
 
 interface Props {
@@ -144,8 +144,13 @@ const updateDraft = (preferences: WeekDayMap<DinnerMode>) => {
   draftPreferences.value = preferences
 }
 
-// Handle row toggle
-const handleToggleRow = (row: any) => {
+// Handle row toggle - row is a TanStack table row
+interface ToggleableRow {
+  getIsExpanded: () => boolean
+  toggleExpanded: () => void
+  original: { id: number; dinnerPreferences?: WeekDayMap<DinnerMode> | null }
+}
+const handleToggleRow = (row: ToggleableRow) => {
   if (!row.getIsExpanded()) {
     // Opening - initialize draft
     editingInhabitantId.value = row.original.id

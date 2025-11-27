@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {
     SystemRoleSchema,
-    RoleSchema,
+    RoleSchema as _RoleSchema,
     TicketTypeSchema,
     DinnerModeSchema,
     DinnerStateSchema,
