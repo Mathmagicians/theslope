@@ -232,32 +232,29 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     /**
-     * Announce dinner (state transition SCHEDULED → ANNOUNCED)
-     * Publishes menu to members for booking
+     * Change dinner state via state transition endpoint (ADR-013)
+     * Handles Heynabo event sync for ANNOUNCED/CANCELLED states
      */
-    const announceDinner = async (dinnerEventId: number): Promise<void> => {
+    const changeDinnerState = async (dinnerEventId: number, targetState: typeof DinnerState[keyof typeof DinnerState]): Promise<DinnerEventDetail> => {
         try {
-            await updateDinnerEventField(dinnerEventId, {state: DinnerState.ANNOUNCED})
-            console.info(CTX, `Announced dinner event ${dinnerEventId}`)
+            const updated = await $fetch<DinnerEventDetail>(`/api/chef/dinner/${dinnerEventId}/${targetState}`, {
+                method: 'POST'
+            })
+            console.info(CTX, `Changed dinner event ${dinnerEventId} to state ${targetState}`)
+            return updated
         } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke annoncere menuen til beboerne')
+            const errorMessages = {
+                [DinnerState.ANNOUNCED]: 'Kunne ikke annoncere menuen til beboerne',
+                [DinnerState.CANCELLED]: 'Kunne ikke aflyse fællesspisningen'
+            } as const
+            handleApiError(e, errorMessages[targetState as keyof typeof errorMessages] || 'Kunne ikke ændre fællesspisningens status')
             throw e
         }
     }
 
-    /**
-     * Cancel dinner (state transition → CANCELLED)
-     * Marks dinner as cancelled with refund handling
-     */
-    const cancelDinner = async (dinnerEventId: number): Promise<void> => {
-        try {
-            await updateDinnerEventField(dinnerEventId, {state: DinnerState.CANCELLED})
-            console.info(CTX, `Cancelled dinner event ${dinnerEventId}`)
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke aflyse fællesspisningen')
-            throw e
-        }
-    }
+    // Convenience wrappers for common state transitions
+    const announceDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.ANNOUNCED)
+    const cancelDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.CANCELLED)
 
     return {
         // state

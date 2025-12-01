@@ -82,9 +82,9 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
         }"
         :style="{ backgroundImage: `url(${effectivePictureUrl})` }"
       >
-        <!-- Dark gradient overlay for text readability (pointer-events-none to allow clicks through) -->
+        <!-- Radial gradient overlay: transparent center (80%), dark edges for text readability -->
         <template #top>
-          <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20 pointer-events-none" />
+          <div class="absolute inset-0 pointer-events-none bg-radial from-transparent from-80% to-black/60" />
         </template>
 
         <slot name="hero" />

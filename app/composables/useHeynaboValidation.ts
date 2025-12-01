@@ -1,5 +1,5 @@
 import {z} from "zod";
-import type { HouseholdDetail, InhabitantCreate, UserCreate } from './useCoreValidation'
+import type { HouseholdCreate, InhabitantCreate, UserCreate } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
 
 export const useHeynaboValidation = () => {
@@ -76,16 +76,14 @@ export const useHeynaboValidation = () => {
     }
 
     /**
-     * Transforms a HeynaboMember into an InhabitantCreate
+     * Transforms a HeynaboMember into an InhabitantCreate (without householdId - repository handles it)
      *
-     * @param locationId - The Heynabo location ID this member belongs to
      * @param member - The HeynaboMember data from the API
-     * @returns InhabitantCreate ready for database creation
+     * @returns InhabitantCreate without householdId, ready for nested household creation
      */
-    const inhabitantFromMember = (locationId: number, member: HeynaboMember): InhabitantCreate => {
-        const inhabitant: InhabitantCreate = {
+    const inhabitantFromMember = (member: HeynaboMember): Omit<InhabitantCreate, 'householdId'> => {
+        const inhabitant: Omit<InhabitantCreate, 'householdId'> = {
             heynaboId: member.id,
-            householdId: locationId, // Will be overridden when nested in household creation
             pictureUrl: member.avatar,
             name: member.firstName,
             lastName: member.lastName,
@@ -112,12 +110,12 @@ export const useHeynaboValidation = () => {
      *
      * @param locationId - The Heynabo location ID to filter by
      * @param members - Array of all HeynaboMember data
-     * @returns Array of InhabitantCreate for this location
+     * @returns Array of InhabitantCreate without householdId for this location
      */
-    const findInhabitantsByLocation = (locationId: number, members: HeynaboMember[]): InhabitantCreate[] => {
+    const findInhabitantsByLocation = (locationId: number, members: HeynaboMember[]): Omit<InhabitantCreate, 'householdId'>[] => {
         return members
             .filter(member => member.locationId === locationId)
-            .map(member => inhabitantFromMember(locationId, member))
+            .map(member => inhabitantFromMember(member))
     }
 
     /**
@@ -126,11 +124,11 @@ export const useHeynaboValidation = () => {
      *
      * @param locations - Array of HeynaboLocation data from API
      * @param members - Array of HeynaboMember data from API
-     * @returns Array of HouseholdCreateWithInhabitants ready for database creation
+     * @returns Array of HouseholdCreate ready for database creation
      */
-    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): Omit<HouseholdDetail, 'id'>[] => {
+    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreate[] => {
         const households = locations.map(location => {
-            const newHousehold: Omit<HouseholdDetail, 'id'> = {
+            const newHousehold: HouseholdCreate = {
                 heynaboId: location.id,
                 movedInDate: new Date('2019-06-25'),
                 pbsId: location.id, // FIXME - import pbs from csv file

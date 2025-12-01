@@ -33,7 +33,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // Use useAsyncData for detail endpoint - allows manual execute() without context issues
     const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
 
-    const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+    const {HouseholdDetailSchema} = useCoreValidation()
 
     const {
         data: selectedHousehold,
@@ -51,7 +51,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             transform: (data: any) => {
                 if (!data) return null
                 // Repository validates data per ADR-010, schema handles HTTP JSON deserialization (ISO strings → Date objects)
-                return HouseholdWithInhabitantsSchema.parse(data)
+                return HouseholdDetailSchema.parse(data)
             }
         }
     )

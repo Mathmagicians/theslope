@@ -37,7 +37,7 @@ export class HouseholdFactory {
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         expectedStatus: number = 201
     ): Promise<any> => {
-        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+        const {HouseholdDetailSchema} = useCoreValidation()
 
         // Merge partial with defaults to create full Household object
         const householdData = {
@@ -63,12 +63,7 @@ export class HouseholdFactory {
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new household ID').toBeDefined()
-
-            // Validate API returns data conforming to HouseholdDetail schema
-            const result = HouseholdWithInhabitantsSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid HouseholdDetail object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-
-            return result.data!
+            return HouseholdDetailSchema.parse(responseBody)
         }
 
         return responseBody
@@ -98,7 +93,7 @@ export class HouseholdFactory {
         householdId: number,
         expectedStatus: number = 200
     ): Promise<any> => {
-        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+        const {HouseholdDetailSchema} = useCoreValidation()
         const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
 
         const status = response.status()
@@ -106,12 +101,7 @@ export class HouseholdFactory {
 
         if (expectedStatus === 200) {
             const rawData = await response.json()
-
-            // Validate API returns data conforming to HouseholdDetail schema
-            const result = HouseholdWithInhabitantsSchema.safeParse(rawData)
-            expect(result.success, `API should return valid HouseholdDetail object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-
-            return result.data!
+            return HouseholdDetailSchema.parse(rawData)
         }
         return null
     }
@@ -127,7 +117,7 @@ export class HouseholdFactory {
         householdIds: number | number[],
         expectedStatus?: number
     ): Promise<HouseholdDetail | HouseholdDetail[]> => {
-        const {HouseholdWithInhabitantsSchema} = useCoreValidation()
+        const {HouseholdDetailSchema} = useCoreValidation()
         const ids = Array.isArray(householdIds) ? householdIds : [householdIds]
         const isSingleId = !Array.isArray(householdIds)
 
@@ -170,9 +160,8 @@ export class HouseholdFactory {
 
         // Validate and return
         const validResults = results.filter(r => r !== null).map(r => {
-            const result = HouseholdWithInhabitantsSchema.safeParse(r)
-            return result.success ? result.data : null
-        }).filter(r => r !== null) as HouseholdDetail[]
+            return HouseholdDetailSchema.parse(r)
+        }) as HouseholdDetail[]
 
         return isSingleId ? validResults[0] : validResults
     }

@@ -28,10 +28,10 @@ export const useBookingValidation = () => {
     const {CookingTeamDisplaySchema, deserializeCookingTeamDetail} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema} = useTicketPriceValidation()
-    const {AllergyTypeDisplaySchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema} = useAllergyValidation()
 
     // ============================================================================
-    // DINNER EVENT
+    // DINNER EVENT (Base + Display schemas - defined first for Order to reference)
     // ============================================================================
 
     // all scalar fields
@@ -51,11 +51,6 @@ export const useBookingValidation = () => {
         allergens: z.array(AllergyTypeDisplaySchema).optional()
     })
 
-    const DinnerEventRelationsOnlySchema = z.object({
-        chef: InhabitantDisplaySchema.nullable(), cookingTeam: CookingTeamDisplaySchema.nullable(),
-        tickets: z.array(z.lazy(() => OrderDetailSchema)).optional()
-    })
-
     /**
      * DinnerEvent Display - all scalars fields for index endpoints (GET /api/admin/dinner-event)
      * ADR-009: Lightweight, display-ready data for lists/calendar
@@ -63,13 +58,6 @@ export const useBookingValidation = () => {
     const DinnerEventDisplaySchema = DinnerEventBaseSchema.extend({
         id: z.number().int().positive()
     })
-
-
-    /**
-     * DinnerEvent Detail - Display +  relations (GET /api/admin/dinner-event/[id])
-     * ADR-009: Operation-ready, comprehensive data
-     */
-    const DinnerEventDetailSchema = DinnerEventDisplaySchema.merge(DinnerEventRelationsOnlySchema)
 
     /**
      * DinnerEvent Create - For API input validation (PUT /api/admin/dinner-event)
@@ -83,7 +71,7 @@ export const useBookingValidation = () => {
     const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
 
     // ============================================================================
-    // ORDER
+    // ORDER (defined after DinnerEventDisplaySchema so it can reference it)
     // ============================================================================
 
     const OrderBaseSchema = z.object({
@@ -98,12 +86,6 @@ export const useBookingValidation = () => {
         closedAt: z.coerce.date().nullable(),
         createdAt: z.coerce.date(),
         updatedAt: z.coerce.date()
-    })
-
-    const _OrderRelationsOnlySchema = z.object({
-        chef: InhabitantDisplaySchema.nullable(),
-        cookingTeam: CookingTeamDisplaySchema.nullable(),
-        tickets: z.array(z.lazy(() => OrderDetailSchema)).optional()
     })
 
     /**
@@ -122,13 +104,8 @@ export const useBookingValidation = () => {
     const OrderDetailSchema = OrderDisplaySchema.extend({
         // DinnerEvent relation - ALL scalar fields
         dinnerEvent: DinnerEventDisplaySchema,
-        // Inhabitant relation
-        inhabitant: z.object({
-            id: z.number().int().positive(),
-            name: z.string(),
-            lastName: z.string(),
-            pictureUrl: z.string().nullable()
-        }),
+        // Inhabitant relation with allergies for kitchen display (clean type from useAllergyValidation)
+        inhabitant: InhabitantWithAllergiesSchema,
         // BookedByUser relation
         bookedByUser: z.object({
             id: z.number().int().positive(),
@@ -142,6 +119,22 @@ export const useBookingValidation = () => {
             description: z.string().nullable()
         })
     })
+
+    // ============================================================================
+    // DINNER EVENT (Detail schema - defined after OrderDetailSchema so no z.lazy needed)
+    // ============================================================================
+
+    const DinnerEventRelationsOnlySchema = z.object({
+        chef: InhabitantDisplaySchema.nullable(),
+        cookingTeam: CookingTeamDisplaySchema.nullable(),
+        tickets: z.array(OrderDetailSchema).optional()  // No z.lazy() - OrderDetailSchema is now defined
+    })
+
+    /**
+     * DinnerEvent Detail - Display + relations (GET /api/admin/dinner-event/[id])
+     * ADR-009: Operation-ready, comprehensive data
+     */
+    const DinnerEventDetailSchema = DinnerEventDisplaySchema.merge(DinnerEventRelationsOnlySchema)
 
     /**
      * Order Create - Repository layer (used internally)

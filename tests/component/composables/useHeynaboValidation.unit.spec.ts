@@ -175,15 +175,16 @@ describe('useHeynaboValidation', () => {
 
         describe('inhabitantFromMember', () => {
             it.each([
-                {member: sampleHeynaboMembers[0], locationId: 2, hasUser: true, systemRoles: ['ADMIN']},
-                {member: {...sampleHeynaboMembers[2], email: 'valid@email.com'}, locationId: 48, hasUser: true, systemRoles: []},
-                {member: sampleHeynaboMembers[1], locationId: 116, hasUser: false, systemRoles: []},
-                {member: {...sampleHeynaboMembers[0], role: 'limited'}, locationId: 2, hasUser: false, systemRoles: []}
-            ])('creates inhabitant with hasUser=$hasUser for member $member.id', ({member, locationId, hasUser, systemRoles}) => {
-                const result = inhabitantFromMember(locationId, member)
+                {member: sampleHeynaboMembers[0], hasUser: true, systemRoles: ['ADMIN']},
+                {member: {...sampleHeynaboMembers[2], email: 'valid@email.com'}, hasUser: true, systemRoles: []},
+                {member: sampleHeynaboMembers[1], hasUser: false, systemRoles: []},
+                {member: {...sampleHeynaboMembers[0], role: 'limited'}, hasUser: false, systemRoles: []}
+            ])('creates inhabitant with hasUser=$hasUser for member $member.id', ({member, hasUser, systemRoles}) => {
+                const result = inhabitantFromMember(member)
 
                 expect(result.heynaboId).toBe(member.id)
-                expect(result.householdId).toBe(locationId)
+                // householdId is NOT included - repository handles it during nested creation
+                expect(result).not.toHaveProperty('householdId')
                 if (hasUser) {
                     expect(result.user).toBeDefined()
                     expect(result.user?.systemRoles).toEqual(systemRoles)
@@ -197,7 +198,7 @@ describe('useHeynaboValidation', () => {
                 {dateOfBirth: null, expected: null}
             ])('handles dateOfBirth=$dateOfBirth', ({dateOfBirth, expected}) => {
                 const member = {...sampleHeynaboMembers[0], dateOfBirth}
-                const result = inhabitantFromMember(2, member)
+                const result = inhabitantFromMember(member)
                 expect(result.birthDate).toEqual(expected)
             })
         })

@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
 const { getStepConfig, getStepDeadline } = useBooking()
@@ -71,13 +71,13 @@ const steps = computed(() => {
       </template>
     </UAlert>
 
-    <!-- Normal: Steps progress -->
+    <!-- Normal: Steps progress (horizontal on desktop, vertical on mobile) -->
     <UStepper
       v-else
       :model-value="currentStep"
       :items="steps"
-      :size="mode === 'compact' ? 'sm' : 'md'"
-      :orientation="mode === 'compact' ? 'horizontal' : 'vertical'"
+      :size="mode === 'compact' ? SIZES.small.value : SIZES.standard.value"
+      :orientation="ORIENTATIONS.responsive"
     />
   </div>
 </template>

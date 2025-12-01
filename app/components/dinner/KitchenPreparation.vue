@@ -28,20 +28,15 @@
  * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
+import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {AffectedDiner} from '~/composables/useAllergy'
 
 // Import DinnerMode from validation composable (ADR-001)
-const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
-const _TicketType = TicketTypeSchema.enum
 
-// Extended order detail for mock data (diningMode will come from inhabitant preferences in real implementation)
-interface OrderDetailWithDiningMode extends OrderDetail {
-  diningMode: typeof DinnerMode[keyof typeof DinnerMode]
-  allergyIcon?: string
-}
-
-// Statistics for one dining mode
-interface _DiningModeStats {
+// Statistics for one dining mode panel
+interface DiningModeStats {
   key: typeof DinnerMode[keyof typeof DinnerMode] | 'RELEASED'
   label: string
   percentage: number
@@ -49,25 +44,22 @@ interface _DiningModeStats {
   portions: number | null
   chairs: number | null
   plates: number | null
-  allergies: Array<{ icon: string; name: string; portions: number }>
-}
-
-// Ticket price breakdown (dynamic, not hardcoded)
-interface _TicketPriceBreakdown {
-  ticketType: typeof _TicketType[keyof typeof _TicketType]
-  description: string
-  count: number
-  portions: number
+  affectedDiners: AffectedDiner[]
 }
 
 interface Props {
-  orders: OrderDetailWithDiningMode[]
+  orders: OrderDetail[]
+  allergens?: AllergyTypeDisplay[]  // Menu allergens to check against
 }
 
 const props = defineProps<Props>()
 
-// Use business logic composable for order calculations (ADR-001)
-const {getActiveOrders, getReleasedOrders, groupByTicketType, calculateTotalPortionsFromPrices, getPortionsForTicketPrice, requiresChair} = useOrder()
+// Use business logic composables (ADR-001)
+const {getActiveOrders, getReleasedOrders, groupByTicketType, calculateTotalPortionsFromPrices, requiresChair} = useOrder()
+const {computeAffectedDiners} = useAllergy()
+
+// Menu allergen IDs for affected diner calculation
+const menuAllergenIds = computed(() => props.allergens?.map(a => a.id) ?? [])
 
 // Separate active orders (cooking for) from released orders (for sale)
 const activeOrders = computed(() => getActiveOrders(props.orders))
@@ -91,8 +83,8 @@ const diningModeStats = computed(() => {
     [DinnerMode.DINEINLATE]: 'SPIS SENT'
   }
 
-  const stats = modes.map(mode => {
-    const modeOrders = activeOrders.value.filter(o => o.diningMode === mode)
+  const stats: DiningModeStats[] = modes.map(mode => {
+    const modeOrders = activeOrders.value.filter(o => o.dinnerMode === mode)
     const count = modeOrders.length
     const portions = calculateTotalPortionsFromPrices(modeOrders)
 
@@ -104,25 +96,12 @@ const diningModeStats = computed(() => {
     // Plates = portions rounded
     const plates = Math.round(portions)
 
-    // Collect allergies (group by person)
-    const allergies = modeOrders
-      .filter(o => o.allergyIcon && o.inhabitant?.name)
-      .reduce((acc, o) => {
-        const existing = acc.find(a => a.name === o.inhabitant.name && a.icon === o.allergyIcon)
-        if (existing) {
-          existing.portions += getPortionsForTicketPrice(o.ticketPrice)
-        } else {
-          acc.push({
-            icon: o.allergyIcon!,
-            name: o.inhabitant.name,
-            portions: getPortionsForTicketPrice(o.ticketPrice)
-          })
-        }
-        return acc
-      }, [] as Array<{ icon: string; name: string; portions: number }>)
-
     // Calculate percentage (0 if no orders)
     const percentage = props.orders.length > 0 ? Math.round((count / total) * 100) : 0
+
+    // Calculate affected diners for this mode (who has allergies matching menu allergens)
+    const affectedResult = computeAffectedDiners(modeOrders, menuAllergenIds.value)
+    const affectedDiners = affectedResult?.affectedList ?? []
 
     return {
       key: mode,
@@ -132,22 +111,24 @@ const diningModeStats = computed(() => {
       portions: Math.round(portions),
       chairs,
       plates,
-      allergies
+      affectedDiners
     }
   })
 
   // Add released tickets panel if any exist (rightmost panel for tickets for sale)
   if (releasedOrders.value.length > 0) {
     const count = releasedOrders.value.length
+    const releasedAffectedResult = computeAffectedDiners(releasedOrders.value, menuAllergenIds.value)
+
     stats.push({
       key: 'RELEASED' as const,
       label: 'TIL SALG',
       percentage: Math.round((count / total) * 100),
       count,
-      portions: null, // Not cooking for these
+      portions: null,
       chairs: null,
       plates: null,
-      allergies: []
+      affectedDiners: releasedAffectedResult?.affectedList ?? []
     })
   }
 

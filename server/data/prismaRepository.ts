@@ -425,7 +425,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDisplay[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeHouseholdSummary} = useCoreValidation()
+    const {deserializeHouseholdDisplay} = useCoreValidation()
 
     try {
         const households = await prisma.household.findMany({
@@ -450,7 +450,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
         })
 
         // ADR-010: Repository validates data after deserialization
-        const validatedHouseholds = households.map(household => deserializeHouseholdSummary(household))
+        const validatedHouseholds = households.map(household => deserializeHouseholdDisplay(household))
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
         return validatedHouseholds
@@ -462,7 +462,7 @@ export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDi
 export async function fetchHousehold(d1Client: D1Database, id: number): Promise<HouseholdDetail | null> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeHouseholdWithInhabitants} = useCoreValidation()
+    const {deserializeHouseholdDetail} = useCoreValidation()
 
     try {
         const household = await prisma.household.findFirst({
@@ -483,7 +483,7 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         if (!household) return null
 
         // ADR-010: Repository validates data after deserialization
-        const validatedHousehold = deserializeHouseholdWithInhabitants(household)
+        const validatedHousehold = deserializeHouseholdDetail(household)
 
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
         return validatedHousehold
@@ -533,7 +533,7 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
 export async function deleteHousehold(d1Client: D1Database, id: number): Promise<HouseholdDetail> {
     console.info(`🏠 > HOUSEHOLD > [DELETE] Deleting household with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeHouseholdWithInhabitants} = useCoreValidation()
+    const {deserializeHouseholdDetail} = useCoreValidation()
 
     try {
         // ADR-009: Include relations in delete response (same structure as GET/:id)
@@ -553,7 +553,7 @@ export async function deleteHousehold(d1Client: D1Database, id: number): Promise
         })
 
         // ADR-010: Repository validates data after deserialization
-        const householdDetail = deserializeHouseholdWithInhabitants(deletedHousehold)
+        const householdDetail = deserializeHouseholdDetail(deletedHousehold)
 
         console.info(`🏠 > HOUSEHOLD > [DELETE] Successfully deleted household ${householdDetail.name} with ${householdDetail.inhabitants.length} inhabitants`)
         return householdDetail

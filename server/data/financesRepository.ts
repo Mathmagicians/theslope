@@ -407,7 +407,15 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                 },
                 tickets: {
                     include: {
-                        inhabitant: true,
+                        inhabitant: {
+                            include: {
+                                allergies: {
+                                    include: {
+                                        allergyType: true
+                                    }
+                                }
+                            }
+                        },
                         bookedByUser: true,
                         ticketPrice: true
                     }
@@ -494,7 +502,15 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                 },
                 tickets: {
                     include: {
-                        inhabitant: true,
+                        inhabitant: {
+                            include: {
+                                allergies: {
+                                    include: {
+                                        allergyType: true
+                                    }
+                                }
+                            }
+                        },
                         ticketPrice: true
                     }
                 },

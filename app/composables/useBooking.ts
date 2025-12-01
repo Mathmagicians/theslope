@@ -148,6 +148,20 @@ export const useBooking = () => {
     }
 
     /**
+     * Check if a dinner can be announced/re-announced
+     *
+     * Business rules:
+     * - SCHEDULED → can announce (creates Heynabo event)
+     * - ANNOUNCED + no heynaboEventId → can RE-announce (creates missing Heynabo event)
+     * - CANCELLED/CONSUMED → cannot announce
+     */
+    const canAnnounceDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'heynaboEventId'>): boolean => {
+        if (dinnerEvent.state === DinnerState.SCHEDULED) return true
+        if (dinnerEvent.state === DinnerState.ANNOUNCED && !dinnerEvent.heynaboEventId) return true
+        return false
+    }
+
+    /**
      * Check if a dinner can be cancelled
      *
      * Business rules:
@@ -234,6 +248,7 @@ export const useBooking = () => {
         getDinnerStepState,
         getStepConfig,
         getStepDeadline,
+        canAnnounceDinner,
         canCancelDinner,
         // Heynabo sync
         buildDinnerUrl,

@@ -13,6 +13,44 @@
 
 ---
 
+## 🟡 MEDIUM PRIORITY: Admin Dinner Endpoint Guard for State Transitions
+
+**Status:** Scoped - Ready for Implementation
+
+**Context:** The admin endpoint `/api/admin/dinner-event/[id].post.ts` can currently accept state changes (ANNOUNCED, CANCELLED) that bypass Heynabo integration. Per ADR-013, state transitions requiring external sync should use the chef state endpoint `/api/chef/dinner/[id]/[state]`.
+
+**Problem:**
+- Admin endpoint accepts `{state: 'ANNOUNCED'}` updates directly
+- This bypasses Heynabo event creation (ADR-013 violation)
+- Callers must know which endpoint to use for state changes
+
+**Solution:**
+Add validation guard to reject state transitions that require external sync:
+
+```typescript
+// In /api/admin/dinner-event/[id].post.ts
+const EXTERNAL_SYNC_STATES = [DinnerState.ANNOUNCED, DinnerState.CANCELLED]
+
+if (body.state && EXTERNAL_SYNC_STATES.includes(body.state)) {
+    throw createError({
+        statusCode: 400,
+        message: `State transition to ${body.state} requires chef endpoint: POST /api/chef/dinner/${id}/${body.state}`
+    })
+}
+```
+
+**Files to Modify:**
+- `/server/routes/api/admin/dinner-event/[id].post.ts` - Add state transition guard
+
+**Testing:**
+- [ ] E2E test: POST with `{state: 'ANNOUNCED'}` returns 400
+- [ ] E2E test: POST with `{state: 'CANCELLED'}` returns 400
+- [ ] E2E test: POST with other fields (menuTitle, etc.) succeeds
+
+**Priority:** MEDIUM - Prevents ADR-013 violations, but store fix already routes correctly
+
+---
+
 ## 🟡 MEDIUM PRIORITY: Standardize Success Toast Pattern Across Store Mutations
 
 **Status:** Pattern Identified - Needs Consistency

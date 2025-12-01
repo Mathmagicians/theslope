@@ -175,10 +175,10 @@ describe('useCoreValidation - Household Schemas', () => {
     const {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
-        HouseholdSummarySchema,
-        HouseholdWithInhabitantsSchema,
-        deserializeHouseholdSummary,
-        deserializeHouseholdWithInhabitants
+        HouseholdDisplaySchema,
+        HouseholdDetailSchema,
+        deserializeHouseholdDisplay,
+        deserializeHouseholdDetail
     } = useCoreValidation()
 
     describe.each([
@@ -218,7 +218,7 @@ describe('useCoreValidation - Household Schemas', () => {
         })
     })
 
-    describe('deserializeHouseholdSummary', () => {
+    describe('deserializeHouseholdDisplay', () => {
         it('should deserialize with computed shortName and inhabitants', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -227,7 +227,7 @@ describe('useCoreValidation - Household Schemas', () => {
                 moveOutDate: null,
                 inhabitants: []
             }
-            const deserialized = deserializeHouseholdSummary(serialized)
+            const deserialized = deserializeHouseholdDisplay(serialized)
 
             expect(deserialized.movedInDate).toBeInstanceOf(Date)
             expect(deserialized.shortName).toBeDefined()
@@ -236,7 +236,7 @@ describe('useCoreValidation - Household Schemas', () => {
         })
     })
 
-    describe('deserializeHouseholdWithInhabitants', () => {
+    describe('deserializeHouseholdDetail', () => {
         it('should deserialize with nested inhabitants', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -254,7 +254,7 @@ describe('useCoreValidation - Household Schemas', () => {
                     }
                 ]
             }
-            const deserialized = deserializeHouseholdWithInhabitants(serialized)
+            const deserialized = deserializeHouseholdDetail(serialized)
 
             expect(deserialized.inhabitants).toHaveLength(1)
             expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
@@ -288,7 +288,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
     const {
         UserDisplaySchema,
         UserWithInhabitantSchema,
-        HouseholdSummarySchema,
+        HouseholdDisplaySchema,
         deserializeUserWithInhabitant,
         createDefaultWeekdayMap,
         serializeWeekDayMap
@@ -465,7 +465,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
                 }
             ]
         }
-        const result = HouseholdSummarySchema.parse(household)
+        const result = HouseholdDisplaySchema.parse(household)
 
         expect(result.inhabitants).toHaveLength(2)
         expect(result.inhabitants[0].name).toBe(household.inhabitants[0].name)
@@ -697,119 +697,67 @@ describe('useCoreValidation - WeekDayMap Validation', () => {
 })
 
 // ============================================================================
-// HOUSEHOLD CREATE WITH INHABITANTS SCHEMA TESTS
+// HOUSEHOLD CREATE SCHEMA TESTS (with optional inhabitants per ADR-009)
 // ============================================================================
 
-describe('useCoreValidation - HouseholdCreateWithInhabitantsSchema', () => {
-    const {HouseholdCreateWithInhabitantsSchema} = useCoreValidation()
+describe('useCoreValidation - HouseholdCreateSchema with inhabitants', () => {
+    const {HouseholdCreateSchema} = useCoreValidation()
 
-    it('should accept household without inhabitants', () => {
-        const householdOnly = HouseholdFactory.defaultHouseholdData()
+    // Helper to create inhabitant without householdId (as expected by nested schema)
+    const createInhabitantWithoutHouseholdId = (salt: string) => {
+        const {householdId, ...inhabitant} = HouseholdFactory.defaultInhabitantData(salt)
+        return inhabitant
+    }
 
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(householdOnly)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.inhabitants).toBeUndefined()
-        }
-    })
+    describe.each([
+        {name: 'no inhabitants', inhabitants: undefined, expectedLength: undefined},
+        {name: 'empty array', inhabitants: [], expectedLength: 0},
+        {name: 'one inhabitant', inhabitants: [createInhabitantWithoutHouseholdId('i1')], expectedLength: 1},
+        {name: 'multiple inhabitants', inhabitants: [
+            createInhabitantWithoutHouseholdId('i1'),
+            createInhabitantWithoutHouseholdId('i2'),
+            createInhabitantWithoutHouseholdId('i3')
+        ], expectedLength: 3},
+    ])('valid household with $name', ({inhabitants, expectedLength}) => {
+        it('should parse successfully', () => {
+            const household = {...HouseholdFactory.defaultHouseholdData(), inhabitants}
+            const result = HouseholdCreateSchema.safeParse(household)
 
-    it('should accept household with empty inhabitants array', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: []
-        }
-
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.inhabitants).toEqual([])
-        }
-    })
-
-    it('should accept household with one inhabitant', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [
-                HouseholdFactory.defaultInhabitantData('inhabitant1')
-            ]
-        }
-
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.inhabitants).toHaveLength(1)
-            expect(result.data.inhabitants![0]?.name).toBeDefined()
-            expect(result.data.inhabitants![0]?.lastName).toBeDefined()
-        }
-    })
-
-    it('should accept household with multiple inhabitants', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [
-                HouseholdFactory.defaultInhabitantData('inhabitant1'),
-                HouseholdFactory.defaultInhabitantData('inhabitant2'),
-                HouseholdFactory.defaultInhabitantData('inhabitant3')
-            ]
-        }
-
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.inhabitants).toHaveLength(3)
-        }
-    })
-
-    it('should accept inhabitants without householdId (omitted in nested schema)', () => {
-        const inhabitantData = HouseholdFactory.defaultInhabitantData()
-        // Remove householdId to test omit behavior
-        const {householdId, ...inhabitantWithoutHouseholdId} = inhabitantData as any
-
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [inhabitantWithoutHouseholdId]
-        }
-
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
-        expect(result.success).toBe(true)
-    })
-
-    it('should reject household with invalid inhabitant data', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [
-                {
-                    ...HouseholdFactory.defaultInhabitantData(),
-                    name: '' // Invalid - empty name
+            expect(result.success).toBe(true)
+            if (result.success) {
+                if (expectedLength === undefined) {
+                    expect(result.data.inhabitants).toBeUndefined()
+                } else {
+                    expect(result.data.inhabitants).toHaveLength(expectedLength)
                 }
-            ]
-        }
-
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
-        expect(result.success).toBe(false)
+            }
+        })
     })
 
     it('should accept inhabitant with user profile in nested creation', () => {
         const household = {
             ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [
-                {
-                    ...HouseholdFactory.defaultInhabitantData(),
-                    user: {
-                        email: 'john@example.com',
-                        passwordHash: 'hashedpassword123',
-                        systemRole: 'USER' as const
-                    }
-                }
-            ]
+            inhabitants: [{
+                ...createInhabitantWithoutHouseholdId('withUser'),
+                user: {email: 'john@example.com', passwordHash: 'hash123', systemRole: 'USER' as const}
+            }]
         }
 
-        const result = HouseholdCreateWithInhabitantsSchema.safeParse(household)
+        const result = HouseholdCreateSchema.safeParse(household)
         expect(result.success).toBe(true)
         if (result.success) {
-            expect(result.data.inhabitants![0]?.user).toBeDefined()
             expect(result.data.inhabitants![0]?.user?.email).toBe('john@example.com')
         }
+    })
+
+    it('should reject household with invalid inhabitant (empty name)', () => {
+        const household = {
+            ...HouseholdFactory.defaultHouseholdData(),
+            inhabitants: [{...createInhabitantWithoutHouseholdId('invalid'), name: ''}]
+        }
+
+        const result = HouseholdCreateSchema.safeParse(household)
+        expect(result.success).toBe(false)
     })
 })
 
@@ -1007,8 +955,8 @@ describe('getHouseholdShortName - Additional Test Cases', () => {
 describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => {
     const {
         deserializeInhabitantDisplay,
-        deserializeHouseholdSummary,
-        deserializeHouseholdWithInhabitants,
+        deserializeHouseholdDisplay,
+        deserializeHouseholdDetail,
         serializeWeekDayMap,
         createDefaultWeekdayMap
     } = useCoreValidation()
@@ -1035,7 +983,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
         })
     })
 
-    describe('deserializeHouseholdSummary additional tests', () => {
+    describe('deserializeHouseholdDisplay additional tests', () => {
         it('should deserialize household summary from factory data with dinnerPreferences', () => {
             const householdData = HouseholdFactory.defaultHouseholdData()
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
@@ -1055,7 +1003,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 ]
             }
 
-            const result = deserializeHouseholdSummary(serialized)
+            const result = deserializeHouseholdDisplay(serialized)
 
             expect(result.id).toBe(1)
             expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
@@ -1079,7 +1027,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 inhabitants: []
             }
 
-            const result = deserializeHouseholdSummary(serialized)
+            const result = deserializeHouseholdDisplay(serialized)
 
             if (moveOutDate) {
                 expect(result.moveOutDate).toBeInstanceOf(Date)
@@ -1089,7 +1037,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
         })
     })
 
-    describe('deserializeHouseholdWithInhabitants additional tests', () => {
+    describe('deserializeHouseholdDetail additional tests', () => {
         it('should deserialize household with inhabitants from factory data', () => {
             const householdData = HouseholdFactory.defaultHouseholdData()
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
@@ -1111,7 +1059,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 ]
             }
 
-            const result = deserializeHouseholdWithInhabitants(serialized)
+            const result = deserializeHouseholdDetail(serialized)
 
             expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
             expect(result.movedInDate).toBeInstanceOf(Date)
@@ -1168,7 +1116,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                         dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
                     }))
                 }),
-                deserialize: deserializeHouseholdSummary,
+                deserialize: deserializeHouseholdDisplay,
                 checkFields: (original: any, deserialized: any) => {
                     expect(deserialized.movedInDate).toBeInstanceOf(Date)
                     expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
@@ -1203,7 +1151,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                         dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
                     }))
                 }),
-                deserialize: deserializeHouseholdWithInhabitants,
+                deserialize: deserializeHouseholdDetail,
                 checkFields: (original: any, deserialized: any) => {
                     expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
                     expect(deserialized.inhabitants[0].birthDate.getTime()).toBe(original.inhabitants[0].birthDate.getTime())

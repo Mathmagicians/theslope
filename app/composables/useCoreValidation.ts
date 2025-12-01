@@ -214,7 +214,10 @@ export const useCoreValidation = () => {
     })
 
     // Household schemas
-    const HouseholdCreateSchema = BaseHouseholdSchema.omit({ id: true })
+    // ADR-009: Create includes optional inhabitants (lightweight relation, repository handles householdId)
+    const HouseholdCreateSchema = BaseHouseholdSchema.omit({ id: true }).extend({
+        inhabitants: z.array(InhabitantCreateSchema.omit({ householdId: true })).optional()
+    })
 
     const HouseholdUpdateSchema = BaseHouseholdSchema.partial().extend({
         id: z.number().int().positive()
@@ -229,13 +232,8 @@ export const useCoreValidation = () => {
         movedInDate: true
     })
 
-    // Household with nested inhabitants for creation (used by repository)
-    const HouseholdCreateWithInhabitantsSchema = BaseHouseholdSchema.omit({ id: true }).extend({
-        inhabitants: z.array(InhabitantCreateSchema.omit({ householdId: true })).optional()
-    })
-
     // ADR-009: Index endpoint - full household scalars + lightweight inhabitant relation
-    const HouseholdSummarySchema = BaseHouseholdSchema.required({
+    const HouseholdDisplaySchema = BaseHouseholdSchema.required({
         id: true,
         heynaboId: true,
         pbsId: true,
@@ -248,7 +246,7 @@ export const useCoreValidation = () => {
     })
 
     // ADR-009: Detail endpoint - full household with complete inhabitant data
-    const HouseholdWithInhabitantsSchema = BaseHouseholdSchema.required({
+    const HouseholdDetailSchema = BaseHouseholdSchema.required({
         id: true,
         heynaboId: true,
         pbsId: true,
@@ -303,9 +301,9 @@ export const useCoreValidation = () => {
 
     // HOUSEHOLD TYPES
     // Display: Household summary for lists (index endpoint)
-    type _HouseholdDisplay = z.infer<typeof HouseholdSummarySchema>
+    type _HouseholdDisplay = z.infer<typeof HouseholdDisplaySchema>
     // Detail: Full household with inhabitants (detail endpoint)
-    type _HouseholdDetail = z.infer<typeof HouseholdWithInhabitantsSchema>
+    type _HouseholdDetail = z.infer<typeof HouseholdDetailSchema>
     // Mutations: Create/update operations
     type _HouseholdCreate = z.infer<typeof HouseholdCreateSchema>
     type _HouseholdUpdate = z.infer<typeof HouseholdUpdateSchema>
@@ -365,21 +363,24 @@ export const useCoreValidation = () => {
      * Deserialize UserWithInhabitant from database output
      * Handles nested inhabitant with household and computes household.shortName
      */
-    const deserializeUserWithInhabitant = (serializedUser: Record<string, unknown>): UserWithInhabitant => {
-        return {
+    const deserializeUserWithInhabitant = (serializedUser: Record<string, unknown>): z.infer<typeof UserWithInhabitantSchema> => {
+        const inhabitant = serializedUser.Inhabitant as Record<string, unknown> | null
+        const household = inhabitant?.household as Record<string, unknown> | null
+
+        return UserWithInhabitantSchema.parse({
             ...serializedUser,
-            systemRoles: JSON.parse(serializedUser.systemRoles),
-            Inhabitant: serializedUser.Inhabitant ? {
-                ...deserializeInhabitantDisplay(serializedUser.Inhabitant),
-                household: serializedUser.Inhabitant.household ? {
-                    ...serializedUser.Inhabitant.household,
-                    shortName: getHouseholdShortName(serializedUser.Inhabitant.household.address)
-                } : serializedUser.Inhabitant.household
+            systemRoles: JSON.parse(serializedUser.systemRoles as string),
+            Inhabitant: inhabitant ? {
+                ...deserializeInhabitantDisplay(inhabitant),
+                household: household ? {
+                    ...household,
+                    shortName: getHouseholdShortName(household.address as string)
+                } : household
             } : null
-        }
+        })
     }
 
-    const deserializeHouseholdSummary = (serialized: any): HouseholdSummary => {
+    const deserializeHouseholdDisplay = (serialized: any): z.infer<typeof HouseholdDisplaySchema> => {
         const deserialized = {
             ...serialized,
             movedInDate: new Date(serialized.movedInDate),
@@ -393,10 +394,10 @@ export const useCoreValidation = () => {
                     : null
             }))
         }
-        return HouseholdSummarySchema.parse(deserialized)
+        return HouseholdDisplaySchema.parse(deserialized)
     }
 
-    const deserializeHouseholdWithInhabitants = (serialized: any): HouseholdWithInhabitants => {
+    const deserializeHouseholdDetail = (serialized: any): z.infer<typeof HouseholdDetailSchema> => {
         const deserialized = {
             ...serialized,
             movedInDate: new Date(serialized.movedInDate),
@@ -404,7 +405,7 @@ export const useCoreValidation = () => {
             shortName: getHouseholdShortName(serialized.address),
             inhabitants: serialized.inhabitants?.map((inhabitant: any) => deserializeInhabitantDisplay(inhabitant))
         }
-        return HouseholdWithInhabitantsSchema.parse(deserialized)
+        return HouseholdDetailSchema.parse(deserialized)
     }
 
     /**
@@ -444,9 +445,8 @@ export const useCoreValidation = () => {
         HouseholdCreateSchema,
         HouseholdUpdateSchema,
         HouseholdResponseSchema,
-        HouseholdCreateWithInhabitantsSchema,
-        HouseholdSummarySchema,
-        HouseholdWithInhabitantsSchema,
+        HouseholdDisplaySchema,
+        HouseholdDetailSchema,
         // Functions - User
         serializeUserInput,
         deserializeUser,
@@ -455,8 +455,8 @@ export const useCoreValidation = () => {
         // Functions - Inhabitant
         deserializeInhabitantDisplay,
         // Functions - Household
-        deserializeHouseholdSummary,
-        deserializeHouseholdWithInhabitants,
+        deserializeHouseholdDisplay,
+        deserializeHouseholdDetail,
         // Functions - WeekDayMap
         serializeWeekDayMap,
         deserializeWeekDayMap,
@@ -491,9 +491,9 @@ export type InhabitantUpdate = z.infer<ReturnType<typeof useCoreValidation>['Inh
 
 // HOUSEHOLD TYPES (ADR-009: Only Display and Detail - mutations return Detail)
 // Display: Household summary for lists (GET /api/admin/household)
-export type HouseholdDisplay = z.infer<ReturnType<typeof useCoreValidation>['HouseholdSummarySchema']>
+export type HouseholdDisplay = z.infer<ReturnType<typeof useCoreValidation>['HouseholdDisplaySchema']>
 // Detail: Full household with inhabitants (GET /api/admin/household/:id + mutations)
-export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['HouseholdWithInhabitantsSchema']>
+export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['HouseholdDetailSchema']>
 // Mutations
 export type HouseholdCreate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdCreateSchema']>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
@@ -507,9 +507,5 @@ export type UserWithInhabitant = UserDetail
 export type Inhabitant = InhabitantDetail
 /** @deprecated Use InhabitantDetail instead */
 export type InhabitantResponse = InhabitantDetail
-/** @deprecated Use HouseholdDisplay instead */
-export type HouseholdSummary = HouseholdDisplay
-/** @deprecated Use HouseholdDetail instead */
-export type HouseholdWithInhabitants = HouseholdDetail
 /** @deprecated Use HouseholdDetail instead */
 export type HouseholdResponse = HouseholdDetail
