@@ -1,11 +1,11 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
-import {updateDinnerEvent} from "~~/server/data/financesRepository"
+import {assignCookingTeamToDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type {Season} from "~/composables/useSeasonValidation"
-import type {DinnerEventDetail} from "~/composables/useBookingValidation"
+import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -16,7 +16,7 @@ const idSchema = z.object({
 type AssignTeamsResponse = {
     seasonId: number
     eventCount: number
-    events: DinnerEventDetail[]
+    events: DinnerEventDisplay[]
 }
 
 export default defineEventHandler(async (event): Promise<AssignTeamsResponse> => {
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
         const updatedEvents = await Promise.all(
             eventsWithAssignments
                 .filter(event => event.id && event.cookingTeamId)
-                .map(event => updateDinnerEvent(d1Client, event.id!, {cookingTeamId: event.cookingTeamId}))
+                .map(event => assignCookingTeamToDinnerEvent(d1Client, event.id!, event.cookingTeamId!))
         )
 
         console.info(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Successfully assigned teams to ${updatedEvents.length} dinner events for season ${seasonId}`)

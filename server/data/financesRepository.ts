@@ -532,6 +532,18 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
     }
 }
 
+export async function assignCookingTeamToDinnerEvent(d1Client: D1Database, dinnerEventId: number, cookingTeamId: number): Promise<DinnerEventDisplay> {
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventDisplaySchema} = useBookingValidation()
+
+    const updated = await prisma.dinnerEvent.update({
+        where: {id: dinnerEventId},
+        data: {cookingTeamId}
+    })
+
+    return DinnerEventDisplaySchema.parse(updated)
+}
+
 export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDisplay> {
     console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)

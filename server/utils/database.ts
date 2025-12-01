@@ -11,9 +11,8 @@ import {Prisma, PrismaClient} from "@prisma/client"
  */
 
 const log: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
-    ? ['warn', 'error']           // Silence info in prod
-    : ['query', 'warn', 'error']  // Show queries in dev
-console.log('🤖 NODE_ENV:', process.env.NODE_ENV, '=> log level:', log)
+    ? ['error']
+    : ['query', 'warn', 'error']
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
     const adapter = new PrismaD1(d1Client)
