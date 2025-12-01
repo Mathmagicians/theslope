@@ -54,12 +54,12 @@
  * - [Button] = Button groups (expanded EDIT mode)
  */
 import {FORM_MODES} from '~/types/form'
-import type {HouseholdWithInhabitants} from '~/composables/useCoreValidation'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useBookingValidation'
 
 interface Props {
-  household: HouseholdWithInhabitants
+  household: HouseholdDetail
 }
 
 const props = defineProps<Props>()
@@ -152,24 +152,9 @@ interface ToggleableRow {
 }
 const handleToggleRow = (row: ToggleableRow) => {
   if (!row.getIsExpanded()) {
-    // Opening - initialize draft
+    // Opening - initialize draft from preferences (or null if none)
     editingInhabitantId.value = row.original.id
-
-    // Convert any null values to DINEIN default (power mode with mixed preferences)
-    if (row.original.dinnerPreferences) {
-      const {DinnerModeSchema} = useBookingValidation()
-      const DinnerMode = DinnerModeSchema.enum
-      const {createDefaultWeekdayMap} = useWeekDayMapValidation({
-        valueSchema: DinnerModeSchema,
-        defaultValue: DinnerMode.DINEIN
-      })
-
-      draftPreferences.value = createDefaultWeekdayMap(
-          WEEKDAYS.map(day => row.original.dinnerPreferences[day] ?? DinnerMode.DINEIN)
-      )
-    } else {
-      draftPreferences.value = null
-    }
+    draftPreferences.value = row.original.dinnerPreferences ?? null
   } else {
     // Closing - clear draft
     editingInhabitantId.value = null

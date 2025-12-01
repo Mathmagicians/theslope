@@ -67,7 +67,7 @@ import {isWithinInterval} from 'date-fns'
 
 interface Props {
   seasonDates: DateRange
-  team: CookingTeam
+  team: CookingTeamDisplay
   dinnerEvents: DinnerEventDisplay[]
   selectedDinnerId?: number | null
   showSelection?: boolean

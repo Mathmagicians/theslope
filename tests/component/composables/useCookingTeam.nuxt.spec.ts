@@ -29,7 +29,9 @@ describe('useCookingTeam', () => {
 
       expect(team).toEqual({
         seasonId: 1,
-        name: 'Madhold 2 - Winter 2025'
+        name: 'Madhold 2 - Winter 2025',
+        assignments: [],
+        cookingDaysCount: 0
       })
     })
 

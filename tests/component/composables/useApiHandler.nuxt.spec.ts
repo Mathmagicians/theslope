@@ -30,7 +30,8 @@ describe('useApiHandler', () => {
     })
 
     it('should handle API errors', async () => {
-        const mockError = { statusCode: 400 }
+        // Mock must include all 4 properties checked by isApiError()
+        const mockError = { statusCode: 400, message: 'Bad Request', statusMessage: 'Bad Request', data: null }
         const mockAction = vi.fn().mockRejectedValue(mockError)
 
         await expect(apiCall(mockAction, state, 'testAction'))

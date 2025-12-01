@@ -115,7 +115,7 @@ const { DinnerStateSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Business logic from useBooking (ADR-001)
-const { getStepConfig, canAnnounceDinner, canCancelDinner } = useBooking()
+const { getStepConfig, canCancelDinner } = useBooking()
 
 // Time logic from useSeason
 const { isAnnounceMenuPastDeadline, canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()

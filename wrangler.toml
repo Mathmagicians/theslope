@@ -10,6 +10,10 @@ assets = { directory = "./.output/public/", binding = "ASSETS" }
 HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
+[limits]
+# Increase the default CPU time limit to 60s
+cpu_ms=180_000
+
 # Workers Logs
 [observability]
 enabled = true

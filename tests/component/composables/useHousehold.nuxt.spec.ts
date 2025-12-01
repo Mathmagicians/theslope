@@ -17,11 +17,11 @@ describe('useHousehold', () => {
     const { computeAggregatedPreferences } = useHousehold()
 
     describe('edge cases', () => {
-      it('returns all null for empty inhabitants array', () => {
+      it('returns all DINEIN for empty inhabitants array', () => {
         const result = computeAggregatedPreferences([])
 
         WEEKDAYS.forEach(day => {
-          expect(result[day]).toBeNull()
+          expect(result[day]).toBe(DinnerMode.DINEIN)
         })
       })
 
@@ -102,7 +102,7 @@ describe('useHousehold', () => {
           expectConsensus: { tirsdag: DinnerMode.DINEIN, torsdag: DinnerMode.DINEIN, lørdag: DinnerMode.DINEIN }
         }
       ])('$scenario', ({ inhabitant1, inhabitant2, expectMixed, expectConsensus }) => {
-        it('returns null for mixed preferences and consensus where they agree', () => {
+        it('returns DINEIN for mixed preferences and consensus where they agree', () => {
           const inhabitants = [
             { dinnerPreferences: createDefaultWeekdayMap(inhabitant1) },
             { dinnerPreferences: createDefaultWeekdayMap(inhabitant2) }
@@ -110,9 +110,9 @@ describe('useHousehold', () => {
 
           const result = computeAggregatedPreferences(inhabitants)
 
-          // Check mixed days
+          // Check mixed days - fall back to DINEIN
           expectMixed.forEach(day => {
-            expect(result[day as keyof typeof result]).toBeNull()
+            expect(result[day as keyof typeof result]).toBe(DinnerMode.DINEIN)
           })
 
           // Check consensus days
@@ -123,8 +123,8 @@ describe('useHousehold', () => {
       })
     })
 
-    describe('null handling', () => {
-      it('returns value when some have null, others agree', () => {
+    describe('null handling in input preferences', () => {
+      it('treats null preference values as DINEIN default', () => {
         const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
         const prefs2 = createDefaultWeekdayMap([null, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
 
@@ -135,11 +135,12 @@ describe('useHousehold', () => {
 
         const result = computeAggregatedPreferences(inhabitants)
 
-        expect(result.mandag).toBe(DinnerMode.DINEIN) // Only non-null inhabitants count
+        // null treated as DINEIN, so consensus is DINEIN
+        expect(result.mandag).toBe(DinnerMode.DINEIN)
         expect(result.tirsdag).toBe(DinnerMode.DINEIN)
       })
 
-      it('returns null when non-null values are mixed', () => {
+      it('returns DINEIN when null values cause mismatch with non-default', () => {
         const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
         const prefs2 = createDefaultWeekdayMap([null, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
         const prefs3 = createDefaultWeekdayMap([DinnerMode.DINEIN, null, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
@@ -152,133 +153,53 @@ describe('useHousehold', () => {
 
         const result = computeAggregatedPreferences(inhabitants)
 
-        expect(result.mandag).toBe(DinnerMode.DINEIN) // All non-null agree
-        expect(result.tirsdag).toBeNull() // Mixed among non-null
+        expect(result.mandag).toBe(DinnerMode.DINEIN) // All agree (null → DINEIN)
+        expect(result.tirsdag).toBe(DinnerMode.DINEIN) // Mixed, falls back to DINEIN
       })
     })
 
     describe('real-world scenarios', () => {
-      it('typical household: parents agree, child differs', () => {
-        const parentPrefs = createDefaultWeekdayMap([
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.TAKEAWAY,
-          DinnerMode.NONE,
-          DinnerMode.NONE
-        ])
+      // D = DINEIN, L = DINEINLATE, T = TAKEAWAY, N = NONE, X = null (treated as DINEIN)
+      const D = DinnerMode.DINEIN, L = DinnerMode.DINEINLATE, T = DinnerMode.TAKEAWAY, N = DinnerMode.NONE
 
-        const childPrefs = createDefaultWeekdayMap([
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN, // Child wants to eat in on Friday
-          DinnerMode.NONE,
-          DinnerMode.NONE
-        ])
+      describe.each([
+        {
+          scenario: 'parents agree, child differs on Friday',
+          prefs: [[D,D,D,D,T,N,N], [D,D,D,D,T,N,N], [D,D,D,D,D,N,N]],
+          expected: [D,D,D,D,D,N,N] // Friday mixed → DINEIN fallback
+        },
+        {
+          scenario: 'household with baby (null preferences → DINEIN)',
+          prefs: [[D,D,D,D,T,N,N], [D,D,D,D,T,N,N], null],
+          expected: [D,D,D,D,D,D,D] // Fri/Sat/Sun: adults differ from baby's DINEIN → fallback
+        },
+        {
+          scenario: 'completely mixed preferences',
+          prefs: [[D,L,T,D,D,N,D], [L,D,D,T,D,N,T], [T,T,N,D,D,N,D]],
+          expected: [D,D,D,D,D,N,D] // Most days mixed → DINEIN, Sat consensus NONE, Sun mixed
+        },
+        {
+          scenario: 'all agree on everything',
+          prefs: [[D,D,T,T,N,N,D], [D,D,T,T,N,N,D]],
+          expected: [D,D,T,T,N,N,D]
+        },
+        {
+          scenario: 'single inhabitant',
+          prefs: [[T,T,D,D,N,L,L]],
+          expected: [T,T,D,D,N,L,L]
+        }
+      ])('$scenario', ({ prefs, expected }) => {
+        it('aggregates preferences correctly', () => {
+          const inhabitants = prefs.map(p =>
+            ({ dinnerPreferences: p ? createDefaultWeekdayMap(p) : null })
+          )
 
-        const inhabitants = [
-          { dinnerPreferences: parentPrefs },
-          { dinnerPreferences: parentPrefs },
-          { dinnerPreferences: childPrefs }
-        ]
+          const result = computeAggregatedPreferences(inhabitants)
 
-        const result = computeAggregatedPreferences(inhabitants)
-
-        // Consensus days
-        expect(result.mandag).toBe(DinnerMode.DINEIN)
-        expect(result.tirsdag).toBe(DinnerMode.DINEIN)
-        expect(result.onsdag).toBe(DinnerMode.DINEIN)
-        expect(result.torsdag).toBe(DinnerMode.DINEIN)
-        expect(result.lørdag).toBe(DinnerMode.NONE)
-        expect(result.søndag).toBe(DinnerMode.NONE)
-
-        // Mixed day
-        expect(result.fredag).toBeNull()
-      })
-
-      it('household with baby (no preferences) - null treated as DINEIN', () => {
-        const adultPrefs = createDefaultWeekdayMap([
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.TAKEAWAY,
-          DinnerMode.NONE,
-          DinnerMode.NONE
-        ])
-
-        const inhabitants = [
-          { dinnerPreferences: adultPrefs },
-          { dinnerPreferences: adultPrefs },
-          { dinnerPreferences: null } // Baby - null treated as DINEIN
-        ]
-
-        const result = computeAggregatedPreferences(inhabitants)
-
-        // Days where adults agree with baby's default (DINEIN)
-        expect(result.mandag).toBe(DinnerMode.DINEIN)
-        expect(result.tirsdag).toBe(DinnerMode.DINEIN)
-        expect(result.onsdag).toBe(DinnerMode.DINEIN)
-        expect(result.torsdag).toBe(DinnerMode.DINEIN)
-
-        // Days where adults differ from baby's default: mixed (null)
-        expect(result.fredag).toBeNull() // Adults: TAKEAWAY, Baby: DINEIN (default)
-        expect(result.lørdag).toBeNull() // Adults: NONE, Baby: DINEIN (default)
-        expect(result.søndag).toBeNull() // Adults: NONE, Baby: DINEIN (default)
-      })
-
-      it('completely mixed household preferences', () => {
-        const prefs1 = createDefaultWeekdayMap([
-          DinnerMode.DINEIN,
-          DinnerMode.DINEINLATE,
-          DinnerMode.TAKEAWAY,
-          null,
-          DinnerMode.DINEIN,
-          DinnerMode.NONE,
-          DinnerMode.DINEIN
-        ])
-
-        const prefs2 = createDefaultWeekdayMap([
-          DinnerMode.DINEINLATE,
-          DinnerMode.DINEIN,
-          DinnerMode.DINEIN,
-          DinnerMode.TAKEAWAY,
-          DinnerMode.DINEIN,
-          DinnerMode.NONE,
-          DinnerMode.TAKEAWAY
-        ])
-
-        const prefs3 = createDefaultWeekdayMap([
-          DinnerMode.TAKEAWAY,
-          DinnerMode.TAKEAWAY,
-          DinnerMode.NONE,
-          null,
-          DinnerMode.DINEIN,
-          DinnerMode.NONE,
-          null
-        ])
-
-        const inhabitants = [
-          { dinnerPreferences: prefs1 },
-          { dinnerPreferences: prefs2 },
-          { dinnerPreferences: prefs3 }
-        ]
-
-        const result = computeAggregatedPreferences(inhabitants)
-
-        // All mixed or partially null
-        expect(result.mandag).toBeNull()
-        expect(result.tirsdag).toBeNull()
-        expect(result.onsdag).toBeNull()
-        expect(result.torsdag).toBeNull()
-        expect(result.søndag).toBeNull()
-
-        // Consensus days
-        expect(result.fredag).toBe(DinnerMode.DINEIN)
-        expect(result.lørdag).toBe(DinnerMode.NONE)
+          WEEKDAYS.forEach((day, i) => {
+            expect(result[day]).toBe(expected[i])
+          })
+        })
       })
     })
 

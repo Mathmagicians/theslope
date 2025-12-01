@@ -73,9 +73,13 @@ export class OrderFactory {
     },
     inhabitant: {
       id: 10,
+      heynaboId: 1001,
+      householdId: 1,
       name: 'Test',
       lastName: 'User',
-      pictureUrl: null
+      pictureUrl: null,
+      dinnerPreferences: null,
+      allergies: []
     },
     bookedByUser: {
       id: 1,

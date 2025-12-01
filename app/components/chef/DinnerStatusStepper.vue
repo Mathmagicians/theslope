@@ -77,7 +77,8 @@ const steps = computed(() => {
       :model-value="currentStep"
       :items="steps"
       :size="mode === 'compact' ? SIZES.small.value : SIZES.standard.value"
-      :orientation="ORIENTATIONS.responsive"
+      :orientation="ORIENTATIONS.responsive.value"
+      :color="COLOR.primary"
     />
   </div>
 </template>

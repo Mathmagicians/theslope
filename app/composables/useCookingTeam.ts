@@ -1,8 +1,7 @@
 import {useCookingTeamValidation, type CookingTeamDisplay} from './useCookingTeamValidation'
-import type Badge from '#ui/components/Badge.vue'
 
-const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary',  'caramel'] as const
-export type TeamColor = Badge['variants']['color']
+const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
+export type TeamColor = typeof TEAM_COLORS[number]
 
 /**
  * Business logic for working with cooking teams
@@ -28,6 +27,8 @@ export const useCookingTeam = () => {
         return {
             seasonId,
             name: createDefaultTeamName(seasonShortName, teamNumber),
+            assignments: [],
+            cookingDaysCount: 0,
             ...overrides
         }
     }
@@ -57,16 +58,18 @@ export const useCookingTeam = () => {
             if (!selectedSeason.value?.CookingTeams) return []
 
             return selectedSeason.value.CookingTeams.flatMap(team =>
-                (team.assignments || []).map(assignment => ({
-                    id: assignment.id,
-                    role: assignment.role,
-                    cookingTeamId: team.id!,
-                    inhabitantId: assignment.inhabitant.id,
-                    cookingTeam: {
-                        id: team.id!,
-                        name: team.name
-                    }
-                }))
+                (team.assignments || [])
+                    .filter(assignment => assignment.inhabitant)
+                    .map(assignment => ({
+                        id: assignment.id,
+                        role: assignment.role,
+                        cookingTeamId: team.id!,
+                        inhabitantId: assignment.inhabitant!.id,
+                        cookingTeam: {
+                            id: team.id!,
+                            name: team.name
+                        }
+                    }))
             )
         })
 
