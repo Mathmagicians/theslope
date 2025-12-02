@@ -1,126 +1,809 @@
 # TODO
 
-## 🎯 URGENT: Team Assignment Algorithm Implementation
+## About this file
 
-**Context**: Implementing team-to-event assignment algorithm using TDD. Functions are implemented incrementally with unit tests first.
+- Tasks we work with are listed with priorities
+- As tasks get completed, they are compacted and moved to the "COMPLETED" section at the bottom
+- New tasks are added to the top of the file
+- Once we are ready to ship a task, then
+    1. compacted version of "COMPLETED" is added to the Pull Request summary
+    2. A user friendly version of "COMPLETED" is added to `docs/features.md`
+    3. The task and "COMPLETED" items are removed from this TODO file
+    4. Any left over incompleted items are preserved with "Last finishes for <task title>", Low priority
 
 ---
 
-### ✅ Task 1: Make Affinity Computation Idempotent
+## 🟡 MEDIUM PRIORITY: Admin Dinner Endpoint Guard for State Transitions
 
-**Business Requirement**: Affinity assignment should produce consistent results when called multiple times with same inputs.
+**Status:** Scoped - Ready for Implementation
+
+**Context:** The admin endpoint `/api/admin/dinner-event/[id].post.ts` can currently accept state changes (ANNOUNCED, CANCELLED) that bypass Heynabo integration. Per ADR-013, state transitions requiring external sync should use the chef state endpoint `/api/chef/dinner/[id]/[state]`.
+
+**Problem:**
+- Admin endpoint accepts `{state: 'ANNOUNCED'}` updates directly
+- This bypasses Heynabo event creation (ADR-013 violation)
+- Callers must know which endpoint to use for state changes
+
+**Solution:**
+Add validation guard to reject state transitions that require external sync:
+
+```typescript
+// In /api/admin/dinner-event/[id].post.ts
+const EXTERNAL_SYNC_STATES = [DinnerState.ANNOUNCED, DinnerState.CANCELLED]
+
+if (body.state && EXTERNAL_SYNC_STATES.includes(body.state)) {
+    throw createError({
+        statusCode: 400,
+        message: `State transition to ${body.state} requires chef endpoint: POST /api/chef/dinner/${id}/${body.state}`
+    })
+}
+```
+
+**Files to Modify:**
+- `/server/routes/api/admin/dinner-event/[id].post.ts` - Add state transition guard
+
+**Testing:**
+- [ ] E2E test: POST with `{state: 'ANNOUNCED'}` returns 400
+- [ ] E2E test: POST with `{state: 'CANCELLED'}` returns 400
+- [ ] E2E test: POST with other fields (menuTitle, etc.) succeeds
+
+**Priority:** MEDIUM - Prevents ADR-013 violations, but store fix already routes correctly
+
+---
+
+## 🟡 MEDIUM PRIORITY: Standardize Success Toast Pattern Across Store Mutations
+
+**Status:** Pattern Identified - Needs Consistency
+
+**Context:** Store mutation methods have inconsistent user feedback patterns. Error handling is consistent (all use `handleApiError`), but success feedback varies.
+
+**Current State:**
+- ✅ All mutation methods have proper error handling with `handleApiError()`
+- ❌ NO mutation methods have success toasts in store
+- ⚠️ Success feedback inconsistent across components (some show toasts, some don't)
+
+**Established Pattern (from allergen update):**
+- **Store**: Handles API call, error handling with `handleApiError`, loading state with `useAsyncData`
+- **Component**: Shows success toast in try block, catches and relies on store's `handleApiError` for errors
+- **Example**: `chef/index.vue` + `plan.ts` (allergen update implementation)
+
+**Affected Store Methods (plan.ts):**
+1. `createSeason` (L219)
+2. `generateDinnerEvents` (L235)
+3. `assignTeamAffinitiesAndEvents` (L252)
+4. `updateSeason` (L288)
+5. `activateSeason` (L307)
+6. `createTeam` (L328) - Different pattern with `useAsyncData`
+7. `updateTeam` (L353)
+8. `deleteTeam` (L371)
+9. `addTeamMember` (L388)
+10. `removeTeamMember` (L407)
+11. `assignRoleToDinner` (L424)
+
+**Decision Needed:**
+- **Option A**: Add success toasts in store (centralized feedback)
+- **Option B**: Document pattern for components to handle success (decentralized feedback, allows context-specific messages)
+
+**Recommended Approach (Option B):**
+- Keep error handling in store (consistent error messages via `handleApiError`)
+- Components handle success toasts (allows context-specific success messages)
+- Document pattern in ADR-007 or create new ADR for user feedback
+
+**Action Items:**
+- [ ] Audit all components calling store mutations - ensure they show success toasts
+- [ ] Document the pattern in ADR or testing.md
+- [ ] Create reusable success message helpers if needed (DRY toast messages)
+- [ ] Add component tests verifying success toast display
+
+**Priority:** MEDIUM - Affects UX consistency but not functionality
+
+---
+
+## 🔴 HIGH PRIORITY: Cloudflare WAF Configuration via Terraform Cloud
+
+**Status:** Scoped - Ready for Implementation
+
+**Context:** Currently bot scanner traffic (WordPress, PHP admin, etc.) hits our Cloudflare Worker middleware, consuming Worker invocations and creating log noise. WAF rules should block these requests at the edge BEFORE they reach the Worker.
+
+**Current State:**
+- ✅ Worker middleware implemented (`server/middleware/0.block-bots.ts`) - blocks 30+ bot patterns
+- ✅ Tested locally - working correctly
+- ❌ WAF rules not configured - bots still consume Worker resources
+
+**Goal:** Implement Terraform Cloud infrastructure-as-code for Cloudflare WAF configuration.
+
+**Benefits:**
+- Zero Worker invocations for bot traffic (saves money)
+- Faster blocking at edge (before Worker)
+- Cleaner production logs (less noise)
+- Infrastructure versioned in git (IaC best practice)
+- Secure state management (Terraform Cloud)
+
+**Implementation Plan:**
+
+1. **Setup Terraform Cloud**
+   - Create workspace: `theslope-cloudflare`
+   - Configure variables (API token, Zone ID)
+
+2. **Create Terraform Configuration** (`terraform/` directory)
+   - `main.tf` - Provider config with Terraform Cloud backend
+   - `variables.tf` - Input variables (cloudflare_api_token, zone_id)
+   - `waf.tf` - WAF custom rules (4 rulesets: WordPress, PHP, configs, other CMS)
+   - `rate-limiting.tf` - Optional rate limiting (disabled by default)
+   - `outputs.tf` - Ruleset IDs and status
+   - `README.md` - Setup and usage documentation
+
+3. **WAF Rules to Implement**
+   - Rule 1: Block WordPress scanners (wp-*, xmlrpc, wlwmanifest, etc.)
+   - Rule 2: Block PHP admin panels (phpmyadmin, admin.php, etc.)
+   - Rule 3: Block config files (.env, .git, .sql, backup)
+   - Rule 4: Block other CMS (Joomla, Drupal, Typo3)
+
+4. **Optional: CI/CD Integration**
+   - GitHub Actions workflow for automated Terraform apply
+   - Runs on push to `main` when `terraform/` files change
+
+**Files to Create:**
+```
+terraform/
+├── main.tf                  # TF Cloud backend + Cloudflare provider
+├── variables.tf             # Input variables
+├── waf.tf                  # WAF custom rules
+├── rate-limiting.tf        # Rate limiting (optional)
+├── outputs.tf              # Exported values
+├── .gitignore              # Terraform state/variable files
+└── README.md               # Setup and usage docs
+```
+
+**Security:**
+- ✅ No local state files (Terraform Cloud manages state)
+- ✅ Secrets in Terraform Cloud workspace (not in git)
+- ✅ Encrypted state storage (AES-256)
+- ✅ Audit logs (who changed what when)
+
+**Testing:**
+- Deploy Terraform configuration to Terraform Cloud
+- Verify WAF rules created in Cloudflare dashboard
+- Monitor production logs for reduced bot traffic
+- Verify Worker invocations decrease
+
+**Priority:** HIGH - Production logs currently flooded with bot traffic, consuming Worker resources unnecessarily.
+
+---
+
+## 🔴 CRITICAL: Make Heynabo Import Resilient to Email Changes
+
+**Status:** Bug Identified - Needs Fix
+
+**Context:** Heynabo is our master data system. Users can lose their email addresses (email becomes null). Currently, the import succeeds for most users but fails for users who previously had emails that are now null in Heynabo.
+
+**Problem:**
+- D1 has User records with emails from previous imports
+- Heynabo now returns `email: null` for those same members
+- Inhabitant in D1 still has `userId` pointing to the old User record
+- Import doesn't handle this gracefully - needs to either:
+  - Disconnect Inhabitant from User (set userId to NULL), OR
+  - Delete orphaned User records, OR
+  - Handle the case where User exists but Heynabo member has no email
+
+**Affected Example (from investigation):**
+- Heynabo IDs: 217 (Camille), 219 (Daniel), 221 (Emma), 222 (Mogens), 223 (Børge), 224 (Flemming), 227 (Yvonne)
+- All had emails in D1, now have `email: null` in Heynabo
+
+**Files to Fix:**
+- `/app/composables/useHeynaboValidation.ts` (createHouseholdsFromImport logic)
+- `/server/data/prismaRepository.ts` (saveInhabitant - handle userId disconnection)
+- Possibly: Make User.email nullable in schema if we want to preserve user records
+
+**Test:**
+- `/tests/e2e/api/admin/heynabo.e2e.spec.ts` - currently passes with clean DB but needs to handle stale data
+
+**Priority:** CRITICAL - affects production imports when Heynabo master data changes
+
+---
+
+## 🎨 HIGH PRIORITY: Active Season Management Feature (UX Design Phase)
+
+**Status:** UX Design Complete ✅
+
+### UX Work Completed
+- ✅ **Three-state season system designed**: Active (solid green) / Future (dashed green) / Past (grey)
+- ✅ **SeasonSelector visual indicators**: Status icons with color coding
+- ✅ **AdminPlanning status badges**: Visual feedback for active/future/past seasons
+- ✅ **Activation workflow**: Clear UI for activating future seasons with confirmation
+- ✅ **Past season protection**: Archived seasons cannot be reactivated
+- ✅ **Sorting strategy**: Active → Future (closest) → Past (most recent)
+- ✅ **Mockups added to**:
+  - `app/components/form/SeasonSelector.vue` (visual indicators)
+  - `app/components/admin/AdminPlanning.vue` (status badges & activation controls)
+  - `docs/feature-active-season-management.md` (complete UX specifications)
+
+### Next Steps (Implementation)
+See `docs/feature-active-season-management.md` for:
+- TDD implementation plan (6 phases)
+- Domain logic (pure functions in `useSeason`)
+- Repository functions (atomic activation)
+- API endpoints (POST/GET active season)
+- Store integration (`activeSeason` computed)
+- UI component implementation
+
+---
+
+## CRITICAL : Bug in adminTeams
+1After submitting the form in Create mode, set draft / display to 0, otherwise it shows next 8 teams to create!
+. Make help component functional again - it is broken after recent refactor. Remove marquee, place the text in help
+   system
+4. time to add the tabs as a 2. level menu to the menu component, so it doesnt scroll seperately
+
+## 🎯🌋 HIGHEST PRIORITY: Household Booking Feature
+
+**Feature Overview:**
+
+- ✅ **Task 1**: Refactor calendar architecture (DRY) - Create reusable BaseCalendar component for all calendar views
+- ✅ **Task 2**: Extend WeekDayMap to support ticket preferences - Members can set weekly DINEIN/TAKEAWAY/NONE per
+  inhabitant
+- ✅ **Task 3.1**: Build HouseholdCard component foundation - Inhabitant display with ticket types and weekly preferences editing (VIEW/EDIT modes, DRY architecture)
+- [ ] **Task 3.2**: Build booking calendar UI - Intuitive calendar showing bookings and team obligations (mobile + desktop)
+- [ ] **Task 4**: Implement booking management UI - Members can book/cancel tickets for family members and guests
+- [ ] **Task 5**: Auto-generate orders from preferences - Orders created automatically when seasons generate dinner
+  events
+
+Household members can view and manage dinner bookings for their family through an intuitive calendar interface.
+Members can book/cancel tickets, set weekly preferences per inhabitant, book guest tickets, and see their team cooking
+obligations.
+Orders are auto-generated when seasons create dinner events based on stored preferences.
+Accessible from admin view and household-specific URLs.
+Mobile and desktop UX must be intuitive.
+
+---
+
+### HouseholdCard Component - UX Design
+
+**Design Philosophy:**
+
+- **Single-manager workflow**: One family member manages all bookings
+- **Batch operations**: Plan by week/month, not individual days (matches real-world behavior)
+- **Weekly preferences as power controls**: Live controls that auto-update all future bookings when changed
+- **Master-detail pattern**: Calendar/grid (master) + booking details (detail panel) - proven pattern from AdminTeams
+- **No modals**: All editing inline, auto-save on blur/change
+- **Grid-based editing**: Spreadsheet-like for week/month views - efficient for batch changes
+- **Simple feedback**: Toast notifications without undo (just change it again if needed)
+- **Current season only**: Always shows active season, focuses on current/next event
+
+---
+
+#### HouseholdCard Structure
+
+**Overall Component (Desktop):**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ 🏠 Hansen Familie                                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  [•Tilmeldinger]  [Allergier]  [Økonomi]  [Indstillinger]                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│                         (Tab content renders here)                              │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Overall Component (Mobile):**
+
+```
+┌──────────────────────────────────┐
+│ 🏠 Hansen Familie                │
+├──────────────────────────────────┤
+│ [•Tilmeldinger] [Allergier] [Øko]│
+├──────────────────────────────────┤
+│                                  │
+│   (Tab content, scrollable)      │
+│                                  │
+└──────────────────────────────────┘
+```
+
+**Tab Structure (Same on Desktop/Mobile):**
+
+1. **Tilmeldinger** - Calendar + booking management + weekly preferences (3 view modes: Dag/Uge/Måned)
+2. **Allergier** - Family allergy management
+3. **Økonomi** - Monthly cost breakdown
+
+**Entry Point:** Opens Tilmeldinger tab, Dag view, today (or next upcoming event) selected
+
+---
+
+#### Tab 1: Tilmeldinger - Desktop Layouts
+
+**DAG View (Entry Point - Quick Check):**
+
+```
+┌──────────────────────────────┬──────────────────────────────────────────────────┐
+│ KALENDER                     │ DENNE DAG                                        │
+│                              │                                                  │
+│ [•Dag] [Uge] [Måned]         │ Tirsdag 8. Oktober 2025                         │
+│                              │                                                  │
+│ [◀ Sep] OKTOBER 2025 [Nov ▶] │ ┌────────────────────────────────────────────┐  │
+│                              │ │👤 Anna      [📍Spis her▾]  [Voksen▾]  ☑  │  │
+│ Ma Ti On To Fr Lø Sø         │ │👤 Bob       [📍Spis her▾]  [Voksen▾]  ☑  │  │
+│    1  2  3  4  5  6          │ │👶 Clara     [📍Spis her▾]  [Sulten▾]  ☑  │  │
+│ 7 [●8] 9 ●10 11 12 13        │ │👶 David     [⊘ Ingen▾]     [Baby▾]     ☐  │  │
+│14 15 ●16 17 ◆18 19 20        │ └────────────────────────────────────────────┘  │
+│21 22 ●23 24 25 ◆26 27        │                                                  │
+│28 29 ●30 31                  │ [Tilmeld alle 📍] [Tag alle med 📦] [Afmeld ⊘]  │
+│                              │ [+ Gæstebillet]                                 │
+│ ● Tilmeldt  ◆ Hold laver     │                                                  │
+│ ○ Ikke tilmeldt              │ 🍳 Hold 2 laver mad                              │
+│                              │ Frist: 6. okt kl. 18:00 • Pris: 180kr           │
+│                              │                                                  │
+│                              ├──────────────────────────────────────────────────┤
+│                              │ ⚙️ UGENTLIGE PRÆFERENCER            [▼ Udvid]   │
+│                              │ Tirsdag: Anna📍, Bob📍, Clara📍 • David⊘         │
+└──────────────────────────────┴──────────────────────────────────────────────────┘
+```
+
+**UGE View (Weekly Batch Planning):**
+
+```
+┌──────────────────────────────┬──────────────────────────────────────────────────┐
+│ KALENDER                     │ DENNE UGE                                        │
+│                              │                                                  │
+│ [Dag] [•Uge] [Måned]         │ Uge 41 (7.-13. Oktober)                         │
+│                              │                                                  │
+│ [◀ Uge 40]    [Uge 42 ▶]     │ Hurtighandlinger:                               │
+│                              │ [Tilmeld alle Anna] [Afmeld alle David]         │
+│ ┌────────────────────────┐   │                                                  │
+│ │Dag  Anna Bob Cla David │   │ Uge total: 780kr (13 billetter)                 │
+│ ├────────────────────────┤   │                                                  │
+│ │Ma 7 ☑📍  ☑📍 ☑📍  ☐   │   ├──────────────────────────────────────────────────┤
+│ │Ti 8 ☑📍  ☑📍 ☑📍  ☐ 🍳│   │ ⚙️ UGENTLIGE PRÆFERENCER            [▼ Udvid]   │
+│ │On 9 ☑📍  ☐   ☑📍  ☐   │   │                                                  │
+│ │To10 ☑📍  ☑📍 ☑📍  ☐   │   │ Ma: Anna📍Bob📍Clara📍 • Ti: Anna📍Bob📍Clara📍   │
+│ │Fr11 ☑📦  ☑📦 ☑📦  ☐ 🍳│   │ On: Anna📍Clara📍 • To: Anna📍Bob📍Clara📍        │
+│ └────────────────────────┘   │ Fr: Anna📦Bob📦Clara📦                           │
+│                              │                                                  │
+│ Klik ☑/☐ tilmeld/afmeld      │                                                  │
+│ Klik 📍/📦 skift venue        │                                                  │
+└──────────────────────────────┴──────────────────────────────────────────────────┘
+```
+
+**MÅNED View (Monthly Overview):**
+
+```
+┌──────────────────────────────┬──────────────────────────────────────────────────┐
+│ KALENDER                     │ DENNE MÅNED                                      │
+│                              │                                                  │
+│ [Dag] [Uge] [•Måned]         │ Oktober 2025                                     │
+│                              │                                                  │
+│ [◀ September]  [November ▶]  │ Hurtighandlinger:                               │
+│                              │ [Tilmeld hele familien] [Afmeld alle David]     │
+│ ┌────────────────────────┐   │                                                  │
+│ │Dag   Anna Bob Cla David│   │ Måned total: 1.140kr (19 billetter)             │
+│ ├────────────────────────┤   │                                                  │
+│ │Ma 7  ☑📍  ☑📍 ☑📍  ☐   │   ├──────────────────────────────────────────────────┤
+│ │Ti 8  ☑📍  ☑📍 ☑📍  ☐ 🍳│   │ ⚙️ UGENTLIGE PRÆFERENCER            [▼ Udvid]   │
+│ │On 9  ☑📍  ☐   ☑📍  ☐   │   │                                                  │
+│ │To10  ☑📍  ☑📍 ☑📍  ☐   │   │ Ma: Anna📍Bob📍Clara📍 • Ti: Anna📍Bob📍Clara📍   │
+│ │Fr11  ☑📦  ☑📦 ☑📦  ☐ 🍳│   │ On: Anna📍Clara📍 • To: Anna📍Bob📍Clara📍        │
+│ │... (scroll for more)   │   │ Fr: Anna📦Bob📦Clara📦                           │
+│ └────────────────────────┘   │                                                  │
+│                              │                                                  │
+│ [Vis kun dage med middage]   │                                                  │
+└──────────────────────────────┴──────────────────────────────────────────────────┘
+```
+
+**Expanded Preferences (All Views):**
+
+```
+│ ⚙️ UGENTLIGE PRÆFERENCER                               [▲ Skjul]   │
+│                                                                     │
+│ Standard for hver ugedag (opdaterer automatisk fremtidige bookinger)│
+│                                                                     │
+│ ┌─👤 Anna──────────────────────────────────┐                       │
+│ │Ma[📍▾] Ti[📍▾] On[📍▾] To[📍▾] Fr[📦▾]  │                       │
+│ └──────────────────────────────────────────┘                       │
+│                                                                     │
+│ ┌─👤 Bob───────────────────────────────────┐                       │
+│ │Ma[📍▾] Ti[📍▾] On[📍▾] To[⊘▾]  Fr[📦▾]  │                       │
+│ └──────────────────────────────────────────┘                       │
+│                                                                     │
+│ ┌─👶 Clara─────────────────────────────────┐                       │
+│ │Alle dage: [📍 Spis her ▾]                │                       │
+│ └──────────────────────────────────────────┘                       │
+│                                                                     │
+│ ℹ️ Ændringer opdaterer fremtidige bookinger                         │
+```
+
+---
+
+#### Tab 1: Tilmeldinger - Mobile Layouts (Stacked + Scrollable)
+
+**DAG View:**
+
+```
+┌──────────────────────────────────┐
+│ KALENDER                         │
+│ [•Dag] [Uge] [Måned]             │
+│ [◀] OKTOBER 2025 [▶]             │
+│ ┌─────────────────────────────┐  │
+│ │Ma Ti On To Fr Lø Sø         │  │
+│ │    1  2  3  4  5  6         │  │
+│ │ 7 [●8] 9 ●10 11 12 13       │  │
+│ │14 15 ●16 17 ◆18 19 20       │  │
+│ └─────────────────────────────┘  │
+│ ● Tilmeldt ◆ Hold ○ Ingen       │
+│ ──────────────────────────────── │
+│ TIRSDAG 8. OKTOBER               │
+│ ┌────────────────────────────┐   │
+│ │👤 Anna  [Spis her▾][Vok▾]☑│   │
+│ │👤 Bob   [Spis her▾][Vok▾]☑│   │
+│ │👶 Clara [Spis her▾][Sul▾]☑│   │
+│ │👶 David [Ingen▾]  [Baby▾]☐│   │
+│ └────────────────────────────┘   │
+│ [Tilmeld alle] [Tag med] [Afmeld]│
+│ [+ Gæstebillet]                  │
+│ 🍳 Hold 2 • Frist: 6/10 18:00    │
+│ Pris: 180kr                      │
+│ ──────────────────────────────── │
+│ ⚙️ PRÆFERENCER       [▼ Udvid]   │
+│ Tirsdag: Anna📍, Bob📍, Clara📍  │
+└──────────────────────────────────┘
+```
+
+**UGE View:**
+
+```
+┌──────────────────────────────────┐
+│ KALENDER                         │
+│ [Dag] [•Uge] [Måned]             │
+│ [◀ Uge 40] UGE 41 [Uge 42 ▶]     │
+│ ┌────────────────────────────┐   │
+│ │Dag   Anna Bob Clara David  │   │
+│ ├────────────────────────────┤   │
+│ │Ma 7  ☑📍  ☑📍  ☑📍   ☐    │   │
+│ │Ti 8  ☑📍  ☑📍  ☑📍   ☐ 🍳 │   │
+│ │On 9  ☑📍  ☐    ☑📍   ☐    │   │
+│ │To10  ☑📍  ☑📍  ☑📍   ☐    │   │
+│ │Fr11  ☑📦  ☑📦  ☑📦   ☐ 🍳 │   │
+│ └────────────────────────────┘   │
+│ Tryk ☑ tilmeld • 📍/📦 skift     │
+│ ──────────────────────────────── │
+│ DENNE UGE                        │
+│ 780kr (13 billetter)             │
+│ [Tilmeld alle Anna]              │
+│ [Afmeld alle David]              │
+│ ──────────────────────────────── │
+│ ⚙️ PRÆFERENCER [▼]               │
+│ Ma: Anna📍Bob📍Clara📍           │
+└──────────────────────────────────┘
+```
+
+**Grid Cell Interactions (Week/Month Views):**
+
+- **Checkbox (☑/☐)**: Toggle booking on/off (checked = booking active)
+- **Venue Toggle (📍/📦)**: Click to cycle Spis her ↔ Tag med (only when ☑)
+- **Ticket Type (▾)**: Dropdown for Voksen/Barn/Sulten/Baby (only when ☑)
+- **Auto-save**: All changes save immediately
+- **Toast (simple)**: "✓ Anna tilmeldt mandag 7/10" or "⚠️ Bob's torsdagspræference ændret - 8 torsdage opdateret"
+
+---
+
+#### Tab 2: Allergier
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ 🏠 Hansen Familie                                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  [Tilmeldinger]  [•Allergier]  [Økonomi]                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│ Familiens allergier og diætkrav                                                │
+│                                                                                 │
+│ ┌─👤 Anna (Voksen)──────────────────────────────────────────────────────────┐  │
+│ │ 🥜 Peanuts                                                          [✕]   │  │
+│ │ 🌾 Gluten                                                           [✕]   │  │
+│ │ [Tilføj allergi___________________________] [+]                           │  │
+│ └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+│ ┌─👤 Bob (Voksen)───────────────────────────────────────────────────────────┐  │
+│ │ Ingen allergier                                                            │  │
+│ │ [Tilføj allergi___________________________] [+]                           │  │
+│ └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+│ ┌─👶 Clara + David──────────────────────────────────────────────────────────┐  │
+│ │ 🥛 Laktose (Clara)                                                  [✕]   │  │
+│ │ [Tilføj allergi___________________________] [+]                           │  │
+│ └───────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+│ ℹ️ Køkkenet ser disse allergier når de planlægger menuen                       │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+#### Tab 3: Økonomi
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ 🏠 Hansen Familie                                                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  [Tilmeldinger]  [Allergier]  [•Økonomi]                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│ Oversigt over middagsomkostninger                                              │
+│                                                                                 │
+│ ┌─OKTOBER 2025────────────────────────────────────────────────────────────┐    │
+│ │ 8/10  Tirsdag    Anna, Bob, Clara           3 × billetter      180kr   │    │
+│ │ 10/10 Torsdag    Anna, Bob, Clara           3 × billetter      180kr   │    │
+│ │ 16/10 Mandag     Anna, Bob, Clara           3 × billetter      180kr   │    │
+│ │ 23/10 Torsdag    Anna, Bob, Clara           3 × billetter      180kr   │    │
+│ │ 30/10 Torsdag    Anna, Bob, Clara + Gæst    4 × billetter      240kr   │    │
+│ │                                              ─────────────────────────       │
+│ │                                              Oktober total:   1.140kr   │    │
+│ └──────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                 │
+│ ┌─NOVEMBER 2025 [▼ Udvid]────────────────────────────────────────────────┐    │
+│ │ November total: 880kr                                                   │    │
+│ └──────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                 │
+│ ════════════════════════════════════════════════════════════════════════════   │
+│ Sæson total: 2.020kr                                                           │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+**Mobile Layouts for Allergier & Økonomi:**
+
+- Same content as desktop, stacked vertically, scrollable
+
+**Future Features:**
+
+- Calendar feed export (.ics) for Google/Apple/Outlook
+- Ticket marketplace (buy/sell past deadline) in Tilmeldinger detail panel
+
+### Task 1: DRY Calendar Architecture Refactoring
+
+**Goal**: Eliminate duplication between CalendarDisplay and TeamCalendarDisplay. Create reusable calendar foundation for
+household booking calendar.
+
+**Architecture (3-Layer)**:
+
+1. `useCalendarEvents` composable - Generic event mapping/lookup (CalendarEventList type)
+2. `BaseCalendar` component - Renderless calendar with slots (wraps UCalendar)
+3. Domain composables - Event list creators in `useSeason`, `useCookingTeam`, `useHousehold` (new)
+4. Specific calendars - Thin wrappers using BaseCalendar with custom rendering
+
+**Test Plan (TDD - Tests First!)**:
+
+| File                                    | Type | Status   | Tests                                                             |
+|-----------------------------------------|------|----------|-------------------------------------------------------------------|
+| `useCalendarEvents.unit.spec.ts`        | Unit | ✅        | Event mapping, day lookup (multiple lists support)                |
+| `useSeason.nuxt.spec.ts`                | Nuxt | ✅        | Cooking day event lists, `isHoliday` detection, holiday exclusion |
+| `useCookingTeam.nuxt.spec.ts`           | Nuxt | ✅        | Team event lists (with/without teams, color/name data)            |
+| `useHousehold.unit.spec.ts`             | Unit | ✅        | Household booking event lists (aggregation, ticket types)         |
+| `BaseCalendar.nuxt.spec.ts`             | Nuxt | ⭐ CREATE | Slots, day context, responsive sizing, multi-event lists          |
+| `CalendarDisplay.nuxt.spec.ts`          | Nuxt | ⭐ CREATE | Smoke tests (renders, BaseCalendar, ring/chip styling)            |
+| `TeamCalendarDisplay.nuxt.spec.ts`      | Nuxt | ⭐ CREATE | Smoke tests (badge styling, tooltips, team colors)                |
+| `HouseholdCalendarDisplay.nuxt.spec.ts` | Nuxt | ⭐ CREATE | Smoke tests (chip bookings, count display, legend)                |
+
+**Implementation (After Tests!)**:
+
+- ✅ Phase 1: Foundation - `useCalendarEvents` + `BaseCalendar`
+- ✅ Phase 2: Domain extensions - Update `useSeason`, `useCookingTeam`, create `useHousehold`
+- ✅ Phase 3: Component migration - Refactor existing calendars, create `HouseholdCalendarDisplay`
+- ✅Phase 4: Cleanup - Verify tests, remove duplication
+
+**ADR Alignment**: ADR-001 (composables), ADR-007 (separation of concerns), ADR-010 (domain types)
+
+### Task 2: Ticket Type Preferences (WeekDayMap Extension)
+
+**Goal**: Store per-inhabitant weekly dinner preferences (DINEIN, TAKEAWAY, NONE) using generic `WeekDayMap<DinnerMode>`
+
+**Architecture Decision**: Enhance existing `useWeekDayMapValidation()` with optional parameters (Option B)
+
+- Zero breaking changes - existing boolean usage unchanged
+- `useWeekDayMapValidation({ valueSchema: DinnerModeSchema, defaultValue: 'NONE' })`
+- Same ser/de functions for all types
+
+```typescript 
+// in useWeekDayMapValidation.ts
+useWeekDayMapValidation<T = boolean>(options ? : {
+    valueSchema? : z.ZodType<T>      // Zod schema for each day's value
+    defaultValue? : T                 // Default value for createDefaultWeekdayMap
+    isRequired? : (map: WeekDayMap<T>) => boolean  // Custom "at least one" validation
+    requiredMessage? : string         // Error message for validation
+})
+```
+
+**TDD Implementation**:
+
+**Phase 1: Type & Validation Foundation**
+
+- ✅ **Test**: Unit test for generic `WeekDayMap<T>` type in `types/dateTypes.ts` impl  `type WeekDayMap<T = boolean> = Record<WeekDay, T>`
+- ✅  **Impl**: Make `createDefaultWeekdayMap` generic
+- ✅ fixed regressions after refactoring
+
+**Phase 2: Prisma Schema**
+
+- ✅ **Impl**: Add `dinnerPreferences String?` to `Inhabitant` model (JSON stringified `WeekDayMap<DinnerMode>`)
+- ✅ **Impl**: Generate Prisma client + migration (if needed)
+
+**Phase 3: Domain Validation**
+
+- ✅ **Impl**: Added `dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()` to `InhabitantCreateSchema` in `useHouseholdValidation`
+- ✅ **Test**: Unit tests for WeekDayMap validation (valid, optional/null, invalid data, serialization)
+- ✅ **Impl**: Exported `createDefaultWeekdayMap`, `serializeWeekDayMap`, `deserializeWeekDayMap` from `useHouseholdValidation`
+
+**Phase 4: API Implementation**
+
+- ✅ **Test**: E2E test for `POST /api/admin/household/inhabitants/[id]` with dinnerPreferences update (PASSING)
+- [ ] Run migration
+- ✅ **Impl**: Update `POST /api/admin/household/inhabitants/[id].post.ts` endpoint to handle dinnerPreferences serialization
+- ✅ **Impl**: Update `updateInhabitant()` in `prismaRepository.ts` with ser/de for dinnerPreferences
+- ✅ **Verify**: Full E2E test passes with actual database updates
+
+**Phase 5: UI** (Future)
+
+- [ ] UI: Weekly preference selector component
+- [ ] e2e ui test - changes trigger
+
+### Task 3: Household Calendar Card Component
+
+**Goal**: Build HouseholdCard component showing family bookings and cooking obligations.
+
+**Requirements**:
+
+- Calendar view with:
+    - Family member bookings (multi-inhabitant display)
+    - Cooking team assignments (via team calendar integration)
+    - Responsive: Intuitive on mobile and desktop
+- Accessible from:
+    - `/admin/household?household={id}` (admin context - future)
+    - `/household/[shortname]` (household-specific URL - path-based routing)
+
+**URL Pattern Decision**:
+
+- Use path-based routing: `/household/[shortname]` for household detail view
+- Rationale: Consistency with Nuxt 4 file-based routing, REST conventions, and existing patterns
+- Note: Existing `/household/[id].vue` uses address-based IDs (T1, S31) - may need migration/coexistence strategy
+
+**Architecture**:
+
+**Tab Navigation Pattern** (ADR-006):
+- URL: `/household/[shortname]/[tab]` (e.g., `/household/AR_1_st/tilmeldinger`)
+- Client-side navigation (no full page reloads)
+- Tabs: Tilmeldinger, Allergier, Økonomi, Medlemmer, Indstillinger
+- Reusable `useTabNavigation` composable (shared with admin pages)
+
+**File Structure**:
+```
+app/pages/household/
+  [shortname]/[tab].vue      # Tab router (like admin/[tab].vue)
+  [shortname].vue             # Redirects to first tab
+
+app/components/household/
+  HouseholdBookings.vue       # Tilmeldinger tab (calendar + booking)
+  HouseholdAllergies.vue      # Allergier tab
+  HouseholdEconomy.vue        # Økonomi tab
+  HouseholdMembers.vue        # Medlemmer tab
+  HouseholdSettings.vue       # Indstillinger tab
+```
+
+**Implementation Phases**:
+
+**Phase 0: Foundation (Composable)**
+- [ ] Create `app/composables/useTabNavigation.ts`
+  - Support simple routes (`/admin/[tab]`)
+  - Support nested routes (`/household/[shortname]/[tab]`)
+  - Type-safe with TypeScript generics
+- [ ] Unit test: `tests/component/composables/useTabNavigation.unit.spec.ts`
+
+**Phase 1: Validate Pattern (Refactor Admin)**
+- [ ] Refactor `app/pages/admin/[tab].vue` to use `useTabNavigation`
+- [ ] Remove duplicate routing logic (~40 lines → composable call)
+- [ ] E2E test: Verify admin tabs still work (no behavior change)
+- [ ] Rationale: Validate composable works before applying to household
+
+**Phase 2: Household Tab Structure**
+- [ ] Create `app/pages/household/[shortname]/[tab].vue`
+  - Use `useTabNavigation` with `additionalParams: ['shortname']`
+  - Setup async component loading
+  - Store initialization (householdStore, planStore)
+- [ ] Update `app/pages/household/[shortname].vue`
+  - Add redirect to `/household/[shortname]/tilmeldinger`
+- [ ] E2E test: URL navigation and tab switching
+
+**Phase 3: Component Extraction** (Can parallelize)
+- [ ] Extract `HouseholdBookings.vue` from HouseholdCard
+  - Master-detail: Calendar (1/3) + Booking panel (2/3)
+  - Props: household, seasonDates, dinnerEvents, orders, holidays
+  - Component test
+- [ ] Extract `HouseholdAllergies.vue`
+  - Component test
+- [ ] Extract `HouseholdEconomy.vue`
+  - Component test
+- [ ] Extract `HouseholdMembers.vue`
+  - Component test
+- [ ] Extract `HouseholdSettings.vue`
+  - Calendar feed, notifications, preferences
+  - Component test
+
+**Phase 4: Integration & Cleanup**
+- [ ] Wire components in `[shortname]/[tab].vue`
+- [ ] Pass props from page to components
+- [ ] Remove/repurpose old `HouseholdCard.vue`
+- [ ] E2E test: All tabs functional with data flow
+
+**Phase 5: Documentation**
+- [ ] Update ADR-006 with tab navigation pattern
+- [ ] Document `useTabNavigation` usage
+- [ ] Add examples for simple and nested routes
+
+**Completion Criteria**:
+- ✅ `HouseholdCard.vue` created (basic structure)
+- ✅ `HouseholdCalendarDisplay` integrated (from Task 1)
+- [ ] Tab navigation working with URL synchronization
+- [ ] All 5 tabs extracted as separate components
+- [ ] Client-side navigation (no full page reloads)
+- [ ] Admin refactored to use same pattern (DRY)
+- [ ] E2E tests for tab navigation and component rendering
+- [ ] ADR-006 updated with pattern documentation
+
+### Task 4: Booking Management UI
+
+**Goal**: Members can book/cancel tickets for any family member.
+
+**Requirements**:
+
+- Book/cancel tickets per inhabitant per dinner event
+- Select ticket types (ADULT, CHILD, HUNGRY_BABY, BABY)
+- Guest ticket support (extra ticket for non-member)
+- Validation: Cancellation deadline (`ticketIsCancellableDaysBefore`)
 
 **Implementation**:
-- ✅ Added unit test: "calling with already-assigned affinities preserves assignments"
-- ✅ Verified idempotency guarantee (test passes without code changes)
-- ✅ Documented behavior in function implementation
 
-**Verification**: Unit test confirms deterministic output with existing affinities preserved
+- [ ] API: POST/DELETE `/api/household/[id]/order` (create/cancel booking)
+- [ ] UI: Day click → booking modal (select inhabitants + ticket types)
+- [ ] Show existing bookings in calendar (chips with count)
+- [ ] Guest ticket special handling
+- [ ] Cancellation deadline warning/blocking
 
----
+### Task 5: Auto-Generate Orders from Preferences
 
-### ✅ Task 2: Sort Teams by Affinity Relative to First Cooking Day
+**Goal**: When season generates dinner events, auto-create orders based on inhabitant ticket preferences.
 
-**Business Requirement**: Teams should be assigned in order of their affinity match to the season's first cooking day, ensuring fair rotation.
+**Requirements**:
 
-**Algorithm Implementation**:
-1. Find first cooking day in season (uses `findFirstCookingDayInDates()`)
-2. Compare affinities by distance from start day
-3. Create sorted map of affinities to teams
-4. Zigzag through matrix to produce fair team roster
+- During dinner event generation (existing flow)
+- Create orders for each inhabitant matching their weekly preferences
+- Skip if preference is NONE for that weekday
+- Apply correct ticket type based on inhabitant age/preference
 
-**Completed Functions**:
-- ✅ **Task 2.1**: `compareAffinities(startDay)` - Curried comparator function
-  - Returns comparator that sorts affinities by weekday distance from startDay
-  - Handles wraparound (Sunday to Monday)
-  - Unit tests: 3 parameterized scenarios (all passing)
+**Implementation**:
 
-- ✅ **Task 2.2**: `createSortedAffinitiesToTeamsMap(teams, startDay)`
-  - Returns `Map<WeekDay, CookingTeam[]>` with keys sorted by distance from startDay
-  - Teams with same affinity sorted alphabetically by name
-  - Unit tests: 3 scenarios covering single/multiple teams per affinity (all passing)
+- [ ] Update `generateDinnerEvents` logic (server-side)
+- [ ] For each event date, check all inhabitants' preferences for that weekday
+- [ ] Bulk create orders matching preferences
+- [ ] E2E tests: Generate season → verify auto-created orders
+- [ ] Handle edge cases: Mid-season preference changes
 
-- ✅ **Task 2.3**: `createTeamRoster(teams, startDay)`
-  - Zigzag traversal through affinity matrix for fair distribution
-  - Uses `Array.from` to iterate Map entries in insertion order
-  - Unit tests: 3 scenarios verifying fair rotation (all passing)
+### Feature Completion Criteria
 
-**Verification**: All unit tests in `season.unit.spec.ts` passing for these functions
+- [ ] All calendar components use DRY BaseCalendar architecture
+- [ ] Household members can view bookings in calendar
+- [ ] Household members can book/cancel tickets (with deadline validation)
+- [ ] Guest tickets supported
+- [ ] Ticket preferences stored per inhabitant per weekday
+- [ ] Orders auto-generated when season creates dinner events
+- [ ] Mobile and desktop UX tested and approved
+- [ ] E2E tests cover all booking flows
 
----
+## 🗻 HIGH PRIORITY: Team Assignment UI Integration
 
-### ✅ Task 3: Implement Round-Robin Assignment Algorithm
+**Remaining UI work**:
 
-**Business Requirement**: Assign teams to dinner events using round-robin rotation based on `consecutiveCookingDays` quota.
-
-**Implementation Complete**:
-- ✅ Implemented `computeTeamAssignmentsForEvents()` in `utils/season.ts:161-204`
-- ✅ Uses `createTeamRoster()` from Task 2 for affinity-based sorting
-- ✅ Handles all edge cases:
-  - No teams (return events unchanged)
-  - No events (return empty array)
-  - More teams than events (some teams get 0 assignments)
-  - Already assigned events (skip assignment, not included in rotation)
-  - Holiday handling (ghost assignments - team gets credit even when event missing)
-
-**Optimizations Applied**:
-- Removed redundant `seasonDates` parameter (use event dates directly)
-- Direct Map creation using flatMap (single pass, no intermediate arrays)
-- Clean functional style with nullish coalescing
-
-**Verification**: All 43 unit tests passing in `season.unit.spec.ts`
-
----
-
-## 🎯 HIGHEST PRIORITY: Migration 003 - Remaining E2E Tests
-
-**Remaining work**: Expand E2E test suite for ticket price API and UI validation
-
----
-
-### Task 8: E2E API Tests - Ticket Price CRUD
-
-**Expand `tests/e2e/api/admin/season.e2e.spec.ts:261`** (add to existing describe block):
-
-**Ticket price tests**:
-- [ ] PUT season with 4 ticket prices returns 201 with nested prices
-- [ ] PUT season with HUNGRY_BABY (900 øre) persists correctly
-- [ ] GET season includes ticketPrices relation
-- [ ] POST updates season ticketPrices
-- [ ] DELETE season cascades delete ticketPrices
-- [ ] Validation: Missing ticket type returns 400
-- [ ] Validation: Duplicate types returns 400
-- [ ] Edge case: Season without prices returns empty array
-
----
-
-### Task 9: E2E UI Tests
-
-**Update `tests/e2e/ui/AdminPlanningSeason.e2e.spec.ts`**:
-
-**Create mode**:
-- [ ] Default prices load (4 types visible)
-- [ ] Prices editable (change ADULT 4000→5000)
-- [ ] Season saves with custom prices
-- [ ] Verify via API
-
-**Edit mode**:
-- [ ] Existing prices load
-- [ ] Changes save
-- [ ] Verify via API
-
-**View mode**:
-- [ ] Read-only formatted display
-
-**Validation**:
-- [ ] Cannot save without all 4 types
-- [ ] Price range validation
-
----
-
-## 🎯 HIGH PRIORITY: Team Assignment UI Integration
-
-**Remaining UI work**: 
 - [ ] Manual reassignment UI (admin changes team for specific event)
 - [ ] Display team assignment counts in UI ("Hold 1: 12 fællesspisninger")
 - [ ] User-defined team affinity preferences
@@ -128,26 +811,39 @@
 - [ ] Auto-reassign when teams added/removed
 - [ ] Warnings for imbalanced distribution
 
-### Phase 4: Integration & Validation
-- [ ] Write integration tests for season-team-event flow
-- [ ] Create API documentation
-- [ ] Update ADR with team/event architecture decisions
-
 ---
 
+## 🎯 HIGH PRIORITY: Feature: /dinner today dinner information page for everyone
+
+When a user navigates to the /dinner page, they should see a master / detail view with a calendar of dinner events
+and a complex information panel about today's dinner event if it exists, or the next upcoming dinner event if today's
+dinner event does not exist.
+The information panel should include:
+
+- sell / buy tickets
+- show unsold
+- show hours / minutes deadlines
+- menu information
+- cooking team members
+- allergy information
 
 ## 🎯 HIGH PRIORITY: URL-Based Admin Navigation (DRY Season Selection)
 
 ### Goal
-Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and eliminating component duplication.
+
+Implement URL-based navigation for admin context (season, team) using query parameters, consolidating routing logic and
+eliminating component duplication.
 
 ### Architecture Pattern
+
 **Query parameters as context/filters**:
+
 - Season context: `?season={shortName}`
 - Team context: `?team={slug}` (future)
 - Mode state: `?mode=edit|create|view` (existing)
 
 **Example URLs**:
+
 ```
 /admin/planning?season=fall-2025&mode=edit
 /admin/teams?season=fall-2025&mode=view
@@ -159,23 +855,27 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 1. Season Context (Required)
 
 **Default Behavior**:
+
 - User navigates to `/admin/planning` (no `?season=`)
 - Auto-redirect to `/admin/planning?season={activeSeason.shortName}`
 - Active season = first season in list (temporary - will be database `isActive` field later)
 - Only ONE season can be active at a time (business invariant)
 
 **Invalid Season Handling**:
+
 - User navigates to `/admin/planning?season=nonexistent`
 - Redirect to `/admin/planning?season={activeSeason.shortName}` (graceful fallback)
 - No error toast - silent recovery
 
 **Empty State** (No Seasons):
+
 - `isNoSeasons = true` when no seasons exist
 - URL: `/admin/planning` (no redirect, no season param)
 - Show empty state UI: "Ingen sæsoner. Opret en ny sæson."
 - Season-dependent actions disabled (edit mode, team creation)
 
 **Season Persistence**:
+
 - Season param persists across ALL admin tabs
 - User at `/admin/planning?season=fall-2025` → clicks "Madhold" → `/admin/teams?season=fall-2025`
 - Coexists with mode param: `?season=fall-2025&mode=edit`
@@ -183,11 +883,13 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 2. URL Sync with Store
 
 **Two-way binding**:
+
 - URL query param `?season=fall-2025` → Store `selectedSeason`
 - Store `selectedSeason` updated → URL reflects change
 - SeasonSelector dropdown updates URL → Store syncs automatically
 
 **Store Integration**:
+
 - Add `activeSeason` computed property: `seasons.value[0] ?? null`
 - Existing `selectedSeason` ref synced from URL
 - Existing `onSeasonSelect(id)` method remains unchanged
@@ -195,16 +897,19 @@ Implement URL-based navigation for admin context (season, team) using query para
 #### 3. Routing Logic Consolidation
 
 **Problem**: Routing logic fragmented across:
+
 - FormModeSelector component (manages `?mode=`)
 - Admin [tab].vue page (manages `/admin/[tab]`)
 - Duplicated season selection in AdminPlanning + AdminTeams
 
 **Solution**: Create `useAdminNavigation` composable
+
 - Responsibility: Manage URL query params (season, future: team, filters)
 - Single source of truth for admin context/navigation
 - Separate from `useEntityFormManager` (entity editing state)
 
 **Clear separation** (ADR-007 compliant):
+
 ```
 useAdminNavigation    → URL context (season, team filters)
 useEntityFormManager  → Entity editing (mode, draft entity)
@@ -214,6 +919,7 @@ usePlanStore          → Server data (seasons list, CRUD)
 #### 4. Component Extraction (DRY)
 
 **Create SeasonSelector component**:
+
 - Replaces inline `<USelect>` in AdminPlanning.vue (lines 93-103)
 - Replaces inline `<USelect>` in AdminTeams.vue (lines 257-266)
 - Uses `useAdminNavigation` internally for URL updates
@@ -222,20 +928,24 @@ usePlanStore          → Server data (seasons list, CRUD)
 ### Implementation Checklist
 
 **New Files**:
+
 - [ ] `app/composables/useAdminNavigation.ts` - URL query param management
 - [ ] `app/components/admin/SeasonSelector.vue` - Reusable season dropdown
 
 **Modified Files**:
+
 - [ ] `app/stores/plan.ts` - Add `activeSeason` computed property
 - [ ] `app/components/admin/AdminPlanning.vue` - Use SeasonSelector + useAdminNavigation
 - [ ] `app/components/admin/AdminTeams.vue` - Use SeasonSelector + useAdminNavigation
 
 **Unchanged Files** (respects ADR-007, ADR-008):
+
 - [ ] `app/composables/useEntityFormManager.ts` - No changes
 - [ ] `app/components/form/FormModeSelector.vue` - No changes
 - [ ] `app/pages/admin/[tab].vue` - No changes
 
 **Testing**:
+
 - [ ] E2E: Season persists across admin tabs
 - [ ] E2E: Invalid season redirects to active season
 - [ ] E2E: Missing season param redirects to active season
@@ -245,11 +955,14 @@ usePlanStore          → Server data (seasons list, CRUD)
 - [ ] Unit: useAdminNavigation composable tests
 
 **Documentation**:
+
 - [ ] Move to `docs/features.md` after implementation
 - [ ] Update URL patterns in README.md (if needed)
 
 ### Decision Rationale
+
 Query parameters chosen over path-based routing because:
+
 1. Season/team are "context filters" not primary entities
 2. Minimal code changes (no new route files)
 3. Consistent with existing `?mode=` pattern
@@ -263,6 +976,7 @@ Query parameters chosen over path-based routing because:
 ### Skipped E2E Tests (1 test)
 
 **`tests/e2e/api/admin/dinnerEvent.e2e.spec.ts:46`**
+
 - Test: `POST can update existing dinner event with status 200`
 - Status: Intentionally skipped - feature not yet implemented
 - Action: Implement POST /api/admin/dinner-event/[id] endpoint when needed
@@ -272,7 +986,9 @@ Query parameters chosen over path-based routing because:
 ## Medium priority: Fix Vitest ECONNREFUSED error on test cleanup
 
 ### Issue
+
 After all tests pass successfully, the test process throws an unhandled ECONNREFUSED error during cleanup:
+
 ```
 AggregateError [ECONNREFUSED]:
   Error: connect ECONNREFUSED ::1:3000
@@ -280,12 +996,14 @@ AggregateError [ECONNREFUSED]:
 ```
 
 ### Current Status
+
 - **All tests pass**: 125/125 tests passing ✅
 - **Error occurs**: During process teardown after tests complete
 - **Affected**: Only when running all Nuxt tests together (`npm run test`)
 - **Not affected**: Individual test files run without error
 
 ### Investigation Done
+
 - ✅ Confirmed: `plan.ts` uses module-level `useFetch` (Nuxt 4 pattern with `refreshSeasons()`)
 - ✅ Confirmed: Test properly registers mock endpoint before importing store
 - ✅ Confirmed: Other stores use `useFetch` inside actions (users.ts, households.ts)
@@ -293,12 +1011,14 @@ AggregateError [ECONNREFUSED]:
 - ✅ Found: `useFetch` designed for components, not stores (but Nuxt 4 allows it)
 
 ### Potential Causes
+
 1. HMR code (`import.meta.hot`) running in test environment
 2. Nuxt/Vite cleanup trying to connect to dev server (port 3000)
 3. Test environment not fully mocking the Nuxt runtime during cleanup
 4. Known issue with `@nuxt/test-utils` and module-level `useFetch`
 
 ### Action Items
+
 - [ ] Check if `import.meta.hot` is active in test environment
 - [ ] Research `@nuxt/test-utils` GitHub issues for similar problems
 - [ ] Consider using MSW (Mock Service Worker) instead of `registerEndpoint`
@@ -306,6 +1026,7 @@ AggregateError [ECONNREFUSED]:
 - [ ] Test if issue persists with Pinia 3 migration (scheduled)
 
 ### References
+
 - Pinia testing docs: https://pinia.vuejs.org/cookbook/testing.html
 - `@nuxt/test-utils` issue #943: registerEndpoint doesn't expose to $fetch
 - Search results indicate `useFetch` in stores is problematic for testing
@@ -315,26 +1036,32 @@ AggregateError [ECONNREFUSED]:
 ## Medium priority: Fix UForm error display in AdminPlanningSeason footer
 
 ### Issue
-Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't display.
+
+Form validation is working (submit button is disabled when errors exist), but the error message in the footer doesn't
+display.
 
 ### Current Behavior
+
 - `app/components/admin/planning/AdminPlanningSeason.vue:175` has error display: `<div v-if="errors.length > 0">`
 - UForm v-slot provides `errors` array which should populate with validation errors
 - Debug output shows: `errors = [], length = 0` even when validation prevents submission
 - Removing `form="seasonForm"` attribute fixed validation blocking (UForm now prevents invalid submission)
 
 ### Investigation Done
+
 - ✅ Confirmed: UForm docs say errors array should populate during input events
 - ✅ Confirmed: `errors.length > 0` is correct syntax per Nuxt UI docs
 - ✅ Fixed: Removed `form` attribute from submit button (was bypassing UForm validation)
 - ❌ Problem: `errors` array remains empty even though validation is active
 
 ### Potential Causes
+
 1. UForm v-slot `errors` may only populate after attempted submit (not during input validation)
 2. May need to use `@error` event instead of v-slot pattern
 3. May need to set `validate-on` prop explicitly
 
 ### Action Items
+
 - [ ] Test clicking submit button to see if errors populate after submission attempt
 - [ ] Check Nuxt UI 4 migration docs for error handling changes
 - [ ] Try `@error` event pattern as alternative to v-slot
@@ -343,25 +1070,82 @@ Form validation is working (submit button is disabled when errors exist), but th
 
 ---
 
+## 🔴 HIGH PRIORITY: Define Serialized Input Schemas for All Deserialize Functions
+
+**Status:** Scoped - Ready for Implementation
+
+**Context:** Deserialize functions across composables use `any` for input types, losing compile-time type safety. ESLint flags these as `@typescript-eslint/no-explicit-any` violations.
+
+**Affected Composables (6 `any` types):**
+1. `useCoreValidation.ts:382` - `deserializeHouseholdSummary(serialized: any)`
+2. `useSeasonValidation.ts:94` - `deserializeSeason(serialized: any)`
+3. `useSeason.ts:196` - deserialize helper
+4. `useWeekDayMapValidation.ts:52` - `deserializeWeekDayMap(serialized: any)`
+5. `useQueryParam.ts:100` - param parsing
+6. `useApiHandler.ts:54` - error handling
+
+**Pattern to Follow (ADR-010):**
+```typescript
+// Define input schema matching database format
+const SerializedHouseholdInputSchema = z.object({
+    id: z.number(),
+    movedInDate: z.string(),  // ISO date string from DB
+    inhabitants: z.array(z.object({
+        birthDate: z.string().nullable(),
+        dinnerPreferences: z.string().nullable()  // JSON string
+    })).optional()
+})
+type SerializedHouseholdInput = z.infer<typeof SerializedHouseholdInputSchema>
+
+// Type-safe deserialize
+const deserializeHouseholdSummary = (serialized: SerializedHouseholdInput): HouseholdSummary => {
+    // Transform and parse to domain type
+}
+```
+
+**Estimated Effort:** ~30 min per composable (6 total = ~3 hours)
+
+**Benefits:**
+- Compile-time type safety for all deserialize inputs
+- ESLint compliance (no `any` types)
+- Better documentation of DB ↔ Domain contract
+- Catch schema drift earlier
+
+**Action Items:**
+- [ ] `useSeasonValidation.ts` - Create `SerializedSeasonInputSchema`
+- [ ] `useCoreValidation.ts` - Create `SerializedHouseholdInputSchema`, `SerializedInhabitantInputSchema`
+- [ ] `useWeekDayMapValidation.ts` - Type the input (string | WeekDayMap<T>)
+- [ ] `useSeason.ts` - Use typed schema from validation composable
+- [ ] `useQueryParam.ts` - Type param parsing
+- [ ] `useApiHandler.ts` - Type error object properly
+
+**Priority:** HIGH - Affects code quality, maintainability, and ESLint compliance
+
+---
+
 ## Medium priority: Type-safe deserializeSeason (ADR-010 alignment)
 
 ### Issue
+
 `deserializeSeason(serialized: SerializedSeason | any)` uses `| any` escape hatch, losing compile-time type safety.
 
 ### Root Cause
+
 - **Prisma returns conditional types** based on `include` clause (index vs detail endpoints)
 - **SerializedSeason is transform OUTPUT**, not deserialize INPUT (one-way schema)
 - Function handles multiple input shapes (with/without relations) but lacks proper type
 
 ### Options
+
 1. **Keep `| any`** - Pragmatic, runtime-safe, but loses compile-time safety
 2. **Use Prisma Payload Types** - Type-safe but couples to Prisma, maintenance overhead
 3. **Create SerializedSeasonBase type** ✅ **RECOMMENDED**
-   - Define base serialized type matching database format
-   - Separate from domain Season type (ADR-010 compliant)
-   - Type-safe contract: what repository returns → what deserialize accepts
+    - Define base serialized type matching database format
+    - Separate from domain Season type (ADR-010 compliant)
+    - Type-safe contract: what repository returns → what deserialize accepts
 
 ### Action Items
+
 - [ ] Create `SerializedSeasonBase` type in `useSeasonValidation.ts`
 - [ ] Update `deserializeSeason(serialized: SerializedSeasonBase): Season`
 - [ ] Document in ADR-010 (serialized types represent DB format, not transform output)
@@ -371,528 +1155,85 @@ Form validation is working (submit button is disabled when errors exist), but th
 ## Major Framework Migrations Plan (Remaining)
 
 ### Zod 4 Migration (MEDIUM PRIORITY)
+
 **Branch**: `migrate-zod-4`
 **Current**: 3.24.1 → **Target**: 4.1.5
 **Impact**: MEDIUM - Form validation and API schemas
 
 ---
 
-# ✅ COMPLETED
-
-## Team Assignment Calendar Visualization & UI Integration (2025-10-19)
-**Date**: 2025-10-19 | **Compliance**: ADR-007, DRY principles
-
-### Store Integration
-- ✅ **assignTeamAffinitiesAndEvents()** orchestration method in plan store
-  - Sequential execution: assign affinities → assign teams to events
-  - Combined toast notification showing both operation counts
-  - Replaces separate function calls with single orchestrated flow
-  - Returns `{teamCount, eventCount}` for UI feedback
-
-### Calendar Visualization
-- ✅ **TeamCalendarDisplay component** created
-  - Shows team cooking assignments with color-coded badges
-  - Tooltips display team names on hover
-  - Holiday support with green chips
-  - Efficient Map-based date lookup for O(1) event access
-  - Hides days from adjacent months (`data-[outside-view]:hidden`)
-  - Responsive: 3 months on desktop, 1 month on mobile
-- ✅ **Integrated into AdminTeams**
-  - VIEW mode: Calendar after table showing all teams
-  - EDIT mode: Calendar in CookingTeamCard showing only selected team's events
-  - Filtered dinner events passed as props to avoid unnecessary data
-
-### UX Improvements
-- ✅ **CookingTeamCard layout reorganized** (3-row layout)
-  - Header: Team icon + name input + compact member view + delete button
-  - Row 1: Affinity selector (1/4 width) + Team calendar (3/4 width)
-  - Row 2: Team members (FULL WIDTH, horizontal role columns)
-  - Row 3: Inhabitant selector (FULL WIDTH)
-  - Compact member view in header (avatar group + count badge)
-  - Better information hierarchy on large screens
-
-### Bug Fixes
-- ✅ **InhabitantSelector team number display bug fixed**
-  - Problem: Regex `/Hold (\d+)/` failed to match "Madhold {n}" team names
-  - All people in other teams showed "Madhold 1" regardless of actual team
-  - Solution: Pass full teams list as prop, lookup by ID instead of regex
-  - Team index determines display number and color (reliable, works with renamed teams)
-  - Type-safe: `teams?: Array<{ id: number, name: string }>`
-
-### Files Modified
-- `app/stores/plan.ts` - assignTeamAffinitiesAndEvents() orchestration
-- `app/components/calendar/TeamCalendarDisplay.vue` - NEW calendar component
-- `app/components/admin/AdminTeams.vue` - Calendar integration, teams prop passing
-- `app/components/cooking-team/CookingTeamCard.vue` - 3-row layout, teams prop
-- `app/components/cooking-team/InhabitantSelector.vue` - ID-based team lookup
-
-### Key Achievements
-- Calendar provides visual confirmation of team assignment algorithm
-- UX improvements make team management more intuitive on large screens
-- Bug fix ensures accurate team status display across all contexts
-- All changes follow established ADR patterns (no new technical debt)
-
----
-
-# ✅ COMPLETED (EARLIER)
-
-## Season Serialization Refactoring (ADR-010: Domain-Driven Serialization Architecture)
-**Date**: 2025-10-15 | **Compliance**: ADR-010, ADR-001, ADR-005
-
-### Architecture Changes
-- ✅ **Serialization moved to repository layer** - API endpoints work with domain types only
-- ✅ **ADR-010 created** - Domain-Driven Serialization Architecture documented
-- ✅ **Schema pattern established** - Domain schema (SeasonSchema) + Serialized schema (SerializedSeasonSchema) in composables
-- ✅ **Repository transforms** - serialize/deserialize at DB boundary (`createSeason`, `updateSeason`, `fetchSeason`, etc.)
-- ✅ **API cleanup** - Endpoints accept/return Season domain type, not SerializedSeason
-- ✅ **Factory simplification** - SeasonFactory sends domain objects, no manual serialization
-- ✅ **Test regression fixes** - Date regex (single-digit support), factory API usage, mock data DRY (25/25 tests passing)
-
-### Key Benefits
-- Clean separation: DB format is implementation detail, not API contract
-- Type safety: Domain types throughout app, serialization isolated to repository
-- Migration flexibility: Can change DB without touching API/UI
-- Testing simplicity: Factories use domain types
-
-## Migration 003 - Ticket Prices and Team Assignment Fields
-**Date**: 2025-10-15 | **Compliance**: ADR-001, ADR-002, ADR-005
-
-### Schema Changes
-- ✅ Added `HUNGRY_BABY` to TicketType enum
-- ✅ Added `affinity: String?` to CookingTeam model (JSON array of weekdays)
-- ✅ Added `allocationPercentage: Int @default(100)` to CookingTeamAssignment model
-- ✅ Note: `consecutiveCookingDays` already existed in Season model (E2E tests passing)
-- ✅ Created and applied migration: `migration_003_ticket_prices_and_team_fields`
-- ✅ Generated Prisma client with new types
-
-### Validation & Composables
-- ✅ Created `useTicketPriceValidation.ts` composable
-  - TicketPriceSchema with id, seasonId, ticketType, price (0-20000 øre), description
-  - Exported TicketPrice type
-  - Unit tests passing
-- ✅ Updated `useSeasonValidation.ts`
-  - Imported TicketPriceSchema from useTicketPriceValidation
-  - Replaced `z.array(z.any()).optional()` with proper TicketPrice array schema
-  - Added validation: At least 1 ticket type required (ADULT, CHILD, BABY, HUNGRY_BABY)
-  - Added validation: No duplicate ticket types within same season
-  - Updated `deserializeSeason` to handle ticketPrices relation
-  - Updated composable tests
-- ✅ Updated `useSeason.ts`
-  - `getDefaultSeason()` exports default ticket prices
-  - Updated composable tests
-- ✅ Updated `useCookingTeam.ts`
-  - Added `affinity: string | null` to CookingTeam type
-  - Added `allocationPercentage: number` to CookingTeamAssignment type
-- ✅ Updated `useInhabitant.ts`
-  - Added `affinity: string | null` to Inhabitant type
-
-### Repository Layer
-- ✅ Created `createTicketPrices()` - batch create ticket prices
-- ✅ Created `deleteTicketPrices()` - cleanup helper for season deletion
-- ✅ Modified `createSeason()` to accept optional nested `ticketPrices` array
-- ✅ Modified `updateSeason()` to handle nested ticketPrice updates (delete + recreate pattern)
-- ✅ Verified `deleteSeason()` cascades ticketPrices via Prisma schema (ADR-005)
-- ✅ Updated repository to handle team affinity and allocationPercentage
-- ✅ Updated E2E CRUD tests to handle team affinity and allocationPercentage
-
-### UI Components
-- ✅ Created `TicketPriceListEditor.vue` component
-  - Add/remove ticket prices with validation
-  - Display ticket type, price (DKK), max age, and description
-  - Proper width sizing with Nuxt UI patterns
-  - Simplified icon usage (auto-styled by component)
-- ✅ Updated `AdminPlanningSeason.vue`
-  - Added `<TicketPriceListEditor v-model="model.ticketPrices" />`
-  - Handle nested ticketPrices in save operation
-  - Display existing prices in EDIT mode
-- ✅ Updated `CalendarDateRangeListPicker.vue`
-  - Proper width sizing to prevent date cutoff
-  - Simplified icon usage
-
-### Test Factories
-- ✅ Updated `seasonFactory.ts`
-  - Added `ticketPrices` to `defaultSeason()`
-  - Note: `consecutiveCookingDays: 2` already present
-
-### E2E Tests
-- ✅ ConsecutiveCookingDays tests complete (season.e2e.spec.ts:263-304)
-- ✅ Affinity tests complete (team.e2e.spec.ts:252-298)
-- ✅ AllocationPercentage tests complete (team.e2e.spec.ts:300-328)
-
-### App Configuration
-- ✅ Updated `app.config.ts` with ticket price defaults and team assignment settings
-
-### Key Patterns Applied
-- **ADR-001**: Zod schemas in composables for shared validation
-- **ADR-002**: Separate validation try-catch blocks
-- **ADR-005**: Prisma CASCADE deletion for strong relations (TicketPrice → Season)
-- **Nuxt UI v4**: Proper `:ui` prop usage for component styling (`base: 'w-fit min-w-full mr-4'`)
-- **Component width sizing**: Using `base` layer instead of `root` for proper content-based sizing
-
-## Cleanup of ai attributions - replaced with grazing unicorns 🦄
-
-## Household Management View (Admin Husstande Tab)
-**Date**: 2025-01-28 | **Compliance**: ADR-009
-
-### Implementation
-- ✅ **ADR-009 created**: Weight-Based Data Inclusion Strategy for API endpoints
-  - Index endpoints include lightweight relations if: bounded cardinality, lightweight data, essential context, performance safe
-  - Detail endpoints include comprehensive relations
-  - Clear decision criteria documented
-- ✅ **HouseholdSummary type** created for lightweight index data
-  - Includes basic inhabitant fields (id, name, lastName, pictureUrl, birthDate)
-  - Full HouseholdWithInhabitants type for detail operations
-- ✅ **AdminHouseholds.vue** component created
-  - UTable with address and inhabitants columns
-  - Top-level await for SSR-compatible data loading
-  - Compact household display with avatar groups and name badges
-  - Empty state handling
-- ✅ **HouseholdCard.vue** extended with compact mode
-  - Boolean `compact` prop (false by default)
-  - Compact view: UAvatarGroup (max 3, with tooltips) + UBadge for names
-  - Full view: UCard with inhabitant list
-- ✅ **E2E tests** (6/6 passing)
-  - Load households page
-  - Display household with inhabitants
-  - Display multiple households
-  - Display household without inhabitants (empty state)
-  - API test verifying lightweight vs comprehensive data
-- ✅ **HouseholdFactory** updated
-  - Sequential inhabitant creation (prevents unique constraint violations)
-  - Unique inhabitant names (Donald0 Duck, Donald1 Duck, etc.)
-
-### Key Patterns
-- **ADR-009 compliance**: GET index returns HouseholdSummary, GET by ID returns HouseholdWithInhabitants
-- **Prisma select**: Efficient queries with specific field selection
-- **Component reuse**: HouseholdCard supports both compact and full views
-- **Type safety**: Separate types for lightweight vs comprehensive data
-
-## Phase 1: Display Generated Events with Calendar Visualization (PR #31: create-dinner-events-for-season)
-**Merged**: 2025-10-09
-
-### Auto-Generate Dinner Events
-- ✅ Season creation handler auto-generates dinner events via component orchestration
-- ✅ Component orchestrates createSeason() → generateDinnerEvents() → toast notification
-- ✅ Toast notification: "Sæson oprettet - X fællesspisninger genereret"
-- ✅ GET /api/admin/dinner-event endpoint with optional seasonId filter
-- ✅ API tests for GET endpoint (all events, filtered by season, validation)
-- ✅ Exact count assertions in generate-dinner-events API tests (3 tests)
-- ✅ POST /api/admin/season/[id]/generate-dinner-events endpoint
-- ✅ Event generation algorithm (cooking days, holidays, date range)
-- ✅ E2E API tests for event generation (7 tests passing)
-
-### Calendar Display Component
-- ✅ CalendarDisplay.vue shows dinner events with visual indicators:
-  - Filled circle (●) for generated events
-  - Ring (○) for expected cooking days
-- ✅ Season type extended to support optional relations (dinnerEvents, CookingTeams, ticketPrices)
-- ✅ Store fetches full season data with relations when selected
-- ✅ UI E2E test verifies exact event count after async generation with exponential backoff polling
-- ✅ Comprehensive E2E test coverage in AdminPlanningSeason.e2e.spec.ts
-
-### Critical Infrastructure Fixes
-- ✅ **Wrangler Environment Configuration** - Fixed login 500 error
-  - Implemented three-environment structure (local/dev/prod)
-  - Explicit vars and d1_databases for each environment
-  - Updated package.json, Makefile, cicd.yml, README.md
-- ✅ **CI Cross-Platform Compatibility** - Tests now pass on macOS and Linux
-  - Changed text locators to semantic selectors (getByRole)
-  - Documented OS-specific rendering differences in testing.md
-- ✅ **Async Event Generation Polling** - DinnerEventFactory.waitForDinnerEventsGeneration()
-  - Exponential backoff (500ms → 1s → 2s → 4s → 8s)
-  - Handles timing issues in CI environment
-- ✅ **Nuxt UI 4 Form Submission Bug** - Fixed array mutations not persisting
-  - Changed from event.data to model.value for v-model changes
-  - Ensures holiday removal works correctly
-- ✅ **Repository Type Fixes** - All functions use properly imported types
-  - Added relation field exclusion in createSeason and updateSeason
-- ✅ **Cloudflare Compatibility Dates** - Updated to 2025-10-01
-  - Both nuxt.config.ts and wrangler.toml synchronized
-  - Includes latest Node.js compatibility improvements
-
-## Phase 2: Cooking Teams Admin Tab - API
-- ✅ PUT/POST/DELETE /api/admin/team endpoints
-- ✅ Team member assignment endpoints
-- ✅ E2E API tests passing
-
-## Phase 2: Cooking Teams Admin Tab - UI (Immediate Operations Pattern)
-**Date**: 2025-01-28 | **Compliance**: ADR-007, ADR-008
-
-### UI Development
-- ✅ **Teams tab** added to admin navigation (alongside Planning)
-- ✅ **`/admin/teams` page component** created (handled by `/admin/[tab].vue`)
-- ✅ **AdminTeams.vue** refactored with immediate operations pattern
-  - Partial `useEntityFormManager()` usage (URL/mode management only)
-  - Component-owned CREATE draft for dynamic team generation
-  - Immediate save operations (add team, delete team, rename on blur)
-  - No "Gem ændringer" button - operations save immediately
-- ✅ **CookingTeamCard.vue component** created (replaces separate form/list components)
-  - Reusable team display component
-  - List and standalone variants
-  - Edit mode with immediate save-on-blur for team names
-  - View mode for read-only display
-
-### Testing
-- ✅ **E2E tests for teams workflow** (9/9 passing)
-  - Create teams via batch generation
-  - Add team (immediate save)
-  - Delete team (immediate save)
-  - Rename team (save on blur)
-  - All immediate operations verified via API
-- ✅ **AdminPlanning verified** working after refactor
-
-### Infrastructure Fixes
-- ✅ **Fixed hydration mismatch**
-  - SSR-safe mode initialization from URL query parameters
-  - Synchronous `formMode` initialization prevents server/client mismatch
-
-### Architecture Patterns Documented
-- ✅ **ADR-008 created**: Form Draft Ownership and Operation Patterns
-  - Deferred Save Pattern (AdminPlanning) - full composable usage
-  - Immediate Operations Pattern (AdminTeams) - partial composable usage
-  - Clear decision criteria for when to use each pattern
-- ✅ **Draft ownership clarified**
-  - Composable: URL/mode management (always)
-  - Component: CREATE draft when dynamic generation needed
-  - Live data: EDIT/VIEW modes show store data directly
-
-### Key Learnings
-- `useEntityFormManager` designed for deferred-save patterns
-- Components can opt out of draft management for immediate operations
-- Separation: composable handles URL sync, component handles business logic
-- No synchronization issues when showing live data in EDIT mode
-
-## Phase 3: Team Member Assignment - Master-Detail Pattern
-**Date**: 2025-10-10 | **Compliance**: ADR-007, ADR-008
-
-### UI Implementation
-- ✅ **Master-Detail Layout** implemented in AdminTeams.vue
-  - Left panel: Vertical team tabs with member count badges
-  - Right panel: Selected team editor with member management
-  - Responsive design (stacks vertically on mobile)
-- ✅ **Team selection state** (selectedTeamIndex) with active highlighting
-- ✅ **InhabitantSelector component** created
-  - Searchable table with filtering for 100-200 users
-  - TanStack Table integration with sorting
-  - Shows current team assignments inline
-  - Add member functionality with role selection
-- ✅ **CookingTeamCard enhanced** for member display
-  - Shows current members grouped by role (Chef, Cook, Junior Helper)
-  - Remove member functionality (immediate delete)
-  - Compact and full view modes
-- ✅ **useCookingTeam composable** created
-  - Team color generation (blue, green, amber, rose, etc.)
-  - Default team factory functions
-  - Shared team utilities
-
-### Testing & Best Practices
-- ✅ **E2E test refactoring** - Playwright best practices applied
-  - Removed all `waitForLoadState('networkidle')` calls (22 tests in admin.e2e.spec.ts)
-  - Direct URL navigation instead of click-based routing (avoids hydration timing issues)
-  - API response waiting pattern with `page.waitForResponse()`
-  - DRY refactoring with consolidated test data arrays
-- ✅ **Test helper utilities** expanded
-  - `selectDropdownOption()` with API wait support
-  - `pollUntil()` for async operations
-  - `captureDebugScreenshot()` for debugging
-- ✅ **Testing documentation updated** (docs/testing.md)
-  - Playwright best practices documented
-  - CI/CD compatibility patterns (macOS vs Linux)
-  - Hydration timing issue solutions
-- ✅ **Data-testid selectors** added for robust test selection
-  - `data-testid="team-name-input"`
-  - `data-testid="delete-team-button"`
-  - `data-testid="add-team-button"`
-
-### Architecture Achievements
-- Master-detail UX pattern successfully implemented
-- Immediate operations for all member add/remove actions
-- Fully tested with both API and UI E2E tests
-- Cross-platform CI compatibility (macOS and Linux)
-
-## Phase 2: useEntityFormManager() Composable Pattern (TDD Composition Pattern)
-**Date**: 2025-01-28 | **Compliance**: ADR-007
-
-### Implementation
-- ✅ **Unit tests written first** (`tests/component/composables/useEntityFormManager.nuxt.spec.ts`)
-  - Form mode state management (view/edit/create)
-  - Draft entity state transitions
-  - URL query parameter synchronization
-  - currentModel computed property logic
-  - Initialization from URL query on mount
-  - Edge cases (null entities, reactive updates)
-- ✅ **Composable implemented** (`app/composables/useEntityFormManager.ts`)
-  - Generic form mode management for any entity type
-  - Draft vs selected entity logic (prevents store mutation)
-  - URL sync using `navigateTo()` with `{replace: true}`
-  - Reactive `watch()` for v-model updates (handles FormModeSelector changes)
-- ✅ **AdminPlanning.vue refactored** to use composable
-  - Reduced from ~197 lines to ~140 lines
-  - Removed 60+ lines of manual form management code
-  - Kept season-specific business logic (`generateDinnerEvents`, `handleSeasonUpdate`)
-  - E2E tests passing (matrix tests for Planning + Teams tabs)
-
-### Key Patterns Established
-- **Composition over duplication**: Reusable form logic extracted to composable
-- **v-model + watch pattern**: FormModeSelector uses `defineModel` (emits `update:modelValue`), composable watches `formMode` ref for URL sync
-- **ADR-007 compliance**: UI state (formMode, draftEntity) in component/composable, server data in store
-- **Generic type support**: `useEntityFormManager<T>()` works with any entity type
-
-### Architecture Benefits
-- DRY principle: Form management logic written once, reused across admin tabs
-- Type safety: Generic TypeScript types ensure compile-time correctness
-- Testability: Composable tested independently, components focus on business logic
-- Maintainability: Changes to form logic propagate to all consumers automatically
-
-## BDD/TDD Tests Completed (ADR-005 compliance)
-
-**Season Aggregate** (tests/e2e/api/admin/season.e2e.spec.ts):
-- ✅ Task 2a: PUT should create season with cooking teams (line 118)
-- ✅ Task 2b: DELETE should cascade delete cooking teams (line 148)
-- ✅ Task 2b: DELETE should cascade delete dinner events (line 177)
-- ✅ Task 2b: DELETE should cascade delete complete seasonal aggregate (line 214)
-
-**CookingTeam Aggregate** (tests/e2e/api/admin/team.e2e.spec.ts):
-- ✅ Task 1b: PUT creates team with assignments + DELETE cascades (line 52)
-- ✅ Task 1b: PUT /api/admin/team/[id]/members adds assignments (line 175)
-- ✅ Task 1b: DELETE /api/admin/team/[id]/members removes assignments (line 188)
-
-**Household Aggregate** (tests/e2e/api/admin/household.e2e.spec.ts):
-- ✅ Task 3a: PUT can create household with inhabitants (line 68)
-- ✅ Task 3b: DELETE should cascade delete inhabitants (line 89)
-
-**Inhabitant Aggregate** (tests/e2e/api/admin/inhabitant.e2e.spec.ts):
-- ✅ Task 4a: Inhabitant with User weak relation tests (line 85+)
-- ✅ Task 4b: DELETE should cascade delete cooking team assignments (line 122)
-
-## Path-based admin navigation
-**Status**: COMPLETED - Successfully migrated from fragment-based to path-based routing
-
-### Implementation Summary
-- ✅ Path-based routing implemented: `/admin/planning`, `/admin/users`, etc.
-- ✅ Clean URLs: Replaced fragment URLs (`/admin#adminplanning`) with paths (`/admin/planning`)
-- ✅ Single page component maintained: Used `[tab].vue` dynamic routing
-- ✅ Invalid route handling: `/admin/unicorn` redirects to `/admin/planning`
-- ✅ Tests updated and passing: All 13 E2E tests passing
-- ✅ Documentation added: Admin URLs documented in README.md
-
-### Architecture Benefits Achieved
-- Better SEO with distinct page URLs
-- Cleaner, more intuitive URLs
-- Simplified navigation logic (removed ~50 lines of fragment sync code)
-- Standard browser back/forward behavior
-- Query parameters work seamlessly with paths
-
-## Major Framework Migrations Completed
-
-### Phase 1: Dependency Updates ✅
-- ✅ Safe dependency updates (PR #21) - MERGED
-- ✅ Wrangler 4 migration (PR #22) - IN REVIEW
-- ✅ Security vulnerabilities resolved (0 vulnerabilities)
-
-### Phase 2: Major Framework Updates ✅
-- ✅ Nuxt 4 + Nuxt UI + Tailwind CSS Migration
-
-## CookingTeam Affinity UI Implementation (2025-10-16)
-**Compliance**: ADR-007, DRY principles
-
-### Implementation
-- ✅ **WeekDayMapDisplay component** enhanced with edit mode
-  - UFormField integration for consistent form UI styling
-  - Checkbox handlers for adding/removing cooking days
-  - Factory method (`createDefaultWeekdayMap`) for null affinity initialization
-  - Type-safe color prop using `BadgeProps['color']` from Nuxt UI (DRY)
-  - Compact mode with color-coded day badges (soft variant)
-  - Full mode with labeled checkboxes for editing
-- ✅ **CookingTeamCard layout** reorganized
-  - Moved team affinity section above members section
-  - Better visual hierarchy in edit mode
-- ✅ **AdminTeams handlers** connected
-  - `handleUpdateTeamAffinity` for immediate save to DB
-  - Store refresh pattern after updates
-  - Toast notifications for user feedback
-
-### Key Achievements
-- Affinity field fully editable in UI with immediate save
-- Type safety maintained using Nuxt UI's own type definitions
-- Component reusability (WeekDayMapDisplay used in both compact and full modes)
-- Consistent form styling across all admin forms
-
-## Team Affinity Auto-Assignment (2025-10-17)
-**Date**: 2025-10-17 | **Files**: `assign-team-affinities.post.ts`, `plan.ts`, `AdminTeams.vue`
-
-- ✅ **API endpoint** `POST /season/[id]/assign-team-affinities` - Calculates and assigns affinities using `computeAffinitiesForTeams` from `app/utils/season.ts`
-- ✅ **Store integration** - `assignTeamAffinities()` method in plan store with refresh
-- ✅ **Automatic flow** - Affinities auto-assigned after batch team creation and single team addition
-- ✅ **E2E test** - `season.e2e.spec.ts:493-533` verifies all cooking days assigned to exactly one team
-- ✅ Pattern follows dinner event generation (create → auto-generate → toast notification)
-
-## Team-to-Event Assignment Algorithm (2025-10-18)
-**Date**: 2025-10-18 | **Compliance**: TDD, Functional Programming, ADR-002 | **Status**: READY TO SHIP 🚀
-
-### TDD Implementation (Red-Green-Refactor)
-- ✅ **Task 1**: Idempotent affinity computation
-  - Unit tests written first for affinity preservation
-  - Implementation using functional approach with nullish coalescing
-  - Teams with existing affinities remain unchanged
-
-- ✅ **Task 2**: Affinity-based team sorting (3 functions)
-  - **`compareAffinities(startDay)`**: Curried comparator using circular weekday distance
-  - **`createSortedAffinitiesToTeamsMap(teams, weekDay)`**: Groups teams by affinity, sorted by distance
-  - **`createTeamRoster(startDay, teams)`**: Zigzag matrix traversal for fair distribution
-  - 12 parameterized unit tests (all passing)
-
-- ✅ **Task 3**: Round-robin event assignment
-  - **`computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, events)`**
-  - Handles all edge cases: no teams, no events, pre-assigned events, holidays (ghost assignments)
-  - 12 unit test scenarios covering quota tracking and rotation (all passing)
-
-### Code Quality & Optimizations
-- ✅ **Style improvements applied**
-  - Fixed JSDoc comments and typos
-  - Removed redundant code (`|| []` after filter, extra blank lines)
-  - Better variable naming (`event` → `cookingDate`)
-  - Split long lines for readability
-  - Added comprehensive function documentation
-
-- ✅ **Performance optimizations**
-  - Removed redundant `seasonDates` parameter (use event dates directly)
-  - Direct Map creation with flatMap (single pass, no intermediate arrays)
-  - Functional style with nullish coalescing and type predicates
-  - Fixed Prisma relation name bug (`season` → `Season`)
-
-### API Integration
-- ✅ **Endpoint**: `POST /api/admin/season/[id]/assign-cooking-teams`
-  - Flat try-catch structure (ADR-002 compliance)
-  - Fetches season with teams and events
-  - Uses `assignTeamsToEvents()` composable
-  - Batch updates all dinner events with computed assignments
-  - Returns assignment summary with event count
-
-- ✅ **Store integration**: `assignCookingTeamsToEvents()` method in plan store
-- ✅ **E2E test**: Integrated into existing affinity test (combined workflow)
-  - Creates season with 3 teams, generates 3 events
-  - Assigns affinities, then assigns teams to events
-  - Verifies all events have team assignments (round-robin distribution)
-
-### Test Coverage
-- ✅ **Unit tests**: 43/43 passing (`season.unit.spec.ts`)
-- ✅ **E2E API test**: 1/1 passing (`season.e2e.spec.ts:494-560`)
-- ✅ **All functions tested**: Idempotency, sorting, roster creation, event assignment
-- ✅ **Edge cases covered**: Empty arrays, pre-assigned events, holiday gaps
-
-### Key Technical Achievements
-- Pure functional programming with no side effects
-- Type-safe Map usage instead of Record for proper ordering
-- Zigzag matrix traversal algorithm for fair team distribution
-- Ghost assignment pattern for holiday handling
-- Clean separation: algorithm (utils) → composable → API → store → UI
-
-### Files Modified
-- `app/utils/season.ts` - Core algorithm functions (200 lines, fully documented)
-- `tests/component/utils/season.unit.spec.ts` - Comprehensive unit test suite
-- `server/routes/api/admin/season/[id]/assign-cooking-teams.post.ts` - API endpoint
-- `tests/e2e/api/admin/season.e2e.spec.ts` - E2E integration test
-- `server/data/prismaRepository.ts` - Fixed Prisma relation name bug
-
-**READY TO SHIP** - All tests green, code reviewed, optimized, and fully integrated! 🎉
+# ✅ COMPLETED (For Current PR)
+
+## Household Ticket Management Foundation (Task 3.1)
+**Component**: `HouseholdCard.vue` + `WeekDayMapDinnerModeDisplay.vue`
+- Displays household members with age-based ticket types (BABY/HUNGRY_BABY/CHILD/ADULT)
+- Weekly dinner preferences editing (DINEIN/TAKEAWAY/NONE per weekday per inhabitant)
+- VIEW/EDIT mode toggle with inline editing
+- Responsive design (mobile + desktop ready)
+- **DRY Architecture**: `useTicket` composable for ticket logic (age→type calculation, UI config)
+- **Factory Pattern**: `TicketFactory` with spread pattern for test data consistency
+- **Parallel Test Safety**: Fixed `saltedId()` collision issue - now accepts `testSalt` parameter
+- **Test Coverage**: 41 tests passing (16 unit + 25 E2E, verified with 4 parallel workers)
+- **ADR Compliance**: Follows ADR-001 (composables), ADR-007 (separation), ADR-010 (serialization)
+- Files: `app/composables/useTicket.ts`, `tests/e2e/testDataFactories/ticketFactory.ts`, 16 parametrized unit tests
+
+## Factory Pattern Consistency
+- All factories use `temporaryAndRandom()` default (not `Date.now().toString()`)
+- `SeasonFactory` now uses `TicketFactory.defaultTicketPrices()` (DRY)
+- `saltedId()` accepts optional `testSalt` to prevent parallel collision
+- `temporaryAndRandom()` exported from testHelpers
+- Distinct numeric ID bases (1000, 2000, 3000) for households/inhabitants
+
+## Testing Infrastructure
+- **DRY Test Principles**: Added to `docs/testing.md` with parametrization examples
+- **Parallel Execution Requirements**: `testSalt` usage documented, 4-worker verification mandate
+- All E2E tests pass with 4 parallel workers (no collisions)
+
+# ✅ COMPLETED (Previous PRs)
+
+## Store Initialization Pattern (ADR-007 Refactoring)
+- Reactive `useFetch` + `useAsyncData` pattern with NO AWAITS
+- Stores expose `isLoading`, `isErrored`, `isInitialized`, `isEmpty`, `isStoreReady` computed
+- Synchronous init methods with internal watchers for timing
+- Critical fix: `isInitialized` checks actual data exists (not just status='success')
+- 4-state UI pattern (loading/error/empty/data) in all components
+- Test infrastructure: `clearNuxtData()` to prevent cache pollution
+- No SSR hydration errors - consistent server/client rendering
+
+## DRY Calendar Architecture (3-Layer Pattern)
+- `useCalendarEvents` composable: Generic event mapping/lookup, supports multiple event lists per day
+- `BaseCalendar` component: Wraps UCalendar with typed slots (#day, #week-day), responsive sizing
+- Domain composables: Event list creators in `useSeason`, `useCookingTeam`, `useHousehold`
+- Specific calendars: `TeamCalendarDisplay`, `CalendarDisplay`, `HouseholdCalendarDisplay` as thin wrappers
+
+## Generic WeekDayMap Type Extension
+- Extended `WeekDayMap<T = boolean>` to support any value type (dinner preferences, cooking days, etc.)
+- Enhanced `useWeekDayMapValidation()` with optional parameters: `valueSchema`, `defaultValue`, `isRequired`, `requiredMessage`
+- Zero breaking changes - existing boolean usage unchanged
+- Same serialization/deserialization functions for all types
+
+## URL-Based Tab Navigation
+- Created `useTabNavigation` composable for reusable tab routing patterns
+- Supports simple routes (`/admin/[tab]`) and nested routes (`/household/[shortname]/[tab]`)
+- SSR-friendly synchronous initialization from URL
+- Refactored admin pages to use composable (~40 lines of duplicate code eliminated)
+
+## Household Page Structure
+- Path-based routing: `/household/[shortname]/[tab]` (bookings, allergies, economy, settings)
+- Tab components extracted: `HouseholdBookings`, `HouseholdAllergies`, `HouseholdEconomy`, `HouseholdSettings`
+- Household-specific calendar display using `HouseholdCalendarDisplay`
+- Store initialization: `householdsStore` + `planStore` for data needs
+
+## Test Infrastructure Improvements
+- Test helper utilities in `/tests/e2e/testHelpers.ts` for DRY tests
+- `doScreenshot()` for debug and documentation screenshots
+- `selectDropdownOption()` for cross-platform dropdown selection
+- `pollUntil()` for async operations (replaces fixed timeouts)
+- `validatedBrowserContext()` for authenticated API requests
+- Component tests: Fixed cache pollution with `clearNuxtData()`
+- E2E tests: Platform-specific fixes for Linux CI (dropdown strict mode violations)
+
+## ADR Updates
+- ADR-007: Added reactive initialization pattern with internal watchers
+- ADR-008: Documented `useEntityFormManager` partial usage pattern
+- ADR-009: API index endpoint data inclusion strategy

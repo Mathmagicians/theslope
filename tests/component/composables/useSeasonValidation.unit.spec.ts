@@ -6,7 +6,8 @@ import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 
-const {TICKET_TYPES} = useTicketPriceValidation()
+const {TicketTypeSchema} = useTicketPriceValidation()
+const TicketType = TicketTypeSchema.enum
 const testSeason = SeasonFactory.defaultSeasonData
 
 // Helper to format validation error messages for assertions
@@ -183,7 +184,7 @@ describe('useSeasonValidation', () => {
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
         CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: []}],
-        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: 'HUNGRY_BABY', price: 4000}]
+        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000}]
       }
 
       // Serialize
@@ -219,14 +220,14 @@ describe('useSeasonValidation', () => {
 
       // ticket prices
         expect(deserializedWithRelations.ticketPrices.length).toBe(1)
-        expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual(['HUNGRY_BABY'])
+        expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual([TicketType.ADULT])
     })
 
     it('should deserialize nested CookingTeam affinity fields from JSON strings', () => {
-      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useWeekDayMapValidation()
+      const {createWeekDayMapFromSelection, serializeWeekDayMap} = useSeasonValidation()
 
       // Create affinity using factory method and serialize it (simulating DB format)
-      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'])
+      const teamAffinity = createWeekDayMapFromSelection(['mandag', 'onsdag', 'fredag'], true, false)
       const serializedAffinity = serializeWeekDayMap(teamAffinity)
 
       // Create a season with CookingTeams that have serialized affinity (as from DB)

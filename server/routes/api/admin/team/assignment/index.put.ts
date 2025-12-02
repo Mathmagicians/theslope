@@ -1,28 +1,33 @@
 // PUT /api/admin/team/assignment - Create single team member assignment
+// Note: cookingTeamId comes in body (not URL), so we use CookingTeamAssignment.omit({id})
 
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {createTeamAssignment} from "~~/server/data/prismaRepository"
+import type {CookingTeamAssignment} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-// Get schema from composable and refine for create operation (remove optional id)
+// Get base schema from composable
 const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
-const TeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true })
 
-export default defineEventHandler(async (event) => {
+// For this endpoint, cookingTeamId is in body (not URL param), so only omit id
+const AssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true })
+
+// Input type: assignment without id (cookingTeamId required in body)
+type AssignmentCreateInput = Omit<CookingTeamAssignment, 'id'>
+
+export default defineEventHandler(async (event): Promise<CookingTeamAssignment> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let assignmentData
+    let assignmentData!: AssignmentCreateInput
     try {
-        assignmentData = await readValidatedBody(event, TeamAssignmentCreateSchema.parse)
+        assignmentData = await readValidatedBody(event, AssignmentCreateSchema.parse)
     } catch (error) {
-        const h3e = h3eFromCatch('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
-        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('👥🔗 > ASSIGNMENT > [PUT] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -33,8 +38,6 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 201)
         return assignment
     } catch (error) {
-        const h3e = h3eFromCatch(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [PUT] Error creating team assignment`, error)
     }
 })

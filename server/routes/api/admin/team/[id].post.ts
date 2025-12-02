@@ -2,33 +2,37 @@
 
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
 import {updateTeam} from "~~/server/data/prismaRepository"
+import type {CookingTeamDetail, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Team ID must be a positive integer')
 })
 
-// Get the validation utilities from our composable
-const {CookingTeamSchema} = useCookingTeamValidation()
+// Get the validation schema from composable (ADR-009)
+const {CookingTeamUpdateSchema} = useCookingTeamValidation()
 
-// Create a schema for POST operations (partial updates)
-const PostTeamSchema = CookingTeamSchema.partial().omit({ id: true })
+// Create schema for POST operations (CookingTeamUpdate without id in body, id comes from URL)
+const PostTeamSchema = CookingTeamUpdateSchema.omit({ id: true })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id, teamData
+    let id!: number
+    let teamData!: CookingTeamUpdate
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
-        teamData = await readValidatedBody(event, PostTeamSchema.parse)
+        const bodyData = await readValidatedBody(event, PostTeamSchema.parse)
+        // Construct CookingTeamUpdate with id from URL
+        teamData = { ...bodyData, id }
     } catch (error) {
         console.error("👥 > TEAM > [POST] Input validation error:", error)
         throw createError({
@@ -45,8 +49,6 @@ export default defineEventHandler(async (event) => {
         console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
         return updatedTeam
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
-        console.error(`👥 > TEAM > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
     }
 })

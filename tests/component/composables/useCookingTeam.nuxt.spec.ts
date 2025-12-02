@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import { usePlanStore } from '~/stores/plan'
-import { setActivePinia, createPinia } from 'pinia'
+import { setActivePinia, createPinia, storeToRefs } from 'pinia'
 import { clearNuxtData } from '#app'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 describe('useCookingTeam', () => {
   beforeEach(() => {
@@ -28,7 +29,9 @@ describe('useCookingTeam', () => {
 
       expect(team).toEqual({
         seasonId: 1,
-        name: 'Madhold 2 - Winter 2025'
+        name: 'Madhold 2 - Winter 2025',
+        assignments: [],
+        cookingDaysCount: 0
       })
     })
 
@@ -45,6 +48,9 @@ describe('useCookingTeam', () => {
     describe('with store integration', () => {
       it('fetches inhabitants and merges with assignments from store', async () => {
         // Setup mock season with assignments - using factory data for DRY
+        const anna = { ...HouseholdFactory.defaultInhabitantData('test-anna'), id: 1, name: 'Anna', lastName: 'Hansen' }
+        const bob = { ...HouseholdFactory.defaultInhabitantData('test-bob'), id: 2, name: 'Bob', lastName: 'Jensen' }
+
         const mockSeason = {
         ...SeasonFactory.defaultSeasonData,
         id: 1,
@@ -55,13 +61,15 @@ describe('useCookingTeam', () => {
             id: 1,
             name: 'Madhold 1',
             seasonId: 1,
+            affinity: null,
+            cookingDaysCount: 0,
             assignments: [
               {
                 id: 101,
                 role: 'CHEF',
                 cookingTeamId: 1,
                 inhabitantId: 1,
-                inhabitant: { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null }
+                inhabitant: anna
               }
             ]
           },
@@ -69,13 +77,15 @@ describe('useCookingTeam', () => {
             id: 2,
             name: 'Madhold 2',
             seasonId: 1,
+            affinity: null,
+            cookingDaysCount: 0,
             assignments: [
               {
                 id: 102,
                 role: 'COOK',
                 cookingTeamId: 2,
                 inhabitantId: 2,
-                inhabitant: { id: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null }
+                inhabitant: bob
               }
             ]
           }
@@ -109,24 +119,37 @@ describe('useCookingTeam', () => {
 
         // Select the season via store
       const store = usePlanStore()
-      await store.onSeasonSelect(1)
+      const { isSelectedSeasonInitialized } = storeToRefs(store)
+      store.onSeasonSelect(1)
+
+      // Wait for season to load (has the CookingTeams data needed for merging)
+      await vi.waitFor(() => {
+        expect(isSelectedSeasonInitialized.value).toBe(true)
+      })
+
+      // Check for errors
+      expect(store.selectedSeasonError, 'Season should load without error').toBeFalsy()
+      expect(store.selectedSeason, 'Season should be loaded').toBeDefined()
 
       // Use the composable
       const { useInhabitantsWithAssignments } = useCookingTeam()
       const { inhabitants, pending, refresh } = await useInhabitantsWithAssignments()
 
-      // Wait for async data to load
+      // Wait for inhabitants to load with actual data
       await vi.waitFor(() => {
         expect(pending.value).toBe(false)
+        expect(inhabitants.value).not.toBeNull()
+        expect(inhabitants.value?.length).toBeGreaterThan(0)
       })
 
       // Verify merged data
       expect(inhabitants.value).toHaveLength(3)
 
       // Anna should have assignment to Team 1
-      const anna = inhabitants.value?.find(i => i.id === 1)
-      expect(anna?.CookingTeamAssignment).toHaveLength(1)
-      expect(anna?.CookingTeamAssignment?.[0]).toMatchObject({
+      const annaResult = inhabitants.value?.find(i => i.id === 1)
+      expect(annaResult).toBeDefined()
+      expect(annaResult!.CookingTeamAssignment).toHaveLength(1)
+      expect(annaResult!.CookingTeamAssignment[0]).toMatchObject({
         id: 101,
         role: 'CHEF',
         cookingTeamId: 1,
@@ -135,9 +158,10 @@ describe('useCookingTeam', () => {
       })
 
       // Bob should have assignment to Team 2
-      const bob = inhabitants.value?.find(i => i.id === 2)
-      expect(bob?.CookingTeamAssignment).toHaveLength(1)
-      expect(bob?.CookingTeamAssignment?.[0]).toMatchObject({
+      const bobResult = inhabitants.value?.find(i => i.id === 2)
+      expect(bobResult).toBeDefined()
+      expect(bobResult!.CookingTeamAssignment).toHaveLength(1)
+      expect(bobResult!.CookingTeamAssignment[0]).toMatchObject({
         id: 102,
         role: 'COOK',
         cookingTeamId: 2,

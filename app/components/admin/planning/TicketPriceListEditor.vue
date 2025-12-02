@@ -3,7 +3,9 @@ import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
-const {TICKET_TYPES, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
+const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
+const TICKET_TYPES = TicketTypeSchema.options
+const TicketType = TicketTypeSchema.enum
 
 // COMPONENT DEFINITION
 const model = defineModel<TicketPrice[]>({required: true, default: () => []})
@@ -29,10 +31,9 @@ const toOre = (dkk: number): number => Math.round(dkk * 100)
 
 const formatTicketType = (type: string): string => {
   const labels: Record<string, string> = {
-    'ADULT': 'Voksen',
-    'CHILD': 'Barn',
-    'BABY': 'Baby',
-    'HUNGRY_BABY': 'Sulten baby'
+    [TicketType.ADULT]: 'Voksen',
+    [TicketType.CHILD]: 'Barn',
+    [TicketType.BABY]: 'Baby'
   }
   return labels[type] || type
 }
@@ -137,11 +138,11 @@ const onAddTicketPrice = () => {
       <template #footer>
         <div class="flex justify-end">
           <UButton
-              @click="onAddTicketPrice"
               name="addTicketPrice"
               color="info"
               icon="i-heroicons-ticket"
-              variant="outline">
+              variant="outline"
+              @click="onAddTicketPrice">
             Tilføj billet
           </UButton>
         </div>
@@ -168,13 +169,13 @@ const onAddTicketPrice = () => {
               </UInput>
               <UButton
                   v-if="!props.disabled"
-                  @click="model.splice(index, 1)"
                   :name="`removeTicketPrice-${index}`"
                   color="error"
                   icon="i-heroicons-trash"
                   size="sm"
                   variant="ghost"
-                  class="mt-1"/>
+                  class="mt-1"
+                  @click="model.splice(index, 1)"/>
             </div>
             <p v-if="ticket.description" class="text-sm text-gray-500 ml-1">
               {{ ticket.description }}

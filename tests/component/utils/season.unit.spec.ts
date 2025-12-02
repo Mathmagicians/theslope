@@ -1,10 +1,40 @@
-import { describe, it, expect } from 'vitest'
-import { computeCookingDates, computeAffinitiesForTeams, computeTeamAssignmentsForEvents, isThisACookingDay, findFirstCookingDayInDates, compareAffinities, createSortedAffinitiesToTeamsMap, createTeamRoster } from '~/utils/season'
-import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import type { DateRange, WeekDay, WeekDayMap } from '~/types/dateTypes'
-import type { CookingTeam } from '~/composables/useCookingTeamValidation'
-import type { DinnerEvent } from '~/composables/useDinnerEventValidation'
-import { createWeekDayMapFromSelection } from '~/types/dateTypes'
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {z} from 'zod'
+import {
+    calculateDeadlineUrgency,
+    canSeasonBeActive,
+    compareAffinities,
+    computeAffinitiesForTeams,
+    computeCookingDates,
+    computeTeamAssignmentsForEvents,
+    createSortedAffinitiesToTeamsMap,
+    createTeamRoster,
+    distanceToToday,
+    findFirstCookingDayInDates,
+    getNextDinnerDate,
+    getSeasonStatus,
+    isBeforeDeadline,
+    isFuture,
+    isPast,
+    isThisACookingDay,
+    selectMostAppropriateActiveSeason,
+    sortSeasonsByActivePriority,
+    splitDinnerEvents
+} from '~/utils/season'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
+import {createWeekDayMapFromSelection} from '~/types/dateTypes'
+import type {CookingTeam} from '~/composables/useCookingTeamValidation'
+import type {DinnerEvent} from '~/composables/useBookingValidation'
+import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+
+// Schema for splitDinnerEvents return structure
+const SplitDinnerEventsResultSchema = z.object({
+    nextDinner: z.object({ id: z.number(), date: z.date() }).nullable(),
+    pastDinnerDates: z.array(z.date()),
+    futureDinnerDates: z.array(z.date())
+})
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
@@ -608,5 +638,440 @@ describe('computeTeamAssignmentsForEvents', () => {
         // Holiday Wed Jan 8 → Team 1 gets credit (quota=2, rotation triggers)
         expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
         expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
+    })
+})
+
+describe('Active Season Management utilities', () => {
+    describe('isPast', () => {
+        it.each([
+            { desc: 'season ending yesterday', end: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: true },
+            { desc: 'season ending today (not past)', end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'season ending tomorrow', end: new Date(2025, 0, 20), ref: new Date(2025, 0, 19), expected: false }
+        ])('$desc → $expected', ({ end, ref, expected }) => {
+            const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start: new Date(2025, 0, 1), end } }
+            expect(isPast(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('isFuture', () => {
+        it.each([
+            { desc: 'season starting tomorrow', start: new Date(2025, 0, 16), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'season starting today (not future)', start: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'season starting yesterday', start: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: false }
+        ])('$desc → $expected', ({ start, ref, expected }) => {
+            const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start, end: new Date(2025, 5, 30) } }
+            expect(isFuture(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('distanceToToday', () => {
+        it.each([
+            { desc: 'current season (includes today)', start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: 0 },
+            { desc: 'future season starting in 10 days', start: new Date(2025, 0, 25), end: new Date(2025, 5, 30), ref: new Date(2025, 0, 15), expected: 10 },
+            { desc: 'past season ended 5 days ago', start: new Date(2024, 6, 1), end: new Date(2025, 0, 10), ref: new Date(2025, 0, 15), expected: -5 }
+        ])('$desc → $expected', ({ start, end, ref, expected }) => {
+            const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start, end } }
+            expect(distanceToToday(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('canSeasonBeActive', () => {
+        it.each([
+            { desc: 'past season (ended yesterday)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 14), ref: new Date(2025, 0, 15), expected: false },
+            { desc: 'current season (includes today)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 31), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'future season', start: new Date(2025, 1, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 0, 15), expected: true },
+            { desc: 'season ending today (still eligible)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: true }
+        ])('$desc → $expected', ({ start, end, ref, expected }) => {
+            const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start, end } }
+            expect(canSeasonBeActive(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('getSeasonStatus', () => {
+        it.each([
+            { desc: 'active season (isActive = true)', active: true, start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: SEASON_STATUS.ACTIVE },
+            { desc: 'past season', active: false, start: new Date(2024, 6, 1), end: new Date(2024, 11, 31), ref: new Date(2025, 0, 15), expected: SEASON_STATUS.PAST },
+            { desc: 'current season (not active)', active: false, start: new Date(2025, 0, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 2, 15), expected: SEASON_STATUS.CURRENT },
+            { desc: 'future season', active: false, start: new Date(2025, 6, 1), end: new Date(2025, 11, 31), ref: new Date(2025, 0, 15), expected: SEASON_STATUS.FUTURE }
+        ])('$desc → $expected', ({ active, start, end, ref, expected }) => {
+            const season = { ...SeasonFactory.defaultSeason(), id: 1, isActive: active, seasonDates: { start, end } }
+            expect(getSeasonStatus(season, ref)).toBe(expected)
+        })
+    })
+
+    describe('sortSeasonsByActivePriority', () => {
+        it('should sort: active → future (closest) → current → past (recent)', () => {
+            const ref = new Date(2025, 0, 15)
+            const seasons = [
+                { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past Far', isActive: false, seasonDates: { start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) } },
+                { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Past Recent', isActive: false, seasonDates: { start: new Date(2024, 6, 1), end: new Date(2024, 11, 31) } },
+                { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Current', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) } },
+                { ...SeasonFactory.defaultSeason(), id: 4, shortName: 'Active', isActive: true, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) } },
+                { ...SeasonFactory.defaultSeason(), id: 5, shortName: 'Future Close', isActive: false, seasonDates: { start: new Date(2025, 1, 1), end: new Date(2025, 6, 30) } },
+                { ...SeasonFactory.defaultSeason(), id: 6, shortName: 'Future Far', isActive: false, seasonDates: { start: new Date(2026, 0, 1), end: new Date(2026, 11, 31) } }
+            ]
+
+            expect(sortSeasonsByActivePriority(seasons, ref).map(s => s.shortName)).toEqual([
+                'Active', 'Future Close', 'Future Far', 'Current', 'Past Recent', 'Past Far'
+            ])
+        })
+
+        it.each([
+            { desc: 'empty array', seasons: [], expected: [] },
+            { desc: 'single season', seasons: [{ ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Test' }], expected: ['Test'] }
+        ])('$desc', ({ seasons, expected }) => {
+            expect(sortSeasonsByActivePriority(seasons).map(s => s.shortName)).toEqual(expected)
+        })
+    })
+
+    describe('selectMostAppropriateActiveSeason', () => {
+        it.each([
+            {
+                desc: 'future season closest to today',
+                ref: new Date(2025, 0, 15),
+                seasons: [
+                    { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
+                    { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Future Close', isActive: false, seasonDates: { start: new Date(2025, 1, 1), end: new Date(2025, 6, 30) } },
+                    { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Future Far', isActive: false, seasonDates: { start: new Date(2026, 0, 1), end: new Date(2026, 11, 31) } }
+                ],
+                expected: 'Future Close'
+            },
+            {
+                desc: 'current season when no future',
+                ref: new Date(2025, 2, 15),
+                seasons: [
+                    { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
+                    { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Current', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) } }
+                ],
+                expected: 'Current'
+            }
+        ])('$desc', ({ ref, seasons, expected }) => {
+            expect(selectMostAppropriateActiveSeason(seasons, ref)?.shortName).toBe(expected)
+        })
+
+        it.each([
+            {
+                desc: 'null when all past (cannot activate)',
+                ref: new Date(2026, 0, 15),
+                seasons: [
+                    { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past 2023', isActive: false, seasonDates: { start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) } },
+                    { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Past 2024', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
+                    { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Past 2025', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 11, 31) } }
+                ]
+            },
+            { desc: 'null when no seasons', ref: new Date(2025, 0, 15), seasons: [] }
+        ])('$desc', ({ ref, seasons }) => {
+            expect(selectMostAppropriateActiveSeason(seasons, ref)).toBeNull()
+        })
+    })
+
+    describe('splitDinnerEvents', () => {
+        it.each([
+            {
+                scenario: 'splits events with next dinner at start',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 6, 18, 0), end: new Date(2025, 0, 6, 19, 0) },
+                expectedNextDinnerId: 1,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'splits events with next dinner in middle',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedNextDinnerId: 2,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'splits events with next dinner at end',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 10, 18, 0), end: new Date(2025, 0, 10, 19, 0) },
+                expectedNextDinnerId: 3,
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'matches by same day, ignoring time differences',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 12, 30) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedNextDinnerId: 2,
+                expectedOtherCount: 1
+            }
+        ])('$scenario', ({ events, nextDinnerDateRange, expectedNextDinnerId, expectedOtherCount }) => {
+            const result = splitDinnerEvents(events, nextDinnerDateRange)
+
+            // Validate structure
+            const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
+            expect(parseResult.success, parseResult.success ? '' : JSON.stringify(parseResult.error.format(), null, 2)).toBe(true)
+
+            // Verify expected values
+            expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
+            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
+            expect(allOtherDates).toHaveLength(expectedOtherCount)
+        })
+
+        it.each([
+            {
+                scenario: 'returns null nextDinner when no match',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) }
+                ],
+                nextDinnerDateRange: { start: new Date(2025, 0, 15, 18, 0), end: new Date(2025, 0, 15, 19, 0) },
+                expectedOtherCount: 2
+            },
+            {
+                scenario: 'returns all events as others when nextDinnerDateRange is null',
+                events: [
+                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
+                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
+                ],
+                nextDinnerDateRange: null,
+                expectedOtherCount: 3
+            },
+            {
+                scenario: 'handles empty events array',
+                events: [],
+                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
+                expectedOtherCount: 0
+            }
+        ])('$scenario', ({ events, nextDinnerDateRange, expectedOtherCount }) => {
+            const result = splitDinnerEvents(events, nextDinnerDateRange)
+
+            expect(result.nextDinner).toBeNull()
+            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
+            expect(allOtherDates).toHaveLength(expectedOtherCount)
+        })
+    })
+
+    describe('getNextDinnerDate', () => {
+        it('should find next dinner when there are future dates', () => {
+            // GIVEN: Dinner dates with mix of past and future
+            const dinnerDates = [
+                new Date(2020, 10, 3, 18, 0),  // Nov 3, 2020 (past)
+                new Date(2030, 10, 17, 18, 0)  // Nov 17, 2030 (future)
+            ]
+            const dinnerStartHour = 18
+
+            // WHEN: Getting next dinner
+            const getNext = getNextDinnerDate(60)
+            const result = getNext(dinnerDates, dinnerStartHour)
+
+            // THEN: Should return the next future date (skipping past dates)
+            expect(result).not.toBeNull()
+            expect(result?.start).toEqual(new Date(2030, 10, 17, 18, 0))
+        })
+
+        it('should return null when all dates are in the past', () => {
+            // GIVEN: Only past dinner dates
+            const dinnerDates = [
+                new Date(2020, 0, 1, 18, 0),
+                new Date(2020, 0, 3, 18, 0)
+            ]
+            const dinnerStartHour = 18
+
+            // WHEN: Getting next dinner
+            const getNext = getNextDinnerDate(60)
+            const result = getNext(dinnerDates, dinnerStartHour)
+
+            // THEN: Should return null
+            expect(result).toBeNull()
+        })
+    })
+
+    describe('isBeforeDeadline', () => {
+        let mockNow: Date
+
+        beforeEach(() => {
+            // Set a fixed "now" for testing: Jan 15, 2025 at 12:00
+            mockNow = new Date(2025, 0, 15, 12, 0, 0)
+            vi.useFakeTimers()
+            vi.setSystemTime(mockNow)
+        })
+
+        afterEach(() => {
+            vi.useRealTimers()
+        })
+
+        it.each([
+            {
+                scenario: 'now is before deadline (3 days before dinner)',
+                dinnerStartTime: new Date(2025, 0, 20, 18, 0),  // Jan 20 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: true  // Now (Jan 15) is before Jan 18 (2 days before dinner)
+            },
+            {
+                scenario: 'now is after deadline (dinner tomorrow)',
+                dinnerStartTime: new Date(2025, 0, 16, 18, 0),  // Jan 16 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: false  // Now (Jan 15) is after Jan 14 (2 days before dinner)
+            },
+            {
+                scenario: 'now is exactly at deadline',
+                dinnerStartTime: new Date(2025, 0, 17, 12, 0),  // Jan 17 at 12:00
+                offsetDays: 2,
+                offsetMinutes: 0,
+                expected: false  // Now (Jan 15 12:00) equals deadline (Jan 15 12:00)
+            },
+            {
+                scenario: 'minutes offset - before deadline',
+                dinnerStartTime: new Date(2025, 0, 15, 18, 0),  // Jan 15 at 18:00 (today)
+                offsetDays: 0,
+                offsetMinutes: 120,  // 2 hours
+                expected: true  // Now (12:00) is before 16:00 (2 hours before 18:00)
+            },
+            {
+                scenario: 'minutes offset - after deadline',
+                dinnerStartTime: new Date(2025, 0, 15, 12, 0),  // Jan 15 at 12:00 (today, same as now)
+                offsetDays: 0,
+                offsetMinutes: 30,
+                expected: false  // Now (12:00) is after 11:30 (30 min before 12:00), deadline passed
+            },
+            {
+                scenario: 'combined days and minutes - before deadline',
+                dinnerStartTime: new Date(2025, 0, 18, 18, 0),  // Jan 18 at 18:00
+                offsetDays: 2,
+                offsetMinutes: 360,  // 6 hours
+                expected: true  // Now (Jan 15 12:00) is before Jan 16 12:00 (2 days + 6 hours before dinner)
+            },
+            {
+                scenario: 'combined days and minutes - after deadline',
+                dinnerStartTime: new Date(2025, 0, 16, 10, 0),  // Jan 16 at 10:00
+                offsetDays: 1,
+                offsetMinutes: 120,  // 2 hours
+                expected: false  // Now (Jan 15 12:00) is after Jan 15 08:00 (1 day + 2 hours before dinner), deadline passed
+            },
+            {
+                scenario: 'zero offsets - dinner in future',
+                dinnerStartTime: new Date(2025, 0, 20, 18, 0),  // Jan 20 at 18:00
+                offsetDays: 0,
+                offsetMinutes: 0,
+                expected: true  // Now is before dinner time
+            },
+            {
+                scenario: 'zero offsets - dinner in past',
+                dinnerStartTime: new Date(2025, 0, 10, 18, 0),  // Jan 10 at 18:00
+                offsetDays: 0,
+                offsetMinutes: 0,
+                expected: false  // Now is after dinner time
+            }
+        ])('$scenario', ({ dinnerStartTime, offsetDays, offsetMinutes, expected }) => {
+            // WHEN: Checking if now is before deadline
+            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes)
+            const result = checkDeadline(dinnerStartTime)
+
+            // THEN: Returns expected result
+            expect(result).toBe(expected)
+        })
+
+        it('should use default parameters (0 days, 0 minutes)', () => {
+            // GIVEN: Dinner tomorrow at 18:00
+            const dinnerStartTime = new Date(2025, 0, 16, 18, 0)
+
+            // WHEN: Calling with default parameters
+            const checkDeadline = isBeforeDeadline()
+            const result = checkDeadline(dinnerStartTime)
+
+            // THEN: Checks against dinner time directly (no offset)
+            expect(result).toBe(true)  // Now (Jan 15 12:00) is before Jan 16 18:00
+        })
+    })
+
+    describe('calculateDeadlineUrgency', () => {
+        it.each([
+            {
+                scenario: 'on track - 80 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 15, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // > 72h = on track
+            },
+            {
+                scenario: 'warning - 48 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 13, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 1  // 24h < x < 72h = warning
+            },
+            {
+                scenario: 'critical - 12 hours before dinner',
+                dinnerStartTime: new Date(2025, 0, 12, 6, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 2  // < 24h = critical
+            },
+            {
+                scenario: 'boundary - exactly 24 hours (critical threshold)',
+                dinnerStartTime: new Date(2025, 0, 12, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 1  // Exactly 24h = warning (not critical)
+            },
+            {
+                scenario: 'boundary - exactly 72 hours (warning threshold)',
+                dinnerStartTime: new Date(2025, 0, 14, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // Exactly 72h = on track
+            },
+            {
+                scenario: 'past event - negative hours',
+                dinnerStartTime: new Date(2025, 0, 10, 18, 0),
+                criticalHours: 24,
+                warningHours: 72,
+                expected: 0  // Past events = on track (no urgency)
+            }
+        ])('$scenario', ({ dinnerStartTime, criticalHours, warningHours, expected }) => {
+            // GIVEN: Fixed reference time (Jan 11, 2025 at 18:00)
+            const referenceTime = new Date(2025, 0, 11, 18, 0)
+
+            // WHEN: Calculating deadline urgency
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, referenceTime)
+
+            // THEN: Returns expected urgency level
+            expect(urgency).toBe(expected)
+        })
+
+        it.each([
+            {
+                scenario: 'custom thresholds - 12h critical, 36h warning',
+                dinnerStartTime: new Date(2025, 0, 12, 6, 0),
+                criticalHours: 12,
+                warningHours: 36,
+                expectedUrgency: 1  // 12h < time < 36h = warning
+            },
+            {
+                scenario: 'custom thresholds - 6 hours before (critical)',
+                dinnerStartTime: new Date(2025, 0, 12, 0, 0),
+                criticalHours: 12,
+                warningHours: 36,
+                expectedUrgency: 2  // < 12h = critical
+            }
+        ])('$scenario', ({ dinnerStartTime, criticalHours, warningHours, expectedUrgency }) => {
+            // GIVEN: Fixed reference time (Jan 11, 2025 at 18:00)
+            const referenceTime = new Date(2025, 0, 11, 18, 0)
+
+            // WHEN: Calculating with custom thresholds
+            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, referenceTime)
+
+            // THEN: Respects custom threshold values
+            expect(urgency).toBe(expectedUrgency)
+        })
     })
 })

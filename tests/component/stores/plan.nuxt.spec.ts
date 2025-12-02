@@ -1,69 +1,90 @@
 // @vitest-environment nuxt
 import { setActivePinia, createPinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
-
-// IMPORTANT: Register endpoints BEFORE importing the store
-// The store's module-level useFetch executes on import
-const seasonIndexEndpoint = vi.fn()
-const seasonByIdEndpoint = vi.fn()
-registerEndpoint('/api/admin/season', seasonIndexEndpoint)
-registerEndpoint('/api/admin/season/:id', seasonByIdEndpoint)
+import { pollFor } from '../testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
 
-describe('Plan Store', () => {
-    // Use SeasonFactory for consistent test data
-    const season1 = { ...SeasonFactory.defaultSeason('1'), id: 1 }
-    const season2 = { ...SeasonFactory.defaultSeason('2'), id: 2 }
-    const mockSeasons = [season1, season2]
+// IMPORTANT: Register endpoints BEFORE importing the store
+// The store's module-level useFetch executes on import
+// Order matters: specific endpoints FIRST, generic endpoints LAST
+
+// Prepare default mock data before store import
+const season1 = { ...SeasonFactory.defaultSeason('1'), id: 1 }
+const season2 = { ...SeasonFactory.defaultSeason('2'), id: 2 }
+const mockSeasons = [season1, season2]
+
+// Register with default return values for auto-loading store
+const seasonIndexEndpoint = vi.fn(() => mockSeasons)
+const seasonByIdEndpoint = vi.fn(() => season1)
+const activeSeasonIdEndpoint = vi.fn(() => season1.id)
+
+registerEndpoint('/api/admin/season/active', activeSeasonIdEndpoint)
+registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
+registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
+registerEndpoint('/api/admin/season', seasonIndexEndpoint)
+
+// Test helpers
+const setupStore = async (initStore = false, shortName?: string) => {
+    const store = usePlanStore()
+    await store.loadSeasons()
+    if (initStore) store.initPlanStore(shortName)
+    return store
+}
+
+describe('Plan Store - Basic Initialization', () => {
+    beforeAll(() => {
+        setActivePinia(createPinia())
+    })
 
     beforeEach(() => {
-        setActivePinia(createPinia())
         vi.clearAllMocks()
         seasonIndexEndpoint.mockClear()
         seasonByIdEndpoint.mockClear()
-        // Clear Nuxt data cache to prevent useFetch caching between tests
-        clearNuxtData()
+        activeSeasonIdEndpoint.mockClear()
+
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
     })
 
-    describe('loads seasons successfully', () => {
-        it('returns mock seasons', async () => {
-            seasonIndexEndpoint.mockReturnValue(mockSeasons)
-            seasonByIdEndpoint.mockReturnValue(season1)
-            const store = usePlanStore()
-            await store.loadSeasons()
-            // Check that seasons were loaded by checking their IDs and shortNames
-            expect(store.seasons.length).toBe(2)
-            expect(store.seasons[0].id).toBe(1)
-            expect(store.seasons[0].shortName).toBe('TestSeason-1')
-            expect(store.seasons[1].id).toBe(2)
-            expect(store.seasons[1].shortName).toBe('TestSeason-2')
+    it('initializes with 2 seasons', async () => {
+        const store = await setupStore()
+
+        expect(store.isSeasonsInitialized).toBe(true)
+        expect(store.seasons).toHaveLength(2)
+    })
+    
+
+    it('exposes seasons error when fetch fails', async () => {
+        seasonIndexEndpoint.mockImplementation(() => {
+            throw createError({
+                statusCode: 500,
+                statusMessage: 'Network error'
+            })
         })
+
+        const store = usePlanStore()
+
+        // Manually call loadSeasons to trigger error
+        await expect(store.loadSeasons()).rejects.toThrow()
+
+        expect(store.isSeasonsErrored).toBe(true)
+        expect(store.seasonsError).toBeTruthy()
+        expect(store.seasonsError?.statusCode).toBe(500)
     })
 
-    describe('handles empty server response', () => {
-        it('handles empty array', async () => {
-            seasonIndexEndpoint.mockReturnValue([])
-            const store = usePlanStore()
-            await store.loadSeasons()
-            // Verify endpoint was called with empty array
-            expect(seasonIndexEndpoint).toHaveBeenCalled()
-            expect(seasonIndexEndpoint.mock.results[0].value).toEqual([])
-            // Store should be updated to reflect empty response
-            expect(store.seasons.length).toBe(0)
-            expect(store.isNoSeasons).toBe(true)
-        })
-    })
+    it.each([
+        { data: [], expected: true, description: 'empty array' },
+        { data: mockSeasons, expected: false, description: 'with data' }
+    ])('isNoSeasons detects $description', async ({ data, expected }) => {
+        seasonIndexEndpoint.mockReturnValue(data)
 
-    describe('initialization', () => {
-        it('initializes without errors', () => {
-            seasonIndexEndpoint.mockReturnValue([])
-            const store = usePlanStore()
-            expect(store.error).toBeUndefined()
-            expect(store.seasons).toEqual([])
-            expect(store.selectedSeason).toBeNull()
-        })
+        const store = await setupStore()
+
+        expect(store.isNoSeasons).toBe(expected)
+        expect(store.seasons).toHaveLength(data.length)
     })
 })

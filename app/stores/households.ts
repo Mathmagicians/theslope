@@ -1,101 +1,227 @@
-import type {Household, Inhabitant} from '~/composables/useHouseholdValidation'
-import type {HouseholdSummary, HouseholdWithInhabitants} from '~/server/data/prismaRepository'
+import type {
+    HouseholdDisplay,
+    HouseholdDetail
+} from '~/composables/useCoreValidation'
 
 /**
  * Household store - manages household data and API operations
  * Following ADR-007: Store owns server data, component owns UI state
- * Following ADR-009: Index endpoint returns HouseholdSummary (lightweight), detail returns HouseholdWithInhabitants (comprehensive)
+ * Following ADR-009: Index endpoint returns HouseholdDisplay (lightweight), detail returns HouseholdDetail (comprehensive)
  */
 export const useHouseholdsStore = defineStore("Households", () => {
+
+    // DEPENDENCIES
+    const {handleApiError} = useApiHandler()
+
     // STATE - Server data only
-    const households = ref<HouseholdSummary[]>([])
-    const selectedHousehold = ref<HouseholdWithInhabitants | null>(null)
-    const isLoading = ref(false)
-    const error = ref<string | null>(null)
+    const selectedHouseholdId = ref<number | null>(null)
 
-    // COMPUTED - Derived state
-    const isNoHouseholds = computed(() => households.value.length === 0)
-
-    /**
-     * Fetch all households from API
-     * Uses useFetch for SSR compatibility (ADR-007)
-     */
-    const { data, error: fetchError, refresh: refreshHouseholds } = useFetch('/api/admin/household', {
-        immediate: false,
-        watch: false
+    // ========================================
+    // State - useFetch with status exposed internally
+    // ========================================
+    const {
+        data: households,
+        status: householdsStatus,
+        error: householdsError,
+        refresh: refreshHouseholds
+    } = useFetch<HouseholdDisplay[]>('/api/admin/household', {
+        immediate: true,
+        watch: false,
+        default: () => []
     })
 
-    /**
-     * Load all households
-     */
-    const loadHouseholds = async () => {
-        try {
-            isLoading.value = true
-            error.value = null
-            await refreshHouseholds()
-            if (fetchError.value) {
-                throw fetchError.value
+    // Use useAsyncData for detail endpoint - allows manual execute() without context issues
+    const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
+
+    const {HouseholdDetailSchema} = useCoreValidation()
+
+    const {
+        data: selectedHousehold,
+        status: selectedHouseholdStatus,
+        error: selectedHouseholdError,
+        refresh: refreshSelectedHousehold
+    } = useAsyncData<HouseholdDetail | null>(
+        selectedHouseholdKey,
+        () => {
+            if (!selectedHouseholdId.value) return Promise.resolve(null)
+            return $fetch(`/api/admin/household/${selectedHouseholdId.value}`)
+        },
+        {
+            default: () => null,
+            transform: (data: any) => {
+                if (!data) return null
+                // Repository validates data per ADR-010, schema handles HTTP JSON deserialization (ISO strings → Date objects)
+                return HouseholdDetailSchema.parse(data)
             }
-            households.value = (data.value as HouseholdSummary[]) ?? []
-            console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
-        } catch (e: any) {
-            handleApiError(e, 'loadHouseholds')
-            throw e
-        } finally {
-            isLoading.value = false
         }
+    )
+
+    // ========================================
+    // Computed - Public API (derived from status)
+    // ========================================
+    const isHouseholdsLoading = computed(() => householdsStatus.value === 'pending')
+    const isHouseholdsErrored = computed(() => householdsStatus.value === 'error')
+    const isHouseholdsInitialized = computed(() => householdsStatus.value === 'success')
+    const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
+
+    const isSelectedHouseholdLoading = computed(() => selectedHouseholdStatus.value === 'pending')
+    const isSelectedHouseholdErrored = computed(() => selectedHouseholdStatus.value === 'error')
+    const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success' && selectedHousehold.value !== null)
+
+    // Convenience computed for components - true when store is fully initialized and ready to use
+    const isHouseholdsStoreReady = computed(() =>
+        isHouseholdsInitialized.value && (isNoHouseholds.value || isSelectedHouseholdInitialized.value)
+    )
+
+    // DEPENDENCIES - access auth store
+    const authStore = useAuthStore()
+
+    /**
+     * Get the logged-in user's household (from auth session)
+     * Returns full household object from session, or null if not authenticated
+     */
+    const myHousehold = computed(() => {
+        return authStore.user?.Inhabitant?.household ?? null
+    })
+
+    // ========================================
+    // Store Actions
+    // ========================================
+    const loadHouseholds = async () => {
+        await refreshHouseholds()
+        if (householdsError.value) {
+            handleApiError(householdsError.value, 'loadHouseholds')
+            throw householdsError.value
+        }
+        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
     }
 
     /**
      * Fetch single household with inhabitants
      */
-    const loadHousehold = async (id: number) => {
+    const loadHousehold = (id: number) => {
+        selectedHouseholdId.value = id
+        console.info(LOG_CTX, `🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
+    }
+
+
+    /**
+     * Update inhabitant dinner preferences
+     * @param inhabitantId - ID of the inhabitant to update
+     * @param preferences - WeekDayMap of DinnerMode preferences
+     */
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: any) => {
+        const {handleApiError} = useApiHandler()
+
         try {
-            isLoading.value = true
-            error.value = null
-            const household = await $fetch<HouseholdWithInhabitants>(`/api/admin/household/${id}`)
-            selectedHousehold.value = household
-            console.info(`🏠 > HOUSEHOLDS_STORE > Loaded household ${id}`)
-        } catch (e: any) {
-            handleApiError(e, 'loadHousehold')
+            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
+
+            await $fetch(`/api/admin/household/inhabitants/${inhabitantId}`, {
+                method: 'POST',
+                body: { dinnerPreferences: preferences }
+            })
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated preferences for inhabitant ${inhabitantId}`)
+
+            // Refresh the selected household to get updated data
+            if (selectedHouseholdId.value) {
+                await refreshSelectedHousehold()
+            }
+        } catch (e: unknown) {
+            handleApiError(e, 'updateInhabitantPreferences')
             throw e
-        } finally {
-            isLoading.value = false
         }
     }
 
     /**
-     * Select a household by ID
+     * Update all inhabitants' dinner preferences in a household (power mode)
+     * @param householdId - ID of the household
+     * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const onHouseholdSelect = async (id: number) => {
-        const household = households.value.find(h => h.id === id)
-        if (household) {
-            selectedHousehold.value = household
-            // Fetch full household data with inhabitants
-            await loadHousehold(id)
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: any) => {
+        const {handleApiError} = useApiHandler()
+
+        try {
+            // Get the household to access inhabitants
+            const household = households.value.find(h => h.id === householdId)
+            if (!household) {
+                throw new Error(`Household ${householdId} not found`)
+            }
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
+
+            // Update all inhabitants in parallel
+            await Promise.all(
+                household.inhabitants.map(inhabitant =>
+                    $fetch(`/api/admin/household/inhabitants/${inhabitant.id}`, {
+                        method: 'POST',
+                        body: { dinnerPreferences: preferences }
+                    })
+                )
+            )
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated all ${household.inhabitants.length} inhabitants`)
+
+            // Refresh the selected household once after all updates
+            if (selectedHouseholdId.value === householdId) {
+                await refreshSelectedHousehold()
+            }
+        } catch (e: unknown) {
+            handleApiError(e, 'updateAllInhabitantPreferences')
+            throw e
         }
     }
 
     /**
-     * Initialize store - load households
+     * Initialize store - load households and optionally select one by shortName
+     * If no shortName provided, keeps current selection or falls back to user's household
+     * @param shortName - Optional shortName to load specific household
      */
-    const initHouseholdsStore = async () => {
-        await loadHouseholds()
+    const initHouseholdsStore = (shortName?: string) => {
+        // households autoload when store is created (immediate: true)
+        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
+        const householdId = shortName
+            ? households.value.find(h => h.shortName === shortName)?.id
+            : (selectedHouseholdId.value ?? myHousehold.value?.id)
+
+        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName:', shortName ?? 'none',
+            'current:', selectedHouseholdId.value, 'resolved:', householdId)
+
+        if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }
+
+    // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
+    watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
+        if (!isHouseholdsInitialized.value) return
+        if (selectedHouseholdId.value) return // Already selected
+
+        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
+        initHouseholdsStore()
+    })
 
     return {
         // State
         households,
         selectedHousehold,
-        isLoading,
-        error,
         // Computed
+        myHousehold,
+        isHouseholdsLoading,
         isNoHouseholds,
+        isHouseholdsErrored,
+        isHouseholdsInitialized,
+        householdsError,
+        isSelectedHouseholdLoading,
+        isSelectedHouseholdErrored,
+        isSelectedHouseholdInitialized,
+        isHouseholdsStoreReady,
+        selectedHouseholdError,
         // Actions
         loadHouseholds,
         loadHousehold,
-        onHouseholdSelect,
-        initHouseholdsStore
+        refreshSelectedHousehold,
+        initHouseholdsStore,
+        updateInhabitantPreferences,
+        updateAllInhabitantPreferences
     }
 })
 

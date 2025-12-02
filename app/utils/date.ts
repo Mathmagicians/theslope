@@ -1,6 +1,7 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
-    isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek
+    isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
+    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, differenceInMinutes, intervalToDuration
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
@@ -11,8 +12,10 @@ export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
         locale: da,
+        localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
-        SEASON_NAME_MASK: 'MM/yy'
+        SEASON_NAME_MASK: 'MM/yy',
+        timezone: 'Europe/Copenhagen'
     }
 
 // Takes an iso week number, and a year in which the week is in, and a weekday number (0-6),
@@ -40,7 +43,7 @@ export const formatDate = (date: Date | undefined, mask: string = DATE_SETTINGS.
 export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
 
 export function formatDateRange(range: DateRange | undefined, mask: string = DATE_SETTINGS.DATE_MASK): string {
-    return !range ? '?->?' : `${formatDate(range?.start, mask)} - ${formatDate(range?.end, mask)}`
+    return !range ? '?->?' : `${formatDate(range?.start, mask)}-${formatDate(range?.end, mask)}`
 }
 
 export function getEachDayOfIntervalWithSelectedWeekdays(
@@ -98,6 +101,11 @@ export function areRangesOverlapping(ranges: DateRange[]): boolean {
 
 }
 
+// Convert DateValue to JavaScript Date (DK/CPH timezone) CalendarDates are used by UCalendar components
+export function toDate(dateValue: DateValue): Date {
+    return dateValue.toDate('UTC')
+}
+
 export function toCalendarDate(date: Date | undefined): CalendarDate | undefined {
     if (!date || !isValid(date)) return undefined
 
@@ -106,6 +114,11 @@ export function toCalendarDate(date: Date | undefined): CalendarDate | undefined
         date.getMonth() + 1, // JavaScript months are 0-based, CalendarDate uses 1-based
         date.getDate()
     )
+}
+
+export function formatCalendarDate( date: DateValue ) : string {
+    const jsDate = parseISO(date.toString())
+    return formatDate(jsDate)
 }
 
 // Helper for ranges
@@ -120,13 +133,8 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
 
 // Check if a CalendarDate is in a list of Date objects
 export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
-    const dateToCheck = dateValue.toDate('UTC')
+    const dateToCheck = dateValue.toDate(DATE_SETTINGS.timezone)
     return dateList.some(date => isSameDay(date, dateToCheck))
-}
-
-// Convert DateValue to JavaScript Date
-export function toDate(dateValue: DateValue): Date {
-    return dateValue.toDate('UTC')
 }
 
 // Translate English weekday abbreviations to Danish
@@ -141,6 +149,18 @@ export function translateToDanish(day: string): string {
         'Sun': 'S'
     }
     return mapping[day] || day
+}
+
+/**
+ * Format Danish weekday to compact form
+ * @param day - Full Danish weekday name (e.g., 'mandag')
+ * @param ultraCompact - If true, return 1 letter (e.g., 'M'); if false, return 3 letters (e.g., 'Man')
+ * @returns Capitalized weekday abbreviation
+ */
+export function formatWeekdayCompact(day: WeekDay, ultraCompact: boolean = false): string {
+    const length = ultraCompact ? 1 : 3
+    const abbreviated = day.substring(0, length)
+    return abbreviated.charAt(0).toUpperCase() + abbreviated.slice(1)
 }
 
 /**
@@ -179,4 +199,104 @@ export function selectWeekNumbersFromListThatFitInsideDateRange(
     return weekRanges.filter(weekRange =>
         isDateRangeInside(dates, weekRange)
     )
+}
+
+/**
+ * Calculate age in years on a specific date
+ * @param birthDate - Date of birth
+ * @param eventDate - Date to calculate age on
+ * @returns Age in complete years
+ */
+export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
+    let age = eventDate.getFullYear() - birthDate.getFullYear()
+    const monthDiff = eventDate.getMonth() - birthDate.getMonth()
+
+    // If birthday hasn't occurred yet this year, subtract 1
+    if (monthDiff < 0 || (monthDiff === 0 && eventDate.getDate() < birthDate.getDate())) {
+        age--
+    }
+
+    return age
+}
+
+/**
+ * Format a date as relative time from now in Danish
+ * @param dateString - ISO date string or Date object
+ * @returns Relative time string (e.g., "for 2 timer siden", "i går")
+ */
+export function formatRelativeTime(dateString: string | Date): string {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+    return formatDistanceToNow(date, { locale: DATE_SETTINGS.locale, addSuffix: true })
+}
+
+/**
+ * Check if a date is considered "new" (within 7 days)
+ * @param dateString - ISO date string or Date object
+ * @returns True if the date is within 7 days from now
+ */
+export function isNew(dateString: string | Date): boolean {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString
+    const days = differenceInDays(new Date(), date)
+    return days <= 7
+}
+
+/**
+ * Calculate current age from birth date
+ * @param birthDate - Date of birth (Date, string, or null)
+ * @returns Age in complete years, or null if birthDate is null/invalid
+ */
+export function calculateAge(birthDate: Date | string | null): number | null {
+    if (!birthDate) return null
+    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
+    if (!isValid(birth)) return null
+    return calculateAgeOnDate(birth, new Date())
+}
+
+/**
+ * Format date with Danish 3-letter weekday abbreviation
+ * @param date - Date to format
+ * @returns Formatted string like "Man 15/11"
+ */
+export function formatDanishWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEE dd/MM')
+}
+
+/**
+ * Calculate countdown from current time to target time
+ * Shows days when >24h away, hours and minutes when <24h away
+ * @param targetDate - Target date/time (e.g., dinner time)
+ * @param currentDate - Current date/time (defaults to now)
+ * @returns Countdown object with hours, minutes, and formatted Danish string
+ */
+export function calculateCountdown(
+    targetDate: Date,
+    currentDate: Date = new Date()
+): { hours: number; minutes: number; formatted: string } {
+    if (targetDate <= currentDate) {
+        return { hours: 0, minutes: 0, formatted: 'NU' }
+    }
+
+    const totalHours = differenceInHours(targetDate, currentDate)
+
+    // More than 24 hours away - show days
+    if (totalHours >= 24) {
+        const daysText = formatDistanceToNowStrict(targetDate, {
+            locale: DATE_SETTINGS.locale,
+            unit: 'day'
+        })
+        const formatted = daysText.toUpperCase()
+        return { hours: totalHours, minutes: 0, formatted }
+    }
+
+    // Less than 24 hours - show hours and minutes
+    const duration = intervalToDuration({
+        start: currentDate,
+        end: targetDate
+    })
+
+    const hours = duration.hours ?? 0
+    const minutes = duration.minutes ?? 0
+    const formatted = hours > 0 ? `${hours}T ${minutes}M` : `${minutes}M`
+
+    return { hours, minutes, formatted }
 }

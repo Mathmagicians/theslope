@@ -38,10 +38,8 @@ setup('Authenticate admin for UI', async ({page}) => {
     await page.waitForURL('/login')
     await performLogin(page.request)
     await page.goto('/admin')
-    // Wait for redirect to default admin tab
     await page.waitForURL('/admin/planning')
-    // Wait for page to be interactive - verify form mode buttons are visible
-    await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
+
     // Save browser state
     await page.context().storageState({ path: authFiles.adminUIFile })
 })

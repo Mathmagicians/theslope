@@ -1,10 +1,10 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {updateSeason} from "~~/server/data/prismaRepository"
-import {useSeasonValidation} from "~/composables/useSeasonValidation"
+import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Get the validation utilities from our composable
 const {SeasonSchema} = useSeasonValidation()
@@ -26,26 +26,23 @@ const createPostSeasonSchema = (expectedId: number) =>
             path: ['id']
         })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch
-    let id, seasonData
+    let id!: number
+    let seasonData!: Season
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
         seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
     } catch (error) {
-        const h3e = h3eFromCatch('Validation error', error)
-        console.error("🌞 > SEASON > [POST] Input validation error:", h3e.statusMessage)
-        throw h3e
+        return throwH3Error('🌞 > SEASON > [POST] Validation error', error)
     }
 
     if (!seasonData.id || seasonData.id !== id) {
-        const h3e = h3eFromCatch('Invalid input', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`))
-        console.warn("🌞 > SEASON > [POST] ID mismatch:", h3e.statusMessage)
-        throw h3e
+        return throwH3Error('🌞 > SEASON > [POST] ID mismatch', new Error(`Season ID ${id} in URL must match ID in body ${seasonData.id}`), 400)
     }
     // Database operations try-catch
     try {
@@ -53,8 +50,6 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 200)
         return updatedSeason
     } catch (error) {
-        const h3e = h3eFromCatch(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
-        console.error(`🌞 > SEASON > [POST] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`🌞 > SEASON > [POST] Error updating season with id ${id}`, error)
     }
 })

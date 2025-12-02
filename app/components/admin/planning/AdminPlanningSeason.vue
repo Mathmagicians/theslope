@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
-import type {FormSubmitEvent} from "#ui/types"
-import {type DateRange, type WeekDayMap} from "~/types/dateTypes"
 import type {FormMode} from "~/types/form"
 
 //COMPONENT DEPENDENCIES
@@ -46,8 +44,8 @@ const formTitle = computed(() => {
 })
 
 // ACTIONS
-const onSubmitSeason = (event: FormSubmitEvent<Season>) => {
-  // Use model.value directly instead of event.data to ensure v-model changes are included
+const onSubmitSeason = () => {
+  // Use model.value directly to ensure v-model changes are included
   emit('update', model.value)
 }
 
@@ -83,15 +81,16 @@ const buttonText = computed(() => {
             <div class="grow">
               <div class="space-y-4">
                 <UFormField label="Sæson" name="shortName">
-                  <UInput disabled
+                  <UInput
+disabled
                           name="shortName"
                           :model-value="shortName"/>
                 </UFormField>
 
                 <!-- Season date picker -->
                 <CalendarDateRangePicker
-                    name="seasonDates"
                     v-model="model.seasonDates"
+                    name="seasonDates"
                     :disabled="isViewMode"/>
 
                 <!-- Pick weekdays for cooking -->
@@ -109,8 +108,8 @@ const buttonText = computed(() => {
                     Hvornår holder fællesspisning fri?
                   </h4>
                   <CalendarDateRangeListPicker
-                      name="holidays"
                       v-model="model.holidays"
+                      name="holidays"
                       :disabled="isViewMode"
                       :season-dates="model.seasonDates"
                   />
@@ -136,7 +135,8 @@ const buttonText = computed(() => {
                       :disabled="isViewMode"/>
                 </UFormField>
 
-                <UFormField label="Hvor mange dage i træk laver madholdene mad?"
+                <UFormField
+label="Hvor mange dage i træk laver madholdene mad?"
                             name="consecutiveCookingDays">
                   <UInput
                       v-model="model.consecutiveCookingDays"
@@ -152,8 +152,8 @@ const buttonText = computed(() => {
                     Billetpriser
                   </h4>
                   <TicketPriceListEditor
-                      name="ticketPrices"
                       v-model="model.ticketPrices"
+                      name="ticketPrices"
                       :disabled="isViewMode"/>
                 </div>
               </div>
@@ -161,9 +161,10 @@ const buttonText = computed(() => {
 
             <!-- Calendar Section - Above on mobile, Right on desktop -->
             <div class="min-w-1/2 lg:w-1/2 grow-0">
-              <CalendarDisplay class="mx-auto"
-                               :seasonDates="model.seasonDates"
-                               :cookingDays="model.cookingDays as WeekDayMap"
+              <CalendarDisplay
+class="mx-auto"
+                               :season-dates="model.seasonDates"
+                               :cooking-days="model.cookingDays as WeekDayMap"
                                :holidays="model.holidays"
                                :dinner-events="model.dinnerEvents"/>
             </div>
@@ -172,8 +173,13 @@ const buttonText = computed(() => {
 
         <template #footer>
           <div v-if="!isViewMode" class="flex justify-between items-center gap-4">
-            <div v-if="errors.length > 0" class="text-red-500 text-sm">
-              Formen indeholder fejl, som skal rettes.
+            <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
+              <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
+              <ul class="list-disc list-inside">
+                <li v-for="error in errors" :key="error.path">
+                  <span class="font-medium">{{ error.path }}:</span> {{ error.message }}
+                </li>
+              </ul>
             </div>
             <div class="flex gap-4 ml-auto">
               <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">

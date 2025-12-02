@@ -1,30 +1,34 @@
-
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, updateTeam} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
+import type {CookingTeamDetail} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
-const {h3eFromCatch} = eventHandlerHelper
-const {assignAffinitiesToTeams} = useSeason()
+const {throwH3Error} = eventHandlerHelper
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+// ADR-009: Mutations return Detail type (full team with all relations)
+type AssignAffinitiesResponse = {
+    seasonId: number
+    teamCount: number
+    teams: CookingTeamDetail[]
+}
+
+export default defineEventHandler(async (event): Promise<AssignAffinitiesResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonId: number
+    let seasonId!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         seasonId = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
-        console.error(`👥 > SEASON > [ASSIGN_AFFINITIES] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)
     }
 
     // Business logic try-catch - separate concerns
@@ -34,19 +38,24 @@ export default defineEventHandler(async (event) => {
         // Fetch season from database with teams (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
-            const h3e = h3eFromCatch(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'))
-            h3e.statusCode = 404
-            throw h3e
+            return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
-        // Compute affinities for teams using composable
+        // Compute affinities for teams using composable (call at request time, not module load time)
+        const {assignAffinitiesToTeams} = useSeason()
         const teamsWithAffinities = assignAffinitiesToTeams(season)
 
-        // Update each team with computed affinity (pass full team with updated affinity)
+        // Update each team with computed affinity
+        // Transform to CookingTeamUpdate format (strip read-only fields, keep only updateable fields)
         const updatedTeams = await Promise.all(
-            teamsWithAffinities.map(team =>
-                updateTeam(d1Client, team.id!, team)
-            )
+            teamsWithAffinities.map(team => {
+                // CookingTeamUpdate: only id (required) + optional updateable fields (name, seasonId, affinity)
+                const teamForUpdate = {
+                    id: team.id!,
+                    affinity: team.affinity
+                }
+                return updateTeam(d1Client, team.id!, teamForUpdate)
+            })
         )
 
         console.info(`👥 > SEASON > [ASSIGN_AFFINITIES] Successfully assigned affinities to ${updatedTeams.length} teams for season ${seasonId}`)
@@ -58,8 +67,6 @@ export default defineEventHandler(async (event) => {
             teams: updatedTeams
         }
     } catch (error) {
-        const h3e = h3eFromCatch(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
-        console.error(`👥 > SEASON > [ASSIGN_AFFINITIES] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`👥 > SEASON > [ASSIGN_AFFINITIES] Error assigning affinities to teams for season ${seasonId}`, error)
     }
 })

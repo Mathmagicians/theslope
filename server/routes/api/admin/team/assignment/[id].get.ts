@@ -1,28 +1,27 @@
 import {defineEventHandler, getValidatedRouterParams, createError} from "h3"
 import {fetchTeamAssignment} from "~~/server/data/prismaRepository"
+import type {CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {z} from 'zod'
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
 const idSchema = z.object({
     id: z.coerce.number().int().positive('Assignment ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamAssignment> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id
+    let id!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
         id = params.id
     } catch (error) {
-        const h3e = h3eFromCatch('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns
@@ -40,8 +39,6 @@ export default defineEventHandler(async (event) => {
         console.info(`👥🔗 > ASSIGNMENT > [GET] Returning assignment ${assignment.id}`)
         return assignment
     } catch (error) {
-        const h3e = h3eFromCatch(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
-        console.error(`👥🔗 > ASSIGNMENT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [GET] Error fetching assignment with id ${id}`, error)
     }
 })

@@ -6,11 +6,41 @@
 **ALWAYS REFERENCE BEFORE IMPLEMENTING:** @docs/adr.md
 
 Key patterns:
+- **ADR-011:** Booking system schema (three-state order model with audit trail)
+- **ADR-010:** Domain-driven serialization (repository-layer serialization)
+- **ADR-009:** API index endpoint data inclusion strategy
+- **ADR-008:** useEntityFormManager composable pattern
+- **ADR-007:** SSR-friendly store pattern with useAsyncData
+- **ADR-006:** URL-based navigation and client-side state
 - **ADR-005:** Strong (CASCADE) vs Weak (SET NULL) relationships - Prisma schema onDelete behavior
 - **ADR-004:** Logging standards - `console.info`/`warn`/`error`, never log sensitive data
 - **ADR-003:** Factory pattern for tests in `/tests/e2e/testDataFactories/`
 - **ADR-002:** Separate try-catch for validation vs business logic
 - **ADR-001:** Zod schemas in composables for shared validation
+
+### ADR Compliance Tracking
+**CRITICAL: Keep compliance documents updated as part of implementation:**
+
+- **@docs/adr-compliance-backend.md** - Tracks API endpoint compliance
+  - Update when implementing/modifying API endpoints
+  - Mark validation, return types, repository patterns, and test coverage
+  - Reference this before creating new endpoints to ensure compliance
+
+- **@docs/adr-compliance-frontend.md** - Tracks frontend compliance
+  - Update when creating/modifying pages, components, or stores
+  - Track route usage, store dependencies, composable usage, ADR compliance
+  - Reference this to ensure components follow established patterns
+
+**When to update compliance docs:**
+1. After implementing API endpoints → Update backend compliance table
+2. After creating components/stores → Update frontend component breakdown
+3. After adding tests → Update test coverage columns
+4. After fixing violations → Mark as ✅ compliant
+
+**Compliance doc principles (DRY):**
+- Documents reference ADRs, don't duplicate ADR content
+- Use status markers (✅ ⚠️ ❌ ❓) for quick scanning
+- Tables show relationships (routes ↔ components, endpoints ↔ tests) without duplication
 
 ### Prisma Schema
 **ALWAYS REFERENCE BEFORE WORKING WITH ENTITIES:** @prisma/schema.prisma
@@ -21,6 +51,8 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 
 ## Remember Important Files
 - **REFERENCE** @docs/adr.md for architectural patterns before implementation
+- **REFERENCE** @docs/adr-compliance-backend.md before implementing API endpoints
+- **REFERENCE** @docs/adr-compliance-frontend.md before implementing components/stores
 - **REFERENCE** @prisma/schema.prisma for entity relationships and deletion behavior
 - `.github/copilot-instructions.md` for project-specific guidelines and conventions
 

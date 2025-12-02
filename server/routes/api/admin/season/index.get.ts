@@ -1,21 +1,21 @@
-import {defineEventHandler} from "h3"
-import {fetchSeasons} from "~~/server/data/prismaRepository";
+import {defineEventHandler, setResponseStatus} from "h3"
+import {fetchSeasons} from "~~/server/data/prismaRepository"
+import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<Season[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     try {
-        console.log("👨‍💻 > SEASON > [GET]")
+        console.info("🌞 > SEASON > [GET] Fetching all seasons")
         const seasons = await fetchSeasons(d1Client)
-        console.info(`👨‍💻 > SEASON > Returning seasons ${seasons?.length}`)
+        console.info(`🌞 > SEASON > [GET] Returning ${seasons?.length} seasons`)
+        setResponseStatus(event, 200)
         return seasons ? seasons : []
     } catch (error) {
-        const h3e = h3eFromCatch("👨‍💻 > SEASON > [GET] Error fetching seasons", error)
-        console.error(`👨‍💻 > SEASON > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error("🌞 > SEASON > [GET] Error fetching seasons", error)
     }
 })

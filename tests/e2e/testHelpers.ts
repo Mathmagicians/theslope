@@ -3,12 +3,38 @@ import {expect} from "@playwright/test"
 import {authFiles} from './config'
 const { adminFile } = authFiles
 
-const salt = (base: string, testSalt: string = Date.now().toString()):string => base === '' ? base : `${base}-${testSalt}`
+const temporaryAndRandom = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+const salt = (base: string, testSalt: string = temporaryAndRandom()):string => base === '' ? testSalt : `${base}-${testSalt}`
+
+/**
+ * Generate a unique numeric ID from a test salt
+ * Combines base number with a hash of the salt string to ensure uniqueness across parallel tests
+ *
+ * @param base - Base number to add to the hash (e.g., 1000, 2000, 3000)
+ * @param testSalt - Optional salt string. If not provided, generates a new random one
+ * @returns A unique numeric ID
+ *
+ * @example
+ * // Generate IDs for same test entity using same salt (prevents collisions)
+ * const testSalt = temporaryAndRandom()
+ * const heynaboId = saltedId(1000, testSalt)
+ * const pbsId = saltedId(2000, testSalt)
+ */
+const saltedId = (base: number = 0, testSalt?: string): number => {
+    const salt = testSalt || temporaryAndRandom()
+    // Hash the salt string to create a numeric offset
+    const saltHash = salt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return (base + saltHash) % 100000 // Modulo to keep numbers reasonable
+}
+
 const headers = {'Content-Type': 'application/json'}
-const validatedBrowserContext = async (browser:Browser) => {
-    return await browser.newContext({
-        storageState: adminFile
-    })
+const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
+    const options: any = { storageState: adminFile }
+    if (baseURL) {
+        options.baseURL = baseURL
+    }
+    return await browser.newContext(options)
 }
 
 /**
@@ -82,44 +108,24 @@ async function doScreenshot(page: any, name: string, isDocumentation: boolean = 
 /**
  * Select an option from a dropdown by test ID
  * Uses .first() to avoid strict mode violations on Linux where dropdown shows text twice
+ * With reactive stores (useFetch immediate:true by default), dropdown data loads automatically on page load
  *
  * @param page - Playwright Page object
  * @param dropdownTestId - Test ID of the dropdown/selector element
  * @param optionName - Name/text of the option to select
- * @param navigationUrl - Optional. If provided, waits for dropdown API data to load using pollUntil
  *
  * @example
- * // Simple dropdown (no API wait)
  * await selectDropdownOption(page, 'season-selector', 'TestSeason-123')
- *
- * // Dropdown after navigation (waits for API data)
- * await page.goto('/admin/teams?mode=edit')
- * await selectDropdownOption(page, 'season-selector', 'TestSeason-123', '/admin/teams?mode=edit')
  */
 async function selectDropdownOption(
     page: any,
     dropdownTestId: string,
-    optionName: string,
-    navigationUrl?: string
+    optionName: string
 ): Promise<void> {
     const dropdown = page.getByTestId(dropdownTestId)
 
     // Wait for dropdown to be visible
     await dropdown.waitFor({ state: 'visible', timeout: 10000 })
-
-    // If URL provided, wait for API response to load dropdown data (Playwright best practice)
-    if (navigationUrl) {
-        try {
-            // Wait for the API response that loads seasons data
-            await page.waitForResponse(
-                (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-                { timeout: 10000 }
-            )
-        } catch (error) {
-            await doScreenshot(page, 'dropdown-timeout')
-            throw error
-        }
-    }
 
     // Click dropdown to open it
     await dropdown.click()
@@ -132,8 +138,11 @@ async function selectDropdownOption(
     await option.click()
 }
 
+
 const testHelpers = {
     salt,
+    saltedId,
+    temporaryAndRandom,
     headers,
     validatedBrowserContext,
     pollUntil,

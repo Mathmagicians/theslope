@@ -42,6 +42,6 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
       <UToaster />
     </ClientOnly>
     <PageFooter/>
-    <div id="breakpoint-md" class="hidden md:block w-0 h-0"></div>
+    <div id="breakpoint-md" class="hidden md:block w-0 h-0"/>
   </div>
 </template>

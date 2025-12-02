@@ -5,7 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["strictUndefinedChecks"]
 }
 
 generator zod {
@@ -19,7 +20,7 @@ datasource db {
 
 enum SystemRole {
   ADMIN
-  USER
+  ALLERGYMANAGER
 }
 
 enum Role {
@@ -28,64 +29,79 @@ enum Role {
   JUNIORHELPER
 }
 
-enum Weekday {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
-}
-
 enum TicketType {
   ADULT
   CHILD
-  HUNGRY_BABY
   BABY
 }
 
 enum DinnerMode {
   TAKEAWAY
   DINEIN
+  DINEINLATE
   NONE
 }
 
+enum DinnerState {
+  SCHEDULED
+  ANNOUNCED
+  CANCELLED // used if the dinner is cancelled, and orders should be refunded
+  CONSUMED
+}
+
+enum OrderState {
+  BOOKED
+  RELEASED
+  CANCELLED // permitted if parent dinner is cancelled
+  CLOSED
+}
+
 model AllergyType {
-  id          Int       @id @default(autoincrement())
-  name        String
-  description String
-  icon        String?
-  Allergy     Allergy[]
+  id                   Int                   @id @default(autoincrement())
+  name                 String
+  description          String
+  icon                 String?
+  Allergy              Allergy[]
+  DinnerEventAllergens DinnerEventAllergen[]
+}
+
+model DinnerEventAllergen {
+  id            Int         @id @default(autoincrement())
+  dinnerEventId Int
+  dinnerEvent   DinnerEvent @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  allergyTypeId Int
+  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([dinnerEventId, allergyTypeId])
+  @@index([allergyTypeId])
 }
 
 model Allergy {
-  id            Int         @id @default(autoincrement())
-  inhabitantId  Int
-  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  allergyTypeId Int
-  allergyType   AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
+  id                Int         @id @default(autoincrement())
+  inhabitantId      Int
+  inhabitant        Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  inhabitantComment String?
+  allergyTypeId     Int
+  allergyType       AllergyType @relation(fields: [allergyTypeId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([inhabitantId, allergyTypeId])
+  @@index([inhabitantId])
 }
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles
 model User {
-  id           Int         @id @default(autoincrement())
-  email        String      @unique
+  id           Int            @id @default(autoincrement())
+  email        String         @unique
   phone        String?
   passwordHash String
-  systemRole   SystemRole  @default(USER)
+  systemRoles  String         @default("[]") // JSON stringified array of SystemRole
   Inhabitant   Inhabitant?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-}
-
-// Represents the dinner preferences of an inhabitant for a given weekday
-model DinnerPreference {
-  id           Int        @id @default(autoincrement())
-  inhabitantId Int
-  inhabitant   Inhabitant @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  weekday      Weekday
-  dinnerMode   DinnerMode
+  bookedOrders Order[]        @relation("BookedByUser")
+  orderHistory OrderHistory[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 // Represents a member of a household, that can participate in the dinners and cooking
@@ -106,10 +122,13 @@ model Inhabitant {
   lastName              String
   birthDate             DateTime?
   allergies             Allergy[]
-  dinnerPreferences     DinnerPreference[]
+  dinnerPreferences     String? // JSON stringified map of Weekday to DINNERMODE
   DinnerEvent           DinnerEvent[]
   Order                 Order[]
   CookingTeamAssignment CookingTeamAssignment[]
+
+  @@index([householdId])
+  @@index([userId]) // For user lookups
 }
 
 model Household {
@@ -125,54 +144,85 @@ model Household {
 }
 
 model DinnerEvent {
-  id              Int          @id @default(autoincrement())
+  id              Int                   @id @default(autoincrement())
   date            DateTime
   menuTitle       String
   menuDescription String?
   menuPictureUrl  String?
-  dinnerMode      DinnerMode
+  state           DinnerState           @default(SCHEDULED)
+  totalCost       Int                   @default(0) // Price in DKK øre, total grocery costs
+  heynaboEventId  Int?                  @unique
   chefId          Int?
-  chef            Inhabitant?  @relation(fields: [chefId], references: [id], onDelete: SetNull)
+  chef            Inhabitant?           @relation(fields: [chefId], references: [id], onDelete: SetNull)
   cookingTeamId   Int?
-  cookingTeam     CookingTeam? @relation(fields: [cookingTeamId], references: [id], onDelete: SetNull)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  cookingTeam     CookingTeam?          @relation(fields: [cookingTeamId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   tickets         Order[]
-  Season          Season?      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  Season          Season?               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   seasonId        Int?
+  allergens       DinnerEventAllergen[] // Many-to-many with AllergyType via join table
+
+  @@index([seasonId])
+  @@index([chefId])
+  @@index([date]) // For chronological queries
+  @@index([state]) // For filtering by state
 }
 
 model Order {
-  id            Int          @id @default(autoincrement())
-  dinnerEventId Int
-  dinnerEvent   DinnerEvent  @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId  Int
-  inhabitant    Inhabitant   @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  ticketType    TicketType
-  Transaction   Transaction?
+  id             Int            @id @default(autoincrement())
+  dinnerEventId  Int
+  dinnerEvent    DinnerEvent    @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId   Int
+  inhabitant     Inhabitant     @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  bookedByUserId Int?
+  bookedByUser   User?          @relation("BookedByUser", fields: [bookedByUserId], references: [id], onDelete: SetNull)
+  ticketPriceId  Int
+  ticketPrice    TicketPrice    @relation(fields: [ticketPriceId], references: [id], onDelete: Restrict)
+  priceAtBooking Int
+  dinnerMode     DinnerMode     @default(DINEIN)
+  state          OrderState     @default(BOOKED)
+  releasedAt     DateTime? // when the order was released back to availability, first released is first in line for booking by other users
+  closedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  Transaction    Transaction?
+  orderHistory   OrderHistory[]
+
+  @@index([bookedByUserId])
+  @@index([inhabitantId])
+  @@index([dinnerEventId, state]) // Composite for "orders by dinner and state"
 }
 
 model Transaction {
-  id        Int      @id @default(autoincrement())
-  orderId   Int      @unique
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  amount    Int
-  createdAt DateTime @default(now())
-  invoiceId Int?     @unique
-  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  id              Int      @id @default(autoincrement())
+  orderId         Int?     @unique
+  order           Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderSnapshot   String // JSON stringified snapshot of the order at the time of transaction
+  userSnapshot    String // JSON stringified snapshot of the user at the time of transaction
+  amount          Int // price in DKK øre
+  userEmailHandle String
+  createdAt       DateTime @default(now())
+  invoiceId       Int?     @unique
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([invoiceId])
 }
 
 model Invoice {
-  id           Int           @id @default(autoincrement())
-  transactions Transaction[]
-  cutoffDate   DateTime
-  paymentDate  DateTime
-  amount       Int
-  createdAt    DateTime      @default(now())
-  householdId  Int
-  houseHold    Household     @relation(fields: [householdId], references: [id])
+  id            Int           @id @default(autoincrement())
+  transactions  Transaction[]
+  cutoffDate    DateTime
+  paymentDate   DateTime
+  billingPeriod String // stringified date range with formatDateRange function
+  amount        Int
+  createdAt     DateTime      @default(now())
+  householdId   Int?
+  houseHold     Household?    @relation(fields: [householdId], references: [id], onDelete: SetNull)
+
+  @@index([householdId])
+  @@index([billingPeriod])
 }
 
 // Cooking teams are seasonal, and created by the system administrator
@@ -183,7 +233,7 @@ model CookingTeam {
   name        String
   dinners     DinnerEvent[]
   assignments CookingTeamAssignment[]
-  affinity    String?                  // JSON stringified map of Weekday to boolean
+  affinity    String? // JSON stringified map of Weekday to boolean
 }
 
 model CookingTeamAssignment {
@@ -194,14 +244,17 @@ model CookingTeamAssignment {
   inhabitant           Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   role                 Role
   allocationPercentage Int         @default(100)
-  affinity             String?      // JSON stringified map of Weekday to boolean
+  affinity             String? // JSON stringified map of Weekday to boolean
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
+
+  @@index([cookingTeamId])
+  @@index([inhabitantId])
 }
 
 model Season {
   id                                Int           @id @default(autoincrement())
-  shortName                         String?
+  shortName                         String?       @unique
   seasonDates                       String // JSON stringified DateRange object
   isActive                          Boolean
   CookingTeams                      CookingTeam[]
@@ -222,4 +275,20 @@ model TicketPrice {
   price           Int
   description     String?
   maximumAgeLimit Int?
+  orders          Order[]
+}
+
+model OrderHistory {
+  id                Int      @id @default(autoincrement())
+  orderId           Int?
+  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  action            String
+  performedByUserId Int?
+  performedByUser   User?    @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  auditData         String
+  timestamp         DateTime @default(now())
+
+  @@index([orderId])
+  @@index([performedByUserId])
+  @@index([timestamp])
 }

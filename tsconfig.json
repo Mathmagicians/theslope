@@ -6,8 +6,6 @@
     "strict": true,
     "strictNullChecks": true,
     "types": [
-      "@nuxt/types",
-      "@nuxtjs/date-fns",
       "@cloudflare/workers-types/2023-07-01",
       "vitest/globals",
       "@nuxt/test-utils"
@@ -17,6 +15,7 @@
     "app/**/*",
     "server/**/*",
     "tests/**/*",
+    "types/**/*",
     ".nuxt/**/*"
   ]
 }

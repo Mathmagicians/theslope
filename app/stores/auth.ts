@@ -1,5 +1,15 @@
+import type {UserDetail} from '~/composables/useCoreValidation'
+
 export const useAuthStore = defineStore("Auth", () => {
-    const {loggedIn, user, session, clear, fetch} = useUserSession();
+    const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
+
+    // Cast user to UserDetail for type-safe access (see types/auth.d.ts)
+    const user = computed(() => _user.value as UserDetail | null)
+
+    // Get SystemRole enum from validation composable
+    const {SystemRoleSchema} = useCoreValidation()
+    const SystemRole = SystemRoleSchema.enum
+
     const signIn = async (email: string, password: string) => {
         await $fetch("/api/auth/login", {
             method: "POST",
@@ -10,19 +20,31 @@ export const useAuthStore = defineStore("Auth", () => {
 
     }
 
-    const greeting = computed(() => user?.value?.Inhabitant?.name || 'Ukendt bruger')
+    const greeting = computed(() => user.value?.Inhabitant?.name || 'Ukendt bruger')
 
-    const avatar = computed(() => user?.value?.Inhabitant?.pictureUrl)
-    const name = computed(() => user?.value?.Inhabitant?.name)
-    const lastName = computed(() => user?.value?.Inhabitant?.lastName)
-    const email = computed(() => user?.value?.email)
-    const phone = computed(() => user?.value?.phone)
-    const birthDate = computed(() => user?.value?.Inhabitant?.birthDate)
-    const systemRole = computed(() => user?.value?.systemRole)
-    const isAdmin = computed(() => user?.value?.systemRole === 'ADMIN')
-    const address = computed(() => user?.value?.Inhabitant?.household?.address)
+    const avatar = computed(() => user.value?.Inhabitant?.pictureUrl)
+    const name = computed(() => user.value?.Inhabitant?.name)
+    const lastName = computed(() => user.value?.Inhabitant?.lastName)
+    const email = computed(() => user.value?.email)
+    const phone = computed(() => user.value?.phone)
+    const birthDate = computed(() => user.value?.Inhabitant?.birthDate)
+    const systemRoles = computed(() => {
+        const roles = user.value?.systemRoles
+        // Parse JSON string from database to array
+        if (typeof roles === 'string') {
+            try {
+                return JSON.parse(roles)
+            } catch {
+                return []
+            }
+        }
+        return roles || []
+    })
+    const isAdmin = computed(() => systemRoles.value.includes(SystemRole.ADMIN))
+    const isAllergyManager = computed(() => systemRoles.value.includes(SystemRole.ALLERGYMANAGER))
+    const address = computed(() => user.value?.Inhabitant?.household?.address)
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRole, isAdmin, address, loggedIn, user, session, clear, fetch}
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, address, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {

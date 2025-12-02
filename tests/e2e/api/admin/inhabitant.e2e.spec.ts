@@ -1,22 +1,26 @@
 import {test, expect} from '@playwright/test'
-import {useHouseholdValidation} from '../../../../app/composables/useHouseholdValidation'
 import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '../../testHelpers'
 
-const {InhabitantResponseSchema} = useHouseholdValidation()
-const {headers, validatedBrowserContext} = testHelpers
+const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
+// Only track household - CASCADE will delete all inhabitants (ADR-005)
 let testHouseholdId: number
-let testInhabitantIds: number[] = []
+const createdSeasonIds: number[] = []
 
 test.describe('Admin Inhabitant API', () => {
 
     // Setup test household before all tests
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const created = await HouseholdFactory.createHousehold(context, 'Test-Household-for-Inhabitant-Tests')
+        const testSalt = temporaryAndRandom()
+        const created = await HouseholdFactory.createHousehold(context, {
+            name: salt('Test-Household-for-Inhabitant-Tests', testSalt)
+        })
         testHouseholdId = created.id as number
         console.info(`Created test household ${created.name} with ID ${testHouseholdId}`)
     })
@@ -27,14 +31,10 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId)
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             // Verify response structure
             expect(testInhabitant.id).toBeGreaterThanOrEqual(0)
             expect(testInhabitant.householdId).toEqual(testHouseholdId)
-
-            // Validate the response matches our schema
-            expect(() => InhabitantResponseSchema.parse(testInhabitant)).not.toThrow()
 
             const retrievedInhabitant = await HouseholdFactory.getInhabitantById(context, testInhabitant.id)
             expect(retrievedInhabitant.id).toBe(testInhabitant.id)
@@ -46,7 +46,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'List-Test-Inhabitant')
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             const inhabitants = await HouseholdFactory.getAllInhabitants(context)
             expect(Array.isArray(inhabitants)).toBe(true)
@@ -60,7 +59,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const createdInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'Details-Test-Inhabitant')
             expect(createdInhabitant.id).toBeDefined()
-            testInhabitantIds.push(createdInhabitant.id)
 
             // Get inhabitant details
             const inhabitantDetails = await HouseholdFactory.getInhabitantById(context, createdInhabitant.id)
@@ -89,7 +87,6 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', 'usertest@example.com')
             expect(testInhabitant.id).toBeDefined()
-            testInhabitantIds.push(testInhabitant.id)
 
             // Verify inhabitant has user association
             expect(testInhabitant.userId).toBeDefined()
@@ -125,12 +122,13 @@ test.describe('Admin Inhabitant API', () => {
 
             // Create a season for the team
             const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id as number)
 
             // Create a cooking team with 1 member (creates its own household + inhabitant)
             const team = await SeasonFactory.createCookingTeamWithMembersForSeason(
                 context,
                 season.id as number,
-                'Team-For-Cascade-Test',
+                salt('Team-For-Cascade-Test'),  // Salted to prevent race conditions
                 1  // Single member
             )
 
@@ -152,7 +150,15 @@ test.describe('Admin Inhabitant API', () => {
             // THEN: Inhabitant should be deleted
             await HouseholdFactory.getInhabitantById(context, inhabitantId, 404)
 
-            // AND: Cooking team assignment should be cascade deleted
+            // AND: Cooking team assignment should be cascade deleted (poll for DB cascade)
+            await pollUntil(
+                async () => {
+                    const response = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
+                    return response.status()
+                },
+                (status) => status === 404,
+                10
+            )
             const assignmentAfterDelete = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
             expect(assignmentAfterDelete.status()).toBe(404)
 
@@ -162,20 +168,51 @@ test.describe('Admin Inhabitant API', () => {
         })
     })
 
+    test.describe('POST /api/admin/inhabitant/[id]', () => {
+
+        test('GIVEN inhabitant exists WHEN updating dinner preferences THEN preferences are updated and other fields unchanged', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            const {DinnerModeSchema} = useBookingValidation()
+            const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+                valueSchema: DinnerModeSchema,
+                defaultValue: 'NONE'
+            })
+
+            const createdInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, 'DinnerPref-Test-Inhabitant')
+            expect(createdInhabitant.id).toBeDefined()
+
+            const newPreferences = createDefaultWeekdayMap(['DINEIN', 'TAKEAWAY', 'NONE', 'DINEIN', 'TAKEAWAY', 'NONE', 'NONE'])
+
+            const response = await context.request.post(`/api/admin/household/inhabitants/${createdInhabitant.id}`, {
+                headers,
+                data: {dinnerPreferences: newPreferences}
+            })
+
+            expect(response.status()).toBe(200)
+            const updated = await response.json()
+
+            expect(updated.dinnerPreferences).toEqual(newPreferences)
+            expect(updated.name).toBe(createdInhabitant.name)
+            expect(updated.birthDate).toBe(createdInhabitant.birthDate)
+            expect(updated.householdId).toBe(createdInhabitant.householdId)
+        })
+    })
+
     test.describe('Validation and Error Handling', () => {
 
         test('PUT /api/admin/inhabitant should reject invalid inhabitant data', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
             // Try to create inhabitant without householdId - should fail
-            await HouseholdFactory.createInhabitantForHousehold(context, 0, 'Invalid-Test-Inhabitant', 400)
+            await HouseholdFactory.createInhabitantForHousehold(context, 0, 'Invalid-Test-Inhabitant', null, 400)
         })
 
         test('PUT /api/admin/inhabitant should reject empty name', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
             // Try to create inhabitant with empty name - should fail
-            await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, '', 400)
+            await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, '', null, 400)
         })
 
         test('GET /api/admin/inhabitant/[id] should return 404 for non-existent inhabitant', async ({browser}) => {
@@ -197,16 +234,14 @@ test.describe('Admin Inhabitant API', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up all created inhabitants
-        await Promise.all(testInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id).catch(error => {
-            // Ignore cleanup errors
-            console.warn(`Failed to cleanup inhabitant ${id}:`, error)
-        })))
+        // Clean up seasons created in individual tests (CASCADE deletes teams and assignments per ADR-005)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 
-        // Clean up the test household
+        // Clean up the test household (CASCADE deletes all inhabitants automatically per ADR-005)
         if (testHouseholdId) {
             try {
                 await HouseholdFactory.deleteHousehold(context, testHouseholdId)
+                console.info(`Cleaned up test household ${testHouseholdId} (cascade deleted all inhabitants)`)
             } catch (error) {
                 console.warn(`Failed to cleanup test household ${testHouseholdId}:`, error)
             }

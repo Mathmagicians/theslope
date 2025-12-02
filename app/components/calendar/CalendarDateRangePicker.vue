@@ -122,19 +122,6 @@ const formatLabel = (key: keyof DateRange): string => {
   }
 }
 
-const attrs = {
-  'transparent': false,
-  'borderless': false,
-  'color': 'pink',
-  'is-dark': {selector: 'html', darkClass: 'dark'},
-  'first-day-of-week': 2
-}
-
-function onDayClick(_: any, event: MouseEvent): void {
-  const target = event.target as HTMLElement
-  target.blur() //unfocus the clicked element
-}
-
 const togglePopover = () => {
   console.log("toggle popover")
 }
@@ -152,10 +139,17 @@ watch(() => model.value, (newModelValue) => {
 const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
+// Expose for testing
+defineExpose({
+  errors,
+  updateDateRange
+})
+
 </script>
 
 <template>
-  <UPopover :content="{
+  <UPopover
+:content="{
       align: 'center',
       side: 'bottom',
       sideOffset: 16
@@ -179,18 +173,21 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
       </UCalendar>
     </template>
     <div :name="props.name" class="flex flex-row gap-1 md:gap-4">
-      <UFormField v-for="key in ['start', 'end'] as const" :key="key"
+      <UFormField
+v-for="key in ['start', 'end'] as const" :key="key"
                   class="p-2"
                   :label="formatLabel(key)"
                   :error="getErrorMessage(errors, [key, '_'])">
-        <UInput :placeholder="DATE_SETTINGS.USER_MASK" type="string"
+        <UInput
+v-model="inputState[key]" :placeholder="DATE_SETTINGS.USER_MASK"
+                type="string"
                 :name="key"
                 @update:model-value="handleInputChange($event, key)"
-                v-model="inputState[key]"
         >
           <template #trailing>
-            <UButton @click="togglePopover" icon="i-heroicons-calendar"
-                     color="info"/>
+            <UButton
+icon="i-heroicons-calendar" color="info"
+                     @click="togglePopover"/>
           </template>
         </UInput>
       </UFormField>

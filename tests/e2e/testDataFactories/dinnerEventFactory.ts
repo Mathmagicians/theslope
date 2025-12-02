@@ -1,13 +1,16 @@
-import {formatDate} from "../../../app/utils/date"
 import {
-    type DinnerEvent,
-    type DinnerEventCreate
-} from "../../../app/composables/useDinnerEventValidation"
+    type DinnerEventDisplay,
+    type DinnerEventDetail,
+    type DinnerEventCreate,
+    useBookingValidation
+} from "~/composables/useBookingValidation"
+import { type TeamRole } from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
-import {expect, BrowserContext} from "@playwright/test"
+import {expect, type BrowserContext} from "@playwright/test"
 
 const {salt, headers, pollUntil} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
+const { DinnerStateSchema } = useBookingValidation()
 
 export class DinnerEventFactory {
     static readonly today = new Date()
@@ -18,10 +21,14 @@ export class DinnerEventFactory {
         menuTitle: 'Test Menu',
         menuDescription: 'A delicious test menu',
         menuPictureUrl: null,
-        dinnerMode: 'DINEIN',
+        state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
         chefId: null,
         cookingTeamId: null,
-        seasonId: null
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today
     }
 
     static readonly defaultDinnerEvent = (testSalt: string = Date.now().toString()) => {
@@ -31,11 +38,102 @@ export class DinnerEventFactory {
         }
     }
 
+    static readonly defaultDinnerEventCreate = (testSalt?: string): DinnerEventCreate => ({
+        ...this.defaultDinnerEventData,
+        menuTitle: testSalt ? salt(this.defaultDinnerEventData.menuTitle, testSalt) : this.defaultDinnerEventData.menuTitle
+    })
+
+    static readonly defaultDinnerEventDisplay = (testSalt?: string): DinnerEventDisplay => ({
+        id: 1,
+        date: this.tomorrow,
+        menuTitle: testSalt ? salt('Test Menu', testSalt) : 'Test Menu',
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
+        state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
+        chefId: null,
+        cookingTeamId: null,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today
+    })
+
+    static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
+        ...this.defaultDinnerEventDisplay(testSalt),
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
+        totalCost: 0,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today,
+        chef: null,
+        cookingTeam: null,
+        tickets: []
+    })
+
+    /**
+     * Create a Prisma-format dinner event detail with JSON strings for testing deserialization (ADR-010)
+     * Simulates what comes directly from the database before deserialization
+     */
+    static readonly defaultSerializedDinnerEventDetail = (overrides: {
+        chef?: Record<string, unknown> | null,
+        cookingTeam?: Record<string, unknown> | null,
+        tickets?: Array<Record<string, unknown>>,
+        allergens?: Array<{allergyType: Record<string, unknown>}>
+    } = {}) => ({
+        id: 1,
+        date: this.tomorrow,
+        menuTitle: 'Test Menu',
+        menuDescription: 'A delicious test menu',
+        menuPictureUrl: null,
+        state: DinnerStateSchema.enum.SCHEDULED,
+        totalCost: 0,
+        chefId: overrides.chef ? 1 : null,
+        cookingTeamId: overrides.cookingTeam ? 1 : null,
+        heynaboEventId: null,
+        seasonId: null,
+        createdAt: this.today,
+        updatedAt: this.today,
+        chef: overrides.chef ?? null,
+        cookingTeam: overrides.cookingTeam ?? null,
+        tickets: overrides.tickets ?? [],
+        allergens: overrides.allergens ?? []
+    })
+
+    /**
+     * Create a serialized inhabitant (chef/ticket holder) with dinnerPreferences as JSON string
+     * Used for testing deserialization
+     */
+    static readonly serializedInhabitant = (dinnerPreferences: string | null = null) => ({
+        id: 1,
+        heynaboId: 12345,
+        householdId: 1,
+        name: 'Test',
+        lastName: 'Chef',
+        pictureUrl: null,
+        birthDate: null,
+        dinnerPreferences
+    })
+
+    /**
+     * Create a serialized cooking team with affinity as JSON string
+     * Used for testing deserialization
+     */
+    static readonly serializedCookingTeam = (affinity: string | null = null) => ({
+        id: 1,
+        seasonId: 1,
+        name: 'Test Team',
+        affinity,
+        assignments: []
+    })
+
     static readonly createDinnerEvent = async (
         context: BrowserContext,
         dinnerEventData: Partial<DinnerEventCreate> = this.defaultDinnerEvent(),
         expectedStatus: number = 201
-    ): Promise<DinnerEvent> => {
+    ): Promise<DinnerEventDisplay> => {
         const requestData = {
             ...this.defaultDinnerEvent(),
             ...dinnerEventData
@@ -62,11 +160,36 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent | null> => {
+    ): Promise<DinnerEventDetail | null> => {
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
 
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const responseBody = await response.json()
+            expect(responseBody.id).toBe(dinnerEventId)
+            return responseBody
+        }
+
+        return null
+    }
+
+    static readonly updateDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        dinnerEventData: Partial<DinnerEventCreate>,
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDisplay | null> => {
+        const response = await context.request.post(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`, {
+            headers: headers,
+            data: dinnerEventData
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 200) {
             const responseBody = await response.json()
@@ -81,7 +204,7 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent | null> => {
+    ): Promise<DinnerEventDisplay | null> => {
         const response = await context.request.delete(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
 
         const status = response.status()
@@ -98,7 +221,8 @@ export class DinnerEventFactory {
         context: BrowserContext,
         seasonId: number,
         expectedStatus: number = 200
-    ): Promise<DinnerEvent[]> => {
+    ): Promise<DinnerEventDisplay[]> => {
+        const {DinnerEventDisplaySchema} = useBookingValidation()
         const response = await context.request.get(`${DINNER_EVENT_ENDPOINT}?seasonId=${seasonId}`)
 
         const status = response.status()
@@ -106,11 +230,41 @@ export class DinnerEventFactory {
 
         if (expectedStatus === 200) {
             const responseBody = await response.json()
-            expect(Array.isArray(responseBody)).toBe(true)
-            return responseBody
+            expect(Array.isArray(responseBody), 'Response should be an array').toBe(true)
+
+            // Deserialize dates from ISO strings to Date objects
+            return responseBody.map((event: any) => DinnerEventDisplaySchema.parse(event))
         }
 
         return []
+    }
+
+    static readonly assignRoleToDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        inhabitantId: number,
+        role: TeamRole,
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail | null> => {
+        const {DinnerEventDetailSchema} = useBookingValidation()
+        const response = await context.request.post(
+            `/api/team/cooking/${dinnerEventId}/assign-role`,
+            {
+                headers: headers,
+                data: { inhabitantId, role }
+            }
+        )
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `POST assign-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            // ADR-010: Validate response through schema to catch deserialization issues
+            const responseBody = await response.json()
+            return DinnerEventDetailSchema.parse(responseBody)
+        }
+        return null
     }
 
     /**
@@ -122,7 +276,7 @@ export class DinnerEventFactory {
      * @param expectedCount - Expected number of events
      * @param maxAttempts - Maximum polling attempts (default 5)
      * @param initialDelayMs - Initial delay between attempts in ms (default 500ms), doubles on each attempt
-     * @returns Promise<DinnerEvent[]> - Array of generated dinner events
+     * @returns Promise<DinnerEventDisplay[]> - Array of generated dinner events
      * @throws Error if expected count not reached within maxAttempts
      */
     static readonly waitForDinnerEventsGeneration = async (
@@ -131,12 +285,71 @@ export class DinnerEventFactory {
         expectedCount: number,
         maxAttempts: number = 5,
         initialDelayMs: number = 500
-    ): Promise<DinnerEvent[]> => {
+    ): Promise<DinnerEventDisplay[]> => {
         return await pollUntil(
             () => this.getDinnerEventsForSeason(context, seasonId),
             (events) => events.length === expectedCount,
             maxAttempts,
             initialDelayMs
         )
+    }
+
+    /**
+     * Clean up Heynabo events created during testing
+     * Uses Heynabo API to delete events (requires system credentials)
+     *
+     * @param context - Browser context for API requests
+     * @param heynaboEventIds - Array of Heynabo event IDs to delete
+     * @throws Error if cleanup fails (logged but doesn't fail tests)
+     */
+    static readonly cleanupHeynaboEvents = async (
+        context: BrowserContext,
+        heynaboEventIds: number[]
+    ): Promise<void> => {
+        console.info(`Cleaning up ${heynaboEventIds.length} Heynabo events...`)
+
+        // Call cleanup endpoint (to be implemented in GREEN phase)
+        // This endpoint will use system credentials to delete Heynabo events
+        const response = await context.request.post('/api/test/heynabo/cleanup', {
+            headers: headers,
+            data: { eventIds: heynaboEventIds }
+        })
+
+        const status = response.status()
+        if (status !== 200) {
+            const errorBody = await response.text()
+            console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
+            // Don't throw - cleanup failures shouldn't fail tests
+        } else {
+            const result = await response.json()
+            console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)
+        }
+    }
+
+    /**
+     * Update allergens for a dinner event (chef operation)
+     *
+     * @param context - Browser context for API requests
+     * @param dinnerEventId - Dinner event ID
+     * @param allergenIds - Array of allergen type IDs to assign
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns Promise<DinnerEventDetail> - Updated dinner event with allergens
+     */
+    static readonly updateDinnerEventAllergens = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        allergenIds: number[],
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail> => {
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}/allergens`, {
+            headers: headers,
+            data: {allergenIds}
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return await response.json()
     }
 }

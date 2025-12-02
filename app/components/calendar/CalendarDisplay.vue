@@ -1,8 +1,20 @@
 <script setup lang="ts">
+/**
+ * CalendarDisplay - Shows potential cooking days and actual generated events
+ *
+ * Displays:
+ * - Holidays (green chips)
+ * - Potential cooking days (pink rings) - days matching cookingDays pattern minus holidays
+ * - Generated dinner events (pink filled) - actual events created for the season
+ *
+ * Uses BaseCalendar for consistent calendar structure and event management.
+ * Domain-specific rendering via slots (rings for potential, filled for actual).
+ */
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import type {DateValue} from "@internationalized/date"
-import type {DinnerEventDisplay} from '~/composables/useDinnerEventValidation'
-import {isCalendarDateInDateList, translateToDanish} from "~/utils/date"
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DayEventList} from '~/composables/useCalendarEvents'
+import {isCalendarDateInDateList} from "~/utils/date"
 
 interface Props {
   seasonDates: DateRange
@@ -12,67 +24,72 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const {createEventList} = useCalendarEvents()
+const {getHolidayDatesFromDateRangeList, computeCookingDates} = useSeason()
 
-const dinnerDays = computed(() => getEachDayOfIntervalWithSelectedWeekdays(
-    props.seasonDates.start,
-    props.seasonDates.end,
-    props.cookingDays))
+// Expand holiday ranges into individual dates
+const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 
-const allHolidays = computed(() => eachDayOfManyIntervals(props.holidays))
+// Calculate potential cooking days using domain logic from utils/season
+const potentialCookingDays = computed(() =>
+  computeCookingDates(props.cookingDays, props.seasonDates, props.holidays)
+)
 
-const resultDays = computed(() => excludeDatesFromInterval(
-    dinnerDays.value,
-    props.holidays))
-
-const seasonDatesAsCalendarDates = computed(() => toCalendarDateRange(props.seasonDates))
-
-// Extract dates from actual dinner events
+// Extract dates from actual generated dinner events
 const generatedEventDates = computed(() => {
   if (!props.dinnerEvents) return []
   return props.dinnerEvents.map(event => event.date)
 })
 
+// Transform into event lists for BaseCalendar
+const potentialCookingEventList = computed(() =>
+  createEventList(potentialCookingDays.value, 'potential-cooking', 'ring')
+)
+
+const generatedEventList = computed(() =>
+  createEventList(generatedEventDates.value, 'generated-events', 'badge')
+)
+
+// Combine all event lists
+const allEventLists = computed(() => [
+  potentialCookingEventList.value,
+  generatedEventList.value
+])
+
+// Check if a day is a holiday
 const isHoliday = (day: DateValue): boolean => {
-  return isCalendarDateInDateList(day, allHolidays.value)
+  return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-const isCookingDay = (day: DateValue): boolean => {
-  return isCalendarDateInDateList(day, resultDays.value)
+// Helper to check if has potential cooking event
+const hasPotentialCooking = (eventLists: DayEventList[]) => {
+  return eventLists.some(list => list.listId === 'potential-cooking')
 }
 
-const hasGeneratedEvent = (day: DateValue): boolean => {
-  return isCalendarDateInDateList(day, generatedEventDates.value)
+// Helper to check if has generated event
+const hasGeneratedEvent = (eventLists: DayEventList[]) => {
+  return eventLists.some(list => list.listId === 'generated-events')
 }
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
 </script>
 
 <template>
-  <UCalendar
-    :size="getIsMd ? 'xl': 'sm'"
-    :number-of-months="getIsMd ? 3: 1"
-    :min-value="seasonDatesAsCalendarDates.start"
-    :max-value="seasonDatesAsCalendarDates.end"
-    :week-starts-on="1"
-    :fixed-weeks="false"
-    weekday-format="short"
-  >
-    <template #day="{ day }">
+  <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
+    <template #day="{ day, eventLists }">
+      <!-- Holiday takes precedence -->
       <UChip v-if="isHoliday(day)" show size="md" color="success">
         {{ day.day }}
       </UChip>
-      <div v-else-if="isCookingDay(day)"
-           class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 border-pink-300"
-           :class="hasGeneratedEvent(day) ? 'bg-pink-800 text-pink-50' : 'border-2 border-pink-300 text-pink-800'">
+
+      <!-- Potential cooking day with optional generated event (filled vs ring) -->
+      <div
+v-else-if="hasPotentialCooking(eventLists)"
+           class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+           :class="hasGeneratedEvent(eventLists) ? 'bg-pink-800 text-pink-50' : 'border-2 border-pink-300 text-pink-800'">
         {{ day.day }}
       </div>
+
+      <!-- Regular day -->
+      <span v-else class="text-sm">{{ day.day }}</span>
     </template>
-    <template #week-day="{ day}">
-      <span class="text-sm text-muted uppercase">
-        {{ translateToDanish(day) }}
-      </span>
-    </template>
-  </UCalendar>
+  </BaseCalendar>
 </template>

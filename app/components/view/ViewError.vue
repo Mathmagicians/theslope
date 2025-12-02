@@ -1,10 +1,15 @@
 <script setup lang="ts">
 
-import type {ErrorWithStatusCode} from "~/types/error"
+export interface ViewErrorProps {
+  error?: number  // HTTP status code (renamed from statusCode to match usage)
+  message?: string
+  cause?: {
+    stack?: string
+  }
+}
+const props = defineProps<ViewErrorProps>()
 
-const props = defineProps< ErrorWithStatusCode>()
-
-const icons = Array.from({length: 32}, (_, i) => i)
+const icons = Array.from({length: 16}, (_, i) => i)
 
 function getRotationClass(i: number) {
 
@@ -32,22 +37,24 @@ function getRotationClass(i: number) {
 </script>
 
 <template>
-  <div class="relative w-screen h-screen min-w-screen min-h-screen">
-    <div class="flex flex-wrap gap-4  md:gap-8">
+  <div class="relative w-full h-full overflow-hidden">
+    <div class="flex flex-wrap gap-4 md:gap-8">
       <UIcon
           v-for="(item,i) in icons"
           :key="i"
-          name="fluent-emoji-high-contrast:confused-face"
+          :name="i%2 ? 'mage:robot-dead': 'fluent-emoji-high-contrast:confused-face'"
           class="size-32 md:size-64 lg:size-128 text-red-500"
           :class="getRotationClass(i)"/>
     </div>
 
     <!-- Error Content -->
-    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 grow items-start min-w-1/2 opacity-90 bg-red-100 flex flex-col p-2 md:p-4">
+    <div class="absolute z-50 top-10 left-10 md:top-20 md:left-20 right-10 md:right-20 opacity-90 bg-red-100 flex flex-col p-2 md:p-4 rounded-lg">
       <!-- Error Code -->
-      <p v-if="props.statusCode"
+      <UIcon name="i-mage-robot-dead" size="64"/>
+      <p
+v-if="props.error"
          class="text-2xl md:text-4xl font-mono font-bold bg-red-100 text-red-900 rounded inline-block mb-2">
-        FEJL {{ props.statusCode }}
+        FEJL {{ props.error }}
       </p>
 
       <!-- Error Message -->
@@ -64,7 +71,7 @@ function getRotationClass(i: number) {
       <UPopover v-if="props.cause">
         <template #trigger>
           <UButton
-              color="red"
+              color="error"
               size="sm"
               variant="ghost"
               icon="i-heroicons-exclamation-triangle"

@@ -10,10 +10,163 @@
 
 ### General Principles
 
-- Always use assertions over console logs (`expect()` instead of `console.log()`)
+- **NEVER use console.log() in tests** - ALWAYS use assertions (`expect()`) to verify behavior
 - Use meaningful test names that describe the behavior being tested
 - Focus tests on business requirements, not implementation details
 - When testing async behavior, use proper `await` patterns
+- Use `vi.fn()` spies to track function calls instead of manual counters
+
+### DRY Principles: No Boilerplate in Tests
+
+**CRITICAL**: Every test must be DRY (Don't Repeat Yourself). If you find yourself copying code between tests:
+
+1. **STOP** - Do not write duplicate code
+2. **EXTRACT** - Move to helper function (testHelpers.ts) or factory (testDataFactories/)
+3. **REUSE** - Import and use the helper/factory
+
+**Techniques to eliminate boilerplate:**
+
+- **Test parametrization**: Use `describe.each()` or `it.each()` for similar test cases with different data
+  ```typescript
+  describe.each([
+    { input: 'value1', expected: 'result1' },
+    { input: 'value2', expected: 'result2' }
+  ])('function with $input', ({ input, expected }) => {
+    it('returns $expected', () => {
+      expect(myFunction(input)).toBe(expected)
+    })
+  })
+  ```
+
+- **Helper functions**: Extract repeated setup/interaction patterns to testHelpers.ts
+  ```typescript
+  // testHelpers.ts
+  export const clickButton = async (page, name) => {
+    await page.locator(`[name="${name}"]`).click()
+    await page.waitForResponse(...)
+  }
+  ```
+
+- **Factories**: Use factory pattern for test data creation
+  ```typescript
+  const season = await SeasonFactory.createSeason(context, { holidays: [] })
+  const inhabitant = HouseholdFactory.defaultInhabitantData('test-salt')
+  ```
+
+**CRITICAL: Always use factories for mock data** - Manually constructed objects often miss required fields, causing silent schema validation failures. Factories ensure all required fields are present and match current schemas.
+
+```typescript
+// ❌ BAD: Manual construction - missing householdId causes Zod validation error
+const inhabitant = { id: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null }
+
+// ✅ GOOD: Factory includes all required fields (householdId, heynaboId, etc.)
+const inhabitant = { ...HouseholdFactory.defaultInhabitantData('test'), id: 1, name: 'Anna' }
+```
+
+### Parallel Execution: Test Isolation
+
+**CRITICAL**: All tests run in parallel. Tests MUST be isolated to prevent race conditions and flaky failures.
+
+#### Parallel Execution Requirements
+
+1. **Use `testSalt` for unique data**: Every E2E factory method accepts optional `testSalt` parameter
+   ```typescript
+   const season = SeasonFactory.defaultSeason(testSalt)  // Creates unique data per test
+   ```
+
+2. **Generate unique values**: Use factory helpers for dates, names, IDs
+   ```typescript
+   const uniqueDate = SeasonFactory.generateUniqueDate()  // Random year/month
+   const uniqueName = `TestSeason-${Date.now()}`         // Timestamp-based
+   ```
+
+3. **Import and use testHelpers**: Located at `/tests/e2e/testHelpers.ts`
+   ```typescript
+   import testHelpers from '../testHelpers'
+   const {validatedBrowserContext, pollUntil, selectDropdownOption} = testHelpers
+   ```
+
+4. **ALWAYS verify E2E with parallel workers**: Test with at least 4 parallel workers
+   ```bash
+   npx playwright test --workers=4  # Minimum for isolation verification
+   npx playwright test tests/e2e/ui/MyTest.e2e.spec.ts --workers=4
+   ```
+
+**Why This Matters:**
+- Tests creating "Season 2025" will conflict if run simultaneously
+- Salting ensures `Season-2025-abc123` vs `Season-2025-xyz789` (unique per test run)
+- Parallel execution catches race conditions and data conflicts early
+- CI/CD runs tests in parallel - local testing must match
+
+**Example: Proper Test Isolation**
+```typescript
+test('GIVEN unique season WHEN creating THEN succeeds', async ({ page, browser }) => {
+  const testSalt = Date.now().toString()
+  const context = await validatedBrowserContext(browser)
+
+  // ✅ GOOD: Unique data per test execution
+  const season = SeasonFactory.defaultSeason(testSalt)
+  const created = await SeasonFactory.createSeason(context, season)
+
+  // Cleanup with unique ID
+  await SeasonFactory.cleanupSeasons(context, [created.id])
+})
+```
+
+#### Test Data Naming Convention
+
+Use Donald Duck universe names (obvious test data, will be deleted):
+```typescript
+const household = await HouseholdFactory.createHousehold(context, {
+  name: salt('Duckburg', testSalt)
+})
+const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
+  context, householdId, 'Scrooge McDuck'
+)
+```
+
+#### Use Validation Composable Helpers
+
+Create domain objects using validation composable helpers, not manual construction:
+```typescript
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+
+// ✅ GOOD: Use helper
+const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+  valueSchema: DinnerModeSchema,
+  defaultValue: DinnerMode.DINEIN
+})
+const preferences = createDefaultWeekdayMap(DinnerMode.DINEIN)
+
+// ❌ BAD: Manual construction (missing days, invalid structure)
+const preferences = { mandag: 'DINEIN', tirsdag: 'DINEIN' }
+```
+
+#### Deserialization Pattern
+
+API responses return serialized data - use composable deserializers:
+```typescript
+import {useHouseholdValidation} from '~/composables/useHouseholdValidation'
+const {deserializeWeekDayMap} = useHouseholdValidation()
+
+const inhabitant = await HouseholdFactory.getInhabitant(context, id)
+const preferences = typeof inhabitant.dinnerPreferences === 'string'
+  ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+  : inhabitant.dinnerPreferences
+```
+
+#### Troubleshooting: Element Not Found
+
+If `[name="..."]` selector fails, check if component forwards `name` to DOM. Add `data-testid`:
+```vue
+<!-- Component: Add data-testid for test selection -->
+<UFieldGroup :name="name" :data-testid="name" />
+```
+
+```typescript
+// Test: Use getByTestId when name doesn't forward
+await page.getByTestId('element-name').click()
+```
 
 ### Component Testing (Nuxt UI v4+)
 
@@ -107,6 +260,32 @@ it('adds a holiday period', async () => {
     expect(emitted[0][0]).toEqual([{ start: new Date(2025, 0, 1), end: new Date(2025, 0, 5) }])
 })
 ```
+
+### Composable Testing (Nuxt Auto-imports)
+
+**Use `mockNuxtImport` for all Nuxt auto-imported functions:**
+
+```typescript
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
+
+const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
+  mockNavigateTo: vi.fn(),
+  mockRouteData: { path: '/simple/tab1', params: { tab: 'tab1' }, query: {}, hash: '' }
+}))
+
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+mockNuxtImport('useRoute', () => () => mockRouteData)  // Composables return functions
+```
+
+**Mutate mock data between tests** (don't replace object references):
+```typescript
+const setupRoute = (params: Record<string, string | undefined>) => {
+  Object.keys(mockRouteData.params).forEach(key => delete mockRouteData.params[key])
+  Object.assign(mockRouteData.params, params)
+}
+```
+
+**Example:** `tests/component/composables/useTabNavigation.nuxt.spec.ts`
 
 ### Store Testing (Pinia + useFetch)
 
@@ -335,20 +514,98 @@ await doScreenshot(page, 'admin/admin-planning-loaded', true)
 - Debug screenshots help troubleshoot failing tests (temporary)
 - Documentation screenshots capture UI state for README/docs (permanent)
 
+#### Waiting for Store/Component Readiness
+
+**CRITICAL**: API response ≠ Component ready. The store needs time to process data and Vue needs to re-render.
+
+**Pattern 1: Pages with Loaders (planning, teams tabs)**
+
+Some tabs show a `<Loader>` until the store is ready. The `data-test-id` element only renders AFTER the Loader disappears.
+
+```typescript
+// ✅ CORRECT: Wait for API, then wait for Loader to disappear
+const responsePromise = page.waitForResponse(
+    (response) => response.url().match(/\/api\/admin\/season\/\d+$/),  // Detail endpoint
+    {timeout: 10000}
+)
+await page.goto(`/admin/planning`)
+const response = await responsePromise
+expect(response.status()).toBe(200)
+
+// Wait for Loader text to disappear (store is processing)
+await pollUntil(
+    async () => await page.locator('text=Vi venter på data').isVisible(),
+    (isVisible) => !isVisible,
+    10
+)
+
+// NOW check for the component
+await expect(page.locator('[data-test-id="admin-planning"]')).toBeVisible()
+```
+
+**Pattern 2: Paginated tables**
+
+Tables may show "No data" or a loading state before data arrives. Don't wait for specific row counts - be resilient to different data volumes.
+
+```typescript
+// ✅ CORRECT: Wait for loading to complete, not specific data
+// Check component's custom empty state text (look in the component!)
+await pollUntil(
+    async () => {
+        // Either data rows appear OR custom empty state shows
+        const hasEmptyState = await page.getByText('Ingen er flyttet ind i appen endnu').count() > 0
+        const hasDataRows = await page.locator('[data-test-id="admin-households"] tbody tr td').count() > 1
+        return hasEmptyState || hasDataRows
+    },
+    (ready) => ready,
+    10
+)
+
+// ❌ WRONG: Assumes specific row count
+await pollUntil(
+    async () => await page.locator('tbody tr').count(),
+    (count) => count > 5,  // What if CI only has 1 row?
+    10
+)
+```
+
+**Key insight**: Always check the component's actual empty state text - don't assume "No data". NuxtUI's default may differ from custom `#empty-state` templates.
+
 #### Playwright Best Practices
 
 **❌ AVOID: `waitForLoadState('networkidle')`** - Flaky and slow
 
-**✅ USE: `page.waitForResponse()` for API data loading**
+**✅ USE: `page.waitForResponse()` BEFORE navigation**
 
 ```typescript
-// ✅ Wait for specific API response
-await page.goto('/admin/teams?mode=edit')
-await page.waitForResponse(
-  (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-  { timeout: 10000 }
+// ✅ Setup response wait BEFORE goto to catch the API call
+const responsePromise = page.waitForResponse(
+    (response) => response.url().match(/\/api\/admin\/season\/\d+$/),
+    {timeout: 10000}
 )
-await selectDropdownOption(page, 'season-selector', season.shortName)
+await page.goto('/admin/planning')
+const response = await responsePromise
+expect(response.status()).toBe(200)  // Assert status, don't filter by it
+```
+
+**❌ WRONG: Filter by status in waitForResponse**
+```typescript
+// This times out silently if status isn't 200
+await page.waitForResponse(
+    (response) => response.url().includes('/api/admin/season') && response.status() === 200,
+    {timeout: 10000}
+)
+```
+
+**✅ CORRECT: Match URL only, assert status separately**
+```typescript
+const responsePromise = page.waitForResponse(
+    (response) => response.url().includes('/api/admin/season'),
+    {timeout: 10000}
+)
+await page.goto(url)
+const response = await responsePromise
+expect(response.status()).toBe(200)  // Clear error if status wrong
 ```
 
 **✅ USE: URL parameters + explicit waits**

@@ -1,3 +1,9 @@
+// Import TicketType enum from generated Zod schemas (ADR-001 compliance)
+// Note: app.config.ts is a build-time file, so we import directly from generated schemas
+import { TicketTypeSchema } from '~~/prisma/generated/zod'
+
+const TicketType = TicketTypeSchema.enum
+
 export default defineAppConfig({
     theslope: {
         defaultSeason: {
@@ -8,14 +14,22 @@ export default defineAppConfig({
             ticketIsCancellableDaysBefore: 10,
             diningModeIsEditableMinutesBefore: 90,
             ticketPrices: [
-                { ticketType: 'BABY', description: 'Babyer spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2 },
-                { ticketType: 'HUNGRY_BABY', description: 'Til en meget sulten baby, kan godt bestille en 1/4 kuvert', price: 0, maximumAgeLimit: 2 },
-                { ticketType: 'CHILD', price: 1700, maximumAgeLimit: 12 },
-                { ticketType: 'ADULT', price: 4000 }],
+                { ticketType: TicketType.BABY, description: 'Babyer spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2 },
+                { ticketType: TicketType.BABY, description: 'Til en meget sulten baby, kan man godt bestille en 1/4 kuvert', price: 900, maximumAgeLimit: 2 },
+                { ticketType: TicketType.CHILD, price: 1700, maximumAgeLimit: 12 },
+                { ticketType: TicketType.ADULT, price: 4000 }],
             consecutiveCookingDays: 2
         },
         defaultDinnerStartTime: 18,
-        holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage'
+        holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
+        cookingDeadlines: {
+            criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
+            warningHours: 72    // Warning urgency: 24-72h before dinner event (yellow)
+        },
+        kitchen: {
+            baseRatePercent: 5,  // Kitchen contribution: 5% of ticket revenue goes to common kitchen fund
+            vatPercent: 25       // VAT rate: Used to calculate ex-VAT budget for grocery shopping
+        }
     },
     ui: {
         colors: {

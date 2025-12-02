@@ -1,12 +1,21 @@
 <script setup lang="ts">
-const props = defineProps<{ text?: string }>()
+defineProps<{ text?: string }>()
 </script>
 <template>
-  <div class="flex flex-col min-h-screen justify-center items-center">
-    <h2 class="text-large  uppercase text-blue-600">
-      Loading data for
-    </h2>
-    <h3 class="text-base text-blue-400">{{  text }} </h3>
+  <UCard class="w-full px-0">
+    <template #header>
+      <h1 class="text-xl">Vi venter på data, vi venter på data ... </h1>
+      <h2 class="text-muted">
+        {{ text }}
+      </h2>
+    </template>
+    <div class="flex items-center gap-4">
+      <USkeleton class="h-12 w-12 rounded-full" />
 
-  </div>
+      <div class="grid gap-2">
+        <USkeleton class="h-4 w-[250px]" />
+        <USkeleton class="h-4 w-[200px]" />
+      </div>
+    </div>
+  </UCard>
 </template>

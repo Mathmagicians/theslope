@@ -1,25 +1,38 @@
-import {defineEventHandler} from 'h3';
-import {createHouseholdsFromImport, importFromHeyNabo} from "~~/server/integration/heynabo";
-import {saveHousehold} from "~~/server/data/prismaRepository";
-import eventHandlerHelper from "~~/server/utils/eventHandlerHelper";
+import {defineEventHandler, setResponseStatus} from 'h3'
+import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
+import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
+import {saveHousehold} from '~~/server/data/prismaRepository'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
-const {h3eFromCatch} = eventHandlerHelper
-
+const {throwH3Error} = eventHandlerHelper
+const {createHouseholdsFromImport} = useHeynaboValidation()
 
 // Returns imported locations and members from HeyNabo
-export default defineEventHandler(async (event) => {
-    const { locations, members } = await importFromHeyNabo()
+export default defineEventHandler(async (event): Promise<HouseholdDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const households = createHouseholdsFromImport(d1Client, locations, members)
 
+    // Business logic - ADR-002 compliant
     try {
-        console.log("🏠> IMPORT > Saving households: ", households ? households.length: 0 )
-        const result = await  Promise.all(  households.map(  household => saveHousehold(d1Client, household) ))
+        // 1. Fetch data from Heynabo API
+        console.info("🏠 > IMPORT > Fetching data from Heynabo API")
+        const {locations, members} = await importFromHeynabo()
+        console.info(`🏠 > IMPORT > Fetched ${locations.length} locations and ${members.length} members`)
+
+        // 2. Transform to domain models
+        console.info("🏠 > IMPORT > Transforming to household domain models")
+        const households = createHouseholdsFromImport(locations, members)
+        console.info(`🏠 > IMPORT > Created ${households.length} households with ${households.reduce((sum, h) => sum + (h.inhabitants?.length || 0), 0)} inhabitants`)
+
+        // 3. Save to database
+        console.info(`🏠 > IMPORT > Saving ${households.length} households to database`)
+        const result = await Promise.all(households.map(household => saveHousehold(d1Client, household)))
+        console.info(`🏠 > IMPORT > Successfully saved ${result.length} households`)
+
+        setResponseStatus(event, 200)
         return result
     } catch (error) {
-        const h3e = h3eFromCatch("🏠 > IMPORT > Error saving households", error)
-        console.error(`🏠 > IMPORT > ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error("🏠 > IMPORT > Import operation failed", error)
     }
 })

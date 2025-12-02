@@ -1,58 +1,47 @@
 <script setup lang="ts">
+/**
+ * Ticker - Animated word ticker for landing page
+ *
+ * Uses Pantone color palette from design system for consistent branding
+ */
 
 interface Props {
   words: string[]
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  words:  ()  => ['marque test']
+withDefaults(defineProps<Props>(), {
+  words: () => ['marque test']
 })
 
 const animationClass = () => {
   return 'animate-marquee'
 }
 
-const seed = Math.floor(Math.random() * 10)
-const style = (index: number) => {
-  switch (index % 5) {
-    case 0 : {
-      return 'border-blue-600 bg-blue-100 text-blue-800';
-      break;
-    }
-    case 1: {
-      return 'border-red-900 bg-red-100 text-red-800';
-      break;
-    }
-    case 2: {
-      return 'border-pink-900 bg-pink-100 text-pink-800';
-      break;
-    }
-    case 3: {
-      return 'border-orange-900 bg-orange-100 text-orange-800';
-      break;
-    }
-    case 4: {
-      return 'border-amber-900 bg-amber-100 text-amber-800';
-      break;
-    }
-    default: {
-      return 'border-violet-900 bg-violet-200 text-violet-900';
-      break;
-    }
-  }
-}
+// Use Pantone colors from design system (matches landing page rainbow)
+const pantoneStyles = [
+  'border-amber-900 bg-amber-100 text-amber-900',     // Mocha Mousse (PRIMARY)
+  'border-pink-800 bg-pink-100 text-pink-800',        // Pink Lemonade
+  'border-orange-600 bg-orange-100 text-orange-800',  // Mandarin Orange
+  'border-party-800 bg-party-50 text-party-900',      // Party Punch
+  'border-ocean-600 bg-ocean-50 text-ocean-900',      // Ocean/Sky
+  'border-peach-700 bg-peach-50 text-peach-950',      // Peach Cobbler
+  'border-violet-800 bg-violet-100 text-violet-900'   // Bonbon
+]
 
+const getStyle = (index: number) => {
+  return pantoneStyles[index % pantoneStyles.length]
+}
 </script>
 
 <template>
-  <ul class="w-full flex flex-nowrap flex-row
-  items-center justify-center md:justify-start
-  text-center lowercase  text-xs md:text-base whitespace-nowrap"
-      :class="animationClass()">
-    <li v-for="(word, index)  in words" :key="index">
-        <span class="p-1 m-1 md:px-4 md:px-2 border md:border-2 rounded-lg" :class="style(index)">
-          {{ word }}
-        </span>
+  <ul
+    class="w-full flex flex-nowrap flex-row items-center justify-center md:justify-start text-center lowercase text-xs md:text-base whitespace-nowrap"
+    :class="animationClass()"
+  >
+    <li v-for="(word, index) in words" :key="index">
+      <span class="p-1 m-1 md:px-4 md:px-2 border md:border-2 rounded-lg" :class="getStyle(index)">
+        {{ word }}
+      </span>
     </li>
   </ul>
 </template>

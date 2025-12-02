@@ -1,48 +1,43 @@
-// PUT /api/admin/teams - Create team (seasonId in body)
+// PUT /api/admin/teams - Create team(s) - accepts single team or array
 
-import {defineEventHandler, readValidatedBody, setResponseStatus, createError} from "h3"
+import {defineEventHandler, readBody, setResponseStatus} from "h3"
 import {createTeam} from "~~/server/data/prismaRepository"
+import type {CookingTeamDetail, CookingTeamCreate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {z} from "zod"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-// Get the validation utilities from our composable
-const {CookingTeamWithMembersSchema} = useCookingTeamValidation()
+const {CookingTeamCreateSchema} = useCookingTeamValidation()
 
-// Create a refined schema for PUT operations that rejects any team with an ID
-const PutTeamSchema = CookingTeamWithMembersSchema.refine(
-    team => !team.id,
-    {
-        message: 'Cannot provide an ID when creating a new team. Use POST to update an existing team.',
-        path: ['id']
-    }
-)
-
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let teamData
+    let teams!: CookingTeamCreate[]
+
     try {
-        teamData = await readValidatedBody(event, PutTeamSchema.parse)
+        const body = await readBody(event)
+        teams = z.array(CookingTeamCreateSchema).parse(body)
     } catch (error) {
-        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Input validation error", error)
-        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error("👥 > TEAM > [PUT] Input validation error", error)
     }
 
     // Database operations try-catch - separate concerns
     try {
-        const savedTeam = await createTeam(d1Client, teamData)
+        console.info(`👥 > TEAM > [PUT] Creating ${teams.length} team(s)`)
 
-        // Return the saved team with 201 Created status
+        const savedTeams = await Promise.all(
+            teams.map(team => createTeam(d1Client, team))
+        )
+
+        console.info(`👥 > TEAM > [PUT] Created ${savedTeams.length} team(s)`)
         setResponseStatus(event, 201)
-        return savedTeam
+
+        return savedTeams
     } catch (error) {
-        const h3e = h3eFromCatch("👥 > TEAM > [PUT] Error creating team", error)
-        console.error(`👥 > TEAM > [PUT] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error("👥 > TEAM > [PUT] Error creating team(s)", error)
     }
 })

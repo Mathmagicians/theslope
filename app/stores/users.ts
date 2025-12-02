@@ -1,63 +1,154 @@
-import type { InternalApi } from 'nitropack'
-import {formatDistanceToNow} from "date-fns"
-import {da} from "date-fns/locale"
-
-type UsersApiResponse = InternalApi['/api/admin/users']['get']
+import type {InternalApi} from 'nitropack'
+import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
+import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 
 export const useUsersStore = defineStore("Users", () => {
-    // Create state for holding users
-    const users = ref<UsersApiResponse | null>(null)
+    // DEPENDENCIES
+    const {handleApiError} = useApiHandler()
+
     const importing = ref(false)
 
-    /** Function to load user data */
-    const loadData = async () => {
-        try {
-            // Fetch data from the server
-            const response = await useFetch("/api/admin/users", {
-                deep: true
-            })
-            users.value = response.data.value
-            console.log("🍍 > PINA > USERS > Fetched users data")
-        } catch (error: any) {
-            createError({
-                statusMessage: "Error getting users from database",
-                statusCode: 500,
-                cause: error
-            });
+    // Get SystemRole enum from validation composable
+    const {SystemRoleSchema} = useCoreValidation()
+    const SystemRole = SystemRoleSchema.enum
+
+    const {
+        data: allergyManagers,
+        status: allergyManagersStatus,
+        error: allergyManagersError,
+        refresh: refreshAllergyManagers
+    } = useFetch<UserDisplay[]>(
+        `/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`,
+        {
+            key: 'allergyManagers',
+            immediate: true,
+            default: () => []
         }
+    )
+
+    const {
+        data: users,
+        status: usersStatus,
+        error: usersError,
+        refresh: refreshUsers
+    } = useFetch<UserDisplay[]>(
+        '/api/admin/users',
+        {
+            key: 'users',
+            immediate: true,
+            default: () => []
+        }
+    )
+
+    const {
+        data: heynaboImport,
+        status: heynaboImportStatus,
+        error: heynaboImportError,
+        refresh: refreshHeynaboImport
+    } = useAsyncData<HouseholdDetail[]>(
+        '/api/admin/heynabo/import',
+        () => $fetch<HouseholdDetail[]>('/api/admin/heynabo/import'),
+        {
+            default: () => [],
+            immediate: false // only when triggered by admin, not on store creation
+        }
+    )
+
+    // My teams - cooking teams the logged-in user is assigned to in active season
+    // HTTP JSON converts Date objects to ISO strings during transport
+    // CookingTeamDetailSchema.parse() handles date coercion via z.coerce.date()
+    const {CookingTeamDetailSchema} = useCookingTeamValidation()
+    const {
+        data: myTeams,
+        status: myTeamsStatus,
+        error: myTeamsError,
+        refresh: refreshMyTeams
+    } = useFetch<CookingTeamDetail[]>(
+        '/api/team/my',
+        {
+            key: 'users-store-my-teams',
+            default: () => [],
+            immediate: true,
+            transform: (data: any[]) => {
+                try {
+                    // Parse through schema to coerce ISO date strings to Date objects
+                    // Affinity is already an object (HTTP deserialized it), no manual JSON.parse needed
+                    return data.map(team => CookingTeamDetailSchema.parse(team))
+                } catch (e) {
+                    handleApiError(e, 'parseMyTeams')
+                    throw e
+                }
+            }
+        }
+    )
+
+
+    // ========================================
+    // Computed - Public API (derived from status)
+    // ========================================
+    const isAllergyManagersLoading = computed(() => allergyManagersStatus.value === 'pending')
+    const isAllergyManagersErrored = computed(() => allergyManagersStatus.value === 'error')
+    const isImportHeynaboLoading = computed(() => heynaboImportStatus.value === 'pending')
+    const isImportHeynaboErrored = computed(() => heynaboImportStatus.value === 'error')
+    const isUsersLoading = computed(() => usersStatus.value === 'pending')
+    const isUsersErrored = computed(() => usersStatus.value === 'error')
+    const isMyTeamsLoading = computed(() => myTeamsStatus.value === 'pending')
+    const isMyTeamsErrored = computed(() => myTeamsStatus.value === 'error')
+    const isMyTeamsInitialized = computed(() =>
+        myTeamsStatus.value === 'success' && myTeams.value !== null
+    )
+
+    // ========================================
+    // Store Actions
+    // ========================================
+    const loadUsers = async () => {
+        await refreshUsers()
+        if (usersError.value) {
+            handleApiError(usersError.value, 'loadUsers')
+            throw usersError.value
+        }
+        console.info(LOG_CTX, `🪪 > USERS_STORE > loadUsers > Loaded ${users.value.length} users`)
     }
 
-    const timeAgo = (then: string) => formatDistanceToNow(new Date(then), { locale: da })
-    const formattedUsers = computed(() => users.value?.map((user) => {
-        return {
-            ...user,
-            updatedAt: timeAgo(user.updatedAt)
-        }
-    }))
 
     const importHeynaboData = async () => {
-        try {
-            importing.value = true
-            console.log("🍍 > PINA > USERS > Importing Heynabo data")
-            users.value = await $fetch("/api/admin/heynabo/import")
-        } catch (error: any) {
-            console.error("🍍 > PINA > USERS > Error importing Heynabo data:", error)
-            createError({
-                statusMessage: "Error Importing users from Heynabo",
-                statusCode: 500,
-                cause: error
-            })
-        } finally {
-            importing.value = false
+        await refreshHeynaboImport()
+        if (heynaboImportError.value) {
+            handleApiError(heynaboImportError.value, 'importHeynaboData')
+            throw heynaboImportError.value
         }
-    };
+        console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Loaded ${heynaboImport.value?.length} households from Heynabo`)
+        loadUsers()
+    }
+
+    const loadMyTeams = async () => {
+        await refreshMyTeams()
+        if (myTeamsError.value) {
+            handleApiError(myTeamsError.value, 'loadMyTeams')
+            throw myTeamsError.value
+        }
+        console.info(`🪪 > USERS_STORE > loadMyTeams > Loaded ${myTeams.value.length} teams`)
+    }
 
     return {
-        users,
-        formattedUsers,
-        loadData,
         importHeynaboData,
-        importing
+        isImportHeynaboLoading,
+        isImportHeynaboErrored,
+        users,
+        loadUsers,
+        isUsersLoading,
+        isUsersErrored,
+        usersError,
+        allergyManagers,
+        isAllergyManagersLoading,
+        isAllergyManagersErrored,
+        allergyManagersError,
+        myTeams,
+        loadMyTeams,
+        isMyTeamsLoading,
+        isMyTeamsErrored,
+        isMyTeamsInitialized,
+        myTeamsError
     };
 });
 

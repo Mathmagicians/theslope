@@ -82,20 +82,21 @@ describe('CalendarDateRangePicker', () => {
 
     // Access the component's error state through the VM
     const vm = wrapper.vm as any
-    
+
     // Find input fields
     const inputs = wrapper.findAll('input')
-    
+
     // Enter invalid date format
     await inputs[0].setValue('31-01-2025') // Wrong format (should be dd/mm/yyyy)
     await nextTick()
     await nextTick() // Double nextTick to ensure validation happens
 
-    // Check that errors exist
-    expect(vm.errors.value.size).toBeGreaterThan(0)
+    // Check that errors exist (vm.errors is the ref itself when exposed via defineExpose)
+    expect(vm.errors).toBeDefined()
+    expect(vm.errors.size).toBeGreaterThan(0)
 
     // Get all error messages from the Map
-    const allErrorMessages = Array.from(vm.errors.value.values()).flat()
+    const allErrorMessages = Array.from(vm.errors.values()).flat()
 
     // The actual error message generated is "Invalid input"
     const hasDateFormatError = allErrorMessages.some(msg =>
@@ -145,24 +146,25 @@ describe('CalendarDateRangePicker', () => {
     
     // Simulate validation by calling updateDateRange
     const result = vm.updateDateRange(invalidRange)
-    
+
     // The function should return false for invalid date ranges
     expect(result).toBe(false)
-    
+
     // Wait for the DOM to update
     await nextTick()
-    
-    // Now the errors Map should have entries
-    expect(vm.errors.value.size).toBeGreaterThan(0)
-    
-    // The error should contain the time machine message 
-    const hasTimeError = Array.from(vm.errors.value.values()).some(
-      messages => messages.some(msg => 
-        msg.includes('Tidsmaskinen') || 
+
+    // Now the errors Map should have entries (vm.errors is the ref itself when exposed via defineExpose)
+    expect(vm.errors).toBeDefined()
+    expect(vm.errors.size).toBeGreaterThan(0)
+
+    // The error should contain the time machine message
+    const hasTimeError = Array.from(vm.errors.values()).some(
+      messages => messages.some(msg =>
+        msg.includes('Tidsmaskinen') ||
         msg.includes('slutdato skal være efter startdato')
       )
     )
-    
+
     expect(hasTimeError).toBe(true)
   })
 })

@@ -1,12 +1,13 @@
 // GET /api/admin/household/inhabitants - Get all inhabitants
 
-import {defineEventHandler} from "h3"
+import {defineEventHandler, setResponseStatus} from "h3"
 import {fetchInhabitants} from "~~/server/data/prismaRepository"
+import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler<Promise<InhabitantDetail[]>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -14,10 +15,9 @@ export default defineEventHandler(async (event) => {
         console.info("👩‍🏠 > INHABITANT > [GET] Fetching all inhabitants")
         const inhabitants = await fetchInhabitants(d1Client)
         console.info(`👩‍🏠 > INHABITANT > [GET] Successfully fetched ${inhabitants.length} inhabitants`)
+        setResponseStatus(event, 200)
         return inhabitants
     } catch (error) {
-        const h3e = h3eFromCatch('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
-        console.error(`👩‍🏠 > INHABITANT > [GET] ${h3e.statusMessage}`, error)
-        throw h3e
+        return throwH3Error('👩‍🏠 > INHABITANT > [GET] Error fetching inhabitants', error)
     }
 })

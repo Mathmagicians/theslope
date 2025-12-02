@@ -1,9 +1,23 @@
+type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
+
+const isApiError = (error: unknown): error is ApiError => {
+    if (typeof error !== 'object' || error === null) return false
+    return 'statusCode' in error && 'message' in error && 'statusMessage' in error && 'data' in error
+}
+
 export const useApiHandler = () => {
-    const handleApiError = (error: any, action: string): string => {
-        console.warn(`API Error in ${action}:`, error)
+    const handleApiError = (error: ApiError | unknown, action: string): string => {
+        // Extract serializable parts (FetchError is not a POJO)
+        const err = isApiError(error) ? error : { message: String(error) }
+        console.error(`API Error in ${action}:`, {
+            message: err.message,
+            statusCode: err.statusCode,
+            statusMessage: err.statusMessage,
+            data: err.data
+        })
         let message: string
 
-        switch (error.statusCode) {
+        switch (err.statusCode) {
             case 400:
                 message = '' +
                     'Ugyldig forespørgsel. Tjek venligst dine data'
@@ -25,7 +39,7 @@ export const useApiHandler = () => {
         const toast = useToast()
         toast.add({
             icon: 'i-heroicons-exclamation-triangle',
-            title: `${error.statusCode ?? 500}: Uh, åh, fejl kan ske`,
+            title: `${err.statusCode ?? 500}: Uh, åh, fejl kan ske`,
             description: message,
             duration: 10000,
             color: 'warning'
