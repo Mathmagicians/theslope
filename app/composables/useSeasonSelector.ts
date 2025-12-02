@@ -4,7 +4,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 export interface SeasonSelectorOptions {
     seasons: ComputedRef<Season[]>
     selectedSeasonId: ComputedRef<number | null>
-    activeSeason: ComputedRef<Season | undefined>
+    activeSeason: ComputedRef<Season | null>
     onSeasonSelect: (id: number) => void
 }
 

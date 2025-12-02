@@ -77,7 +77,8 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
                 pictureUrl: allergy.inhabitant.pictureUrl,
                 birthDate: allergy.inhabitant.birthDate,
                 householdName: allergy.inhabitant.household.name,
-                inhabitantComment: allergy.inhabitantComment
+                inhabitantComment: allergy.inhabitantComment,
+                allergyUpdatedAt: allergy.updatedAt
             }))
         }))
 

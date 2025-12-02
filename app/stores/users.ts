@@ -65,7 +65,7 @@ export const useUsersStore = defineStore("Users", () => {
             key: 'users-store-my-teams',
             default: () => [],
             immediate: true,
-            transform: (data: any[]) => {
+            transform: (data: unknown[]) => {
                 try {
                     // Parse through schema to coerce ISO date strings to Date objects
                     // Affinity is already an object (HTTP deserialized it), no manual JSON.parse needed

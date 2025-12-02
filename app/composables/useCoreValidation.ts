@@ -380,30 +380,32 @@ export const useCoreValidation = () => {
         })
     }
 
-    const deserializeHouseholdDisplay = (serialized: any): z.infer<typeof HouseholdDisplaySchema> => {
+    const deserializeHouseholdDisplay = (serialized: Record<string, unknown>): z.infer<typeof HouseholdDisplaySchema> => {
+        const inhabitants = serialized.inhabitants as Record<string, unknown>[] | undefined
         const deserialized = {
             ...serialized,
-            movedInDate: new Date(serialized.movedInDate),
-            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
-            shortName: getHouseholdShortName(serialized.address),
-            inhabitants: serialized.inhabitants?.map((inhabitant: any) => ({
+            movedInDate: new Date(serialized.movedInDate as string),
+            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate as string) : null,
+            shortName: getHouseholdShortName(serialized.address as string),
+            inhabitants: inhabitants?.map((inhabitant) => ({
                 ...inhabitant,
-                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate) : null,
+                birthDate: inhabitant.birthDate ? new Date(inhabitant.birthDate as string) : null,
                 dinnerPreferences: inhabitant.dinnerPreferences
-                    ? deserializeWeekDayMap(inhabitant.dinnerPreferences)
+                    ? deserializeWeekDayMap(inhabitant.dinnerPreferences as string)
                     : null
             }))
         }
         return HouseholdDisplaySchema.parse(deserialized)
     }
 
-    const deserializeHouseholdDetail = (serialized: any): z.infer<typeof HouseholdDetailSchema> => {
+    const deserializeHouseholdDetail = (serialized: Record<string, unknown>): z.infer<typeof HouseholdDetailSchema> => {
+        const inhabitants = serialized.inhabitants as Record<string, unknown>[] | undefined
         const deserialized = {
             ...serialized,
-            movedInDate: new Date(serialized.movedInDate),
-            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate) : null,
-            shortName: getHouseholdShortName(serialized.address),
-            inhabitants: serialized.inhabitants?.map((inhabitant: any) => deserializeInhabitantDisplay(inhabitant))
+            movedInDate: new Date(serialized.movedInDate as string),
+            moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate as string) : null,
+            shortName: getHouseholdShortName(serialized.address as string),
+            inhabitants: inhabitants?.map((inhabitant) => deserializeInhabitantDisplay(inhabitant))
         }
         return HouseholdDetailSchema.parse(deserialized)
     }

@@ -39,9 +39,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         },
         {
             default: () => [],
-            transform: (data: any[]) => {
+            transform: (data: unknown[]) => {
                 try {
-                    return data.map(order => OrderDisplaySchema.parse(order))
+                    return (data as Record<string, unknown>[]).map(order => OrderDisplaySchema.parse(order))
                 } catch (e) {
                     handleApiError(e, 'parseOrders')
                     throw e

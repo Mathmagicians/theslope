@@ -4,7 +4,7 @@ import {
     type DinnerEventCreate,
     useBookingValidation
 } from "~/composables/useBookingValidation"
-import { type TeamRole } from "~/composables/useCookingTeamValidation"
+import type { TeamRole } from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 

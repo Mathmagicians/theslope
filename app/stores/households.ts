@@ -48,7 +48,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         },
         {
             default: () => null,
-            transform: (data: any) => {
+            transform: (data: unknown) => {
                 if (!data) return null
                 // Repository validates data per ADR-010, schema handles HTTP JSON deserialization (ISO strings → Date objects)
                 return HouseholdDetailSchema.parse(data)
@@ -110,7 +110,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: any) => {
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>) => {
         const {handleApiError} = useApiHandler()
 
         try {
@@ -138,7 +138,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: any) => {
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>) => {
         const {handleApiError} = useApiHandler()
 
         try {

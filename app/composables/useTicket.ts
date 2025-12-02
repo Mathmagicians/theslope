@@ -94,9 +94,17 @@ export const useTicket = () => {
         return ticketTypeConfig[ticketType]
     }
 
+    /**
+     * Format price from øre to DKK with locale formatting
+     * @param ore - Price in øre (100 øre = 1 kr)
+     * @returns Formatted price string (e.g., "1.500" for 150000 øre)
+     */
+    const formatPrice = (ore: number): string => Math.round(ore / 100).toLocaleString('da-DK')
+
     return {
         ticketTypeConfig,
         determineTicketType,
-        getTicketTypeConfig
+        getTicketTypeConfig,
+        formatPrice
     }
 }

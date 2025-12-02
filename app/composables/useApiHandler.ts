@@ -59,7 +59,7 @@ export const useApiHandler = () => {
             const result = await action()
             state.value = prevState
             return result
-        } catch (e: any) {
+        } catch (e: unknown) {
             state.value = 'error'
             throw new Error(handleApiError(e, actionName))
         }

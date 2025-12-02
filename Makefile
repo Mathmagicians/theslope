@@ -64,6 +64,42 @@ d1-seed-testdata:
 	@npx wrangler d1 execute theslope --file migrations/seed/test-data.sql --local
 	@echo "✅ Test data loaded!"
 
+# Master data: Address → PBS ID mapping (from .theslope/, gitignored)
+d1-seed-master-data-local:
+	@echo "📦 Loading master data (Address → PBS ID) to local database"
+	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --local
+	@echo "✅ Master data loaded (local)!"
+
+d1-seed-master-data-dev:
+	@echo "📦 Loading master data (Address → PBS ID) to dev database"
+	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --env dev --remote
+	@echo "✅ Master data loaded (dev)!"
+
+d1-seed-master-data-prod:
+	@echo "📦 Loading master data (Address → PBS ID) to prod database"
+	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
+	@echo "✅ Master data loaded (prod)!"
+
+# Billing: Import orders from CSV (uses active season)
+# Usage: make import-orders-local FILE=path/to/file.csv
+import-orders-local:
+	@echo "📦 Importing orders from $(FILE) to local"
+	@curl -b .cookies.txt -X POST "http://localhost:3000/api/admin/billing/import" \
+		-H "Content-Type: application/json" \
+		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+
+import-orders-dev:
+	@echo "📦 Importing orders from $(FILE) to dev"
+	@curl -b .cookies.txt -X POST "https://dev.theslope.dk/api/admin/billing/import" \
+		-H "Content-Type: application/json" \
+		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+
+import-orders-prod:
+	@echo "📦 Importing orders from $(FILE) to prod"
+	@curl -b .cookies.txt -X POST "https://theslope.dk/api/admin/billing/import" \
+		-H "Content-Type: application/json" \
+		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+
 d1-list-users-local:
 	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local
 

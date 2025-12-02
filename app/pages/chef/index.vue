@@ -36,7 +36,7 @@
 
 import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
 // Design system
 const { COLOR, ICONS } = useTheSlopeDesignSystem()
@@ -193,22 +193,20 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
   }
 }
 
-const handleMenuUpdate = async (data: { menuTitle: string, menuDescription: string }) => {
+const handleFormUpdate = async (data: ChefMenuForm) => {
   if (!selectedDinnerId.value) return
 
   try {
     await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
-    await refreshDinnerEventDetail() // Refresh page-owned data
+    await refreshDinnerEventDetail()
     toast.add({
       title: 'Menu gemt',
       description: 'Menuen er nu opdateret',
       icon: ICONS.checkCircle,
       color: COLOR.success
     })
-    // Refresh team data to show updated menu in calendar
     await usersStore.loadMyTeams()
   } catch (error) {
-    // Error already handled by store with handleApiError
     console.error('Failed to update menu:', error)
   }
 }
@@ -369,7 +367,7 @@ useHead({
           :form-mode="chefFormMode"
           :show-state-controls="true"
           :show-allergens="true"
-          @update:menu="handleMenuUpdate"
+          @update:form="handleFormUpdate"
           @update:allergens="handleAllergenUpdate"
           @advance-state="handleAdvanceState"
           @cancel-dinner="handleCancelDinner"

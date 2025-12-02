@@ -29,6 +29,9 @@ export default defineAppConfig({
         kitchen: {
             baseRatePercent: 5,  // Kitchen contribution: 5% of ticket revenue goes to common kitchen fund
             vatPercent: 25       // VAT rate: Used to calculate ex-VAT budget for grocery shopping
+        },
+        billing: {
+            cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
         }
     },
     ui: {

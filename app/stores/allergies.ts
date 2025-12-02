@@ -1,5 +1,5 @@
 import type {
-    AllergyTypeDisplay,
+    AllergyTypeDetail,
     AllergyTypeCreate,
     AllergyTypeUpdate,
     AllergyDisplay,
@@ -28,7 +28,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         status: allergyTypesStatus,
         error: allergyTypesError,
         refresh: refreshAllergyTypes
-    } = useFetch<AllergyTypeDisplay[]>('/api/admin/allergy-type', {
+    } = useFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
         key: 'allergy-store-types',
         immediate: true,
         watch: false,
@@ -43,7 +43,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         data: selectedAllergyType,
         status: selectedAllergyTypeStatus,
         error: selectedAllergyTypeError
-    } = useAsyncData<AllergyTypeDisplay | null>(
+    } = useAsyncData<AllergyTypeDetail | null>(
         selectedAllergyTypeKey,
         () => {
             if (!selectedAllergyTypeId.value) return Promise.resolve(null)

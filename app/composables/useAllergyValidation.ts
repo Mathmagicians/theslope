@@ -34,12 +34,12 @@ export const useAllergyValidation = () => {
         id: z.number().int().positive()
     })
 
-    // AllergyType with nested Inhabitants (for admin allergies  master-detail view)
-    // Shows which inhabitants have this allergy type (lightweight)
+    // AllergyType with nested Inhabitants (for admin allergies master-detail view)
     const AllergyTypeDetailSchema = AllergyTypeDisplaySchema.extend({
         inhabitants: z.array(InhabitantDisplaySchema.extend({
-            householdName: z.string(), // Display which household the inhabitant belongs to
-            inhabitantComment: z.string().optional().nullable() // Display the comment from Allergy
+            householdName: z.string(),
+            inhabitantComment: z.string().optional().nullable(),
+            allergyUpdatedAt: z.coerce.date()
         }))
     })
 

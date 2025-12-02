@@ -241,19 +241,27 @@ watch(selectedAllergenIds, (newIds) => {
   draftAllergenIds.value = [...newIds]
 }, { immediate: true })
 
-// ========== MENU EDIT STATE ==========
+// ========== FORM STATE (ChefMenuForm) ==========
+
+const toFormState = (event: DinnerEventDetail): ChefMenuForm => ({
+  menuTitle: event.menuTitle || '',
+  menuDescription: event.menuDescription || '',
+  totalCost: event.totalCost || 0
+})
+
+const formState = ref<ChefMenuForm>(toFormState(props.dinnerEvent))
+
+watch(() => props.dinnerEvent, (newEvent) => {
+  if (newEvent) formState.value = toFormState(newEvent)
+}, { immediate: true })
+
+// Computed for totalCost input (øre to kr conversion)
+const totalCostKr = computed({
+  get: () => Math.round(formState.value.totalCost / 100),
+  set: (kr: number) => { formState.value.totalCost = kr * 100 }
+})
 
 const isEditingMenu = ref(false)
-const draftMenuTitle = ref(props.dinnerEvent.menuTitle || '')
-const draftMenuDescription = ref(props.dinnerEvent.menuDescription || '')
-
-// Sync draft when event changes
-watch(() => props.dinnerEvent, (newEvent) => {
-  if (newEvent) {
-    draftMenuTitle.value = newEvent.menuTitle || ''
-    draftMenuDescription.value = newEvent.menuDescription || ''
-  }
-}, { immediate: true })
 
 // Next state logic
 const nextState = computed(() => {
@@ -277,17 +285,13 @@ const canAdvanceState = computed(() => {
 
 // ========== HANDLERS ==========
 
-const handleMenuSave = () => {
-  emit('update:menu', {
-    menuTitle: draftMenuTitle.value,
-    menuDescription: draftMenuDescription.value
-  })
+const handleFormSubmit = (event: FormSubmitEvent<ChefMenuForm>) => {
+  emit('update:form', event.data)
   isEditingMenu.value = false
 }
 
 const handleMenuCancel = () => {
-  draftMenuTitle.value = props.dinnerEvent.menuTitle || ''
-  draftMenuDescription.value = props.dinnerEvent.menuDescription || ''
+  formState.value = toFormState(props.dinnerEvent)
   isEditingMenu.value = false
 }
 
@@ -408,19 +412,28 @@ const handleCardClick = () => {
         </UButton>
       </div>
 
-      <!-- EDIT mode: Edit menu fields -->
-      <div v-if="isEditing && isEditingMenu" class="space-y-4">
-        <UFormField label="Menu titel" required>
-          <UInput v-model="draftMenuTitle" placeholder="Indtast menu titel" :size="SIZES.standard.value" data-testid="chef-menu-title-input" />
+      <!-- EDIT mode: Edit menu fields with Zod validation -->
+      <UForm
+        v-if="isEditing && isEditingMenu"
+        :schema="ChefMenuFormSchema"
+        :state="formState"
+        class="space-y-4"
+        @submit="handleFormSubmit"
+      >
+        <UFormField label="Menu titel" name="menuTitle" required>
+          <UInput v-model="formState.menuTitle" placeholder="Indtast menu titel" :size="SIZES.standard.value" name="chef-menu-title-input" />
         </UFormField>
-        <UFormField label="Beskrivelse (valgfri)">
-          <UTextarea v-model="draftMenuDescription" placeholder="Tilføj en beskrivelse af menuen" :rows="3" :size="SIZES.standard.value" data-testid="chef-menu-description-input" />
+        <UFormField label="Beskrivelse (valgfri)" name="menuDescription">
+          <UTextarea v-model="formState.menuDescription" placeholder="Tilføj en beskrivelse af menuen" :rows="3" :size="SIZES.standard.value" name="chef-menu-description-input" />
+        </UFormField>
+        <UFormField label="Indkøbsomkostninger (kr)" name="totalCost">
+          <UInput v-model="totalCostKr" type="number" min="0" placeholder="0" :size="SIZES.standard.value" name="chef-total-cost-input" />
         </UFormField>
         <div class="flex gap-2 justify-end">
           <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard.value" name="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard.value" :icon="ICONS.check" name="save-menu-edit" :disabled="!draftMenuTitle.trim()" @click="handleMenuSave">Gem</UButton>
+          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard.value" :icon="ICONS.check" name="save-menu-edit">Gem</UButton>
         </div>
-      </div>
+      </UForm>
 
       <!-- ========== ALLERGEN SECTION ========== -->
       <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">

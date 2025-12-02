@@ -111,15 +111,53 @@ export const useOrder = () => {
     return ticketType !== TicketType.BABY
   }
 
+  // ========== BUDGET CALCULATIONS ==========
+
+  /**
+   * Kitchen config defaults (can be overridden via app.config.ts)
+   */
+  const DEFAULT_KITCHEN_BASE_RATE_PERCENT = 5
+  const DEFAULT_VAT_PERCENT = 25
+
+  /**
+   * Calculate budget breakdown from orders
+   * Returns all financial figures for kitchen/chef planning
+   */
+  const calculateBudget = (
+    orders: OrderDisplay[],
+    kitchenBaseRatePercent = DEFAULT_KITCHEN_BASE_RATE_PERCENT,
+    vatPercent = DEFAULT_VAT_PERCENT
+  ) => {
+    const activeOrders = orders.filter(isActiveOrder)
+    const ticketCount = activeOrders.length
+    const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
+    const availableBudget = totalRevenue - kitchenContribution
+    const availableBudgetExVat = Math.round(availableBudget / (1 + vatPercent / 100))
+
+    return {
+      ticketCount,
+      totalRevenue,
+      kitchenContribution,
+      availableBudget,        // inkl. moms
+      availableBudgetExVat,   // ex moms (for grocery shopping)
+      kitchenBaseRatePercent,
+      vatPercent
+    }
+  }
+
   return {
     // State filtering
     getActiveOrders,
     getReleasedOrders,
 
     // Grouping and calculations
-    groupByTicketType, // Dynamic grouping, no hardcoded types
+    groupByTicketType,
     calculateTotalPortionsFromPrices,
     getPortionsForTicketPrice,
-    requiresChair
+    requiresChair,
+
+    // Budget
+    calculateBudget
   }
 }

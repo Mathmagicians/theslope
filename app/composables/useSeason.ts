@@ -1,4 +1,5 @@
 import type {DateRange} from '~/types/dateTypes'
+import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
@@ -193,7 +194,7 @@ export const useSeason = () => {
      * @param nextDinner - Next dinner event (or null if none)
      * @returns True if the day matches the next dinner date
      */
-    const isNextDinnerDate = (day: any, nextDinner: { date: Date } | null): boolean => {
+    const isNextDinnerDate = (day: DateValue, nextDinner: { date: Date } | null): boolean => {
         if (!nextDinner) return false
         const dayAsDate = toDate(day)
         const nextDinnerDate = new Date(nextDinner.date)
@@ -294,6 +295,13 @@ export const useSeason = () => {
         return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
     }
 
+    /**
+     * Get the billing cutoff day from app configuration
+     * This is the day of month (1-31) when billing periods close for order imports
+     * @returns Day of month for billing cutoff
+     */
+    const getBillingCutoffDay = (): number => theslope.billing.cutoffDay
+
     return {
         // Validation schemas
         SeasonStatusSchema,
@@ -327,6 +335,7 @@ export const useSeason = () => {
         isOnTeam,
         isChefFor,
         getDeadlineUrgency,
+        getBillingCutoffDay,
 
         // Active season management - pure functions
         isPast,

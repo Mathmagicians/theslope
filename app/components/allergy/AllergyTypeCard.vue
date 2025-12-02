@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
 // PROPS
 const props = defineProps<{
-  allergyType: AllergyTypeDisplay
+  allergyType: AllergyTypeDetail
   mode?: 'view' | 'edit'
   compact?: boolean
 }>()
@@ -49,7 +49,9 @@ const handleCancel = () => {
 
 // COMPUTED
 const inhabitantCount = computed(() => props.allergyType.inhabitants?.length || 0)
-const showNewBadge = computed(() => isNew(props.allergyType.createdAt || ''))
+const hasRecentAllergies = computed(() =>
+    props.allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
+)
 
 // Funny empty state messages (rotates based on allergy ID for consistency)
 const emptyStateMessages = [
@@ -134,7 +136,7 @@ const emptyStateMessage = computed(() => {
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2">
         <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
-        <span v-if="showNewBadge" class="text-xs">🆕</span>
+        <span v-if="hasRecentAllergies" class="text-xs">🆕</span>
       </div>
       <p class="text-xs text-gray-600 dark:text-gray-400">
         {{ inhabitantCount }} beboer{{ inhabitantCount !== 1 ? 'e' : '' }}
@@ -160,7 +162,7 @@ const emptyStateMessage = computed(() => {
       <div class="flex-1">
         <div class="flex items-center gap-2">
           <h3 class="text-lg font-semibold">{{ allergyType.name }}</h3>
-          <span v-if="showNewBadge" class="text-sm">🆕</span>
+          <span v-if="hasRecentAllergies" class="text-sm">🆕</span>
         </div>
         <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
           {{ allergyType.description }}

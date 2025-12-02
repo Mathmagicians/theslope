@@ -41,7 +41,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 key: 'plan-store-seasons',
                 watch: false,
                 default: () => [],
-                transform: (data: any[]) => {
+                transform: (data: unknown[]) => {
                     // Repository validates data per ADR-010, so we can trust it's valid
                     return data.map(season => SeasonSchema.parse(season))
                 }
@@ -63,7 +63,7 @@ export const usePlanStore = defineStore("Plan", () => {
             },
             {
                 default: () => null,
-                transform: (data: any) => data ? SeasonSchema.parse(data) : null
+                transform: (data: unknown) => data ? SeasonSchema.parse(data) : null
             }
         )
 
@@ -234,7 +234,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 const result = await $fetch<{
                     seasonId: number,
                     eventCount: number,
-                    events: any[]
+                    events: unknown[]
                 }>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
                     method: 'POST'
                 })
