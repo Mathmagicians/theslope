@@ -84,8 +84,9 @@ const emit = defineEmits<{
 const planStore = usePlanStore()
 
 // Each component instance fetches its own team detail (ADR-007)
+// Key must be computed to react to teamId changes (cache key drives refetch)
 const {data: team, status, error} = useAsyncData(
-  `cooking-team-detail-${props.teamId}`,
+  computed(() => `cooking-team-detail-${props.teamId}`),
   () => planStore.fetchTeamDetail(props.teamId),
   {
     default: () => null,

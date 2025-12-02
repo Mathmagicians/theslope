@@ -2,6 +2,9 @@ import {defineEventHandler, readValidatedBody, createError} from "h3"
 import {loginUserIntoHeynabo} from "~~/server/integration/heynabo/heynaboClient"
 import {fetchUser} from "~~/server/data/prismaRepository"
 import {useCoreValidation} from '~/composables/useCoreValidation'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+
+const {throwH3Error} = eventHandlerHelper
 
 export default defineEventHandler(async (event) => {
     const {cloudflare} = event.context
@@ -15,12 +18,7 @@ export default defineEventHandler(async (event) => {
     try {
         loginData = await readValidatedBody(event, LoginSchema.parse)
     } catch (error) {
-        console.error("🔐 > LOGIN > Input validation error:", error)
-        throw createError({
-            statusCode: 400,
-            message: 'Invalid or missing credentials',
-            cause: error
-        })
+        return throwH3Error('🔐 > LOGIN > Invalid or missing credentials', error, 400)
     }
 
     // Heynabo authentication
@@ -31,12 +29,7 @@ export default defineEventHandler(async (event) => {
         heynaboLoggedIn = await loginUserIntoHeynabo(email, password)
         console.log("🔐 > LOGIN > Logged into heynabo with user id: ", heynaboLoggedIn.id)
     } catch (error) {
-        console.error("🔐 > LOGIN > Heynabo authentication error:", error)
-        throw createError({
-            statusCode: 404,
-            message: 'Invalid Heynabo credentials - cant login with heynabo',
-            cause: error
-        })
+        return throwH3Error('🔐 > LOGIN > Invalid Heynabo credentials', error, 404)
     }
 
     // Database operations
@@ -57,11 +50,6 @@ export default defineEventHandler(async (event) => {
 
         return validatedUser
     } catch (error) {
-        console.error("🔐 > LOGIN > error setting userSession:", error)
-        throw createError({
-            statusCode: 500,
-            message: '🔐 > LOGIN > Server Error',
-            cause: error
-        })
+        return throwH3Error('🔐 > LOGIN > Server error', error)
     }
 })

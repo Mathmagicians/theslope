@@ -65,7 +65,7 @@ const {
   getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {BG, TEXT, BORDER, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, TYPOGRAPHY, SIZES, BG, TEXT, BORDER} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
@@ -111,16 +111,18 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-const hasPastDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'past-dinners')
+// Day type detection - returns 'next' | 'future' | 'past' | null
+type DayType = 'next' | 'future' | 'past'
+const getDayType = (eventLists: DayEventList[]): DayType | null => {
+  if (eventLists.some(list => list.listId === 'next-dinner')) return 'next'
+  if (eventLists.some(list => list.listId === 'future-dinners')) return 'future'
+  if (eventLists.some(list => list.listId === 'past-dinners')) return 'past'
+  return null
 }
 
-const hasFutureDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'future-dinners')
-}
-
-const hasNextDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'next-dinner')
+// Get day color class (past is shared, next/future are palette-specific)
+const getDayColorClass = (type: DayType): string => {
+  return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
 const currentTime = ref(new Date())
@@ -149,28 +151,27 @@ const countdown = computed(() => {
   return calculateCountdown(nextDinnerDateRange.value.start, currentTime.value)
 })
 
+// Legend items using design system classes
 const legendItems = computed(() => [
   {
     label: 'Næste fællesspisning',
     type: 'circle' as const,
-    circleClass: `w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold ${BG.peach[400]}`
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}`
   },
   {
     label: 'Valgt dato',
     type: 'circle' as const,
-    circleClass: `w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold ${BG.peach[400]} ring-2 ring-peach-700`
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}`
   },
   {
     label: 'Planlagt fællesspisning',
     type: 'circle' as const,
-    circleClass: props.useRings
-      ? `w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium ${BORDER.peach[400]} ${TEXT.peach[600]}`
-      : `w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}`
   },
   {
     label: 'Tidligere fællesspisning',
     type: 'circle' as const,
-    circleClass: `w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
   },
   {
     label: 'Ferie',
@@ -178,15 +179,10 @@ const legendItems = computed(() => [
   }
 ])
 
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
 const accordionItems = [{
   label: 'Kalender',
   slot: 'calendar-content'
 }]
-
-const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
 
 const emit = defineEmits<{
   'date-selected': [date: Date]
@@ -249,54 +245,29 @@ v-if="isDuringDinner"
     </div>
 
     <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
-    <UAccordion :items="accordionItems" :default-value="defaultValue" class="flex-1">
+    <UAccordion :items="accordionItems" :default-value="SIZES.calendarAccordionDefault.value" type="single" collapsible class="flex-1">
       <template #calendar-content>
         <!-- Calendar Display -->
         <div class="flex-1">
-          <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths">
+          <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
               <!-- Holiday takes precedence -->
               <UChip v-if="isHoliday(day)" show size="md" color="success">
                 {{ day.day }}
               </UChip>
 
-              <!-- Next dinner event (prominent - full color) -->
+              <!-- Dinner event (next/future/past) -->
               <div
-v-else-if="hasNextDinnerEvent(eventLists)"
-                   :data-testid="`calendar-dinner-date-${day.day}`"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold cursor-pointer hover:opacity-90"
-                   :class="[BG.peach[400], isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
-                   @click="handleDateClick(day)">
-                {{ day.day }}
-              </div>
-
-              <!-- Future dinner event (rings - subtle) -->
-              <div
-v-else-if="hasFutureDinnerEvent(eventLists) && useRings"
-                   :data-testid="`calendar-dinner-date-${day.day}`"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 cursor-pointer hover:opacity-90"
-                   :class="[`${BORDER.peach[400]} ${TEXT.peach[600]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
-                   @click="handleDateClick(day)">
-                {{ day.day }}
-              </div>
-
-              <!-- Future dinner event (lighter fill - subtle) -->
-              <div
-v-else-if="hasFutureDinnerEvent(eventLists)"
-                   :data-testid="`calendar-dinner-date-${day.day}`"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
-                   :class="[`${BG.peach[200]} ${TEXT.peach[800]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
-                   @click="handleDateClick(day)">
-                {{ day.day }}
-              </div>
-
-              <!-- Past dinner event (mocha - discrete) -->
-              <div
-v-else-if="hasPastDinnerEvent(eventLists)"
-                   :data-testid="`calendar-dinner-date-${day.day}`"
-                   class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
-                   :class="[`${BG.mocha[100]} ${TEXT.mocha[900]}`, isSelected(day) ? 'ring-2 md:ring-4 ring-peach-700' : '']"
-                   @click="handleDateClick(day)">
+                v-else-if="getDayType(eventLists)"
+                :data-testid="`calendar-dinner-date-${day.day}`"
+                :class="[
+                  SIZES.calendarCircle.value,
+                  CALENDAR.day.shape,
+                  getDayColorClass(getDayType(eventLists)!),
+                  isSelected(day) ? DINNER_CALENDAR.selection : ''
+                ]"
+                @click="handleDateClick(day)"
+              >
                 {{ day.day }}
               </div>
 

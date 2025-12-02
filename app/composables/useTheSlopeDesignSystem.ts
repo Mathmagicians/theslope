@@ -1,4 +1,5 @@
 import type {WeekDay} from '~/types/dateTypes'
+import heynaboLogo from '~/assets/heynabo.jpeg'
 
 /**
  * Color System - TheSlope Design System
@@ -367,6 +368,11 @@ export const COMPONENTS = {
     clickableCell: 'cursor-pointer'
   },
 
+  // Calendar UI configuration (UCalendar)
+  calendar: {
+    cellTrigger: 'data-[outside-view]:hidden'
+  },
+
   // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
   // Curated defaults for maximum readability on warm hero backgrounds
   heroPanel: {
@@ -447,7 +453,8 @@ export const ICONS = {
   checkCircle: 'i-heroicons-check-circle',
   megaphone: 'i-heroicons-megaphone',
   exclamationCircle: 'i-heroicons-exclamation-circle',
-  xMark: 'i-heroicons-x-mark'
+  xMark: 'i-heroicons-x-mark',
+  arrowRight: 'i-heroicons-arrow-right'
 } as const
 
 /**
@@ -462,7 +469,7 @@ export const ICONS = {
  * ```
  */
 export const IMG = {
-  heynabo: '~/assets/heynabo.jpeg',
+  heynabo: heynaboLogo,
   /**
    * Default dinner picture for heroes without custom menu pictures
    * Located in public/ folder (ADR-013), accessible from root URL
@@ -503,6 +510,18 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
     value: computed(() => isMd.value ? 'xl' : 'lg'),
     iconSize: computed(() => isMd.value ? '24' : '20')
   },
+
+  // Calendar: xl on desktop, sm on mobile (UCalendar sizing)
+  calendar: computed(() => isMd.value ? 'xl' : 'sm'),
+
+  // Calendar months: 3 on desktop, 1 on mobile
+  calendarMonths: computed(() => isMd.value ? 3 : 1),
+
+  // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
+  calendarCircle: computed(() => isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'),
+
+  // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
+  calendarAccordionDefault: computed(() => isMd.value ? '0' : undefined),
 
   // Empty state avatar: 2xl on mobile, 3xl on desktop
   emptyStateAvatar: computed(() => isMd.value ? '3xl' : '2xl'),
@@ -669,47 +688,67 @@ export const DINNER_STATE_BADGES = {
 } as const
 
 /**
- * CHEF_CALENDAR - Chef cooking schedule color system
+ * CALENDAR - Shared calendar structure and styling
  *
- * Professional ocean palette (vs warm peach for household booking).
- * Temporal states (next/future/past) + deadline urgency overlays.
- *
- * Visual hierarchy:
- * - Ocean blue = Professional chef context
- * - Deadline rings = Urgency (red critical, amber warning)
- * - Mocha = Completed (same as household for consistency)
+ * Contains shared shapes, typography, and behaviors.
+ * Use with palette-specific constants (CHEF_CALENDAR, DINNER_CALENDAR).
  */
-export const CHEF_CALENDAR = {
-  // Base temporal states
-  base: {
-    next: BG.ocean[400],      // Bold ocean - next cooking
-    future: BG.ocean[200],    // Light ocean - future cookings
-    past: BG.mocha[100]       // Mocha (consistent with household)
-  },
-  text: {
-    next: TEXT.ocean[400],
-    future: TEXT.ocean[800],
-    past: TEXT.mocha[900]
+export const CALENDAR = {
+  day: {
+    shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
+    past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
   },
   countdown: {
-    container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2 border-ocean-400',
+    container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
     title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
-    date: 'text-sm font-medium uppercase text-ocean-400',
-    number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-ocean-400',
+    date: 'text-sm font-medium uppercase',
+    number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight',
     numberPrefix: 'opacity-75 text-amber-50',
-    timeLabel: 'text-xs md:text-sm text-ocean-50',
-    timeValue: 'text-xl md:text-2xl font-medium text-ocean-300',
-    dot: 'w-3 h-3 rounded-full animate-pulse bg-ocean-400'
+    timeLabel: 'text-xs md:text-sm',
+    timeValue: 'text-xl md:text-2xl font-medium',
+    dot: 'w-3 h-3 rounded-full animate-pulse'
   },
-  // Deadline urgency rings (overlay on base)
   deadline: {
-    critical: 'ring-2 ring-red-500',      // < 24h - act NOW!
-    warning: 'ring-2 ring-amber-500',     // 24-72h - prepare soon
-    onTrack: ''                            // > 72h - all good (no ring)
-  },
-  selection: {
-    ring: `ring-2 md:ring-4 ring-ocean-700`  // Selected dinner
+    critical: 'ring-2 ring-red-500',
+    warning: 'ring-2 ring-amber-500',
+    onTrack: ''
   }
+} as const
+
+/**
+ * CHEF_CALENDAR - Ocean palette accent colors
+ */
+export const CHEF_CALENDAR = {
+  day: {
+    next: `text-white font-bold ${BG.ocean[400]}`,
+    future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
+  },
+  countdown: {
+    border: 'border-ocean-400',
+    accent: TEXT.ocean[400],
+    accentLight: TEXT.ocean[50],
+    accentMedium: TEXT.ocean[300],
+    dot: BG.ocean[400]
+  },
+  selection: 'ring-2 md:ring-4 ring-ocean-700'
+} as const
+
+/**
+ * DINNER_CALENDAR - Peach palette accent colors
+ */
+export const DINNER_CALENDAR = {
+  day: {
+    next: `text-white font-bold ${BG.peach[400]}`,
+    future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
+  },
+  countdown: {
+    border: BORDER.peach[400],
+    accent: TEXT.peach[400],
+    accentLight: TEXT.peach[50],
+    accentMedium: TEXT.peach[300],
+    dot: BG.peach[400]
+  },
+  selection: 'ring-2 md:ring-4 ring-peach-700'
 } as const
 
 /**
@@ -745,7 +784,9 @@ export const useTheSlopeDesignSystem = () => {
     COLOR,
     TICKET_TYPE_COLORS,
     DINNER_STATE_BADGES,
+    CALENDAR,
     CHEF_CALENDAR,
+    DINNER_CALENDAR,
     DEADLINE_BADGES,
     ICONS,
     IMG,

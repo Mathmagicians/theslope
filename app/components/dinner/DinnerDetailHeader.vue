@@ -53,10 +53,11 @@ const stateBadge = computed(() => {
     <!-- Left: State badge -->
     <div class="flex items-center gap-2">
       <UBadge
-        :color="stateBadge.color"
+        color="mocha"
         :icon="stateBadge.icon"
-        variant="subtle"
-        :size="SIZES.small.value"
+        variant="outline"
+        :size="SIZES.standard.value"
+        :class="TYPOGRAPHY.bodyTextMedium"
       >
         {{ stateBadge.label }}
       </UBadge>
@@ -64,7 +65,7 @@ const stateBadge = computed(() => {
 
     <!-- Center: Date -->
     <div class="flex items-center justify-center gap-2">
-      <UIcon :name="ICONS.calendar" class="w-4 h-4" />
+      <UIcon :name="ICONS.calendar" :size="SIZES.standard.iconSize.value" />
       <span :class="TYPOGRAPHY.bodyTextMedium" class="capitalize">
         {{ formattedDate }}
       </span>
@@ -72,17 +73,20 @@ const stateBadge = computed(() => {
 
     <!-- Right: Heynabo link -->
     <div class="flex items-center justify-end">
-      <UTooltip v-if="heynaboEventUrl" text="Se på Heynabo">
-        <UButton
-          :to="heynaboEventUrl"
-          target="_blank"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          name="heynabo-event-link"
-          :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
-        />
-      </UTooltip>
+      <UButton
+        v-if="heynaboEventUrl"
+        :to="heynaboEventUrl"
+        target="_blank"
+        color="neutral"
+        variant="ghost"
+        :size="SIZES.standard.value"
+        :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
+        :trailing-icon="ICONS.arrowRight"
+        class="!text-[inherit]"
+        name="heynabo-event-link"
+      >
+        Se på Heynabo
+      </UButton>
     </div>
   </div>
 </template>

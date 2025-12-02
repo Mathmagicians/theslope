@@ -10,7 +10,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import dotenv from 'dotenv'
 
 const LOG = '🔑 > HEYNABO > '
-const {h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {
     LoggedInHeynaboUserSchema,
     HeynaboMemberSchema,
@@ -44,19 +44,15 @@ async function getTokenFromHeynaboApi(username: string | undefined, password: st
             headers: {ContentType: 'application/json'}
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch(`Error fetching token from Heynabo API for username ${maskPassword(username)}: `, error)
-        console.error(LOG, h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}TOKEN > Error fetching token for ${maskPassword(username)}`, error)
     }
 
     try {
         const validatedHeynaboUser = LoggedInHeynaboUserSchema.parse(heynaboUser)
         console.info(LOG, "TOKEN > Got Heynabo security token: ", maskPassword(validatedHeynaboUser.token))
         return validatedHeynaboUser
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch(`Error no Heynabo token for username ${maskPassword(username)}: `, e)
-        console.error(LOG, "TOKEN > ", h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}TOKEN > No token for ${maskPassword(username)}`, error)
     }
 }
 
@@ -86,18 +82,14 @@ async function loadLocations(from: string, token: string): Promise<HeynaboLocati
             }
         }) || []
     } catch (error: unknown) {
-        const h3e = h3eFromCatch('Error loading locations from HeyNabo API: ', error)
-        console.error(LOG, "LOCATIONS >", h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}LOCATIONS > Error loading locations`, error)
     }
 
     try {
         console.info(LOG, `LOCATIONS > Loaded ${list?.length} locations from HeyNabo`)
         return z.array(HeynaboLocationSchema).parse(list)
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch('Error validating locations from HeyNabo API: ', e)
-        console.error(LOG, "LOCATIONS >", h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}LOCATIONS > Error validating locations`, error)
     }
 }
 
@@ -119,19 +111,15 @@ async function loadMembers(from: string, token: string): Promise<HeynaboMember[]
             }
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch('Error loading members from HeyNabo API: ', error)
-        console.error(LOG, "MEMBERS >", h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}MEMBERS > Error loading members`, error)
     }
 
     try {
         const {list} = response
         console.info(LOG, `MEMBERS > Loaded ${list?.length} members from HeyNabo`)
         return z.array(HeynaboMemberSchema).parse(list)
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch('Error validating members from HeyNabo API: ', e)
-        console.error(LOG, "MEMBERS > error validating members ", h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}MEMBERS > Error validating members`, error)
     }
 }
 
@@ -176,17 +164,13 @@ export async function createHeynaboEvent(token: string, payload: HeynaboEventCre
             }
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch('Error creating event in Heynabo: ', error)
-        console.error(LOG, 'EVENT CREATE >', h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}EVENT CREATE > Error creating event`, error)
     }
 
     try {
         return HeynaboEventResponseSchema.parse(response)
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch('Error validating created event from Heynabo: ', e)
-        console.error(LOG, 'EVENT CREATE >', h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}EVENT CREATE > Error validating response`, error)
     }
 }
 
@@ -212,17 +196,13 @@ export async function updateHeynaboEvent(token: string, eventId: number, payload
             }
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch(`Error updating event ${eventId} in Heynabo: `, error)
-        console.error(LOG, 'EVENT UPDATE >', h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}EVENT UPDATE > Error updating event ${eventId}`, error)
     }
 
     try {
         return HeynaboEventResponseSchema.parse(response)
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch('Error validating updated event from Heynabo: ', e)
-        console.error(LOG, 'EVENT UPDATE >', h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}EVENT UPDATE > Error validating response`, error)
     }
 }
 
@@ -251,7 +231,7 @@ const DEFAULT_DINNER_PICTURES = [
  */
 export function getRandomDefaultDinnerPicture(): string {
     const index = Math.floor(Math.random() * DEFAULT_DINNER_PICTURES.length)
-    return DEFAULT_DINNER_PICTURES[index]
+    return DEFAULT_DINNER_PICTURES[index]!
 }
 
 /**
@@ -283,9 +263,7 @@ export async function uploadHeynaboEventImage(
             }
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch(`Error uploading image to event ${eventId} in Heynabo: `, error)
-        console.error(LOG, 'EVENT IMAGE >', h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}EVENT IMAGE > Error uploading image to event ${eventId}`, error)
     }
 
     if (!response.list?.[0]) {
@@ -316,17 +294,13 @@ export async function fetchHeynaboEvent(token: string, eventId: number): Promise
             }
         })
     } catch (error: unknown) {
-        const h3e = h3eFromCatch(`Error fetching event ${eventId} from Heynabo: `, error)
-        console.error(LOG, 'EVENT FETCH >', h3e.statusMessage, error)
-        throw h3e
+        return throwH3Error(`${LOG}EVENT FETCH > Error fetching event ${eventId}`, error)
     }
 
     try {
         return HeynaboEventResponseSchema.parse(response)
-    } catch (e: unknown) {
-        const h3e = h3eFromCatch('Error validating fetched event from Heynabo: ', e)
-        console.error(LOG, 'EVENT FETCH >', h3e.statusMessage, e)
-        throw h3e
+    } catch (error: unknown) {
+        return throwH3Error(`${LOG}EVENT FETCH > Error validating response`, error)
     }
 }
 

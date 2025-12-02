@@ -84,7 +84,11 @@ const emit = defineEmits<{
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {getDinnerTimeRange, getDeadlineUrgency} = useSeason()
-const {CHEF_CALENDAR, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES} = useTheSlopeDesignSystem()
+
+// Focus date for calendar navigation (from selected dinner)
+const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
+const focusDate = computed(() => selectedDinner.value ? new Date(selectedDinner.value.date) : null)
 
 // View state with horizontal tabs (default: calendar view)
 const viewTabs = [
@@ -139,17 +143,18 @@ const allEventLists = computed(() =>
   )
 )
 
-// Event list helpers
-const hasPastDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'past-dinners')
+// Day type detection - returns 'next' | 'future' | 'past' | null
+type DayType = 'next' | 'future' | 'past'
+const getDayType = (eventLists: DayEventList[]): DayType | null => {
+  if (eventLists.some(list => list.listId === 'next-dinner')) return 'next'
+  if (eventLists.some(list => list.listId === 'future-dinners')) return 'future'
+  if (eventLists.some(list => list.listId === 'past-dinners')) return 'past'
+  return null
 }
 
-const hasFutureDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'future-dinners')
-}
-
-const hasNextDinnerEvent = (eventLists: DayEventList[]) => {
-  return eventLists.some(list => list.listId === 'next-dinner')
+// Get day color class (past is shared, next/future are palette-specific)
+const getDayColorClass = (type: DayType): string => {
+  return type === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[type]
 }
 
 // Selection support
@@ -179,11 +184,11 @@ const sortedDinnerEvents = computed(() => {
   )
 })
 
-// Deadline urgency ring logic
+// Deadline urgency ring logic (shared across calendars)
 const URGENCY_TO_RING_CLASS = {
-  0: '', // On track - no ring
-  1: CHEF_CALENDAR.deadline.warning, // Warning - yellow ring
-  2: CHEF_CALENDAR.deadline.critical // Critical - red ring
+  0: CALENDAR.deadline.onTrack,
+  1: CALENDAR.deadline.warning,
+  2: CALENDAR.deadline.critical
 } as const
 
 const getDeadlineRingClass = (day: DateValue): string => {
@@ -194,78 +199,70 @@ const getDeadlineRingClass = (day: DateValue): string => {
   return URGENCY_TO_RING_CLASS[urgency]
 }
 
-// Legend items with responsive sizing
-const legendItems = computed(() => {
-  const baseSize = getIsMd.value ? 'w-8 h-8' : 'w-6 h-6'
-  const textSize = getIsMd.value ? 'text-sm' : 'text-xs'
+// Legend items using design system classes
+const legendItems = computed(() => [
+  {
+    label: 'Næste madlavning',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
+  },
+  {
+    label: 'Valgt dato',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
+  },
+  {
+    label: 'Planlagt madlavning',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
+  },
+  {
+    label: 'Tidligere madlavning',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
+  },
+  {
+    label: 'Deadline kritisk (<24t)',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
+  },
+  {
+    label: 'Deadline snart (24-72t)',
+    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+  }
+])
 
-  return [
-    {
-      label: 'Næste madlavning',
-      type: 'circle' as const,
-      circleClass: `${baseSize} rounded-full flex items-center justify-center ${textSize} text-white font-bold ${CHEF_CALENDAR.base.next}`
-    },
-    {
-      label: 'Valgt dato',
-      type: 'circle' as const,
-      circleClass: `${baseSize} rounded-full flex items-center justify-center ${textSize} text-white font-bold ${CHEF_CALENDAR.base.next} ${CHEF_CALENDAR.selection.ring}`
-    },
-    {
-      label: 'Planlagt madlavning',
-      type: 'circle' as const,
-      circleClass: `${baseSize} rounded-full flex items-center justify-center ${textSize} font-medium ${CHEF_CALENDAR.base.future} ${CHEF_CALENDAR.text.future}`
-    },
-    {
-      label: 'Tidligere madlavning',
-      type: 'circle' as const,
-      circleClass: `${baseSize} rounded-full flex items-center justify-center ${textSize} font-medium ${CHEF_CALENDAR.base.past} ${CHEF_CALENDAR.text.past}`
-    }
-  ]
-})
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-const accordionItems = [{
-  label: 'Kalender',
-  slot: 'calendar-content'
-}]
-
-const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
+const accordionItems = [{ label: 'Kalender', slot: 'calendar-content' }]
+const accordionDefault = computed(() => SIZES.calendarMonths.value > 1 ? '0' : undefined)
 </script>
 
 <template>
   <div class="flex flex-col h-full">
     <!-- Countdown Timer (Train Station Style) -->
-    <div :class="CHEF_CALENDAR.countdown.container">
+    <div :class="[CALENDAR.countdown.container, CHEF_CALENDAR.countdown.border]">
       <!-- Active cooking event state -->
       <div v-if="nextDinner && countdown" class="text-center space-y-2">
         <!-- Title -->
-        <div :class="CHEF_CALENDAR.countdown.title">
+        <div :class="CALENDAR.countdown.title">
           Næste Madlavning
         </div>
 
         <!-- Weekday + Date (Danish 3-letter) -->
-        <div :class="CHEF_CALENDAR.countdown.date">
+        <div :class="[CALENDAR.countdown.date, CHEF_CALENDAR.countdown.accent]">
           {{ formatDanishWeekdayDate(new Date(nextDinner.date)) }}
         </div>
 
         <!-- Countdown (Large - Most Important) -->
-        <div :class="CHEF_CALENDAR.countdown.number">
-          <span :class="CHEF_CALENDAR.countdown.numberPrefix">OM</span>
+        <div :class="[CALENDAR.countdown.number, CHEF_CALENDAR.countdown.accent]">
+          <span :class="CALENDAR.countdown.numberPrefix">OM</span>
           <span class="ml-2">{{ countdown.formatted }}</span>
         </div>
 
         <!-- Cooking Time (Smaller) with blinking dot during event -->
         <div class="flex items-baseline justify-center gap-2">
-          <span :class="CHEF_CALENDAR.countdown.timeLabel">madlavning kl </span>
-          <span :class="CHEF_CALENDAR.countdown.timeValue">
+          <span :class="[CALENDAR.countdown.timeLabel, CHEF_CALENDAR.countdown.accentLight]">madlavning kl </span>
+          <span :class="[CALENDAR.countdown.timeValue, CHEF_CALENDAR.countdown.accentMedium]">
             {{ dinnerStartHour.toString().padStart(2, '0') }}:00
           </span>
           <span class="text-xs md:text-sm invisible" aria-hidden="true">madlavning kl </span>
           <span
             v-if="isDuringEvent"
-            :class="CHEF_CALENDAR.countdown.dot"
+            :class="[CALENDAR.countdown.dot, CHEF_CALENDAR.countdown.dot]"
             aria-label="Cooking is happening now"
           />
         </div>
@@ -291,56 +288,35 @@ const defaultValue = computed(() => getIsMd.value ? '0' : undefined)
 
     <!-- Agenda View -->
     <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-      <ChefMenuCard
+      <ChefDinnerCard
         v-for="dinner in sortedDinnerEvents"
         :key="dinner.id"
         :dinner-event="dinner"
-        mode="compact"
         :selected="dinner.id === selectedDinnerId"
         @select="emit('select', $event)"
       />
     </div>
 
     <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
-    <UAccordion v-else :items="accordionItems" :default-value="defaultValue" class="flex-1">
+    <UAccordion v-else :items="accordionItems" :default-value="accordionDefault" class="flex-1">
       <template #calendar-content>
         <div class="flex-1">
-          <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1">
+          <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
-              <!-- Next cooking event (prominent - full color) -->
               <div
-                v-if="hasNextDinnerEvent(eventLists)"
+                v-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
-                class="w-8 h-8 rounded-full flex items-center justify-center text-sm text-white font-bold cursor-pointer hover:opacity-90"
-                :class="[CHEF_CALENDAR.base.next, getDeadlineRingClass(day), isSelected(day) ? CHEF_CALENDAR.selection.ring : '']"
+                :class="[
+                  SIZES.calendarCircle.value,
+                  CALENDAR.day.shape,
+                  getDayColorClass(getDayType(eventLists)!),
+                  getDayType(eventLists) !== 'past' ? getDeadlineRingClass(day) : '',
+                  isSelected(day) ? CHEF_CALENDAR.selection : ''
+                ]"
                 @click="handleDateClick(day)"
               >
                 {{ day.day }}
               </div>
-
-              <!-- Future cooking event (lighter fill - subtle) -->
-              <div
-                v-else-if="hasFutureDinnerEvent(eventLists)"
-                :data-testid="`calendar-dinner-date-${day.day}`"
-                class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
-                :class="[CHEF_CALENDAR.base.future, CHEF_CALENDAR.text.future, getDeadlineRingClass(day), isSelected(day) ? CHEF_CALENDAR.selection.ring : '']"
-                @click="handleDateClick(day)"
-              >
-                {{ day.day }}
-              </div>
-
-              <!-- Past cooking event (mocha - discrete) -->
-              <div
-                v-else-if="hasPastDinnerEvent(eventLists)"
-                :data-testid="`calendar-dinner-date-${day.day}`"
-                class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer hover:opacity-90"
-                :class="[CHEF_CALENDAR.base.past, CHEF_CALENDAR.text.past, isSelected(day) ? CHEF_CALENDAR.selection.ring : '']"
-                @click="handleDateClick(day)"
-              >
-                {{ day.day }}
-              </div>
-
-              <!-- Regular day -->
               <span v-else class="text-sm">{{ day.day }}</span>
             </template>
 

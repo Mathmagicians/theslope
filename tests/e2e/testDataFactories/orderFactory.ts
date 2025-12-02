@@ -279,13 +279,11 @@ export class OrderFactory {
   ): Promise<void> => {
     if (orderIds.length === 0) return
 
-    for (const id of orderIds) {
-      try {
-        await this.deleteOrder(context, id)
-      } catch (error) {
-        // Ignore 404 errors (order already deleted), log others
-        console.error(`Failed to delete test order with ID ${id}:`, error)
+    await Promise.all(orderIds.map(async (id) => {
+      const response = await context.request.delete(`${ORDER_ENDPOINT}/${id}`)
+      if (response.status() !== 200 && response.status() !== 404) {
+        console.warn(`Failed to cleanup order ${id}: status ${response.status()}`)
       }
-    }
+    }))
   }
 }

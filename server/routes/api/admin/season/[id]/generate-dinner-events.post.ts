@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import {saveDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
-import type {DinnerEventDetail} from "~/composables/useBookingValidation"
+import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
@@ -15,7 +15,7 @@ const idSchema = z.object({
 type GenerateDinnerEventsResponse = {
     seasonId: number
     eventCount: number
-    events: DinnerEventDetail[]
+    events: DinnerEventDisplay[]
 }
 
 export default defineEventHandler(async (event): Promise<GenerateDinnerEventsResponse> => {

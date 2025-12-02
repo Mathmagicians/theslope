@@ -224,6 +224,7 @@ async function createSeason(d1: D1Database, season: Season): Promise<Season> {
 ## ADR-009: API Index Endpoint Data Inclusion Strategy
 
 **Status:** Accepted | **Date:** 2025-01-28
+**Updated:** 2025-12-01 (Batch operations and D1 rate limits)
 
 ### Decision
 
@@ -299,6 +300,35 @@ POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
 
 **Rationale:** Small payloads make separate Response schemas unjustified complexity. Two types are sufficient and prevent type explosion.
 
+### Batch Operations and D1 Rate Limits
+
+**CRITICAL: Batch operations MUST use Display types to avoid D1 query limits.**
+
+Cloudflare D1 enforces a **1,000 query limit per worker invocation**. Detail types with nested includes multiply queries per entity.
+
+**Example: assign-cooking-teams endpoint**
+```typescript
+// ❌ WRONG: Detail type with nested includes (~10 queries per event)
+// 170 events × 10 queries = 1,700 queries → EXCEEDS D1 LIMIT
+for (const event of dinnerEvents) {
+  await updateDinnerEvent(d1, event.id, { cookingTeamId })
+  // Returns DinnerEventDetail with chef, cookingTeam, orders, allergens...
+}
+
+// ✅ CORRECT: Display type with no includes (1 query per event)
+// 170 events × 1 query = 170 queries → WITHIN LIMIT
+for (const event of dinnerEvents) {
+  await assignCookingTeamToDinnerEvent(d1, event.id, cookingTeamId)
+  // Returns DinnerEventDisplay (scalar fields only)
+}
+```
+
+**When to create lightweight repository functions:**
+- Bulk updates (>10 entities)
+- Batch assignments/reassignments
+- Mass state transitions
+- Any operation where N × queries_per_entity could exceed 1,000
+
 ### Compliance
 
 1. Use Prisma Payload types: `EntityListItem` vs `EntityDetail`
@@ -308,6 +338,7 @@ POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
 5. Mutations MUST return Detail schema (same Zod type as GET/:id)
 6. **ONLY 2 types per entity:** `EntityDisplay` and `EntityDetail` - NO third type (Entity, EntityResponse, etc.)
 7. Prisma types MUST NOT leave repository layer (ADR-010)
+8. **Batch operations MUST use Display types** - Create lightweight repository functions for bulk updates to stay within D1's 1,000 query limit
 
 ---
 

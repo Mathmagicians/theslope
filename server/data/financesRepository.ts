@@ -214,6 +214,8 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                 inhabitant: {
                     select: {
                         id: true,
+                        heynaboId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true

@@ -12,7 +12,7 @@ import {Prisma, PrismaClient} from "@prisma/client"
 
 const log: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
     ? ['error']
-    : ['query', 'warn', 'error']
+    : ['warn', 'error']
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
     const adapter = new PrismaD1(d1Client)

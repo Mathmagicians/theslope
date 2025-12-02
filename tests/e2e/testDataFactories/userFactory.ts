@@ -50,6 +50,18 @@ export class UserFactory {
         return responseBody
     }
 
+    static readonly cleanupUsers = async (
+        context: BrowserContext,
+        userIds: number[]
+    ): Promise<void> => {
+        await Promise.all(userIds.map(async (id) => {
+            const response = await context.request.delete(`/api/admin/users/${id}`)
+            if (response.status() !== 200 && response.status() !== 404) {
+                console.warn(`Failed to cleanup user ${id}: status ${response.status()}`)
+            }
+        }))
+    }
+
     static readonly createAdmin = (testSalt: string = Date.now().toString()) => {
         return {
             ...this.defaultUser(testSalt),

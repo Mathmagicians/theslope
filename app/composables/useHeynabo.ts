@@ -31,11 +31,11 @@ export function useHeynabo() {
      * @example
      * // Input: heynaboEventId = 123
      * // API URL: https://skraaningeni.spaces.heynabo.com/api
-     * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/events/123
+     * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/calendar/detail/123/info
      */
     const getEventUrl = (heynaboEventId: number): string => {
         const apiUrl = config.public.HEY_NABO_API
-        return apiUrl.replace('/api', `/desktop/events/${heynaboEventId}`)
+        return apiUrl.replace('/api', `/desktop/calendar/detail/${heynaboEventId}/info`)
     }
 
     return {

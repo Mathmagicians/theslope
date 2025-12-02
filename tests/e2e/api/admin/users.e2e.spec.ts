@@ -152,17 +152,8 @@ test('GET /api/admin/users/by-role/[role] should return users with multiple role
 
 // Cleanup after all tests
 test.afterAll(async ({browser}) => {
-    // Only run cleanup if we created a user
     if (createdUserIds.length > 0) {
         const context = await validatedBrowserContext(browser)
-        // iterate over list and delete each user
-        for (const id of createdUserIds) {
-            try {
-                const deleted = await UserFactory.deleteUser(context, id)
-                expect(deleted.id).toBe(id)
-            } catch (error) {
-                console.error(`Failed to delete test user with ID ${id}:`, error)
-            }
-        }
+        await UserFactory.cleanupUsers(context, createdUserIds)
     }
 })

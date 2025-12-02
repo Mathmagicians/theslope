@@ -239,13 +239,12 @@ export class AllergyFactory {
         context: BrowserContext,
         allergyTypeIds: number[]
     ): Promise<void> => {
-        for (const id of allergyTypeIds) {
-            try {
-                await this.deleteAllergyType(context, id)
-            } catch (error) {
-                console.warn(`Failed to cleanup allergy type ${id}:`, error)
+        await Promise.all(allergyTypeIds.map(async (id) => {
+            const response = await context.request.delete(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
+            if (response.status() !== 200 && response.status() !== 404) {
+                console.warn(`Failed to cleanup allergy type ${id}: status ${response.status()}`)
             }
-        }
+        }))
     }
 
     // === ALLERGY METHODS ===

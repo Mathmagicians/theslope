@@ -177,7 +177,6 @@ const createDraft = ref<CookingTeam[]>([])
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
-  console.info('AdminTeams watch', ', teamCount:', teamCount.value, ', selected season:', selectedSeason.value?.shortName, 'teams count:', teams.value.length)
   if (!selectedSeason.value) return
   if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
     const existingTeamCount = teams.value.length
