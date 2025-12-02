@@ -126,12 +126,8 @@ export const useCookingTeamValidation = () => {
     const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
 
     // Type definitions (inside composable to avoid circular reference)
-    type _CookingTeam = z.infer<typeof CookingTeamSchema>
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
     type CookingTeamDetail = z.infer<typeof CookingTeamDetailSchema>
-    type CookingTeamCreate = z.infer<typeof CookingTeamCreateSchema>
-    type CookingTeamUpdate = z.infer<typeof CookingTeamUpdateSchema>
-    type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
     type TeamRole = z.infer<typeof TeamRoleSchema>
 
     // Transform schema for serialization (converts WeekDayMap to JSON string)

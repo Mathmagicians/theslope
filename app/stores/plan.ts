@@ -70,8 +70,11 @@ export const usePlanStore = defineStore("Plan", () => {
         // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
         // No store state - components use useAsyncData with this function
         // Pattern: Store provides fetch logic, components manage their own data
-        const fetchTeamDetail = (teamId: number): Promise<CookingTeamDetail> => {
-            return $fetch(`/api/admin/team/${teamId}`)
+        // Note: HTTP converts Date→ISO strings, schema.parse() with z.coerce.date() converts back
+        const {CookingTeamDetailSchema} = useCookingTeamValidation()
+        const fetchTeamDetail = async (teamId: number): Promise<CookingTeamDetail> => {
+            const data = await $fetch(`/api/admin/team/${teamId}`)
+            return CookingTeamDetailSchema.parse(data)
         }
 
         // Create team operation - useAsyncData pattern for mutations

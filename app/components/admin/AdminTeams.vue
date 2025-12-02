@@ -234,6 +234,9 @@ const showAdminTeams = computed(() => {
   return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
 })
 
+// Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
+const isActionLoading = computed(() => isSeasonsLoading.value || isSelectedSeasonLoading.value || isCreatingTeams.value)
+
 // UTILITY
 const showSuccessToast = (title: string, description?: string) => {
   const toast = useToast()
@@ -582,7 +585,7 @@ v-else
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="secondary" :loading="isCreatingTeams" @click="handleBatchCreateTeams">
+        <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           Opret madhold
         </UButton>
         <UButton color="neutral" variant="ghost" @click="handleCancel">
@@ -595,7 +598,8 @@ v-else
             data-testid="add-team-button"
             color="secondary"
             icon="i-heroicons-plus-circle"
-            :loading="isCreatingTeams"
+            :loading="isActionLoading"
+            :disabled="isActionLoading"
             @click="handleAddTeam"
         >
           Tilføj madhold

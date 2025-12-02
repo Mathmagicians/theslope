@@ -14,7 +14,7 @@ import type {
 } from '~/composables/useAllergyValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
-const {h3eFromCatch, throwH3Error} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 /**
  * Get Prisma client connection to D1 database

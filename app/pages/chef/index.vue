@@ -35,7 +35,6 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
-import {formatDate, parseDate} from '~/utils/date'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 
@@ -323,7 +322,7 @@ useHead({
               type="info"
               variant="soft"
               :color="COLOR.info"
-              icon="i-heroicons-calendar-days"
+              :icon="ICONS.calendarDays"
             >
               <template #title>
                 Holdet har ingen fællesspisninger
@@ -390,7 +389,7 @@ useHead({
             v-else
             variant="soft"
             :color="COLOR.neutral"
-            icon="i-heroicons-user-group"
+            :icon="ICONS.userGroup"
           >
             <template #title>Intet madhold tildelt endnu</template>
           </UAlert>
@@ -400,18 +399,7 @@ useHead({
 
       <!-- #stats: Kitchen statistics -->
       <template #stats>
-        <template v-if="dinnerEventDetail">
-          <UAlert
-            v-if="!dinnerEventDetail.tickets || dinnerEventDetail.tickets.length === 0"
-            variant="soft"
-            :color="COLOR.info"
-            icon="i-heroicons-ticket"
-          >
-            <template #title>Ingen billetter endnu</template>
-            <template #description>Der er endnu ikke bestilt nogen billetter til denne fællesspisning.</template>
-          </UAlert>
-          <KitchenPreparation v-else :orders="dinnerEventDetail.tickets" />
-        </template>
+        <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" />
       </template>
     </DinnerDetailPanel>
   </UPage>

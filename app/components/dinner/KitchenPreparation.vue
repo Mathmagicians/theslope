@@ -136,7 +136,7 @@ const diningModeStats = computed(() => {
 })
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {

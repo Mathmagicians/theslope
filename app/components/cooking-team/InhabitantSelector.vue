@@ -32,8 +32,6 @@ interface Inhabitant {
 interface Props {
   teamId: number
   teamName: string
-  seasonId: number
-  teamNumber: number  // For color matching
   teamColor: string   // For color matching
   teams?: Array<{ id: number, name: string }>  // All teams in season for lookup
 }
@@ -92,26 +90,26 @@ const getTeamInfo = (inhabitant: Inhabitant) => {
   const assignment = inhabitant.CookingTeamAssignment?.[0]
 
   if (!assignment) {
-    return {type: 'available' as const, teamNumber: null, color: null, assignmentId: null}
+    return {type: 'available' as const, teamName: null, color: null, assignmentId: null}
   }
 
   if (assignment.cookingTeamId === props.teamId) {
     return {
       type: 'current' as const,
-      teamNumber: props.teamNumber,
+      teamName: props.teamName,
       color: props.teamColor,
       assignmentId: assignment.id
     }
   }
 
-  // For other teams, look up by ID to get the correct index (and thus correct number/color)
+  // For other teams, use the actual team name from the assignment (not computed from index)
+  // Color is computed from current index for visual distinction only
   const teamIndex = props.teams?.findIndex(t => t.id === assignment.cookingTeamId) ?? -1
-  const otherTeamNumber = teamIndex >= 0 ? teamIndex + 1 : 1  // 1-based display number
   const otherTeamColor = teamIndex >= 0 ? getTeamColor(teamIndex) : 'neutral'
 
   return {
     type: 'other' as const,
-    teamNumber: otherTeamNumber,
+    teamName: assignment.cookingTeam.name,
     color: otherTeamColor,
     assignmentId: assignment.id
   }
@@ -262,63 +260,67 @@ const table = useTemplateRef('table')
 
       <!-- Status column with colored badge -->
       <template #status-cell="{ row }">
-        <UBadge
-            v-if="getTeamInfo(row.original).type === 'available'"
-            color="success"
-            variant="outline"
-            size="sm"
-        >
-          LEDIG
-        </UBadge>
-        <UBadge
-            v-else
-            :color="getTeamInfo(row.original).color"
-            variant="solid"
-            size="sm"
-        >
-          Madhold {{ getTeamInfo(row.original).teamNumber }}
-        </UBadge>
+        <template v-for="(info, idx) in [getTeamInfo(row.original)]" :key="idx">
+          <UBadge
+              v-if="info.type === 'available'"
+              color="success"
+              variant="outline"
+              size="sm"
+          >
+            LEDIG
+          </UBadge>
+          <UBadge
+              v-else
+              :color="info.color"
+              variant="solid"
+              size="sm"
+          >
+            {{ info.teamName }}
+          </UBadge>
+        </template>
       </template>
 
       <!-- Actions column with role buttons or remove button -->
       <template #actions-cell="{ row }">
-        <div v-if="getTeamInfo(row.original).type === 'available'" class="flex gap-1">
+        <template v-for="(info, idx) in [getTeamInfo(row.original)]" :key="idx">
+          <div v-if="info.type === 'available'" class="flex gap-1">
+            <UButton
+                color="primary"
+                size="xs"
+                icon="i-heroicons-plus"
+                @click="handleAddMember(row.original.id, Role.CHEF)"
+            >
+              Chef
+            </UButton>
+            <UButton
+                color="primary"
+                size="xs"
+                icon="i-heroicons-plus"
+                @click="handleAddMember(row.original.id, Role.COOK)"
+            >
+              Kok
+            </UButton>
+            <UButton
+                color="primary"
+                size="xs"
+                icon="i-heroicons-plus"
+                @click="handleAddMember(row.original.id, Role.JUNIORHELPER)"
+            >
+              Spire
+            </UButton>
+          </div>
           <UButton
-              color="primary"
-              size="xs"
-              icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, Role.CHEF)"
+              v-else-if="info.type === 'current'"
+              color="error"
+              variant="ghost"
+              size="sm"
+              icon="i-heroicons-x-mark"
+              @click="handleRemoveMember(info.assignmentId!)"
           >
-            Chef
+            Fjern
           </UButton>
-          <UButton
-              color="primary"
-              size="xs"
-              icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, Role.COOK)"
-          >
-            Kok
-          </UButton>
-          <UButton
-              color="primary"
-              size="xs"
-              icon="i-heroicons-plus"
-              @click="handleAddMember(row.original.id, Role.JUNIORHELPER)"
-          >
-            Spire
-          </UButton>
-        </div>
-        <UButton
-            v-else-if="getTeamInfo(row.original).type === 'current'"
-            color="error"
-            variant="ghost"
-            size="sm"
-            icon="i-heroicons-x-mark"
-            @click="handleRemoveMember(getTeamInfo(row.original).assignmentId!)"
-        >
-          Fjern
-        </UButton>
-        <span v-else class="text-xs text-gray-500">I andet hold</span>
+          <span v-else class="text-xs text-gray-500">I andet hold</span>
+        </template>
       </template>
 
       <template #empty-state>

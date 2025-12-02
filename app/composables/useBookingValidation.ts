@@ -27,7 +27,7 @@ export const OrderState = OrderStateSchema.enum
 export const useBookingValidation = () => {
     const {CookingTeamDisplaySchema, deserializeCookingTeamDetail} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
-    const {TicketPriceSchema} = useTicketPriceValidation()
+    const {TicketPriceSchema: _TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema} = useAllergyValidation()
 
     // ============================================================================
@@ -69,6 +69,18 @@ export const useBookingValidation = () => {
      * Note: id is optional in body since it comes from URL path
      */
     const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
+
+    /**
+     * Chef Menu Form - For chef UI form validation
+     * Derived from DinnerEventBaseSchema with stricter validation for user input
+     */
+    const ChefMenuFormSchema = z.object({
+        menuTitle: z.string()
+            .min(1, 'Menu titel er påkrævet')
+            .max(500, 'Menu titel må maks være 500 tegn'),
+        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn').nullable(),
+        totalCost: z.number().int().min(0, 'Indkøbsomkostninger kan ikke være negative')
+    })
 
     // ============================================================================
     // ORDER (defined after DinnerEventDisplaySchema so it can reference it)
@@ -374,6 +386,7 @@ export const useBookingValidation = () => {
         DinnerEventDetailSchema,
         DinnerEventCreateSchema,
         DinnerEventUpdateSchema,
+        ChefMenuFormSchema,
 
         // Order
         OrderDisplaySchema,
@@ -419,6 +432,7 @@ export type DinnerEventDisplay = z.infer<ReturnType<typeof useBookingValidation>
 export type DinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDetailSchema']>
 export type DinnerEventCreate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventCreateSchema']>
 export type DinnerEventUpdate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventUpdateSchema']>
+export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['ChefMenuFormSchema']>
 
 // Order
 export type OrderDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderDisplaySchema']>

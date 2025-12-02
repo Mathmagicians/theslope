@@ -71,7 +71,8 @@
  * - Uses useSeason for deadline logic (no manual date calculations)
  * - Uses design system (useTheSlopeDesignSystem)
  */
-import type { DinnerEventDetail } from '~/composables/useBookingValidation'
+import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
+import type { FormSubmitEvent } from '#ui/types'
 import { format } from 'date-fns'
 import { da } from 'date-fns/locale'
 import { calculateCountdown } from '~/utils/date'
@@ -97,7 +98,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'update:menu': [data: { menuTitle: string, menuDescription: string }]
+  'update:form': [data: ChefMenuForm]
   'update:allergens': [allergenIds: number[]]
   'advance-state': [newState: string]
   'cancel-dinner': []
@@ -111,7 +112,7 @@ const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS } = use
 const HERO_BUTTON = COMPONENTS.heroPanel.light
 
 // Validation schemas
-const { DinnerStateSchema } = useBookingValidation()
+const { DinnerStateSchema, ChefMenuFormSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Business logic from useBooking (ADR-001)
@@ -489,10 +490,11 @@ const handleCardClick = () => {
             <UBadge :color="bookingStatus.color" variant="soft" :size="SIZES.small.value">{{ bookingStatus.badge }}</UBadge>
             <span>{{ bookingStatus.message }}</span>
           </div>
-          <div v-if="formattedBudget" class="flex items-center gap-1">
-            <span>💰</span>
-            <span class="font-medium">{{ formattedBudget }}</span>
-          </div>
+        </div>
+
+        <!-- Budget section (chef's financial overview) -->
+        <div class="pt-4 border-t">
+          <DinnerBudget :orders="dinnerEvent.tickets ?? []" mode="full" />
         </div>
 
         <!-- Action buttons (EDIT mode only) -->

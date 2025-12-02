@@ -445,16 +445,24 @@ export const ICONS = {
   // Navigation & entities
   team: 'i-fluent-mdl2-team-favorite',
   calendar: 'i-heroicons-calendar',
+  calendarDays: 'i-heroicons-calendar-days',
   user: 'i-heroicons-user',
   users: 'i-heroicons-users',
+  userGroup: 'i-heroicons-user-group',
+  ticket: 'i-heroicons-ticket',
 
   // Actions & feedback
   edit: 'i-heroicons-pencil',
+  check: 'i-heroicons-check',
   checkCircle: 'i-heroicons-check-circle',
+  plusCircle: 'i-heroicons-plus-circle',
   megaphone: 'i-heroicons-megaphone',
   exclamationCircle: 'i-heroicons-exclamation-circle',
   xMark: 'i-heroicons-x-mark',
-  arrowRight: 'i-heroicons-arrow-right'
+  arrowRight: 'i-heroicons-arrow-right',
+
+  // Empty states
+  robotDead: 'i-mage-robot-dead'
 } as const
 
 /**

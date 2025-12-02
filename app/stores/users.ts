@@ -1,12 +1,9 @@
-import type {InternalApi} from 'nitropack'
 import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 
 export const useUsersStore = defineStore("Users", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-
-    const importing = ref(false)
 
     // Get SystemRole enum from validation composable
     const {SystemRoleSchema} = useCoreValidation()
@@ -15,8 +12,7 @@ export const useUsersStore = defineStore("Users", () => {
     const {
         data: allergyManagers,
         status: allergyManagersStatus,
-        error: allergyManagersError,
-        refresh: refreshAllergyManagers
+        error: allergyManagersError
     } = useFetch<UserDisplay[]>(
         `/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`,
         {

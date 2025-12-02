@@ -1,12 +1,13 @@
 # 🎯 Chef/Team Management Feature - Implementation Workplan
 
-**Status**: 95% Complete - Final Polish | **Started**: 2025-01-15 | **Last Updated**: 2025-01-29
+**Status**: 90% Complete | **Started**: 2025-11-01 | **Last Updated**: 2025-12-02
 
 ---
-endpoints
+
+## API Endpoints
 
 | Directory       | Actor             | Authority               | When                     |
-  |-----------------|-------------------|-------------------------|--------------------------|
+|-----------------|-------------------|-------------------------|--------------------------|
 | /api/admin/     | Admins            | System configuration    | Always                   |
 | /api/team/      | Team members      | Self-service operations | Pre-event (planning)     |
 | /api/chef/      | Assigned chef     | Dinner management       | During event (execution) |
@@ -14,33 +15,25 @@ endpoints
 
 ---
 
-## 🎯 REMAINING WORK (2-3 hours)
+## 🎯 REMAINING WORK
 
-| # | Task | File | Time | Type |
-|---|------|------|------|------|
-| 1 | Integrate `ChefDinnerCard` in agenda | `ChefCalendarDisplay.vue` L294-309 | 15min | DRY |
-| 2 | Create allergen endpoint | `server/routes/api/chef/dinner/[id]/allergens.post.ts` | 1h | API |
-| 3 | Add allergen save/cancel buttons | `DinnerMenuHero.vue` (chef mode) | 30min | UX |
-| 4 | Wire allergen save handler | `chef/index.vue` + `plan.ts` | 30min | Integration |
+| Component | Location | Status | Remaining Work |
+|-----------|----------|--------|----------------|
+| `ChefMenuCard` | `chef/ChefMenuCard.vue` | ⚠️ | Add `totalCost` input (ALL states), Zod form validation, wire handler |
+| `DinnerBudget` | `chef/DinnerBudget.vue` | ⚠️ | **NOT INTEGRATED** - Add to `chef/index.vue` `#stats` slot |
+| `KitchenPreparation` | `dinner/KitchenPreparation.vue` | ⚠️ | Show 0 values when no orders (don't hide with UAlert) |
+| `ChefDinnerCard` | `chef/ChefDinnerCard.vue` | ⚠️ | Missing component tests |
+| `ChefCalendarDisplay` | `calendar/ChefCalendarDisplay.vue` | ⚠️ | Missing component tests |
+| `DinnerStatusStepper` | `chef/DinnerStatusStepper.vue` | ⚠️ | Missing component tests |
+| `TeamRoleStatus` | `chef/TeamRoleStatus.vue` | ⚠️ | Missing component tests |
+| `DinnerDetailHeader` | `dinner/DinnerDetailHeader.vue` | ⚠️ | Missing component tests |
+| `DinnerDetailPanel` | `dinner/DinnerDetailPanel.vue` | ⚠️ | Missing component tests |
+| `AllergenMultiSelector` | `shared/AllergenMultiSelector.vue` | ⚠️ | Missing component tests |
 
-**After completion:** Feature 100% functional, production-ready.
-
----
-
-## ✅ COMPLETED (Phases 1-5)
-
-**All Components Built:**
-- ✅ `ChefDinnerCard`, `TeamRoleStatus`, `DinnerStatusStepper`, `DinnerBudget`
-- ✅ `MyTeamSelector`, `ChefCalendarDisplay`, `DinnerDetailPanel`, `CalendarMasterPanel`
-- ✅ `DinnerMenuHero` (chef + household modes), `AllergenMultiSelector`
-
-**All Backend Complete:**
-- ✅ `/api/team/my`, `/api/admin/dinner-event/[id]/assign-role.post.ts`
-- ✅ Store: `loadMyTeams()`, `fetchDinnerEventDetail()`, `assignRoleToDinner()`
-
-**Known Issues:**
-- ⚠️ Agenda view uses inline markup (should use `ChefDinnerCard`)
-- ⚠️ Allergen updates not persisted (missing endpoint + save button)
+**Design Decisions:**
+- Deadline logic in `useSeason` (no micro composables)
+- Budget input visible in ALL states
+- Kitchen stats shows 0s when no orders (don't hide)
 
 ---
 

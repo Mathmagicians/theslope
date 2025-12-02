@@ -244,9 +244,7 @@ export const useSeason = () => {
      * @returns True if inhabitant has matching assignment
      */
     const hasAssignment = (inhabitantId: number, team: CookingTeam, role?: string): boolean => {
-        const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
-        type Assignment = typeof CookingTeamAssignmentSchema._type
-        return team.assignments?.some((assignment: Assignment) =>
+        return team.assignments?.some((assignment) =>
             assignment.inhabitantId === inhabitantId && (!role || assignment.role === role)
         ) ?? false
     }

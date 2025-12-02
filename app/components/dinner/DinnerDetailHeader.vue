@@ -14,8 +14,6 @@
  * Design: Subtle, not competing with the hero below. Uses muted colors.
  */
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
-import {format} from 'date-fns'
-import {da} from 'date-fns/locale'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -23,8 +21,10 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Design system
+// Design system and validation
 const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, BACKGROUNDS} = useTheSlopeDesignSystem()
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 // Heynabo link
 const {getEventUrl} = useHeynabo()
@@ -34,14 +34,11 @@ const heynaboEventUrl = computed(() => {
 })
 
 // Formatted date
-const formattedDate = computed(() => {
-  return format(props.dinnerEvent.date, "EEEE d. MMMM yyyy", {locale: da})
-})
+const formattedDate = computed(() => formatDate(props.dinnerEvent.date))
 
 // State badge config
 const stateBadge = computed(() => {
-  return DINNER_STATE_BADGES[props.dinnerEvent.state as keyof typeof DINNER_STATE_BADGES]
-    || DINNER_STATE_BADGES.SCHEDULED
+  return DINNER_STATE_BADGES[props.dinnerEvent.state] ?? DINNER_STATE_BADGES[DinnerState.SCHEDULED]
 })
 </script>
 
