@@ -1068,7 +1068,19 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
     })
 
     describe('Roundtrip Tests', () => {
-        it.each([
+        // Type aliases for roundtrip test data
+        type SerializeFn = (data: Record<string, unknown>) => Record<string, unknown>
+        type CheckFieldsFn = (original: Record<string, unknown>, deserialized: Record<string, unknown>) => void
+
+        interface RoundtripTestCase {
+            type: string
+            getData: () => Record<string, unknown>
+            serialize: SerializeFn
+            deserialize: (data: Record<string, unknown>) => Record<string, unknown>
+            checkFields: CheckFieldsFn
+        }
+
+        const testCases: RoundtripTestCase[] = [
             {
                 type: 'inhabitant',
                 getData: () => ({
@@ -1078,15 +1090,15 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     birthDate: new Date('1990-01-15'),
                     dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
                 }),
-                serialize: (data: any) => ({
+                serialize: (data) => ({
                     ...data,
-                    birthDate: data.birthDate.toISOString(),
-                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)
+                    birthDate: (data.birthDate as Date).toISOString(),
+                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as Record<string, unknown>)
                 }),
                 deserialize: deserializeInhabitantDisplay,
-                checkFields: (original: any, deserialized: any) => {
+                checkFields: (original, deserialized) => {
                     expect(deserialized.birthDate).toBeInstanceOf(Date)
-                    expect(deserialized.birthDate.getTime()).toBe(original.birthDate.getTime())
+                    expect((deserialized.birthDate as Date).getTime()).toBe((original.birthDate as Date).getTime())
                     expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
                 }
             },
@@ -1105,23 +1117,23 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                         }
                     ]
                 }),
-                serialize: (data: any) => ({
+                serialize: (data) => ({
                     ...data,
-                    movedInDate: data.movedInDate.toISOString(),
-                    moveOutDate: data.moveOutDate?.toISOString(),
-                    inhabitants: data.inhabitants.map((i: any) => ({
+                    movedInDate: (data.movedInDate as Date).toISOString(),
+                    moveOutDate: (data.moveOutDate as Date | null)?.toISOString(),
+                    inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
                         ...i,
-                        birthDate: i.birthDate?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
+                        birthDate: (i.birthDate as Date | null)?.toISOString(),
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as Record<string, unknown>) : null
                     }))
                 }),
                 deserialize: deserializeHouseholdDisplay,
-                checkFields: (original: any, deserialized: any) => {
+                checkFields: (original, deserialized) => {
                     expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                    expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
-                    expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
-                    expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
-                    expect(deserialized.inhabitants[0].dinnerPreferences).toEqual(original.inhabitants[0].dinnerPreferences)
+                    expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
+                    expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
+                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate).toBeInstanceOf(Date)
+                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].dinnerPreferences).toEqual((original.inhabitants as Record<string, unknown>[])[0].dinnerPreferences)
                 }
             },
             {
@@ -1141,23 +1153,25 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                         }
                     ]
                 }),
-                serialize: (data: any) => ({
+                serialize: (data) => ({
                     ...data,
-                    movedInDate: data.movedInDate.toISOString(),
-                    inhabitants: data.inhabitants.map((i: any) => ({
+                    movedInDate: (data.movedInDate as Date).toISOString(),
+                    inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
                         ...i,
-                        birthDate: i.birthDate?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences) : null
+                        birthDate: (i.birthDate as Date | null)?.toISOString(),
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as Record<string, unknown>) : null
                     }))
                 }),
                 deserialize: deserializeHouseholdDetail,
-                checkFields: (original: any, deserialized: any) => {
-                    expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
-                    expect(deserialized.inhabitants[0].birthDate.getTime()).toBe(original.inhabitants[0].birthDate.getTime())
-                    expect(deserialized.inhabitants[0].dinnerPreferences).toEqual(original.inhabitants[0].dinnerPreferences)
+                checkFields: (original, deserialized) => {
+                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate).toBeInstanceOf(Date)
+                    expect(((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate as Date).getTime()).toBe(((original.inhabitants as Record<string, unknown>[])[0].birthDate as Date).getTime())
+                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].dinnerPreferences).toEqual((original.inhabitants as Record<string, unknown>[])[0].dinnerPreferences)
                 }
             }
-        ])('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
+        ]
+
+        it.each(testCases)('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
             const original = getData()
             const serialized = serialize(original)
             const deserialized = deserialize(serialized)

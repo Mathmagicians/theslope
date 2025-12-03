@@ -179,7 +179,7 @@ describe('CalendarDateRangeListPicker', () => {
                 }
             },
             attrs: {
-                'onUpdate:modelValue': (val: any) => { holidays.value = val; }
+                'onUpdate:modelValue': (val: DateRange[]) => { holidays.value = val }
             },
             global: {
                 provide: {
@@ -227,8 +227,8 @@ describe('CalendarDateRangeListPicker', () => {
                 }
             },
             attrs: {
-                'onUpdate:modelValue': (val: any) => { 
-                    mockStore.holidays = val;
+                'onUpdate:modelValue': (val: DateRange[]) => {
+                    mockStore.holidays = val
                 }
             },
             global: {

@@ -8,6 +8,8 @@ import type {Season} from '~/composables/useSeasonValidation'
 
 describe('SeasonSelector', () => {
 
+    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
+
     const DROPDOWN_TEST_ID = 'season-selector'
 
     // Create mock seasons using factory
@@ -41,11 +43,11 @@ describe('SeasonSelector', () => {
         })
     }
 
-    const getDropdown = (wrapper: any) => {
+    const getDropdown = (wrapper: WrapperType) => {
         return wrapper.find(`[data-testid="${DROPDOWN_TEST_ID}"]`)
     }
 
-    const selectOption = async (wrapper: any, optionValue: number) => {
+    const selectOption = async (wrapper: WrapperType, optionValue: number) => {
         // Find USelect component and trigger v-model update
         const uSelect = wrapper.findComponent({ name: 'USelect' })
         await uSelect.vm.$emit('update:modelValue', optionValue)

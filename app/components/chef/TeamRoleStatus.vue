@@ -77,6 +77,7 @@ const teamNumber = computed(() => {
     :color="isChef ? COLOR.warning : COLOR.info"
     variant="soft"
     :icon="roleConfig.icon"
+    :ui="{ root: 'w-full' }"
   >
     <template #title>
       <div class="flex items-center gap-2">

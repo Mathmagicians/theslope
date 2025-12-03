@@ -323,21 +323,20 @@ useHead({
           />
 
           <!-- No events for team -->
-          <div v-else-if="teamDinnerEvents.length === 0" class="px-4">
-            <UAlert
-              type="info"
-              variant="soft"
-              :color="COLOR.info"
-              :icon="ICONS.calendarDays"
-            >
-              <template #title>
-                Holdet har ingen fællesspisninger
-              </template>
-              <template #description>
-                Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
-              </template>
-            </UAlert>
-          </div>
+          <UAlert
+            v-else-if="teamDinnerEvents.length === 0"
+            type="info"
+            variant="soft"
+            :color="COLOR.info"
+            :icon="ICONS.calendarDays"
+          >
+            <template #title>
+              Holdet har ingen fællesspisninger
+            </template>
+            <template #description>
+              Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
+            </template>
+          </UAlert>
 
           <!-- Calendar display -->
           <div v-else>

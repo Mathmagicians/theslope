@@ -1,7 +1,5 @@
 import {describe, it, expect} from 'vitest'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState} from '~/composables/useBooking'
-import {useBookingValidation} from '~/composables/useBookingValidation'
-import type {DinnerState as DinnerStateType} from '~~/prisma/generated/zod'
 
 describe('useBooking', () => {
     const {
@@ -12,8 +10,6 @@ describe('useBooking', () => {
         getStepConfig,
         getDinnerStepState
     } = useBooking()
-    const {DinnerStateSchema} = useBookingValidation()
-    const DinnerState: Record<DinnerStateType, DinnerStateType> = DinnerStateSchema.enum
 
     describe('buildDinnerUrl', () => {
         it.each([

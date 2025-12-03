@@ -18,7 +18,7 @@ mockComponent('UserListItem', {
     setup(props) {
         const count = Array.isArray(props.inhabitants) ? props.inhabitants.length : 1
         const names = Array.isArray(props.inhabitants)
-            ? props.inhabitants.map((i: any) => i.name).join(', ')
+            ? props.inhabitants.map((i: {name: string}) => i.name).join(', ')
             : props.inhabitants.name
 
         return () => h('div', { 'data-testid': 'user-list-item' }, [
@@ -33,7 +33,7 @@ describe('AllergenMultiSelector', () => {
     const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 
     // DRY helper
-    const createWrapper = async (props: any = {}) => {
+    const createWrapper = async (props: Record<string, unknown> = {}) => {
         return await mountSuspended(AllergenMultiSelector, {
             props: {
                 modelValue: [],

@@ -1,6 +1,7 @@
 # Feature: CSV Billing Import/Export System
 
-**Status:** Proposed | **Date:** 2025-12-02
+**Status:** Implemented (Phase 1-3) | **Date:** 2025-12-02
+**Updated:** 2025-12-03
 
 ## Overview
 
@@ -39,27 +40,32 @@ Børn (2-12 år)      ,               ,{count}   ,{count}   ,...
 
 | Aspect | Rule |
 |--------|------|
-| **Idempotency** | Re-running same import produces same result |
-| **Address Match** | Exact match on `Household.address` or computed `shortName` |
-| **Inhabitant** | Assign to first adult inhabitant in household |
-| **BABY tickets** | Ignored |
-| **Missing DinnerEvent** | Warning (skip row, continue) |
-| **Date outside season** | Error (fail import) |
+| **Season** | Imports to ACTIVE season only |
+| **Address Match** | Via computed `shortName` from address |
+| **Inhabitant** | Assign to first inhabitant in household |
+| **BABY tickets** | Ignored (only ADULT/CHILD) |
+| **Missing DinnerEvent** | Error (fail import) |
+| **Missing Inhabitant** | Error (fail import) |
+| **Unmatched Address** | Error (fail import with list) |
 
-### Make Target
+### Make Targets
 
 ```bash
-make import-orders FILE=path/to/file.csv
+make heynabo-import-local  # Test CSV to localhost
+make heynabo-import-dev    # Test CSV to dev
+make heynabo-import-prod   # Prod CSV to production
 ```
+
+CSV files configured in Makefile:
+- `CSV_TEST` → `.theslope/order-import/test_import_orders.csv`
+- `CSV_PROD` → `.theslope/order-import/skraaningen_2025_december_framelding.csv`
 
 ### Response
 
 ```json
 {
-  "ordersCreated": 150,
-  "ordersSkipped": 10,
-  "warnings": ["No DinnerEvent for 2025-12-25"],
-  "errors": []
+  "orders": [...],
+  "count": 150
 }
 ```
 
@@ -85,28 +91,15 @@ const getBillingCutoffDay = (): number => theslope.billing.cutoffDay
 
 ---
 
-## Idempotency Strategy
-
-Orders uniquely identified by: `(householdId, dinnerEventId, ticketType)`
-
-| Scenario | Action |
-|----------|--------|
-| No existing orders | Create new |
-| Same count exists | Skip (no-op) |
-| Different count | Delete existing, create new |
-
-Audit trail via `OrderHistory` with action `BILLING_IMPORT`.
-
----
-
 ## Error Handling
 
 | Condition | Behavior |
 |-----------|----------|
-| Address not found | **Error** - fail with unmatched addresses list |
-| DinnerEvent not found | **Warning** - log, skip row, continue |
-| Date outside active season | **Error** - fail import |
-| No adult in household | **Warning** - skip household, continue |
+| No active season | **400** - "No active season" |
+| Address not found | **400** - fail with unmatched addresses list |
+| DinnerEvent not found | **400** - "No dinner event for {date}" |
+| No inhabitant in household | **400** - "No inhabitants in household" |
+| Missing ticket price | **400** - "Season has no ADULT/CHILD ticket price" |
 
 ---
 
@@ -123,16 +116,18 @@ make import-orders FILE=.theslope/test_import_orders.csv
 ## Implementation Phases
 
 ### Phase 1: Master Data (Job 1) ✅
+- [x] Created master data SQL files
+- [x] Make targets `d1-seed-master-data-{local,dev,prod}`
 
 ### Phase 2: Configuration (Job 3)
 - [ ] Add `billing.cutoffDay` to `app.config.ts`
 - [ ] Expose `getBillingCutoffDay()` in `useSeason`
 
-### Phase 3: Import API (Job 2)
-- [ ] Create `useBillingValidation.ts` composable
-- [ ] Create `import.post.ts` endpoint
-- [ ] Add `make import-orders` target
-- [ ] Create test CSV
+### Phase 3: Import API (Job 2) ✅
+- [x] Create `useBillingValidation.ts` composable
+- [x] Create `import.post.ts` endpoint (ADR-002 compliant)
+- [x] Make targets `heynabo-import-{local,dev,prod}`
+- [x] Test CSV `.theslope/order-import/test_import_orders.csv`
 - [ ] E2E tests
 
 ---
@@ -140,18 +135,20 @@ make import-orders FILE=.theslope/test_import_orders.csv
 ## File Structure
 
 ```
-.theslope/                           # Gitignored
-  master-data-households.sql         # Address → PBS mapping
-  test_import_orders.csv             # Test data
+.theslope/                                    # Gitignored
+  dev-master-data-households.sql              # Dev address → PBS mapping
+  prod-master-data-households.sql             # Prod address → PBS mapping
+  order-import/
+    test_import_orders.csv                    # Test data
+    skraaningen_2025_december_framelding.csv  # Prod data
 
 app/
   composables/
-    useBillingValidation.ts          # Import schemas
-  app.config.ts                      # + billing.cutoffDay
+    useBillingValidation.ts                   # Import schemas ✅
 
 server/
   routes/api/admin/billing/
-    import.post.ts                   # Import endpoint
+    import.post.ts                            # Import endpoint ✅
 
-Makefile                             # + targets
+Makefile                                      # heynabo-import-* targets ✅
 ```

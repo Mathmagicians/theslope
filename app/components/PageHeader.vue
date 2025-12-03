@@ -4,6 +4,10 @@ const {myHousehold} = storeToRefs(useHouseholdsStore())
 
 const householdLink = computed(() => myHousehold.value ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings` : '/household')
 
+const closeMobileMenu = () => {
+  burgerLink.value.open = false
+}
+
 const navigationLinks = computed(() => [
   {
     label: "Fællesspisning",
@@ -38,10 +42,16 @@ const loginLink = computed(() => ({
   icon: 'i-guidance-entry'
 }))
 
-const burgerLink = computed(() => ({
+const burgerLink = ref({
   icon: 'heroicons:bars-3',
-  children: navigationLinks.value
-}))
+  children: [] as typeof navigationLinks.value,
+  open: false
+})
+
+// Keep children in sync with navigationLinks
+watch(navigationLinks, (links) => {
+  burgerLink.value.children = links
+}, { immediate: true })
 
 </script>
 
@@ -67,6 +77,7 @@ const burgerLink = computed(() => ({
             orientation="vertical"
             color="primary"
             arrow
+            @select="closeMobileMenu"
         />
       </div>
     </div>

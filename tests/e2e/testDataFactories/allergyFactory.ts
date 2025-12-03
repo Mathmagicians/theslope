@@ -275,7 +275,7 @@ export class AllergyFactory {
         const status = response.status()
         const responseBody = await response.json()
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Unexpected status creating allergy. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new allergy ID').toBeDefined()

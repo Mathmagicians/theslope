@@ -785,20 +785,29 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
+  DONE: {
+    color: COLOR.success,
+    label: 'Færdig',
+    icon: 'i-heroicons-check-circle',
+    emoji: '🟢'
+  },
   CRITICAL: {
     color: COLOR.error,
     label: 'Kritisk',
-    icon: 'i-heroicons-exclamation-circle'
+    icon: 'i-heroicons-exclamation-circle',
+    emoji: '🔴'
   },
   WARNING: {
     color: COLOR.warning,
     label: 'Snart',
-    icon: 'i-heroicons-clock'
+    icon: 'i-heroicons-clock',
+    emoji: '🟡'
   },
   ON_TRACK: {
-    color: COLOR.success,
+    color: COLOR.neutral,
     label: 'OK',
-    icon: 'i-heroicons-check-circle'
+    icon: 'i-heroicons-clock',
+    emoji: '⚪'
   }
 } as const
 

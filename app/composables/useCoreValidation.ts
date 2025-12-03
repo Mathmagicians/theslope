@@ -442,6 +442,7 @@ export const useCoreValidation = () => {
         InhabitantUpdateSchema,
         InhabitantResponseSchema,
         InhabitantDisplaySchema,
+        InhabitantDetailSchema: InhabitantResponseSchema, // ADR-009: Detail schema for GET/:id + mutations
         // Schemas - Household
         BaseHouseholdSchema,
         HouseholdCreateSchema,

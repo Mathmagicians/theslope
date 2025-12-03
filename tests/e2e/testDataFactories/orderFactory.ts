@@ -31,7 +31,7 @@ export class OrderFactory {
     return new Date(year, randomMonth, randomDay)
   }
 
-  static readonly defaultOrder = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDisplay>): OrderDisplay => ({
+  static readonly defaultOrder = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDisplay>): OrderDisplay => ({
     id: 1,
     dinnerEventId: 5,
     inhabitantId: 10,
@@ -134,7 +134,7 @@ export class OrderFactory {
     ...overrides
   })
 
-  static readonly defaultOrderHistory = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistory>): OrderHistory => ({
+  static readonly defaultOrderHistory = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistory>): OrderHistory => ({
     id: 1,
     orderId: 1,
     action: OrderStateSchema.enum.BOOKED,

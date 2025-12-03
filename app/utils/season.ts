@@ -430,13 +430,15 @@ export const splitDinnerEvents = <T extends { date: Date }>(
 
 /**
  * Temporal category for dinner events
+ * Re-exported from useSeason composable (ADR-001)
  */
-export type TemporalCategory = 'next' | 'future' | 'past'
+type TemporalCategory = 'next' | 'future' | 'past'
 
 /**
  * Dinner event with temporal category
+ * Re-exported from useSeason composable (ADR-001)
  */
-export type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
+type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
 
 /**
  * Sort dinner events in temporal order: next (today), future (ascending), past (descending)
@@ -491,8 +493,9 @@ export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number =
  * 0 = On track (> warningHours before event)
  * 1 = Warning (between criticalHours and warningHours)
  * 2 = Critical (< criticalHours before event)
+ * Re-exported from useSeason composable (ADR-001)
  */
-export type DeadlineUrgency = 0 | 1 | 2
+type DeadlineUrgency = 0 | 1 | 2
 
 /**
  * Convert hours to days and minutes for isBeforeDeadline

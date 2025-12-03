@@ -8,6 +8,8 @@ import {nextTick} from 'vue'
 
 describe('FormModeSelector', () => {
 
+    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
+
     const BUTTON_NAMES = {
         view: 'form-mode-view',
         edit: 'form-mode-edit',
@@ -33,13 +35,13 @@ describe('FormModeSelector', () => {
         return wrapper
     }
 
-    const clickButton = async (wrapper: any, buttonName: string) => {
+    const clickButton = async (wrapper: WrapperType, buttonName: string) => {
         const button = wrapper.find(`[name="${buttonName}"]`)
         await button.trigger('click')
         await nextTick()
     }
 
-    const getButton = (wrapper: any, buttonName: string) => {
+    const getButton = (wrapper: WrapperType, buttonName: string) => {
         return wrapper.find(`[name="${buttonName}"]`)
     }
 

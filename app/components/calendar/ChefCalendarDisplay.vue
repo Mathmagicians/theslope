@@ -280,7 +280,7 @@ const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefin
     <UAccordion :items="accordionItems" :default-value="accordionDefault" class="flex-1">
       <template #calendar-content>
         <!-- View Toggle -->
-        <div class="px-4 pt-4">
+        <div class="px-4 pt-2 md:pt-4">
           <UTabs
             v-model="viewMode"
             :items="viewTabs"
