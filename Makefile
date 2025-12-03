@@ -81,24 +81,26 @@ d1-seed-master-data-prod:
 	@echo "✅ Master data loaded (prod)!"
 
 # Billing: Import orders from CSV (uses active season)
-# Usage: make import-orders-local FILE=path/to/file.csv
-import-orders-local:
-	@echo "📦 Importing orders from $(FILE) to local"
-	@curl -b .cookies.txt -X POST "http://localhost:3000/api/admin/billing/import" \
-		-H "Content-Type: application/json" \
-		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+ORDER_IMPORT_TEST_CSV := .theslope/order-import/test_import_orders.csv
+ORDER_IMPORT_PROD_CSV := .theslope/order-import/skraaningen_2025_december_framelding.csv
 
-import-orders-dev:
-	@echo "📦 Importing orders from $(FILE) to dev"
-	@curl -b .cookies.txt -X POST "https://dev.theslope.dk/api/admin/billing/import" \
-		-H "Content-Type: application/json" \
-		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+import-orders-local: URL := http://localhost:3000/api/admin/billing/import
+import-orders-local: CSV := $(ORDER_IMPORT_TEST_CSV)
+import-orders-local: import-orders
 
-import-orders-prod:
-	@echo "📦 Importing orders from $(FILE) to prod"
-	@curl -b .cookies.txt -X POST "https://theslope.dk/api/admin/billing/import" \
+import-orders-dev: URL := https://dev.skraaningen.dk/api/admin/billing/import
+import-orders-dev: CSV := $(ORDER_IMPORT_TEST_CSV)
+import-orders-dev: import-orders
+
+import-orders-prod: URL := https://skraaningen.dk/api/admin/billing/import
+import-orders-prod: CSV := $(ORDER_IMPORT_PROD_CSV)
+import-orders-prod: import-orders
+
+import-orders:
+	@echo "📦 Importing orders from $(CSV) to $(URL)"
+	@curl -b .cookies.txt -X POST "$(URL)" \
 		-H "Content-Type: application/json" \
-		-d "{\"csvContent\": $$(cat $(FILE) | jq -Rs .)}" | jq
+		-d "{\"csvContent\": $$(cat $(CSV) | jq -Rs .)}" | jq
 
 d1-list-users-local:
 	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local

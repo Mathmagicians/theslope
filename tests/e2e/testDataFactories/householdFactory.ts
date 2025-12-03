@@ -3,7 +3,7 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, InhabitantDetail} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, InhabitantDetail, InhabitantCreate} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 
@@ -163,12 +163,12 @@ export class HouseholdFactory {
             return HouseholdDetailSchema.parse(r)
         }) as HouseholdDetail[]
 
-        return isSingleId ? validResults[0] : validResults
+        return isSingleId ? validResults[0]! : validResults
     }
 
     // === INHABITANT METHODS ===
 
-    static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): InhabitantDetail => {
+    static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): InhabitantCreate => {
         return {
             heynaboId: saltedId(TEST_DATA_ID_BASE, testSalt),
             householdId: 1,  // Default household ID for test data

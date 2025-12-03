@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { Order, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
+import type { OrderDisplay, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -31,7 +31,7 @@ export class OrderFactory {
     return new Date(year, randomMonth, randomDay)
   }
 
-  static readonly defaultOrder = (testSalt: string = temporaryAndRandom(), overrides?: Partial<Order>): Order => ({
+  static readonly defaultOrder = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDisplay>): OrderDisplay => ({
     id: 1,
     dinnerEventId: 5,
     inhabitantId: 10,
@@ -112,11 +112,14 @@ export class OrderFactory {
       return {
         ...defaults,
         ...overrides,
-        orders: overrides.orders.map(order => ({
-          bookedByUserId: defaults.orders[0].bookedByUserId,
-          dinnerMode: defaults.orders[0].dinnerMode,
-          ...order
-        }))
+        orders: overrides.orders.map(order => {
+          const defaultOrder = defaults.orders[0]
+          return {
+            ...order,
+            bookedByUserId: order.bookedByUserId ?? defaultOrder?.bookedByUserId,
+            dinnerMode: order.dinnerMode ?? defaultOrder?.dinnerMode
+          }
+        })
       }
     }
 

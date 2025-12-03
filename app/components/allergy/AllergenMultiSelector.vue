@@ -173,7 +173,7 @@ const columns = computed(() => {
           :key="allergy.id"
           :color="COLOR.error"
           variant="subtle"
-          :size="SIZES.standard.value"
+          :size="SIZES.standard"
       >
         <span class="mr-1">{{ allergy.icon || '🏷️' }}</span>
         {{ allergy.name }}

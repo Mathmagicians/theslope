@@ -5,6 +5,7 @@
 // Example: const user = session.user as UserDetail & {passwordHash: string}
 
 declare module '#auth-utils' {
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface User {
         // Properties are defined via type casting in actual usage
         // See: server/middleware/guard.ts, server/routes/api/team/my.get.ts

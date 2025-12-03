@@ -53,7 +53,7 @@ const stateBadge = computed(() => {
         color="mocha"
         :icon="stateBadge.icon"
         variant="outline"
-        :size="SIZES.standard.value"
+        :size="SIZES.standard"
         :class="TYPOGRAPHY.bodyTextMedium"
       >
         {{ stateBadge.label }}
@@ -62,7 +62,7 @@ const stateBadge = computed(() => {
 
     <!-- Center: Date -->
     <div class="flex items-center justify-center gap-2">
-      <UIcon :name="ICONS.calendar" :size="SIZES.standard.iconSize.value" />
+      <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize" />
       <span :class="TYPOGRAPHY.bodyTextMedium" class="capitalize">
         {{ formattedDate }}
       </span>
@@ -76,7 +76,7 @@ const stateBadge = computed(() => {
         target="_blank"
         color="neutral"
         variant="ghost"
-        :size="SIZES.standard.value"
+        :size="SIZES.standard"
         :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
         :trailing-icon="ICONS.arrowRight"
         class="!text-[inherit]"

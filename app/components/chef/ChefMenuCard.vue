@@ -73,9 +73,7 @@
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { FormSubmitEvent } from '#ui/types'
-import { format } from 'date-fns'
-import { da } from 'date-fns/locale'
-import { calculateCountdown } from '~/utils/date'
+import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
 interface Props {
@@ -106,7 +104,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -118,19 +116,16 @@ const DinnerState = DinnerStateSchema.enum
 // Business logic from useBooking (ADR-001)
 const { getStepConfig, canCancelDinner } = useBooking()
 
-// Time logic from useSeason
-const { isAnnounceMenuPastDeadline, canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()
+// Budget/VAT logic from useOrder (ADR-001)
+const { convertVat } = useOrder()
+
+// Time logic from useSeason (ADR-001: business logic in composables)
+const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
 // Allergies store for allergen data
 const allergiesStore = useAllergiesStore()
 const { allergyTypes } = storeToRefs(allergiesStore)
-
-// Deadline thresholds
-const DEADLINE_THRESHOLDS = {
-  WARNING: 72,
-  URGENT: 24
-} as const
 
 // ========== COMPUTED: Mode helpers ==========
 
@@ -155,56 +150,25 @@ const _isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANC
 const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
 const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
 
-// Format dates
-const formattedShortDate = computed(() => format(props.dinnerEvent.date, 'dd/MM', { locale: da }))
+// Format dates (formatDate auto-imported from ~/utils/date, uses Danish locale)
+const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
 
-// Deadline warnings (SCHEDULED state only)
-const deadlineWarnings = computed(() => {
-  if (props.dinnerEvent.state !== DinnerState.SCHEDULED) return []
-
-  const warnings: Array<{
-    badge: string
-    message: string
-    color: string
-    level: 'warning' | 'urgent' | 'critical'
-  }> = []
-
+// Menu status - uses getDeadlineUrgency from useSeason
+const menuStatus = computed(() => {
   const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
   const countdown = calculateCountdown(dinnerTimeRange.start)
+  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
 
-  // Menu deadline
-  const isPastMenuDeadline = isAnnounceMenuPastDeadline(props.dinnerEvent.date)
-  if (isPastMenuDeadline) {
-    warnings.push({
-      badge: 'Menu',
-      message: 'Deadline overskredet',
-      color: COLOR.error,
-      level: 'critical'
-    })
-  } else if (countdown.hours < DEADLINE_THRESHOLDS.WARNING) {
-    warnings.push({
-      badge: 'Menu',
-      message: `Om ${countdown.formatted.toLowerCase()}`,
-      color: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? COLOR.error : COLOR.warning,
-      level: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? 'urgent' : 'warning'
-    })
+  // 0 = compliant (green), 1 = warning, 2 = critical
+  return {
+    urgency,
+    countdown,
+    color: URGENCY_TO_BADGE[urgency].color
   }
-
-  // Grocery shopping deadline
-  if (countdown.hours < DEADLINE_THRESHOLDS.WARNING && countdown.hours > 0) {
-    warnings.push({
-      badge: 'Indkøb',
-      message: `Om ${countdown.formatted.toLowerCase()}`,
-      color: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? COLOR.error : COLOR.warning,
-      level: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? 'urgent' : 'warning'
-    })
-  }
-
-  return warnings
 })
 
 // Booking status
-const bookingStatus = computed(() => {
+const bookingStatus = computed((): { badge: string; isOpen: boolean; message: string; color: NuxtUIColor } => {
   const isOpen = canModifyOrders(props.dinnerEvent.date)
   return {
     badge: 'Bestilling',
@@ -221,8 +185,15 @@ const formattedBudget = computed(() => {
   return `${Math.round(budgetValue.value / 100)} kr`
 })
 
-// Most urgent warning for compact mode
-const urgentWarning = computed(() => deadlineWarnings.value[0] || null)
+// Menu status badge for compact mode - derived from menuStatus
+const menuStatusBadge = computed(() => {
+  const { urgency, countdown } = menuStatus.value
+  const badge = URGENCY_TO_BADGE[urgency]
+  return {
+    color: badge.color,
+    label: urgency === 0 ? badge.label : countdown.formatted
+  }
+})
 
 // ========== ALLERGEN STATE ==========
 
@@ -255,10 +226,47 @@ watch(() => props.dinnerEvent, (newEvent) => {
   if (newEvent) formState.value = toFormState(newEvent)
 }, { immediate: true })
 
-// Computed for totalCost input (øre to kr conversion)
+// VAT config from app.config
+const appConfig = useAppConfig()
+const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
+
+// Cost input type: chef can enter either inkl. or ex moms
+type CostInputType = 'inkl' | 'ex'
+const costInputType = ref<CostInputType>('inkl')
+const costTypeOptions = [
+  { value: 'inkl' as CostInputType, label: 'Inkl. moms' },
+  { value: 'ex' as CostInputType, label: 'Ex moms' }
+]
+
+// Computed for totalCost input (øre to kr conversion + VAT handling)
+// totalCost is stored as gross (inkl. moms) in øre
 const totalCostKr = computed({
-  get: () => Math.round(formState.value.totalCost / 100),
-  set: (kr: number) => { formState.value.totalCost = kr * 100 }
+  get: () => {
+    const grossOre = formState.value.totalCost
+    if (costInputType.value === 'ex') {
+      return Math.round(convertVat(grossOre, vatPercent, true) / 100)
+    }
+    return Math.round(grossOre / 100)
+  },
+  set: (inputKr: number) => {
+    const inputOre = inputKr * 100
+    if (costInputType.value === 'ex') {
+      formState.value.totalCost = convertVat(inputOre, vatPercent, false)
+    } else {
+      formState.value.totalCost = inputOre
+    }
+  }
+})
+
+// Display the alternative value for reference
+const costAlternativeDisplay = computed(() => {
+  if (!formState.value.totalCost) return null
+  const grossOre = formState.value.totalCost
+  const netOre = convertVat(grossOre, vatPercent, true)
+  if (costInputType.value === 'inkl') {
+    return `${Math.round(netOre / 100)} kr ex moms`
+  }
+  return `${Math.round(grossOre / 100)} kr inkl. moms`
 })
 
 const isEditingMenu = ref(false)
@@ -329,9 +337,8 @@ const handleCardClick = () => {
     v-if="isCompact"
     :name="`chef-menu-card-${dinnerEvent.id}`"
     :ui="{
-      root: 'cursor-pointer transition-all hover:scale-[1.01]',
-      ring: selected ? 'ring-2 ring-primary' : '',
-      body: { padding: 'p-3' }
+      root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
+      body: 'p-3'
     }"
     @click="handleCardClick"
   >
@@ -352,21 +359,20 @@ const handleCardClick = () => {
       <UBadge
         :color="stateBadge.color"
         variant="subtle"
-        :size="SIZES.small.value"
+        :size="SIZES.small"
         class="shrink-0"
       >
         {{ stateBadge.label }}
       </UBadge>
 
-      <!-- Urgent warning -->
+      <!-- Menu status -->
       <UBadge
-        v-if="urgentWarning"
-        :color="urgentWarning.color"
+        :color="menuStatusBadge.color"
         variant="soft"
-        :size="SIZES.small.value"
+        :size="SIZES.small"
         class="shrink-0"
       >
-        {{ urgentWarning.badge }} {{ urgentWarning.message }}
+        {{ menuStatusBadge.label }}
       </UBadge>
 
       <!-- Budget -->
@@ -381,7 +387,7 @@ const handleCardClick = () => {
     <template #header>
       <div class="flex items-start justify-between gap-2">
         <h3 :class="TYPOGRAPHY.cardTitle">{{ cardTitle }}</h3>
-        <UBadge :color="stateBadge.color" :icon="stateBadge.icon" variant="subtle" :size="SIZES.small.value">
+        <UBadge :color="stateBadge.color" :icon="stateBadge.icon" variant="subtle" :size="SIZES.small">
           {{ stateBadge.label }}
         </UBadge>
       </div>
@@ -420,24 +426,30 @@ const handleCardClick = () => {
         class="space-y-4"
         @submit="handleFormSubmit"
       >
-        <UFormField label="Menu titel" name="menuTitle" required>
-          <UInput v-model="formState.menuTitle" placeholder="Indtast menu titel" :size="SIZES.standard.value" name="chef-menu-title-input" />
+        <UFormField label="Menu titel" name="menuTitle" required class="w-full" hint="Hvad er aftenens ret?">
+          <UInput v-model="formState.menuTitle" placeholder="f.eks. Spaghetti Carbonara" :size="SIZES.standard" name="chef-menu-title-input" class="w-full" />
         </UFormField>
-        <UFormField label="Beskrivelse (valgfri)" name="menuDescription">
-          <UTextarea v-model="formState.menuDescription" placeholder="Tilføj en beskrivelse af menuen" :rows="3" :size="SIZES.standard.value" name="chef-menu-description-input" />
+        <UFormField label="Beskrivelse" name="menuDescription" class="w-full" hint="Beskriv menuen kort">
+          <UTextarea v-model="formState.menuDescription" placeholder="f.eks. Cremet pasta med bacon og parmesan" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" class="w-full" />
         </UFormField>
-        <UFormField label="Indkøbsomkostninger (kr)" name="totalCost">
-          <UInput v-model="totalCostKr" type="number" min="0" placeholder="0" :size="SIZES.standard.value" name="chef-total-cost-input" />
+        <UFormField label="Indkøbsomkostninger" name="totalCost" class="w-full" hint="Hvad kostede indkøbene?">
+          <div class="flex gap-2 items-start">
+            <UInput v-model="totalCostKr" type="number" min="0" placeholder="f.eks. 450" :size="SIZES.standard" name="chef-total-cost-input" class="flex-1" />
+            <USelect v-model="costInputType" :items="costTypeOptions" value-key="value" :size="SIZES.standard" name="chef-cost-type-select" class="w-32" />
+          </div>
+          <div v-if="costAlternativeDisplay" :class="`mt-1 ${TYPOGRAPHY.finePrint} opacity-60`">
+            = {{ costAlternativeDisplay }}
+          </div>
         </UFormField>
         <div class="flex gap-2 justify-end">
-          <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard.value" name="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard.value" :icon="ICONS.check" name="save-menu-edit">Gem</UButton>
+          <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" name="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
+          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" name="save-menu-edit">Gem</UButton>
         </div>
       </UForm>
 
       <!-- ========== ALLERGEN SECTION ========== -->
       <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">
-        <h4 :class="`${TYPOGRAPHY.label} mb-2`">Allergener i menuen</h4>
+        <h4 :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Allergener i menuen</h4>
 
         <!-- VIEW mode: Display allergens -->
         <div v-if="!isEditingAllergens">
@@ -471,8 +483,8 @@ const handleCardClick = () => {
             :show-statistics="true"
           />
           <div class="flex gap-2 justify-end">
-            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard.value" name="cancel-allergen-edit" @click="handleAllergenCancel">Annuller</UButton>
-            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard.value" :icon="ICONS.check" name="save-allergen-edit" @click="handleAllergenSave">Gem</UButton>
+            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" name="cancel-allergen-edit" @click="handleAllergenCancel">Annuller</UButton>
+            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" name="save-allergen-edit" @click="handleAllergenSave">Gem</UButton>
           </div>
         </div>
       </div>
@@ -493,14 +505,14 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- Deadline warnings row -->
-        <div v-if="deadlineWarnings.length > 0 || dinnerEvent.state === DinnerState.SCHEDULED" class="flex flex-wrap items-center gap-2 text-sm">
-          <div v-for="warning in deadlineWarnings" :key="warning.badge" class="flex items-center gap-1">
-            <UBadge :color="warning.color" variant="soft" :size="SIZES.small.value">{{ warning.badge }}</UBadge>
-            <span :class="warning.level === 'critical' ? 'text-error font-medium' : ''">{{ warning.message }}</span>
+        <!-- Status row: menu countdown + booking status -->
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          <div class="flex items-center gap-1">
+            <UBadge :color="menuStatusBadge.color" variant="soft" :size="SIZES.small">Menu</UBadge>
+            <span>{{ menuStatusBadge.label }}</span>
           </div>
-          <div v-if="dinnerEvent.state === DinnerState.SCHEDULED" class="flex items-center gap-1">
-            <UBadge :color="bookingStatus.color" variant="soft" :size="SIZES.small.value">{{ bookingStatus.badge }}</UBadge>
+          <div class="flex items-center gap-1">
+            <UBadge :color="bookingStatus.color" variant="soft" :size="SIZES.small">{{ bookingStatus.badge }}</UBadge>
             <span>{{ bookingStatus.message }}</span>
           </div>
         </div>
@@ -516,7 +528,7 @@ const handleCardClick = () => {
             v-if="nextState"
             :color="canAdvanceState ? HERO_BUTTON.primaryButton : COLOR.neutral"
             variant="solid"
-            :size="SIZES.standard.value"
+            :size="SIZES.standard"
             :icon="nextState.icon"
             :disabled="!canAdvanceState"
             block
@@ -531,7 +543,7 @@ const handleCardClick = () => {
             :color="COLOR.warning"
             variant="soft"
             icon="i-heroicons-information-circle"
-            :ui="{ padding: 'p-2', description: 'text-xs' }"
+            :ui="{ root: 'p-2', description: 'text-xs' }"
           >
             <template #description>Indtast menu titel for at annoncere</template>
           </UAlert>
@@ -540,7 +552,7 @@ const handleCardClick = () => {
             v-if="canCancelDinner(dinnerEvent)"
             :color="COLOR.error"
             variant="outline"
-            :size="SIZES.standard.value"
+            :size="SIZES.standard"
             icon="i-heroicons-x-mark"
             block
             name="cancel-dinner"

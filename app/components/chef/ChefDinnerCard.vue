@@ -5,35 +5,23 @@
  * Features:
  * - Display dinner date, menu, state
  * - Click to select dinner
- * - Multiple deadline warnings with badge labels
+ * - Menu status with urgency levels (0=compliant, 1=warning, 2=critical)
+ * - Booking status (open/closed)
  * - State badges (SCHEDULED, ANNOUNCED, CANCELLED, CONSUMED)
  * - Visual selection state
- *
- * Deadline types (SCHEDULED only):
- * 1. Menu announcement (chef action) - badge "Menu"
- *    - Warning: < 72h before booking deadline
- *    - Critical: Past booking deadline
- * 2. Grocery shopping (chef action) - badge "Indkøb"
- *    - Warning: < 72h before dinner
- *    - Urgent: < 24h before dinner
- * 3. Booking status (informational) - badge "Bestil"
- *    - Shows booking window open/closed
- *    - Uses canModifyOrders() from useSeason
  *
  * Used in:
  * - /chef/index.vue master view (dinner list)
  *
  * ADR Compliance:
- * - ADR-001: Types from validation composables
+ * - ADR-001: Types from validation composables, business logic in useSeason
+ * - Uses getDeadlineUrgency() from useSeason (no manual thresholds)
+ * - Uses URGENCY_TO_BADGE from design system
+ * - Uses design system for card styling (CALENDAR, CHEF_CALENDAR)
  * - Mobile-first responsive design
- * - Uses useSeason for time-related logic (no manual date calculations)
- * - Reuses existing utilities: getDinnerTimeRange, calculateCountdown, canModifyOrders
- * - Consistent thresholds: 72h (warning), 24h (urgent)
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import { format } from 'date-fns'
-import { da } from 'date-fns/locale'
-import { calculateCountdown } from '~/utils/date'
+import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
@@ -49,84 +37,46 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, DINNER_STATE_BADGES, URGENCY_TO_BADGE, CALENDAR, CHEF_CALENDAR } = useTheSlopeDesignSystem()
 
-// Validation schemas
-const { DinnerStateSchema } = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
-
-// Time logic from useSeason (same pattern as DinnerCalendarDisplay)
-const { isAnnounceMenuPastDeadline, canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()
+// Time logic from useSeason (ADR-001: business logic in composables)
+const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
-// Deadline thresholds (consistent across all deadlines)
-const DEADLINE_THRESHOLDS = {
-  WARNING: 72, // hours - show warning
-  URGENT: 24   // hours - urgent action needed
-} as const
+// Format dinner date (formatDate auto-imported from ~/utils/date, uses Danish locale)
+const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
 
-// Format dinner date
-const formattedDate = computed(() => {
-  return format(props.dinnerEvent.date, 'EEEE d. MMMM', { locale: da })
-})
-
-const formattedShortDate = computed(() => {
-  return format(props.dinnerEvent.date, 'dd/MM', { locale: da })
-})
-
-// Chef action warnings (only for SCHEDULED state)
-const deadlineWarnings = computed(() => {
-  if (props.dinnerEvent.state !== DinnerState.SCHEDULED) return []
-
-  const warnings: Array<{
-    badge: string
-    message: string
-    color: string
-    level: 'warning' | 'urgent' | 'critical'
-  }> = []
-
+// Menu status - uses getDeadlineUrgency from useSeason (same pattern as ChefMenuCard)
+const menuStatus = computed(() => {
   const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
   const countdown = calculateCountdown(dinnerTimeRange.start)
+  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
 
-  // Menu announcement deadline (before booking deadline)
-  const isPastMenuDeadline = isAnnounceMenuPastDeadline(props.dinnerEvent.date)
-  if (isPastMenuDeadline) {
-    warnings.push({
-      badge: 'Menu',
-      message: 'Deadline overskredet',
-      color: COLOR.error,
-      level: 'critical'
-    })
-  } else if (countdown.hours < DEADLINE_THRESHOLDS.WARNING) {
-    warnings.push({
-      badge: 'Menu',
-      message: `Om ${countdown.formatted.toLowerCase()}`,
-      color: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? COLOR.error : COLOR.warning,
-      level: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? 'urgent' : 'warning'
-    })
+  return {
+    urgency,
+    countdown,
+    color: URGENCY_TO_BADGE[urgency].color
   }
+})
 
-  // Grocery shopping deadline (before dinner)
-  if (countdown.hours < DEADLINE_THRESHOLDS.WARNING && countdown.hours > 0) {
-    warnings.push({
-      badge: 'Indkøb',
-      message: `Om ${countdown.formatted.toLowerCase()}`,
-      color: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? COLOR.error : COLOR.warning,
-      level: countdown.hours < DEADLINE_THRESHOLDS.URGENT ? 'urgent' : 'warning'
-    })
+// Menu status badge - derived from menuStatus (same pattern as ChefMenuCard)
+const menuStatusBadge = computed(() => {
+  const { urgency, countdown } = menuStatus.value
+  const badge = URGENCY_TO_BADGE[urgency]
+  return {
+    color: badge.color,
+    label: urgency === 0 ? badge.label : countdown.formatted
   }
-
-  return warnings
 })
 
 // Booking status (informational only - uses existing canModifyOrders)
-const bookingStatus = computed(() => {
+const bookingStatus = computed((): { badge: string; isOpen: boolean; message: string; color: NuxtUIColor } => {
   const isOpen = canModifyOrders(props.dinnerEvent.date)
   return {
     badge: 'Bestil',
     isOpen,
     message: isOpen ? 'Åben' : 'Lukket',
-    color: COLOR.neutral
+    color: isOpen ? COLOR.success : COLOR.neutral
   }
 })
 
@@ -136,13 +86,8 @@ const stateBadge = computed(() => {
 })
 
 // Menu title or placeholder
-const menuTitle = computed(() => {
-  return props.dinnerEvent.menuTitle || 'Menu ikke annonceret'
-})
-
-const isMenuAnnounced = computed(() => {
-  return props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD'
-})
+const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
+const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
 
 // Handle card click
 const handleClick = () => {
@@ -154,83 +99,50 @@ const handleClick = () => {
   <UCard
     :name="`chef-dinner-card-${dinnerEvent.id}`"
     :ui="{
-      root: 'cursor-pointer transition-all hover:scale-[1.02]',
-      ring: selected ? 'ring-2 ring-primary' : ''
+      root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
+      body: 'p-3'
     }"
     @click="handleClick"
   >
-    <template #header>
-      <div class="flex items-start justify-between gap-2">
-        <!-- Date -->
-        <div>
-          <div class="text-sm font-semibold text-primary">
-            {{ formattedShortDate }}
-          </div>
-          <div class="text-xs text-neutral-500 hidden md:block">
-            {{ formattedDate }}
-          </div>
-        </div>
+    <div class="flex items-center gap-3">
+      <!-- Date -->
+      <div class="text-sm font-semibold text-primary w-12 shrink-0">
+        {{ formattedShortDate }}
+      </div>
 
-        <!-- State badge -->
-        <UBadge
-          :color="stateBadge.color"
-          :icon="stateBadge.icon"
-          variant="subtle"
-          :size="SIZES.small.value"
-        >
-          {{ stateBadge.label }}
+      <!-- Menu title -->
+      <div class="flex-1 min-w-0">
+        <div :class="['text-sm truncate', isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500']">
+          {{ menuTitle }}
+        </div>
+      </div>
+
+      <!-- State badge -->
+      <UBadge
+        :color="stateBadge.color"
+        variant="subtle"
+        :size="SIZES.small"
+        class="shrink-0"
+      >
+        {{ stateBadge.label }}
+      </UBadge>
+
+      <!-- Menu status -->
+      <UBadge
+        :color="menuStatusBadge.color"
+        variant="soft"
+        :size="SIZES.small"
+        class="shrink-0"
+      >
+        {{ menuStatusBadge.label }}
+      </UBadge>
+
+      <!-- Booking status -->
+      <div class="flex items-center gap-1 shrink-0">
+        <UBadge :color="bookingStatus.color" variant="subtle" :size="SIZES.small">
+          {{ bookingStatus.badge }}
         </UBadge>
-      </div>
-
-      <!-- Chef action warnings (Menu, Indkøb) -->
-      <div v-if="deadlineWarnings.length > 0" class="mt-2 space-y-1">
-        <UAlert
-          v-for="warning in deadlineWarnings"
-          :key="warning.badge"
-          :color="warning.color"
-          variant="soft"
-          icon="i-heroicons-exclamation-triangle"
-          :ui="{ padding: 'p-2', title: 'text-xs' }"
-        >
-          <template #title>
-            <div class="flex items-center gap-2">
-              <UBadge :color="warning.color" variant="solid" :size="SIZES.small.value">
-                {{ warning.badge }}
-              </UBadge>
-              <span>{{ warning.message }}</span>
-            </div>
-          </template>
-        </UAlert>
-      </div>
-
-      <!-- Booking status (informational only) -->
-      <div v-if="dinnerEvent.state === DinnerState.SCHEDULED" class="mt-2">
-        <div class="flex items-center gap-2 text-xs text-neutral-500">
-          <UBadge :color="bookingStatus.color" variant="subtle" :size="SIZES.small.value">
-            {{ bookingStatus.badge }}
-          </UBadge>
-          <span>{{ bookingStatus.message }}</span>
-        </div>
-      </div>
-    </template>
-
-    <!-- Menu title -->
-    <div class="py-2">
-      <div
-        :class="[
-          'text-sm',
-          isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500'
-        ]"
-      >
-        {{ menuTitle }}
-      </div>
-
-      <!-- Chef info if announced -->
-      <div
-        v-if="dinnerEvent.chefId"
-        class="text-xs text-neutral-500 mt-1"
-      >
-        Chefkok tildelt
+        <span class="text-xs text-neutral-500">{{ bookingStatus.message }}</span>
       </div>
     </div>
   </UCard>

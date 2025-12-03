@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { nextTick, ref } from 'vue'

@@ -1,6 +1,7 @@
 import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/generated/zod'
 import {parse as parseDate} from 'date-fns'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 
 /**
  * Validation schemas for Billing domain (CSV Import/Export)
@@ -37,15 +38,11 @@ export const useBillingValidation = () => {
         csvContent: z.string().min(1, 'CSV content is required')
     })
 
-    /**
-     * Import response
-     */
+    const {OrderDisplaySchema} = useBookingValidation()
+
     const BillingImportResponseSchema = z.object({
-        ordersCreated: z.number().int().min(0),
-        ordersUpdated: z.number().int().min(0),
-        ordersSkipped: z.number().int().min(0),
-        warnings: z.array(z.string()),
-        errors: z.array(z.string())
+        orders: z.array(OrderDisplaySchema),
+        count: z.number().int().min(0)
     })
 
     /**
@@ -74,12 +71,12 @@ export const useBillingValidation = () => {
         }
 
         // Parse header row to extract dates
-        const headerCells = parseCSVLine(lines[0])
+        const headerCells = parseCSVLine(lines[0]!) // Safe: lines.length >= 4
         const dates: Date[] = []
 
         // First two columns are empty/total, dates start at index 2
         for (let i = 2; i < headerCells.length; i++) {
-            const dateStr = headerCells[i].trim()
+            const dateStr = headerCells[i]?.trim()
             if (dateStr) {
                 // Parse DD/MM/YYYY format
                 const date = parseDate(dateStr, 'dd/MM/yyyy', new Date())
@@ -111,15 +108,15 @@ export const useBillingValidation = () => {
             }
 
             const addressCells = parseCSVLine(addressLine)
-            const voksneCells = parseCSVLine(voksneLine)
-            const bornCells = parseCSVLine(bornLine)
-
             const address = addressCells[0]?.trim()
 
-            // Validate address row
+            // Empty first cell = end of data (trailing empty rows)
             if (!address) {
-                throw new Error(`Empty address at row ${i + 1}`)
+                break
             }
+
+            const voksneCells = parseCSVLine(voksneLine)
+            const bornCells = parseCSVLine(bornLine)
 
             // Validate Voksne row
             const voksneLabel = voksneCells[0]?.trim()
@@ -143,7 +140,7 @@ export const useBillingValidation = () => {
                 if (adultCount > 0 || childCount > 0) {
                     orders.push({
                         address,
-                        date: dates[j],
+                        date: dates[j]!, // Safe: j < dates.length
                         adultCount,
                         childCount
                     })

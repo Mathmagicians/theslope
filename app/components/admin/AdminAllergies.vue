@@ -428,7 +428,7 @@ const catalogEmptyState = {
                 <UAlert
                     variant="soft"
                     :color="COLOR.success"
-                    :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
+                    :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar }"
                     :ui="COMPONENTS.emptyStateAlert"
                 >
                   <template #title>
@@ -530,7 +530,7 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
           v-else-if="isNoAllergyTypes"
           variant="soft"
           :color="COLOR.success"
-          :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar.value }"
+          :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar }"
           :ui="COMPONENTS.emptyStateAlert"
         >
           <template #title>

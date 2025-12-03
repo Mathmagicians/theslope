@@ -49,12 +49,12 @@ export const useWeekDayMapValidation = <T = boolean>(
         defaultValue: T,
         isRequired?: (map: WeekDayMap<T>) => boolean,
         requiredMessage?: string
-    } = DEFAULT_BOOLEAN_OPTIONS as any): UseWeekDayMapValidationReturn<T> => {
+    } = DEFAULT_BOOLEAN_OPTIONS as unknown as UseWeekDayMapValidationOptions<T>): UseWeekDayMapValidationReturn<T> => {
     const {defaultValue, valueSchema, isRequired, requiredMessage} = options
     // Base schema - validates structure (all 7 weekdays present)
     const WeekDayMapSchema: z.ZodType<WeekDayMap<T>> = z.object(
         Object.fromEntries(WEEKDAYS.map(day => [day, valueSchema]))
-    ) as any as z.ZodType<WeekDayMap<T>>
+    ) as unknown as z.ZodType<WeekDayMap<T>>
 
     // With "at least one day selected" validation (for Season)
     const WeekDayMapSchemaRequired = isRequired

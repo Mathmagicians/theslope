@@ -206,7 +206,7 @@ const table = useTemplateRef('table')
           :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
           :items-per-page="table?.tableApi?.getState().pagination.pageSize"
           :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          :size="SIZES.standard.value.value"
+          :size="SIZES.standard"
           :sibling-count="PAGINATION.siblingCount.value"
           @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
       />
@@ -231,14 +231,14 @@ const table = useTemplateRef('table')
       <template #status-header>
         <UButton
             variant="outline"
-            :size="SIZES.standard.value.value"
+            :size="SIZES.standard"
             name="sort-by-status"
             @click="toggleSortOrder"
         >
           <template #leading>
             <UIcon
                 :name="sorting[0].desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
-                :size="SIZES.standard.iconSize.value"
+                :size="SIZES.standardIconSize"
             />
           </template>
           Status

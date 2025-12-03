@@ -93,7 +93,7 @@ class="w-full px-0"
           :page="pagination.pageIndex + 1"
           :items-per-page="pagination.pageSize"
           :total="filteredHouseholds.length"
-          :size="SIZES.standard.value.value"
+          :size="SIZES.standard"
           :sibling-count="PAGINATION.siblingCount.value"
           @update:page="(p: number) => pagination.pageIndex = p - 1"
       />

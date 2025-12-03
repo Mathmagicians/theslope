@@ -187,8 +187,10 @@ test.describe('AllergyType API - CRUD Operations', () => {
             const foundInhabitant = found.inhabitants.find((i: any) => i.id === inhabitant.id)
             expect(foundInhabitant).toBeDefined()
             expect(foundInhabitant.name).toBe(inhabitantsData[index].name)
-            expect(foundInhabitant.householdName).toBe(household.name)
+            expect(foundInhabitant.householdId).toBe(household.id)
             expect(foundInhabitant.inhabitantComment).toBe(inhabitantsData[index].comment)
+            expect(foundInhabitant.allergyUpdatedAt).toBeDefined()
+            expect(new Date(foundInhabitant.allergyUpdatedAt).getTime()).not.toBeNaN()
         })
 
         // Cleanup: Delete household (CASCADE removes inhabitants and their allergies per ADR-005)

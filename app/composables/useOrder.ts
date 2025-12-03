@@ -120,6 +120,17 @@ export const useOrder = () => {
   const DEFAULT_VAT_PERCENT = 25
 
   /**
+   * Convert amount between gross (inkl. moms) and net (ex moms)
+   * @param amountOre - Amount in øre
+   * @param vatPercent - VAT as whole number (25 = 25%)
+   * @param toNet - true: gross→net, false: net→gross
+   */
+  const convertVat = (amountOre: number, vatPercent: number, toNet: boolean): number => {
+    const multiplier = 1 + vatPercent / 100
+    return Math.round(toNet ? amountOre / multiplier : amountOre * multiplier)
+  }
+
+  /**
    * Calculate budget breakdown from orders
    * Returns all financial figures for kitchen/chef planning
    */
@@ -133,7 +144,7 @@ export const useOrder = () => {
     const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
     const availableBudget = totalRevenue - kitchenContribution
-    const availableBudgetExVat = Math.round(availableBudget / (1 + vatPercent / 100))
+    const availableBudgetExVat = convertVat(availableBudget, vatPercent, true)
 
     return {
       ticketCount,
@@ -157,7 +168,8 @@ export const useOrder = () => {
     getPortionsForTicketPrice,
     requiresChair,
 
-    // Budget
-    calculateBudget
+    // Budget & VAT
+    calculateBudget,
+    convertVat
   }
 }

@@ -203,32 +203,32 @@ const getDeadlineRingClass = (day: DateValue): string => {
 const legendItems = computed(() => [
   {
     label: 'Næste madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
   },
   {
     label: 'Valgt dato',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
   },
   {
     label: 'Planlagt madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
   },
   {
     label: 'Tidligere madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
   },
   {
     label: 'Deadline kritisk (<24t)',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
   },
   {
     label: 'Deadline snart (24-72t)',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
   }
 ])
 
 const accordionItems = [{ label: 'Kalender', slot: 'calendar-content' }]
-const accordionDefault = computed(() => SIZES.calendarMonths.value > 1 ? '0' : undefined)
+const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefined)
 </script>
 
 <template>
@@ -307,7 +307,7 @@ const accordionDefault = computed(() => SIZES.calendarMonths.value > 1 ? '0' : u
                 v-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="[
-                  SIZES.calendarCircle.value,
+                  SIZES.calendarCircle,
                   CALENDAR.day.shape,
                   getDayColorClass(getDayType(eventLists)!),
                   getDayType(eventLists) !== 'past' ? getDeadlineRingClass(day) : '',

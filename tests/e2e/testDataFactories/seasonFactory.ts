@@ -642,11 +642,11 @@ export class SeasonFactory {
         if (expectedStatus === 201) {
             const responseBody = await response.json()
             const validatedTeams = CookingTeamDetailSchema.array().parse(responseBody)
-            expect(validatedTeams[0].id, 'Response should contain the new team ID').toBeDefined()
-            expect(validatedTeams[0].seasonId).toBe(seasonId)
-            return validatedTeams[0]
+            expect(validatedTeams[0]!.id, 'Response should contain the new team ID').toBeDefined()
+            expect(validatedTeams[0]!.seasonId).toBe(seasonId)
+            return validatedTeams[0]!
         }
-        return null
+        return null as unknown as CookingTeamDetail
     }
 
     static readonly createCookingTeamWithMembersForSeason = async (

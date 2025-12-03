@@ -1,5 +1,10 @@
 import type {WeekDay} from '~/types/dateTypes'
+import type {AvatarProps, ButtonProps} from '@nuxt/ui'
 import heynaboLogo from '~/assets/heynabo.jpeg'
+
+// NuxtUI size types extracted from component props
+type NuxtUISize = NonNullable<ButtonProps['size']>
+type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
 
 /**
  * Color System - TheSlope Design System
@@ -66,6 +71,9 @@ export const COLOR = {
   caramel: 'caramel',      // Caramel - warm brown
   bonbon: 'bonbon'         // Bonbon - light purple
 } as const
+
+/** NuxtUI color type - derived from COLOR constant for type-safe component props */
+export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
 
 // ============================================================================
 // PART 2: Tailwind Class Builders (for dynamic classes)
@@ -491,48 +499,47 @@ export const IMG = {
  * Automatically adapts based on `isMd` breakpoint from layout.
  * Use these instead of manually checking `getIsMd ? 'lg' : 'md'`.
  *
- * Each size includes both badge size and matching icon size for consistency.
+ * Returns typed computed refs that Vue auto-unwraps in templates.
  *
  * @example
  * ```vue
- * <UBadge :size="SIZES.large.value">
- *   <UIcon :name="ICONS.team" :size="SIZES.large.iconSize" />
- * </UBadge>
+ * <UButton :size="SIZES.standard">Click me</UButton>
+ * <UBadge :size="SIZES.small">Tag</UBadge>
+ * <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" />
  * ```
+ */
+
+/**
+ * Creates responsive size getters that work with Vue's reactivity and TypeScript templates.
+ * Uses getters to return plain values while maintaining reactivity through isMd dependency.
  */
 export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   // Standard responsive: md on mobile, lg on desktop
-  standard: {
-    value: computed(() => isMd.value ? 'lg' : 'md'),
-    iconSize: computed(() => isMd.value ? '20' : '16')
-  },
+  get standard(): NuxtUISize { return isMd.value ? 'lg' : 'md' },
+  get standardIconSize(): string { return isMd.value ? '20' : '16' },
 
   // Small responsive: sm on mobile, md on desktop
-  small: {
-    value: computed(() => isMd.value ? 'md' : 'sm'),
-    iconSize: computed(() => isMd.value ? '16' : '12')
-  },
+  get small(): NuxtUISize { return isMd.value ? 'md' : 'sm' },
+  get smallIconSize(): string { return isMd.value ? '16' : '12' },
 
   // Large responsive: lg on mobile, xl on desktop
-  large: {
-    value: computed(() => isMd.value ? 'xl' : 'lg'),
-    iconSize: computed(() => isMd.value ? '24' : '20')
-  },
+  get large(): NuxtUISize { return isMd.value ? 'xl' : 'lg' },
+  get largeIconSize(): string { return isMd.value ? '24' : '20' },
 
   // Calendar: xl on desktop, sm on mobile (UCalendar sizing)
-  calendar: computed(() => isMd.value ? 'xl' : 'sm'),
+  get calendar(): NuxtUISize { return isMd.value ? 'xl' : 'sm' },
 
   // Calendar months: 3 on desktop, 1 on mobile
-  calendarMonths: computed(() => isMd.value ? 3 : 1),
+  get calendarMonths(): number { return isMd.value ? 3 : 1 },
 
   // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
-  calendarCircle: computed(() => isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'),
+  get calendarCircle(): string { return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs' },
 
   // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
-  calendarAccordionDefault: computed(() => isMd.value ? '0' : undefined),
+  get calendarAccordionDefault(): string | undefined { return isMd.value ? '0' : undefined },
 
   // Empty state avatar: 2xl on mobile, 3xl on desktop
-  emptyStateAvatar: computed(() => isMd.value ? '3xl' : '2xl'),
+  get emptyStateAvatar(): NuxtUIAvatarSize { return isMd.value ? '3xl' : '2xl' },
 
   // Static sizes (for when you need non-responsive)
   xs: 'xs' as const,
@@ -720,6 +727,16 @@ export const CALENDAR = {
     critical: 'ring-2 ring-red-500',
     warning: 'ring-2 ring-amber-500',
     onTrack: ''
+  },
+  // Base selection behavior - combine with palette-specific color
+  selection: {
+    base: 'ring-2 md:ring-4',
+    // Card behaviors for selectable items (agenda, list views)
+    card: {
+      base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
+      // Helper to generate selected state with color
+      selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+    }
   }
 } as const
 
@@ -783,6 +800,16 @@ export const DEADLINE_BADGES = {
   }
 } as const
 
+/**
+ * Maps DeadlineUrgency (0 | 1 | 2) to DEADLINE_BADGES
+ * 0 = On track, 1 = Warning, 2 = Critical
+ */
+export const URGENCY_TO_BADGE = {
+  0: DEADLINE_BADGES.ON_TRACK,
+  1: DEADLINE_BADGES.WARNING,
+  2: DEADLINE_BADGES.CRITICAL
+} as const
+
 export const useTheSlopeDesignSystem = () => {
   // Inject responsive breakpoint from layout
   const isMd = inject<Ref<boolean>>('isMd', ref(false))
@@ -796,6 +823,7 @@ export const useTheSlopeDesignSystem = () => {
     CHEF_CALENDAR,
     DINNER_CALENDAR,
     DEADLINE_BADGES,
+    URGENCY_TO_BADGE,
     ICONS,
     IMG,
 

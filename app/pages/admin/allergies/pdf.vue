@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {formatDate, calculateAge} from '~/utils/date'
+
+// Inhabitant type from AllergyTypeDetail for local grouping
+type AllergyInhabitant = NonNullable<AllergyTypeDetail['inhabitants']>[number]
 
 // No layout for printing
 definePageMeta({
@@ -16,11 +20,9 @@ store.initAllergiesStore()
 // Current date for header (formatted in Danish)
 const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
 
-// QR Code URL (server base URL + current route)
-const config = useRuntimeConfig()
-const qrCodeUrl = computed(() => {
-  return `${config.public.baseUrl}/admin/allergies/pdf`
-})
+// QR Code URL (uses current request URL for correct environment - local/dev/prod)
+const requestUrl = useRequestURL()
+const qrCodeUrl = computed(() => `${requestUrl.origin}/admin/allergies/pdf`)
 
 // Generate QR code data URL using a simple service
 const qrCodeDataUrl = computed(() => {
@@ -33,8 +35,8 @@ const allergyData = computed(() => {
   return allergyTypes.value
       .filter(at => at.inhabitants && at.inhabitants.length > 0)
       .map(allergyType => {
-        const adults: any[] = []
-        const children: any[] = []
+        const adults: AllergyInhabitant[] = []
+        const children: AllergyInhabitant[] = []
 
         allergyType.inhabitants?.forEach(inhabitant => {
           const age = calculateAge(inhabitant.birthDate)

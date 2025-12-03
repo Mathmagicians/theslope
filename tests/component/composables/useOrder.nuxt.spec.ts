@@ -3,28 +3,63 @@ import { useOrder } from '~/composables/useOrder'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 
 // Get enum schemas for type-safe test data
-const { OrderStateSchema, TicketTypeSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 const TicketType = TicketTypeSchema.enum
+const DinnerMode = DinnerModeSchema.enum
 
-// Test data factory helper
+// Test data factory helper - creates full OrderDisplay objects
+let orderIdCounter = 1
 const createTestOrder = (overrides: {
   state?: typeof OrderState[keyof typeof OrderState]
   priceAtBooking?: number
   ticketType?: typeof TicketType[keyof typeof TicketType]
   description?: string | null
-} = {}) => ({
-  id: Math.random(),
-  state: overrides.state ?? OrderState.BOOKED,
-  priceAtBooking: overrides.priceAtBooking ?? 5000,
-  ticketPrice: {
+} = {}) => {
+  const now = new Date()
+  return {
+    // Required scalar fields
+    id: orderIdCounter++,
+    dinnerEventId: 1,
+    inhabitantId: 1,
+    bookedByUserId: 1,
+    ticketPriceId: 1,
+    priceAtBooking: overrides.priceAtBooking ?? 5000,
+    dinnerMode: DinnerMode.DINEIN,
+    state: overrides.state ?? OrderState.BOOKED,
+    releasedAt: null,
+    closedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    // Flattened ticketType (ADR-009)
     ticketType: overrides.ticketType ?? TicketType.ADULT,
-    description: overrides.description ?? null
+    // Legacy ticketPrice object for getPortionsForTicketPrice
+    ticketPrice: {
+      ticketType: overrides.ticketType ?? TicketType.ADULT,
+      description: overrides.description ?? null
+    }
   }
-})
+}
 
 describe('useOrder', () => {
-  const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair } = useOrder()
+  const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair, convertVat } = useOrder()
+
+  describe('convertVat', () => {
+    describe.each([
+      // toNet=true: gross → net (divide by 1.25 for 25% VAT)
+      { amountOre: 12500, vatPercent: 25, toNet: true, expected: 10000, description: '125 kr gross → 100 kr net' },
+      { amountOre: 10000, vatPercent: 25, toNet: true, expected: 8000, description: '100 kr gross → 80 kr net' },
+      { amountOre: 0, vatPercent: 25, toNet: true, expected: 0, description: '0 kr gross → 0 kr net' },
+      // toNet=false: net → gross (multiply by 1.25 for 25% VAT)
+      { amountOre: 10000, vatPercent: 25, toNet: false, expected: 12500, description: '100 kr net → 125 kr gross' },
+      { amountOre: 8000, vatPercent: 25, toNet: false, expected: 10000, description: '80 kr net → 100 kr gross' },
+      { amountOre: 0, vatPercent: 25, toNet: false, expected: 0, description: '0 kr net → 0 kr gross' }
+    ])('GIVEN $description', ({ amountOre, vatPercent, toNet, expected }) => {
+      it(`WHEN converting with toNet=${toNet} THEN returns ${expected} øre`, () => {
+        expect(convertVat(amountOre, vatPercent, toNet)).toBe(expected)
+      })
+    })
+  })
 
   describe('calculateBudget', () => {
     describe.each([

@@ -44,13 +44,13 @@ const getEventListsForDay = (day: DateValue): DayEventList[] => {
   return getEventListsForDayFromComposable(day, props.eventLists, eventMap.value)
 }
 
-const monthsToDisplay = computed(() => props.numberOfMonths ?? SIZES.calendarMonths.value)
+const monthsToDisplay = computed(() => props.numberOfMonths ?? SIZES.calendarMonths)
 </script>
 
 <template>
   <div>
     <UCalendar
-        :size="SIZES.calendar.value"
+        :size="SIZES.calendar"
         :number-of-months="monthsToDisplay"
         :default-value="focusDateAsCalendarDate"
         :min-value="seasonDatesAsCalendarDates.start"

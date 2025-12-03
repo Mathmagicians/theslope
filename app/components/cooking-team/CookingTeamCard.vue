@@ -191,7 +191,7 @@ const emptyStateMessage = computed(() => {
     v-else-if="isNoTeam"
     variant="soft"
     :color="COLOR.neutral"
-    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
     :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>
@@ -206,13 +206,13 @@ const emptyStateMessage = computed(() => {
   <div v-else-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
-        <UIcon :name="ICONS.team" :size="SIZES.large.iconSize.value" class="inline" /> {{ teamName }}
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+        <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         👥 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -226,7 +226,7 @@ const emptyStateMessage = computed(() => {
           <UserListItem
             :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
             :compact="false"
-            :size="SIZES.standard.value.value"
+            :size="SIZES.standard"
             :ring-color="teamColor"
             :label="ROLE_LABELS.CHEF"
           />
@@ -240,7 +240,7 @@ const emptyStateMessage = computed(() => {
           <UserListItem
             :inhabitants="teamMembers.map(m => m.inhabitant)"
             :compact="false"
-            :size="SIZES.standard.value.value"
+            :size="SIZES.standard"
             :ring-color="teamColor"
             label="medlemmer"
           />
@@ -251,7 +251,7 @@ const emptyStateMessage = computed(() => {
       v-else
       variant="soft"
       :color="COLOR.neutral"
-      :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+      :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
       :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
@@ -274,8 +274,8 @@ const emptyStateMessage = computed(() => {
       :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :color="teamColor" variant="soft" :size="SIZES.standard.value.value" class="rounded-full p-2 md:p-3">
-          <UIcon :name="ICONS.team" :size="SIZES.standard.iconSize.value" />
+        <UBadge :color="teamColor" variant="soft" :size="SIZES.standard" class="rounded-full p-2 md:p-3">
+          <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
           <UInput
@@ -308,14 +308,14 @@ const emptyStateMessage = computed(() => {
           <UBadge
             :color="teamColor"
             variant="soft"
-            :size="SIZES.large.value.value"
+            :size="SIZES.large"
           >
             👥 {{ assignments.length }}
           </UBadge>
           <UBadge
             :color="teamColor"
             variant="soft"
-            :size="SIZES.large.value.value"
+            :size="SIZES.large"
           >
             📅 {{ cookingDaysCount }}
           </UBadge>
@@ -335,13 +335,13 @@ const emptyStateMessage = computed(() => {
 
     <!-- VIEW MODE: Team name header -->
     <div v-else class="flex items-center gap-2 flex-wrap p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
-        <UIcon :name="ICONS.team" :size="SIZES.large.iconSize.value" class="inline" /> {{ teamName }}
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+        <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         👥 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large.value.value" class="w-fit">
+      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -471,7 +471,7 @@ const emptyStateMessage = computed(() => {
         v-else
         variant="soft"
         :color="COLOR.neutral"
-        :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+        :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
         :ui="COMPONENTS.emptyStateAlert"
       >
         <template #title>

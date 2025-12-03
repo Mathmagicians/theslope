@@ -76,7 +76,7 @@ const steps = computed(() => {
       v-else
       :model-value="currentStep"
       :items="steps"
-      :size="mode === 'compact' ? SIZES.small.value : SIZES.standard.value"
+      :size="mode === 'compact' ? SIZES.small : SIZES.standard"
       :orientation="ORIENTATIONS.responsive.value"
       :color="COLOR.primary"
     />

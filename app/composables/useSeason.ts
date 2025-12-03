@@ -347,3 +347,6 @@ export const useSeason = () => {
         selectMostAppropriateActiveSeason
     }
 }
+
+// Re-export DeadlineUrgency type for consumers (ADR-001)
+export type { DeadlineUrgency }

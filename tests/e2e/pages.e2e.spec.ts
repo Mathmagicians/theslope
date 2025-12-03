@@ -14,8 +14,9 @@ test('/ has title', async ({page}) => {
 publicPages.forEach(pageName => {
     test(`All public pages can load - /${pageName}`, async ({page}) => {
         for (const pageName of publicPages) {
-            const response = await page.goto(`/${pageName}`);
-            expect(response.status()).toBe(200)
+            const response = await page.goto(`/${pageName}`)
+            expect(response).not.toBeNull()
+            expect(response!.status()).toBe(200)
         }
     })
 })
@@ -28,7 +29,8 @@ protectedPages.forEach(pageName => {
 
             // Should redirect to /login and return 200 for login page
             expect(page.url()).toContain('/login')
-            expect(response.status()).toBe(200)
+            expect(response).not.toBeNull()
+            expect(response!.status()).toBe(200)
         }
     })
 })
