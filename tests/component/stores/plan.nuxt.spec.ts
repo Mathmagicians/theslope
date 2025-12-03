@@ -2,8 +2,7 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
-import { SeasonFactory } from '../../e2e/testDataFactories/seasonFactory'
-import { pollFor } from '../testHelpers'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 import { usePlanStore } from '~/stores/plan'
 

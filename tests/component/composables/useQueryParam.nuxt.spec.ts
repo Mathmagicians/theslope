@@ -4,7 +4,6 @@ import {flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {formatDate, parseDate} from '~/utils/date'
-import {FORM_MODES, type FormMode} from '~/types/form'
 
 /**
  * Unit tests for useQueryParam.ts composable
@@ -31,7 +30,11 @@ mockNuxtImport('useRoute', () => () => mockRouteData)
 
 describe('useQueryParam.ts', () => {
   const setupQuery = (query: Record<string, string>) => {
-    Object.keys(mockRouteData.query).forEach(key => delete mockRouteData.query[key])
+    // Clear existing query params by reassigning to empty object spread
+    const keys = Object.keys(mockRouteData.query)
+    keys.forEach(key => {
+      mockRouteData.query[key] = undefined as unknown as string
+    })
     Object.assign(mockRouteData.query, query)
   }
 

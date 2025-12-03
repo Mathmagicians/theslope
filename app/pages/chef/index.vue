@@ -85,6 +85,14 @@ const selectedTeam = computed(() => {
 })
 
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
+
+// Calendar view mode via URL query param - survives component remounts (ADR-006)
+const {value: calendarViewMode, setValue: setCalendarViewMode} = useQueryParam<'agenda' | 'calendar'>('view', {
+  serialize: (v) => v,
+  deserialize: (s) => (s === 'agenda' || s === 'calendar') ? s : null,
+  defaultValue: () => 'calendar',
+  syncWhen: () => isPageReady.value
+})
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
 const getDefaultDate = (): Date => {
@@ -335,6 +343,7 @@ useHead({
           <div v-else>
             <ChefCalendarDisplay
               v-if="selectedSeason && selectedTeam"
+              v-model:view-mode="calendarViewMode"
               :season-dates="selectedSeason.seasonDates"
               :team="selectedTeam"
               :dinner-events="teamDinnerEvents"

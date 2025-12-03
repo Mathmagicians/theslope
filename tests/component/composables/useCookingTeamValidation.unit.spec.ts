@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import { useCoreValidation } from '~/composables/useCoreValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 

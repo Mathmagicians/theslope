@@ -250,7 +250,7 @@ export class SeasonFactory {
                 ...aSeason,
                 shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
             })
-        } catch (error: any) {
+        } catch {
             // Unique constraint violation - another worker created the singleton first
             console.info('🌞 > SEASON_FACTORY > Singleton already exists (created by another worker), fetching it')
 
@@ -371,7 +371,7 @@ export class SeasonFactory {
             try {
                 await this.deleteSeason(context, singleton.id!)
                 console.info('🌞 > SEASON_FACTORY > Singleton season deleted')
-            } catch (error) {
+            } catch {
                 // Ignore 404 errors - another worker already deleted the singleton
                 console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
             }
@@ -403,7 +403,7 @@ export class SeasonFactory {
         const rawData = await response.json()
 
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
-        const parsedSeasons = rawData.map((season: any) => {
+        const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
             expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
             return result.data!
@@ -457,9 +457,10 @@ export class SeasonFactory {
                     }
                 }
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             // Only log if not a 404 (season already deleted is expected)
-            if (error?.matcherResult?.actual !== 404) {
+            const matcherError = error as { matcherResult?: { actual?: number } }
+            if (matcherError?.matcherResult?.actual !== 404) {
                 console.warn(`❌ Cleanup failed: Could not fetch season ${id} for order cleanup:`, error)
             }
         }
@@ -529,7 +530,7 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonData: Partial<Season> = this.defaultSeason(),
         teamCount: number = 2
-    ): Promise<{ season: Season, teams: any[] }> => {
+    ): Promise<{ season: Season, teams: CookingTeamDetail[] }> => {
         const season = await this.createSeason(context, seasonData)
         const teams = await Promise.all(
             Array(teamCount).fill(0).map(() => this.createCookingTeamForSeason(context, season.id as number))
@@ -541,7 +542,7 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonId: number,
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<{ seasonId: number, eventCount: number, events: DinnerEventDisplay[] }> => {
         const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`, {
             headers: headers
         })
@@ -581,10 +582,10 @@ export class SeasonFactory {
     }
 
     static readonly createDinnerEventsForSeason = async (
-        context: BrowserContext,
-        seasonId: number,
-        eventCount: number = 3
-    ): Promise<any[]> => {
+        _context: BrowserContext,
+        _seasonId: number,
+        _eventCount: number = 3
+    ): Promise<DinnerEventDisplay[]> => {
         throw new Error('createDinnerEventsForSeason: Not implemented - mock method')
     }
 
@@ -606,13 +607,13 @@ export class SeasonFactory {
      * Create season with teams and dinner events (for comprehensive test scenarios)
      */
     static readonly createSeasonWithTeamsAndDinners = async (
-        context: BrowserContext,
-        options: {
+        _context: BrowserContext,
+        _options: {
             withTeams?: number,
             withEvents?: number,
             withAssignments?: number
         } = {}
-    ): Promise<any> => {
+    ): Promise<{ season: Season, teams: CookingTeamDetail[], events: DinnerEventDisplay[] }> => {
         throw new Error('createSeasonWithTeamsAndDinners: Not implemented - mock method')
     }
 
@@ -654,7 +655,7 @@ export class SeasonFactory {
         seasonId: number,
         teamName: string = salt('TestTeam'),
         memberCount: number = 2
-    ): Promise<any> => {
+    ): Promise<CookingTeamDetail & { householdId: number }> => {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
@@ -664,7 +665,7 @@ export class SeasonFactory {
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
         await Promise.all(
-            householdWithInhabitants.inhabitants.map((inhabitant: any, index: number) =>
+            householdWithInhabitants.inhabitants.map((inhabitant, index: number) =>
                 this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
             )
         )
@@ -681,7 +682,7 @@ export class SeasonFactory {
         context: BrowserContext,
         teamId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<CookingTeamDetail | null> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
 
         const status = response.status()
@@ -690,7 +691,7 @@ export class SeasonFactory {
         if (expectedStatus === 200) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(teamId)
-            return responseBody
+            return responseBody as CookingTeamDetail
         }
 
         return null

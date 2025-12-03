@@ -3,11 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { clearNuxtData } from '#app'
-import type {
-    AllergyTypeDisplay,
-    AllergyDetail
-} from '~/composables/useAllergyValidation'
-import { AllergyFactory } from '../../e2e/testDataFactories/allergyFactory'
+import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 import { useAllergiesStore } from '~/stores/allergies'
 

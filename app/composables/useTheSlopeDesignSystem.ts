@@ -755,7 +755,8 @@ export const CHEF_CALENDAR = {
     accentMedium: TEXT.ocean[300],
     dot: BG.ocean[400]
   },
-  selection: 'ring-2 md:ring-4 ring-ocean-700'
+  // Selection uses outline (outer) so deadline ring (inner) remains visible
+  selection: 'outline outline-2 md:outline-4 outline-ocean-700 outline-offset-2'
 } as const
 
 /**
@@ -773,7 +774,8 @@ export const DINNER_CALENDAR = {
     accentMedium: TEXT.peach[300],
     dot: BG.peach[400]
   },
-  selection: 'ring-2 md:ring-4 ring-peach-700'
+  // Selection uses outline (outer) so deadline ring (inner) remains visible
+  selection: 'outline outline-2 md:outline-4 outline-peach-700 outline-offset-2'
 } as const
 
 /**

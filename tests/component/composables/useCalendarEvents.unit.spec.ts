@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useCalendarEvents} from '~/composables/useCalendarEvents'
 import type {CalendarEventList} from '~/composables/useCalendarEvents'
-import {CalendarDate, type DateValue} from '@internationalized/date'
+import {CalendarDate} from '@internationalized/date'
 import {toCalendarDate, toDate, formatDate} from "~/utils/date"
 import {isSameDay} from 'date-fns'
 

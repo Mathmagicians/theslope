@@ -20,7 +20,6 @@ describe('useCoreValidation - User Schemas', () => {
     const {
         BaseUserSchema,
         UserCreateSchema,
-        UserDisplaySchema,
         serializeUserInput,
         deserializeUser,
         mergeUserRoles
@@ -175,8 +174,6 @@ describe('useCoreValidation - Household Schemas', () => {
     const {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
-        HouseholdDisplaySchema,
-        HouseholdDetailSchema,
         deserializeHouseholdDisplay,
         deserializeHouseholdDetail
     } = useCoreValidation()

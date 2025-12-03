@@ -5,11 +5,10 @@ import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {DinnerStateSchema, DinnerEventCreateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
+const {DinnerEventCreateSchema} = useBookingValidation()
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -137,7 +136,7 @@ describe('getDefaultSeason', () => {
 })
 
 describe('getDefaultHolidays', () => {
-    const { getDefaultHolidays, getDefaultSeason } = useSeason()
+    const { getDefaultHolidays } = useSeason()
 
     it('should calculate holidays within full production season', () => {
         // GIVEN: A typical production season (Aug - Jun)
@@ -190,7 +189,7 @@ describe('getDefaultHolidays', () => {
 })
 
 describe('generateDinnerEventDataForSeason', () => {
-    const { generateDinnerEventDataForSeason, getDefaultSeason } = useSeason()
+    const { generateDinnerEventDataForSeason } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
