@@ -60,7 +60,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(adultPrice!.id).toBeDefined()
 
         // AND: Create tickets for the dinner event using database ticket price
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
+        const {inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
         const inhabitant = inhabitants[0]
 
         // Verify ticket price ID is from database
@@ -178,7 +178,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // AND: Should include our created events
         const createdEventIds = [dinnerEvent1.id, dinnerEvent2.id]
-        const foundEvents = events.filter((e: any) => createdEventIds.includes(e.id))
+        const foundEvents = events.filter((e: unknown) => createdEventIds.includes(e.id))
         expect(foundEvents.length).toBe(2)
     })
 
@@ -201,12 +201,12 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(Array.isArray(events)).toBe(true)
 
         // AND: All events should belong to testSeasonId
-        events.forEach((event: any) => {
+        events.forEach((event: unknown) => {
             expect(event.seasonId).toBe(testSeasonId)
         })
 
         // AND: Should include our created event
-        const foundEvent = events.find((e: any) => e.id === dinnerEvent.id)
+        const foundEvent = events.find((e: unknown) => e.id === dinnerEvent.id)
         expect(foundEvent).toBeDefined()
     })
 

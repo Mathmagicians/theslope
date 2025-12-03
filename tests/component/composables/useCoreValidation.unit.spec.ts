@@ -629,9 +629,10 @@ describe('useCoreValidation - Household Schema Validation Edge Cases', () => {
     })
 
     it('should coerce date strings to Date objects', () => {
-        const household = {
+        // Input typed as Record to test schema coercion of string dates
+        const household: Record<string, unknown> = {
             ...HouseholdFactory.defaultHouseholdData(),
-            movedInDate: '2024-01-01' as any
+            movedInDate: '2024-01-01'
         }
         const result = HouseholdCreateSchema.safeParse(household)
 
@@ -820,16 +821,17 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
         {
             getData: () => {
                 const map = createDefaultWeekdayMap(DinnerMode.DINEIN)
-                map.mandag = 'INVALID_MODE' as any
+                // Cast to test invalid enum value at runtime
+                map.mandag = 'INVALID_MODE' as 'DINEIN'
                 return map
             },
             description: 'invalid DinnerMode value'
         },
         {
             getData: () => {
-                const map = createDefaultWeekdayMap(DinnerMode.DINEIN) as any
-                delete map.onsdag
-                delete map.torsdag
+                const map = createDefaultWeekdayMap(DinnerMode.DINEIN) as Record<string, unknown>
+                Reflect.deleteProperty(map, 'onsdag')
+                Reflect.deleteProperty(map, 'torsdag')
                 return map
             },
             description: 'incomplete WeekDayMap (missing days)'

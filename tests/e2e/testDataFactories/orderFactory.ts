@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, OrderCreate, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'

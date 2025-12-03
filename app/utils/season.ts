@@ -429,6 +429,48 @@ export const splitDinnerEvents = <T extends { date: Date }>(
 }
 
 /**
+ * Temporal category for dinner events
+ */
+export type TemporalCategory = 'next' | 'future' | 'past'
+
+/**
+ * Dinner event with temporal category
+ */
+export type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
+
+/**
+ * Sort dinner events in temporal order: next (today), future (ascending), past (descending)
+ * @param dinnerEvents - Array of dinner events to sort
+ * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
+ * @returns Events sorted in temporal order with category attached
+ */
+export const sortDinnerEventsByTemporal = <T extends { date: Date }>(
+    dinnerEvents: T[],
+    nextDinnerDateRange: DateRange | null
+): TemporalDinnerEvent<T>[] => {
+    const now = new Date()
+    const next: TemporalDinnerEvent<T>[] = []
+    const future: TemporalDinnerEvent<T>[] = []
+    const past: TemporalDinnerEvent<T>[] = []
+
+    for (const event of dinnerEvents) {
+        if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
+            next.push({ ...event, temporalCategory: 'next' })
+        } else if (event.date < now) {
+            past.push({ ...event, temporalCategory: 'past' })
+        } else {
+            future.push({ ...event, temporalCategory: 'future' })
+        }
+    }
+
+    // Future ascending (soonest first), past descending (most recent first)
+    future.sort((a, b) => a.date.getTime() - b.date.getTime())
+    past.sort((a, b) => b.date.getTime() - a.date.getTime())
+
+    return [...next, ...future, ...past]
+}
+
+/**
  * Generic curried function to check if now is before a deadline relative to dinner start time
  *
  * @param offsetDays - Number of days before dinner (default: 0)

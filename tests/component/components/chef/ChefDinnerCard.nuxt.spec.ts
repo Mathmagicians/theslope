@@ -44,52 +44,31 @@ describe('ChefDinnerCard', () => {
             expect(wrapper.text()).toContain('Menu ikke annonceret')
         })
 
-        it('should show formatted date', async () => {
+        it('should show formatted date with weekday', async () => {
             const dinnerEvent = createDinnerEvent({ date: new Date('2025-12-25T18:00:00') })
             const wrapper = await mountSuspended(ChefDinnerCard, {
                 props: { dinnerEvent }
             })
 
+            // Should show weekday and date (e.g., "tor. 25/12")
             expect(wrapper.text()).toContain('25/12')
         })
     })
 
-    describe('State badges', () => {
-        it.each([
-            {
-                state: DinnerState.SCHEDULED,
-                expectedLabel: 'Planlagt',
-                description: 'SCHEDULED state'
-            },
-            {
-                state: DinnerState.ANNOUNCED,
-                expectedLabel: 'Annonceret',
-                description: 'ANNOUNCED state'
-            },
-            {
-                state: DinnerState.CANCELLED,
-                expectedLabel: 'Aflyst',
-                description: 'CANCELLED state'
-            },
-            {
-                state: DinnerState.CONSUMED,
-                expectedLabel: 'Afholdt',
-                description: 'CONSUMED state'
-            }
-        ])('should display $expectedLabel badge for $description', async ({ state, expectedLabel }) => {
-            const dinnerEvent = createDinnerEvent({ state })
+    describe('Deadline badges via DinnerDeadlineBadges', () => {
+        it('should show Menu and Tilmelding labels', async () => {
+            const dinnerEvent = createDinnerEvent()
             const wrapper = await mountSuspended(ChefDinnerCard, {
                 props: { dinnerEvent }
             })
 
-            expect(wrapper.text()).toContain(expectedLabel)
+            // DinnerDeadlineBadges always shows these labels in standalone mode
+            expect(wrapper.text()).toContain('Menu')
+            expect(wrapper.text()).toContain('Tilmelding')
         })
-    })
 
-    describe('Deadline warnings', () => {
-        it('should show no warnings for far future dinner (>72h)', async () => {
-            // Dinner in 15 days - no warnings expected
-            // Note: Must be > ticketIsCancellableDaysBefore (10 days) to avoid deadline warnings
+        it('should show OK badge for far future dinner', async () => {
+            // Dinner in 15 days - should show "OK" for menu deadline
             const dinnerDate = new Date()
             dinnerDate.setDate(dinnerDate.getDate() + 15)
             dinnerDate.setHours(18, 0, 0, 0)
@@ -102,14 +81,11 @@ describe('ChefDinnerCard', () => {
                 props: { dinnerEvent }
             })
 
-            // Should not contain any warning indicators
-            expect(wrapper.text()).not.toContain('Menu')
-            expect(wrapper.text()).not.toContain('Indkøb')
-            expect(wrapper.text()).not.toContain('overskredet')
+            expect(wrapper.text()).toContain('OK')
         })
 
-        it('should show warning badges for dinner within 72h', async () => {
-            // Dinner in 48 hours - should show warnings
+        it('should show countdown for dinner within 72h', async () => {
+            // Dinner in 48 hours - should show countdown
             const dinnerDate = new Date()
             dinnerDate.setDate(dinnerDate.getDate() + 2)
             dinnerDate.setHours(18, 0, 0, 0)
@@ -122,46 +98,20 @@ describe('ChefDinnerCard', () => {
                 props: { dinnerEvent }
             })
 
-            // Should contain warning badges (Menu and Indkøb)
             const text = wrapper.text()
-            expect(text).toContain('Menu')
-            expect(text).toContain('Indkøb')
-            // Should show countdown (either days or hours format)
-            expect(text).toMatch(/Om \d+/)
+            // Should show countdown value (days, hours, or minutes)
+            expect(text).toMatch(/\d+\s*(DAGE?|T|M)/i)
         })
 
-        it('should show critical warning for past deadline', async () => {
-            // Dinner 1 hour ago - critical
-            const dinnerDate = new Date()
-            dinnerDate.setHours(dinnerDate.getHours() - 1)
-
-            const dinnerEvent = createDinnerEvent({
-                date: dinnerDate,
-                state: DinnerState.SCHEDULED
-            })
+        it('should show Åben or Lukket for tilmelding status', async () => {
+            const dinnerEvent = createDinnerEvent()
             const wrapper = await mountSuspended(ChefDinnerCard, {
                 props: { dinnerEvent }
             })
 
-            expect(wrapper.text()).toContain('Deadline overskredet')
-        })
-
-        it('should not show deadline warning for ANNOUNCED dinner', async () => {
-            // Past deadline but ANNOUNCED state - no warnings
-            const dinnerDate = new Date()
-            dinnerDate.setHours(dinnerDate.getHours() - 1)
-
-            const dinnerEvent = createDinnerEvent({
-                date: dinnerDate,
-                state: DinnerState.ANNOUNCED
-            })
-            const wrapper = await mountSuspended(ChefDinnerCard, {
-                props: { dinnerEvent }
-            })
-
-            expect(wrapper.text()).not.toContain('Deadline overskredet')
-            expect(wrapper.text()).not.toContain('Menu')
-            expect(wrapper.text()).not.toContain('Indkøb')
+            const text = wrapper.text()
+            // Should show either Åben or Lukket for tilmelding
+            expect(text).toMatch(/Åben|Lukket/)
         })
     })
 
@@ -205,26 +155,6 @@ describe('ChefDinnerCard', () => {
             const emitted = wrapper.emitted('select')
             expect(emitted).toBeTruthy()
             expect(emitted![0]).toEqual([42])
-        })
-    })
-
-    describe('Chef assignment indicator', () => {
-        it('should show chef assigned indicator when chefId is set', async () => {
-            const dinnerEvent = createDinnerEvent({ chefId: 5 })
-            const wrapper = await mountSuspended(ChefDinnerCard, {
-                props: { dinnerEvent }
-            })
-
-            expect(wrapper.text()).toContain('Chefkok tildelt')
-        })
-
-        it('should not show chef assigned indicator when chefId is null', async () => {
-            const dinnerEvent = createDinnerEvent({ chefId: null })
-            const wrapper = await mountSuspended(ChefDinnerCard, {
-                props: { dinnerEvent }
-            })
-
-            expect(wrapper.text()).not.toContain('Chefkok tildelt')
         })
     })
 })

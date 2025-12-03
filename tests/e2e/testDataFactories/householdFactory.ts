@@ -3,12 +3,12 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, InhabitantDetail, InhabitantCreate} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
-const {createDefaultWeekdayMap} = useCoreValidation()
+const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema} = useCoreValidation()
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
@@ -36,7 +36,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<HouseholdDetail> => {
         const {HouseholdDetailSchema} = useCoreValidation()
 
         // Merge partial with defaults to create full Household object
@@ -73,7 +73,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},
         inhabitantCount: number = 2
-    ): Promise<{household: HouseholdDetail, inhabitants: Inhabitant[]}> => {
+    ): Promise<{household: HouseholdDetail, inhabitants: InhabitantDetail[]}> => {
         const household = await this.createHousehold(context, partialHousehold)
         const inhabitants = []
         for (let i = 0; i < inhabitantCount; i++) {
@@ -92,7 +92,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         householdId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<HouseholdDetail | null> => {
         const {HouseholdDetailSchema} = useCoreValidation()
         const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
 
@@ -189,7 +189,7 @@ export class HouseholdFactory {
         inhabitantName: string = "Pluto Hund",
         birthDate?: Date | null,
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<InhabitantDetail> => {
         // Split name into first and last
         const nameParts = inhabitantName.split(' ')
         // Only use defaults for success cases (201) - validation tests need exact invalid data
@@ -225,35 +225,13 @@ export class HouseholdFactory {
 
 
     /**
-     * Create inhabitant from existing user (needed by seasonFactory for team assignments)
-     */
-    static readonly createInhabitantFromUser = async (
-        context: BrowserContext,
-        householdId: number,
-        userId: number
-    ): Promise<any> => {
-        throw new Error('createInhabitantFromUser: Not implemented - mock method')
-    }
-
-    /**
-     * Create multiple inhabitants (needed by seasonFactory for team assignments)
-     */
-    static readonly createInhabitants = async (
-        context: BrowserContext,
-        count: number = 5,
-        householdId?: number
-    ): Promise<any[]> => {
-        throw new Error('createInhabitants: Not implemented - mock method')
-    }
-
-    /**
      * Get inhabitant by ID
      */
     static readonly getInhabitantById = async (
         context: BrowserContext,
         inhabitantId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<InhabitantDetail | null> => {
         const response = await context.request.get(`${INHABITANT_ENDPOINT}/${inhabitantId}`)
 
         const status = response.status()
@@ -262,7 +240,7 @@ export class HouseholdFactory {
         if (expectedStatus === 200) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(inhabitantId)
-            return responseBody
+            return InhabitantDetailSchema.parse(responseBody)
         }
 
         return null
@@ -271,13 +249,13 @@ export class HouseholdFactory {
     /**
      * Get all inhabitants
      */
-    static readonly getAllInhabitants = async (context: BrowserContext): Promise<any[]> => {
+    static readonly getAllInhabitants = async (context: BrowserContext): Promise<InhabitantDetail[]> => {
         const response = await context.request.get(INHABITANT_ENDPOINT)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return responseBody
+        return InhabitantDetailSchema.array().parse(responseBody)
     }
 
     /**
@@ -289,7 +267,7 @@ export class HouseholdFactory {
         inhabitantName: string,
         email: string,
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<InhabitantDetail> => {
         const inhabitantData = {
             ...this.defaultInhabitantData(),
             householdId: householdId,
@@ -327,7 +305,7 @@ export class HouseholdFactory {
     /**
      * Get user by email (for testing user associations)
      */
-    static readonly getUserByEmail = async (context: BrowserContext, email: string): Promise<any> => {
+    static readonly getUserByEmail = async (context: BrowserContext, email: string): Promise<UserDisplay> => {
         const response = await context.request.get(`/api/admin/users?email=${email}`)
         expect(response.status()).toBe(200)
 
@@ -335,7 +313,7 @@ export class HouseholdFactory {
         expect(Array.isArray(responseBody)).toBe(true)
         expect(responseBody.length).toBe(1)
 
-        const user = responseBody[0]
+        const user = UserDisplaySchema.parse(responseBody[0])
         expect(user.email).toBe(email)
         return user
     }
@@ -348,7 +326,7 @@ export class HouseholdFactory {
         inhabitantId: number,
         updates: Partial<InhabitantDetail>,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<InhabitantDetail | null> => {
         const response = await context.request.post(`${INHABITANT_ENDPOINT}/${inhabitantId}`, {
             headers: headers,
             data: updates
@@ -358,7 +336,7 @@ export class HouseholdFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json()
+            return InhabitantDetailSchema.parse(await response.json())
         }
 
         return null
@@ -371,12 +349,12 @@ export class HouseholdFactory {
         context: BrowserContext,
         inhabitantId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<InhabitantDetail | null> => {
         const response = await context.request.delete(`${INHABITANT_ENDPOINT}/${inhabitantId}`)
         const status = response.status()
 
         if (status === expectedStatus) {
-            return status === 200 ? await response.json() : null
+            return status === 200 ? InhabitantDetailSchema.parse(await response.json()) : null
         } else if (status === 404 && expectedStatus === 200) {
             return null
         } else {

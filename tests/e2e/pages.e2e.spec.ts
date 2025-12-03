@@ -41,7 +41,8 @@ test.describe('Pages with logged in user can load', () => {
 
     protectedPages.forEach(pageName => {
         test(`Protected page can load when Logged in as admin - /${pageName}`, async ({page}) => {
-            // page is authenticated as a user
+            await page.goto(`/${pageName}`)
+            await expect(page).toHaveURL(new RegExp(`/${pageName}`))
         })
     })
 })

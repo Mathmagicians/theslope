@@ -83,7 +83,7 @@ const emit = defineEmits<{
 }>()
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {getDinnerTimeRange, getDeadlineUrgency} = useSeason()
+const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES} = useTheSlopeDesignSystem()
 
 // Focus date for calendar navigation (from selected dinner)
@@ -178,12 +178,11 @@ const isSelected = (day: DateValue): boolean => {
   return dinner?.id === props.selectedDinnerId
 }
 
-// Agenda view - sorted dinner events
-const sortedDinnerEvents = computed(() => {
-  return [...props.dinnerEvents].sort((a, b) =>
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
-})
+// Agenda view - temporal order: next (today), future, past
+// Each event has temporalCategory ('next' | 'future' | 'past') attached
+const sortedDinnerEvents = computed(() =>
+  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
+)
 
 // Deadline urgency ring logic (shared across calendars)
 const URGENCY_TO_RING_CLASS = {
@@ -297,6 +296,7 @@ const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefin
             :key="dinner.id"
             :dinner-event="dinner"
             :selected="dinner.id === selectedDinnerId"
+            :temporal-category="dinner.temporalCategory"
             @select="emit('select', $event)"
           />
         </div>

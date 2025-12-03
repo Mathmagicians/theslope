@@ -49,12 +49,18 @@ describe('useTabNavigation.ts', () => {
     query?: Record<string, string>
   }) => {
     mockRouteData.path = config.path
-    // Mutate existing params object instead of replacing it
-    // This ensures the route reference inside composable sees the changes
-    Object.keys(mockRouteData.params).forEach(key => delete mockRouteData.params[key])
+    // Mutate existing objects - use Reflect.deleteProperty to clear keys
+    for (const key in mockRouteData.params) {
+      if (Object.hasOwn(mockRouteData.params, key)) {
+        Reflect.deleteProperty(mockRouteData.params, key)
+      }
+    }
     Object.assign(mockRouteData.params, config.params)
-    // Same for query
-    Object.keys(mockRouteData.query).forEach(key => delete mockRouteData.query[key])
+    for (const key in mockRouteData.query) {
+      if (Object.hasOwn(mockRouteData.query, key)) {
+        Reflect.deleteProperty(mockRouteData.query, key)
+      }
+    }
     Object.assign(mockRouteData.query, config.query || {})
   }
 
@@ -68,7 +74,7 @@ describe('useTabNavigation.ts', () => {
   }
 
   // Helper to set activeTab and wait for async navigation
-  const setActiveTab = async (activeTabRef: any, tab: string) => {
+  const setActiveTab = async (activeTabRef: { value: string }, tab: string) => {
     activeTabRef.value = tab
     await flushPromises()
   }

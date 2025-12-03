@@ -1,25 +1,71 @@
-#! /usr/bin/env bash
-# change .env, .env.test, .env.prod to access localhost, dev, prod system
-include .env
-export
+#!/usr/bin/env make
+# Environment: .env.* locally, CI/CD provides env vars directly
+SHELL := /bin/bash
 
-.PHONY: heynabo-print-token heynabo-api heynabo-get-locations heynabo-get-nhbrs heynabo-get-admin heynabo
+# ============================================================================
+# ENVIRONMENT CONFIGS
+# ============================================================================
+ENV_local := .env
+ENV_dev   := .env.test
+ENV_prod  := .env.prod
 
-export HEY_TOKEN?="$(shell curl -s -X POST $(HEY_NABO_API)/login  -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)"}' | jq .'token')"
+URL_local := http://localhost:3000
+URL_dev   := https://dev.skraaningen.dk
+URL_prod  := https://skraaningen.dk
+
+CSV_TEST := .theslope/order-import/test_import_orders.csv
+CSV_PROD := .theslope/order-import/skraaningen_2025_december_framelding.csv
+
+# ============================================================================
+# MACROS
+# ============================================================================
+# Source env file (if exists) then run command - works with CI/CD provided vars
+define with_env
+	@if [ -f "$(1)" ]; then set -a; source "$(1)"; set +a; fi; $(2)
+endef
+
+define theslope_call
+	@source $(1) && curl -s -c .cookies.txt "$(2)/api/auth/login" -H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -e '.email' > /dev/null && \
+	curl -s -b .cookies.txt -H "Content-Type: application/json" $(3) | jq
+endef
+
+define heynabo_call
+	@source $(1) && HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
+	curl -s -H "Accept: application/json" -H "Authorization: Bearer $$HEY_TOKEN" $(2) | jq
+endef
+
+# D1 execute wrapper
+define d1_exec
+	@npx wrangler d1 execute $(1) --command="$(2)" $(3)
+endef
+
+# ============================================================================
+# HELP
+# ============================================================================
+.DEFAULT_GOAL := help
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z0-9_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}'
+
+# ============================================================================
+# PRISMA & MIGRATIONS
+# ============================================================================
+.PHONY: prisma-to-zod d1-prisma prisma-create-migration prisma-flatten-migrations
 
 prisma-to-zod:
 	@npx prisma generate zod
 
-d1-prisma: prisma-to-zod
+d1-prisma: prisma-to-zod ## Generate Prisma client and Zod types
 	@npx prisma format
 	@npx prisma validate
 	@npm run db:generate-client
 
-prisma-create-migration:
+prisma-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."
 	@npx prisma migrate dev --name $(name) --create-only
 	@echo "✅ Migration created in prisma/migrations/"
-	@echo "🔄 Flattening for Wrangler..."
 	@$(MAKE) prisma-flatten-migrations
 
 prisma-flatten-migrations:
@@ -41,17 +87,22 @@ prisma-flatten-migrations:
 	done
 	@echo "✅ Migrations flattened!"
 
-d1-migrate-local:
+# ============================================================================
+# DATABASE MIGRATIONS
+# ============================================================================
+.PHONY: d1-migrate-local d1-migrate-dev d1-migrate-prod d1-migrate-all
+
+d1-migrate-local: ## Migrate + seed local database
 	@echo "🏗️ Applying migrations to local database"
 	@npm run db:migrate:local
 	@npm run db:seed:local
 
-d1-migrate-dev:
-	@echo "🏗️ Applying migrations to dev database (theslope --remote)"
+d1-migrate-dev: ## Migrate + seed dev database
+	@echo "🏗️ Applying migrations to dev database"
 	@npm run db:migrate
 	@npm run db:seed
 
-d1-migrate-prod:
+d1-migrate-prod: ## Migrate + seed production database
 	@echo "🏗️ Applying migrations to production database"
 	@npm run db_prod:migrate
 	@npm run db_prod:seed
@@ -59,172 +110,209 @@ d1-migrate-prod:
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
 
-d1-seed-testdata:
-	@echo "🧪 Applying test data to local database"
+# ============================================================================
+# DATABASE SEEDING
+# ============================================================================
+.PHONY: d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
+
+d1-seed-testdata: ## Seed local with test data
 	@npx wrangler d1 execute theslope --file migrations/seed/test-data.sql --local
 	@echo "✅ Test data loaded!"
 
-# Master data: Address → PBS ID mapping (from .theslope/, gitignored)
-d1-seed-master-data-local:
-	@echo "📦 Loading master data (Address → PBS ID) to local database"
+d1-seed-master-data-local: ## Load master data to local
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --local
 	@echo "✅ Master data loaded (local)!"
 
-d1-seed-master-data-dev:
-	@echo "📦 Loading master data (Address → PBS ID) to dev database"
+d1-seed-master-data-dev: ## Load master data to dev
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --env dev --remote
 	@echo "✅ Master data loaded (dev)!"
 
-d1-seed-master-data-prod:
-	@echo "📦 Loading master data (Address → PBS ID) to prod database"
+d1-seed-master-data-prod: ## Load master data to prod
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
-# Billing: Import orders from CSV (uses active season)
-ORDER_IMPORT_TEST_CSV := .theslope/order-import/test_import_orders.csv
-ORDER_IMPORT_PROD_CSV := .theslope/order-import/skraaningen_2025_december_framelding.csv
+# ============================================================================
+# BILLING IMPORT
+# ============================================================================
+.PHONY: heynabo-import-local heynabo-import-dev heynabo-import-prod
 
-import-orders-local: URL := http://localhost:3000/api/admin/billing/import
-import-orders-local: CSV := $(ORDER_IMPORT_TEST_CSV)
-import-orders-local: import-orders
+define heynabo_import
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
+endef
 
-import-orders-dev: URL := https://dev.skraaningen.dk/api/admin/billing/import
-import-orders-dev: CSV := $(ORDER_IMPORT_TEST_CSV)
-import-orders-dev: import-orders
+heynabo-import-local: ## Import test CSV to localhost
+	$(call heynabo_import,$(ENV_local),$(URL_local),$(CSV_TEST))
 
-import-orders-prod: URL := https://skraaningen.dk/api/admin/billing/import
-import-orders-prod: CSV := $(ORDER_IMPORT_PROD_CSV)
-import-orders-prod: import-orders
+heynabo-import-dev: ## Import test CSV to dev
+	$(call heynabo_import,$(ENV_dev),$(URL_dev),$(CSV_TEST))
 
-import-orders:
-	@echo "📦 Importing orders from $(CSV) to $(URL)"
-	@curl -b .cookies.txt -X POST "$(URL)" \
-		-H "Content-Type: application/json" \
-		-d "{\"csvContent\": $$(cat $(CSV) | jq -Rs .)}" | jq
+heynabo-import-prod: ## Import prod CSV to production
+	$(call heynabo_import,$(ENV_prod),$(URL_prod),$(CSV_PROD))
+
+# ============================================================================
+# DATABASE QUERIES
+# ============================================================================
+.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households
 
 d1-list-users-local:
-	@npx wrangler d1 execute theslope --command  "SELECT * FROM User" --local
+	$(call d1_exec,theslope,SELECT * FROM User,--local)
 
 d1-list-tables:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --env dev --remote
+	$(call d1_exec,theslope,PRAGMA table_list,--env dev --remote)
 
 d1-list-tables-local:
-	@npx wrangler d1 execute theslope --command 'PRAGMA table_list' --local
+	$(call d1_exec,theslope,PRAGMA table_list,--local)
 
 d1-nuke-seasons:
-	@ npx wrangler d1 execute theslope --command="SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%'"
-	@npx wrangler d1 execute theslope --command="DELETE FROM 'Order';"
-	@npx wrangler d1 execute theslope --command="DELETE FROM Season WHERE ShortName LIKE 'Test%';"
-	@ npx wrangler d1 execute theslope --command="SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%'"
+	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
+	$(call d1_exec,theslope,DELETE FROM 'Order',)
+	$(call d1_exec,theslope,DELETE FROM Season WHERE ShortName LIKE 'Test%',)
+	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
 
-d1-nuke-households:
-	@echo "🧹 Cleaning up test households and related data..."
-	@echo "📊 Current test household count:"
-	@npx wrangler d1 execute theslope --command="SELECT COUNT(id) as count FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
-	@echo "🗑️  Deleting orders, cooking team assignments, and allergies for test inhabitants..."
-	@npx wrangler d1 execute theslope --command="DELETE FROM 'Order' WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
-	@npx wrangler d1 execute theslope --command="DELETE FROM CookingTeamAssignment WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
-	@npx wrangler d1 execute theslope --command="DELETE FROM Allergy WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'));" --local
-	@echo "🗑️  Deleting test inhabitants..."
-	@npx wrangler d1 execute theslope --command="DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%');" --local
-	@echo "🗑️  Deleting test households..."
-	@npx wrangler d1 execute theslope --command="DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
+d1-nuke-households: ## Delete test households (local)
+	@echo "🧹 Cleaning up test households..."
+	$(call d1_exec,theslope,DELETE FROM 'Order' WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%')),--local)
+	$(call d1_exec,theslope,DELETE FROM CookingTeamAssignment WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%')),--local)
+	$(call d1_exec,theslope,DELETE FROM Allergy WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%')),--local)
+	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'),--local)
+	$(call d1_exec,theslope,DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%',--local)
 	@echo "✅ Cleanup complete!"
-	@echo "📊 Remaining test household count:"
-	@npx wrangler d1 execute theslope --command="SELECT COUNT(id) as count FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%';" --local
 
-logs-dev:
+# ============================================================================
+# LOGS
+# ============================================================================
+.PHONY: logs-dev logs-prod
+
+logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty
 
-logs-prod:
+logs-prod: ## Tail prod logs
 	@npx wrangler tail theslope --env prod --format pretty
 
-.env.example:
-	@cat .env | sed 's/=.*$$/=/g' > .env.examples
+# ============================================================================
+# THESLOPE API
+# ============================================================================
+.PHONY: theslope-login-local theslope-login-dev theslope-login-prod theslope-admin-get-households theslope-admin-import theslope-put-user
 
-generate-session-secret:
-	@openssl rand -base64 32
+define theslope_login
+	@source $(1) && curl -s -c .cookies.txt "$(2)/api/auth/login" \
+		-H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
+endef
 
-heynabo-api:
-	@echo $(HEY_NABO_API)
+theslope-login-local: ## Login to localhost
+	$(call theslope_login,$(ENV_local),$(URL_local))
 
-heynabo-print-token:
-	@echo $(HEY_TOKEN)
+theslope-login-dev: ## Login to dev
+	$(call theslope_login,$(ENV_dev),$(URL_dev))
 
-heynabo-login:
-	@curl -s -X POST $(HEY_NABO_API)/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } '|  jq
-
-heynabo-get-locations:
-	@curl $(HEY_NABO_API)/members/locations/ -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-heynabo-get-nhbrs:
-	@curl $(HEY_NABO_API)/members/users/ -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-heynabo-get-admin:
-	@curl $(HEY_NABO_API)/admin/users/154 -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-heynabo-post-event:
-	curl -v "$(HEY_NABO_API)/members/events/" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d "@docs/heynabo_api_samples/heynabo.json"
-
-# HEYNABO EVENT API (verified 2025-11-26) - Usage: EVENT_ID=123 make heynabo-get-event
-heynabo-get-event:
-	@curl -s "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-heynabo-patch-event:
-	@curl -s -X PATCH "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Content-Type: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" -d '{"status": "CANCELED"}' | jq
-
-heynabo-delete-event:
-	@curl -s -X DELETE "$(HEY_NABO_API)/members/events/$(EVENT_ID)" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-# Upload image to Heynabo event - Usage: EVENT_ID=123 make heynabo-upload-image
-heynabo-upload-image:
-	@curl -v -X POST "$(HEY_NABO_API)/members/events/$(EVENT_ID)/files" \
-		-H "Authorization: Bearer $(HEY_TOKEN)" \
-		-F "file=@public/fællesspisning_0.jpeg"
-
-heynabo-get-events:
-	@curl -s "$(HEY_NABO_API)/members/events/" -H "Accept: application/json" -H "Authorization: Bearer $(HEY_TOKEN)" | jq
-
-#logs into heynabo (-i show headers, -s silent, -d implies POST and sends data, -c saves the session cookie into .cookies.txt
-theslope-login:
-	@curl -c .cookies.txt $(THE_SLOPE_API)/api/auth/login -H "Content-Type: application/json"  -d '{"email": "$(HEY_NABO_USERNAME)","password": "$(HEY_NABO_PASSWORD)" } ' |  jq
+theslope-login-prod: ## Login to prod
+	$(call theslope_login,$(ENV_prod),$(URL_prod))
 
 theslope-admin-get-households:
-	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/household | jq
+	@curl -s -b .cookies.txt $(URL_local)/api/admin/household | jq
 
 theslope-admin-import:
-	@curl -b .cookies.txt $(THE_SLOPE_API)/api/admin/heynabo/import | jq
+	@curl -s -b .cookies.txt $(URL_local)/api/admin/heynabo/import | jq
 
 theslope-put-user:
-	@curl -b .cookies.txt -X PUT "$(THE_SLOPE_API)/api/admin/users" \
+	@curl -b .cookies.txt -X PUT "$(URL_local)/api/admin/users" \
 		--url-query "email=andemad@andeby.dk" \
 		--url-query "phone=+4512345678" \
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
-e2e-team:
-	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
+# ============================================================================
+# HEYNABO API
+# ============================================================================
+.PHONY: heynabo-login heynabo-get-events heynabo-get-event heynabo-patch-event heynabo-delete-event heynabo-upload-image heynabo-get-locations heynabo-get-nhbrs
 
-e2e-season:
-	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+heynabo-login: ## Login to HeyNabo (prints token)
+	$(call with_env,$(ENV_local),curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq)
 
-unit-test:
+heynabo-get-events: ## List all events
+	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/")
+
+heynabo-get-event: ## Get event (EVENT_ID=xxx)
+	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/$(EVENT_ID)")
+
+heynabo-patch-event: ## Update event status (EVENT_ID=xxx)
+	$(call with_env,$(ENV_local),\
+		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
+		curl -s -X PATCH "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
+			-H "Content-Type: application/json" -H "Authorization: Bearer $$HEY_TOKEN" \
+			-d '{"status": "CANCELED"}' | jq)
+
+heynabo-delete-event: ## Delete event (EVENT_ID=xxx)
+	$(call with_env,$(ENV_local),\
+		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
+		curl -s -X DELETE "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
+			-H "Authorization: Bearer $$HEY_TOKEN" | jq)
+
+heynabo-upload-image: ## Upload image to event (EVENT_ID=xxx)
+	$(call with_env,$(ENV_local),\
+		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
+		curl -v -X POST "$$HEY_NABO_API/members/events/$(EVENT_ID)/files" \
+			-H "Authorization: Bearer $$HEY_TOKEN" -F "file=@public/fællesspisning_0.jpeg")
+
+heynabo-get-locations:
+	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/locations/")
+
+heynabo-get-nhbrs:
+	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/users/")
+
+# ============================================================================
+# TESTING
+# ============================================================================
+.PHONY: unit-test unit-test-single e2e-team e2e-season
+
+unit-test: ## Run all unit tests
 	@npx vitest --run
 
-unit-test-single:
+unit-test-single: ## Run single test (name=pattern)
 	@npx vitest --run --testNamePattern=$(name)
 
-claude-senior-dev:
+e2e-team: ## Run team E2E tests
+	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
+
+e2e-season: ## Run season E2E tests
+	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+.PHONY: generate-session-secret
+
+generate-session-secret: ## Generate a session secret
+	@openssl rand -base64 32
+
+.env.example:
+	@cat .env | sed 's/=.*$$/=/g' > .env.example
+
+# ============================================================================
+# CLAUDE MODES
+# ============================================================================
+.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops
+
+claude-senior-dev: ## Claude as senior dev
 	@claude --system-prompt "You are a senior nuxt developer, and your task is to develop the next feature described in the docs. Remember about @docs/adr-compliance-frontend.md and @docs/adr-compliance-backend.md. You must point out if any significant parts of the project are missing or could be improved. You must also ensure that existing code follows best practices, is secure, and well tested. You are not allowed to commit to git, and you are not allowed to start dev server, the user does that. You should start by asking about what feature we are implementing, and what the business requirements are."
-claude-test:
+
+claude-test: ## Claude as test engineer
 	@claude --system-prompt "You are a senior test automation engineer, and you know how to write dry parametrized tests, both unit, component, e2e api and e2e ui. Your task is to make sure our tests are green, test factories well maintained, and coverage is comprehensive. You MUST point out if test cases are missing. You must take care to update our adr-compliance documents."
-claude-adr:
+
+claude-adr: ## Claude as architect
 	@claude --system-prompt "You are a senior software architect, and your task is to make sure our architecture decision records (ADRs) are up to date and comprehensive. You must point out if any ADRs are missing for significant decisions made in the project. You must also ensure that existing ADRs are well written and follow best practices."
-claude-ux:
+
+claude-ux: ## Claude as UX designer
 	@claude --system-prompt "You are a a wizard UX designer, with great frontend coding skill, and your task is to help us design a friendly, and consistent user interface. Your task is to design ascii mockups for new features, implement components with Nuxtui, stay consistent with our DesignSystem, and update it along the way. Your code needs to conform to the @docs/adr-compliance-frontend.md. Start by asking what feature we are designing, and what the business requirements are"
-claude-doc:
+
+claude-doc: ## Claude as tech writer
 	@claude --system-prompt "You are a technical writer, and your task is to make sure our documentation is up to date, but compact. You must point out if any significant parts of the project are missing documentation. You must also ensure that existing documentation is well written and follows best practices. You have to maintain the @docs/features.md when developers finish a feature, add asci art from feature to the file, together with 1 documentation screenshot generated by e2e test for that feature."
-claude-pair:
+
+claude-pair: ## Claude as pair programmer
 	@claude --system-prompt "You are my pair programmer, use the pair programmer subagent until I tell you otherwise. I write code, you assist with tests, discussions and clarifications. Be assertive, I am a senior engineer, no trivialities, watch how the implementation is progressing and discuss fine details."
-claude-devops:
+
+claude-devops: ## Claude as DevOps engineer
 	@claude --system-prompt "You are a senior DevOps engineer, use the devops subagent ONLY. Your task is to make sure our deployment pipelines, infrastructure as code, and cloud resources are well managed and optimized. You must point out if any significant parts of our DevOps practices are missing or could be improved. You must also ensure that existing configurations follow best practices and are secure. You are not allowed to commit to git, but you are allowed to merge pr on request."

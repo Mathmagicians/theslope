@@ -233,7 +233,7 @@ export class DinnerEventFactory {
             expect(Array.isArray(responseBody), 'Response should be an array').toBe(true)
 
             // Deserialize dates from ISO strings to Date objects
-            return responseBody.map((event: any) => DinnerEventDisplaySchema.parse(event))
+            return responseBody.map((event: unknown) => DinnerEventDisplaySchema.parse(event))
         }
 
         return []

@@ -19,7 +19,8 @@ import {
     isThisACookingDay,
     selectMostAppropriateActiveSeason,
     sortSeasonsByActivePriority,
-    splitDinnerEvents
+    splitDinnerEvents,
+    sortDinnerEventsByTemporal
 } from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -855,6 +856,52 @@ describe('Active Season Management utilities', () => {
             expect(result.nextDinner).toBeNull()
             const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
             expect(allOtherDates).toHaveLength(expectedOtherCount)
+        })
+    })
+
+    describe('sortDinnerEventsByTemporal', () => {
+        // Use fixed reference date for predictable tests
+        const referenceDate = new Date(2025, 5, 15, 12, 0) // June 15, 2025 noon
+
+        beforeEach(() => {
+            vi.useFakeTimers()
+            vi.setSystemTime(referenceDate)
+        })
+
+        afterEach(() => {
+            vi.useRealTimers()
+        })
+
+        it('should sort events in temporal order: next, future (ascending), past (descending)', () => {
+            const pastEvent1 = { id: 1, date: new Date(2025, 5, 10, 18, 0) } // June 10
+            const pastEvent2 = { id: 2, date: new Date(2025, 5, 13, 18, 0) } // June 13
+            const nextEvent = { id: 3, date: new Date(2025, 5, 15, 18, 0) }  // June 15 (today)
+            const futureEvent1 = { id: 4, date: new Date(2025, 5, 18, 18, 0) } // June 18
+            const futureEvent2 = { id: 5, date: new Date(2025, 5, 22, 18, 0) } // June 22
+
+            const events = [futureEvent2, pastEvent1, nextEvent, pastEvent2, futureEvent1]
+            const nextDinnerDateRange = { start: nextEvent.date, end: new Date(2025, 5, 15, 19, 0) }
+
+            const result = sortDinnerEventsByTemporal(events, nextDinnerDateRange)
+
+            // Order: next, future (ascending), past (descending - most recent first)
+            expect(result.map(e => e.id)).toEqual([3, 4, 5, 2, 1])
+            expect(result.map(e => e.temporalCategory)).toEqual(['next', 'future', 'future', 'past', 'past'])
+        })
+
+        it('should handle null nextDinnerDateRange', () => {
+            const pastEvent = { id: 1, date: new Date(2025, 5, 10, 18, 0) }
+            const futureEvent = { id: 2, date: new Date(2025, 5, 20, 18, 0) }
+
+            const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null)
+
+            expect(result.map(e => e.id)).toEqual([2, 1])
+            expect(result.map(e => e.temporalCategory)).toEqual(['future', 'past'])
+        })
+
+        it('should handle empty events array', () => {
+            const result = sortDinnerEventsByTemporal([], null)
+            expect(result).toEqual([])
         })
     })
 

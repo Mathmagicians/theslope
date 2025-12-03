@@ -386,6 +386,7 @@ describe('useAllergyValidation', () => {
                 inhabitant: {
                     id: 1,
                     heynaboId: 101,
+                    householdId: 1,
                     name: 'Test',
                     lastName: 'User',
                     pictureUrl: null,
@@ -505,6 +506,7 @@ describe('useAllergyValidation', () => {
             const inhabitantWithAllergies = {
                 id: 1,
                 heynaboId: 101,
+                householdId: 1,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: 'https://example.com/anna.jpg',
@@ -554,6 +556,7 @@ describe('useAllergyValidation', () => {
             const inhabitantWithoutAllergies = {
                 id: 1,
                 heynaboId: 101,
+                householdId: 1,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: null,
@@ -593,13 +596,14 @@ describe('useAllergyValidation', () => {
         })
 
         it('should coerce date strings to Date objects', () => {
-            const allergy = {
+            // Input typed as Record to test schema coercion of string dates
+            const allergy: Record<string, unknown> = {
                 id: 1,
                 inhabitantId: 1,
                 allergyTypeId: 1,
                 inhabitantComment: 'Test',
-                createdAt: '2024-01-01' as any,
-                updatedAt: '2024-01-02' as any,
+                createdAt: '2024-01-01',
+                updatedAt: '2024-01-02',
                 allergyType: {
                     id: 1,
                     name: 'Peanuts',

@@ -89,12 +89,12 @@ test.describe('Allergy API - CRUD Operations', () => {
         const allergyType2 = await AllergyFactory.createAllergyType(context, {name: 'Shellfish', icon: '🦐'})
         createdAllergyTypeIds.push(allergyType1.id, allergyType2.id)
 
-        const allergy1 = await AllergyFactory.createAllergy(context, {
+        await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType1.id,
             inhabitantComment: 'Severe'
         })
-        const allergy2 = await AllergyFactory.createAllergy(context, {
+        await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType2.id,
             inhabitantComment: null
@@ -107,8 +107,8 @@ test.describe('Allergy API - CRUD Operations', () => {
         expect(Array.isArray(allergies)).toBe(true)
         expect(allergies.length).toBe(2)
 
-        const foundAllergy1 = allergies.find((a: any) => a.allergyTypeId === allergyType1.id)
-        const foundAllergy2 = allergies.find((a: any) => a.allergyTypeId === allergyType2.id)
+        const foundAllergy1 = allergies.find((a: unknown) => a.allergyTypeId === allergyType1.id)
+        const foundAllergy2 = allergies.find((a: unknown) => a.allergyTypeId === allergyType2.id)
 
         expect(foundAllergy1).toBeTruthy()
         expect(foundAllergy1.inhabitantComment).toBe('Severe')
@@ -129,12 +129,12 @@ test.describe('Allergy API - CRUD Operations', () => {
         const allergyType = await AllergyFactory.createAllergyType(context, {name: 'Lactose', icon: '🥛'})
         createdAllergyTypeIds.push(allergyType.id)
 
-        const allergy1 = await AllergyFactory.createAllergy(context, {
+        await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant1.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Mild'
         })
-        const allergy2 = await AllergyFactory.createAllergy(context, {
+        await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant2.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Severe'
@@ -147,8 +147,8 @@ test.describe('Allergy API - CRUD Operations', () => {
         expect(Array.isArray(allergies)).toBe(true)
         expect(allergies.length).toBe(2)
 
-        const allergiesForInhabitant1 = allergies.filter((a: any) => a.inhabitantId === inhabitant1.id)
-        const allergiesForInhabitant2 = allergies.filter((a: any) => a.inhabitantId === inhabitant2.id)
+        const allergiesForInhabitant1 = allergies.filter((a: unknown) => a.inhabitantId === inhabitant1.id)
+        const allergiesForInhabitant2 = allergies.filter((a: unknown) => a.inhabitantId === inhabitant2.id)
 
         expect(allergiesForInhabitant1.length).toBe(1)
         expect(allergiesForInhabitant2.length).toBe(1)

@@ -36,7 +36,7 @@ test.describe('Heynabo Integration API', () => {
 
         // Verify inhabitants with users have systemRoles properly set
         if (fetchedHousehold.inhabitants.length > 0) {
-            const inhabitantWithUser = fetchedHousehold.inhabitants.find((i: any) => i.user)
+            const inhabitantWithUser = fetchedHousehold.inhabitants.find((i: unknown) => i.user)
             if (inhabitantWithUser) {
                 expect(inhabitantWithUser.user).toHaveProperty('systemRoles')
                 // systemRoles should be an array (deserialized by repository)

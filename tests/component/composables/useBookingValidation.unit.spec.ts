@@ -177,8 +177,8 @@ describe('useBookingValidation', () => {
         'id', 'dinnerEventId', 'inhabitantId', 'ticketPriceId',
         'priceAtBooking', 'dinnerMode', 'state', 'createdAt', 'updatedAt', 'ticketType'
       ].map(field => ({field})))('GIVEN missing $field WHEN parsing THEN throws', ({field}) => {
-        const order = OrderFactory.defaultOrder()
-        delete (order as any)[field]
+        const order = OrderFactory.defaultOrder() as Record<string, unknown>
+        Reflect.deleteProperty(order, field)
         const result = OrderDisplaySchema.safeParse(order)
         expect(result.success).toBe(false)
       })

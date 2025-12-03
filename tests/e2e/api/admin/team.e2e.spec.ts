@@ -52,9 +52,9 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.assignments.length).toBe(2)
             const memberAssignmentIds = testTeam.assignments.map((a: any) => a.id)
             const assignments = await Promise.all(
-                memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id))
+                memberAssignmentIds.map((id: number) => SeasonFactory.getCookingTeamAssignment(context, id))
             )
-            expect(assignments.map(a => a.id)).toEqual(memberAssignmentIds)
+            expect(assignments.map((a: unknown) => a.id)).toEqual(memberAssignmentIds)
 
             // Now delete the team
             await SeasonFactory.deleteCookingTeam(context, testTeam.id)
@@ -149,7 +149,7 @@ test.describe('Admin Teams API', () => {
             expect(teamDetail).toHaveProperty('dinnerEvents')
             expect(Array.isArray(teamDetail.dinnerEvents)).toBe(true)
             expect(teamDetail.dinnerEvents.length).toBe(2)
-            expect(teamDetail.dinnerEvents.map((e: any) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
+            expect(teamDetail.dinnerEvents.map((e: unknown) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
 
             // AND: Contains cookingDaysCount aggregate
             expect(teamDetail).toHaveProperty('cookingDaysCount')

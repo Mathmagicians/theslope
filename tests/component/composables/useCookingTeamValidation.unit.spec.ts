@@ -104,8 +104,10 @@ describe('useCookingTeamValidation', () => {
     })
 
     it('should reject team with invalid member role', () => {
+      // Create a team and then override the role with an invalid value for testing validation
+      const assignment = SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF' })
       const teamWithInvalidRole = SeasonFactory.defaultCookingTeamDisplay({
-        assignments: [SeasonFactory.defaultCookingTeamAssignment({ role: 'INVALID_ROLE' as any })]
+        assignments: [{ ...assignment, role: 'INVALID_ROLE' as 'CHEF' }]
       })
 
       const result = CookingTeamDisplaySchema.safeParse(teamWithInvalidRole)
@@ -231,10 +233,10 @@ describe('useCookingTeamValidation', () => {
         expect(fn).toThrow()
       } else {
         expect(fn).not.toThrow()
-        const result = fn()
+        const result = fn() as Record<string, unknown>
         if (expected) {
           Object.entries(expected).forEach(([key, value]) => {
-            expect((result as any)[key]).toEqual(value)
+            expect(result[key]).toEqual(value)
           })
         }
       }

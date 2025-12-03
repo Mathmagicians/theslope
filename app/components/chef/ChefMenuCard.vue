@@ -73,7 +73,6 @@
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { FormSubmitEvent } from '#ui/types'
-import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
 interface Props {
@@ -120,7 +119,7 @@ const { getStepConfig, canCancelDinner } = useBooking()
 const { convertVat } = useOrder()
 
 // Time logic from useSeason (ADR-001: business logic in composables)
-const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
+const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
 // Allergies store for allergen data
@@ -164,17 +163,6 @@ const menuStatus = computed(() => {
     urgency,
     countdown,
     color: URGENCY_TO_BADGE[urgency].color
-  }
-})
-
-// Booking status
-const bookingStatus = computed((): { badge: string; isOpen: boolean; message: string; color: NuxtUIColor } => {
-  const isOpen = canModifyOrders(props.dinnerEvent.date)
-  return {
-    badge: 'Bestilling',
-    isOpen,
-    message: isOpen ? 'Åben' : 'Lukket',
-    color: isOpen ? COLOR.success : COLOR.neutral
   }
 })
 
@@ -505,17 +493,8 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- Status row: menu countdown + booking status -->
-        <div class="flex flex-wrap items-center gap-4 text-sm">
-          <div class="flex items-center gap-1">
-            <UBadge :color="menuStatusBadge.color" variant="soft" :size="SIZES.small">Menu</UBadge>
-            <span>{{ menuStatusBadge.label }}</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <UBadge :color="bookingStatus.color" variant="soft" :size="SIZES.small">{{ bookingStatus.badge }}</UBadge>
-            <span>{{ bookingStatus.message }}</span>
-          </div>
-        </div>
+        <!-- Status/deadline badges (shared component - broad mode with help text) -->
+        <DinnerDeadlineBadges :dinner-event="dinnerEvent" />
 
         <!-- Budget section (chef's financial overview) -->
         <div class="pt-4 border-t">

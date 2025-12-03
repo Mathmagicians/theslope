@@ -60,8 +60,8 @@ test.describe('AllergyType API - CRUD Operations', () => {
         expect(Array.isArray(allergyTypes)).toBe(true)
         expect(allergyTypes.length).toBeGreaterThanOrEqual(2)
 
-        const found1 = allergyTypes.find((at: any) => at.id === allergyType1.id)
-        const found2 = allergyTypes.find((at: any) => at.id === allergyType2.id)
+        const found1 = allergyTypes.find((at: unknown) => at.id === allergyType1.id)
+        const found2 = allergyTypes.find((at: unknown) => at.id === allergyType2.id)
 
         expect(found1).toBeTruthy()
         expect(found2).toBeTruthy()
@@ -162,7 +162,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
         )
 
         // GIVEN: Assign allergies to inhabitants (parametrized)
-        const allergies = await Promise.all(
+        await Promise.all(
             inhabitants.map((inhabitant, index) =>
                 AllergyFactory.createAllergy(context, {
                     inhabitantId: inhabitant.id,
@@ -176,7 +176,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
         const allergyTypes = await AllergyFactory.getAllergyTypes(context)
 
         // THEN: Find our allergy type and verify structure
-        const found = allergyTypes.find((at: any) => at.id === allergyType.id)
+        const found = allergyTypes.find((at: unknown) => at.id === allergyType.id)
         expect(found).toBeTruthy()
         expect(found.inhabitants).toBeDefined()
         expect(Array.isArray(found.inhabitants)).toBe(true)
@@ -184,7 +184,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
         // Verify each inhabitant (parametrized)
         inhabitants.forEach((inhabitant, index) => {
-            const foundInhabitant = found.inhabitants.find((i: any) => i.id === inhabitant.id)
+            const foundInhabitant = found.inhabitants.find((i: unknown) => i.id === inhabitant.id)
             expect(foundInhabitant).toBeDefined()
             expect(foundInhabitant.name).toBe(inhabitantsData[index].name)
             expect(foundInhabitant.householdId).toBe(household.id)

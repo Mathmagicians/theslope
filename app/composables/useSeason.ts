@@ -6,9 +6,9 @@ import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} f
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
+    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, type DeadlineUrgency} from "~/utils/season"
+    selectMostAppropriateActiveSeason, type DeadlineUrgency, type TemporalCategory} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
 
 /**
@@ -328,6 +328,7 @@ export const useSeason = () => {
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
         splitDinnerEvents,
+        sortDinnerEventsByTemporal,
         canModifyOrders,
         canEditDiningMode,
         isAnnounceMenuPastDeadline,
@@ -348,5 +349,5 @@ export const useSeason = () => {
     }
 }
 
-// Re-export DeadlineUrgency type for consumers (ADR-001)
-export type { DeadlineUrgency }
+// Re-export types for consumers (ADR-001)
+export type { DeadlineUrgency, TemporalCategory }
