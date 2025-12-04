@@ -380,7 +380,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
 
         expect(result.Inhabitant).toBeDefined()
         expect(result.Inhabitant?.name).toBe(user.Inhabitant.name)
-        expect(result.Inhabitant).not.toHaveProperty('householdId') // Omitted in user context
+        expect(result.Inhabitant?.householdId).toBe(user.Inhabitant.householdId) // Lightweight scalar, useful for admin context
     })
 
     it('should parse UserWithInhabitant with nested household', () => {
