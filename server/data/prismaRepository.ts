@@ -405,7 +405,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 
         if (household.inhabitants) {
             const inhabitantIds = await Promise.all(
-                household.inhabitants.map((inhabitant: InhabitantCreate) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
+                household.inhabitants.map((inhabitant) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
             )
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }

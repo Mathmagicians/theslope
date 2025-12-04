@@ -11,6 +11,7 @@ import type {
     DinnerEventDetail
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 /**
  * Finances Repository
