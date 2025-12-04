@@ -26,7 +26,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 interface Props {
-  modelValue: number | undefined
+  modelValue: number | null | undefined
   seasons: Season[]
   loading?: boolean
   disabled?: boolean

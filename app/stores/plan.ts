@@ -322,7 +322,8 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamDetail | CookingTeamDetail[]): Promise<CookingTeamDetail[]> => {
+        // ADR-009: Accept Display type for input (lightweight), return Detail type (mutation response)
+        const createTeam = async (teamOrTeams: CookingTeamDisplay | CookingTeamDisplay[]): Promise<CookingTeamDetail[]> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
@@ -347,7 +348,8 @@ export const usePlanStore = defineStore("Plan", () => {
             return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
         }
 
-        const updateTeam = async (team: CookingTeamDetail) => {
+        // ADR-009: Accept Display type for input (lightweight)
+        const updateTeam = async (team: CookingTeamDisplay) => {
             try {
                 await $fetch(`/api/admin/team/${team.id}`, {
                     method: 'post',

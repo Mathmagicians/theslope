@@ -93,7 +93,7 @@ export default defineNuxtConfig({
         // Public keys that are exposed to the client
         public: {
             apiBase: '/api',
-            HEY_NABO_API: process.env.HEY_NABO_API || '', // Used by useHeynabo composable for URL construction
+            HEY_NABO_API: '',  // Overridden at runtime by NUXT_PUBLIC_HEY_NABO_API
             COMMIT_ID: process.env.GITHUB_SHA || 'development'
         }
     },

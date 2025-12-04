@@ -1301,7 +1301,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
 export async function updateTeam(d1Client: D1Database, id: number, teamData: CookingTeamUpdate): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [UPDATE] Updating team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {toPrismaUpdateData, deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {toPrismaUpdateData, deserializeCookingTeamDetail, serializeCookingTeamAssignment} = useCookingTeamValidation()
 
     // Transform domain object to Prisma update format (excludes computed fields, serializes WeekDayMap)
     const {assignments, affinity, ...updateData} = toPrismaUpdateData(teamData)
@@ -1317,15 +1317,8 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                 // Replace all assignments (delete existing, create new)
                 assignments: assignments?.length ? {
                     deleteMany: {},  // Delete all existing assignments for this team
-                    // Strip id and cookingTeamId - Prisma auto-generates id and sets cookingTeamId from relation
-                    // Handle affinity: null using Prisma.skip to omit field entirely
-                    create: assignments.map((item: CookingTeamAssignment) => {
-                        const {id, cookingTeamId, affinity, ...assignment} = item
-                        return {
-                            ...assignment,
-                            affinity: affinity ?? PrismaFromClient.skip
-                        }
-                    })
+                    // ADR-010: Use composable's serialize function for assignment data
+                    create: assignments.map((item: CookingTeamAssignment) => serializeCookingTeamAssignment(item))
                 } : PrismaFromClient.skip
             },
             include: {

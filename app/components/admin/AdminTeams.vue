@@ -177,13 +177,14 @@ const createDraft = ref<CookingTeamDisplay[]>([])
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
-  if (!selectedSeason.value) return
-  if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
+  const season = selectedSeason.value
+  if (!season) return
+  if (formMode.value === FORM_MODES.CREATE) {
     const existingTeamCount = teams.value.length
     createDraft.value = Array.from({length: teamCount.value}, (_, index) =>
         getDefaultCookingTeam(
-            selectedSeason.value.id!,
-            selectedSeason.value.shortName ?? '',
+            season.id!,
+            season.shortName ?? '',
             existingTeamCount + index + 1  // Start numbering from N+1
         )
     )
@@ -483,7 +484,7 @@ const columns = [
 
             <!-- RIGHT PANEL: Edit Selected Team -->
             <div class="w-full md:w-4/5 space-y-4">
-              <div v-if="selectedTeam" class="space-y-4">
+              <div v-if="selectedTeam?.id" class="space-y-4">
                 <CookingTeamCard
                     ref="cookingTeamCardRef"
                     :team-id="selectedTeam.id"
@@ -494,8 +495,8 @@ const columns = [
                     :holidays="selectedSeason?.holidays"
                     :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
                     :mode="FORM_MODES.EDIT"
-                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id!, newName)"
-                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id!, affinity)"
+                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id, newName)"
+                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id, affinity)"
                     @delete="handleDeleteTeam"
                     @add:member="handleAddMember"
                     @remove:member="handleRemoveMember"

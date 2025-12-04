@@ -6,7 +6,7 @@ SHELL := /bin/bash
 # ENVIRONMENT CONFIGS
 # ============================================================================
 ENV_local := .env
-ENV_dev   := .env.test
+ENV_dev   := .env.dev
 ENV_prod  := .env.prod
 
 URL_local := http://localhost:3000
@@ -31,7 +31,7 @@ define theslope_call
 endef
 
 define heynabo_call
-	@source $(1) && HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+	@source $(1) && HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
 	curl -s -H "Accept: application/json" -H "Authorization: Bearer $$HEY_TOKEN" $(2) | jq
 endef
@@ -226,42 +226,48 @@ theslope-put-user:
 # ============================================================================
 .PHONY: heynabo-login heynabo-get-events heynabo-get-event heynabo-patch-event heynabo-delete-event heynabo-upload-image heynabo-get-locations heynabo-get-nhbrs
 
-heynabo-login: ## Login to HeyNabo (prints token)
-	$(call with_env,$(ENV_local),curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq)
+heynabo-login-dev: ## Login to HeyNabo (prints token)
+	$(call with_env,$(ENV_dev),curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq)
 
-heynabo-get-events: ## List all events
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/")
+heynabo-login-prod: ## Login to HeyNabo (prints token)
+	$(call with_env,$(ENV_prod),curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq)
 
-heynabo-get-event: ## Get event (EVENT_ID=xxx)
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/$(EVENT_ID)")
+heynabo-get-events-dev: ## List all events
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/events/")
 
-heynabo-patch-event: ## Update event status (EVENT_ID=xxx)
+heynabo-get-event-dev: ## Get event (EVENT_ID=xxx)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)")
+
+heynabo-patch-event-dev: ## Update event status (EVENT_ID=xxx)
 	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -s -X PATCH "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
+		curl -s -X PATCH "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)" \
 			-H "Content-Type: application/json" -H "Authorization: Bearer $$HEY_TOKEN" \
 			-d '{"status": "CANCELED"}' | jq)
 
-heynabo-delete-event: ## Delete event (EVENT_ID=xxx)
+heynabo-delete-event-dev: ## Delete event (EVENT_ID=xxx)
 	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -s -X DELETE "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
+		curl -s -X DELETE "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)" \
 			-H "Authorization: Bearer $$HEY_TOKEN" | jq)
 
-heynabo-upload-image: ## Upload image to event (EVENT_ID=xxx)
+heynabo-upload-image-dev: ## Upload image to event (EVENT_ID=xxx)
 	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -v -X POST "$$HEY_NABO_API/members/events/$(EVENT_ID)/files" \
+		curl -v -X POST "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)/files" \
 			-H "Authorization: Bearer $$HEY_TOKEN" -F "file=@public/fællesspisning_0.jpeg")
 
-heynabo-get-locations:
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/locations/")
+heynabo-get-locations-dev: ## List all locations (dev)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/locations/")
 
-heynabo-get-nhbrs:
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/users/")
+heynabo-get-locations-prod: ## List all locations (prod)
+	$(call heynabo_call,$(ENV_prod),"$$NUXT_PUBLIC_HEY_NABO_API/members/locations/")
+
+heynabo-get-nhbrs-dev: ## List all neighbors (dev)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/users/")
 
 # ============================================================================
 # TESTING

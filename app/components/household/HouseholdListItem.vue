@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type {HouseholdWithInhabitants, HouseholdSummary} from '~/server/data/prismaRepository'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
 interface Props {
-    household: HouseholdWithInhabitants | HouseholdSummary
+    household: HouseholdDisplay
     compact?: boolean
 }
 

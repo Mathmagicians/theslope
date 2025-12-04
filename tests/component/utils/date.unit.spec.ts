@@ -17,6 +17,7 @@ import {
     toCalendarDate,
     toDate,
     calculateCountdown,
+    getWeekdayFromDate,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
