@@ -223,7 +223,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitantDisplay} = useCoreValidation()
+    const {deserializeInhabitantDetail} = useCoreValidation()
 
     try {
         const data = {
@@ -257,13 +257,13 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
             // ADR-010: Deserialize to domain type before returning
-            return deserializeInhabitantDisplay(updatedInhabitant)
+            return deserializeInhabitantDetail(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
         }
 
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitantDisplay(newInhabitant)
+        return deserializeInhabitantDetail(newInhabitant)
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [SAVE]: Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
     }

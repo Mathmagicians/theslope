@@ -77,7 +77,7 @@ const toggleSortOrder = () => {
 // Auto-select first allergy when data loads
 watch(allergyTypes, (newTypes) => {
   if (newTypes.length > 0 && !selectedAllergyTypeId.value) {
-    selectedAllergyTypeId.value = newTypes[0].id || null
+    selectedAllergyTypeId.value = newTypes[0]?.id ?? null
   }
   // If selected allergy was deleted, select first available
   if (selectedAllergyTypeId.value && !newTypes.find(at => at.id === selectedAllergyTypeId.value)) {
@@ -183,7 +183,7 @@ const showSuccessToast = (title: string, description?: string) => {
 }
 
 // ACTIONS
-const handleRowClick = (allergyType: AllergyType) => {
+const handleRowClick = (allergyType: AllergyTypeDisplay) => {
   // Only handle single select mode (multiselect is handled by AllergenMultiSelector)
   if (!multiselectMode.value) {
     selectedAllergyTypeId.value = allergyType.id || null
@@ -413,13 +413,13 @@ const catalogEmptyState = {
                 </div>
               </template>
 
-              <!-- New badge cell -->
+              <!-- New badge cell - shows if any allergy of this type was recently added -->
               <template #new-cell="{ row }">
                 <div
                     :class="['text-center', COMPONENTS.table.clickableCell]"
                     @click="handleRowClick(row.original)"
                 >
-                  <span v-if="isNew(row.original.createdAt || '')">🆕</span>
+                  <span v-if="row.original.inhabitants?.some((i: { allergyUpdatedAt: Date }) => isNew(i.allergyUpdatedAt))">🆕</span>
                 </div>
               </template>
 
@@ -502,7 +502,7 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
                       color="primary"
                       :disabled="!formData.name || !formData.description"
                       name="submit-allergy-type"
-                      @click="handleSubmit"
+                      @click="() => handleSubmit()"
                   >
                     Opret
                   </UButton>
@@ -557,7 +557,7 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
           <UCard
               v-for="allergyType in allergyTypes"
               :key="allergyType.id"
-              :ui="{ body: { padding: 'p-4 sm:p-4' } }"
+              :ui="{ body: 'p-4 sm:p-4' }"
           >
             <div class="flex items-start gap-3">
               <!-- Icon -->
@@ -598,7 +598,7 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
                 <UButton
                     icon="i-heroicons-trash"
                     size="xs"
-                    color="red"
+                    color="error"
                     variant="ghost"
                     :name="`delete-allergy-type-${allergyType.id}`"
                     @click="handleDelete(allergyType.id!, allergyType.name)"

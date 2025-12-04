@@ -69,22 +69,11 @@ console.log("📆 AdminSeason > initialization done, formMode: ", props.mode, "m
 <template>
   <UCard
       v-if="model"
-      class="w-full ring-none ring-0 shadow-none" padding="px-0" :ui="{
-    rounded: 'rounded-none',
-    shadow: 'shadow-none',
-    body: {
-      padding: 'px-0',
-      base: 'ring-0',
-      shadow: 'shadow-none'
-    },
-    header: {
-      padding: 'px-0',
-      background: 'bg-violet-50 dark:bg-violet-700'
-    },
-    footer: {
-      padding: 'px-0',
-      background: 'bg-violet-50 dark:bg-violet-700'
-    }
+      class="w-full ring-none ring-0 shadow-none rounded-none" :ui="{
+    root: 'shadow-none',
+    body: 'px-0 ring-0 shadow-none',
+    header: 'px-0 bg-violet-50 dark:bg-violet-700',
+    footer: 'px-0 bg-violet-50 dark:bg-violet-700'
   }">
     <template #header>
       <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
@@ -181,7 +170,7 @@ class="mx-auto"
 
     <template #footer>
       <div v-if="!isViewMode" class="flex justify-end gap-4">
-        <UButton color="gray" variant="soft" @click="emit('cancel')">
+        <UButton color="neutral" variant="soft" @click="emit('cancel')">
           Annuller
         </UButton>
         <UButton type="submit" form="seasonForm" color="pink" icon="i-heroicons-calendar">

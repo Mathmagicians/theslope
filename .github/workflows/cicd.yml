@@ -27,10 +27,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Pre check - linting and Typescript validation
-        run: npm run lint
-        #pre:all
       - run: npm ci
+      - name: Linting
+        run: npm run lint
       - run: npx prisma validate
       - name: Run unit tests
         run: npm run test:unit

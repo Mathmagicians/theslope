@@ -3,7 +3,7 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
 
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
@@ -66,8 +66,9 @@ export const useOrder = () => {
   /**
    * Calculate total portions from orders with ticket prices (more accurate)
    * Uses ticket price-specific portion sizes (supports HUNGRY_BABY, etc.)
+   * Requires OrderDetail (with nested ticketPrice relation)
    */
-  const calculateTotalPortionsFromPrices = (orders: Array<{ ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null } }>): number => {
+  const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number => {
     return orders.reduce((sum, order) => {
       return sum + getPortionsForTicketPrice(order.ticketPrice)
     }, 0)
@@ -76,8 +77,9 @@ export const useOrder = () => {
   /**
    * Group orders by ticket type with counts and portions
    * Returns dynamic breakdown - no hardcoded ticket types
+   * Requires OrderDetail (with nested ticketPrice relation)
    */
-  const groupByTicketType = (orders: Array<{ ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null } }>) => {
+  const groupByTicketType = (orders: OrderDetail[]) => {
     const groups = new Map<string, { ticketType: string, count: number, portions: number, descriptions: Map<string, number> }>()
 
     orders.forEach(order => {

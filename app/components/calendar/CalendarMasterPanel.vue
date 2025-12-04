@@ -36,7 +36,7 @@ const { TYPOGRAPHY } = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UCard :ui="{ rounded: '', base: 'flex flex-col h-full' }">
+  <UCard class="rounded-none" :ui="{ root: 'flex flex-col h-full' }">
     <template #header>
       <h3 :class="TYPOGRAPHY.cardTitle">{{ title }}</h3>
     </template>

@@ -89,8 +89,7 @@ const displayName = computed(() => normalizedAllergyType.value.name)
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
-      class="flex-shrink-0 bg-white"
-      :ui="{ padding: 'p-0.5' }"
+      class="flex-shrink-0 bg-white p-0.5"
     />
     <span v-if="showName" class="text-xs md:text-sm whitespace-nowrap" :class="allergyType ? 'font-medium' : ''">
       {{ displayName }}
@@ -103,8 +102,7 @@ const displayName = computed(() => normalizedAllergyType.value.name)
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
-      class="flex-shrink-0 bg-white"
-      :ui="{ padding: 'p-1' }"
+      class="flex-shrink-0 bg-white p-1"
     />
     <span v-if="showName" class="text-sm md:text-base" :class="allergyType ? 'font-medium' : ''">
       {{ displayName }}

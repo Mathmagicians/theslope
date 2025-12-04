@@ -88,7 +88,9 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         BaseInhabitantSchema,
         InhabitantCreateSchema,
         InhabitantDisplaySchema,
+        InhabitantDetailSchema,
         deserializeInhabitantDisplay,
+        deserializeInhabitantDetail,
         createDefaultWeekdayMap,
         serializeWeekDayMap
     } = useCoreValidation()
@@ -96,7 +98,8 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
     describe.each([
         {schema: 'BaseInhabitantSchema', schemaObj: BaseInhabitantSchema, withId: true},
         {schema: 'InhabitantCreateSchema', schemaObj: InhabitantCreateSchema, withId: false},
-        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true}
+        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true},
+        {schema: 'InhabitantDetailSchema', schemaObj: InhabitantDetailSchema, withId: true}
     ])('$schema', ({schemaObj, withId}) => {
         it('should parse inhabitant from factory', () => {
             const inhabitantData = HouseholdFactory.defaultInhabitantData()
@@ -162,6 +165,77 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
             } else {
                 expect(deserialized.dinnerPreferences).toBeNull()
             }
+        })
+    })
+
+    describe('deserializeInhabitantDetail', () => {
+        it.each([
+            {
+                testCase: 'with birthDate',
+                birthDate: '1990-01-01',
+                dinnerPreferences: null,
+                expectBirthDate: true,
+                expectDinnerPrefs: false
+            },
+            {
+                testCase: 'with dinnerPreferences',
+                birthDate: null,
+                dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.DINEIN)),
+                expectBirthDate: false,
+                expectDinnerPrefs: true
+            },
+            {
+                testCase: 'with both',
+                birthDate: '1990-01-01',
+                dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.TAKEAWAY)),
+                expectBirthDate: true,
+                expectDinnerPrefs: true
+            }
+        ])('should deserialize inhabitant detail $testCase', ({birthDate, dinnerPreferences, expectBirthDate, expectDinnerPrefs}) => {
+            const serialized = {
+                ...HouseholdFactory.defaultInhabitantData(),
+                id: 1,
+                householdId: 1,
+                birthDate,
+                dinnerPreferences
+            }
+            const deserialized = deserializeInhabitantDetail(serialized)
+
+            // Detail schema requires dinnerPreferences (never undefined)
+            expect(deserialized.dinnerPreferences).not.toBeUndefined()
+
+            if (expectBirthDate) {
+                expect(deserialized.birthDate).toBeInstanceOf(Date)
+                expect(deserialized.birthDate?.getFullYear()).toBe(1990)
+            } else {
+                expect(deserialized.birthDate).toBeNull()
+            }
+
+            if (expectDinnerPrefs) {
+                expect(deserialized.dinnerPreferences).not.toBeNull()
+                expect(deserialized.dinnerPreferences?.mandag).toBeDefined()
+            } else {
+                expect(deserialized.dinnerPreferences).toBeNull()
+            }
+        })
+
+        it('should return InhabitantDetail type (dinnerPreferences required)', () => {
+            const serialized = {
+                ...HouseholdFactory.defaultInhabitantData(),
+                id: 1,
+                householdId: 1,
+                birthDate: null,
+                dinnerPreferences: null
+            }
+            const deserialized = deserializeInhabitantDetail(serialized)
+
+            // InhabitantDetail has dinnerPreferences as required but nullable
+            // This means it can be null but not undefined
+            expect('dinnerPreferences' in deserialized).toBe(true)
+            expect(deserialized.dinnerPreferences).toBeNull()
+
+            // Verify schema validation passes
+            expect(() => InhabitantDetailSchema.parse(deserialized)).not.toThrow()
         })
     })
 })

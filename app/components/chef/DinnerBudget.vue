@@ -99,7 +99,7 @@ const revenueByType = computed(() => {
     <!-- 3 Summary Boxes -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <!-- Box 1: Indtægter (Revenue) -->
-      <UCard :ui="{ body: { padding: 'p-3' } }">
+      <UCard :ui="{ body: 'p-3' }">
         <div class="text-center">
           <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
             <span>💰</span>
@@ -115,7 +115,7 @@ const revenueByType = computed(() => {
       </UCard>
 
       <!-- Box 2: Rådighedsbeløb (Available Budget) - shows both inkl. and ex moms -->
-      <UCard :ui="{ body: { padding: 'p-3' } }" class="bg-success-50 dark:bg-success-950">
+      <UCard :ui="{ body: 'p-3' }" class="bg-success-50 dark:bg-success-950">
         <div class="text-center">
           <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
             <span>🛒</span>
@@ -134,7 +134,7 @@ const revenueByType = computed(() => {
       </UCard>
 
       <!-- Box 3: Køkkenbidrag (Kitchen Contribution) -->
-      <UCard :ui="{ body: { padding: 'p-3' } }">
+      <UCard :ui="{ body: 'p-3' }">
         <div class="text-center">
           <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
             <span>🏠</span>

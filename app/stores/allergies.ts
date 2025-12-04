@@ -147,7 +147,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         }
     }
 
-    const updateAllergyType = async (id: number, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeDisplay> => {
+    const updateAllergyType = async (id: number, allergyTypeData: Omit<AllergyTypeUpdate, 'id'>): Promise<AllergyTypeDisplay> => {
         try {
             const updated = await $fetch<AllergyTypeDisplay>(`/api/admin/allergy-type/${id}`, {
                 method: 'POST',

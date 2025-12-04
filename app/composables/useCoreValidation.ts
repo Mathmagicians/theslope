@@ -169,7 +169,8 @@ export const useCoreValidation = () => {
         id: z.number().int().positive()
     })
 
-    const InhabitantResponseSchema = BaseInhabitantSchema.required({
+    // ADR-009: Detail schema for GET/:id + mutations
+    const InhabitantDetailSchema = BaseInhabitantSchema.required({
         id: true,
         heynaboId: true,
         householdId: true,
@@ -255,7 +256,7 @@ export const useCoreValidation = () => {
         movedInDate: true,
         shortName: true
     }).extend({
-        inhabitants: z.array(InhabitantResponseSchema)
+        inhabitants: z.array(InhabitantDetailSchema)
     })
 
     // ADR-009: User with nested Inhabitant and Household (essential context for auth)
@@ -293,8 +294,8 @@ export const useCoreValidation = () => {
     // INHABITANT TYPES
     // Display: Minimal inhabitant info for lists (team assignments, bookings)
     type InhabitantDisplay = z.infer<typeof InhabitantDisplaySchema>
-    // Detail: Full inhabitant data (same as Display for now, may grow)
-    type _InhabitantDetail = z.infer<typeof InhabitantResponseSchema>
+    // Detail: Full inhabitant data for GET/:id and mutations (ADR-009)
+    type _InhabitantDetail = z.infer<typeof InhabitantDetailSchema>
     // Mutations: Create/update operations
     type _InhabitantCreate = z.infer<typeof InhabitantCreateSchema>
     type _InhabitantUpdate = z.infer<typeof InhabitantUpdateSchema>
@@ -347,6 +348,7 @@ export const useCoreValidation = () => {
     /**
      * ADR-010: Deserialize InhabitantDisplay from database format to domain format
      * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
+     * Display = lightweight bounded context for lists (ADR-009)
      */
     const deserializeInhabitantDisplay = (serialized: Record<string, unknown>): InhabitantDisplay => {
         const deserialized = {
@@ -357,6 +359,21 @@ export const useCoreValidation = () => {
                 : null
         }
         return InhabitantDisplaySchema.parse(deserialized)
+    }
+
+    /**
+     * ADR-010: Deserialize InhabitantDetail from database format to domain format
+     * Detail = full relations for GET/:id and mutations (ADR-009)
+     */
+    const deserializeInhabitantDetail = (serialized: Record<string, unknown>): z.infer<typeof InhabitantDetailSchema> => {
+        const deserialized = {
+            ...serialized,
+            birthDate: serialized.birthDate ? new Date(serialized.birthDate as string | number | Date) : null,
+            dinnerPreferences: serialized.dinnerPreferences
+                ? deserializeWeekDayMap(serialized.dinnerPreferences as string)
+                : null
+        }
+        return InhabitantDetailSchema.parse(deserialized)
     }
 
     /**
@@ -440,9 +457,8 @@ export const useCoreValidation = () => {
         BaseInhabitantSchema,
         InhabitantCreateSchema,
         InhabitantUpdateSchema,
-        InhabitantResponseSchema,
         InhabitantDisplaySchema,
-        InhabitantDetailSchema: InhabitantResponseSchema, // ADR-009: Detail schema for GET/:id + mutations
+        InhabitantDetailSchema,
         // Schemas - Household
         BaseHouseholdSchema,
         HouseholdCreateSchema,
@@ -457,6 +473,7 @@ export const useCoreValidation = () => {
         mergeUserRoles,
         // Functions - Inhabitant
         deserializeInhabitantDisplay,
+        deserializeInhabitantDetail,
         // Functions - Household
         deserializeHouseholdDisplay,
         deserializeHouseholdDetail,
@@ -487,7 +504,7 @@ export type LoginCredentials = z.infer<ReturnType<typeof useCoreValidation>['Log
 // Display: Minimal inhabitant info for lists (GET /api/admin/household/:id/inhabitants)
 export type InhabitantDisplay = z.infer<ReturnType<typeof useCoreValidation>['InhabitantDisplaySchema']>
 // Detail: Full inhabitant data (GET /api/admin/household/:id/inhabitants/:id)
-export type InhabitantDetail = z.infer<ReturnType<typeof useCoreValidation>['InhabitantResponseSchema']>
+export type InhabitantDetail = z.infer<ReturnType<typeof useCoreValidation>['InhabitantDetailSchema']>
 // Mutations
 export type InhabitantCreate = z.infer<ReturnType<typeof useCoreValidation>['InhabitantCreateSchema']>
 export type InhabitantUpdate = z.infer<ReturnType<typeof useCoreValidation>['InhabitantUpdateSchema']>
