@@ -33,11 +33,11 @@
  */
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode as DinnerModeValue} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
-  modelValue?: WeekDayMap<DinnerMode> | null
+  modelValue?: WeekDayMap<DinnerModeValue> | null
   formMode?: FormMode
   disabled?: boolean
   name?: string
@@ -55,7 +55,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: WeekDayMap<DinnerMode>]
+  'update:modelValue': [value: WeekDayMap<DinnerModeValue>]
 }>()
 
 // Design system
@@ -70,11 +70,11 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
 })
 
 // Update single day
-const updateDay = (day: WeekDay, value: DinnerMode) => {
+const updateDay = (day: WeekDay, value: DinnerModeValue) => {
   if (props.disabled || props.formMode === FORM_MODES.VIEW) return
 
   // Initialize with all days set to DINEIN if modelValue is null/undefined
-  const updated: WeekDayMap<DinnerMode> = props.modelValue
+  const updated: WeekDayMap<DinnerModeValue> = props.modelValue
     ? {...props.modelValue}
     : createDefaultWeekdayMap(DinnerMode.DINEIN)
 
@@ -89,7 +89,7 @@ const visibleDays = computed(() => {
 })
 
 // Get dinner mode for a specific day
-const getDayValue = (day: WeekDay): DinnerMode => {
+const getDayValue = (day: WeekDay): DinnerModeValue => {
   return props.modelValue?.[day] ?? DinnerMode.DINEIN
 }
 </script>
@@ -133,7 +133,7 @@ const getDayValue = (day: WeekDay): DinnerMode => {
         :disabled="disabled"
         size="sm"
         :name="`${name}-${day}`"
-        @update:model-value="(value) => updateDay(day, value as DinnerMode)"
+        @update:model-value="(value) => updateDay(day, value as DinnerModeValue)"
       />
     </div>
   </div>

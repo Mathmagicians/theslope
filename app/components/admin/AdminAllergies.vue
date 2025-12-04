@@ -34,6 +34,9 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 // Design system
 const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
+// Business logic
+const { hasNewAllergyInhabitants } = useAllergy()
+
 // STORE
 const store = useAllergiesStore()
 const {
@@ -419,7 +422,7 @@ const catalogEmptyState = {
                     :class="['text-center', COMPONENTS.table.clickableCell]"
                     @click="handleRowClick(row.original)"
                 >
-                  <span v-if="row.original.inhabitants?.some((i: { allergyUpdatedAt: Date }) => isNew(i.allergyUpdatedAt))">🆕</span>
+                  <span v-if="hasNewAllergyInhabitants(row.original)">🆕</span>
                 </div>
               </template>
 

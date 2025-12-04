@@ -122,8 +122,17 @@ export const useAllergy = () => {
     }
   }
 
+  /**
+   * Check if an AllergyTypeDetail has any inhabitants with recently updated allergies.
+   * Used for showing "new" badge on allergy types in lists/tables.
+   */
+  const hasNewAllergyInhabitants = (allergyType: AllergyTypeDetail): boolean => {
+    return allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) ?? false
+  }
+
   return {
-    computeAffectedDiners,      // For KitchenPreparation (diners only)
-    computeAllergyStatistics    // For AllergenMultiSelector (all inhabitants)
+    computeAffectedDiners,       // For KitchenPreparation (diners only)
+    computeAllergyStatistics,    // For AllergenMultiSelector (all inhabitants)
+    hasNewAllergyInhabitants     // For "new" badge in allergy type lists
   }
 }

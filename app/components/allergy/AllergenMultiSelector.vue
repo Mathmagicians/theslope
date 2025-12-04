@@ -79,6 +79,9 @@ const emit = defineEmits<{
 // Design system
 const { COLOR, SIZES, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
+// Business logic
+const { hasNewAllergyInhabitants } = useAllergy()
+
 // Internal selection state (Set for efficient .has() lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
 
@@ -275,7 +278,7 @@ const columns = computed(() => {
           </div>
         </template>
 
-        <!-- New badge cell -->
+        <!-- New badge cell - checks if any inhabitants have recently updated allergies -->
         <template v-if="showNewBadge" #new-cell="{ row }">
           <div
               :class="[
@@ -284,7 +287,7 @@ const columns = computed(() => {
               ]"
               @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
-            <span v-if="isNew(row.original.createdAt || '')">🆕</span>
+            <span v-if="hasNewAllergyInhabitants(row.original)">🆕</span>
           </div>
         </template>
       </UTable>

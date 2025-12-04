@@ -28,16 +28,18 @@ export const useOrder = () => {
 
   /**
    * Filter orders by active state
+   * Generic to preserve OrderDisplay or OrderDetail type
    */
-  const getActiveOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
-    return orders.filter(isActiveOrder)
+  const getActiveOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
+    return orders.filter(o => isActiveOrder(o))
   }
 
   /**
    * Filter orders by released state
+   * Generic to preserve OrderDisplay or OrderDetail type
    */
-  const getReleasedOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
-    return orders.filter(isReleasedOrder)
+  const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
+    return orders.filter(o => isReleasedOrder(o))
   }
 
   /**

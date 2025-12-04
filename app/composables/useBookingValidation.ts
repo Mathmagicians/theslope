@@ -146,7 +146,11 @@ export const useBookingValidation = () => {
      * DinnerEvent Detail - Display + relations (GET /api/admin/dinner-event/[id])
      * ADR-009: Operation-ready, comprehensive data
      */
-    const DinnerEventDetailSchema = DinnerEventDisplaySchema.merge(DinnerEventRelationsOnlySchema)
+    const DinnerEventDetailSchema = DinnerEventDisplaySchema.extend({
+        chef: InhabitantDisplaySchema.nullable(),
+        cookingTeam: CookingTeamDisplaySchema.nullable(),
+        tickets: z.array(OrderDetailSchema).optional()
+    })
 
     /**
      * Order Create - Repository layer (used internally)

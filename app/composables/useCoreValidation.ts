@@ -186,13 +186,12 @@ export const useCoreValidation = () => {
     })
 
     // User display with nested inhabitant (no circular dependency!)
+    // householdId kept for UserListItem compatibility (displays inhabitants from user context)
     const UserDisplaySchema = BaseUserSchema.omit({
         passwordHash: true
     }).extend({
         id: z.number().int().positive(), // Make id required
-        Inhabitant: InhabitantDisplaySchema.omit({
-            householdId: true // Not needed in user context
-        }).extend({
+        Inhabitant: InhabitantDisplaySchema.extend({
             userId: z.number().int().positive().nullable().optional()
         }).nullable().optional()
     })

@@ -1,5 +1,5 @@
 import {expect, type BrowserContext} from '@playwright/test'
-import {readFileSync, readdirSync} from 'fs'
+import {readFileSync, readdirSync, existsSync} from 'fs'
 import {join} from 'path'
 import {format} from 'date-fns'
 import testHelpers from '../testHelpers'
@@ -14,8 +14,10 @@ export class BillingFactory {
 
     /**
      * Get all CSV files in .theslope/order-import folder
+     * Returns empty array if directory doesn't exist (gitignored, local-only)
      */
     static readonly getCSVFiles = (): string[] => {
+        if (!existsSync(ORDER_IMPORT_DIR)) return []
         return readdirSync(ORDER_IMPORT_DIR)
             .filter(f => f.endsWith('.csv'))
             .map(f => join(ORDER_IMPORT_DIR, f))
