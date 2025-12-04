@@ -345,7 +345,14 @@ describe('getHouseholdShortName', () => {
         {address: 'Abbey Road 1 th.', expected: 'AR_1_th'},
         {address: 'Penny Lane 4, 1 4', expected: 'PL_4_1_4'},
         {address: 'Østerbrogade 123, 2.', expected: 'Ø_123_2'},
-        {address: 'Broadway 42', expected: 'B_42'}
+        {address: 'Broadway 42', expected: 'B_42'},
+        // Dot format should produce same result as comma-space format
+        {address: 'Smedekildevej 37.1', expected: 'S_37_1'},
+        {address: 'Smedekildevej 37, 1', expected: 'S_37_1'},
+        {address: 'Smedekildevej 37, st', expected: 'S_37_st'},
+        {address: 'Tvethøjvej 44.1', expected: 'T_44_1'},
+        {address: 'Tvethøjvej 44, 1', expected: 'T_44_1'},
+        {address: 'Tvethøjvej 44, st', expected: 'T_44_st'}
     ])('should generate "$expected" from "$address"', ({address, expected}) => {
         expect(getHouseholdShortName(address)).toBe(expected)
     })

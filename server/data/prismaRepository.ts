@@ -502,21 +502,17 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Handle undefined values with Prisma.skip to satisfy strictUndefinedChecks
-        const data: Partial<HouseholdCreate> = {}
-        if (householdData.heynaboId !== undefined) data.heynaboId = householdData.heynaboId
-        if (householdData.pbsId !== undefined) data.pbsId = householdData.pbsId
-        if (householdData.movedInDate !== undefined) data.movedInDate = householdData.movedInDate
-        if (householdData.name !== undefined) data.name = householdData.name
-        if (householdData.address !== undefined) data.address = householdData.address
-        // Only set moveOutDate if provided (use Prisma.skip for null to avoid undefined)
-        if (householdData.moveOutDate !== undefined) {
-            data.moveOutDate = householdData.moveOutDate ?? Prisma.skip
-        }
-
+        // Build Prisma update data with Prisma.skip for undefined fields (ADR-012)
         await prisma.household.update({
             where: {id},
-            data
+            data: {
+                heynaboId: householdData.heynaboId ?? Prisma.skip,
+                pbsId: householdData.pbsId ?? Prisma.skip,
+                movedInDate: householdData.movedInDate ?? Prisma.skip,
+                name: householdData.name ?? Prisma.skip,
+                address: householdData.address ?? Prisma.skip,
+                moveOutDate: householdData.moveOutDate === undefined ? Prisma.skip : householdData.moveOutDate
+            }
         })
 
         // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations
@@ -1036,7 +1032,7 @@ export async function updateTeamAssignment(
 ): Promise<CookingTeamAssignment> {
     console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Updating team assignment ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, serializeWeekDayMap, deserializeWeekDayMap} = useCookingTeamValidation()
+    const {CookingTeamAssignmentSchema, serializeWeekDayMapNullable, deserializeWeekDayMap} = useCookingTeamValidation()
 
     try {
         // Extract affinity for serialization if present
@@ -1047,7 +1043,7 @@ export async function updateTeamAssignment(
             data: {
                 ...restData,
                 // Use Prisma.skip to omit field entirely when not being updated
-                affinity: affinity === undefined ? Prisma.skip : serializeWeekDayMap(affinity)
+                affinity: affinity === undefined ? Prisma.skip : serializeWeekDayMapNullable(affinity)
             },
             include: {
                 inhabitant: true

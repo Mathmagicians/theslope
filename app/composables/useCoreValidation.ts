@@ -29,7 +29,8 @@ export type SystemRole = z.infer<typeof SystemRoleSchema>
  * - Penny Lane 4, 1 4-> "PL_4_1_4"
  */
 export const getHouseholdShortName = (address: string): string => {
-    const words = address.trim().split(/\s+/)
+    const normalizedDots = address.trim().replace(/\.(?=[\da-zA-Z])/g, ' ')
+    const words = normalizedDots.split(/\s+/)
 
     // Separate text words from numeric/alphanumeric suffix
     const textWords: string[] = []

@@ -27,6 +27,7 @@ export interface UseWeekDayMapValidationReturn<T> {
     WeekDayMapSchemaRequired: ZodType<WeekDayMap<T>> | undefined
     WeekDayMapSchemaOptional: ZodType<WeekDayMap<T>>
     serializeWeekDayMap: (map: WeekDayMap<T>) => string
+    serializeWeekDayMapNullable: (map: WeekDayMap<T> | null) => string | null
     deserializeWeekDayMap: (serialized: string) => WeekDayMap<T> | null
     createWeekDayMapFromSelection: (
         selectedDays: string[],
@@ -66,6 +67,7 @@ export const useWeekDayMapValidation = <T = boolean>(
 
     // Serialization for database storage
     const serializeWeekDayMap = (map: WeekDayMap<T>): string => JSON.stringify(map)
+    const serializeWeekDayMapNullable = (map: WeekDayMap<T> | null): string | null => map ? JSON.stringify(map) : null
     const deserializeWeekDayMap = (serialized: string): WeekDayMap<T> | null => {
         // Handle "[]" (empty array string) which represents null affinity
         if (serialized === "[]") {
@@ -111,6 +113,7 @@ export const useWeekDayMapValidation = <T = boolean>(
         createWeekDayMapFromSelection,
         createDefaultWeekdayMap,
         serializeWeekDayMap,
+        serializeWeekDayMapNullable,
         deserializeWeekDayMap
     }
 }

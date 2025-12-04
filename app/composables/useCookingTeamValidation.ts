@@ -30,6 +30,7 @@ export const useCookingTeamValidation = () => {
     const {
         WeekDayMapSchemaOptional,
         serializeWeekDayMap,
+        serializeWeekDayMapNullable,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection
     } = useWeekDayMapValidation<boolean>({
@@ -261,6 +262,7 @@ export const useCookingTeamValidation = () => {
         // WeekDayMap functions for affinity
         createWeekDayMapFromSelection,
         serializeWeekDayMap,
+        serializeWeekDayMapNullable,
         deserializeWeekDayMap
     }
 }

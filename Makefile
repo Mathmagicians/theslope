@@ -132,22 +132,22 @@ d1-seed-master-data-prod: ## Load master data to prod
 	@echo "✅ Master data loaded (prod)!"
 
 # ============================================================================
-# BILLING IMPORT
+# ORDER IMPORT (Billing CSV)
 # ============================================================================
-.PHONY: heynabo-import-local heynabo-import-dev heynabo-import-prod
+.PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
 
-define heynabo_import
+define theslope_import_orders
 	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
 endef
 
-heynabo-import-local: ## Import test CSV to localhost
-	$(call heynabo_import,$(ENV_local),$(URL_local),$(CSV_TEST))
+theslope-import-orders-local: ## Import orders CSV to localhost
+	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
 
-heynabo-import-dev: ## Import test CSV to dev
-	$(call heynabo_import,$(ENV_dev),$(URL_dev),$(CSV_TEST))
+theslope-import-orders-dev: ## Import orders CSV to dev
+	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
 
-heynabo-import-prod: ## Import prod CSV to production
-	$(call heynabo_import,$(ENV_prod),$(URL_prod),$(CSV_PROD))
+theslope-import-orders-prod: ## Import orders CSV to production
+	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
 
 # ============================================================================
 # DATABASE QUERIES
