@@ -5,7 +5,7 @@ const route = useRoute()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS } = useTheSlopeDesignSystem()
 // Dynamically lookup help content based on current route
 const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
@@ -49,7 +49,7 @@ watch(() => route.path, () => {
       :popper="{ placement: 'bottom-start' }"
   >
     <UButton
-        icon="i-heroicons-question-mark-circle"
+        :icon="ICONS.help"
         :color="isOpen ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
         :variant="isOpen ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
     />
@@ -60,7 +60,7 @@ watch(() => route.path, () => {
           <div class="flex justify-between items-center">
             <span class="text-sm font-semibold">{{ helpContent.title }}</span>
             <UButton
-                icon="i-heroicons-x-mark"
+                :icon="ICONS.xMark"
                 variant="ghost"
                 size="xs"
                 @click="doClose()"

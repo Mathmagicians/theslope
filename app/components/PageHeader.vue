@@ -27,7 +27,7 @@ const mainLinks = computed(() => loggedIn.value ? [
   {
     label: 'Fællesspisning',
     to: '/dinner',
-    icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
+    icon: ICONS.dinner,
     active: isActive('/dinner')
   },
   {
@@ -41,20 +41,20 @@ const mainLinks = computed(() => loggedIn.value ? [
   {
     label: 'Chefkok',
     to: '/chef',
-    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    icon: ICONS.chef,
     active: isActive('/chef')
   }
 ] : [{
   label: 'LOGIN',
   to: '/login',
-  icon: 'i-guidance-entry',
+  icon: ICONS.login,
   active: isActive('/login')
 }])
 
 
 // Drawer menu items (admin + user)
 const drawerLinks = computed(() => [
-  {label: 'Admin', to: '/admin', icon: 'i-pajamas-admin', active: isActive('/admin')},
+  {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
   {label: greeting.value, to: '/login', icon: ICONS.user, active: isActive('/login')}
 ])
 
@@ -88,7 +88,7 @@ const visibleDrawerLinks = computed(() => {
       <template #toggle="{ open, toggle }">
         <UButton
             class="md:hidden"
-            icon="i-heroicons-bars-3"
+            :icon="ICONS.menu"
             :color="open ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
             :variant="open ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
             @click="toggle"

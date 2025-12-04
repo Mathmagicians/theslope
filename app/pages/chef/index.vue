@@ -87,7 +87,7 @@ const selectedTeam = computed(() => {
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
 
 // Calendar view mode via URL query param - survives component remounts (ADR-006)
-const {value: calendarViewMode, setValue: setCalendarViewMode} = useQueryParam<'agenda' | 'calendar'>('view', {
+const {value: calendarViewMode, setValue: _setCalendarViewMode} = useQueryParam<'agenda' | 'calendar'>('view', {
   serialize: (v) => v,
   deserialize: (s) => (s === 'agenda' || s === 'calendar') ? s : null,
   defaultValue: () => 'calendar',

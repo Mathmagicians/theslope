@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Response} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -74,7 +74,7 @@ test.describe('Household members display', () => {
     test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {
         // Setup response wait BEFORE navigation to catch the API call
         const responsePromise = page.waitForResponse(
-            (response: any) => response.url().includes('/api/admin/household/'),
+            (response: Response) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
 
@@ -106,7 +106,7 @@ test.describe('Household members display', () => {
 
         // Setup response wait BEFORE navigation to catch the API call
         const responsePromise = page.waitForResponse(
-            (response: any) => response.url().includes('/api/admin/household/'),
+            (response: Response) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
 
@@ -147,13 +147,13 @@ test.describe('Household members display', () => {
         const household = await pollUntil(
             async () => await HouseholdFactory.getHouseholdById(context, householdId),
             (h) => {
-                const donald = h.inhabitants.find((i: any) => i.id === donaldId)
+                const donald = h.inhabitants.find((i: {id: number}) => i.id === donaldId)
                 return donald?.dinnerPreferences !== null
             },
             10
         )
 
-        const donald = household.inhabitants.find((i: any) => i.id === donaldId)
+        const donald = household.inhabitants.find((i: {id: number}) => i.id === donaldId)
         expect(donald.dinnerPreferences).toBeDefined()
 
         const preferences = typeof donald.dinnerPreferences === 'string'

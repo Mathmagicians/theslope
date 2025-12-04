@@ -459,6 +459,14 @@ export const ICONS = {
   userGroup: 'i-heroicons-user-group',
   ticket: 'i-heroicons-ticket',
 
+  // Header navigation
+  dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
+  chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+  login: 'i-guidance-entry',
+  admin: 'i-pajamas-admin',
+  menu: 'i-heroicons-bars-3',
+  help: 'i-heroicons-question-mark-circle',
+
   // Actions & feedback
   edit: 'i-heroicons-pencil',
   check: 'i-heroicons-check',

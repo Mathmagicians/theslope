@@ -12,7 +12,7 @@ const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 // Helper to create valid WeekDayMap with all 7 days
-const {createDefaultWeekdayMap, createWeekDayMapFromSelection, deserializeWeekDayMap} = useWeekDayMapValidation({
+const {createDefaultWeekdayMap, deserializeWeekDayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
     defaultValue: DinnerMode.DINEIN
 })
@@ -130,7 +130,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         const household = await pollUntil(
             async () => await HouseholdFactory.getHouseholdById(context, householdId),
             (h) => {
-                const scrooge = h.inhabitants.find((i: any) => i.id === scroogeId)
+                const scrooge = h.inhabitants.find((i: {id: number}) => i.id === scroogeId)
                 if (!scrooge?.dinnerPreferences) return false
 
                 const preferences = typeof scrooge.dinnerPreferences === 'string'
@@ -146,7 +146,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         )
 
         // THEN: Verify preferences persisted correctly via API
-        const scrooge = household.inhabitants.find((i: any) => i.id === scroogeId)
+        const scrooge = household.inhabitants.find((i: {id: number}) => i.id === scroogeId)
         expect(scrooge.dinnerPreferences).toBeDefined()
 
         const preferences = typeof scrooge.dinnerPreferences === 'string'

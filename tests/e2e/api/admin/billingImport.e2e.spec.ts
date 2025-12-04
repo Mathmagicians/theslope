@@ -37,7 +37,9 @@ test.describe('Billing Import API', () => {
 
     test('all CSV files in order-import folder can be parsed', () => {
         const csvFiles = BillingFactory.getCSVFiles()
-        expect(csvFiles.length, '.theslope/order-import should contain CSV files').toBeGreaterThan(0)
+
+        // Skip in CI/CD where .theslope is gitignored and empty
+        test.skip(csvFiles.length === 0, '.theslope/order-import is empty (gitignored, local-only test)')
 
         for (const filePath of csvFiles) {
             BillingFactory.validateCSVFile(filePath)

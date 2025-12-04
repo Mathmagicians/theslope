@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { SIZES, COLOR, URGENCY_TO_BADGE, DEADLINE_BADGES } = useTheSlopeDesignSystem()
+const { SIZES, URGENCY_TO_BADGE, DEADLINE_BADGES } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
 const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()

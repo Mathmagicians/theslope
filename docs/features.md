@@ -106,6 +106,12 @@ Legend: 🟢 Active | 🌱 Future | 🟡 Current | ⚪ Past
 - Create new household for families that move to Skråningen
 - Disable household for families that have left Skråningen
 
+#### Billing Import
+- **Import orders from CSV** (framelding format from legacy system)
+  - Address-based household matching via `shortName`
+  - Creates ADULT/CHILD tickets for active season's dinner events
+  - `make heynabo-import-{local,dev,prod}` targets
+
 #### Future Features
 - Assign chef for dinner event
 - Monthly overview of meal tickets sold
@@ -119,8 +125,15 @@ Legend: 🟢 Active | 🌱 Future | 🟡 Current | ⚪ Past
 #### Planning menu
 - Create menu / edit menu
 - See budget based on meal ticket quantity
-- See kitchen team 
+- See kitchen team
 - see allergies
+
+#### Heynabo Event Sync
+- **Announce menu** syncs dinner event to Heynabo calendar
+  - Creates Heynabo event with menu title, description, booking link
+  - Uploads default dinner picture (random rotation)
+  - Updates existing Heynabo event on menu changes
+- **Cancel dinner** marks Heynabo event as cancelled
 
 #### Cooking menu
 - See number of dining guests

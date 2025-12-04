@@ -50,7 +50,7 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.seasonId).toBe(testSeasonId)
             expect(getTeamMemberCounts(testTeam)).toEqual(2)
             expect(testTeam.assignments.length).toBe(2)
-            const memberAssignmentIds = testTeam.assignments.map((a: any) => a.id)
+            const memberAssignmentIds = testTeam.assignments.map((a: {id: number}) => a.id)
             const assignments = await Promise.all(
                 memberAssignmentIds.map((id: number) => SeasonFactory.getCookingTeamAssignment(context, id))
             )

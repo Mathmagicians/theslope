@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page, type Response} from '@playwright/test'
 import {authFiles} from '../config'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
@@ -23,10 +23,10 @@ test.describe('AdminHouseholds View', () => {
      * Helper: Navigate to households page and wait for data to load
      * Sets up response wait BEFORE navigation to catch the API call
      */
-    const navigateToHouseholds = async (page: any) => {
+    const navigateToHouseholds = async (page: Page) => {
         // Setup wait for API response BEFORE navigation (catches the fetch triggered by store)
         const responsePromise = page.waitForResponse(
-            (response: any) => response.url().includes('/api/admin/household'),
+            (response: Response) => response.url().includes('/api/admin/household'),
             {timeout: 10000}
         )
 
@@ -57,7 +57,7 @@ test.describe('AdminHouseholds View', () => {
      * Helper: Navigate to households page, search, and wait for specific household
      * No reload needed - fresh navigation after API data creation will fetch current data
      */
-    const navigateAndFindHousehold = async (page: any, householdId: number, searchTerm: string, shouldNavigate = true) => {
+    const navigateAndFindHousehold = async (page: Page, householdId: number, searchTerm: string, shouldNavigate = true) => {
         if (shouldNavigate) {
             await navigateToHouseholds(page)
         }
