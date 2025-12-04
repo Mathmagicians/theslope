@@ -147,20 +147,24 @@ test.describe('Household members display', () => {
         const household = await pollUntil(
             async () => await HouseholdFactory.getHouseholdById(context, householdId),
             (h) => {
+                if (!h) return false
                 const donald = h.inhabitants.find((i: {id: number}) => i.id === donaldId)
                 return donald?.dinnerPreferences !== null
             },
             10
         )
+        expect(household).not.toBeNull()
 
-        const donald = household.inhabitants.find((i: {id: number}) => i.id === donaldId)
-        expect(donald.dinnerPreferences).toBeDefined()
+        const donald = household!.inhabitants.find((i: {id: number}) => i.id === donaldId)
+        expect(donald).toBeDefined()
+        expect(donald!.dinnerPreferences).toBeDefined()
 
-        const preferences = typeof donald.dinnerPreferences === 'string'
-            ? deserializeWeekDayMap(donald.dinnerPreferences)
-            : donald.dinnerPreferences
+        const preferences = typeof donald!.dinnerPreferences === 'string'
+            ? deserializeWeekDayMap(donald!.dinnerPreferences)
+            : donald!.dinnerPreferences
 
-        const changedDays = Object.entries(preferences).filter(([_, mode]) => mode === 'TAKEAWAY')
+        expect(preferences).not.toBeNull()
+        const changedDays = Object.entries(preferences!).filter(([_, mode]) => mode === 'TAKEAWAY')
         expect(changedDays).toHaveLength(1)
     })
 })

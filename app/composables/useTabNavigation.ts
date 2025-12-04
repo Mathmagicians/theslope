@@ -20,7 +20,7 @@ export function useTabNavigation(config: TabNavigationConfig) {
     } = config
 
     if (tabs.length === 0) throw new Error('useTabNavigation requires at least one tab to be defined in the tabs object')
-    const defaultTabValue:string = tabs[0]
+    const defaultTabValue: string = tabs[0]!
 
     const isValidTab = (tab?: string): boolean => !!tab &&  tabs.includes(tab.toLowerCase())
 

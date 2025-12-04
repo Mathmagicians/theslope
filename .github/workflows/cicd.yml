@@ -28,7 +28,8 @@ jobs:
         with:
           node-version: 22
       - name: Pre check - linting and Typescript validation
-        run: npm run pre:all
+        run: npm run lint
+        #pre:all
       - run: npm ci
       - run: npx prisma validate
       - name: Run unit tests

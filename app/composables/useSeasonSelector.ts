@@ -45,7 +45,7 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
         const safeSeasonName = safeSeason(shortName)
         const seasonObject = seasons.value.find(s => s.shortName === shortName)
 
-        if (seasonObject && seasonObject.id !== selectedSeasonId.value) {
+        if (seasonObject?.id && seasonObject.id !== selectedSeasonId.value) {
             onSeasonSelect(seasonObject.id)
         }
 

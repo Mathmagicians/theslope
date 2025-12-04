@@ -130,6 +130,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         const household = await pollUntil(
             async () => await HouseholdFactory.getHouseholdById(context, householdId),
             (h) => {
+                if (!h) return false
                 const scrooge = h.inhabitants.find((i: {id: number}) => i.id === scroogeId)
                 if (!scrooge?.dinnerPreferences) return false
 
@@ -137,6 +138,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
                     ? deserializeWeekDayMap(scrooge.dinnerPreferences)
                     : scrooge.dinnerPreferences
 
+                if (!preferences) return false
                 return preferences.mandag === DinnerMode.TAKEAWAY &&
                     preferences.onsdag === DinnerMode.DINEINLATE &&
                     preferences.fredag === DinnerMode.NONE
@@ -144,20 +146,23 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
             10,
             500
         )
+        expect(household).not.toBeNull()
 
         // THEN: Verify preferences persisted correctly via API
-        const scrooge = household.inhabitants.find((i: {id: number}) => i.id === scroogeId)
-        expect(scrooge.dinnerPreferences).toBeDefined()
+        const scrooge = household!.inhabitants.find((i: {id: number}) => i.id === scroogeId)
+        expect(scrooge).toBeDefined()
+        expect(scrooge!.dinnerPreferences).toBeDefined()
 
-        const preferences = typeof scrooge.dinnerPreferences === 'string'
-            ? deserializeWeekDayMap(scrooge.dinnerPreferences)
-            : scrooge.dinnerPreferences
+        const preferences = typeof scrooge!.dinnerPreferences === 'string'
+            ? deserializeWeekDayMap(scrooge!.dinnerPreferences)
+            : scrooge!.dinnerPreferences
 
-        expect(preferences.mandag).toBe(DinnerMode.TAKEAWAY)
-        expect(preferences.tirsdag).toBe(DinnerMode.DINEIN)
-        expect(preferences.onsdag).toBe(DinnerMode.DINEINLATE)
-        expect(preferences.torsdag).toBe(DinnerMode.DINEIN)
-        expect(preferences.fredag).toBe(DinnerMode.NONE)
+        expect(preferences).not.toBeNull()
+        expect(preferences!.mandag).toBe(DinnerMode.TAKEAWAY)
+        expect(preferences!.tirsdag).toBe(DinnerMode.DINEIN)
+        expect(preferences!.onsdag).toBe(DinnerMode.DINEINLATE)
+        expect(preferences!.torsdag).toBe(DinnerMode.DINEIN)
+        expect(preferences!.fredag).toBe(DinnerMode.NONE)
 
         // THEN: Verify UI collapsed back to VIEW mode
         await pollUntil(

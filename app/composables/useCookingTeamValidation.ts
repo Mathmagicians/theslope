@@ -163,11 +163,12 @@ export const useCookingTeamValidation = () => {
     }
 
     // Deserialize team Display (for season fetch with CookingTeams)
-    const deserializeCookingTeam = (serialized: SerializedCookingTeamDisplay): CookingTeamDisplay => {
+    const deserializeCookingTeam = (serialized: Record<string, unknown>): CookingTeamDisplay => {
+        const assignments = serialized.assignments as Record<string, unknown>[] | undefined
         const deserialized = {
             ...serialized,
-            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
-            assignments: serialized.assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
+            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
         }
 
         return CookingTeamDisplaySchema.parse(deserialized)

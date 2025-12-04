@@ -68,10 +68,10 @@ test.describe('AdminTeams Form UI', () => {
                 // THEN: Verify teams created
                 const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
                 expect(teams.length).toBe(2)
-                expect(teams[0].name).toContain('Madhold 1')
-                expect(teams[0].name).toContain(season.shortName)
-                expect(teams[1].name).toContain('Madhold 2')
-                expect(teams[1].name).toContain(season.shortName)
+                expect(teams[0]!.name).toContain('Madhold 1')
+                expect(teams[0]!.name).toContain(season.shortName)
+                expect(teams[1]!.name).toContain('Madhold 2')
+                expect(teams[1]!.name).toContain(season.shortName)
             })
     })
 
@@ -148,7 +148,8 @@ test.describe('AdminTeams Form UI', () => {
 
             // THEN: Team name should be updated immediately via API
             const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id!)
-            expect(updatedTeam.name).toContain('Q')
+            expect(updatedTeam).not.toBeNull()
+            expect(updatedTeam!.name).toContain('Q')
         })
 
         test('GIVEN user in edit mode WHEN adding new team THEN team is saved immediately', async () => {

@@ -96,7 +96,7 @@ test.describe('Admin page path-based navigation', () => {
       const needsApiWait = tabsNeedingSeasonApi.includes(tab.path)
       const responsePromise = needsApiWait
         ? page.waitForResponse(
-            (response: Response) => response.url().match(/\/api\/admin\/season\/\d+$/),
+            (response: Response) => response.url().match(/\/api\/admin\/season\/\d+$/) !== null,
             {timeout: 10000}
           )
         : null

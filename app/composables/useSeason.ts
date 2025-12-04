@@ -8,8 +8,19 @@ import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, type DeadlineUrgency, type TemporalCategory} from "~/utils/season"
+    selectMostAppropriateActiveSeason} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
+
+/**
+ * Deadline urgency levels for dinner events
+ * 0 = On track, 1 = Warning, 2 = Critical
+ */
+export type DeadlineUrgency = 0 | 1 | 2
+
+/**
+ * Temporal category for dinner events relative to current time
+ */
+export type TemporalCategory = 'next' | 'future' | 'past'
 
 /**
  * Business logic for working with seasons
@@ -349,5 +360,3 @@ export const useSeason = () => {
     }
 }
 
-// Re-export types for consumers (ADR-001)
-export type { DeadlineUrgency, TemporalCategory }

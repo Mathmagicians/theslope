@@ -92,7 +92,7 @@ export const useSeasonValidation = () => {
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
     const deserializeSeason = (serialized: Record<string, unknown>): Season => {
-        const parsedSeasonDates = JSON.parse(serialized.seasonDates as string)
+        const parsedSeasonDates = JSON.parse(serialized.seasonDates as string) as { start: string; end: string }
 
         const baseSeason = {
             ...serialized,
@@ -102,7 +102,7 @@ export const useSeasonValidation = () => {
                 end: parseDate(parsedSeasonDates.end)
             }, DATE_SETTINGS.SEASON_NAME_MASK),
             cookingDays: deserializeWeekDayMap(serialized.cookingDays as string),
-            holidays: JSON.parse(serialized.holidays as string).map((holiday: Record<string, string>) => ({
+            holidays: (JSON.parse(serialized.holidays as string) as { start: string; end: string }[]).map((holiday) => ({
                 start: parseDate(holiday.start),
                 end: parseDate(holiday.end)
             })),
@@ -122,10 +122,10 @@ export const useSeasonValidation = () => {
                 dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplaySchema.parse(event)),
                 // Deserialize nested CookingTeams (including affinity fields)
                 CookingTeams: CookingTeams?.map((team) => deserializeCookingTeam(team)),
-                ticketPrices: serialized.ticketPrices
-            }
+                ticketPrices: serialized.ticketPrices as Season['ticketPrices']
+            } as Season
         }
-        return baseSeason
+        return baseSeason as Season
     }
 
     // Return all schemas and utility functions
