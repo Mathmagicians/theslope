@@ -1,10 +1,10 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Proposed | **Date:** 2025-12-04
+**Status:** Approved | **Date:** 2025-12-04 | **Strategy:** Shard by Household
 
 ## Summary
 
-When a season is activated, clip all inhabitants' preferences to the season's cooking days and sync orders accordingly. Maintain data integrity on every preference save.
+When a season is activated, clip all inhabitants' preferences to the season's cooking days and sync orders accordingly. Maintain data integrity on every preference save. Use **household-level sharding** to stay within D1's 1,000 query limit.
 
 ## Core Concept: Preference Clipping
 
@@ -22,8 +22,10 @@ Same logic as `WeekDayMapDinnerModeDisplay` with `parentRestriction` prop - but 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  TRIGGER: Season Activated                                      │
-│  1. Clip ALL inhabitants' preferences to season.cookingDays     │
-│  2. Sync orders: create missing, update changed, delete NONE'd  │
+│  1. For each household (sequential API calls):                  │
+│     a. Clip inhabitants' preferences to season.cookingDays      │
+│     b. Sync orders: create missing, update changed, delete NONE │
+│  2. Progress: "Syncing household 12/35..."                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  TRIGGER: Preference Saved                                      │
 │  1. Clip preference to active season.cookingDays before save    │
@@ -48,19 +50,124 @@ Same logic as `WeekDayMapDinnerModeDisplay` with `parentRestriction` prop - but 
 
 **Key:** Only `BOOKED` orders are system-managed. `RELEASED`/`CLOSED` are immutable.
 
-## Implementation
+---
 
-### Pure Functions (`composables/useSeason.ts`)
+## D1 Platform Constraints
+
+**Sources:** [D1 Limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers Limits](https://developers.cloudflare.com/workers/platform/limits/)
+
+| Constraint | Limit | Impact |
+|------------|-------|--------|
+| Subrequests per Worker invocation | **1,000** (paid) / 50 (free) | Each Prisma query = 1 subrequest |
+| Bound parameters per query | **100** | Order (~12 fields) → max **8 rows per INSERT** |
+
+### Scale Analysis
+
+**Real numbers:** 120 inhabitants × 180 dinner events = **21,600 potential orders**
+
+Single-call approach: 21,600 ÷ 8 rows per INSERT = **2,700 queries ❌ EXCEEDS 1,000**
+
+---
+
+## Sharding Strategy: By Household ✅
+
+**Process one household at a time via sequential API calls.**
+
+| Per Household (~5 inhabitants) | Calculation | Queries |
+|--------------------------------|-------------|---------|
+| Fetch season + dinner events | | ~3 |
+| Fetch household + inhabitants | | ~2 |
+| Clip preferences | 5 updates | 5 |
+| Fetch existing orders | | ~1 |
+| Create orders | 5 × 180 ÷ 8 | ~113 |
+| Update/delete orders | | ~10 |
+| **Total per household** | | **~134** ✅ |
+
+**Full activation:** ~35 households × 1 API call each = **35 sequential calls**
+
+### Why Household Sharding?
+
+1. **Aligns with existing powermode** - `HouseholdCard.vue` already updates all inhabitants at once
+2. **Reusable** - Same endpoint powers user-facing "sync my bookings" feature
+3. **Natural retry boundary** - If one household fails, others unaffected
+4. **Clear progress** - "Syncing household 12/35..."
+5. **Acceptable latency** - ~35 calls for admin operation run once per season
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/api/admin/season/[id]/activate` | Orchestrates activation (calls household sync) |
+| `POST` | `/api/admin/household/[id]/sync-orders` | Sync single household to season |
+
+### Activate Endpoint (Orchestrator)
 
 ```typescript
+// POST /api/admin/season/[id]/activate
+// Orchestrates household-by-household sync
+
+interface ActivateSeasonRequest {
+  // Optional: resume from specific household on retry
+  startFromHouseholdId?: number
+}
+
+interface ActivateSeasonResponse {
+  season: SeasonDisplay
+  sync: {
+    householdsProcessed: number
+    householdsTotal: number
+    inhabitantsClipped: number
+    ordersCreated: number
+    ordersUpdated: number
+    ordersDeleted: number
+  }
+}
+```
+
+### Household Sync Endpoint (Worker)
+
+```typescript
+// POST /api/admin/household/[id]/sync-orders
+// Syncs one household to active season
+
+interface HouseholdSyncRequest {
+  seasonId: number
+}
+
+interface HouseholdSyncResponse {
+  householdId: number
+  inhabitantsClipped: number
+  ordersCreated: number
+  ordersUpdated: number
+  ordersDeleted: number
+}
+```
+
+---
+
+## Implementation
+
+### Pure Functions (`composables/useSeasonActivation.ts`)
+
+```typescript
+import { WEEKDAYS, type WeekDay } from '~/composables/useWeekday'
+import { DinnerMode, type WeekDayMap } from '~/composables/useWeekDayMapValidation'
+
 /**
  * Clip preferences to season's cooking days
  * Non-cooking days → NONE, cooking days → keep existing
  */
-const clipPreferencesToSeason = (
+export const clipPreferencesToSeason = (
   preferences: WeekDayMap<DinnerMode> | null,
   cookingDays: WeekDayMap<boolean>
 ): WeekDayMap<DinnerMode> => {
+  const { createDefaultWeekdayMap } = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerMode.DINEIN
+  })
+
   const clipped = createDefaultWeekdayMap(DinnerMode.DINEIN)
 
   for (const day of WEEKDAYS) {
@@ -71,261 +178,309 @@ const clipPreferencesToSeason = (
 
   return clipped
 }
+
+/**
+ * Get weekday from date (Danish weekday names)
+ */
+export const getWeekdayFromDate = (date: Date): WeekDay => {
+  const dayIndex = date.getDay()
+  // Sunday = 0, Monday = 1, etc. Map to Danish weekday names
+  const mapping: Record<number, WeekDay> = {
+    0: 'søndag',
+    1: 'mandag',
+    2: 'tirsdag',
+    3: 'onsdag',
+    4: 'torsdag',
+    5: 'fredag',
+    6: 'lørdag'
+  }
+  return mapping[dayIndex]
+}
 ```
 
-### Order Sync (`composables/useOrder.ts`)
+### Order Sync Logic (`composables/useOrderSync.ts`)
 
 ```typescript
+import type { DinnerEventDisplay, OrderDisplay, InhabitantDetail, TicketPrice } from '~/types'
+
+interface OrderSyncResult {
+  toCreate: OrderCreate[]
+  toUpdate: Array<{ id: number; dinnerMode: DinnerMode }>
+  toDelete: number[]
+}
+
 /**
  * Compute order sync operations (pure function)
- * Returns arrays of orders to create/update/delete
+ * Compares preferences against existing orders for all dinner events
  */
-const computeOrderSync = (
+export const computeOrderSync = (
   dinnerEvents: DinnerEventDisplay[],
   preferences: WeekDayMap<DinnerMode>,
   existingOrders: OrderDisplay[],
   inhabitant: InhabitantDetail,
   ticketPrices: TicketPrice[]
-): { toCreate: OrderCreate[]; toUpdate: OrderUpdate[]; toDelete: number[] }
+): OrderSyncResult => {
+  const toCreate: OrderCreate[] = []
+  const toUpdate: Array<{ id: number; dinnerMode: DinnerMode }> = []
+  const toDelete: number[] = []
+
+  // Index existing orders by dinnerEventId for O(1) lookup
+  const ordersByEvent = new Map(
+    existingOrders.map(o => [o.dinnerEventId, o])
+  )
+
+  for (const event of dinnerEvents) {
+    const weekday = getWeekdayFromDate(new Date(event.date))
+    const preference = preferences[weekday]
+    const existingOrder = ordersByEvent.get(event.id)
+
+    if (preference === DinnerMode.NONE) {
+      // Should not have order
+      if (existingOrder?.state === 'BOOKED') {
+        toDelete.push(existingOrder.id)
+      }
+      // RELEASED/CLOSED: no action (immutable)
+    } else {
+      // Should have order with this dinnerMode
+      if (!existingOrder) {
+        toCreate.push({
+          dinnerEventId: event.id,
+          inhabitantId: inhabitant.id,
+          dinnerMode: preference,
+          ticketPriceId: getTicketPriceForInhabitant(inhabitant, ticketPrices),
+          priceAtBooking: getTicketPriceForInhabitant(inhabitant, ticketPrices, true),
+          state: 'BOOKED'
+        })
+      } else if (existingOrder.state === 'BOOKED' && existingOrder.dinnerMode !== preference) {
+        toUpdate.push({ id: existingOrder.id, dinnerMode: preference })
+      }
+      // Same mode or RELEASED/CLOSED: no action
+    }
+  }
+
+  return { toCreate, toUpdate, toDelete }
+}
+
+/**
+ * Determine ticket price based on inhabitant age
+ */
+const getTicketPriceForInhabitant = (
+  inhabitant: InhabitantDetail,
+  ticketPrices: TicketPrice[],
+  returnPrice = false
+): number => {
+  // Logic to determine ADULT/CHILD/BABY based on birthDate and maximumAgeLimit
+  const ticketPrice = ticketPrices.find(tp => {
+    if (!inhabitant.birthDate) return tp.ticketType === 'ADULT'
+    const age = calculateAge(inhabitant.birthDate)
+    if (tp.maximumAgeLimit && age <= tp.maximumAgeLimit) return true
+    return tp.ticketType === 'ADULT' && !tp.maximumAgeLimit
+  })
+
+  return returnPrice ? ticketPrice?.price ?? 0 : ticketPrice?.id ?? 0
+}
 ```
 
-### Repository Functions
+### Repository Functions (`server/data/seasonActivationRepository.ts`)
 
 ```typescript
-// Clip and sync single inhabitant (used on preference save)
-clipAndSyncInhabitant(d1Client, inhabitantId, preferences): Promise<SyncResult>
+/**
+ * Sync orders for a single household to match season preferences
+ * Called per-household to stay within D1's 1,000 query limit
+ */
+export async function syncHouseholdOrders(
+  d1Client: D1Database,
+  householdId: number,
+  seasonId: number
+): Promise<HouseholdSyncResponse> {
+  const prisma = await getPrismaClientConnection(d1Client)
 
-// Clip and sync all inhabitants (used on season activation)
-clipAndSyncAllInhabitants(d1Client, seasonId): Promise<BulkSyncResult>
+  // 1. Fetch season with cooking days and dinner events (~2 queries)
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: {
+      dinnerEvents: { select: { id: true, date: true, state: true } },
+      ticketPrices: true
+    }
+  })
 
-// Onboard new inhabitant to active season
-onboardInhabitantToActiveSeason(d1Client, inhabitantId): Promise<void>
-```
+  // 2. Fetch household with inhabitants (~1 query)
+  const household = await prisma.household.findUnique({
+    where: { id: householdId },
+    include: {
+      inhabitants: {
+        select: { id: true, dinnerPreferences: true, birthDate: true }
+      }
+    }
+  })
 
-## API Endpoints
+  const cookingDays = deserializeCookingDays(season.cookingDays)
+  const futureEvents = season.dinnerEvents.filter(e =>
+    new Date(e.date) > new Date() && e.state === 'SCHEDULED'
+  )
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/admin/season/[id]/activate` | Activate season + clip + sync |
-| `POST` | `/api/admin/season/[id]/scaffold-orders` | Manual re-scaffold (idempotent) |
+  let totalClipped = 0
+  let totalCreated = 0
+  let totalUpdated = 0
+  let totalDeleted = 0
 
-### Activate Response
+  for (const inhabitant of household.inhabitants) {
+    // 3. Clip preferences (~1 query per inhabitant)
+    const currentPrefs = inhabitant.dinnerPreferences
+      ? deserializePreferences(inhabitant.dinnerPreferences)
+      : null
+    const clippedPrefs = clipPreferencesToSeason(currentPrefs, cookingDays)
 
-```typescript
-interface ActivateSeasonResponse {
-  season: SeasonDisplay
-  sync: {
-    inhabitantsClipped: number
-    ordersCreated: number
-    ordersUpdated: number
-    ordersDeleted: number
+    await prisma.inhabitant.update({
+      where: { id: inhabitant.id },
+      data: { dinnerPreferences: serializePreferences(clippedPrefs) }
+    })
+    totalClipped++
+
+    // 4. Fetch existing orders for this inhabitant (~1 query)
+    const existingOrders = await prisma.order.findMany({
+      where: {
+        inhabitantId: inhabitant.id,
+        dinnerEventId: { in: futureEvents.map(e => e.id) }
+      },
+      select: { id: true, dinnerEventId: true, dinnerMode: true, state: true }
+    })
+
+    // 5. Compute sync operations (pure function, 0 queries)
+    const { toCreate, toUpdate, toDelete } = computeOrderSync(
+      futureEvents,
+      clippedPrefs,
+      existingOrders,
+      inhabitant,
+      season.ticketPrices
+    )
+
+    // 6. Execute sync (~N queries, chunked by Prisma)
+    if (toCreate.length > 0) {
+      await prisma.order.createMany({ data: toCreate })
+      totalCreated += toCreate.length
+    }
+
+    for (const update of toUpdate) {
+      await prisma.order.update({
+        where: { id: update.id },
+        data: { dinnerMode: update.dinnerMode }
+      })
+      totalUpdated++
+    }
+
+    if (toDelete.length > 0) {
+      await prisma.order.deleteMany({
+        where: { id: { in: toDelete } }
+      })
+      totalDeleted += toDelete.length
+    }
+  }
+
+  return {
+    householdId,
+    inhabitantsClipped: totalClipped,
+    ordersCreated: totalCreated,
+    ordersUpdated: totalUpdated,
+    ordersDeleted: totalDeleted
   }
 }
 ```
 
-## D1 Platform Constraints
-
-**Sources:** [D1 Limits](https://developers.cloudflare.com/d1/platform/limits/), [Workers Limits](https://developers.cloudflare.com/workers/platform/limits/)
-
-| Constraint | Limit | Impact |
-|------------|-------|--------|
-| Subrequests per Worker invocation | **1,000** (paid) / 50 (free) | Each Prisma query = 1 subrequest |
-| Bound parameters per query | **100** | Order (~12 fields) → max **8 rows per INSERT** |
-| `db.batch()` raw API | 1 subrequest total | Bypasses limit but loses Prisma type safety |
-
-### Scale Analysis
-
-**Real numbers:** 120 inhabitants × 180 dinner events = **21,600 potential orders**
-
-Prisma `createMany` auto-chunks based on 100-param limit:
-- 21,600 orders ÷ 8 rows per INSERT = **2,700 queries ❌ EXCEEDS 1,000**
-
 ---
 
-## Sharding Strategies
-
-Natural sharding boundaries exist. Each option stays within D1 limits.
-
-### Option A: Shard by Dinner Event
-
-**Process one dinner event at a time.**
-
-| Per Event | Calculation | Queries |
-|-----------|-------------|---------|
-| Fetch data | | ~3 |
-| Create orders | 120 inhabitants ÷ 8 rows | ~15 |
-| **Total per event** | | **~18** ✅ |
-
-```typescript
-// 180 API calls, ~18 queries each
-POST /api/admin/dinner-event/[id]/scaffold-orders
-```
-
-| Pros | Cons |
-|------|------|
-| Very safe margin | 180 sequential calls (slow) |
-| Natural retry boundary | Network overhead |
-| Progress: "Event 45/180..." | |
-
----
-
-### Option B: Shard by Household ⭐ Recommended
-
-**Process one household at a time.**
-
-| Per Household (~5 inhabitants) | Calculation | Queries |
-|--------------------------------|-------------|---------|
-| Fetch data | | ~5 |
-| Clip preferences | 5 updates | 5 |
-| Create orders | 5 × 180 ÷ 8 | ~113 |
-| Update/delete | | ~10 |
-| **Total per household** | | **~133** ✅ |
-
-```typescript
-// ~35 API calls, ~133 queries each
-POST /api/household/[id]/sync-orders?seasonId=X
-```
-
-| Pros | Cons |
-|------|------|
-| Aligns with user mental model | Variable household sizes |
-| Reusable for user "sync my bookings" | ~35 calls for full activation |
-| Matches existing powermode pattern | |
-
----
-
-### Option C: Shard by Day of Week
-
-**Process all events for one weekday at a time.**
-
-| Per Weekday | Calculation | Queries |
-|-------------|-------------|---------|
-| Events | 180 ÷ 5 cooking days = ~36 | |
-| Create orders | 120 × 36 ÷ 8 | ~540 |
-| Fetch + overhead | | ~50 |
-| **Total per weekday** | | **~590** ✅ |
-
-```typescript
-// 5 API calls (one per cooking day), ~590 queries each
-POST /api/admin/season/[id]/scaffold-orders?weekday=mandag
-```
-
-| Pros | Cons |
-|------|------|
-| Only 5 API calls | Large batches |
-| Logical grouping | Less granular progress |
-
----
-
-### Option D: Lazy Scaffolding (On-Demand)
-
-**Don't scaffold upfront. Create orders when needed.**
-
-| Trigger | Action |
-|---------|--------|
-| User opens household page | Scaffold that household |
-| Chef announces dinner | Scaffold that event |
-| Nightly cron | Scaffold next 7 days |
-
-```typescript
-// Middleware pattern
-const ensureOrdersExist = async (householdId, seasonId) => {
-  const count = await countOrders(householdId, seasonId)
-  if (count === 0) await scaffoldHousehold(householdId, seasonId)
-}
-```
-
-| Pros | Cons |
-|------|------|
-| No upfront cost | First load is slow |
-| Scales naturally | Harder to reason about state |
-| Fast activation | |
-
----
-
-### Option E: Raw `db.batch()` (Bypass Prisma)
-
-**Use D1's batch API directly - unlimited statements in 1 subrequest.**
-
-```typescript
-const statements = ordersToCreate.map(order =>
-  env.DB.prepare(`INSERT INTO "Order" (...) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(order.dinnerEventId, order.inhabitantId, ...)
-)
-await env.DB.batch(statements)  // 1 subrequest for ALL 21,600 inserts!
-```
-
-| Pros | Cons |
-|------|------|
-| Single API call | Loses Prisma type safety |
-| No chunking needed | Manual SQL maintenance |
-| | 30-second timeout applies |
-
----
-
-## Recommendation
-
-| Criteria | Best Option |
-|----------|-------------|
-| **Simplicity** | A (by event) |
-| **UX alignment** | B (by household) ⭐ |
-| **Fewest calls** | C (by weekday) or E (raw batch) |
-| **Scalability** | D (lazy) |
-
-**Recommended: Option B (by household)** because:
-1. Aligns with existing powermode pattern in `HouseholdCard`
-2. Reusable for user-facing "sync my bookings" feature
-3. ~35 API calls is acceptable for admin operation
-4. Clear retry boundary per household
-5. Progress feedback: "Syncing household 12/35..."
-
-For future optimization, consider **Option D (lazy)** as system scales.
-
-## Files to Modify
+## Files to Create/Modify
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `composables/useSeason.ts` | Extend | `clipPreferencesToSeason()` |
-| `composables/useOrder.ts` | Create | `computeOrderSync()` |
-| `server/data/prismaRepository.ts` | Extend | Clip + sync repository functions |
-| `server/routes/api/admin/season/[id]/activate.post.ts` | Create | Activation endpoint |
-| `server/routes/api/admin/household/inhabitants/[id].post.ts` | Modify | Clip + sync on save |
-| `stores/plan.ts` | Extend | `activateSeason()` action |
+| `composables/useSeasonActivation.ts` | Create | `clipPreferencesToSeason()`, `getWeekdayFromDate()` |
+| `composables/useOrderSync.ts` | Create | `computeOrderSync()` |
+| `server/data/seasonActivationRepository.ts` | Create | `syncHouseholdOrders()` |
+| `server/routes/api/admin/season/[id]/activate.post.ts` | Create | Activation orchestrator |
+| `server/routes/api/admin/household/[id]/sync-orders.post.ts` | Create | Per-household sync |
+| `server/routes/api/admin/household/inhabitants/[id].post.ts` | Modify | Clip + sync on preference save |
+| `stores/plan.ts` | Extend | `activateSeason()` action with progress |
+
+---
 
 ## Integration Points
 
 ### Existing Powermode
 
-The existing `updateAllInhabitantPreferences()` in `households.ts` can trigger clip + sync:
+The existing `updateAllInhabitantPreferences()` in `households.ts` should trigger clip + sync:
 
 ```typescript
-// After powermode updates all inhabitants
-await clipAndSyncAllInhabitants(d1Client, activeSeasonId)
+// After powermode updates all inhabitants in a household
+await $fetch(`/api/admin/household/${householdId}/sync-orders`, {
+  method: 'POST',
+  body: { seasonId: activeSeasonId }
+})
 ```
 
 ### Heynabo Import
 
-When importing inhabitants from Heynabo, call `onboardInhabitantToActiveSeason()` for each new inhabitant.
+When importing inhabitants from Heynabo, sync the household:
+
+```typescript
+// After creating new inhabitant
+await $fetch(`/api/admin/household/${householdId}/sync-orders`, {
+  method: 'POST',
+  body: { seasonId: activeSeasonId }
+})
+```
+
+### UI Progress Feedback
+
+```typescript
+// stores/plan.ts
+const activateSeason = async (seasonId: number) => {
+  activationProgress.value = { current: 0, total: 0, status: 'loading' }
+
+  const households = await $fetch('/api/admin/household')
+  activationProgress.value.total = households.length
+
+  for (const household of households) {
+    await $fetch(`/api/admin/household/${household.id}/sync-orders`, {
+      method: 'POST',
+      body: { seasonId }
+    })
+    activationProgress.value.current++
+  }
+
+  activationProgress.value.status = 'complete'
+}
+```
+
+---
 
 ## Test Strategy
 
 | Test Type | Coverage |
 |-----------|----------|
-| Unit | `clipPreferencesToSeason()`, `computeOrderSync()` |
-| E2E | Season activation flow, preference save + order sync |
-| E2E | New inhabitant onboarding |
+| Unit | `clipPreferencesToSeason()` - all weekday combinations |
+| Unit | `computeOrderSync()` - all preference/order state combinations |
+| Unit | `getWeekdayFromDate()` - date to Danish weekday mapping |
+| E2E | Season activation flow with progress |
+| E2E | Preference save triggers order sync |
+| E2E | New inhabitant gets clipped preferences + orders |
 | E2E | Idempotency (re-activation produces same result) |
+| E2E | Respects RELEASED/CLOSED orders (immutable) |
+
+---
 
 ## ADR Compliance
 
-- **ADR-007:** Store handles activation, components show loading states
-- **ADR-009:** Batch operations use Display types (lightweight)
-- **ADR-010:** Clip/sync functions in composables, serialization in repository
-- **ADR-011:** Respects order states (only BOOKED modified)
-- **ADR-012:** Use `Prisma.skip` for optional fields
+- **ADR-007:** Store handles activation with progress state, components show loading
+- **ADR-009:** Per-household calls stay within D1's 1,000 query limit
+- **ADR-010:** Clip/sync pure functions in composables, serialization in repository
+- **ADR-011:** Respects order states (only BOOKED orders modified)
+- **ADR-012:** Use `Prisma.skip` for optional fields in order creation
 
-## Open Questions
+---
 
-1. **`bookedByUserId` for children:** Use parent's userId or leave null?
-2. **Activation trigger:** Manual only, or auto-activate when season dates include today?
-3. **Audit trail:** Should order sync operations create `OrderHistory` entries?
+## Design Decisions
+
+1. **`bookedByUserId`:** Set to `null` (SYSTEM) - orders are system-generated, not user-booked
+2. **Activation trigger:** Manual admin action - admin explicitly activates season via UI
+3. **Audit trail:** Yes - order creation logs first `OrderHistory` entry (action: `SYSTEM_CREATED`)
+4. **Retry handling:** Operation is idempotent - simply re-run activation if it fails

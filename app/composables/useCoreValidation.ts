@@ -90,7 +90,7 @@ export const useCoreValidation = () => {
         // Normalize to standard format by extracting email from angle brackets
         const match = val.match(/<(.+)>/)
         return match ? match[1] : val
-    })
+    }).pipe(z.string().email())
 
     // Domain schema - systemRoles as array
     const BaseUserSchema = UserFragmentSchema.extend({

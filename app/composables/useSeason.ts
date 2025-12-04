@@ -184,9 +184,10 @@ export const useSeason = () => {
             dinnerEvents = [],
             CookingTeams: teams = [],
             consecutiveCookingDays,
-            cookingDays
+            cookingDays,
+            holidays = []
         } = season
-        return computeTeamAssignmentsForEvents( teams, cookingDays, consecutiveCookingDays, dinnerEvents)
+        return computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, dinnerEvents, holidays)
     }
 
 

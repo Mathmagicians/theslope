@@ -136,12 +136,6 @@ export const useBookingValidation = () => {
     // DINNER EVENT (Detail schema - defined after OrderDetailSchema so no z.lazy needed)
     // ============================================================================
 
-    const DinnerEventRelationsOnlySchema = z.object({
-        chef: InhabitantDisplaySchema.nullable(),
-        cookingTeam: CookingTeamDisplaySchema.nullable(),
-        tickets: z.array(OrderDetailSchema).optional()  // No z.lazy() - OrderDetailSchema is now defined
-    })
-
     /**
      * DinnerEvent Detail - Display + relations (GET /api/admin/dinner-event/[id])
      * ADR-009: Operation-ready, comprehensive data

@@ -90,6 +90,7 @@ const USER_DISPLAY_SELECT = {
         select: {
             id: true,
             heynaboId: true,
+            householdId: true,
             name: true,
             lastName: true,
             pictureUrl: true,
@@ -220,7 +221,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<InhabitantDetail> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeInhabitantDetail} = useCoreValidation()
@@ -342,12 +343,16 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
             data: updateData
         })
 
-        if (updatedInhabitant.dinnerPreferences) {
-            updatedInhabitant.dinnerPreferences = deserializeWeekDayMap(updatedInhabitant.dinnerPreferences)
+        // ADR-010: Deserialize to domain type before returning
+        const deserializedInhabitant = {
+            ...updatedInhabitant,
+            dinnerPreferences: updatedInhabitant.dinnerPreferences
+                ? deserializeWeekDayMap(updatedInhabitant.dinnerPreferences)
+                : null
         }
 
-        console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName} with ID ${id}`)
-        return updatedInhabitant
+        console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${deserializedInhabitant.name} ${deserializedInhabitant.lastName} with ID ${id}`)
+        return deserializedInhabitant
     } catch (error) {
         return throwH3Error(`\`👩‍🏠 > INHABITANT > [UPDATE]: Error updating inhabitant with ID ${id}`, error)
     }
@@ -356,7 +361,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitantDisplay} = useCoreValidation()
+    const {deserializeInhabitantDetail} = useCoreValidation()
 
     try {
 
@@ -369,7 +374,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
         console.info(`👩‍🏠 > INHABITANT > [DELETE] Successfully deleted inhabitant ${deletedInhabitant.name} ${deletedInhabitant.lastName}`)
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitantDisplay(deletedInhabitant)
+        return deserializeInhabitantDetail(deletedInhabitant)
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [DELETE]: Error deleting inhabitant with ID ${id}`, error)
     }
