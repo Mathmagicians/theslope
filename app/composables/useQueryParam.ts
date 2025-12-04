@@ -97,9 +97,9 @@ export function useQueryParam<T>(
 
     // If normalize returns null, remove the query param
     if (options.normalize) {
-      const normalized = options.normalize(newValue as any)
+      const normalized = options.normalize(newValue)
       if (normalized === null) {
-        delete query[key]
+        query[key] = undefined as unknown as string
       } else {
         query[key] = serialized
       }

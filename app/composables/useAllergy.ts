@@ -23,7 +23,7 @@ export interface AffectedDinersResult {
   }>
 }
 
-// Statistics for all inhabitants with allergies (from AllergyTypeDetail)
+// Statistics for all inhabitants with allergies (used for UserListItem display)
 export interface AllergyStatisticsResult {
   totalInhabitants: number
   uniqueInhabitantsList: InhabitantDisplay[]
@@ -75,7 +75,7 @@ export const useAllergy = () => {
           } else {
             allergenCounts.set(key, {
               name: allergy.allergyType.name,
-              icon: allergy.allergyType.icon,
+              icon: allergy.allergyType.icon ?? null,
               count: 1
             })
           }
@@ -101,7 +101,7 @@ export const useAllergy = () => {
   const computeAllergyStatistics = (allergies: AllergyTypeDetail[]): AllergyStatisticsResult | null => {
     if (allergies.length === 0) return null
 
-    // Get unique inhabitants across all selected allergies
+    // Get unique inhabitants across all selected allergies (for UserListItem display)
     const uniqueInhabitants = new Map<number, InhabitantDisplay>()
     allergies.forEach(allergy => {
       allergy.inhabitants?.forEach(inhabitant => {
@@ -122,8 +122,17 @@ export const useAllergy = () => {
     }
   }
 
+  /**
+   * Check if an AllergyTypeDetail has any inhabitants with recently updated allergies.
+   * Used for showing "new" badge on allergy types in lists/tables.
+   */
+  const hasNewAllergyInhabitants = (allergyType: AllergyTypeDetail): boolean => {
+    return allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) ?? false
+  }
+
   return {
-    computeAffectedDiners,      // For KitchenPreparation (diners only)
-    computeAllergyStatistics    // For AllergenMultiSelector (all inhabitants)
+    computeAffectedDiners,       // For KitchenPreparation (diners only)
+    computeAllergyStatistics,    // For AllergenMultiSelector (all inhabitants)
+    hasNewAllergyInhabitants     // For "new" badge in allergy type lists
   }
 }

@@ -1,6 +1,7 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import {PrismaD1} from "@prisma/adapter-d1"
-import {Prisma, PrismaClient} from "@prisma/client"
+import {PrismaClient} from "@prisma/client"
+import type {Prisma} from "@prisma/client"
 
 /**
  * Shared database connection utility

@@ -1,17 +1,17 @@
 import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
 import {createDateRange, formatDate} from '~/utils/date'
-import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import type {SafeParseReturnType} from 'zod'
 
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const testSeason = SeasonFactory.defaultSeasonData
 
 // Helper to format validation error messages for assertions
-const getValidationError = (result: any) =>
+const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useSeasonValidation', () => {

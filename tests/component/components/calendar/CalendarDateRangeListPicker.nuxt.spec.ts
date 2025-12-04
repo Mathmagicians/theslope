@@ -18,6 +18,8 @@ describe('CalendarDateRangeListPicker', () => {
         end: Date;
     }
 
+    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
+
     const createWrapper = async (modelValue: DateRange[] = []) => {
         return await mountSuspended(CalendarDateRangeListPicker, {
             props: { modelValue },
@@ -29,13 +31,13 @@ describe('CalendarDateRangeListPicker', () => {
         })
     }
 
-    const setDateRange = async (wrapper: any, start: Date, end: Date) => {
+    const setDateRange = async (wrapper: WrapperType, start: Date, end: Date) => {
         const datePicker = wrapper.findComponent({ name: 'CalendarDateRangePicker' })
         await datePicker.vm.$emit('update:modelValue', { start, end })
         await nextTick()
     }
 
-    const clickAddButton = async (wrapper: any) => {
+    const clickAddButton = async (wrapper: WrapperType) => {
         const addButton = wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`)
         await addButton.trigger('click')
         await nextTick()
@@ -102,7 +104,7 @@ describe('CalendarDateRangeListPicker', () => {
             },
             attrs: {
                 // Handle the update event to update our local ref
-                'onUpdate:modelValue': (val: any) => { modelValue.value = val; }
+                'onUpdate:modelValue': (val: DateRange[]) => { modelValue.value = val }
             },
             global: {
                 provide: {
@@ -177,7 +179,7 @@ describe('CalendarDateRangeListPicker', () => {
                 }
             },
             attrs: {
-                'onUpdate:modelValue': (val: any) => { holidays.value = val; }
+                'onUpdate:modelValue': (val: DateRange[]) => { holidays.value = val }
             },
             global: {
                 provide: {
@@ -225,8 +227,8 @@ describe('CalendarDateRangeListPicker', () => {
                 }
             },
             attrs: {
-                'onUpdate:modelValue': (val: any) => { 
-                    mockStore.holidays = val;
+                'onUpdate:modelValue': (val: DateRange[]) => {
+                    mockStore.holidays = val
                 }
             },
             global: {

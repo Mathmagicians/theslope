@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-11-11 (Seasons - Full ADR-002 & ADR-010 compliance)
+**Last Updated:** 2025-12-03 (Admin Billing - CSV Import endpoint fully compliant)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -81,6 +81,8 @@
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |
 | `/api/calendar/feed.ts` | ❌ | ✅ | |
 | `/api/auth/login.post.ts` | ❌ | ✅ | |
+| **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2025-12-03)**                                                               |
+| `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 

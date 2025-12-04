@@ -11,7 +11,7 @@ const testHouseholdIds: number[] = []
  * Helper: Verify household response structure
  * Server validates against HouseholdDetail schema - we verify key fields
  */
-function verifyHouseholdStructure(household: any, context: string) {
+function verifyHouseholdStructure(household: unknown, context: string) {
     expect(household.id, `${context}: missing id`).toBeDefined()
     expect(household.name, `${context}: missing name`).toBeDefined()
     expect(household.address, `${context}: missing address`).toBeDefined()
@@ -24,7 +24,7 @@ function verifyHouseholdStructure(household: any, context: string) {
 /**
  * Helper: Verify lightweight inhabitant data (ADR-009 index endpoint)
  */
-function verifyLightweightInhabitant(inhabitant: any, context: string) {
+function verifyLightweightInhabitant(inhabitant: unknown, context: string) {
     // Required fields
     expect(inhabitant.id, `${context}: missing id`).toBeDefined()
     expect(inhabitant.heynaboId, `${context}: missing heynaboId`).toBeDefined()
@@ -126,7 +126,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
 
         // Verify inhabitants array structure
         expect(household.inhabitants.length).toBe(2)
-        household.inhabitants.forEach((inhabitant: any) => {
+        household.inhabitants.forEach((inhabitant: unknown) => {
             expect(inhabitant.householdId).toBe(household.id)
         })
     })
@@ -152,7 +152,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         expect(Array.isArray(households)).toBe(true)
 
         // Find our test household
-        const fetchedHousehold = households.find((h: any) => h.id === household.id)
+        const fetchedHousehold = households.find((h: unknown) => h.id === household.id)
         expect(fetchedHousehold).toBeDefined()
 
         // Verify lightweight structure (ADR-009: index endpoints return lightweight data)
@@ -160,7 +160,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         expect(fetchedHousehold.inhabitants.length).toBe(2)
 
         // Verify each inhabitant has lightweight fields only
-        fetchedHousehold.inhabitants.forEach((inhabitant: any, index: number) => {
+        fetchedHousehold.inhabitants.forEach((inhabitant: unknown, index: number) => {
             verifyLightweightInhabitant(inhabitant, `Inhabitant[${index}]`)
         })
     })

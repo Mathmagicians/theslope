@@ -31,7 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const teamColor = computed(() => getTeamColor(props.teamNumber - 1))
-const badgeSize = computed(() => props.compact ? SIZES.small.value.value : SIZES.standard.value.value)
+const badgeSize = computed(() => props.compact ? SIZES.small : SIZES.standard)
 </script>
 
 <template>

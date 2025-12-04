@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
@@ -62,7 +62,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     /**
      * Helper: Navigate to planning page and wait for store to be ready
      */
-    const navigateToPlanning = async (page: any, seasonShortName?: string, mode?: string) => {
+    const navigateToPlanning = async (page: Page, seasonShortName?: string, mode?: string) => {
         // Build URL with optional season and mode params
         const params = new URLSearchParams()
         if (seasonShortName) params.set('season', seasonShortName)

@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page, type Response} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
@@ -68,17 +68,17 @@ test.describe('AdminTeams Form UI', () => {
                 // THEN: Verify teams created
                 const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
                 expect(teams.length).toBe(2)
-                expect(teams[0].name).toContain('Madhold 1')
-                expect(teams[0].name).toContain(season.shortName)
-                expect(teams[1].name).toContain('Madhold 2')
-                expect(teams[1].name).toContain(season.shortName)
+                expect(teams[0]!.name).toContain('Madhold 1')
+                expect(teams[0]!.name).toContain(season.shortName)
+                expect(teams[1]!.name).toContain('Madhold 2')
+                expect(teams[1]!.name).toContain(season.shortName)
             })
     })
 
     test.describe('Edit Mode', () => {
         let context: BrowserContext
         let season: Season
-        let page: any
+        let page: Page
 
         // Common setup for all edit mode tests
         test.beforeEach(async ({page: testPage, browser}) => {
@@ -140,7 +140,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response: any) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
+                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
                 { timeout: 5000 }
             )
             await teamInput.blur() // Trigger save on blur
@@ -148,7 +148,8 @@ test.describe('AdminTeams Form UI', () => {
 
             // THEN: Team name should be updated immediately via API
             const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id!)
-            expect(updatedTeam.name).toContain('Q')
+            expect(updatedTeam).not.toBeNull()
+            expect(updatedTeam!.name).toContain('Q')
         })
 
         test('GIVEN user in edit mode WHEN adding new team THEN team is saved immediately', async () => {
@@ -178,7 +179,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response: any) => response.url().includes('/api/admin/team') && response.request().method() === 'PUT',
+                (response: Response) => response.url().includes('/api/admin/team') && response.request().method() === 'PUT',
                 { timeout: 5000 }
             )
             await addButton.click()
@@ -217,7 +218,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Wait for the API call to complete
             const responsePromise = page.waitForResponse(
-                (response: any) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
+                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
                 { timeout: 5000 }
             )
             await deleteButton.click()

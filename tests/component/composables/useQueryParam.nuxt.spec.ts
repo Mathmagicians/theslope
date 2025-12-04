@@ -4,7 +4,6 @@ import {flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {formatDate, parseDate} from '~/utils/date'
-import {FORM_MODES, type FormMode} from '~/types/form'
 
 /**
  * Unit tests for useQueryParam.ts composable
@@ -31,7 +30,13 @@ mockNuxtImport('useRoute', () => () => mockRouteData)
 
 describe('useQueryParam.ts', () => {
   const setupQuery = (query: Record<string, string>) => {
-    Object.keys(mockRouteData.query).forEach(key => delete mockRouteData.query[key])
+    // Clear existing query params - need to remove keys from the object
+    // Using for-in with delete is required here to properly reset mock state
+    for (const key in mockRouteData.query) {
+      if (Object.hasOwn(mockRouteData.query, key)) {
+        Reflect.deleteProperty(mockRouteData.query, key)
+      }
+    }
     Object.assign(mockRouteData.query, query)
   }
 
@@ -314,59 +319,71 @@ describe('useQueryParam.ts', () => {
   })
 
   describe('Parametrized: All standard types', () => {
-    const typeCases = [
-      {
-        name: 'string',
-        options: {
-          defaultValue: 'default'
-        },
-        testValue: 'test',
-        expectedQuery: 'test'
-      },
-      {
-        name: 'number (as string)',
-        options: {
-          serialize: (n: number) => String(n),
-          deserialize: (s: string) => {
-            const parsed = parseInt(s, 10)
-            return isNaN(parsed) ? null : parsed
-          },
-          defaultValue: 0
-        },
-        testValue: 42,
-        expectedQuery: '42'
-      },
-      {
-        name: 'boolean (as string)',
-        options: {
-          serialize: (b: boolean) => b ? 'true' : 'false',
-          deserialize: (s: string) => s === 'true' ? true : s === 'false' ? false : null,
-          defaultValue: false
-        },
-        testValue: true,
-        expectedQuery: 'true'
-      }
-    ]
-
-    for (const testCase of typeCases) {
-      describe(testCase.name, () => {
-        it('should read from query', () => {
-          setupQuery({test: testCase.expectedQuery})
-          const {value} = useQueryParam('test', testCase.options as any)
-          expect(value.value).toEqual(testCase.testValue)
-        })
-
-        it('should write to query', async () => {
-          setupQuery({})
-          const {value} = useQueryParam('test', testCase.options as any)
-
-          value.value = testCase.testValue as any
-          await flushPromises()
-
-          expect(mockNavigateTo.mock.calls[0][0].query.test).toBe(testCase.expectedQuery)
-        })
+    // Test string type
+    describe('string', () => {
+      it('should read from query', () => {
+        setupQuery({test: 'test'})
+        const {value} = useQueryParam<string>('test', {defaultValue: 'default'})
+        expect(value.value).toEqual('test')
       })
-    }
+
+      it('should write to query', async () => {
+        setupQuery({})
+        const {value} = useQueryParam<string>('test', {defaultValue: 'default'})
+        value.value = 'test'
+        await flushPromises()
+        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('test')
+      })
+    })
+
+    // Test number type
+    describe('number (as string)', () => {
+      const numberOptions = {
+        serialize: (n: number) => String(n),
+        deserialize: (s: string) => {
+          const parsed = parseInt(s, 10)
+          return isNaN(parsed) ? null : parsed
+        },
+        defaultValue: 0
+      }
+
+      it('should read from query', () => {
+        setupQuery({test: '42'})
+        const {value} = useQueryParam<number>('test', numberOptions)
+        expect(value.value).toEqual(42)
+      })
+
+      it('should write to query', async () => {
+        setupQuery({})
+        const {value} = useQueryParam<number>('test', numberOptions)
+        value.value = 42
+        await flushPromises()
+        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('42')
+      })
+    })
+
+    // Test boolean type
+    describe('boolean (as string)', () => {
+      const boolOptions = {
+        serialize: (b: boolean) => b ? 'true' : 'false',
+        deserialize: (s: string) => s === 'true' ? true : s === 'false' ? false : null,
+        defaultValue: false
+      }
+
+      it('should read from query', () => {
+        setupQuery({test: 'true'})
+        const {value} = useQueryParam<boolean>('test', boolOptions)
+        expect(value.value).toEqual(true)
+      })
+
+      it('should write to query', async () => {
+        setupQuery({})
+        const {value} = useQueryParam<boolean>('test', boolOptions)
+        value.value = true
+        await flushPromises()
+        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('true')
+      })
+    })
   })
 
   describe('Auto-Sync (syncWhen)', () => {

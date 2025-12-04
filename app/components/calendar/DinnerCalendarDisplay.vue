@@ -156,22 +156,22 @@ const legendItems = computed(() => [
   {
     label: 'Næste fællesspisning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}`
   },
   {
     label: 'Valgt dato',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}`
   },
   {
     label: 'Planlagt fællesspisning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}`
   },
   {
     label: 'Tidligere fællesspisning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
   },
   {
     label: 'Ferie',
@@ -245,7 +245,7 @@ v-if="isDuringDinner"
     </div>
 
     <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
-    <UAccordion :items="accordionItems" :default-value="SIZES.calendarAccordionDefault.value" type="single" collapsible class="flex-1">
+    <UAccordion :items="accordionItems" :default-value="SIZES.calendarAccordionDefault" type="single" collapsible class="flex-1">
       <template #calendar-content>
         <!-- Calendar Display -->
         <div class="flex-1">
@@ -261,7 +261,7 @@ v-if="isDuringDinner"
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="[
-                  SIZES.calendarCircle.value,
+                  SIZES.calendarCircle,
                   CALENDAR.day.shape,
                   getDayColorClass(getDayType(eventLists)!),
                   isSelected(day) ? DINNER_CALENDAR.selection : ''

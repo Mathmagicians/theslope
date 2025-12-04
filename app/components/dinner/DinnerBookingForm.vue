@@ -114,7 +114,7 @@ const handlePowerModeUpdate = () => {
     v-if="!household?.inhabitants?.length"
     :color="COLOR.neutral"
     variant="soft"
-    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+    :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
     :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>

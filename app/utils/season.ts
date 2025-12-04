@@ -49,6 +49,54 @@ function dateToWeekDay(firstDay: Date) {
 }
 
 /**
+ * Counts cooking days within a holiday period
+ * @param holiday - The holiday DateRange
+ * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
+ * @returns Number of cooking days within the holiday
+ */
+const countCookingDaysInHoliday = (holiday: DateRange, cookingDays: WeekDayMap): number =>
+    getEachDayOfIntervalWithSelectedWeekdays(holiday.start, holiday.end, cookingDays).length
+
+/**
+ * Counts cooking days per week (how many weekdays are cooking days)
+ * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
+ * @returns Number of cooking days per week (1-7)
+ */
+const countCookingDaysPerWeek = (cookingDays: WeekDayMap): number =>
+    Object.values(cookingDays).filter(Boolean).length
+
+/**
+ * Determines if a cooking day within a holiday should count as ghost duty.
+ * Full "cooking weeks" = week-off (no ghost duty)
+ * Remaining cooking days beyond full weeks = ghost duty
+ *
+ * Example with Mon-Thu schedule (4 cooking days/week):
+ * - 4 cooking days in holiday = 1 week-off, 0 ghost
+ * - 5 cooking days in holiday = 1 week-off, 1 ghost
+ * - 8 cooking days in holiday = 2 week-offs, 0 ghost
+ *
+ * @param cookingDate - The date to check (must be within a holiday and a cooking day)
+ * @param holidays - Array of holiday DateRanges
+ * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
+ * @returns true if this cooking day counts as ghost duty
+ */
+export const isHolidayGhostDuty = (cookingDate: Date, holidays: DateRange[], cookingDays: WeekDayMap): boolean =>
+    holidays
+        .filter(holiday => isWithinInterval(cookingDate, holiday))
+        .some(holiday => {
+            const cookingDaysInHoliday = countCookingDaysInHoliday(holiday, cookingDays)
+            const cookingDaysPerWeek = countCookingDaysPerWeek(cookingDays)
+            const weekOffCookingDays = Math.floor(cookingDaysInHoliday / cookingDaysPerWeek) * cookingDaysPerWeek
+
+            // Find this cooking day's position within the holiday's cooking days
+            const cookingDaysBeforeThis = getEachDayOfIntervalWithSelectedWeekdays(holiday.start, cookingDate, cookingDays)
+                .filter(d => d.getTime() < cookingDate.getTime()).length
+
+            // Ghost duty if this cooking day is beyond the week-off portion
+            return cookingDaysBeforeThis >= weekOffCookingDays
+        })
+
+/**
  * Computes affinities (preferred cooking weekdays) for teams based on rotation.
  * If a team already has an affinity, it is preserved (idempotent).
  * @param teams - Array of cooking teams
@@ -156,13 +204,24 @@ export const createTeamRoster = (startDay: WeekDay, teams: CookingTeamDisplay[])
 /**
  * Assigns cooking teams to dinner events using round-robin with quota tracking.
  * Handles pre-assigned events and holidays (ghost assignments for fair distribution).
+ *
+ * Holiday behavior (based on cooking days, not calendar days):
+ * - Full "cooking weeks" in holiday = week-off (don't advance rotation)
+ * - Remaining cooking days = ghost duty (advance rotation)
+ *
+ * Example with Mon-Thu schedule (4 cooking days/week):
+ * - 4 cooking days in holiday = 1 week-off, 0 ghost
+ * - 5 cooking days in holiday = 1 week-off, 1 ghost
+ * - 8 cooking days in holiday = 2 week-offs, 0 ghost
+ *
  * @param teams - Array of cooking teams with affinities
  * @param cookingDays - WeekDayMap indicating which weekdays are cooking days
  * @param consecutiveCookingDays - Number of consecutive cooking days per team
  * @param events - Array of dinner events to assign teams to
+ * @param holidays - Optional array of holiday DateRanges
  * @returns Array of DinnerEvents with computed team IDs assigned
  */
-export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], cookingDays: WeekDayMap, consecutiveCookingDays: number, events: DinnerEventDisplay[]): DinnerEventDisplay[] => {
+export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], cookingDays: WeekDayMap, consecutiveCookingDays: number, events: DinnerEventDisplay[], holidays: DateRange[] = []): DinnerEventDisplay[] => {
     if (teams.length === 0 || events.length === 0 || consecutiveCookingDays < 1) return events
 
     const needsAssignment = events
@@ -173,18 +232,42 @@ export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], coo
     const teamsWithAffinity = teams.filter(team => team.affinity)
     if (teamsWithAffinity.length === 0) return events
 
-    const firstDay = dateToWeekDay(needsAssignment[0]!.date)
+    const firstEventDate = needsAssignment[0]!.date
+    const firstDay = dateToWeekDay(firstEventDate)
     const roster = createTeamRoster(firstDay!, teamsWithAffinity)
 
+    // Find earliest ghost duty date from holidays before first event
+    // This ensures ghost duties in holidays preceding the first event are counted
+    const ghostDutiesBeforeFirstEvent = holidays
+        .filter(h => isBefore(h.start, firstEventDate))
+        .flatMap(holiday => getEachDayOfIntervalWithSelectedWeekdays(holiday.start, holiday.end, cookingDays))
+        .filter(cookingDate => isBefore(cookingDate, firstEventDate) && isHolidayGhostDuty(cookingDate, holidays, cookingDays))
+        .toSorted((a, b) => a.getTime() - b.getTime())
+
+    const startDate = ghostDutiesBeforeFirstEvent.length > 0 ? ghostDutiesBeforeFirstEvent[0]! : firstEventDate
+
     const wouldBeCookingDays = getEachDayOfIntervalWithSelectedWeekdays(
-        needsAssignment[0]!.date,
+        startDate,
         needsAssignment.at(-1)!.date,
         cookingDays
     )
+
+    // Build assignments with holiday-aware counter
+    // Week-off holidays don't advance counter, ghost duty holidays do
+    let quotaCounter = 0
     const assignmentsMap = new Map<number, number>(
-        wouldBeCookingDays.flatMap((cookingDate, i) => {
-            const rosterIndex = Math.floor(i / consecutiveCookingDays) % roster.length
+        wouldBeCookingDays.flatMap(cookingDate => {
+            const isWeekOffHoliday = holidays.some(h =>
+                isWithinInterval(cookingDate, h) && !isHolidayGhostDuty(cookingDate, holidays, cookingDays)
+            )
+
+            // Skip week-off holidays entirely (don't advance counter)
+            if (isWeekOffHoliday) return []
+
+            const rosterIndex = Math.floor(quotaCounter / consecutiveCookingDays) % roster.length
             const assignedTeam = roster[rosterIndex]!
+            quotaCounter++
+
             const isActualEvent = needsAssignment.find(e => e.date.getTime() === cookingDate.getTime())
             return isActualEvent ? [[isActualEvent.id, assignedTeam.id] as [number, number]] : []
         })
@@ -429,6 +512,50 @@ export const splitDinnerEvents = <T extends { date: Date }>(
 }
 
 /**
+ * Temporal category for dinner events
+ * Re-exported from useSeason composable (ADR-001)
+ */
+type TemporalCategory = 'next' | 'future' | 'past'
+
+/**
+ * Dinner event with temporal category
+ * Re-exported from useSeason composable (ADR-001)
+ */
+type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
+
+/**
+ * Sort dinner events in temporal order: next (today), future (ascending), past (descending)
+ * @param dinnerEvents - Array of dinner events to sort
+ * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
+ * @returns Events sorted in temporal order with category attached
+ */
+export const sortDinnerEventsByTemporal = <T extends { date: Date }>(
+    dinnerEvents: T[],
+    nextDinnerDateRange: DateRange | null
+): TemporalDinnerEvent<T>[] => {
+    const now = new Date()
+    const next: TemporalDinnerEvent<T>[] = []
+    const future: TemporalDinnerEvent<T>[] = []
+    const past: TemporalDinnerEvent<T>[] = []
+
+    for (const event of dinnerEvents) {
+        if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
+            next.push({ ...event, temporalCategory: 'next' })
+        } else if (event.date < now) {
+            past.push({ ...event, temporalCategory: 'past' })
+        } else {
+            future.push({ ...event, temporalCategory: 'future' })
+        }
+    }
+
+    // Future ascending (soonest first), past descending (most recent first)
+    future.sort((a, b) => a.date.getTime() - b.date.getTime())
+    past.sort((a, b) => b.date.getTime() - a.date.getTime())
+
+    return [...next, ...future, ...past]
+}
+
+/**
  * Generic curried function to check if now is before a deadline relative to dinner start time
  *
  * @param offsetDays - Number of days before dinner (default: 0)
@@ -449,8 +576,9 @@ export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number =
  * 0 = On track (> warningHours before event)
  * 1 = Warning (between criticalHours and warningHours)
  * 2 = Critical (< criticalHours before event)
+ * Re-exported from useSeason composable (ADR-001)
  */
-export type DeadlineUrgency = 0 | 1 | 2
+type DeadlineUrgency = 0 | 1 | 2
 
 /**
  * Convert hours to days and minutes for isBeforeDeadline

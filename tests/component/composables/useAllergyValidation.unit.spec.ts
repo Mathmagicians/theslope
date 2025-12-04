@@ -386,6 +386,7 @@ describe('useAllergyValidation', () => {
                 inhabitant: {
                     id: 1,
                     heynaboId: 101,
+                    householdId: 1,
                     name: 'Test',
                     lastName: 'User',
                     pictureUrl: null,
@@ -416,43 +417,16 @@ describe('useAllergyValidation', () => {
     })
 
     describe('AllergyTypeDetailSchema', () => {
-        it('should accept allergy type with nested inhabitants array', () => {
-            const allergyTypeWithInhabitants = {
-                id: 1,
-                name: 'Peanuts',
-                description: 'Alvorlig allergi',
-                icon: '🥜',
-                inhabitants: [
-                    {
-                        id: 1,
-                        heynaboId: 101,
-                        name: 'Anna',
-                        lastName: 'Hansen',
-                        pictureUrl: 'https://example.com/anna.jpg',
-                        birthDate: new Date('1990-01-01'),
-                        householdName: 'Skråningen 31',
-                        inhabitantComment: 'Meget alvorlig'
-                    },
-                    {
-                        id: 2,
-                        heynaboId: 102,
-                        name: 'Bob',
-                        lastName: 'Jensen',
-                        pictureUrl: null,
-                        birthDate: null,
-                        householdName: 'Abbey Road 1',
-                        inhabitantComment: null
-                    }
-                ]
-            }
+        it('should accept allergy type with nested inhabitants array including allergyUpdatedAt', () => {
+            const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 
-            const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithInhabitants)
+            const result = AllergyTypeDetailSchema.safeParse(mockAllergyTypes[0])
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.inhabitants).toHaveLength(2)
-                expect(result.data.inhabitants[0].householdName).toBe('Skråningen 31')
-                expect(result.data.inhabitants[0].inhabitantComment).toBe('Meget alvorlig')
-                expect(result.data.inhabitants[1].inhabitantComment).toBeNull()
+                expect(result.data.inhabitants[0].householdId).toBe(1)
+                expect(result.data.inhabitants[0].allergyUpdatedAt).toBeInstanceOf(Date)
+                expect(result.data.inhabitants[1].inhabitantComment).toBe('Mild')
             }
         })
 
@@ -471,6 +445,60 @@ describe('useAllergyValidation', () => {
                 expect(result.data.inhabitants).toHaveLength(0)
             }
         })
+
+        it('should coerce allergyUpdatedAt date strings to Date objects', () => {
+            const allergyTypeWithStringDate = {
+                id: 1,
+                name: 'Peanuts',
+                description: 'Alvorlig allergi',
+                icon: '🥜',
+                inhabitants: [
+                    {
+                        id: 1,
+                        heynaboId: 101,
+                        userId: null,
+                        householdId: 1,
+                        name: 'Anna',
+                        lastName: 'Hansen',
+                        pictureUrl: null,
+                        birthDate: null,
+                        inhabitantComment: null,
+                        allergyUpdatedAt: '2025-01-15T10:30:00.000Z'
+                    }
+                ]
+            }
+
+            const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithStringDate)
+            expect(result.success).toBe(true)
+            if (result.success) {
+                expect(result.data.inhabitants[0].allergyUpdatedAt).toBeInstanceOf(Date)
+            }
+        })
+
+        it('should reject inhabitant without allergyUpdatedAt', () => {
+            const allergyTypeWithMissingDate = {
+                id: 1,
+                name: 'Peanuts',
+                description: 'Alvorlig allergi',
+                icon: '🥜',
+                inhabitants: [
+                    {
+                        id: 1,
+                        heynaboId: 101,
+                        userId: null,
+                        householdId: 1,
+                        name: 'Anna',
+                        lastName: 'Hansen',
+                        pictureUrl: null,
+                        birthDate: null,
+                        inhabitantComment: null
+                    }
+                ]
+            }
+
+            const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithMissingDate)
+            expect(result.success).toBe(false)
+        })
     })
 
     describe('InhabitantWithAllergiesSchema', () => {
@@ -478,6 +506,7 @@ describe('useAllergyValidation', () => {
             const inhabitantWithAllergies = {
                 id: 1,
                 heynaboId: 101,
+                householdId: 1,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: 'https://example.com/anna.jpg',
@@ -527,6 +556,7 @@ describe('useAllergyValidation', () => {
             const inhabitantWithoutAllergies = {
                 id: 1,
                 heynaboId: 101,
+                householdId: 1,
                 name: 'Anna',
                 lastName: 'Hansen',
                 pictureUrl: null,
@@ -566,13 +596,14 @@ describe('useAllergyValidation', () => {
         })
 
         it('should coerce date strings to Date objects', () => {
-            const allergy = {
+            // Input typed as Record to test schema coercion of string dates
+            const allergy: Record<string, unknown> = {
                 id: 1,
                 inhabitantId: 1,
                 allergyTypeId: 1,
                 inhabitantComment: 'Test',
-                createdAt: '2024-01-01' as any,
-                updatedAt: '2024-01-02' as any,
+                createdAt: '2024-01-01',
+                updatedAt: '2024-01-02',
                 allergyType: {
                     id: 1,
                     name: 'Peanuts',

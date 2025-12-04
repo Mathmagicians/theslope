@@ -4,7 +4,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 export interface SeasonSelectorOptions {
     seasons: ComputedRef<Season[]>
     selectedSeasonId: ComputedRef<number | null>
-    activeSeason: ComputedRef<Season | undefined>
+    activeSeason: ComputedRef<Season | null>
     onSeasonSelect: (id: number) => void
 }
 
@@ -45,7 +45,7 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
         const safeSeasonName = safeSeason(shortName)
         const seasonObject = seasons.value.find(s => s.shortName === shortName)
 
-        if (seasonObject && seasonObject.id !== selectedSeasonId.value) {
+        if (seasonObject?.id && seasonObject.id !== selectedSeasonId.value) {
             onSeasonSelect(seasonObject.id)
         }
 

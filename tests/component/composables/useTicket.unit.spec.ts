@@ -3,7 +3,7 @@ import {useTicket} from '~/composables/useTicket'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 
 describe('useTicket', () => {
-    const {ticketTypeConfig, determineTicketType, getTicketTypeConfig} = useTicket()
+    const {ticketTypeConfig, determineTicketType, getTicketTypeConfig, formatPrice} = useTicket()
     const referenceDate = new Date('2025-01-15')
     const ticketPrices = TicketFactory.defaultTicketPrices()
 
@@ -83,5 +83,17 @@ describe('useTicket', () => {
                 expect(config.icon).toBe(expectedIcon)
             }
         )
+    })
+
+    describe('formatPrice', () => {
+        it.each([
+            [0, '0'],
+            [100, '1'],
+            [5000, '50'],
+            [150000, '1.500'],
+            [1234567, '12.346'],
+        ])('GIVEN %i øre WHEN formatting THEN returns %s kr', (ore, expected) => {
+            expect(formatPrice(ore)).toBe(expected)
+        })
     })
 })

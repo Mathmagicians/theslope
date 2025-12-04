@@ -1,78 +1,128 @@
 <script setup lang="ts">
+/**
+ * PageHeader - Main navigation header
+ *
+ * Business Rules:
+ * - Non-admin links always visible (icons only on mobile)
+ * - Admin link and user menu in burger/drawer
+ * - Active state shown for current route
+ * - Only login button shown when not logged in
+ *
+ * ADR Compliance:
+ * - Uses design system icons (ICONS)
+ * - Responsive with isMd breakpoint
+ * - Mobile-first design
+ */
+
+const route = useRoute()
 const {loggedIn, greeting} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
+const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
 
-const householdLink = computed(() => myHousehold.value ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings` : '/household')
+// Check if route is active
+const isActive = (to: string): boolean => route.path.startsWith(to)
 
-const navigationLinks = computed(() => [
+// Main navigation links (always visible when logged in)
+const mainLinks = computed(() => loggedIn.value ? [
   {
-    label: "Fællesspisning",
-    to: "/dinner",
-    icon: "i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining"
+    label: 'Fællesspisning',
+    to: '/dinner',
+    icon: ICONS.dinner,
+    active: isActive('/dinner')
   },
   {
-    label: "Husholdning",
-    to: householdLink.value,
-    icon: 'i-heroicons-home'
+    label: 'Husholdning',
+    to: myHousehold.value
+        ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings`
+        : '/household',
+    icon: ICONS.users,
+    active: isActive('/household')
   },
   {
-    label: "Chefkok",
-    to: "/chef",
-    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food'
-  },
-  {
-    label: "Admin",
-    to: "/admin",
-    icon: 'i-pajamas-admin'
-  },
-  {
-    label: loggedIn.value ? greeting.value : 'LOGIN',
-    to: "/login",
-    icon: loggedIn.value ? 'i-pajamas-user' : 'i-guidance-entry'
+    label: 'Chefkok',
+    to: '/chef',
+    icon: ICONS.chef,
+    active: isActive('/chef')
   }
+] : [{
+  label: 'LOGIN',
+  to: '/login',
+  icon: ICONS.login,
+  active: isActive('/login')
+}])
+
+
+// Drawer menu items (admin + user)
+const drawerLinks = computed(() => [
+  {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
+  {label: greeting.value, to: '/login', icon: ICONS.user, active: isActive('/login')}
 ])
 
-const loginLink = computed(() => ({
-  label: 'LOGIN',
-  to: "/login",
-  icon: 'i-guidance-entry'
-}))
+// Swap links based on breakpoint: on desktop drawer links go to main nav
+const visibleMainLinks = computed(() => {
+  if (!loggedIn.value) return mainLinks.value
+  return NAVIGATION.shouldSwapDrawerWithMain
+    ? drawerLinks.value
+    : mainLinks.value
+})
 
-const burgerLink = computed(() => ({
-  icon: 'heroicons:bars-3',
-  children: navigationLinks.value
-}))
+const visibleDrawerLinks = computed(() => {
+  if (!loggedIn.value) return []
+  return NAVIGATION.shouldSwapDrawerWithMain
+    ? mainLinks.value
+    : drawerLinks.value
+})
 
 </script>
 
 <template>
-  <div class="sticky top-0 md:top-4 z-30 relative flex items-center justify-center">
-    <div class="bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg">
-      <div class="flex items-center justify-between px-1 py-0.5 md:p-2">
-        <NuxtLink to="/" class="shrink-0 w-24 lg:w-32 shrink-0 md:mr-2 lg:mr-4">
+  <div class="sticky top-0 md:top-4 z-30 flex items-center justify-center">
+    <UHeader
+        :ui="{
+          root: 'bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg',
+          toggle: 'md:hidden',
+          left: 'md:flex-1',
+          right: 'flex items-center justify-end md:flex-1 gap-1.5'
+        }"
+    >
+      <template #toggle="{ open, toggle }">
+        <UButton
+            class="md:hidden"
+            :icon="ICONS.menu"
+            :color="open ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
+            :variant="open ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
+            @click="toggle"
+        />
+      </template>
+      <template #left>
+        <NuxtLink to="/" class="shrink-0 w-16 md:w-32">
           <Logo/>
         </NuxtLink>
-        <!-- Spacer to push navigation to the right -->
-        <div class="grow w-2 md:w-8"/>
-        <!-- Desktop Navigation-->
+      </template>
+      <template #right>
+        <!-- Main navigation - swaps with drawer on desktop -->
         <UNavigationMenu
-            :items="loggedIn ? navigationLinks: [loginLink]"
-            class="hidden md:flex "
+            :items="visibleMainLinks"
             orientation="horizontal"
+            :ui="{ linkLabel: 'hidden md:inline' }"
         />
-        <!-- Mobile Navigation -->
+        <HelpButton/>
+      </template>
+
+      <!-- Default slot - drawer links shown horizontally on desktop -->
+      <UNavigationMenu
+          :items="visibleDrawerLinks"
+          orientation="horizontal"
+      />
+
+      <!-- Drawer content - only on mobile -->
+      <template #body>
         <UNavigationMenu
-            :items="loggedIn ? [burgerLink]: [loginLink]"
-            class="md:hidden w-full items-center"
+            :items="visibleDrawerLinks"
             orientation="vertical"
-            color="primary"
-            arrow
         />
-      </div>
-    </div>
-    <!-- Help Button - floating to the very right -->
-    <div class="absolute right-4 top-1/2 -translate-y-1/2">
-      <HelpButton />
-    </div>
+        <HelpButton/>
+      </template>
+    </UHeader>
   </div>
 </template>

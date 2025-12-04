@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { nextTick, ref } from 'vue'
@@ -81,7 +81,7 @@ describe('CalendarDateRangePicker', () => {
     })
 
     // Access the component's error state through the VM
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as Record<string, unknown>
 
     // Find input fields
     const inputs = wrapper.findAll('input')
@@ -136,7 +136,7 @@ describe('CalendarDateRangePicker', () => {
     // The component validation might be delayed or might not be triggering in the test
     // Let's force the validation manually by calling the component's methods
     
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as Record<string, unknown>
     
     // Create a date range with end date before start date
     const invalidRange = {

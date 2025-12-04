@@ -6,6 +6,7 @@ const authStore = useAuthStore()
 const {loggedIn, greeting, name, lastName, avatar, email, phone} = storeToRefs(authStore)
 const {signIn, clear} = authStore
 const {LoginSchema} = useCoreValidation()
+const {handleApiError} = useApiHandler()
 
 const fullName = computed(() => `${name.value} ${lastName.value}`.trim())
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
@@ -16,14 +17,18 @@ const state = reactive<LoginCredentials>({
 })
 
 const isLoading = ref(false)
+const loginError = ref<string | null>(null)
 
 const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
+  loginError.value = null
   try {
     isLoading.value = true
     await signIn(event.data.email, event.data.password)
     console.log('🔑> Login >lykkedes')
   } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
+    loginError.value = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'
+    handleApiError(error, 'login', loginError.value)
   } finally {
     isLoading.value = false
   }
@@ -39,6 +44,17 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
           <template #header>
             <h2 class="text-xl font-bold">Log ind</h2>
           </template>
+
+          <UAlert
+            v-if="loginError"
+            color="error"
+            variant="soft"
+            icon="i-mage-robot-dead"
+            class="mb-4"
+          >
+            <template #title>Login mislykkedes</template>
+            <template #description>{{ loginError }}</template>
+          </UAlert>
 
           <div class="space-y-4 ">
             <UFormField label="Email" name="email">

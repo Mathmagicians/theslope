@@ -41,7 +41,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 key: 'plan-store-seasons',
                 watch: false,
                 default: () => [],
-                transform: (data: any[]) => {
+                transform: (data: unknown[]) => {
                     // Repository validates data per ADR-010, so we can trust it's valid
                     return data.map(season => SeasonSchema.parse(season))
                 }
@@ -63,15 +63,18 @@ export const usePlanStore = defineStore("Plan", () => {
             },
             {
                 default: () => null,
-                transform: (data: any) => data ? SeasonSchema.parse(data) : null
+                transform: (data: unknown) => data ? SeasonSchema.parse(data) : null
             }
         )
 
         // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
         // No store state - components use useAsyncData with this function
         // Pattern: Store provides fetch logic, components manage their own data
-        const fetchTeamDetail = (teamId: number): Promise<CookingTeamDetail> => {
-            return $fetch(`/api/admin/team/${teamId}`)
+        // Note: HTTP converts Date→ISO strings, schema.parse() with z.coerce.date() converts back
+        const {CookingTeamDetailSchema} = useCookingTeamValidation()
+        const fetchTeamDetail = async (teamId: number): Promise<CookingTeamDetail> => {
+            const data = await $fetch(`/api/admin/team/${teamId}`)
+            return CookingTeamDetailSchema.parse(data)
         }
 
         // Create team operation - useAsyncData pattern for mutations
@@ -231,7 +234,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 const result = await $fetch<{
                     seasonId: number,
                     eventCount: number,
-                    events: any[]
+                    events: unknown[]
                 }>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
                     method: 'POST'
                 })

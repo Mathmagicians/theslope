@@ -1,7 +1,7 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, differenceInMinutes, intervalToDuration
+    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"

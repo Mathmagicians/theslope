@@ -45,12 +45,11 @@
  * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 
-import {formatDate, parseDate} from '~/utils/date'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Design system
-const { COLOR, BACKGROUNDS } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS } = useTheSlopeDesignSystem()
 
 // Booking form state
 const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
@@ -75,7 +74,7 @@ const handleSaveBooking = () => {
   toast.add({
     title: 'Booking gemt',
     description: 'Din booking er blevet opdateret',
-    icon: 'i-heroicons-check-circle',
+    icon: ICONS.checkCircle,
     color: COLOR.success
   })
 }
@@ -190,7 +189,7 @@ useHead({
         type="info"
         variant="soft"
         :color="COLOR.info"
-        icon="i-mage-robot-dead"
+        :icon="ICONS.robotDead"
       >
         <template #title>
           Her ser lidt tomt ud!
@@ -203,7 +202,7 @@ useHead({
             :color="COLOR.secondary"
             variant="solid"
             to="/admin/planning"
-            icon="i-heroicons-plus-circle"
+            :icon="ICONS.plusCircle"
             size="lg"
           >
             Værsgo, opret en ny sæson
@@ -290,7 +289,7 @@ useHead({
                 size="lg"
                 name="save-booking"
                 class="flex-1"
-                icon="i-heroicons-check"
+                :icon="ICONS.check"
                 @click="handleSaveBooking"
               >
                 Gem booking

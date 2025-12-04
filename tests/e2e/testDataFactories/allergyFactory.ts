@@ -81,6 +81,8 @@ export class AllergyFactory {
             inhabitant: {
                 id: 1,
                 heynaboId: 1001,
+                userId: null,
+                householdId: 1,
                 name: 'Alice',
                 lastName: 'Anderson',
                 pictureUrl: null,
@@ -91,7 +93,7 @@ export class AllergyFactory {
 
     /**
      * Create mock AllergyTypeDetail data with inhabitants for component tests (no API call)
-     * Returns array of AllergyTypeDetail objects (includes inhabitants)
+     * Returns array of AllergyTypeDetail objects (includes inhabitants with allergyUpdatedAt)
      */
     static readonly createMockAllergyTypesWithInhabitants = (): AllergyTypeDetail[] => [
         {
@@ -100,10 +102,9 @@ export class AllergyFactory {
             description: 'Laktoseintolerans',
             icon: '🥛',
             inhabitants: [
-                { id: 1, heynaboId: 101, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01') },
-                { id: 2, heynaboId: 102, name: 'Bob', lastName: 'Jensen', pictureUrl: null, birthDate: new Date('1985-05-15') }
-            ],
-            createdAt: new Date('2025-01-01')
+                { id: 1, heynaboId: 101, userId: null, householdId: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01'), inhabitantComment: null, allergyUpdatedAt: new Date('2025-01-01') },
+                { id: 2, heynaboId: 102, userId: null, householdId: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null, birthDate: new Date('1985-05-15'), inhabitantComment: 'Mild', allergyUpdatedAt: new Date('2025-01-05') }
+            ]
         },
         {
             id: 2,
@@ -111,9 +112,8 @@ export class AllergyFactory {
             description: 'Nøddeallergi',
             icon: '🥜',
             inhabitants: [
-                { id: 3, heynaboId: 103, name: 'Clara', lastName: 'Petersen', pictureUrl: null, birthDate: new Date('1995-03-20') }
-            ],
-            createdAt: new Date('2025-01-10')
+                { id: 3, heynaboId: 103, userId: null, householdId: 3, name: 'Clara', lastName: 'Petersen', pictureUrl: null, birthDate: new Date('1995-03-20'), inhabitantComment: 'Alvorlig', allergyUpdatedAt: new Date('2025-01-10') }
+            ]
         },
         {
             id: 3,
@@ -121,9 +121,8 @@ export class AllergyFactory {
             description: 'Cøliaki',
             icon: '🌾',
             inhabitants: [
-                { id: 1, heynaboId: 101, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01') }
-            ],
-            createdAt: new Date('2024-12-01')
+                { id: 1, heynaboId: 101, userId: null, householdId: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01'), inhabitantComment: null, allergyUpdatedAt: new Date('2024-12-01') }
+            ]
         }
     ]
 
@@ -276,7 +275,7 @@ export class AllergyFactory {
         const status = response.status()
         const responseBody = await response.json()
 
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        expect(status, `Unexpected status creating allergy. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
             expect(responseBody.id, 'Response should contain the new allergy ID').toBeDefined()

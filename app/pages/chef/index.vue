@@ -35,9 +35,8 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
-import {formatDate, parseDate} from '~/utils/date'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
 // Design system
 const { COLOR, ICONS } = useTheSlopeDesignSystem()
@@ -86,6 +85,14 @@ const selectedTeam = computed(() => {
 })
 
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
+
+// Calendar view mode via URL query param - survives component remounts (ADR-006)
+const {value: calendarViewMode, setValue: _setCalendarViewMode} = useQueryParam<'agenda' | 'calendar'>('view', {
+  serialize: (v) => v,
+  deserialize: (s) => (s === 'agenda' || s === 'calendar') ? s : null,
+  defaultValue: () => 'calendar',
+  syncWhen: () => isPageReady.value
+})
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
 const getDefaultDate = (): Date => {
@@ -194,22 +201,20 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
   }
 }
 
-const handleMenuUpdate = async (data: { menuTitle: string, menuDescription: string }) => {
+const handleFormUpdate = async (data: ChefMenuForm) => {
   if (!selectedDinnerId.value) return
 
   try {
     await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
-    await refreshDinnerEventDetail() // Refresh page-owned data
+    await refreshDinnerEventDetail()
     toast.add({
       title: 'Menu gemt',
       description: 'Menuen er nu opdateret',
       icon: ICONS.checkCircle,
       color: COLOR.success
     })
-    // Refresh team data to show updated menu in calendar
     await usersStore.loadMyTeams()
   } catch (error) {
-    // Error already handled by store with handleApiError
     console.error('Failed to update menu:', error)
   }
 }
@@ -318,26 +323,26 @@ useHead({
           />
 
           <!-- No events for team -->
-          <div v-else-if="teamDinnerEvents.length === 0" class="px-4">
-            <UAlert
-              type="info"
-              variant="soft"
-              :color="COLOR.info"
-              icon="i-heroicons-calendar-days"
-            >
-              <template #title>
-                Holdet har ingen fællesspisninger
-              </template>
-              <template #description>
-                Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
-              </template>
-            </UAlert>
-          </div>
+          <UAlert
+            v-else-if="teamDinnerEvents.length === 0"
+            type="info"
+            variant="soft"
+            :color="COLOR.info"
+            :icon="ICONS.calendarDays"
+          >
+            <template #title>
+              Holdet har ingen fællesspisninger
+            </template>
+            <template #description>
+              Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
+            </template>
+          </UAlert>
 
           <!-- Calendar display -->
           <div v-else>
             <ChefCalendarDisplay
               v-if="selectedSeason && selectedTeam"
+              v-model:view-mode="calendarViewMode"
               :season-dates="selectedSeason.seasonDates"
               :team="selectedTeam"
               :dinner-events="teamDinnerEvents"
@@ -370,7 +375,7 @@ useHead({
           :form-mode="chefFormMode"
           :show-state-controls="true"
           :show-allergens="true"
-          @update:menu="handleMenuUpdate"
+          @update:form="handleFormUpdate"
           @update:allergens="handleAllergenUpdate"
           @advance-state="handleAdvanceState"
           @cancel-dinner="handleCancelDinner"
@@ -390,7 +395,7 @@ useHead({
             v-else
             variant="soft"
             :color="COLOR.neutral"
-            icon="i-heroicons-user-group"
+            :icon="ICONS.userGroup"
           >
             <template #title>Intet madhold tildelt endnu</template>
           </UAlert>
@@ -400,18 +405,7 @@ useHead({
 
       <!-- #stats: Kitchen statistics -->
       <template #stats>
-        <template v-if="dinnerEventDetail">
-          <UAlert
-            v-if="!dinnerEventDetail.tickets || dinnerEventDetail.tickets.length === 0"
-            variant="soft"
-            :color="COLOR.info"
-            icon="i-heroicons-ticket"
-          >
-            <template #title>Ingen billetter endnu</template>
-            <template #description>Der er endnu ikke bestilt nogen billetter til denne fællesspisning.</template>
-          </UAlert>
-          <KitchenPreparation v-else :orders="dinnerEventDetail.tickets" />
-        </template>
+        <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" />
       </template>
     </DinnerDetailPanel>
   </UPage>

@@ -3,7 +3,7 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
 
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
@@ -28,27 +28,18 @@ export const useOrder = () => {
 
   /**
    * Filter orders by active state
+   * Generic to preserve OrderDisplay or OrderDetail type
    */
-  const getActiveOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
-    return orders.filter(isActiveOrder)
+  const getActiveOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
+    return orders.filter(o => isActiveOrder(o))
   }
 
   /**
    * Filter orders by released state
+   * Generic to preserve OrderDisplay or OrderDetail type
    */
-  const getReleasedOrders = (orders: OrderDisplay[]): OrderDisplay[] => {
-    return orders.filter(isReleasedOrder)
-  }
-
-  /**
-   * Calculate portion count from ticket type
-   * ADULT = 1 portion, CHILD = 0.5 portion, BABY = 0 portions
-   * @deprecated Use getPortionsForTicketPrice instead (supports dynamic portion sizes)
-   */
-  const getPortionsForTicketType = (ticketType: typeof TicketType[keyof typeof TicketType]): number => {
-    if (ticketType === TicketType.ADULT) return 1
-    if (ticketType === TicketType.CHILD) return 0.5
-    return 0 // BABY
+  const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
+    return orders.filter(o => isReleasedOrder(o))
   }
 
   /**
@@ -75,19 +66,11 @@ export const useOrder = () => {
   }
 
   /**
-   * Calculate total portions from orders
-   */
-  const calculateTotalPortions = (orders: OrderDisplay[]): number => {
-    return orders.reduce((sum, order) => {
-      return sum + getPortionsForTicketType(order.ticketType)
-    }, 0)
-  }
-
-  /**
    * Calculate total portions from orders with ticket prices (more accurate)
    * Uses ticket price-specific portion sizes (supports HUNGRY_BABY, etc.)
+   * Requires OrderDetail (with nested ticketPrice relation)
    */
-  const calculateTotalPortionsFromPrices = (orders: Array<{ ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null } }>): number => {
+  const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number => {
     return orders.reduce((sum, order) => {
       return sum + getPortionsForTicketPrice(order.ticketPrice)
     }, 0)
@@ -96,8 +79,9 @@ export const useOrder = () => {
   /**
    * Group orders by ticket type with counts and portions
    * Returns dynamic breakdown - no hardcoded ticket types
+   * Requires OrderDetail (with nested ticketPrice relation)
    */
-  const groupByTicketType = (orders: Array<{ ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null } }>) => {
+  const groupByTicketType = (orders: OrderDetail[]) => {
     const groups = new Map<string, { ticketType: string, count: number, portions: number, descriptions: Map<string, number> }>()
 
     orders.forEach(order => {
@@ -131,15 +115,65 @@ export const useOrder = () => {
     return ticketType !== TicketType.BABY
   }
 
+  // ========== BUDGET CALCULATIONS ==========
+
+  /**
+   * Kitchen config defaults (can be overridden via app.config.ts)
+   */
+  const DEFAULT_KITCHEN_BASE_RATE_PERCENT = 5
+  const DEFAULT_VAT_PERCENT = 25
+
+  /**
+   * Convert amount between gross (inkl. moms) and net (ex moms)
+   * @param amountOre - Amount in øre
+   * @param vatPercent - VAT as whole number (25 = 25%)
+   * @param toNet - true: gross→net, false: net→gross
+   */
+  const convertVat = (amountOre: number, vatPercent: number, toNet: boolean): number => {
+    const multiplier = 1 + vatPercent / 100
+    return Math.round(toNet ? amountOre / multiplier : amountOre * multiplier)
+  }
+
+  /**
+   * Calculate budget breakdown from orders
+   * Returns all financial figures for kitchen/chef planning
+   */
+  const calculateBudget = (
+    orders: OrderDisplay[],
+    kitchenBaseRatePercent = DEFAULT_KITCHEN_BASE_RATE_PERCENT,
+    vatPercent = DEFAULT_VAT_PERCENT
+  ) => {
+    const activeOrders = orders.filter(isActiveOrder)
+    const ticketCount = activeOrders.length
+    const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
+    const availableBudget = totalRevenue - kitchenContribution
+    const availableBudgetExVat = convertVat(availableBudget, vatPercent, true)
+
+    return {
+      ticketCount,
+      totalRevenue,
+      kitchenContribution,
+      availableBudget,        // inkl. moms
+      availableBudgetExVat,   // ex moms (for grocery shopping)
+      kitchenBaseRatePercent,
+      vatPercent
+    }
+  }
+
   return {
     // State filtering
     getActiveOrders,
     getReleasedOrders,
 
     // Grouping and calculations
-    groupByTicketType, // Dynamic grouping, no hardcoded types
+    groupByTicketType,
     calculateTotalPortionsFromPrices,
     getPortionsForTicketPrice,
-    requiresChair
+    requiresChair,
+
+    // Budget & VAT
+    calculateBudget,
+    convertVat
   }
 }

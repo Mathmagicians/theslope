@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, selectDropdownOption, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season

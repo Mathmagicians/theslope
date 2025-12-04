@@ -5,11 +5,10 @@ import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {DinnerStateSchema, DinnerEventCreateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
+const {DinnerEventCreateSchema} = useBookingValidation()
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -137,7 +136,7 @@ describe('getDefaultSeason', () => {
 })
 
 describe('getDefaultHolidays', () => {
-    const { getDefaultHolidays, getDefaultSeason } = useSeason()
+    const { getDefaultHolidays } = useSeason()
 
     it('should calculate holidays within full production season', () => {
         // GIVEN: A typical production season (Aug - Jun)
@@ -190,7 +189,7 @@ describe('getDefaultHolidays', () => {
 })
 
 describe('generateDinnerEventDataForSeason', () => {
-    const { generateDinnerEventDataForSeason, getDefaultSeason } = useSeason()
+    const { generateDinnerEventDataForSeason } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -531,29 +530,39 @@ describe('isOnTeam', () => {
     const { TeamRoleSchema } = useCookingTeamValidation()
     const TeamRole = TeamRoleSchema.enum
 
+    // Helper to create properly typed team using factory
+    const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER'}>) =>
+        SeasonFactory.defaultCookingTeamDisplay({
+            assignments: assignments.map(a => SeasonFactory.defaultCookingTeamAssignment({
+                id: a.id,
+                inhabitantId: a.inhabitantId,
+                role: a.role
+            }))
+        })
+
     it.each([
         {
             description: 'inhabitant is on team as CHEF',
             inhabitantId: 1,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
             expected: true
         },
         {
             description: 'inhabitant is on team as COOK',
             inhabitantId: 2,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }] },
+            team: createTeam([{id: 2, inhabitantId: 2, role: TeamRole.COOK}]),
             expected: true
         },
         {
             description: 'inhabitant is on team as JUNIORHELPER',
             inhabitantId: 3,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 3, cookingTeamId: 1, inhabitantId: 3, role: TeamRole.JUNIORHELPER, allocationPercentage: 100 }] },
+            team: createTeam([{id: 3, inhabitantId: 3, role: TeamRole.JUNIORHELPER}]),
             expected: true
         },
         {
             description: 'inhabitant is not on team',
             inhabitantId: 99,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
             expected: false
         },
         {
@@ -565,12 +574,12 @@ describe('isOnTeam', () => {
         {
             description: 'team has no assignments',
             inhabitantId: 1,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [] },
+            team: SeasonFactory.defaultCookingTeamDisplay({assignments: []}),
             expected: false
         }
     ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
         // WHEN: Checking if inhabitant is on team
-        const result = isOnTeam(inhabitantId, team as any)
+        const result = isOnTeam(inhabitantId, team)
 
         // THEN: Returns expected result
         expect(result).toBe(expected)
@@ -582,29 +591,39 @@ describe('isChefFor', () => {
     const { TeamRoleSchema } = useCookingTeamValidation()
     const TeamRole = TeamRoleSchema.enum
 
+    // Helper to create properly typed team using factory
+    const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER'}>) =>
+        SeasonFactory.defaultCookingTeamDisplay({
+            assignments: assignments.map(a => SeasonFactory.defaultCookingTeamAssignment({
+                id: a.id,
+                inhabitantId: a.inhabitantId,
+                role: a.role
+            }))
+        })
+
     it.each([
         {
             description: 'inhabitant is CHEF on team',
             inhabitantId: 1,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
             expected: true
         },
         {
             description: 'inhabitant is COOK (not CHEF)',
             inhabitantId: 2,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }] },
+            team: createTeam([{id: 2, inhabitantId: 2, role: TeamRole.COOK}]),
             expected: false
         },
         {
             description: 'inhabitant is JUNIORHELPER (not CHEF)',
             inhabitantId: 3,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 3, cookingTeamId: 1, inhabitantId: 3, role: TeamRole.JUNIORHELPER, allocationPercentage: 100 }] },
+            team: createTeam([{id: 3, inhabitantId: 3, role: TeamRole.JUNIORHELPER}]),
             expected: false
         },
         {
             description: 'inhabitant is not on team',
             inhabitantId: 99,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [{ id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 }] },
+            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
             expected: false
         },
         {
@@ -616,24 +635,21 @@ describe('isChefFor', () => {
         {
             description: 'team has no assignments',
             inhabitantId: 1,
-            team: { id: 1, name: 'Team A', seasonId: 1, assignments: [] },
+            team: SeasonFactory.defaultCookingTeamDisplay({assignments: []}),
             expected: false
         },
         {
             description: 'multiple assignments, inhabitant is CHEF',
             inhabitantId: 1,
-            team: {
-                id: 1, name: 'Team A', seasonId: 1,
-                assignments: [
-                    { id: 1, cookingTeamId: 1, inhabitantId: 1, role: TeamRole.CHEF, allocationPercentage: 100 },
-                    { id: 2, cookingTeamId: 1, inhabitantId: 2, role: TeamRole.COOK, allocationPercentage: 100 }
-                ]
-            },
+            team: createTeam([
+                {id: 1, inhabitantId: 1, role: TeamRole.CHEF},
+                {id: 2, inhabitantId: 2, role: TeamRole.COOK}
+            ]),
             expected: true
         }
     ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
         // WHEN: Checking if inhabitant is chef for team
-        const result = isChefFor(inhabitantId, team as any)
+        const result = isChefFor(inhabitantId, team)
 
         // THEN: Returns expected result
         expect(result).toBe(expected)

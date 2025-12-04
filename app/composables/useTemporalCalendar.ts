@@ -26,7 +26,7 @@ export const useTemporalCalendar = () => {
   /**
    * Split events into temporal categories (past/next/future)
    */
-  const useTemporalSplit = <T extends { date: Date | string }>(events: T[]) => {
+  const useTemporalSplit = <T extends { date: Date }>(events: T[]) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
     const dinnerDates = computed(() => events.map(e => new Date(e.date)))
     const nextDinnerDateRange = computed(() => getNextDinnerDate(dinnerDates.value, dinnerStartHour))

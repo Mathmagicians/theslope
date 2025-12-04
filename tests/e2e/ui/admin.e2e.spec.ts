@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Response } from '@playwright/test'
 import { authFiles } from '../config'
 import testHelpers from '../testHelpers'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
@@ -96,7 +96,7 @@ test.describe('Admin page path-based navigation', () => {
       const needsApiWait = tabsNeedingSeasonApi.includes(tab.path)
       const responsePromise = needsApiWait
         ? page.waitForResponse(
-            (response: any) => response.url().match(/\/api\/admin\/season\/\d+$/),
+            (response: Response) => response.url().match(/\/api\/admin\/season\/\d+$/) !== null,
             {timeout: 10000}
           )
         : null

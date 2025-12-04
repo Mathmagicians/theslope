@@ -2,7 +2,6 @@ import {useSeasonValidation, type Season} from "~/composables/useSeasonValidatio
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
-    CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
     TeamRole
@@ -17,7 +16,7 @@ import {DinnerEventFactory} from "./dinnerEventFactory"
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -250,7 +249,7 @@ export class SeasonFactory {
                 ...aSeason,
                 shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
             })
-        } catch (error: any) {
+        } catch {
             // Unique constraint violation - another worker created the singleton first
             console.info('🌞 > SEASON_FACTORY > Singleton already exists (created by another worker), fetching it')
 
@@ -371,7 +370,7 @@ export class SeasonFactory {
             try {
                 await this.deleteSeason(context, singleton.id!)
                 console.info('🌞 > SEASON_FACTORY > Singleton season deleted')
-            } catch (error) {
+            } catch {
                 // Ignore 404 errors - another worker already deleted the singleton
                 console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
             }
@@ -403,7 +402,7 @@ export class SeasonFactory {
         const rawData = await response.json()
 
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
-        const parsedSeasons = rawData.map((season: any) => {
+        const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
             expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
             return result.data!
@@ -457,9 +456,10 @@ export class SeasonFactory {
                     }
                 }
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             // Only log if not a 404 (season already deleted is expected)
-            if (error?.matcherResult?.actual !== 404) {
+            const matcherError = error as { matcherResult?: { actual?: number } }
+            if (matcherError?.matcherResult?.actual !== 404) {
                 console.warn(`❌ Cleanup failed: Could not fetch season ${id} for order cleanup:`, error)
             }
         }
@@ -529,7 +529,7 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonData: Partial<Season> = this.defaultSeason(),
         teamCount: number = 2
-    ): Promise<{ season: Season, teams: any[] }> => {
+    ): Promise<{ season: Season, teams: CookingTeamDetail[] }> => {
         const season = await this.createSeason(context, seasonData)
         const teams = await Promise.all(
             Array(teamCount).fill(0).map(() => this.createCookingTeamForSeason(context, season.id as number))
@@ -541,7 +541,7 @@ export class SeasonFactory {
         context: BrowserContext,
         seasonId: number,
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<{ seasonId: number, eventCount: number, events: DinnerEventDisplay[] }> => {
         const response = await context.request.post(`/api/admin/season/${seasonId}/generate-dinner-events`, {
             headers: headers
         })
@@ -580,14 +580,6 @@ export class SeasonFactory {
         return await response.json()
     }
 
-    static readonly createDinnerEventsForSeason = async (
-        context: BrowserContext,
-        seasonId: number,
-        eventCount: number = 3
-    ): Promise<any[]> => {
-        throw new Error('createDinnerEventsForSeason: Not implemented - mock method')
-    }
-
     /**
      * Create a single dinner event for a season (convenience wrapper)
      */
@@ -600,20 +592,6 @@ export class SeasonFactory {
             seasonId,
             ...overrides
         })
-    }
-
-    /**
-     * Create season with teams and dinner events (for comprehensive test scenarios)
-     */
-    static readonly createSeasonWithTeamsAndDinners = async (
-        context: BrowserContext,
-        options: {
-            withTeams?: number,
-            withEvents?: number,
-            withAssignments?: number
-        } = {}
-    ): Promise<any> => {
-        throw new Error('createSeasonWithTeamsAndDinners: Not implemented - mock method')
     }
 
     // === COOKING TEAM METHODS ===
@@ -642,11 +620,11 @@ export class SeasonFactory {
         if (expectedStatus === 201) {
             const responseBody = await response.json()
             const validatedTeams = CookingTeamDetailSchema.array().parse(responseBody)
-            expect(validatedTeams[0].id, 'Response should contain the new team ID').toBeDefined()
-            expect(validatedTeams[0].seasonId).toBe(seasonId)
-            return validatedTeams[0]
+            expect(validatedTeams[0]!.id, 'Response should contain the new team ID').toBeDefined()
+            expect(validatedTeams[0]!.seasonId).toBe(seasonId)
+            return validatedTeams[0]!
         }
-        return null
+        return null as unknown as CookingTeamDetail
     }
 
     static readonly createCookingTeamWithMembersForSeason = async (
@@ -654,7 +632,7 @@ export class SeasonFactory {
         seasonId: number,
         teamName: string = salt('TestTeam'),
         memberCount: number = 2
-    ): Promise<any> => {
+    ): Promise<CookingTeamDetail & { householdId: number }> => {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
@@ -664,7 +642,7 @@ export class SeasonFactory {
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
         await Promise.all(
-            householdWithInhabitants.inhabitants.map((inhabitant: any, index: number) =>
+            householdWithInhabitants.inhabitants.map((inhabitant, index: number) =>
                 this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
             )
         )
@@ -681,7 +659,7 @@ export class SeasonFactory {
         context: BrowserContext,
         teamId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<CookingTeamDetail | null> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
 
         const status = response.status()
@@ -690,7 +668,7 @@ export class SeasonFactory {
         if (expectedStatus === 200) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(teamId)
-            return responseBody
+            return CookingTeamDetailSchema.parse(responseBody)
         }
 
         return null
@@ -700,7 +678,7 @@ export class SeasonFactory {
         context: BrowserContext,
         assignmentId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<CookingTeamAssignment | null> => {
         const response = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
 
         const status = response.status()
@@ -709,7 +687,7 @@ export class SeasonFactory {
         if (expectedStatus === 200) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(assignmentId)
-            return responseBody
+            return CookingTeamAssignmentSchema.parse(responseBody)
         }
 
         return null
@@ -721,7 +699,7 @@ export class SeasonFactory {
         inhabitantId: number,
         role: TeamRole,
         expectedStatus: number = 201
-    ): Promise<any> => {
+    ): Promise<CookingTeamAssignment | null> => {
         const teamAssignmentData = {
             cookingTeamId: teamId,  // Schema expects 'cookingTeamId' not 'teamId'
             inhabitantId: inhabitantId,
@@ -739,37 +717,26 @@ export class SeasonFactory {
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
-            return await response.json()
+            return CookingTeamAssignmentSchema.parse(await response.json())
         }
         return null
     }
 
     static readonly removeMemberFromTeam = async (
         context: BrowserContext,
-        teamId: number,
+        _teamId: number,
         assignmentId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<number | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/assignment/${assignmentId}`)
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json()
+            return await response.json() as number
         }
         return null
-    }
-
-    /**
-     * Associate team with dinner events (weak relation) for 1a, 1b test scenarios
-     */
-    static readonly assignTeamToDinnerEvents = async (
-        context: BrowserContext,
-        teamId: number,
-        eventIds: number[]
-    ): Promise<any[]> => {
-        throw new Error('assignTeamToDinnerEvents: Not implemented - mock method')
     }
 
     /**
@@ -779,13 +746,13 @@ export class SeasonFactory {
         context: BrowserContext,
         teamId: number,
         expectedStatus: number = 200
-    ): Promise<any> => {
+    ): Promise<CookingTeamDetail | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
         if (expectedStatus === 200) {
-            return await response.json()
+            return CookingTeamDetailSchema.parse(await response.json())
         }
         return null
     }
@@ -793,16 +760,16 @@ export class SeasonFactory {
     static readonly getCookingTeamsForSeason = async (
         context: BrowserContext,
         seasonId: number
-    ): Promise<any[]> => {
+    ): Promise<CookingTeamDetail[]> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}?seasonId=${seasonId}`)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return responseBody
+        return CookingTeamDetailSchema.array().parse(responseBody)
     }
 
-    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<any[]> => {
+    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDetail[]> => {
         const response = await context.request.get(ADMIN_TEAM_ENDPOINT)
         const status = response.status()
         const errorBody = status !== 200 ? await response.text() : ''
@@ -810,16 +777,16 @@ export class SeasonFactory {
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return responseBody
+        return CookingTeamDetailSchema.array().parse(responseBody)
     }
 
-    static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: any[]}> => {
+    static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: CookingTeamDetail[]}> => {
         const response = await context.request.post(`/api/admin/season/${seasonId}/assign-team-affinities`)
         expect(response.status()).toBe(200)
         return response.json()
     }
 
-    static readonly assignCookingTeams = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, eventCount: number, events: any[]}> => {
+    static readonly assignCookingTeams = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, eventCount: number, events: DinnerEventDisplay[]}> => {
         const response = await context.request.post(`/api/admin/season/${seasonId}/assign-cooking-teams`)
         expect(response.status()).toBe(200)
         return response.json()

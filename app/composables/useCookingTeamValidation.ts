@@ -30,6 +30,7 @@ export const useCookingTeamValidation = () => {
     const {
         WeekDayMapSchemaOptional,
         serializeWeekDayMap,
+        serializeWeekDayMapNullable,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection
     } = useWeekDayMapValidation<boolean>({
@@ -126,12 +127,8 @@ export const useCookingTeamValidation = () => {
     const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
 
     // Type definitions (inside composable to avoid circular reference)
-    type _CookingTeam = z.infer<typeof CookingTeamSchema>
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
     type CookingTeamDetail = z.infer<typeof CookingTeamDetailSchema>
-    type CookingTeamCreate = z.infer<typeof CookingTeamCreateSchema>
-    type CookingTeamUpdate = z.infer<typeof CookingTeamUpdateSchema>
-    type CookingTeamAssignment = z.infer<typeof CookingTeamAssignmentSchema>
     type TeamRole = z.infer<typeof TeamRoleSchema>
 
     // Transform schema for serialization (converts WeekDayMap to JSON string)
@@ -167,11 +164,12 @@ export const useCookingTeamValidation = () => {
     }
 
     // Deserialize team Display (for season fetch with CookingTeams)
-    const deserializeCookingTeam = (serialized: SerializedCookingTeamDisplay): CookingTeamDisplay => {
+    const deserializeCookingTeam = (serialized: Record<string, unknown>): CookingTeamDisplay => {
+        const assignments = serialized.assignments as Record<string, unknown>[] | undefined
         const deserialized = {
             ...serialized,
-            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity) : undefined,
-            assignments: serialized.assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
+            affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
+            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
         }
 
         return CookingTeamDisplaySchema.parse(deserialized)
@@ -264,6 +262,7 @@ export const useCookingTeamValidation = () => {
         // WeekDayMap functions for affinity
         createWeekDayMapFromSelection,
         serializeWeekDayMap,
+        serializeWeekDayMapNullable,
         deserializeWeekDayMap
     }
 }

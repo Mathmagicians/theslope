@@ -99,7 +99,7 @@ const teamTabs = computed(() => {
       :items="teamTabs"
       :orientation="tabOrientation"
       variant="link"
-      :size="SIZES.large.value"
+      :size="SIZES.large"
     >
       <template #item="{ item }">
         <CookingTeamBadges

@@ -90,6 +90,7 @@ const USER_DISPLAY_SELECT = {
         select: {
             id: true,
             heynaboId: true,
+            householdId: true,
             name: true,
             lastName: true,
             pictureUrl: true,
@@ -220,10 +221,10 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: InhabitantCreate, householdId: number): Promise<InhabitantDetail> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitantDisplay} = useCoreValidation()
+    const {deserializeInhabitantDetail} = useCoreValidation()
 
     try {
         const data = {
@@ -257,13 +258,13 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Inhabitan
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
             // ADR-010: Deserialize to domain type before returning
-            return deserializeInhabitantDisplay(updatedInhabitant)
+            return deserializeInhabitantDetail(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
         }
 
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitantDisplay(newInhabitant)
+        return deserializeInhabitantDetail(newInhabitant)
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [SAVE]: Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
     }
@@ -342,12 +343,16 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
             data: updateData
         })
 
-        if (updatedInhabitant.dinnerPreferences) {
-            updatedInhabitant.dinnerPreferences = deserializeWeekDayMap(updatedInhabitant.dinnerPreferences)
+        // ADR-010: Deserialize to domain type before returning
+        const deserializedInhabitant = {
+            ...updatedInhabitant,
+            dinnerPreferences: updatedInhabitant.dinnerPreferences
+                ? deserializeWeekDayMap(updatedInhabitant.dinnerPreferences)
+                : null
         }
 
-        console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName} with ID ${id}`)
-        return updatedInhabitant
+        console.info(`👩‍🏠 > INHABITANT > [UPDATE] Successfully updated inhabitant ${deserializedInhabitant.name} ${deserializedInhabitant.lastName} with ID ${id}`)
+        return deserializedInhabitant
     } catch (error) {
         return throwH3Error(`\`👩‍🏠 > INHABITANT > [UPDATE]: Error updating inhabitant with ID ${id}`, error)
     }
@@ -356,7 +361,7 @@ export async function updateInhabitant(d1Client: D1Database, id: number, inhabit
 export async function deleteInhabitant(d1Client: D1Database, id: number): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [DELETE] Deleting inhabitant with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeInhabitantDisplay} = useCoreValidation()
+    const {deserializeInhabitantDetail} = useCoreValidation()
 
     try {
 
@@ -369,7 +374,7 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
         console.info(`👩‍🏠 > INHABITANT > [DELETE] Successfully deleted inhabitant ${deletedInhabitant.name} ${deletedInhabitant.lastName}`)
         // ADR-010: Deserialize to domain type before returning
-        return deserializeInhabitantDisplay(deletedInhabitant)
+        return deserializeInhabitantDetail(deletedInhabitant)
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [DELETE]: Error deleting inhabitant with ID ${id}`, error)
     }
@@ -400,7 +405,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
 
         if (household.inhabitants) {
             const inhabitantIds = await Promise.all(
-                household.inhabitants.map((inhabitant: InhabitantCreate) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
+                household.inhabitants.map((inhabitant) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
             )
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
@@ -497,21 +502,17 @@ export async function updateHousehold(d1Client: D1Database, id: number, househol
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Handle undefined values with Prisma.skip to satisfy strictUndefinedChecks
-        const data: Partial<HouseholdCreate> = {}
-        if (householdData.heynaboId !== undefined) data.heynaboId = householdData.heynaboId
-        if (householdData.pbsId !== undefined) data.pbsId = householdData.pbsId
-        if (householdData.movedInDate !== undefined) data.movedInDate = householdData.movedInDate
-        if (householdData.name !== undefined) data.name = householdData.name
-        if (householdData.address !== undefined) data.address = householdData.address
-        // Only set moveOutDate if provided (use Prisma.skip for null to avoid undefined)
-        if (householdData.moveOutDate !== undefined) {
-            data.moveOutDate = householdData.moveOutDate ?? Prisma.skip
-        }
-
+        // Build Prisma update data with Prisma.skip for undefined fields (ADR-012)
         await prisma.household.update({
             where: {id},
-            data
+            data: {
+                heynaboId: householdData.heynaboId ?? Prisma.skip,
+                pbsId: householdData.pbsId ?? Prisma.skip,
+                movedInDate: householdData.movedInDate ?? Prisma.skip,
+                name: householdData.name ?? Prisma.skip,
+                address: householdData.address ?? Prisma.skip,
+                moveOutDate: householdData.moveOutDate === undefined ? Prisma.skip : householdData.moveOutDate
+            }
         })
 
         // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations
@@ -1031,7 +1032,7 @@ export async function updateTeamAssignment(
 ): Promise<CookingTeamAssignment> {
     console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Updating team assignment ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, serializeWeekDayMap, deserializeWeekDayMap} = useCookingTeamValidation()
+    const {CookingTeamAssignmentSchema, serializeWeekDayMapNullable, deserializeWeekDayMap} = useCookingTeamValidation()
 
     try {
         // Extract affinity for serialization if present
@@ -1042,7 +1043,7 @@ export async function updateTeamAssignment(
             data: {
                 ...restData,
                 // Use Prisma.skip to omit field entirely when not being updated
-                affinity: affinity === undefined ? Prisma.skip : serializeWeekDayMap(affinity)
+                affinity: affinity === undefined ? Prisma.skip : serializeWeekDayMapNullable(affinity)
             },
             include: {
                 inhabitant: true

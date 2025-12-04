@@ -1,13 +1,13 @@
 import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema} from '~~/prisma/generated/zod'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import type {SafeParseReturnType} from 'zod'
 
-const getValidationError = (result: any) =>
+const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useBookingValidation', () => {
@@ -33,7 +33,6 @@ describe('useBookingValidation', () => {
   } = useBookingValidation()
 
   const DinnerState = DinnerStateSchema.enum
-  const DinnerMode = DinnerModeSchema.enum
 
   describe('Enum Validation', () => {
     it.each([
@@ -178,8 +177,8 @@ describe('useBookingValidation', () => {
         'id', 'dinnerEventId', 'inhabitantId', 'ticketPriceId',
         'priceAtBooking', 'dinnerMode', 'state', 'createdAt', 'updatedAt', 'ticketType'
       ].map(field => ({field})))('GIVEN missing $field WHEN parsing THEN throws', ({field}) => {
-        const order = OrderFactory.defaultOrder()
-        delete (order as any)[field]
+        const order = OrderFactory.defaultOrder() as Record<string, unknown>
+        Reflect.deleteProperty(order, field)
         const result = OrderDisplaySchema.safeParse(order)
         expect(result.success).toBe(false)
       })

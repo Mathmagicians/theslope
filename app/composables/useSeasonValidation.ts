@@ -91,8 +91,8 @@ export const useSeasonValidation = () => {
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
-    const deserializeSeason = (serialized: any): Season => {
-        const parsedSeasonDates = JSON.parse(serialized.seasonDates)
+    const deserializeSeason = (serialized: Record<string, unknown>): Season => {
+        const parsedSeasonDates = JSON.parse(serialized.seasonDates as string) as { start: string; end: string }
 
         const baseSeason = {
             ...serialized,
@@ -101,8 +101,8 @@ export const useSeasonValidation = () => {
                 start: parseDate(parsedSeasonDates.start),
                 end: parseDate(parsedSeasonDates.end)
             }, DATE_SETTINGS.SEASON_NAME_MASK),
-            cookingDays: deserializeWeekDayMap(serialized.cookingDays),
-            holidays: JSON.parse(serialized.holidays).map((holiday: any) => ({
+            cookingDays: deserializeWeekDayMap(serialized.cookingDays as string),
+            holidays: (JSON.parse(serialized.holidays as string) as { start: string; end: string }[]).map((holiday) => ({
                 start: parseDate(holiday.start),
                 end: parseDate(holiday.end)
             })),
@@ -113,17 +113,19 @@ export const useSeasonValidation = () => {
         }
 
         // If relations exist, deserialize them
-        if (serialized.dinnerEvents || serialized.CookingTeams || serialized.ticketPrices) {
+        const dinnerEvents = serialized.dinnerEvents as unknown[] | undefined
+        const CookingTeams = serialized.CookingTeams as Record<string, unknown>[] | undefined
+        if (dinnerEvents || CookingTeams || serialized.ticketPrices) {
             return {
                 ...baseSeason,
                 // Parse dinner events to ensure dates are Date objects (not strings from JSON)
-                dinnerEvents: serialized.dinnerEvents?.map((event: any) => DinnerEventDisplaySchema.parse(event)),
+                dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplaySchema.parse(event)),
                 // Deserialize nested CookingTeams (including affinity fields)
-                CookingTeams: serialized.CookingTeams?.map((team: any) => deserializeCookingTeam(team)),
-                ticketPrices: serialized.ticketPrices
-            }
+                CookingTeams: CookingTeams?.map((team) => deserializeCookingTeam(team)),
+                ticketPrices: serialized.ticketPrices as Season['ticketPrices']
+            } as Season
         }
-        return baseSeason
+        return baseSeason as Season
     }
 
     // Return all schemas and utility functions

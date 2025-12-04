@@ -14,7 +14,8 @@
  * │  Voksne: 60 (50 Standard + 10 Vegetar)  |  Børn: 30 (25 Normal + 5 Sulten) │
  * │  Baby: 10 (8 Normal + 2 Sulten) (0.5 portioner)                            │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
- * │   TAKEAWAY - 40%         │  SPIS HER - 35%     │SPIS SENT-20% │TIL SALG-5% │
+ * │   TAKEAWAY - 38%         │  SPIS HER - 33%     │SPIS SENT-19% │TIL SALG-10%│
+ * │   (normalized: min 10% each, always shown, sums to 100%)                  │
  * │                          │                     │              │            │
  * │      50 personer         │    44 personer      │  25 personer │ 6 billetter│
  * │                          │                     │              │            │
@@ -115,28 +116,26 @@ const diningModeStats = computed(() => {
     }
   })
 
-  // Add released tickets panel if any exist (rightmost panel for tickets for sale)
-  if (releasedOrders.value.length > 0) {
-    const count = releasedOrders.value.length
-    const releasedAffectedResult = computeAffectedDiners(releasedOrders.value, menuAllergenIds.value)
+  // Add released tickets panel (always show - rightmost panel for tickets for sale)
+  const releasedCount = releasedOrders.value.length
+  const releasedAffectedResult = computeAffectedDiners(releasedOrders.value, menuAllergenIds.value)
 
-    stats.push({
-      key: 'RELEASED' as const,
-      label: 'TIL SALG',
-      percentage: Math.round((count / total) * 100),
-      count,
-      portions: null,
-      chairs: null,
-      plates: null,
-      affectedDiners: releasedAffectedResult?.affectedList ?? []
-    })
-  }
+  stats.push({
+    key: 'RELEASED' as const,
+    label: 'TIL SALG',
+    percentage: props.orders.length > 0 ? Math.round((releasedCount / total) * 100) : 0,
+    count: releasedCount,
+    portions: null,
+    chairs: null,
+    plates: null,
+    affectedDiners: releasedAffectedResult?.affectedList ?? []
+  })
 
   return stats
 })
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime'
+import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import { usePlanStore } from '~/stores/plan'
 import { setActivePinia, createPinia, storeToRefs } from 'pinia'
@@ -133,7 +133,7 @@ describe('useCookingTeam', () => {
 
       // Use the composable
       const { useInhabitantsWithAssignments } = useCookingTeam()
-      const { inhabitants, pending, refresh } = await useInhabitantsWithAssignments()
+      const { inhabitants, pending } = await useInhabitantsWithAssignments()
 
       // Wait for inhabitants to load with actual data
       await vi.waitFor(() => {

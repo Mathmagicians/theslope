@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
+// Households store for shortName lookup
+const householdsStore = useHouseholdsStore()
+const {households} = storeToRefs(householdsStore)
+
+// Helper to get household shortName from householdId
+const getHouseholdShortName = (householdId: number) => {
+  const household = households.value.find(h => h.id === householdId)
+  return household?.shortName ?? ''
+}
+
 // PROPS
 const props = defineProps<{
-  allergyType: AllergyTypeDisplay
+  allergyType: AllergyTypeDetail
   mode?: 'view' | 'edit'
   compact?: boolean
 }>()
@@ -35,7 +45,11 @@ watch(() => props.allergyType, (newValue) => {
 
 // HANDLERS
 const handleSave = () => {
-  emit('save', formData.value)
+  emit('save', {
+    name: formData.value.name,
+    description: formData.value.description,
+    icon: formData.value.icon ?? undefined
+  })
 }
 
 const handleCancel = () => {
@@ -49,7 +63,9 @@ const handleCancel = () => {
 
 // COMPUTED
 const inhabitantCount = computed(() => props.allergyType.inhabitants?.length || 0)
-const showNewBadge = computed(() => isNew(props.allergyType.createdAt || ''))
+const hasRecentAllergies = computed(() =>
+    props.allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
+)
 
 // Funny empty state messages (rotates based on allergy ID for consistency)
 const emptyStateMessages = [
@@ -134,7 +150,7 @@ const emptyStateMessage = computed(() => {
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2">
         <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
-        <span v-if="showNewBadge" class="text-xs">🆕</span>
+        <span v-if="hasRecentAllergies" class="text-xs">🆕</span>
       </div>
       <p class="text-xs text-gray-600 dark:text-gray-400">
         {{ inhabitantCount }} beboer{{ inhabitantCount !== 1 ? 'e' : '' }}
@@ -160,7 +176,7 @@ const emptyStateMessage = computed(() => {
       <div class="flex-1">
         <div class="flex items-center gap-2">
           <h3 class="text-lg font-semibold">{{ allergyType.name }}</h3>
-          <span v-if="showNewBadge" class="text-sm">🆕</span>
+          <span v-if="hasRecentAllergies" class="text-sm">🆕</span>
         </div>
         <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
           {{ allergyType.description }}
@@ -183,16 +199,16 @@ const emptyStateMessage = computed(() => {
           <!-- Inhabitant with avatar and name -->
           <UserListItem
               :inhabitants="inhabitant"
-              :label="inhabitant.householdName"
+              :label="getHouseholdShortName(inhabitant.householdId)"
           />
 
           <!-- Additional info: Comment and timestamp -->
-          <div v-if="inhabitant.inhabitantComment || inhabitant.updatedAt" class="pl-14 space-y-1">
+          <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">
             <div v-if="inhabitant.inhabitantComment" class="text-xs text-gray-700 dark:text-gray-300 italic">
               "{{ inhabitant.inhabitantComment }}"
             </div>
-            <div v-if="inhabitant.updatedAt" class="text-xs text-gray-500 dark:text-gray-500">
-              {{ formatRelativeTime(inhabitant.updatedAt) }}
+            <div v-if="inhabitant.allergyUpdatedAt" class="text-xs text-gray-500 dark:text-gray-500">
+              {{ formatRelativeTime(inhabitant.allergyUpdatedAt) }}
             </div>
           </div>
         </div>
@@ -204,11 +220,11 @@ const emptyStateMessage = computed(() => {
       v-else
       variant="soft"
       :color="COLOR.success"
-      :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar.value }"
+      :avatar="{ text: emptyStateMessage!.emoji, size: SIZES.emptyStateAvatar }"
       :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
-        {{ emptyStateMessage.text }}
+        {{ emptyStateMessage!.text }}
       </template>
       <template #description>
         Ingen beboere har denne allergi

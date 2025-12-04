@@ -11,7 +11,7 @@ import type {
     DinnerEventDetail
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 /**
  * Finances Repository
@@ -334,10 +334,10 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
 // - Weak to CookingTeam (event can exist without assigned team)
 // - Weak to Inhabitant chef (event can exist without assigned chef)
 
-export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEventDisplay> {
+export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEventDetail> {
     console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {DinnerEventDetailSchema} = useBookingValidation()
 
     // Exclude relation fields that Prisma doesn't accept in create data
     const {allergens, ...createData} = dinnerEvent
@@ -347,8 +347,15 @@ export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerE
             data: createData
         })
 
+        // ADR-009: mutations return Detail - newly created events have no chef/cookingTeam yet
+        const dinnerEventToValidate = {
+            ...newDinnerEvent,
+            chef: null,
+            cookingTeam: null
+        }
+
         console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
-        return DinnerEventDisplaySchema.parse(newDinnerEvent)
+        return DinnerEventDetailSchema.parse(dinnerEventToValidate)
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
     }
@@ -546,18 +553,35 @@ export async function assignCookingTeamToDinnerEvent(d1Client: D1Database, dinne
     return DinnerEventDisplaySchema.parse(updated)
 }
 
-export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDisplay> {
+export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDetail> {
     console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting dinner event with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {DinnerEventDetailSchema} = useBookingValidation()
+    const {deserializeInhabitantDisplay} = useCoreValidation()
 
     try {
-        const deletedDinnerEvent = await prisma.dinnerEvent.delete({
+        // Fetch with relations before deleting (ADR-009: mutations return Detail)
+        const dinnerEventToDelete = await prisma.dinnerEvent.findUniqueOrThrow({
+            where: {id},
+            include: {
+                chef: true,
+                cookingTeam: true
+            }
+        })
+
+        await prisma.dinnerEvent.delete({
             where: {id}
         })
 
-        console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${deletedDinnerEvent.menuTitle}`)
-        return DinnerEventDisplaySchema.parse(deletedDinnerEvent)
+        // Deserialize chef inhabitant if present
+        const dinnerEventToValidate = {
+            ...dinnerEventToDelete,
+            chef: dinnerEventToDelete.chef ? deserializeInhabitantDisplay(dinnerEventToDelete.chef) : null,
+            cookingTeam: dinnerEventToDelete.cookingTeam
+        }
+
+        console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${dinnerEventToDelete.menuTitle}`)
+        return DinnerEventDetailSchema.parse(dinnerEventToValidate)
     } catch (error) {
         return throwH3Error(`️ > DINNER_EVENT > [DELETE]: Error deleting dinner event with ID ${id}`, error)
     }

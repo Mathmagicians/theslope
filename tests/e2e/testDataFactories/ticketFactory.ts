@@ -20,7 +20,7 @@ export class TicketFactory {
         createTicketPrice(TicketType.BABY, 0, undefined, 'Baby (0-2 år)', 2),
         createTicketPrice(TicketType.BABY, 1500, undefined, 'Sulten baby (0-2 år)', 2),
         createTicketPrice(TicketType.CHILD, 3000, undefined, undefined, 12),
-        createTicketPrice(TicketType.ADULT, 5000, undefined, undefined, null)
+        createTicketPrice(TicketType.ADULT, 5000, undefined, undefined, undefined)
     ]
 
     /**
@@ -75,7 +75,7 @@ export class TicketFactory {
                 overrides?.adultPrice ?? 5000,
                 overrides?.seasonId,
                 undefined,
-                null
+                undefined
             )
         ]
     }

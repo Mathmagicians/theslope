@@ -1,3 +1,4 @@
+import type { APIRequestContext} from '@playwright/test';
 import {test as setup, expect} from '@playwright/test'
 import {authFiles} from './config'
 
@@ -17,11 +18,12 @@ async function performLogin(request: APIRequestContext) {
     const responseHeaders = response.headers()
     const responseCookies = new Map(responseHeaders['set-cookie']
         .split('\n')
-        .map(c => c.split(';', 2)[0].split('=')))
+        .map((c: string) => c.split(';', 2)[0].split('=') as [string, string]))
 
     expect(responseCookies.size).toBeGreaterThan(0)
     const nuxtCookie = responseCookies.get('nuxt-session')
-    expect(nuxtCookie.length).toBeGreaterThan(0)
+    expect(nuxtCookie).toBeDefined()
+    expect(nuxtCookie!.length).toBeGreaterThan(0)
 
     return response
 }

@@ -4,12 +4,13 @@ import { HouseholdFactory } from '../testDataFactories/householdFactory'
 import { DinnerEventFactory } from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
+import type { Season } from '~/composables/useSeasonValidation'
 
 const { validatedBrowserContext, salt, temporaryAndRandom } = testHelpers
 const { TeamRoleSchema } = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
-let testSeason: any
+let testSeason: Season
 const createdHouseholdIds: number[] = []
 
 test.describe('DinnerEvent API - Assign Role', () => {
@@ -118,7 +119,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 expect(teamWithAssignments.assignments).toBeDefined()
 
                 const assignment = teamWithAssignments.assignments.find(
-                    (a: any) => a.inhabitantId === inhabitant.id
+                    (a: unknown) => a.inhabitantId === inhabitant.id
                 )
                 expect(assignment, `${role} assignment should exist`).toBeDefined()
                 expect(assignment.role, `Assignment role should be ${role}`).toBe(role)
@@ -172,7 +173,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
             // Verify role was updated to CHEF
             const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id)
             const chefAssignment = teamWithAssignments.assignments.find(
-                (a: any) => a.inhabitantId === inhabitant.id
+                (a: unknown) => a.inhabitantId === inhabitant.id
             )
             expect(chefAssignment, 'Assignment should exist').toBeDefined()
             expect(chefAssignment.role, 'Role should be updated to CHEF').toBe(TeamRole.CHEF)

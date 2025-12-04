@@ -1,5 +1,10 @@
 import type {WeekDay} from '~/types/dateTypes'
+import type {AvatarProps, ButtonProps} from '@nuxt/ui'
 import heynaboLogo from '~/assets/heynabo.jpeg'
+
+// NuxtUI size types extracted from component props
+type NuxtUISize = NonNullable<ButtonProps['size']>
+type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
 
 /**
  * Color System - TheSlope Design System
@@ -66,6 +71,9 @@ export const COLOR = {
   caramel: 'caramel',      // Caramel - warm brown
   bonbon: 'bonbon'         // Bonbon - light purple
 } as const
+
+/** NuxtUI color type - derived from COLOR constant for type-safe component props */
+export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
 
 // ============================================================================
 // PART 2: Tailwind Class Builders (for dynamic classes)
@@ -257,7 +265,7 @@ export const TYPOGRAPHY = {
   caption: 'text-xs font-medium',
 
   // Footer
-  footerText: 'text-xs text-amber-50'
+  footerText: 'text-xs text-white dark:text-amber-50'
 } as const
 
 /**
@@ -445,16 +453,32 @@ export const ICONS = {
   // Navigation & entities
   team: 'i-fluent-mdl2-team-favorite',
   calendar: 'i-heroicons-calendar',
+  calendarDays: 'i-heroicons-calendar-days',
   user: 'i-heroicons-user',
   users: 'i-heroicons-users',
+  userGroup: 'i-heroicons-user-group',
+  ticket: 'i-heroicons-ticket',
+
+  // Header navigation
+  dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
+  chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+  login: 'i-guidance-entry',
+  admin: 'i-pajamas-admin',
+  menu: 'i-heroicons-bars-3',
+  help: 'i-heroicons-question-mark-circle',
 
   // Actions & feedback
   edit: 'i-heroicons-pencil',
+  check: 'i-heroicons-check',
   checkCircle: 'i-heroicons-check-circle',
+  plusCircle: 'i-heroicons-plus-circle',
   megaphone: 'i-heroicons-megaphone',
   exclamationCircle: 'i-heroicons-exclamation-circle',
   xMark: 'i-heroicons-x-mark',
-  arrowRight: 'i-heroicons-arrow-right'
+  arrowRight: 'i-heroicons-arrow-right',
+
+  // Empty states
+  robotDead: 'i-mage-robot-dead'
 } as const
 
 /**
@@ -483,48 +507,47 @@ export const IMG = {
  * Automatically adapts based on `isMd` breakpoint from layout.
  * Use these instead of manually checking `getIsMd ? 'lg' : 'md'`.
  *
- * Each size includes both badge size and matching icon size for consistency.
+ * Returns typed computed refs that Vue auto-unwraps in templates.
  *
  * @example
  * ```vue
- * <UBadge :size="SIZES.large.value">
- *   <UIcon :name="ICONS.team" :size="SIZES.large.iconSize" />
- * </UBadge>
+ * <UButton :size="SIZES.standard">Click me</UButton>
+ * <UBadge :size="SIZES.small">Tag</UBadge>
+ * <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" />
  * ```
+ */
+
+/**
+ * Creates responsive size getters that work with Vue's reactivity and TypeScript templates.
+ * Uses getters to return plain values while maintaining reactivity through isMd dependency.
  */
 export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   // Standard responsive: md on mobile, lg on desktop
-  standard: {
-    value: computed(() => isMd.value ? 'lg' : 'md'),
-    iconSize: computed(() => isMd.value ? '20' : '16')
-  },
+  get standard(): NuxtUISize { return isMd.value ? 'lg' : 'md' },
+  get standardIconSize(): string { return isMd.value ? '20' : '16' },
 
   // Small responsive: sm on mobile, md on desktop
-  small: {
-    value: computed(() => isMd.value ? 'md' : 'sm'),
-    iconSize: computed(() => isMd.value ? '16' : '12')
-  },
+  get small(): NuxtUISize { return isMd.value ? 'md' : 'sm' },
+  get smallIconSize(): string { return isMd.value ? '16' : '12' },
 
   // Large responsive: lg on mobile, xl on desktop
-  large: {
-    value: computed(() => isMd.value ? 'xl' : 'lg'),
-    iconSize: computed(() => isMd.value ? '24' : '20')
-  },
+  get large(): NuxtUISize { return isMd.value ? 'xl' : 'lg' },
+  get largeIconSize(): string { return isMd.value ? '24' : '20' },
 
   // Calendar: xl on desktop, sm on mobile (UCalendar sizing)
-  calendar: computed(() => isMd.value ? 'xl' : 'sm'),
+  get calendar(): NuxtUISize { return isMd.value ? 'xl' : 'sm' },
 
   // Calendar months: 3 on desktop, 1 on mobile
-  calendarMonths: computed(() => isMd.value ? 3 : 1),
+  get calendarMonths(): number { return isMd.value ? 3 : 1 },
 
   // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
-  calendarCircle: computed(() => isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'),
+  get calendarCircle(): string { return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs' },
 
   // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
-  calendarAccordionDefault: computed(() => isMd.value ? '0' : undefined),
+  get calendarAccordionDefault(): string | undefined { return isMd.value ? '0' : undefined },
 
   // Empty state avatar: 2xl on mobile, 3xl on desktop
-  emptyStateAvatar: computed(() => isMd.value ? '3xl' : '2xl'),
+  get emptyStateAvatar(): NuxtUIAvatarSize { return isMd.value ? '3xl' : '2xl' },
 
   // Static sizes (for when you need non-responsive)
   xs: 'xs' as const,
@@ -624,6 +647,31 @@ const createPagination = (isMd: Ref<boolean>) => ({
 })
 
 /**
+ * createNavigation - Responsive navigation configuration
+ *
+ * Provides navigation link styling and responsive behavior for header menus.
+ * On desktop (md+), drawer links swap to main nav since drawer toggle is hidden.
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Navigation configuration
+ */
+const createNavigation = (isMd: Ref<boolean>) => ({
+  // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
+  link: {
+    color: 'neutral' as const,
+    variant: 'link' as const,
+    activeColor: 'primary' as const,
+    activeVariant: 'soft' as const
+  },
+  /**
+   * Whether to swap drawer content with main nav
+   * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
+   * - Mobile (!isMd): false - drawer links stay in drawer
+   */
+  get shouldSwapDrawerWithMain(): boolean { return isMd.value }
+})
+
+/**
  * useTheSlopeDesignSystem Composable
  *
  * TheSlope's centralized design system - single source of truth for colors, typography,
@@ -712,6 +760,16 @@ export const CALENDAR = {
     critical: 'ring-2 ring-red-500',
     warning: 'ring-2 ring-amber-500',
     onTrack: ''
+  },
+  // Base selection behavior - combine with palette-specific color
+  selection: {
+    base: 'ring-2 md:ring-4',
+    // Card behaviors for selectable items (agenda, list views)
+    card: {
+      base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
+      // Helper to generate selected state with color
+      selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+    }
   }
 } as const
 
@@ -730,7 +788,8 @@ export const CHEF_CALENDAR = {
     accentMedium: TEXT.ocean[300],
     dot: BG.ocean[400]
   },
-  selection: 'ring-2 md:ring-4 ring-ocean-700'
+  // Selection uses outline (outer) so deadline ring (inner) remains visible
+  selection: 'outline outline-2 md:outline-4 outline-ocean-700 outline-offset-2'
 } as const
 
 /**
@@ -748,7 +807,8 @@ export const DINNER_CALENDAR = {
     accentMedium: TEXT.peach[300],
     dot: BG.peach[400]
   },
-  selection: 'ring-2 md:ring-4 ring-peach-700'
+  // Selection uses outline (outer) so deadline ring (inner) remains visible
+  selection: 'outline outline-2 md:outline-4 outline-peach-700 outline-offset-2'
 } as const
 
 /**
@@ -758,21 +818,40 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
+  DONE: {
+    color: COLOR.success,
+    label: 'Færdig',
+    icon: 'i-heroicons-check-circle',
+    emoji: '🟢'
+  },
   CRITICAL: {
     color: COLOR.error,
     label: 'Kritisk',
-    icon: 'i-heroicons-exclamation-circle'
+    icon: 'i-heroicons-exclamation-circle',
+    emoji: '🔴'
   },
   WARNING: {
     color: COLOR.warning,
     label: 'Snart',
-    icon: 'i-heroicons-clock'
+    icon: 'i-heroicons-clock',
+    emoji: '🟡'
   },
   ON_TRACK: {
-    color: COLOR.success,
+    color: COLOR.neutral,
     label: 'OK',
-    icon: 'i-heroicons-check-circle'
+    icon: 'i-heroicons-clock',
+    emoji: '⚪'
   }
+} as const
+
+/**
+ * Maps DeadlineUrgency (0 | 1 | 2) to DEADLINE_BADGES
+ * 0 = On track, 1 = Warning, 2 = Critical
+ */
+export const URGENCY_TO_BADGE = {
+  0: DEADLINE_BADGES.ON_TRACK,
+  1: DEADLINE_BADGES.WARNING,
+  2: DEADLINE_BADGES.CRITICAL
 } as const
 
 export const useTheSlopeDesignSystem = () => {
@@ -788,6 +867,7 @@ export const useTheSlopeDesignSystem = () => {
     CHEF_CALENDAR,
     DINNER_CALENDAR,
     DEADLINE_BADGES,
+    URGENCY_TO_BADGE,
     ICONS,
     IMG,
 
@@ -808,6 +888,9 @@ export const useTheSlopeDesignSystem = () => {
 
     // Pagination configuration
     PAGINATION: createPagination(isMd),
+
+    // Navigation configuration
+    NAVIGATION: createNavigation(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,

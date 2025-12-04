@@ -83,19 +83,20 @@ const emit = defineEmits<{
 }>()
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {getDinnerTimeRange, getDeadlineUrgency} = useSeason()
+const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES} = useTheSlopeDesignSystem()
 
 // Focus date for calendar navigation (from selected dinner)
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
 const focusDate = computed(() => selectedDinner.value ? new Date(selectedDinner.value.date) : null)
 
-// View state with horizontal tabs (default: calendar view)
+// View state with horizontal tabs
+// Parent controls via v-model:view-mode (URL query param for persistence)
 const viewTabs = [
   { label: 'Agenda', value: 'agenda', icon: 'i-heroicons-list-bullet' },
   { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
 ]
-const viewMode = ref<'agenda' | 'calendar'>('calendar')
+const viewMode = defineModel<'agenda' | 'calendar'>('viewMode', { required: true })
 
 // Temporal splitting using shared composable
 const {
@@ -177,12 +178,11 @@ const isSelected = (day: DateValue): boolean => {
   return dinner?.id === props.selectedDinnerId
 }
 
-// Agenda view - sorted dinner events
-const sortedDinnerEvents = computed(() => {
-  return [...props.dinnerEvents].sort((a, b) =>
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
-})
+// Agenda view - temporal order: next (today), future, past
+// Each event has temporalCategory ('next' | 'future' | 'past') attached
+const sortedDinnerEvents = computed(() =>
+  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
+)
 
 // Deadline urgency ring logic (shared across calendars)
 const URGENCY_TO_RING_CLASS = {
@@ -203,32 +203,32 @@ const getDeadlineRingClass = (day: DateValue): string => {
 const legendItems = computed(() => [
   {
     label: 'Næste madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
   },
   {
     label: 'Valgt dato',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
   },
   {
     label: 'Planlagt madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
   },
   {
     label: 'Tidligere madlavning',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
   },
   {
     label: 'Deadline kritisk (<24t)',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
   },
   {
     label: 'Deadline snart (24-72t)',
-    circleClass: `${SIZES.calendarCircle.value} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
   }
 ])
 
 const accordionItems = [{ label: 'Kalender', slot: 'calendar-content' }]
-const accordionDefault = computed(() => SIZES.calendarMonths.value > 1 ? '0' : undefined)
+const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefined)
 </script>
 
 <template>
@@ -276,38 +276,40 @@ const accordionDefault = computed(() => SIZES.calendarMonths.value > 1 ? '0' : u
       </div>
     </div>
 
-    <!-- View Toggle -->
-    <div class="px-4 pt-4">
-      <UTabs
-        v-model="viewMode"
-        :items="viewTabs"
-        orientation="horizontal"
-        variant="link"
-      />
-    </div>
-
-    <!-- Agenda View -->
-    <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-      <ChefDinnerCard
-        v-for="dinner in sortedDinnerEvents"
-        :key="dinner.id"
-        :dinner-event="dinner"
-        :selected="dinner.id === selectedDinnerId"
-        @select="emit('select', $event)"
-      />
-    </div>
-
-    <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
-    <UAccordion v-else :items="accordionItems" :default-value="accordionDefault" class="flex-1">
+    <!-- Accordion wraps both view toggle and content (collapsed on mobile, open on desktop) -->
+    <UAccordion :items="accordionItems" :default-value="accordionDefault" class="flex-1">
       <template #calendar-content>
-        <div class="flex-1">
+        <!-- View Toggle -->
+        <div class="px-4 pt-2 md:pt-4">
+          <UTabs
+            v-model="viewMode"
+            :items="viewTabs"
+            orientation="horizontal"
+            variant="link"
+          />
+        </div>
+
+        <!-- Agenda View -->
+        <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+          <ChefDinnerCard
+            v-for="dinner in sortedDinnerEvents"
+            :key="dinner.id"
+            :dinner-event="dinner"
+            :selected="dinner.id === selectedDinnerId"
+            :temporal-category="dinner.temporalCategory"
+            @select="emit('select', $event)"
+          />
+        </div>
+
+        <!-- Calendar View -->
+        <div v-else class="flex-1">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
               <div
                 v-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="[
-                  SIZES.calendarCircle.value,
+                  SIZES.calendarCircle,
                   CALENDAR.day.shape,
                   getDayColorClass(getDayType(eventLists)!),
                   getDayType(eventLists) !== 'past' ? getDeadlineRingClass(day) : '',

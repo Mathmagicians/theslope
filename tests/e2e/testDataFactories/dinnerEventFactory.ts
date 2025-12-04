@@ -4,7 +4,7 @@ import {
     type DinnerEventCreate,
     useBookingValidation
 } from "~/composables/useBookingValidation"
-import { type TeamRole } from "~/composables/useCookingTeamValidation"
+import type { TeamRole } from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
@@ -233,7 +233,7 @@ export class DinnerEventFactory {
             expect(Array.isArray(responseBody), 'Response should be an array').toBe(true)
 
             // Deserialize dates from ISO strings to Date objects
-            return responseBody.map((event: any) => DinnerEventDisplaySchema.parse(event))
+            return responseBody.map((event: unknown) => DinnerEventDisplaySchema.parse(event))
         }
 
         return []

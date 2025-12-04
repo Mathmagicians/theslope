@@ -14,7 +14,7 @@ import type {
 } from '~/composables/useAllergyValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
-const {h3eFromCatch, throwH3Error} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 
 /**
  * Get Prisma client connection to D1 database
@@ -47,15 +47,12 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
                             select: {
                                 id: true,
                                 heynaboId: true,
+                                userId: true,
+                                householdId: true,
                                 name: true,
                                 lastName: true,
                                 pictureUrl: true,
-                                birthDate: true,
-                                household: {
-                                    select: {
-                                        name: true
-                                    }
-                                }
+                                birthDate: true
                             }
                         }
                     }
@@ -72,12 +69,14 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
             inhabitants: allergyType.Allergy.map(allergy => ({
                 id: allergy.inhabitant.id,
                 heynaboId: allergy.inhabitant.heynaboId,
+                userId: allergy.inhabitant.userId,
+                householdId: allergy.inhabitant.householdId,
                 name: allergy.inhabitant.name,
                 lastName: allergy.inhabitant.lastName,
                 pictureUrl: allergy.inhabitant.pictureUrl,
                 birthDate: allergy.inhabitant.birthDate,
-                householdName: allergy.inhabitant.household.name,
-                inhabitantComment: allergy.inhabitantComment
+                inhabitantComment: allergy.inhabitantComment,
+                allergyUpdatedAt: allergy.updatedAt
             }))
         }))
 
@@ -206,6 +205,8 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -246,6 +247,8 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -282,6 +285,8 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -318,6 +323,8 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -361,6 +368,8 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,
@@ -399,6 +408,8 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
                     select: {
                         id: true,
                         heynaboId: true,
+                        userId: true,
+                        householdId: true,
                         name: true,
                         lastName: true,
                         pictureUrl: true,

@@ -1,20 +1,13 @@
 import {z} from 'zod'
+import {InhabitantFragmentSchema} from '~/composables/fragments/domainFragments'
 
 /**
  * Validation schemas for Allergy and AllergyType entities
  * Following ADR-001: Zod schemas in composables for shared validation
  */
 export const useAllergyValidation = () => {
-    // Inline InhabitantDisplay schema to avoid circular dependency with useHouseholdValidation
-    // This is the minimal structure needed for displaying inhabitant info in allergy context
-    const InhabitantDisplaySchema = z.object({
-        id: z.number().int().positive(),
-        heynaboId: z.number().int().positive(),
-        name: z.string(),
-        lastName: z.string(),
-        pictureUrl: z.string().nullable().optional(),
-        birthDate: z.coerce.date().nullable().optional()
-    })
+    // Use InhabitantFragmentSchema from domainFragments (has householdId)
+    const InhabitantDisplaySchema = InhabitantFragmentSchema
 
     // Base AllergyType schema (global catalog managed by admin)
     const BaseAllergyTypeSchema = z.object({
@@ -34,12 +27,12 @@ export const useAllergyValidation = () => {
         id: z.number().int().positive()
     })
 
-    // AllergyType with nested Inhabitants (for admin allergies  master-detail view)
-    // Shows which inhabitants have this allergy type (lightweight)
+    // AllergyType with nested Inhabitants (for admin allergies master-detail view)
+    // Note: inhabitantComment and allergyUpdatedAt are from Allergy join table, not Inhabitant
     const AllergyTypeDetailSchema = AllergyTypeDisplaySchema.extend({
         inhabitants: z.array(InhabitantDisplaySchema.extend({
-            householdName: z.string(), // Display which household the inhabitant belongs to
-            inhabitantComment: z.string().optional().nullable() // Display the comment from Allergy
+            inhabitantComment: z.string().optional().nullable(),
+            allergyUpdatedAt: z.coerce.date()
         }))
     })
 

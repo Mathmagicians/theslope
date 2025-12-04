@@ -40,6 +40,10 @@ const columns = [
     header: 'Address'
   },
   {
+    accessorKey: 'pbsId',
+    header: 'PBS'
+  },
+  {
     accessorKey: 'inhabitants',
     header: 'Inhabitants',
     cell: ({row}: {row: {original: HouseholdDisplay}}) =>
@@ -55,8 +59,6 @@ const pagination = ref({
   pageIndex: 0,
   pageSize: 10
 })
-
-const _table = useTemplateRef<{ tableApi?: { getState(): { pagination: { pageIndex: number; pageSize: number } }; setPageIndex(index: number): void } }>('table')
 </script>
 
 <template>
@@ -88,17 +90,16 @@ class="w-full px-0"
       <!-- Pagination -->
       <UPagination
           v-if="filteredHouseholds.length > pagination.pageSize"
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
+          :page="pagination.pageIndex + 1"
+          :items-per-page="pagination.pageSize"
           :total="filteredHouseholds.length"
-          :size="SIZES.standard.value.value"
+          :size="SIZES.standard"
           :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+          @update:page="(p: number) => pagination.pageIndex = p - 1"
       />
     </div>
 
     <UTable
-        ref="table"
         v-model:pagination="pagination"
         :columns="columns"
         :data="filteredHouseholds"

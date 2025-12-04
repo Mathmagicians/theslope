@@ -130,25 +130,25 @@ const getCalendarDayClasses = (day: DateValue) => [
           <span v-else class="text-sm">{{ day.day }}</span>
         </template>
 
-        <!-- Legend -->
+        <!-- Legend: Responsive layout matching calendar months (1 col mobile, 3 cols desktop) -->
         <template #legend>
-          <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto text-sm">
+          <div class="px-4 py-6 md:px-6 md:py-8 border-t mt-auto text-sm grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
             <!-- Teams -->
-            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-4">
+            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-3">
               <UBadge
                 :color="getTeamColor(index)"
                 variant="solid"
                 size="md"
-                class="w-8 h-8 flex items-center justify-center"
+                class="w-8 h-8 flex items-center justify-center shrink-0"
               >
                 1
               </UBadge>
-              <span>{{ team.name }}</span>
+              <span class="truncate">{{ team.name }}</span>
             </div>
 
             <!-- Holidays -->
-            <div v-if="holidays && holidays.length > 0" class="flex items-center gap-4">
-              <div class="w-8 h-8 flex items-center justify-center">
+            <div v-if="holidays && holidays.length > 0" class="flex items-center gap-3">
+              <div class="w-8 h-8 flex items-center justify-center shrink-0">
                 <UChip show size="md" color="success">1</UChip>
               </div>
               <span>Ferie</span>

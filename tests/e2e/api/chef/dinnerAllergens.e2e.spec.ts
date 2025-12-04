@@ -30,7 +30,7 @@ test.describe('Chef Dinner Allergens API', () => {
 
     // Test-specific resources
     let testSeasonId: number
-    let createdAllergyTypeIds: number[] = []
+    const createdAllergyTypeIds: number[] = []
 
     const trackAllergyType = (id: number) => createdAllergyTypeIds.push(id)
 

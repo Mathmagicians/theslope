@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, TYPOGRAPHY, IMG } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, IMG } = useTheSlopeDesignSystem()
 
 // Effective picture URL: use menu picture if available, otherwise default dinner picture
 const effectivePictureUrl = computed(() =>

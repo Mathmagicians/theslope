@@ -14,7 +14,7 @@ const chefDinnerStateUrl = (dinnerId: number, state: string) => `/api/chef/dinne
 // Variables to store for cleanup
 let testSeasonId: number
 let testSeason: Season
-let createdDinnerEventIds: number[] = []
+const createdDinnerEventIds: number[] = []
 
 test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
 

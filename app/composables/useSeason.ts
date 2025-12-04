@@ -1,14 +1,26 @@
 import type {DateRange} from '~/types/dateTypes'
+import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents,
+    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, type DeadlineUrgency} from "~/utils/season"
+    selectMostAppropriateActiveSeason} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
+
+/**
+ * Deadline urgency levels for dinner events
+ * 0 = On track, 1 = Warning, 2 = Critical
+ */
+export type DeadlineUrgency = 0 | 1 | 2
+
+/**
+ * Temporal category for dinner events relative to current time
+ */
+export type TemporalCategory = 'next' | 'future' | 'past'
 
 /**
  * Business logic for working with seasons
@@ -172,9 +184,10 @@ export const useSeason = () => {
             dinnerEvents = [],
             CookingTeams: teams = [],
             consecutiveCookingDays,
-            cookingDays
+            cookingDays,
+            holidays = []
         } = season
-        return computeTeamAssignmentsForEvents( teams, cookingDays, consecutiveCookingDays, dinnerEvents)
+        return computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, dinnerEvents, holidays)
     }
 
 
@@ -193,7 +206,7 @@ export const useSeason = () => {
      * @param nextDinner - Next dinner event (or null if none)
      * @returns True if the day matches the next dinner date
      */
-    const isNextDinnerDate = (day: any, nextDinner: { date: Date } | null): boolean => {
+    const isNextDinnerDate = (day: DateValue, nextDinner: { date: Date } | null): boolean => {
         if (!nextDinner) return false
         const dayAsDate = toDate(day)
         const nextDinnerDate = new Date(nextDinner.date)
@@ -244,9 +257,7 @@ export const useSeason = () => {
      * @returns True if inhabitant has matching assignment
      */
     const hasAssignment = (inhabitantId: number, team: CookingTeam, role?: string): boolean => {
-        const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
-        type Assignment = typeof CookingTeamAssignmentSchema._type
-        return team.assignments?.some((assignment: Assignment) =>
+        return team.assignments?.some((assignment) =>
             assignment.inhabitantId === inhabitantId && (!role || assignment.role === role)
         ) ?? false
     }
@@ -296,6 +307,13 @@ export const useSeason = () => {
         return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
     }
 
+    /**
+     * Get the billing cutoff day from app configuration
+     * This is the day of month (1-31) when billing periods close for order imports
+     * @returns Day of month for billing cutoff
+     */
+    const getBillingCutoffDay = (): number => theslope.billing.cutoffDay
+
     return {
         // Validation schemas
         SeasonStatusSchema,
@@ -322,6 +340,7 @@ export const useSeason = () => {
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
         splitDinnerEvents,
+        sortDinnerEventsByTemporal,
         canModifyOrders,
         canEditDiningMode,
         isAnnounceMenuPastDeadline,
@@ -329,6 +348,7 @@ export const useSeason = () => {
         isOnTeam,
         isChefFor,
         getDeadlineUrgency,
+        getBillingCutoffDay,
 
         // Active season management - pure functions
         isPast,
@@ -340,3 +360,4 @@ export const useSeason = () => {
         selectMostAppropriateActiveSeason
     }
 }
+

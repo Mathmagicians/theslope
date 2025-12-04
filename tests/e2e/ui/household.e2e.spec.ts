@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page, type Response} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -28,7 +28,7 @@ test.describe('Household tab navigation', () => {
     const buildUrl = (tabPath: string, query?: string) =>
         `/household/${encodeURIComponent(shortName)}/${tabPath}${query ? `?${query}` : ''}`
 
-    const waitForTabVisible = async (page: any, tab: Tab) => {
+    const waitForTabVisible = async (page: Page, tab: Tab) => {
         await pollUntil(
             async () => {
                 const isVisible = await page.locator(tab.selector).isVisible()
@@ -42,10 +42,10 @@ test.describe('Household tab navigation', () => {
     /**
      * Navigate to tab with API wait to ensure store is ready
      */
-    const navigateToTab = async (page: any, tab: Tab) => {
+    const navigateToTab = async (page: Page, tab: Tab) => {
         // Setup response wait BEFORE navigation
         const responsePromise = page.waitForResponse(
-            (response: any) => response.url().includes('/api/admin/household/'),
+            (response: Response) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
 
@@ -116,7 +116,7 @@ test.describe('Household tab navigation', () => {
 
         // Setup response wait BEFORE reload
         const responsePromise = page.waitForResponse(
-            (response: any) => response.url().includes('/api/admin/household/'),
+            (response: Response) => response.url().includes('/api/admin/household/'),
             {timeout: 10000}
         )
 

@@ -1,4 +1,4 @@
-import type {Browser} from "@playwright/test"
+import type {Browser, Page, BrowserContextOptions} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 const { adminFile } = authFiles
@@ -30,7 +30,7 @@ const saltedId = (base: number = 0, testSalt?: string): number => {
 
 const headers = {'Content-Type': 'application/json'}
 const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
-    const options: any = { storageState: adminFile }
+    const options: BrowserContextOptions = { storageState: adminFile }
     if (baseURL) {
         options.baseURL = baseURL
     }
@@ -94,7 +94,7 @@ async function pollUntil<T>(
  * // Documentation screenshot (permanent, no timestamp)
  * await captureDebugScreenshot(page, 'admin/admin-planning-loaded', true)
  */
-async function doScreenshot(page: any, name: string, isDocumentation: boolean = false): Promise<void> {
+async function doScreenshot(page: Page, name: string, isDocumentation: boolean = false): Promise<void> {
     const path = isDocumentation
         ? `docs/screenshots/${name}.png`
         : `test-results/${name}-${Date.now()}.png`
@@ -118,7 +118,7 @@ async function doScreenshot(page: any, name: string, isDocumentation: boolean = 
  * await selectDropdownOption(page, 'season-selector', 'TestSeason-123')
  */
 async function selectDropdownOption(
-    page: any,
+    page: Page,
     dropdownTestId: string,
     optionName: string
 ): Promise<void> {

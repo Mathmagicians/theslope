@@ -120,7 +120,7 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {FORM_MODES} from "~/types/form"
-import type {TeamRole} from "~/composables/useCookingTeamValidation"
+import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
@@ -150,7 +150,7 @@ const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
 const isNoTeams = computed(() => teams.value.length === 0)
 
 // FORM MANAGEMENT - useEntityFormManager for URL/mode management only
-const {formMode, onModeChange} = useEntityFormManager<CookingTeam[]>({
+const {formMode, onModeChange} = useEntityFormManager<CookingTeamDisplay[]>({
   getDefaultEntity: () => [], // Not used - component manages CREATE draft
   selectedEntity: computed(() => teams.value)
 })
@@ -160,7 +160,7 @@ const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
-  activeSeason: computed(() => activeSeason.value || null),
+  activeSeason: computed(() => activeSeason.value),
   onSeasonSelect: store.onSeasonSelect
 })
 
@@ -173,7 +173,7 @@ const handleSeasonChange = (id: number) => {
 
 // CREATE MODE - Component owns draft (dynamic generation based on teamCount)
 const teamCount = ref(1)
-const createDraft = ref<CookingTeam[]>([])
+const createDraft = ref<CookingTeamDisplay[]>([])
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
@@ -233,6 +233,9 @@ watch([formMode, displayedTeams], () => {
 const showAdminTeams = computed(() => {
   return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
 })
+
+// Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
+const isActionLoading = computed(() => isSeasonsLoading.value || isSelectedSeasonLoading.value || isCreatingTeams.value)
 
 // UTILITY
 const showSuccessToast = (title: string, description?: string) => {
@@ -582,7 +585,7 @@ v-else
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="secondary" :loading="isCreatingTeams" @click="handleBatchCreateTeams">
+        <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           Opret madhold
         </UButton>
         <UButton color="neutral" variant="ghost" @click="handleCancel">
@@ -595,7 +598,8 @@ v-else
             data-testid="add-team-button"
             color="secondary"
             icon="i-heroicons-plus-circle"
-            :loading="isCreatingTeams"
+            :loading="isActionLoading"
+            :disabled="isActionLoading"
             @click="handleAddTeam"
         >
           Tilføj madhold
