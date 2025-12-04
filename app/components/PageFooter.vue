@@ -1,21 +1,56 @@
 <script setup lang="ts">
-import { type Ref, inject } from 'vue'
+/**
+ * PageFooter - Site footer with links and info
+ *
+ * Features:
+ * - Version information
+ * - GitHub link
+ * - Color mode toggle
+ * - Copyright info
+ * - Screen size indicator
+ */
+import {type Ref, inject} from 'vue'
 
 const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed(():boolean =>  isMd?.value ?? false)
+const getIsMd = computed((): boolean => isMd?.value ?? false)
 const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
 
 // Use design system for consistent styling
-const { LAYOUTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+
 </script>
 
 <template>
-  <UContainer>
-    <footer :class="LAYOUTS.footer">
+  <UFooter>
+    <template #left>
+      <span :class="TYPOGRAPHY.footerText">Copyright @themathmagician  @2025 </span>
+    </template>
+    <div :class="`flex flex-col md:flex-row items-center justify-between gap-4 py-4`">
       <span :class="TYPOGRAPHY.footerText">Theslope v {{ $config.public.COMMIT_ID?.substring(0, 7) }}</span>
       <span :class="TYPOGRAPHY.footerText">Created with  🦄 & 🌈</span>
-      <span :class="TYPOGRAPHY.footerText">Copyright @themathmagician  @2025 </span>
-      <span :class="TYPOGRAPHY.footerText"><Icon :name="screenIcon" size="lg" class="ml-auto"/></span>
-    </footer>
-  </UContainer>
+    </div>
+
+    <template #right>
+      <UButton
+          variant="ghost"
+          :icon="screenIcon"
+          aria-label="Screen size indicator"
+          disabled
+          :ui="{ leadingIcon: TYPOGRAPHY.footerText }"
+      />
+
+      <UColorModeButton :ui="{ leadingIcon: TYPOGRAPHY.footerText }" />
+
+      <UTooltip text="Open source project on Github">
+        <UButton
+            variant="ghost"
+            to="https://github.com/Mathmagicians/theslope"
+            target="_blank"
+            icon="i-simple-icons-github"
+            aria-label="GitHub"
+            :ui="{ leadingIcon: TYPOGRAPHY.footerText }"
+        />
+      </UTooltip>
+    </template>
+  </UFooter>
 </template>

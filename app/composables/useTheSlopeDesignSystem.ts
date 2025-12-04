@@ -265,7 +265,7 @@ export const TYPOGRAPHY = {
   caption: 'text-xs font-medium',
 
   // Footer
-  footerText: 'text-xs text-amber-50'
+  footerText: 'text-xs text-white dark:text-amber-50'
 } as const
 
 /**
@@ -639,6 +639,31 @@ const createPagination = (isMd: Ref<boolean>) => ({
 })
 
 /**
+ * createNavigation - Responsive navigation configuration
+ *
+ * Provides navigation link styling and responsive behavior for header menus.
+ * On desktop (md+), drawer links swap to main nav since drawer toggle is hidden.
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Navigation configuration
+ */
+const createNavigation = (isMd: Ref<boolean>) => ({
+  // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
+  link: {
+    color: 'neutral' as const,
+    variant: 'link' as const,
+    activeColor: 'primary' as const,
+    activeVariant: 'soft' as const
+  },
+  /**
+   * Whether to swap drawer content with main nav
+   * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
+   * - Mobile (!isMd): false - drawer links stay in drawer
+   */
+  get shouldSwapDrawerWithMain(): boolean { return isMd.value }
+})
+
+/**
  * useTheSlopeDesignSystem Composable
  *
  * TheSlope's centralized design system - single source of truth for colors, typography,
@@ -855,6 +880,9 @@ export const useTheSlopeDesignSystem = () => {
 
     // Pagination configuration
     PAGINATION: createPagination(isMd),
+
+    // Navigation configuration
+    NAVIGATION: createNavigation(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,

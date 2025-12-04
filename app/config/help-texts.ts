@@ -1,4 +1,12 @@
 export const HELP_TEXTS = {
+    index: {
+        title: 'Velkommen til Skråningen',
+        content: 'Fællesspisning på Skråningen. Log ind for at se kommende middage, booke pladser og administrere din husstand.'
+    },
+    chef: {
+        title: 'Chefkok',
+        content: 'Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier.'
+    },
     admin: {
         planning: {
             title: 'Planlægning',

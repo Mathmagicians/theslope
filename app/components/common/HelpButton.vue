@@ -4,10 +4,17 @@ import { HELP_TEXTS } from '~/config/help-texts'
 const route = useRoute()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
+
+const { NAVIGATION } = useTheSlopeDesignSystem()
 // Dynamically lookup help content based on current route
 const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
-  if (pathSegments.length === 0) return null
+
+  // Handle root path - look for 'index' key
+  if (pathSegments.length === 0) {
+    const indexContent = HELP_TEXTS.index
+    return indexContent?.title && indexContent?.content ? indexContent : null
+  }
 
   // Get all param values to identify dynamic segments
   const paramValues = Object.values(route.params).flat()
@@ -43,9 +50,8 @@ watch(() => route.path, () => {
   >
     <UButton
         icon="i-heroicons-question-mark-circle"
-        variant="solid"
-        color="ocean"
-        size="xl"
+        :color="isOpen ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
+        :variant="isOpen ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
     />
 
     <template #content>

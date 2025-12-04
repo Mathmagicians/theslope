@@ -1,12 +1,25 @@
-import { describe, it, expect } from 'vitest'
-import { mountSuspended } from '@nuxt/test-utils/runtime'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
-import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import { nextTick } from 'vue'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import {nextTick} from 'vue'
 
 describe('ChefDinnerCard', () => {
-    const { DinnerStateSchema } = useBookingValidation()
+    const {DinnerStateSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
+
+    // Fixed reference time for temporal tests: January 11, 2025 at 18:00
+    const REFERENCE_TIME = new Date(2025, 0, 11, 18, 0)
+
+    beforeEach(() => {
+        // Use fake timers for temporal consistency
+        vi.useFakeTimers()
+        vi.setSystemTime(REFERENCE_TIME)
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
 
     const createDinnerEvent = (overrides: Partial<DinnerEventDisplay> = {}): DinnerEventDisplay => ({
         id: 1,
@@ -67,35 +80,37 @@ describe('ChefDinnerCard', () => {
             expect(wrapper.text()).toContain('Tilmelding')
         })
 
-        it('should show OK badge for far future dinner', async () => {
-            // Dinner in 15 days - should show "OK" for menu deadline
-            const dinnerDate = new Date()
-            dinnerDate.setDate(dinnerDate.getDate() + 15)
-            dinnerDate.setHours(18, 0, 0, 0)
+        it('should show on-track badge for far future dinner', async () => {
+            // GIVEN: Reference time is Jan 11, 2025 at 18:00
+            // Dinner on Jan 26, 2025 at 18:00 (15 days away, well past warning threshold)
+            const dinnerDate = new Date(2025, 0, 26, 18, 0)
 
             const dinnerEvent = createDinnerEvent({
                 date: dinnerDate,
                 state: DinnerState.SCHEDULED
             })
             const wrapper = await mountSuspended(ChefDinnerCard, {
-                props: { dinnerEvent }
+                props: {dinnerEvent}
             })
 
-            expect(wrapper.text()).toContain('OK')
+            const text = wrapper.text()
+            // Should show white circle emoji (⚪) for on-track status
+            expect(text).toContain('⚪')
+            // Should show countdown in days
+            expect(text).toContain('15')
         })
 
         it('should show countdown for dinner within 72h', async () => {
-            // Dinner in 48 hours - should show countdown
-            const dinnerDate = new Date()
-            dinnerDate.setDate(dinnerDate.getDate() + 2)
-            dinnerDate.setHours(18, 0, 0, 0)
+            // GIVEN: Reference time is Jan 11, 2025 at 18:00
+            // Dinner on Jan 13, 2025 at 18:00 (48 hours away, within warning threshold)
+            const dinnerDate = new Date(2025, 0, 13, 18, 0)
 
             const dinnerEvent = createDinnerEvent({
                 date: dinnerDate,
                 state: DinnerState.SCHEDULED
             })
             const wrapper = await mountSuspended(ChefDinnerCard, {
-                props: { dinnerEvent }
+                props: {dinnerEvent}
             })
 
             const text = wrapper.text()
