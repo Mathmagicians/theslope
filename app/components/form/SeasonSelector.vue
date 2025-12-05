@@ -96,7 +96,7 @@ const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
 })
 
 const selectedSeasonId = computed({
-  get: () => props.modelValue,
+  get: () => props.modelValue ?? undefined,  // USelect doesn't accept null, convert to undefined
   set: (value: number) => emit('update:modelValue', value)
 })
 </script>

@@ -318,9 +318,9 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
 }
 
 // EDIT MODE: Update team affinity (IMMEDIATE SAVE)
-const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boolean>) => {
+const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boolean> | null) => {
   const team = teams.value.find(t => t.id === teamId)
-  if (!team) return
+  if (!team || !affinity) return
 
   await updateTeam({...team, affinity}) // Immediate save to DB
   showSuccessToast('Madlavningsdage for teams opdateret')
@@ -328,7 +328,8 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
 }
 
 // EDIT MODE: Delete team (IMMEDIATE DELETE)
-const handleDeleteTeam = async (teamId: number) => {
+const handleDeleteTeam = async (teamId: number | undefined) => {
+  if (!teamId) return
   await deleteTeam(teamId) // Immediate delete from DB
   showSuccessToast('Madhold slettet')
   // teams reactively updates from store refresh - no manual update needed
@@ -470,7 +471,7 @@ const columns = [
                   variant="link"
                   size="xl"
               >
-                <template #item="{ item }">
+                <template #default="{ item }">
                   <CookingTeamBadges
                       :team-number="item.value + 1"
                       :team-name="item.label"
@@ -488,15 +489,15 @@ const columns = [
                 <CookingTeamCard
                     ref="cookingTeamCardRef"
                     :team-id="selectedTeam.id"
-                    :team-number="displayedTeams.findIndex(t => t.id === selectedTeam.id) + 1"
+                    :team-number="displayedTeams.findIndex(t => t.id === selectedTeam!.id) + 1"
                     :season-id="selectedSeason?.id"
                     :season-cooking-days="selectedSeason?.cookingDays"
                     :season-dates="selectedSeason?.seasonDates"
                     :holidays="selectedSeason?.holidays"
                     :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
                     :mode="FORM_MODES.EDIT"
-                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id, newName)"
-                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id, affinity)"
+                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam!.id!, newName)"
+                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam!.id!, affinity)"
                     @delete="handleDeleteTeam"
                     @add:member="handleAddMember"
                     @remove:member="handleRemoveMember"

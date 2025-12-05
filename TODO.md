@@ -12,6 +12,12 @@
     4. Any left over incompleted items are preserved with "Last finishes for <task title>", Low priority
 
 ---
+## 🟢 UP NEXT:
+- Learn about cron scheduling in Cloudflare Workers
+-  https://nitro.build/guide/tasks
+- https://github.com/atinux/nitro-cloudflare-crons by Atinux (Nuxt creator)
+- https://developers.cloudflare.com/workers/configuration/cron-triggers/
+- https://github.com/nitrojs/nitro/issues/3214
 
 ## 🟡 MEDIUM PRIORITY: Admin Dinner Endpoint Guard for State Transitions
 

@@ -245,6 +245,110 @@ describe('useBookingValidation', () => {
     })
   })
 
+  describe('Orders Creation (Bulk)', () => {
+    const {
+      AuditActionSchema,
+      AuditContextSchema,
+      OrderCreateWithPriceSchema,
+      OrdersBatchSchema,
+      CreateOrdersResultSchema
+    } = useBookingValidation()
+
+    describe('AuditActionSchema', () => {
+      it.each(AuditActionSchema.options.map(a => ({action: a})))(
+        'GIVEN $action WHEN parsing THEN succeeds',
+        ({action}) => expect(() => AuditActionSchema.parse(action)).not.toThrow()
+      )
+
+      it('GIVEN invalid action WHEN parsing THEN throws', () => {
+        expect(() => AuditActionSchema.parse('INVALID')).toThrow()
+      })
+    })
+
+    describe('AuditContextSchema', () => {
+      it.each([
+        {desc: 'with userId', ctx: OrderFactory.defaultAuditContext()},
+        {desc: 'null userId (system)', ctx: OrderFactory.defaultAuditContext({performedByUserId: null})}
+      ])('GIVEN valid context $desc WHEN parsing THEN succeeds', ({ctx}) => {
+        expect(() => AuditContextSchema.parse(ctx)).not.toThrow()
+      })
+
+      it('GIVEN empty source WHEN parsing THEN throws', () => {
+        expect(() => AuditContextSchema.parse(OrderFactory.defaultAuditContext({source: ''}))).toThrow()
+      })
+    })
+
+    describe('OrderCreateWithPriceSchema', () => {
+      it('GIVEN valid order WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(OrderFactory.defaultOrderCreateWithPrice())).not.toThrow()
+      })
+
+      it.each([
+        {field: 'householdId' as const, desc: 'missing householdId'},
+        {field: 'priceAtBooking' as const, desc: 'missing priceAtBooking'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({field}) => {
+        const order = OrderFactory.defaultOrderCreateWithPrice()
+        const {[field]: _removed, ...orderWithoutField} = order
+        expect(() => OrderCreateWithPriceSchema.parse(orderWithoutField)).toThrow()
+      })
+
+      it.each([
+        {price: 0, desc: 'zero'},
+        {price: -100, desc: 'negative'}
+      ])('GIVEN $desc priceAtBooking WHEN parsing THEN throws', ({price}) => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: price})
+        )).toThrow()
+      })
+    })
+
+    describe('OrdersBatchSchema', () => {
+      it.each([
+        {count: 1, desc: 'min (1)'},
+        {count: 8, desc: 'max (8)'}
+      ])('GIVEN batch of $desc orders WHEN parsing THEN succeeds', ({count}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).not.toThrow()
+      })
+
+      it.each([
+        {count: 0, desc: 'empty', errorMatch: /Mindst én/},
+        {count: 9, desc: 'exceeds max (9)', errorMatch: /Maksimalt 8/}
+      ])('GIVEN $desc batch WHEN parsing THEN throws', ({count, errorMatch}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).toThrow(errorMatch)
+      })
+
+      it('GIVEN batch with same householdId WHEN parsing THEN succeeds', () => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(42, 3))).not.toThrow()
+      })
+
+      it('GIVEN batch with different householdIds WHEN parsing THEN throws', () => {
+        const mixedBatch = [
+          OrderFactory.defaultOrderCreateWithPrice(1),
+          OrderFactory.defaultOrderCreateWithPrice(2)
+        ]
+        expect(() => OrdersBatchSchema.parse(mixedBatch)).toThrow(/samme husstand/)
+      })
+    })
+
+    describe('CreateOrdersResultSchema', () => {
+      it.each([
+        {result: OrderFactory.defaultCreateOrdersResult(), desc: 'with ids'},
+        {result: OrderFactory.defaultCreateOrdersResult({createdIds: []}), desc: 'empty ids'}
+      ])('GIVEN valid result $desc WHEN parsing THEN succeeds', ({result}) => {
+        expect(() => CreateOrdersResultSchema.parse(result)).not.toThrow()
+      })
+
+      it.each([
+        {override: {householdId: 0}, desc: 'zero householdId'},
+        {override: {householdId: -1}, desc: 'negative householdId'},
+        {override: {createdIds: [0]}, desc: 'zero in createdIds'},
+        {override: {createdIds: [-1]}, desc: 'negative in createdIds'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
+        expect(() => CreateOrdersResultSchema.parse(OrderFactory.defaultCreateOrdersResult(override))).toThrow()
+      })
+    })
+  })
+
   describe('Serialization (ADR-010)', () => {
     describe('serializeOrder / deserializeOrder', () => {
       it('GIVEN order WHEN round-tripping THEN preserves data', () => {

@@ -101,7 +101,7 @@ const teamTabs = computed(() => {
       variant="link"
       :size="SIZES.large"
     >
-      <template #item="{ item }">
+      <template #default="{ item }">
         <CookingTeamBadges
           :team-number="item.value + 1"
           :team-name="item.label"

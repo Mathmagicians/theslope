@@ -6,6 +6,9 @@ import type {
     OrderCreate,
     OrderDisplay,
     OrderDetail,
+    OrderCreateWithPrice,
+    AuditContext,
+    CreateOrdersResult,
     DinnerEventCreate,
     DinnerEventDisplay,
     DinnerEventDetail
@@ -75,113 +78,65 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
 }
 
 /**
- * Batch create multiple orders for a household (parent booking for family + guests)
- * Business rules:
- * - ONE user (bookedByUserId) books for entire family
- * - Can have different inhabitantIds from same household
- * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
- * - All orders must have same bookedByUserId
- * - All inhabitants must be from same household
+ * Batch create orders for a single household with audit trail.
+ *
+ * Trusts caller for validation (OrdersBatchSchema ensures same householdId, max 8 orders).
+ * Uses createManyAndReturn for efficient D1 insertion.
+ *
+ * ADR-009: Returns IDs only (DB is source of truth)
+ * ADR-011: Creates OrderHistory audit entries atomically
+ *
  * @param d1Client - D1 database client
- * @param ordersData - Array of order creation data
- * @returns Promise<OrderDisplay[]> - All orders for this dinner from this household
+ * @param householdId - Household ID (for result tracking)
+ * @param ordersData - Pre-validated array of orders (max 8, same householdId)
+ * @param auditContext - Audit context for OrderHistory entries
+ * @returns CreateOrdersResult with householdId and created order IDs
  */
-export async function createOrders(d1Client: D1Database, ordersData: OrderCreate[]): Promise<OrderDisplay[]> {
-    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household`)
-    const {OrderDisplaySchema} = useBookingValidation()
+export async function createOrders(
+    d1Client: D1Database,
+    householdId: number,
+    ordersData: OrderCreateWithPrice[],
+    auditContext: AuditContext
+): Promise<CreateOrdersResult> {
+    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Business validation: All inhabitants must be from same household (requires DB lookup)
-        const inhabitantIds = [...new Set(ordersData.map(o => o.inhabitantId))]
-        const inhabitants = await prisma.inhabitant.findMany({
-            where: { id: { in: inhabitantIds } },
-            select: { id: true, householdId: true }
+        // Insert orders with createManyAndReturn (Prisma 5.14+, returns IDs)
+        const createdOrders = await prisma.order.createManyAndReturn({
+            data: ordersData.map(order => ({
+                dinnerEventId: order.dinnerEventId,
+                inhabitantId: order.inhabitantId,
+                bookedByUserId: order.bookedByUserId,
+                ticketPriceId: order.ticketPriceId,
+                priceAtBooking: order.priceAtBooking,
+                dinnerMode: order.dinnerMode,
+                state: order.state
+            })),
+            select: { id: true }
         })
 
-        if (inhabitants.length !== inhabitantIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some inhabitants not found`
-            })
-        }
+        const createdIds = createdOrders.map(o => o.id)
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Created order IDs: ${createdIds.join(', ')}`)
 
-        const householdIds = [...new Set(inhabitants.map(i => i.householdId))]
-        if (householdIds.length > 1) {
-            throw createError({
-                statusCode: 400,
-                message: `All inhabitants must be from the same household. Found ${householdIds.length} different households.`
-            })
-        }
-
-        const householdId = householdIds[0]
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Validated: All ${inhabitantIds.length} inhabitants from household ${householdId}`)
-
-        // Validate all ticket prices exist
-        const ticketPriceIds = [...new Set(ordersData.map(o => o.ticketPriceId))]
-        const ticketPrices = await prisma.ticketPrice.findMany({
-            where: { id: { in: ticketPriceIds } }
-        })
-
-        if (ticketPrices.length !== ticketPriceIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some ticket prices not found`
-            })
-        }
-
-        // Create price lookup map
-        const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp]))
-
-        // Create orders individually to get IDs back (avoids race conditions)
-        // Note: Not using createMany since it doesn't return created records
-        const createdOrders = await Promise.all(
-            ordersData.map(async orderData => {
-                const priceAtBooking = priceMap.get(orderData.ticketPriceId)!.price
-
-                return prisma.order.create({
-                    data: {
-                        ...orderData,
-                        priceAtBooking
-                    },
-                    select: {
-                        id: true,
-                        dinnerEventId: true,
-                        inhabitantId: true,
-                        bookedByUserId: true,
-                        ticketPriceId: true,
-                        priceAtBooking: true,
-                        dinnerMode: true,
-                        state: true,
-                        releasedAt: true,
-                        closedAt: true,
-                        createdAt: true,
-                        updatedAt: true,
-                        ticketPrice: {
-                            select: {
-                                id: true,
-                                ticketType: true,
-                                price: true,
-                                description: true,
-                                maximumAgeLimit: true
-                            }
-                        }
-                    }
+        // Create audit trail entries atomically
+        await prisma.orderHistory.createMany({
+            data: createdIds.map((orderId, index) => ({
+                orderId,
+                action: auditContext.action,
+                performedByUserId: auditContext.performedByUserId,
+                auditData: JSON.stringify({
+                    source: auditContext.source,
+                    orderData: ordersData[index]
                 })
-            })
-        )
-
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully created ${createdOrders.length} orders for household ${householdId}`)
-
-        // Transform to domain type with ticketType (use included relation instead of priceMap)
-        return createdOrders.map(order => {
-            return OrderDisplaySchema.parse({
-                ...order,
-                ticketType: order.ticketPrice.ticketType
-            })
+            }))
         })
+
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully created ${createdIds.length} orders with audit trail for household ${householdId}`)
+
+        return { householdId, createdIds }
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [CREATE]: Error batch creating ${ordersData.length} orders`, error)
+        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${ordersData.length} orders for household ${householdId}`, error)
     }
 }
 

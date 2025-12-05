@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -148,6 +148,39 @@ export class OrderFactory {
     timestamp: SeasonFactory.generateUniqueDate(),
     ...overrides
   })
+
+  // === BULK ORDER CREATION ===
+
+  static readonly defaultOrderCreateWithPrice = (householdId: number = 1, overrides?: Partial<OrderCreateWithPrice>): OrderCreateWithPrice => ({
+    dinnerEventId: 1,
+    inhabitantId: 1,
+    bookedByUserId: null,
+    ticketPriceId: 1,
+    priceAtBooking: 4000,
+    householdId,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    state: OrderStateSchema.enum.BOOKED,
+    ...overrides
+  })
+
+  static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
+    action: 'BULK_IMPORT',
+    performedByUserId: 1,
+    source: 'csv_billing',
+    ...overrides
+  })
+
+  static readonly defaultCreateOrdersResult = (overrides?: Partial<CreateOrdersResult>): CreateOrdersResult => ({
+    householdId: 1,
+    createdIds: [1, 2, 3],
+    ...overrides
+  })
+
+  /**
+   * Create a batch of orders for same household (for OrdersBatchSchema tests)
+   */
+  static readonly createOrdersBatch = (householdId: number, count: number): OrderCreateWithPrice[] =>
+    Array.from({length: count}, (_, i) => OrderFactory.defaultOrderCreateWithPrice(householdId, {inhabitantId: i + 1}))
 
   // === API METHODS ===
 

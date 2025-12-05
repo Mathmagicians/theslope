@@ -54,6 +54,7 @@ export const useCookingTeamValidation = () => {
     })
 
     // Base team assignment schema (uses cookingTeamId to match database)
+    // inhabitant is required - assignments always have an inhabitant (inhabitantId is NOT NULL in DB)
     const CookingTeamAssignmentSchema = z.object({
         id: z.number().int().positive().optional(),
         cookingTeamId: z.number().int().positive(),
@@ -61,7 +62,7 @@ export const useCookingTeamValidation = () => {
         role: TeamRoleSchema,
         allocationPercentage: z.number().min(1).max(100).default(100),
         affinity: WeekDayMapSchemaOptional.nullish(),
-        inhabitant: InhabitantDisplaySchema.optional()  // Nested inhabitant from Prisma includes
+        inhabitant: InhabitantDisplaySchema  // Required - always included via Prisma include
     })
 
     // Full CookingTeam schema (base - for create/update)
@@ -131,9 +132,9 @@ export const useCookingTeamValidation = () => {
 
     /**
      * CookingTeamAssignmentCreate - Input schema for creating assignments (ADR-009)
-     * Omits id (auto-generated) and cookingTeamId (from URL param)
+     * Omits id (auto-generated), cookingTeamId (from URL param), and inhabitant (populated via Prisma include on response)
      */
-    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
+    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true, inhabitant: true })
 
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>

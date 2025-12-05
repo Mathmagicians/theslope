@@ -45,10 +45,11 @@ const { COLOR, COMPONENTS, SIZES, ICONS } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
+// TeamMember requires inhabitant - only assignments with valid inhabitants are displayed
 interface TeamMember {
-  id: number
+  id?: number  // Optional - new assignments don't have id yet
   role: TeamRole
-  inhabitant: InhabitantDisplay
+  inhabitant: InhabitantDisplay  // Required for display
 }
 
 interface Props {
@@ -121,7 +122,8 @@ const teamColor = computed(() => {
 const appConfig = useAppConfig()
 const resolvedColor = computed(() => {
   const colorName = teamColor.value as string
-  return appConfig.ui?.colors?.[colorName] ?? 'neutral'
+  const colors = appConfig.ui?.colors as Record<string, string> | undefined
+  return colors?.[colorName] ?? 'neutral'
 })
 
 const roleGroups = computed(() => {
@@ -175,7 +177,7 @@ const emptyStateMessages = [
 ]
 const emptyStateMessage = computed(() => {
   const index = (props.teamNumber - 1) % emptyStateMessages.length
-  return emptyStateMessages[index]
+  return emptyStateMessages[index]!  // Index is always valid (modulo ensures bounds)
 })
 </script>
 
@@ -296,11 +298,11 @@ const emptyStateMessage = computed(() => {
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
-              :text="`${assignment.inhabitant.name} ${assignment.inhabitant.lastName} (${ROLE_LABELS[assignment.role]})`"
+              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${ROLE_LABELS[assignment.role]})`"
             >
               <UAvatar
-                :src="assignment.inhabitant.pictureUrl"
-                :alt="`${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`"
+                :src="assignment.inhabitant?.pictureUrl ?? undefined"
+                :alt="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName}`"
                 icon="i-heroicons-user"
               />
             </UTooltip>
@@ -366,23 +368,24 @@ const emptyStateMessage = computed(() => {
               <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
                 <div v-for="member in members" :key="member.id" class="flex items-center gap-2">
                   <UAvatar
-                    :src="member.inhabitant.pictureUrl"
-                    :alt="`${member.inhabitant.name} ${member.inhabitant.lastName}`"
+                    :src="member.inhabitant?.pictureUrl ?? undefined"
+                    :alt="`${member.inhabitant?.name} ${member.inhabitant?.lastName}`"
                     icon="i-heroicons-user"
                     size="sm"
                     class="cursor-pointer"
-                    @click="navigateToInhabitant(member.inhabitant.id)"
+                    @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   />
                   <UBadge
                     size="md"
                     variant="subtle"
                     :color="teamColor"
                     class="cursor-pointer hover:opacity-80 transition-opacity flex-1"
-                    @click="navigateToInhabitant(member.inhabitant.id)"
+                    @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   >
-                    {{ member.inhabitant.name }} {{ member.inhabitant.lastName }}
+                    {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
                   <UButton
+                    v-if="member.id"
                     color="winery"
                     variant="ghost"
                     size="xs"
@@ -433,9 +436,9 @@ const emptyStateMessage = computed(() => {
         <!-- RIGHT: Team Calendar -->
         <div class="w-full md:w-3/4">
           <TeamCalendarDisplay
-            v-if="seasonDates && dinnerEvents.length > 0"
+            v-if="seasonDates && dinnerEvents.length > 0 && team"
             :season-dates="seasonDates"
-            :teams="[{ id: teamId, name: teamName }]"
+            :teams="[team]"
             :dinner-events="dinnerEvents"
             :holidays="holidays"
           />

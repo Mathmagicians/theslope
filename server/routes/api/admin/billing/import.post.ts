@@ -2,7 +2,7 @@ import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {BillingImportResponse} from '~/composables/useBillingValidation'
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
-import {createOrder} from '~~/server/data/financesRepository'
+import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {isSameDay} from 'date-fns'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
@@ -87,43 +87,41 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
             return throwH3Error(LOG, createError({statusCode: 400, message: 'Season has no CHILD ticket price'}))
         }
 
-        // Validate and prepare order data
-        const orderData = parsedOrders.flatMap(parsedOrder => {
+        // Build order data grouped by household (ADR-009: batch by household for memory)
+        const ordersByHousehold = parsedOrders.reduce((acc, parsedOrder) => {
             const shortName = getHouseholdShortName(parsedOrder.address)
             const household = householdByShortName.get(shortName)!
             const dinnerEvent = season.dinnerEvents?.find(de => isSameDay(de.date, parsedOrder.date))
             const firstInhabitant = household.inhabitants?.[0]
 
             if (!dinnerEvent) {
-                const dateStr = parsedOrder.date.toISOString().split('T')[0]
-                throw createError({statusCode: 400, message: `No dinner event for ${dateStr} (${parsedOrder.address})`})
+                throw createError({statusCode: 400, message: `No dinner event for ${parsedOrder.date.toISOString().split('T')[0]} (${parsedOrder.address})`})
             }
-
             if (!firstInhabitant) {
                 throw createError({statusCode: 400, message: `No inhabitants in household ${household.address}`})
             }
 
-            return [
-                ...Array(parsedOrder.adultCount).fill({
-                    dinnerEventId: dinnerEvent.id,
-                    inhabitantId: firstInhabitant.id,
-                    bookedByUserId: firstInhabitant.userId ?? null,
-                    ticketPriceId: adultPrice.id!,
-                    dinnerMode: DinnerMode.DINEIN,
-                    state: OrderState.BOOKED
-                }),
-                ...Array(parsedOrder.childCount).fill({
-                    dinnerEventId: dinnerEvent.id,
-                    inhabitantId: firstInhabitant.id,
-                    bookedByUserId: firstInhabitant.userId ?? null,
-                    ticketPriceId: childPrice.id!,
-                    dinnerMode: DinnerMode.DINEIN,
-                    state: OrderState.BOOKED
-                })
-            ]
-        })
+            const baseOrder = {
+                dinnerEventId: dinnerEvent.id!,
+                inhabitantId: firstInhabitant.id!,
+                bookedByUserId: firstInhabitant.userId ?? null,
+                dinnerMode: DinnerMode.DINEIN,
+                state: OrderState.BOOKED
+            }
 
-        const orders = await Promise.all(orderData.map(data => createOrder(d1Client, data)))
+            const orders = [
+                ...Array(parsedOrder.adultCount).fill({...baseOrder, ticketPriceId: adultPrice.id!}),
+                ...Array(parsedOrder.childCount).fill({...baseOrder, ticketPriceId: childPrice.id!})
+            ]
+
+            return acc.set(household.id!, [...(acc.get(household.id!) ?? []), ...orders])
+        }, new Map())
+
+        // Process households sequentially to avoid memory limits
+        const orders = []
+        for (const [, householdOrders] of ordersByHousehold) {
+            orders.push(...await createOrders(d1Client, householdOrders))
+        }
 
         console.info(`${LOG} Done: created=${orders.length}`)
 

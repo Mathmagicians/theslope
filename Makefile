@@ -131,23 +131,6 @@ d1-seed-master-data-prod: ## Load master data to prod
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
-# ============================================================================
-# ORDER IMPORT (Billing CSV)
-# ============================================================================
-.PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
-
-define theslope_import_orders
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
-endef
-
-theslope-import-orders-local: ## Import orders CSV to localhost
-	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
-
-theslope-import-orders-dev: ## Import orders CSV to dev
-	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
-
-theslope-import-orders-prod: ## Import orders CSV to production
-	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
 
 # ============================================================================
 # DATABASE QUERIES
@@ -220,6 +203,24 @@ theslope-put-user:
 		--url-query "phone=+4512345678" \
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
+
+# ============================================================================
+# ORDER IMPORT (Billing CSV)
+# ============================================================================
+.PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
+
+define theslope_import_orders
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
+endef
+
+theslope-import-orders-local: ## Import orders CSV to localhost
+	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
+
+theslope-import-orders-dev: ## Import orders CSV to dev
+	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
+
+theslope-import-orders-prod: ## Import orders CSV to production
+	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
 
 # ============================================================================
 # HEYNABO API

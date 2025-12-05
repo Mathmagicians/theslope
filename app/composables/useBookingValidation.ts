@@ -152,11 +152,61 @@ export const useBookingValidation = () => {
     const OrderCreateSchema = z.object({
         dinnerEventId: z.number().int().positive(),
         inhabitantId: z.number().int().positive(),
-        bookedByUserId: z.number().int().positive().optional(),
+        bookedByUserId: z.number().int().positive().nullable().optional(),
         ticketPriceId: z.number().int().positive(),
         priceAtBooking: z.number().int().optional(),
         dinnerMode: DinnerModeSchema,
         state: OrderStateSchema
+    })
+
+    // ============================================================================
+    // BULK ORDER CREATION (ADR-009 compliant)
+    // ============================================================================
+
+    /**
+     * Audit action types for order history
+     */
+    const AuditActionSchema = z.enum(['BULK_IMPORT', 'SYSTEM_SCAFFOLD', 'USER_BOOKED'])
+
+    /**
+     * Audit context for order creation - used for OrderHistory entries
+     */
+    const AuditContextSchema = z.object({
+        action: AuditActionSchema,
+        performedByUserId: z.number().int().positive().nullable(),
+        source: z.string().min(1)
+    })
+
+    /**
+     * Order with price and household - for bulk creation
+     * Extends OrderCreateSchema with required fields for bulk operations:
+     * - householdId: Required for same-household validation (Zod validates)
+     * - priceAtBooking: Required (caller enriches from ticket prices)
+     */
+    const OrderCreateWithPriceSchema = OrderCreateSchema.extend({
+        householdId: z.number().int().positive(),
+        priceAtBooking: z.number().int().positive()  // Override to required
+    })
+
+    /**
+     * Batch of orders for bulk creation - validates business rules:
+     * - Array size: 1-8 orders (D1 bound param limit: ~100 params / ~12 fields per order)
+     * - Same household: All orders must have same householdId
+     */
+    const OrdersBatchSchema = z.array(OrderCreateWithPriceSchema)
+        .min(1, 'Mindst én ordre er påkrævet')
+        .max(8, 'Maksimalt 8 ordrer per batch (D1 grænse)')
+        .refine(
+            orders => new Set(orders.map(o => o.householdId)).size === 1,
+            { message: 'Alle ordrer skal være fra samme husstand' }
+        )
+
+    /**
+     * Result of bulk order creation
+     */
+    const CreateOrdersResultSchema = z.object({
+        householdId: z.number().int().positive(),
+        createdIds: z.array(z.number().int().positive())
     })
 
     /**
@@ -165,10 +215,11 @@ export const useBookingValidation = () => {
      * - ONE user (bookedByUserId) books for entire family
      * - Can have different inhabitantIds (family members + guests)
      * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
-     * - All bookedByUserId must be the same (VALIDATED HERE)
-     * - All inhabitants from same household (VALIDATED IN REPOSITORY - requires DB lookup)
+     * - All bookedByUserId must be the same (VALIDATED HERE, skipped if empty)
+     * - All inhabitants must belong to householdId (VALIDATED IN ENDPOINT)
      */
     const CreateOrdersRequestSchema = z.object({
+        householdId: z.number().int().positive(),
         dinnerEventId: z.number().int().positive(),
         orders: z.array(z.object({
             inhabitantId: z.number().int().positive(),
@@ -179,6 +230,8 @@ export const useBookingValidation = () => {
     }).refine(
         (data) => {
             // Business rule: All orders must have same bookedByUserId (single parent booking)
+            // Skip validation if no orders (empty array is valid - graceful no-op)
+            if (data.orders.length === 0) return true
             const userIds = [...new Set(data.orders.map(o => o.bookedByUserId))]
             return userIds.length === 1
         },
@@ -396,6 +449,13 @@ export const useBookingValidation = () => {
         OrderQuerySchema,
         OrderHistorySchema,
 
+        // Bulk Order Creation
+        AuditActionSchema,
+        AuditContextSchema,
+        OrderCreateWithPriceSchema,
+        OrdersBatchSchema,
+        CreateOrdersResultSchema,
+
         // Serialization
         SerializedOrderSchema,
         SerializedOrderHistorySchema,
@@ -443,6 +503,13 @@ export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQ
 export type OrderHistory = z.infer<ReturnType<typeof useBookingValidation>['OrderHistorySchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>
 export type SerializedOrderHistory = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistorySchema']>
+
+// Orders Creation (Bulk)
+export type AuditAction = z.infer<ReturnType<typeof useBookingValidation>['AuditActionSchema']>
+export type AuditContext = z.infer<ReturnType<typeof useBookingValidation>['AuditContextSchema']>
+export type OrderCreateWithPrice = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateWithPriceSchema']>
+export type OrdersBatch = z.infer<ReturnType<typeof useBookingValidation>['OrdersBatchSchema']>
+export type CreateOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersResultSchema']>
 
 // Heynabo Event Sync (ADR-013)
 export type HeynaboEventCreate = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventCreateSchema']>

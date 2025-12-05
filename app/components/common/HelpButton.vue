@@ -28,7 +28,7 @@ const helpContent = computed(() => {
     }
 
     if (current[segment]) {
-      current = current[segment]
+      current = current[segment] as Record<string, unknown>
     } else {
       return null
     }

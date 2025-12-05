@@ -12,13 +12,15 @@
       "WebSearch",
       "WebFetch(domain:nuxt.com)",
       "WebFetch(domain:ui4.nuxt.com)",
-      "WebFetch(domain:ui.nuxt.com)"
+      "WebFetch(domain:ui.nuxt.com)",
+      "Bash(wrangler d1 execute*--remote*--command *SELECT*)"
     ],
     "deny": [
       "Read(./.cookies.txt)",
       "Read(./.env)",
-      "Read(./.env.test)",
-      "Read(./.env.prod)"
+      "Read(./.env.dev)",
+      "Read(./.env.prod)",
+      "Bash(wrangler*--remote*)"
     ],
     "ask": [],
     "includeCoAuthoredBy": false

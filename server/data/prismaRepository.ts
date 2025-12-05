@@ -914,17 +914,17 @@ const {
 
 /**
  * Create team assignment (ADR-009)
- * Accepts: CookingTeamAssignment without id (cookingTeamId required in body)
- * Returns: CookingTeamAssignment (with all relations)
+ * Accepts: CookingTeamAssignment without id and inhabitant (inhabitant populated via Prisma include)
+ * Returns: CookingTeamAssignment (with all relations including inhabitant)
  */
-export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id'>): Promise<CookingTeamAssignment> {
+export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id' | 'inhabitant'>): Promise<CookingTeamAssignment> {
     console
         .info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${assignmentData.inhabitantId} in team ${assignmentData.cookingTeamId} with role ${assignmentData.role}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {serializeWeekDayMap} = useCookingTeamValidation()
 
-    // Extract affinity and inhabitant (relation field) for conditional handling
-    const {affinity, inhabitant, ...createData} = assignmentData
+    // Extract affinity for conditional handling
+    const {affinity, ...createData} = assignmentData
 
     try {
         const assignment = await prisma.cookingTeamAssignment.create({
