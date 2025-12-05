@@ -11,6 +11,7 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
+import {chunkArray} from '~/utils/batchUtils'
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -178,8 +179,8 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Order with price and household - for bulk creation
-     * Extends OrderCreateSchema with required fields for bulk operations:
+     * Order with price and household - for batch creation
+     * Extends OrderCreateSchema with required fields for batch operations:
      * - householdId: Required for same-household validation (Zod validates)
      * - priceAtBooking: Required (caller enriches from ticket prices)
      */
@@ -188,14 +189,22 @@ export const useBookingValidation = () => {
         priceAtBooking: z.number().int().positive()  // Override to required
     })
 
+    // D1 constraint: max 100 bound params per query
+    // Order insert: 7 params (dinnerEventId, inhabitantId, bookedByUserId, ticketPriceId, priceAtBooking, dinnerMode, state)
+    // Max: 100 / 7 ≈ 14 orders, using 12 for safety margin
+    const ORDER_BATCH_SIZE = 12
+
+    // Curried chunk function for order batches
+    const chunkOrderBatch = chunkArray<OrderCreateWithPrice>(ORDER_BATCH_SIZE)
+
     /**
-     * Batch of orders for bulk creation - validates business rules:
-     * - Array size: 1-8 orders (D1 bound param limit: ~100 params / ~12 fields per order)
+     * Batch of orders for batch creation - validates business rules:
+     * - Array size: 1-ORDER_BATCH_SIZE orders (D1 bound param limit)
      * - Same household: All orders must have same householdId
      */
     const OrdersBatchSchema = z.array(OrderCreateWithPriceSchema)
         .min(1, 'Mindst én ordre er påkrævet')
-        .max(8, 'Maksimalt 8 ordrer per batch (D1 grænse)')
+        .max(ORDER_BATCH_SIZE, `Maksimalt ${ORDER_BATCH_SIZE} ordrer per batch (D1 grænse)`)
         .refine(
             orders => new Set(orders.map(o => o.householdId)).size === 1,
             { message: 'Alle ordrer skal være fra samme husstand' }
@@ -449,12 +458,14 @@ export const useBookingValidation = () => {
         OrderQuerySchema,
         OrderHistorySchema,
 
-        // Bulk Order Creation
+        // Batch Order Creation
         AuditActionSchema,
         AuditContextSchema,
         OrderCreateWithPriceSchema,
         OrdersBatchSchema,
         CreateOrdersResultSchema,
+        ORDER_BATCH_SIZE,
+        chunkOrderBatch,
 
         // Serialization
         SerializedOrderSchema,

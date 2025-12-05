@@ -44,7 +44,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Business logic: Fetch inhabitants with assignments (ADR-009 compliant)
 const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
@@ -201,8 +201,9 @@ const table = useTemplateRef('table')
           placeholder="Søg efter navn..."
           class="flex-1 md:max-w-md"
       />
-      <!-- Pagination -->
+      <!-- Pagination - only show when more than one page -->
       <UPagination
+          v-if="(table?.tableApi?.getFilteredRowModel().rows.length || 0) > pagination.pageSize"
           :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
           :items-per-page="table?.tableApi?.getState().pagination.pageSize"
           :total="table?.tableApi?.getFilteredRowModel().rows.length"
@@ -221,7 +222,7 @@ const table = useTemplateRef('table')
         :columns="columns"
         :data="filteredInhabitants"
         :loading="pending"
-        :ui="{ td: 'py-2' }"
+        :ui="COMPONENTS.table.ui"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"

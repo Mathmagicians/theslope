@@ -96,6 +96,7 @@ export class OrderFactory {
 
   static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
     const defaults = {
+      householdId: 1,
       dinnerEventId: 5,
       orders: [
         {
@@ -188,7 +189,8 @@ export class OrderFactory {
     context: BrowserContext,
     orderData?: Partial<CreateOrdersRequest>,
     expectedStatus: number = 201
-  ): Promise<Order[]> => {
+  ): Promise<CreateOrdersResult> => {
+    const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
 
     const response = await context.request.put(ORDER_ENDPOINT, {
@@ -200,13 +202,8 @@ export class OrderFactory {
     const errorBody = status !== expectedStatus ? await response.text() : ''
     expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-    if (expectedStatus === 201) {
-      const responseBody = await response.json()
-      expect(Array.isArray(responseBody), 'Response should be array of orders').toBe(true)
-      return responseBody
-    }
-
-    return await response.json()
+    const responseBody = await response.json()
+    return CreateOrdersResultSchema.parse(responseBody)
   }
 
   static readonly getOrder = async (

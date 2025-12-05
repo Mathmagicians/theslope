@@ -245,13 +245,14 @@ describe('useBookingValidation', () => {
     })
   })
 
-  describe('Orders Creation (Bulk)', () => {
+  describe('Orders Creation (Batch)', () => {
     const {
       AuditActionSchema,
       AuditContextSchema,
       OrderCreateWithPriceSchema,
       OrdersBatchSchema,
-      CreateOrdersResultSchema
+      CreateOrdersResultSchema,
+      ORDER_BATCH_SIZE
     } = useBookingValidation()
 
     describe('AuditActionSchema', () => {
@@ -304,15 +305,15 @@ describe('useBookingValidation', () => {
 
     describe('OrdersBatchSchema', () => {
       it.each([
-        {count: 1, desc: 'min (1)'},
-        {count: 8, desc: 'max (8)'}
-      ])('GIVEN batch of $desc orders WHEN parsing THEN succeeds', ({count}) => {
+        {count: 1, desc: 'min'},
+        {count: ORDER_BATCH_SIZE, desc: 'max'}
+      ])('GIVEN batch of $desc ($count) orders WHEN parsing THEN succeeds', ({count}) => {
         expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).not.toThrow()
       })
 
       it.each([
         {count: 0, desc: 'empty', errorMatch: /Mindst én/},
-        {count: 9, desc: 'exceeds max (9)', errorMatch: /Maksimalt 8/}
+        {count: ORDER_BATCH_SIZE + 1, desc: 'exceeds max', errorMatch: /Maksimalt/}
       ])('GIVEN $desc batch WHEN parsing THEN throws', ({count, errorMatch}) => {
         expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).toThrow(errorMatch)
       })

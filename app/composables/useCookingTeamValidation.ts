@@ -132,9 +132,10 @@ export const useCookingTeamValidation = () => {
 
     /**
      * CookingTeamAssignmentCreate - Input schema for creating assignments (ADR-009)
-     * Omits id (auto-generated), cookingTeamId (from URL param), and inhabitant (populated via Prisma include on response)
+     * Omits id (auto-generated) and inhabitant (populated via Prisma include on response)
+     * Keeps cookingTeamId (sent in request body)
      */
-    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true, inhabitant: true })
+    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, inhabitant: true })
 
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
@@ -142,6 +143,7 @@ export const useCookingTeamValidation = () => {
     type TeamRole = z.infer<typeof TeamRoleSchema>
 
     // Transform schema for serialization (converts WeekDayMap to JSON string)
+    // Assignments in teams being serialized always have inhabitant (came from DB for updates, or empty for creates)
     const SerializedCookingTeamAssignmentSchema = CookingTeamAssignmentSchema.transform((assignment) => ({
         ...assignment,
         affinity: assignment.affinity ? serializeWeekDayMap(assignment.affinity) : null
@@ -155,7 +157,8 @@ export const useCookingTeamValidation = () => {
 
     type SerializedCookingTeamDisplay = z.infer<typeof SerializedCookingTeamDisplaySchema>
 
-    // Serialize team Display (for season fetch)
+    // Serialize team Display (for season fetch and Prisma writes)
+    // Team creates have empty assignments, team updates have assignments with inhabitant (from DB)
     const serializeCookingTeam = (team: CookingTeamDisplay): SerializedCookingTeamDisplay => {
         return SerializedCookingTeamDisplaySchema.parse(team)
     }

@@ -1,6 +1,8 @@
 import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {BillingImportResponse} from '~/composables/useBillingValidation'
+import type {OrderCreateWithPrice, AuditContext} from '~/composables/useBookingValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -13,18 +15,17 @@ const {throwH3Error} = eventHandlerHelper
  * POST /api/admin/billing/import
  *
  * Import orders from CSV file (framelding format) into ACTIVE season
- * - Address matching: Via shortName (computed from address)
- * - Inhabitant: Assign to first inhabitant in household
- * - Missing DinnerEvent: Error (fail import)
  *
  * ADR-002: Separate validation vs business logic
  * ADR-004: Logging standards
+ * ADR-009: Batch by household, Promise.all for parallel processing
  */
 export default defineEventHandler(async (event): Promise<BillingImportResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     const {BillingImportRequestSchema, parseCSV, TicketType, DinnerMode, OrderState} = useBillingValidation()
+    const {chunkOrderBatch} = useBookingValidation()
 
     const LOG = '📦 > BILLING > [IMPORT] > '
 
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
 
         if (parsedOrders.length === 0) {
             setResponseStatus(event, 200)
-            return {orders: [], count: 0}
+            return {results: [], totalCreated: 0}
         }
 
         const season = await fetchSeason(d1Client, activeSeasonId)
@@ -87,8 +88,8 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
             return throwH3Error(LOG, createError({statusCode: 400, message: 'Season has no CHILD ticket price'}))
         }
 
-        // Build order data grouped by household (ADR-009: batch by household for memory)
-        const ordersByHousehold = parsedOrders.reduce((acc, parsedOrder) => {
+        // Build OrderCreateWithPrice grouped by household (functional reduce)
+        const ordersByHousehold = parsedOrders.reduce<Map<number, OrderCreateWithPrice[]>>((acc, parsedOrder) => {
             const shortName = getHouseholdShortName(parsedOrder.address)
             const household = householdByShortName.get(shortName)!
             const dinnerEvent = season.dinnerEvents?.find(de => isSameDay(de.date, parsedOrder.date))
@@ -105,28 +106,52 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
                 dinnerEventId: dinnerEvent.id!,
                 inhabitantId: firstInhabitant.id!,
                 bookedByUserId: firstInhabitant.userId ?? null,
+                householdId: household.id!,
                 dinnerMode: DinnerMode.DINEIN,
                 state: OrderState.BOOKED
             }
 
-            const orders = [
-                ...Array(parsedOrder.adultCount).fill({...baseOrder, ticketPriceId: adultPrice.id!}),
-                ...Array(parsedOrder.childCount).fill({...baseOrder, ticketPriceId: childPrice.id!})
+            const orders: OrderCreateWithPrice[] = [
+                ...Array.from({length: parsedOrder.adultCount}, () => ({
+                    ...baseOrder,
+                    ticketPriceId: adultPrice.id!,
+                    priceAtBooking: adultPrice.price
+                })),
+                ...Array.from({length: parsedOrder.childCount}, () => ({
+                    ...baseOrder,
+                    ticketPriceId: childPrice.id!,
+                    priceAtBooking: childPrice.price
+                }))
             ]
 
-            return acc.set(household.id!, [...(acc.get(household.id!) ?? []), ...orders])
+            const existing = acc.get(household.id!) ?? []
+            return acc.set(household.id!, [...existing, ...orders])
         }, new Map())
 
-        // Process households sequentially to avoid memory limits
-        const orders = []
-        for (const [, householdOrders] of ordersByHousehold) {
-            orders.push(...await createOrders(d1Client, householdOrders))
+        // Audit context for batch import
+        const auditContext: AuditContext = {
+            action: 'BULK_IMPORT',
+            performedByUserId: null,
+            source: 'csv_billing'
         }
 
-        console.info(`${LOG} Done: created=${orders.length}`)
+        // Chunk and process all households in parallel
+        const householdBatches = Array.from(ordersByHousehold.entries())
+            .flatMap(([householdId, orders]) =>
+                chunkOrderBatch(orders).map(batch => ({householdId, orders: batch}))
+            )
+
+        const results = await Promise.all(
+            householdBatches.map(({householdId, orders}) =>
+                createOrders(d1Client, householdId, orders, auditContext)
+            )
+        )
+
+        const totalCreated = results.reduce((sum, r) => sum + r.createdIds.length, 0)
+        console.info(`${LOG} Done: created=${totalCreated} orders across ${results.length} batches`)
 
         setResponseStatus(event, 200)
-        return {orders, count: orders.length}
+        return {results, totalCreated}
     } catch (error) {
         return throwH3Error(`${LOG} Import failed`, error)
     }

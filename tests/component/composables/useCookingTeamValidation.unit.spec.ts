@@ -285,8 +285,8 @@ describe('useCookingTeamValidation', () => {
         team: SeasonFactory.defaultCookingTeamDisplay({
           name: "Team with Member IDs",
           assignments: [
-            { id: 1, cookingTeamId: 1, inhabitantId: 10, role: 'CHEF' as const, allocationPercentage: 100 },
-            { id: 2, cookingTeamId: 1, inhabitantId: 20, role: 'COOK' as const, allocationPercentage: 100 }
+            SeasonFactory.defaultCookingTeamAssignment({ id: 1, inhabitantId: 10, role: 'CHEF' }),
+            SeasonFactory.defaultCookingTeamAssignment({ id: 2, inhabitantId: 20, role: 'COOK' })
           ]
         }),
         expected: { success: true, assignment0Id: 1, assignment1Id: 2 },
@@ -316,11 +316,7 @@ describe('useCookingTeamValidation', () => {
         {
           name: 'assignment with affinity',
           serialized: {
-            id: 10,
-            cookingTeamId: 1,
-            inhabitantId: 42,
-            role: 'CHEF',
-            allocationPercentage: 75,
+            ...SeasonFactory.defaultCookingTeamAssignment({ id: 10, inhabitantId: 42, allocationPercentage: 75 }),
             affinity: '{"mandag":true,"tirsdag":false,"onsdag":true,"torsdag":false,"fredag":false,"lørdag":false,"søndag":false}'
           },
           expectedAffinity: createDefaultWeekdayMap([true, false, true, false, false, false, false])
@@ -328,22 +324,15 @@ describe('useCookingTeamValidation', () => {
         {
           name: 'assignment without affinity',
           serialized: {
-            id: 11,
-            cookingTeamId: 2,
-            inhabitantId: 99,
-            role: 'COOK',
-            allocationPercentage: 100
+            ...SeasonFactory.defaultCookingTeamAssignment({ id: 11, cookingTeamId: 2, inhabitantId: 99, role: 'COOK' }),
+            affinity: undefined
           },
           expectedAffinity: undefined
         },
         {
           name: 'assignment with null affinity',
           serialized: {
-            id: 12,
-            cookingTeamId: 3,
-            inhabitantId: 55,
-            role: 'JUNIORHELPER',
-            allocationPercentage: 50,
+            ...SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: 'JUNIORHELPER', allocationPercentage: 50 }),
             affinity: null
           },
           expectedAffinity: undefined
@@ -393,14 +382,13 @@ describe('useCookingTeamValidation', () => {
             name: "Team Alpha",
             affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
             assignments: [
-              {
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 10,
                 cookingTeamId: 1,
                 inhabitantId: 42,
-                role: 'CHEF' as const,
                 allocationPercentage: 75,
                 affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false]) // Tue, Thu
-              }
+              })
             ]
           } as CookingTeamDisplay,
           expectedTeamAffinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
@@ -414,13 +402,12 @@ describe('useCookingTeamValidation', () => {
             name: "Team Beta",
             affinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]), // Mon, Tue
             assignments: [
-              {
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 11,
                 cookingTeamId: 2,
                 inhabitantId: 99,
-                role: 'COOK' as const,
-                allocationPercentage: 100
-              }
+                role: 'COOK'
+              })
             ]
           } as CookingTeamDisplay,
           expectedTeamAffinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]),
@@ -433,14 +420,14 @@ describe('useCookingTeamValidation', () => {
             seasonId: 5,
             name: "Team Gamma",
             assignments: [
-              {
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 12,
                 cookingTeamId: 3,
                 inhabitantId: 55,
-                role: 'JUNIORHELPER' as const,
+                role: 'JUNIORHELPER',
                 allocationPercentage: 50,
                 affinity: createDefaultWeekdayMap([false, false, false, false, true, true, false]) // Fri, Sat
-              }
+              })
             ]
           } as CookingTeamDisplay,
           expectedTeamAffinity: undefined,
@@ -453,13 +440,12 @@ describe('useCookingTeamValidation', () => {
             seasonId: 5,
             name: "Team Delta",
             assignments: [
-              {
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 13,
                 cookingTeamId: 4,
                 inhabitantId: 77,
-                role: 'COOK' as const,
-                allocationPercentage: 100
-              }
+                role: 'COOK'
+              })
             ]
           } as CookingTeamDisplay,
           expectedTeamAffinity: undefined,
@@ -473,22 +459,20 @@ describe('useCookingTeamValidation', () => {
             name: "Team Echo",
             affinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]), // Mon-Fri
             assignments: [
-              {
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 14,
                 cookingTeamId: 5,
                 inhabitantId: 20,
-                role: 'CHEF' as const,
-                allocationPercentage: 100,
                 affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]) // Mon, Wed, Fri
-              },
-              {
+              }),
+              SeasonFactory.defaultCookingTeamAssignment({
                 id: 15,
                 cookingTeamId: 5,
                 inhabitantId: 21,
-                role: 'COOK' as const,
+                role: 'COOK',
                 allocationPercentage: 50
                 // No affinity
-              }
+              })
             ]
           } as CookingTeamDisplay,
           expectedTeamAffinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]),

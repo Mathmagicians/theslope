@@ -9,7 +9,7 @@ const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = s
 householdsStore.initHouseholdsStore()
 
 // Design system
-const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -108,7 +108,7 @@ class="w-full px-0"
         :columns="columns"
         :data="filteredHouseholds"
         :loading="isHouseholdsLoading"
-        :ui="{ td: 'py-2' }"
+        :ui="COMPONENTS.table.ui"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"

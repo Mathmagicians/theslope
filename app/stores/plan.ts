@@ -384,7 +384,9 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
-        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+        // Input: Assignment data without id/inhabitant (cookingTeamId in body, inhabitant populated on return)
+        // Output: CookingTeamAssignment (with inhabitant populated by Prisma include)
+        const addTeamMember = async (assignment: Omit<CookingTeamAssignment, 'id' | 'inhabitant'>): Promise<CookingTeamAssignment> => {
             try {
                 const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
                     method: 'PUT',

@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'

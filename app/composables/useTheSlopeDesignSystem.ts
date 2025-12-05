@@ -373,7 +373,12 @@ export const COMPONENTS = {
   // Table interactions - row selection and click patterns
   table: {
     selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
-    clickableCell: 'cursor-pointer'
+    clickableCell: 'cursor-pointer',
+    /**
+     * UTable :ui prop for consistent cell styling
+     * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2)
+     */
+    ui: { td: 'py-1 md:py-2' }
   },
 
   // Calendar UI configuration (UCalendar)
