@@ -21,7 +21,7 @@ const {
 dotenv.config()
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string // will give runtime error if env variable is undefined - this is intentional
 const heyNaboPassword = process.env.HEY_NABO_PASSWORD as string
-const heyNaboApi = process.env.HEY_NABO_API as string
+const heyNaboApi = process.env.NUXT_PUBLIC_HEY_NABO_API as string
 
 /**
  * Heynabo HTTP Client

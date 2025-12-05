@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -20,7 +20,7 @@ test.describe('AdminTeams Form UI', () => {
 
     test('Can load admin teams page', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
-        const season = await SeasonFactory.createSeason(context, {holidays: []})
+        const season = await SeasonFactory.createSeason(context)
         createdSeasonIds.push(season.id!)
 
         await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
@@ -42,7 +42,7 @@ test.describe('AdminTeams Form UI', () => {
                 const context = await validatedBrowserContext(browser)
 
                 // GIVEN: Fresh season with NO teams
-                const season = await SeasonFactory.createSeason(context, {holidays: []})
+                const season = await SeasonFactory.createSeason(context)
                 createdSeasonIds.push(season.id!)
 
                 const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
@@ -86,7 +86,7 @@ test.describe('AdminTeams Form UI', () => {
             context = await validatedBrowserContext(browser)
 
             // Create season via API
-            season = await SeasonFactory.createSeason(context, {holidays: []})
+            season = await SeasonFactory.createSeason(context)
             createdSeasonIds.push(season.id!)
 
             // Navigate to edit mode with season in URL
