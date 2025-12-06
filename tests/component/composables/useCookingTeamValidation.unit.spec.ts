@@ -308,7 +308,7 @@ describe('useCookingTeamValidation', () => {
   })
 
   describe('serialization and deserialization', () => {
-    const { serializeCookingTeam, deserializeCookingTeam, deserializeCookingTeamAssignment } = useCookingTeamValidation()
+    const { serializeCookingTeam, deserializeCookingTeamDisplay, deserializeCookingTeamAssignment } = useCookingTeamValidation()
     const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
     describe('CookingTeamAssignment deserialization', () => {
@@ -501,7 +501,7 @@ describe('useCookingTeamValidation', () => {
         }
 
         // Deserialize aggregate root
-        const deserialized = deserializeCookingTeam(serialized)
+        const deserialized = deserializeCookingTeamDisplay(serialized)
 
         // Verify team base fields
         expect(deserialized.id).toBe(team.id)

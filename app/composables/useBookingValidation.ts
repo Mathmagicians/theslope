@@ -17,6 +17,7 @@ import {chunkArray} from '~/utils/batchUtils'
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
 export const OrderState = OrderStateSchema.enum
+export const OrderAuditAction = OrderAuditActionSchema.enum
 
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
@@ -27,7 +28,7 @@ export const OrderState = OrderStateSchema.enum
  * - Detail ALWAYS EXTENDS Display
  */
 export const useBookingValidation = () => {
-    const {CookingTeamDisplaySchema, deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {CookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema: _TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema} = useAllergyValidation()
@@ -166,15 +167,11 @@ export const useBookingValidation = () => {
     // ============================================================================
 
     /**
-     * Audit action types for order history
-     */
-    const AuditActionSchema = z.enum(['BULK_IMPORT', 'SYSTEM_SCAFFOLD', 'USER_BOOKED'])
-
-    /**
      * Audit context for order creation - used for OrderHistory entries
+     * Uses OrderAuditActionSchema from generated Prisma Zod types (ADR-001)
      */
     const AuditContextSchema = z.object({
-        action: AuditActionSchema,
+        action: OrderAuditActionSchema,
         performedByUserId: z.number().int().positive().nullable(),
         source: z.string().min(1)
     })
@@ -282,15 +279,38 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Order history entry
+     * OrderHistory Display - lightweight for lists (ADR-009)
+     * Scalars only, no nested Order relation
+     * Includes denormalized fields for cancellation queries (orderId becomes NULL after deletion)
      */
-    const OrderHistorySchema = z.object({
+    const OrderHistoryDisplaySchema = z.object({
         id: z.number().int().positive(),
         orderId: z.number().int().positive().nullable(),
-        action: OrderStateSchema,
+        action: OrderAuditActionSchema,
         performedByUserId: z.number().int().positive().nullable(),
         auditData: z.string(),
-        timestamp: z.coerce.date()
+        timestamp: z.coerce.date(),
+        // Denormalized fields for cancellation queries
+        inhabitantId: z.number().int().positive().nullable(),
+        dinnerEventId: z.number().int().positive().nullable(),
+        seasonId: z.number().int().positive().nullable()
+    })
+
+    /**
+     * OrderHistory Detail - for GET/:id and mutation returns (ADR-009)
+     * Extends Display with order relation
+     */
+    const OrderHistoryDetailSchema = OrderHistoryDisplaySchema.extend({
+        order: OrderDisplaySchema.nullable()
+    })
+
+    /**
+     * OrderHistory Create - for input validation (PUT)
+     * Omits id (auto-generated) and timestamp (default now())
+     */
+    const OrderHistoryCreateSchema = OrderHistoryDisplaySchema.omit({
+        id: true,
+        timestamp: true
     })
 
     // ============================================================================
@@ -304,7 +324,7 @@ export const useBookingValidation = () => {
         updatedAt: z.string()
     })
 
-    const SerializedOrderHistorySchema = OrderHistorySchema.extend({
+    const SerializedOrderHistoryDisplaySchema = OrderHistoryDisplaySchema.extend({
         timestamp: z.string()
     })
 
@@ -328,14 +348,14 @@ export const useBookingValidation = () => {
         }
     }
 
-    function serializeOrderHistory(history: z.infer<typeof OrderHistorySchema>): z.infer<typeof SerializedOrderHistorySchema> {
+    function serializeOrderHistoryDisplay(history: z.infer<typeof OrderHistoryDisplaySchema>): z.infer<typeof SerializedOrderHistoryDisplaySchema> {
         return {
             ...history,
             timestamp: history.timestamp.toISOString()
         }
     }
 
-    function deserializeOrderHistory(serialized: z.infer<typeof SerializedOrderHistorySchema>): z.infer<typeof OrderHistorySchema> {
+    function deserializeOrderHistoryDisplay(serialized: z.infer<typeof SerializedOrderHistoryDisplaySchema>): z.infer<typeof OrderHistoryDisplaySchema> {
         return {
             ...serialized,
             timestamp: new Date(serialized.timestamp)
@@ -360,7 +380,7 @@ export const useBookingValidation = () => {
      * - allergens: Flatten join table to array of AllergyType
      * - chef: Deserialize Inhabitant with dinnerPreferences JSON string
      * - cookingTeam: Deserialize CookingTeam with affinity and assignments
-     * - tickets: Deserialize Order with nested inhabitant's dinnerPreferences
+     * - tickets: Transform to include ticketType (flattened from ticketPrice) and dinnerEvent reference
      */
     function deserializeDinnerEventDetail(prismaEvent: Record<string, unknown>): Record<string, unknown> {
         const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
@@ -368,17 +388,42 @@ export const useBookingValidation = () => {
         const cookingTeam = prismaEvent.cookingTeam as Record<string, unknown> | null | undefined
         const tickets = prismaEvent.tickets as Array<Record<string, unknown>> | undefined
 
+        // Build dinnerEvent reference for tickets (excludes tickets to avoid circular ref)
+        const dinnerEventForTickets = {
+            id: prismaEvent.id,
+            date: prismaEvent.date,
+            menuTitle: prismaEvent.menuTitle,
+            menuDescription: prismaEvent.menuDescription,
+            menuPictureUrl: prismaEvent.menuPictureUrl,
+            state: prismaEvent.state,
+            totalCost: prismaEvent.totalCost,
+            chefId: prismaEvent.chefId,
+            cookingTeamId: prismaEvent.cookingTeamId,
+            heynaboEventId: prismaEvent.heynaboEventId,
+            seasonId: prismaEvent.seasonId,
+            createdAt: prismaEvent.createdAt,
+            updatedAt: prismaEvent.updatedAt
+        }
+
         return {
             ...prismaEvent,
             allergens: allergens ? allergens.map((a) => a.allergyType) : [],
             chef: chef ? deserializeInhabitantDisplay(chef) : null,
-            cookingTeam: cookingTeam ? deserializeCookingTeamDetail(cookingTeam) : null,
-            tickets: tickets?.map(ticket => ({
-                ...ticket,
-                inhabitant: ticket.inhabitant
-                    ? deserializeInhabitantDisplay(ticket.inhabitant as Record<string, unknown>)
-                    : ticket.inhabitant
-            })) ?? []
+            cookingTeam: cookingTeam ? deserializeCookingTeamDisplay(cookingTeam) : null,
+            tickets: tickets?.map(ticket => {
+                const ticketPrice = ticket.ticketPrice as Record<string, unknown> | undefined
+                return {
+                    ...ticket,
+                    // Flatten ticketType from ticketPrice relation
+                    ticketType: ticketPrice?.ticketType,
+                    // Add parent dinnerEvent reference
+                    dinnerEvent: dinnerEventForTickets,
+                    // Deserialize inhabitant's dinnerPreferences JSON string
+                    inhabitant: ticket.inhabitant
+                        ? deserializeInhabitantDisplay(ticket.inhabitant as Record<string, unknown>)
+                        : ticket.inhabitant
+                }
+            }) ?? []
         }
     }
 
@@ -462,10 +507,14 @@ export const useBookingValidation = () => {
         SwapOrderRequestSchema,
         AssignRoleSchema,
         OrderQuerySchema,
-        OrderHistorySchema,
+
+        // OrderHistory
+        OrderHistoryDisplaySchema,
+        OrderHistoryDetailSchema,
+        OrderHistoryCreateSchema,
 
         // Batch Order Creation
-        AuditActionSchema,
+        OrderAuditActionSchema,
         AuditContextSchema,
         OrderCreateWithPriceSchema,
         OrdersBatchSchema,
@@ -475,11 +524,11 @@ export const useBookingValidation = () => {
 
         // Serialization
         SerializedOrderSchema,
-        SerializedOrderHistorySchema,
+        SerializedOrderHistoryDisplaySchema,
         serializeOrder,
         deserializeOrder,
-        serializeOrderHistory,
-        deserializeOrderHistory,
+        serializeOrderHistoryDisplay,
+        deserializeOrderHistoryDisplay,
 
         // Transformation (ADR-010)
         deserializeDinnerEvent,
@@ -517,12 +566,14 @@ export type CreateOrdersRequest = z.infer<ReturnType<typeof useBookingValidation
 export type SwapOrderRequest = z.infer<ReturnType<typeof useBookingValidation>['SwapOrderRequestSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQuerySchema']>
-export type OrderHistory = z.infer<ReturnType<typeof useBookingValidation>['OrderHistorySchema']>
+export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
+export type OrderHistoryDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDetailSchema']>
+export type OrderHistoryCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryCreateSchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>
-export type SerializedOrderHistory = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistorySchema']>
+export type SerializedOrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistoryDisplaySchema']>
 
 // Orders Creation (Bulk)
-export type AuditAction = z.infer<ReturnType<typeof useBookingValidation>['AuditActionSchema']>
+export type OrderAuditAction = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditActionSchema']>
 export type AuditContext = z.infer<ReturnType<typeof useBookingValidation>['AuditContextSchema']>
 export type OrderCreateWithPrice = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateWithPriceSchema']>
 export type OrdersBatch = z.infer<ReturnType<typeof useBookingValidation>['OrdersBatchSchema']>

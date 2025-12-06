@@ -11,7 +11,9 @@ import type {
     CreateOrdersResult,
     DinnerEventCreate,
     DinnerEventDisplay,
-    DinnerEventDetail
+    DinnerEventDetail,
+    OrderHistoryDetail,
+    OrderHistoryCreate
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -30,6 +32,56 @@ import {useCoreValidation} from '~/composables/useCoreValidation'
  */
 
 const {throwH3Error} = eventHandlerHelper
+
+/*** ORDER AUDIT ***/
+
+/**
+ * Create an audit entry in OrderHistory.
+ *
+ * Used for tracking order lifecycle events (creation, cancellation, etc.)
+ * Denormalized fields (inhabitantId, dinnerEventId, seasonId) persist even
+ * after order deletion, enabling cancellation queries for scaffolding.
+ *
+ * ADR-011: OrderHistory with denormalized fields for cancellation tracking
+ * ADR-010: Repository-layer serialization with validated types
+ * ADR-009: Mutations return Detail schema
+ */
+export async function createOrderAuditEntry(
+    d1Client: D1Database,
+    entry: OrderHistoryCreate
+): Promise<OrderHistoryDetail> {
+    const {OrderHistoryCreateSchema, OrderHistoryDetailSchema, deserializeOrder} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Validate input with schema
+    const validatedEntry = OrderHistoryCreateSchema.parse(entry)
+
+    const created = await prisma.orderHistory.create({
+        data: validatedEntry,
+        include: {
+            order: {
+                include: {
+                    ticketPrice: {
+                        select: {ticketType: true}
+                    }
+                }
+            }
+        }
+    })
+
+    console.info(`📋 > ORDER_AUDIT > [CREATE] Created ${validatedEntry.action} entry for order ${validatedEntry.orderId}`)
+
+    // ADR-010: Transform to domain type with proper order deserialization
+    const orderHistoryDetail = {
+        ...created,
+        order: created.order ? {
+            ...deserializeOrder(created.order),
+            ticketType: created.order.ticketPrice.ticketType
+        } : null
+    }
+
+    return OrderHistoryDetailSchema.parse(orderHistoryDetail)
+}
 
 /*** ORDERS ***/
 
@@ -210,25 +262,79 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
     }
 }
 
-export async function deleteOrder(d1Client: D1Database, id: number): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
+/**
+ * Delete an order and create audit trail entry.
+ *
+ * @param d1Client - D1 database client
+ * @param id - Order ID to delete
+ * @param performedByUserId - User ID who performed deletion (null = admin/system)
+ *
+ * Audit action is determined by performedByUserId:
+ * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
+ * - Null: ADMIN_DELETED (admin deleted, may be recreated by scaffolder)
+ *
+ * ADR-011: Creates OrderHistory entry with denormalized fields before deletion.
+ * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
+ */
+export async function deleteOrder(
+    d1Client: D1Database,
+    id: number,
+    performedByUserId: number | null = null
+): Promise<OrderDisplay> {
+    const action = performedByUserId ? 'USER_CANCELLED' : 'ADMIN_DELETED'
+    console.info(`🎟️ > ORDER > [DELETE] Deleting order ${id} (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
     const {OrderDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Delete order - cascade handles strong associations (Transaction) automatically
-        const deletedOrder = await prisma.order.delete({
+        // 1. Fetch order with relations to get denormalized fields and seasonId
+        const orderToDelete = await prisma.order.findUniqueOrThrow({
             where: {id},
             include: {
                 ticketPrice: {
-                    select: {
-                        ticketType: true
-                    }
+                    select: {ticketType: true}
+                },
+                dinnerEvent: {
+                    select: {seasonId: true}
                 }
             }
         })
 
-        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order with ID ${deletedOrder.id}`)
+        // 2. Create audit entry with denormalized fields BEFORE deletion
+        // (orderId becomes NULL after deletion due to SET NULL, but denormalized fields persist)
+        await prisma.orderHistory.create({
+            data: {
+                orderId: id,
+                action,
+                performedByUserId,
+                inhabitantId: orderToDelete.inhabitantId,
+                dinnerEventId: orderToDelete.dinnerEventId,
+                seasonId: orderToDelete.dinnerEvent?.seasonId ?? null,
+                auditData: JSON.stringify({
+                    orderSnapshot: {
+                        id: orderToDelete.id,
+                        inhabitantId: orderToDelete.inhabitantId,
+                        dinnerEventId: orderToDelete.dinnerEventId,
+                        ticketPriceId: orderToDelete.ticketPriceId,
+                        priceAtBooking: orderToDelete.priceAtBooking,
+                        dinnerMode: orderToDelete.dinnerMode,
+                        state: orderToDelete.state
+                    }
+                })
+            }
+        })
+
+        // 3. Delete order - cascade handles strong associations (Transaction) automatically
+        const deletedOrder = await prisma.order.delete({
+            where: {id},
+            include: {
+                ticketPrice: {
+                    select: {ticketType: true}
+                }
+            }
+        })
+
+        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id} with ${action} audit entry`)
 
         // Transform Prisma type to domain type and validate (ADR-010)
         const {ticketPrice, ...orderWithoutRelation} = deletedOrder
@@ -370,6 +476,9 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                             include: {
                                 inhabitant: true
                             }
+                        },
+                        _count: {
+                            select: {dinners: true}
                         }
                     }
                 },
@@ -397,36 +506,12 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
         })
 
         if (dinnerEvent) {
-            // Transform tickets to include flattened ticketType and dinnerEvent relation
-            const transformedTickets = dinnerEvent.tickets.map(ticket => ({
-                ...ticket,
-                ticketType: ticket.ticketPrice.ticketType,  // Flatten from nested relation
-                dinnerEvent: {  // Add the parent dinner event (excluding tickets to avoid circular ref)
-                    id: dinnerEvent.id,
-                    date: dinnerEvent.date,
-                    menuTitle: dinnerEvent.menuTitle,
-                    menuDescription: dinnerEvent.menuDescription,
-                    menuPictureUrl: dinnerEvent.menuPictureUrl,
-                    state: dinnerEvent.state,
-                    totalCost: dinnerEvent.totalCost,
-                    chefId: dinnerEvent.chefId,
-                    cookingTeamId: dinnerEvent.cookingTeamId,
-                    heynaboEventId: dinnerEvent.heynaboEventId,
-                    seasonId: dinnerEvent.seasonId,
-                    createdAt: dinnerEvent.createdAt,
-                    updatedAt: dinnerEvent.updatedAt
-                }
-            }))
-
-            // ADR-010: Deserialize all nested relations with JSON string fields
+            // ADR-010: Deserialize handles all transformations:
             // - allergens: flatten join table
             // - chef: Inhabitant with dinnerPreferences JSON string
             // - cookingTeam: CookingTeam with affinity and assignments JSON strings
-            // - tickets: Order with nested inhabitant's dinnerPreferences
-            const dinnerEventToValidate = deserializeDinnerEventDetail({
-                ...dinnerEvent,
-                tickets: transformedTickets
-            })
+            // - tickets: flatten ticketType, add dinnerEvent ref, deserialize inhabitant
+            const dinnerEventToValidate = deserializeDinnerEventDetail(dinnerEvent)
 
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
             return DinnerEventDetailSchema.parse(dinnerEventToValidate)
@@ -462,7 +547,6 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                                 inhabitant: true
                             }
                         },
-                        dinners: true,
                         _count: {
                             select: {dinners: true}
                         }
@@ -479,6 +563,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                                 }
                             }
                         },
+                        bookedByUser: true,
                         ticketPrice: true
                     }
                 },
@@ -490,7 +575,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
             }
         })
 
-        // ADR-010: Deserialize all nested JSON string fields (chef.dinnerPreferences, cookingTeam.affinity, ticket.inhabitant.dinnerPreferences)
+        // ADR-010: Deserialize handles all transformations (same as fetchDinnerEvent)
         const dinnerEventToValidate = deserializeDinnerEventDetail(updatedDinnerEvent)
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)

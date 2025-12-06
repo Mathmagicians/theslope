@@ -148,12 +148,15 @@ const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 // Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
 const {DinnerEventDetailSchema} = useBookingValidation()
 
+// Reactive key for useAsyncData - follows ADR-007 pattern
+const dinnerDetailKey = computed(() => `chef-dinner-detail-${selectedDinnerId.value || 'null'}`)
+
 const {
   data: dinnerEventDetail,
   status: dinnerEventDetailStatus,
   refresh: refreshDinnerEventDetail
 } = useAsyncData(
-    computed(() => `chef-dinner-detail-${selectedDinnerId.value || 'null'}`),
+    dinnerDetailKey,
     () => selectedDinnerId.value
         ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
         : Promise.resolve(null),
@@ -291,21 +294,24 @@ const handleAdvanceState = async (newState: string) => {
 const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
 
-  try {
-    cancelParams.value = {dinnerEventId: selectedDinnerId.value}
-    await executeCancel()
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    toast.add({
-      title: 'Middag aflyst',
-      description: 'Fællesspisningen er blevet aflyst',
-      icon: ICONS.xMark,
-      color: COLOR.warning
-    })
-    // Refresh team data to show updated state in calendar
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    console.error('Failed to cancel dinner:', error)
+  cancelParams.value = {dinnerEventId: selectedDinnerId.value}
+  await executeCancel()
+
+  // Check if cancel succeeded (useAsyncData doesn't throw, it captures errors)
+  if (cancelStatus.value === 'error') {
+    console.error('Failed to cancel dinner')
+    return
   }
+
+  await refreshDinnerEventDetail() // Refresh page-owned data
+  toast.add({
+    title: 'Middag aflyst',
+    description: 'Fællesspisningen er blevet aflyst',
+    icon: ICONS.xMark,
+    color: COLOR.warning
+  })
+  // Refresh team data to show updated state in calendar
+  await usersStore.loadMyTeams()
 }
 
 useHead({

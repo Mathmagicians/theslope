@@ -149,8 +149,8 @@ const _currentStep = computed(() => getStepConfig(props.dinnerEvent).step)
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Menu display
-const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
-const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
+const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())
+const menuTitle = computed(() => hasMenuTitle.value ? props.dinnerEvent.menuTitle : 'Chefkokken har ikke fundet på en god menu endnu')
 
 // Format dates (formatDate auto-imported from ~/utils/date, uses Danish locale)
 const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
@@ -301,12 +301,13 @@ const nextState = computed(() => {
   }
 })
 
+// Can announce: dinner is SCHEDULED (announce is the only manual state transition)
+const canAnnounce = computed(() => props.dinnerEvent.state === DinnerState.SCHEDULED)
+
+// Can actually submit announce: menu title must be set
 const canAdvanceState = computed(() => {
-  if (!nextState.value) return false
-  if (props.dinnerEvent.state === DinnerState.SCHEDULED) {
-    return !!props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD'
-  }
-  return true
+  if (!canAnnounce.value) return false
+  return !!props.dinnerEvent.menuTitle?.trim()
 })
 
 // ========== HANDLERS ==========
@@ -336,11 +337,35 @@ const handleAdvanceState = () => {
   emit('advance-state', nextState.value.state)
 }
 
-const handleCancelDinner = () => {
-  if (confirm('Er du sikker på at du vil aflyse denne middag?')) {
+// Two-step cancel confirmation (GitHub-style)
+const isCancelConfirmMode = ref(false)
+const cancelButtonRef = ref<HTMLElement | null>(null)
+
+const handleCancelClick = () => {
+  if (isCancelConfirmMode.value) {
+    // Second click - actually cancel
     emit('cancel-dinner')
+    isCancelConfirmMode.value = false
+  } else {
+    // First click - enter confirm mode
+    isCancelConfirmMode.value = true
   }
 }
+
+// Reset confirm mode when clicking outside
+const handleClickOutside = (event: MouseEvent) => {
+  if (isCancelConfirmMode.value && cancelButtonRef.value && !cancelButtonRef.value.contains(event.target as Node)) {
+    isCancelConfirmMode.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 const handleCardClick = () => {
   if (props.isCompact) {
@@ -368,7 +393,7 @@ const handleCardClick = () => {
 
       <!-- Menu title -->
       <div class="flex-1 min-w-0">
-        <div :class="['text-sm truncate', isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500']">
+        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : 'italic text-neutral-500']">
           {{ menuTitle }}
         </div>
       </div>
@@ -422,31 +447,82 @@ const handleCardClick = () => {
 
     <div class="space-y-6">
       <!-- ========== MENU SECTION ========== -->
-      <!-- Menu display with inline edit buttons -->
+      <!-- Menu display with inline action buttons (pencil, announce, cancel) -->
       <div v-if="!isEditingMenu">
-        <UFormField :hint="isEditing ? 'Rediger menu' : undefined" :ui="{ hint: 'hidden md:block' }">
+        <UFormField
+          :hint="isEditing ? (canAnnounce ? 'Annoncer menuen så beboerne kan tilmelde sig' : (canCancelDinner(dinnerEvent) ? 'Aflys middagen hvis den ikke kan afholdes' : 'Rediger menu')) : undefined"
+          :ui="{ hint: 'hidden md:block' }"
+        >
           <template #default>
             <div class="flex items-center gap-1 md:gap-2">
-              <div :class="['text-lg font-medium flex-1', isMenuAnnounced ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+              <div :class="['text-lg font-medium flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
                 {{ menuTitle }}
               </div>
-              <UButton
-                v-for="btn in menuEditButtons"
-                :key="btn.name"
-                :icon="btn.icon"
-                :color="btn.color"
-                :variant="btn.variant"
-                size="xs"
-                square
-                :name="btn.name"
-                @click="btn.onClick"
-              />
+
+              <!-- Action buttons (EDIT mode only) -->
+              <template v-if="isEditing">
+                <!-- Edit pencil button -->
+                <UButton
+                  v-for="btn in menuEditButtons"
+                  :key="btn.name"
+                  :icon="btn.icon"
+                  :color="HERO_BUTTON.primaryButton"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  :name="btn.name"
+                  @click="btn.onClick"
+                />
+
+                <!-- Announce button -->
+                <UButton
+                  v-if="canAnnounce"
+                  :color="HERO_BUTTON.primaryButton"
+                  variant="ghost"
+                  size="xs"
+                  :icon="ICONS.megaphone"
+                  :disabled="!canAdvanceState || isAnnouncing"
+                  :loading="isAnnouncing"
+                  name="announce-dinner"
+                  @click="handleAdvanceState"
+                >
+                  Annoncer
+                </UButton>
+
+                <!-- Cancel button -->
+                <div v-if="canCancelDinner(dinnerEvent)" ref="cancelButtonRef">
+                  <UButton
+                    :color="isCancelConfirmMode ? COLOR.error : HERO_BUTTON.primaryButton"
+                    :variant="isCancelConfirmMode ? 'solid' : 'ghost'"
+                    size="xs"
+                    icon="i-heroicons-x-mark"
+                    :disabled="isCancelling"
+                    :loading="isCancelling"
+                    name="cancel-dinner"
+                    @click="handleCancelClick"
+                  >
+                    {{ isCancelConfirmMode ? `Aflys (${formattedShortDate})` : 'Aflys' }}
+                  </UButton>
+                </div>
+              </template>
             </div>
           </template>
         </UFormField>
+
         <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
+
+        <!-- Warning when menu title missing -->
+        <UAlert
+          v-if="isEditing && canAnnounce && !canAdvanceState"
+          :color="COLOR.warning"
+          variant="soft"
+          icon="i-heroicons-information-circle"
+          :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
+        >
+          <template #description>Indtast menu titel for at annoncere</template>
+        </UAlert>
       </div>
 
       <!-- EDIT mode: Edit menu fields with Zod validation -->
@@ -542,49 +618,6 @@ const handleCardClick = () => {
         <!-- Budget section (chef's financial overview) -->
         <div class="pt-4 border-t">
           <DinnerBudget :orders="dinnerEvent.tickets ?? []" mode="full" />
-        </div>
-
-        <!-- Action buttons (EDIT mode only) -->
-        <div v-if="isEditing" class="pt-4 border-t space-y-2">
-          <UButton
-            v-if="nextState"
-            :color="canAdvanceState ? HERO_BUTTON.primaryButton : COLOR.neutral"
-            variant="solid"
-            :size="SIZES.standard"
-            :icon="nextState.icon"
-            :disabled="!canAdvanceState || isAnnouncing"
-            :loading="isAnnouncing"
-            block
-            name="advance-dinner-state"
-            @click="handleAdvanceState"
-          >
-            {{ nextState.label }}
-          </UButton>
-
-          <UAlert
-            v-if="nextState && !canAdvanceState && dinnerEvent.state === DinnerState.SCHEDULED"
-            :color="COLOR.warning"
-            variant="soft"
-            icon="i-heroicons-information-circle"
-            :ui="{ root: 'p-2', description: 'text-xs' }"
-          >
-            <template #description>Indtast menu titel for at annoncere</template>
-          </UAlert>
-
-          <UButton
-            v-if="canCancelDinner(dinnerEvent)"
-            :color="COLOR.error"
-            variant="outline"
-            :size="SIZES.standard"
-            icon="i-heroicons-x-mark"
-            :disabled="isCancelling"
-            :loading="isCancelling"
-            block
-            name="cancel-dinner"
-            @click="handleCancelDinner"
-          >
-            Aflys middag
-          </UButton>
         </div>
       </template>
     </div>

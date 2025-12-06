@@ -944,8 +944,9 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                         seasonId: validatedSeasonData.id,
                         ticketType: tp.ticketType,
                         price: tp.price,
-                        description: tp.description,
-                        maximumAgeLimit: tp.maximumAgeLimit
+                        // ADR-012: Use Prisma.skip for optional fields that may be undefined
+                        description: tp.description === undefined ? Prisma.skip : tp.description,
+                        maximumAgeLimit: tp.maximumAgeLimit === undefined ? Prisma.skip : tp.maximumAgeLimit
                     }
                 })
             }
@@ -993,7 +994,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // Get serialization utilities for CookingTeam
 const {
     serializeCookingTeam: _serializeCookingTeam,
-    deserializeCookingTeam,
+    deserializeCookingTeamDisplay,
     deserializeCookingTeamAssignment
 } = useCookingTeamValidation()
 
@@ -1208,7 +1209,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
         }))
 
         // Deserialize from database format
-        const deserializedTeams = teamsWithCount.map(team => deserializeCookingTeam(team))
+        const deserializedTeams = teamsWithCount.map(team => deserializeCookingTeamDisplay(team))
 
         console.info(`👥 > TEAM > [GET] Successfully fetched ${teams.length} teams`, 'Season: ', seasonId ? ` for season ${seasonId}` : '')
         return deserializedTeams

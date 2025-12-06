@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -11,7 +11,7 @@ import { SeasonFactory } from './seasonFactory'
 const { headers, salt, temporaryAndRandom } = testHelpers
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -128,10 +128,13 @@ export class OrderFactory {
     ...overrides
   })
 
-  static readonly defaultOrderHistory = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistory>): OrderHistory => ({
+  /**
+   * OrderHistoryDisplay - lightweight for lists (ADR-009)
+   */
+  static readonly defaultOrderHistoryDisplay = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDisplay>): OrderHistoryDisplay => ({
     id: 1,
     orderId: 1,
-    action: OrderStateSchema.enum.BOOKED,
+    action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
     auditData: JSON.stringify({
       inhabitantId: 10,
@@ -140,6 +143,38 @@ export class OrderFactory {
       priceAtBooking: 45
     }),
     timestamp: SeasonFactory.generateUniqueDate(),
+    // Denormalized fields for cancellation queries
+    inhabitantId: null,
+    dinnerEventId: null,
+    seasonId: null,
+    ...overrides
+  })
+
+  /**
+   * OrderHistoryDetail - includes order relation (ADR-009)
+   */
+  static readonly defaultOrderHistoryDetail = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDetail>): OrderHistoryDetail => ({
+    ...OrderFactory.defaultOrderHistoryDisplay(testSalt),
+    order: OrderFactory.defaultOrder(testSalt),
+    ...overrides
+  })
+
+  /**
+   * OrderHistoryCreate - for input validation (no id, no timestamp)
+   */
+  static readonly defaultOrderHistoryCreate = (overrides?: Partial<OrderHistoryCreate>): OrderHistoryCreate => ({
+    orderId: 1,
+    action: OrderAuditActionSchema.enum.USER_BOOKED,
+    performedByUserId: 1,
+    auditData: JSON.stringify({
+      inhabitantId: 10,
+      bookedByUserId: 1,
+      ticketPriceId: 1,
+      priceAtBooking: 45
+    }),
+    inhabitantId: null,
+    dinnerEventId: null,
+    seasonId: null,
     ...overrides
   })
 

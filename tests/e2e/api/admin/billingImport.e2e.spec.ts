@@ -61,8 +61,10 @@ test.describe('Billing Import API', () => {
         const result = await BillingFactory.importOrders(context, csv)
 
         const expectedCount = dates.length * 2 // 1 adult + 1 child per date
-        expect(result.count).toBe(expectedCount)
-        expect(result.orders).toHaveLength(expectedCount)
+        expect(result.totalCreated).toBe(expectedCount)
+        // Verify createdIds across all batch results
+        const allCreatedIds = result.results.flatMap(r => r.createdIds)
+        expect(allCreatedIds).toHaveLength(expectedCount)
     })
 
     test('GIVEN empty CSV WHEN importing THEN fails with 400', async ({browser}) => {

@@ -186,13 +186,16 @@ export const useCookingTeamValidation = () => {
         return CookingTeamAssignmentSchema.parse(deserialized)
     }
 
-    // Deserialize team Display (for season fetch with CookingTeams)
-    const deserializeCookingTeam = (serialized: Record<string, unknown>): CookingTeamDisplay => {
+    // Deserialize team Display (for season fetch with CookingTeams, DinnerEventDetail.cookingTeam)
+    const deserializeCookingTeamDisplay = (serialized: Record<string, unknown>): CookingTeamDisplay => {
         const assignments = serialized.assignments as Record<string, unknown>[] | undefined
+        // Transform Prisma _count.dinners to cookingDaysCount (if present)
+        const _count = serialized._count as { dinners?: number } | undefined
         const deserialized = {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
-            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
+            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || [],
+            cookingDaysCount: _count?.dinners ?? serialized.cookingDaysCount ?? 0
         }
 
         return CookingTeamDisplaySchema.parse(deserialized)
@@ -279,7 +282,7 @@ export const useCookingTeamValidation = () => {
         getTeamMemberCounts,
         getAssignmentIdsForRole,
         serializeCookingTeam,
-        deserializeCookingTeam,
+        deserializeCookingTeamDisplay,
         deserializeCookingTeamDetail,
         serializeCookingTeamAssignment,
         deserializeCookingTeamAssignment,

@@ -2,7 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema} from '~~/prisma/generated/zod'
+import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} from '~~/prisma/generated/zod'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import type {SafeParseReturnType} from 'zod'
@@ -23,11 +23,13 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     CreateOrdersRequestSchema,
-    OrderHistorySchema,
+    OrderHistoryDisplaySchema,
+    OrderHistoryDetailSchema,
+    OrderHistoryCreateSchema,
     serializeOrder,
     deserializeOrder,
-    serializeOrderHistory,
-    deserializeOrderHistory,
+    serializeOrderHistoryDisplay,
+    deserializeOrderHistoryDisplay,
     deserializeDinnerEvent,
     deserializeDinnerEventDetail
   } = useBookingValidation()
@@ -227,27 +229,36 @@ describe('useBookingValidation', () => {
 
     })
 
-    describe('OrderHistorySchema', () => {
-      it('GIVEN valid history WHEN parsing THEN succeeds', () => {
-        const validHistory = OrderFactory.defaultOrderHistory()
-        const result = OrderHistorySchema.safeParse(validHistory)
+    describe.each([
+      {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
+      {name: 'OrderHistoryDetailSchema', schema: OrderHistoryDetailSchema, factory: () => OrderFactory.defaultOrderHistoryDetail()},
+      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()}
+    ])('$name', ({schema, factory}) => {
+      it('GIVEN valid data WHEN parsing THEN succeeds', () => {
+        const result = schema.safeParse(factory())
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderStateSchema.options.map(action => ({action})))(
+      it.each(OrderAuditActionSchema.options.map(action => ({action})))(
         'GIVEN action $action WHEN parsing THEN succeeds',
-        ({action}: {action: z.infer<typeof OrderStateSchema>}) => {
-          const history = OrderFactory.defaultOrderHistory(undefined, {action})
-          const result = OrderHistorySchema.safeParse(history)
+        ({action}) => {
+          const result = schema.safeParse({...factory(), action})
           expect(result.success, getValidationError(result)).toBe(true)
         }
       )
+    })
+
+    describe('OrderHistoryDetailSchema nullable order', () => {
+      it('GIVEN null order WHEN parsing THEN succeeds', () => {
+        const result = OrderHistoryDetailSchema.safeParse(OrderFactory.defaultOrderHistoryDetail(undefined, {order: null}))
+        expect(result.success, getValidationError(result)).toBe(true)
+      })
     })
   })
 
   describe('Orders Creation (Batch)', () => {
     const {
-      AuditActionSchema,
+      OrderAuditActionSchema,
       AuditContextSchema,
       OrderCreateWithPriceSchema,
       OrdersBatchSchema,
@@ -255,14 +266,14 @@ describe('useBookingValidation', () => {
       ORDER_BATCH_SIZE
     } = useBookingValidation()
 
-    describe('AuditActionSchema', () => {
-      it.each(AuditActionSchema.options.map(a => ({action: a})))(
+    describe('OrderAuditActionSchema', () => {
+      it.each(OrderAuditActionSchema.options.map(a => ({action: a})))(
         'GIVEN $action WHEN parsing THEN succeeds',
-        ({action}) => expect(() => AuditActionSchema.parse(action)).not.toThrow()
+        ({action}) => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow()
       )
 
       it('GIVEN invalid action WHEN parsing THEN throws', () => {
-        expect(() => AuditActionSchema.parse('INVALID')).toThrow()
+        expect(() => OrderAuditActionSchema.parse('INVALID')).toThrow()
       })
     })
 
@@ -389,24 +400,24 @@ describe('useBookingValidation', () => {
       )
     })
 
-    describe('serializeOrderHistory / deserializeOrderHistory', () => {
+    describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {
       it('GIVEN history WHEN round-tripping THEN preserves data', () => {
-        const originalHistory = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(originalHistory)
-        const deserialized = deserializeOrderHistory(serialized)
+        const originalHistory = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(originalHistory)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized).toEqual(originalHistory)
       })
 
       it('GIVEN history WHEN serializing THEN converts timestamp to string', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
         expect(typeof serialized.timestamp).toBe('string')
       })
 
       it('GIVEN serialized history WHEN deserializing THEN converts to Date', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
-        const deserialized = deserializeOrderHistory(serialized)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized.timestamp).toBeInstanceOf(Date)
       })
     })
