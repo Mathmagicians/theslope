@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormMode} from "~/types/form"
+import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName} = useSeason()
@@ -176,8 +177,8 @@ class="mx-auto"
             <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
               <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
               <ul class="list-disc list-inside">
-                <li v-for="error in errors" :key="error.path">
-                  <span class="font-medium">{{ error.path }}:</span> {{ error.message }}
+                <li v-for="error in errors" :key="error.name">
+                  <span class="font-medium">{{ error.name }}:</span> {{ error.message }}
                 </li>
               </ul>
             </div>

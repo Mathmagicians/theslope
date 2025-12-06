@@ -60,15 +60,16 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(adultPrice!.id).toBeDefined()
 
         // AND: Create tickets for the dinner event using database ticket price
-        const {inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
         const inhabitant = inhabitants[0]
 
         // Verify ticket price ID is from database
         expect(adultPrice!.id).toBeGreaterThan(0)
         expect(adultPrice!.id).not.toBe(1) // Should not be factory default
 
-        const [createdOrders1, createdOrders2] = await Promise.all([
+        const [result1, result2] = await Promise.all([
             OrderFactory.createOrder(context, {
+                householdId: household.id,
                 dinnerEventId: createdDinnerEvent.id!,
                 orders: [{
                     inhabitantId: inhabitant.id,
@@ -76,6 +77,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
                 }]
             }),
             OrderFactory.createOrder(context, {
+                householdId: household.id,
                 dinnerEventId: createdDinnerEvent.id!,
                 orders: [{
                     inhabitantId: inhabitant.id,
@@ -84,8 +86,8 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             })
         ])
 
-        expect(createdOrders1.length).toBe(1)
-        expect(createdOrders2.length).toBe(1)
+        expect(result1.createdIds).toHaveLength(1)
+        expect(result2.createdIds).toHaveLength(1)
 
         // AND: Retrieve dinner event detail again with tickets
         const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
@@ -110,8 +112,8 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // Cleanup orders before season deletion (ticketPrice has onDelete: Restrict)
         await Promise.all([
-            OrderFactory.deleteOrder(context, createdOrders1[0].id!),
-            OrderFactory.deleteOrder(context, createdOrders2[0].id!)
+            OrderFactory.deleteOrder(context, result1.createdIds[0]!),
+            OrderFactory.deleteOrder(context, result2.createdIds[0]!)
         ])
     })
 

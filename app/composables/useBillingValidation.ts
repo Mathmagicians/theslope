@@ -38,11 +38,11 @@ export const useBillingValidation = () => {
         csvContent: z.string().min(1, 'CSV content is required')
     })
 
-    const {OrderDisplaySchema} = useBookingValidation()
+    const {CreateOrdersResultSchema} = useBookingValidation()
 
     const BillingImportResponseSchema = z.object({
-        orders: z.array(OrderDisplaySchema),
-        count: z.number().int().min(0)
+        results: z.array(CreateOrdersResultSchema),
+        totalCreated: z.number().int().min(0)
     })
 
     /**

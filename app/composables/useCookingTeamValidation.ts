@@ -54,6 +54,7 @@ export const useCookingTeamValidation = () => {
     })
 
     // Base team assignment schema (uses cookingTeamId to match database)
+    // inhabitant is required - assignments always have an inhabitant (inhabitantId is NOT NULL in DB)
     const CookingTeamAssignmentSchema = z.object({
         id: z.number().int().positive().optional(),
         cookingTeamId: z.number().int().positive(),
@@ -61,7 +62,7 @@ export const useCookingTeamValidation = () => {
         role: TeamRoleSchema,
         allocationPercentage: z.number().min(1).max(100).default(100),
         affinity: WeekDayMapSchemaOptional.nullish(),
-        inhabitant: InhabitantDisplaySchema.optional()  // Nested inhabitant from Prisma includes
+        inhabitant: InhabitantDisplaySchema  // Required - always included via Prisma include
     })
 
     // Full CookingTeam schema (base - for create/update)
@@ -121,10 +122,20 @@ export const useCookingTeamValidation = () => {
     const CookingTeamUpdateSchema = CookingTeamSchema.partial().required({ id: true })
 
     /**
-     * CookingTeamAssignmentCreate - Input schema for creating assignments (ADR-009)
-     * Omits id (auto-generated) and cookingTeamId (from URL param)
+     * PrismaTeamUpdateData - Return type for toPrismaUpdateData
+     * Derived from CookingTeamDetailSchema, excludes computed fields, serializes affinity
      */
-    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true })
+    const PrismaTeamUpdateDataSchema = CookingTeamDetailSchema
+        .omit({ id: true, cookingDaysCount: true, dinnerEvents: true, affinity: true })
+        .extend({ affinity: z.string().nullable().optional() })
+        .partial()
+
+    /**
+     * CookingTeamAssignmentCreate - Input schema for creating assignments (ADR-009)
+     * Omits id (auto-generated) and inhabitant (populated via Prisma include on response)
+     * Keeps cookingTeamId (sent in request body)
+     */
+    const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, inhabitant: true })
 
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
@@ -132,6 +143,7 @@ export const useCookingTeamValidation = () => {
     type TeamRole = z.infer<typeof TeamRoleSchema>
 
     // Transform schema for serialization (converts WeekDayMap to JSON string)
+    // Assignments in teams being serialized always have inhabitant (came from DB for updates, or empty for creates)
     const SerializedCookingTeamAssignmentSchema = CookingTeamAssignmentSchema.transform((assignment) => ({
         ...assignment,
         affinity: assignment.affinity ? serializeWeekDayMap(assignment.affinity) : null
@@ -145,9 +157,20 @@ export const useCookingTeamValidation = () => {
 
     type SerializedCookingTeamDisplay = z.infer<typeof SerializedCookingTeamDisplaySchema>
 
-    // Serialize team Display (for season fetch)
+    // Serialize team Display (for season fetch and Prisma writes)
+    // Team creates have empty assignments, team updates have assignments with inhabitant (from DB)
     const serializeCookingTeam = (team: CookingTeamDisplay): SerializedCookingTeamDisplay => {
         return SerializedCookingTeamDisplaySchema.parse(team)
+    }
+
+    // Serialize individual assignment (for Prisma create/update)
+    // ADR-010: Repository calls this before writing to DB
+    const serializeCookingTeamAssignment = (assignment: z.infer<typeof CookingTeamAssignmentSchema>) => {
+        const {id: _id, cookingTeamId: _teamId, inhabitant: _inhabitant, affinity, ...rest} = assignment
+        return {
+            ...rest,
+            affinity: affinity ? serializeWeekDayMap(affinity) : null
+        }
     }
 
     // Deserialize individual assignment
@@ -163,13 +186,16 @@ export const useCookingTeamValidation = () => {
         return CookingTeamAssignmentSchema.parse(deserialized)
     }
 
-    // Deserialize team Display (for season fetch with CookingTeams)
-    const deserializeCookingTeam = (serialized: Record<string, unknown>): CookingTeamDisplay => {
+    // Deserialize team Display (for season fetch with CookingTeams, DinnerEventDetail.cookingTeam)
+    const deserializeCookingTeamDisplay = (serialized: Record<string, unknown>): CookingTeamDisplay => {
         const assignments = serialized.assignments as Record<string, unknown>[] | undefined
+        // Transform Prisma _count.dinners to cookingDaysCount (if present)
+        const _count = serialized._count as { dinners?: number } | undefined
         const deserialized = {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
-            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || []
+            assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || [],
+            cookingDaysCount: _count?.dinners ?? serialized.cookingDaysCount ?? 0
         }
 
         return CookingTeamDisplaySchema.parse(deserialized)
@@ -222,13 +248,16 @@ export const useCookingTeamValidation = () => {
      * Accepts: CookingTeamUpdate (POST input) or Partial<CookingTeamDetail> (generic)
      * Handles partial updates - only serializes fields that are present
      */
-    const toPrismaUpdateData = (team: z.infer<typeof CookingTeamUpdateSchema> | Partial<z.infer<typeof CookingTeamDetailSchema>>) => {
-        const { id: _id, cookingDaysCount: _cookingDaysCount, dinnerEvents: _dinnerEvents, affinity, ...rest } = team as Record<string, unknown>
+    const toPrismaUpdateData = (team: z.infer<typeof CookingTeamUpdateSchema> | Partial<z.infer<typeof CookingTeamDetailSchema>>): z.infer<typeof PrismaTeamUpdateDataSchema> => {
+        const { id: _id, cookingDaysCount: _cookingDaysCount, dinnerEvents: _dinnerEvents, affinity, assignments, ...rest } = team as Record<string, unknown>
 
-        return {
+        const result = {
             ...rest,
-            affinity: affinity ? serializeWeekDayMap(affinity as _WeekDayMap<boolean>) : affinity
+            affinity: affinity ? serializeWeekDayMap(affinity as _WeekDayMap<boolean>) : affinity as string | null | undefined,
+            assignments: assignments as z.infer<typeof CookingTeamAssignmentSchema>[] | undefined
         }
+
+        return PrismaTeamUpdateDataSchema.parse(result)
     }
 
     // Validation helper for tests
@@ -253,8 +282,9 @@ export const useCookingTeamValidation = () => {
         getTeamMemberCounts,
         getAssignmentIdsForRole,
         serializeCookingTeam,
-        deserializeCookingTeam,
+        deserializeCookingTeamDisplay,
         deserializeCookingTeamDetail,
+        serializeCookingTeamAssignment,
         deserializeCookingTeamAssignment,
         // Prisma transformation functions
         toPrismaCreateData,

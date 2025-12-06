@@ -5,11 +5,13 @@ import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
-    excludeDatesFromInterval
+    excludeDatesFromInterval,
+    createDateInTimezone
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
 import {subDays} from "date-fns/subDays"
 import {subMinutes} from "date-fns/subMinutes"
+import {addMinutes} from "date-fns/addMinutes"
 
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
@@ -43,9 +45,8 @@ function weekDayMapToDays(cookingDays: WeekDayMap) {
     return Object.entries(cookingDays).filter(([_, isOn]) => isOn).map(([day, _]) => day as WeekDay)
 }
 
-function dateToWeekDay(firstDay: Date) {
-    const firstAsIsoDay = getISODay(firstDay)
-    return WEEKDAYS[firstAsIsoDay - 1]
+export function dateToWeekDay(date: Date): WeekDay {
+    return WEEKDAYS[getISODay(date) - 1]
 }
 
 /**
@@ -416,19 +417,17 @@ export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDa
 }
 
 /**
- * Get dinner time range for a given date
+ * Get dinner time range for a given date in Copenhagen timezone.
+ * Uses createDateInTimezone to ensure correct UTC representation on Cloudflare Workers.
  *
  * @param date - The date to get dinner time for
- * @param startHour - Hour when dinner starts (24h format, e.g. 18 for 6 PM)
+ * @param startHour - Hour when dinner starts (24h format, e.g. 18 for 6 PM) in Copenhagen
  * @param durationMinutes - Duration of dinner window in minutes (e.g. 60 for 1 hour)
- * @returns DateRange with start and end times in configured timezone
+ * @returns DateRange with start and end times correctly offset for Copenhagen timezone
  */
 export const getDinnerTimeRange = (date: Date, startHour: number, durationMinutes: number): DateRange => {
-    const start = new Date(date)
-    start.setHours(startHour, 0, 0, 0)
-
-    const end = new Date(start)
-    end.setMinutes(end.getMinutes() + durationMinutes)
+    const start = createDateInTimezone(date, startHour)
+    const end = addMinutes(start, durationMinutes)
 
     return {start, end}
 }

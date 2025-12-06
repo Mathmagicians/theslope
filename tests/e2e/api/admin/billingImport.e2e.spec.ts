@@ -5,7 +5,7 @@ import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
 import testHelpers from '../../testHelpers'
 
-const {validatedBrowserContext, headers} = testHelpers
+const {validatedBrowserContext, headers, salt, temporaryAndRandom} = testHelpers
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'
 
 const testHouseholdIds: number[] = []
@@ -15,16 +15,8 @@ test.describe('Billing Import API', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Ensure active season with dinner events
+        // Ensure active season with dinner events (singleton)
         await SeasonFactory.createActiveSeason(context)
-
-        // Create a test household
-        const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
-            context,
-            {address: 'Billing Test Address 123'},
-            1
-        )
-        testHouseholdIds.push(household.id)
     })
 
     test.afterAll(async ({browser}) => {
@@ -48,19 +40,31 @@ test.describe('Billing Import API', () => {
 
     test('GIVEN valid CSV WHEN importing THEN creates orders', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        // Create test household with salted address
+        const testAddress = salt('Billing Test Address', testSalt)
+        const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            {address: testAddress},
+            1
+        )
+        testHouseholdIds.push(household.id)
 
         const activeSeason = await SeasonFactory.createActiveSeason(context)
         const events = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
         expect(events.length, 'Active season should have dinner events').toBeGreaterThan(0)
 
         const dates = events.slice(0, 2).map(e => e.date)
-        const csv = BillingFactory.generateCSV('Billing Test Address 123', dates, 1, 1)
+        const csv = BillingFactory.generateCSV(testAddress, dates, 1, 1)
 
         const result = await BillingFactory.importOrders(context, csv)
 
         const expectedCount = dates.length * 2 // 1 adult + 1 child per date
-        expect(result.count).toBe(expectedCount)
-        expect(result.orders).toHaveLength(expectedCount)
+        expect(result.totalCreated).toBe(expectedCount)
+        // Verify createdIds across all batch results
+        const allCreatedIds = result.results.flatMap(r => r.createdIds)
+        expect(allCreatedIds).toHaveLength(expectedCount)
     })
 
     test('GIVEN empty CSV WHEN importing THEN fails with 400', async ({browser}) => {
@@ -76,12 +80,14 @@ test.describe('Billing Import API', () => {
 
     test('GIVEN CSV with unknown address WHEN importing THEN fails with 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
 
         const activeSeason = await SeasonFactory.createActiveSeason(context)
         const events = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
         const dates = events.slice(0, 1).map(e => e.date)
 
-        const csv = BillingFactory.generateCSV('Unknown Address 999', dates)
+        const unknownAddress = salt('Unknown Address', testSalt)
+        const csv = BillingFactory.generateCSV(unknownAddress, dates)
 
         const response = await context.request.post(BILLING_IMPORT_ENDPOINT, {
             headers,
@@ -95,8 +101,18 @@ test.describe('Billing Import API', () => {
 
     test('GIVEN CSV with date missing dinner event WHEN importing THEN fails with 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
 
-        const csv = BillingFactory.generateCSV('Billing Test Address 123', [new Date(2099, 11, 25)])
+        // Create test household with salted address (needed for valid address lookup)
+        const testAddress = salt('Billing Missing Event', testSalt)
+        const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            {address: testAddress},
+            1
+        )
+        testHouseholdIds.push(household.id)
+
+        const csv = BillingFactory.generateCSV(testAddress, [new Date(2099, 11, 25)])
 
         const response = await context.request.post(BILLING_IMPORT_ENDPOINT, {
             headers,

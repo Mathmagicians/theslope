@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistory } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -11,7 +11,7 @@ import { SeasonFactory } from './seasonFactory'
 const { headers, salt, temporaryAndRandom } = testHelpers
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -45,12 +45,6 @@ export class OrderFactory {
     closedAt: null,
     createdAt: SeasonFactory.generateUniqueDate(),
     updatedAt: SeasonFactory.generateUniqueDate(),
-    ticketPrice: {
-      id: 1,
-      ticketType: TicketTypeSchema.enum.ADULT,
-      price: 45,
-      description: 'Adult ticket'
-    },
     ...overrides
   })
 
@@ -78,7 +72,6 @@ export class OrderFactory {
       name: 'Test',
       lastName: 'User',
       pictureUrl: null,
-      dinnerPreferences: null,
       allergies: []
     },
     bookedByUser: {
@@ -96,6 +89,7 @@ export class OrderFactory {
 
   static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
     const defaults = {
+      householdId: 1,
       dinnerEventId: 5,
       orders: [
         {
@@ -134,10 +128,13 @@ export class OrderFactory {
     ...overrides
   })
 
-  static readonly defaultOrderHistory = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistory>): OrderHistory => ({
+  /**
+   * OrderHistoryDisplay - lightweight for lists (ADR-009)
+   */
+  static readonly defaultOrderHistoryDisplay = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDisplay>): OrderHistoryDisplay => ({
     id: 1,
     orderId: 1,
-    action: OrderStateSchema.enum.BOOKED,
+    action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
     auditData: JSON.stringify({
       inhabitantId: 10,
@@ -146,8 +143,73 @@ export class OrderFactory {
       priceAtBooking: 45
     }),
     timestamp: SeasonFactory.generateUniqueDate(),
+    // Denormalized fields for cancellation queries
+    inhabitantId: null,
+    dinnerEventId: null,
+    seasonId: null,
     ...overrides
   })
+
+  /**
+   * OrderHistoryDetail - includes order relation (ADR-009)
+   */
+  static readonly defaultOrderHistoryDetail = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDetail>): OrderHistoryDetail => ({
+    ...OrderFactory.defaultOrderHistoryDisplay(testSalt),
+    order: OrderFactory.defaultOrder(testSalt),
+    ...overrides
+  })
+
+  /**
+   * OrderHistoryCreate - for input validation (no id, no timestamp)
+   */
+  static readonly defaultOrderHistoryCreate = (overrides?: Partial<OrderHistoryCreate>): OrderHistoryCreate => ({
+    orderId: 1,
+    action: OrderAuditActionSchema.enum.USER_BOOKED,
+    performedByUserId: 1,
+    auditData: JSON.stringify({
+      inhabitantId: 10,
+      bookedByUserId: 1,
+      ticketPriceId: 1,
+      priceAtBooking: 45
+    }),
+    inhabitantId: null,
+    dinnerEventId: null,
+    seasonId: null,
+    ...overrides
+  })
+
+  // === BULK ORDER CREATION ===
+
+  static readonly defaultOrderCreateWithPrice = (householdId: number = 1, overrides?: Partial<OrderCreateWithPrice>): OrderCreateWithPrice => ({
+    dinnerEventId: 1,
+    inhabitantId: 1,
+    bookedByUserId: null,
+    ticketPriceId: 1,
+    priceAtBooking: 4000,
+    householdId,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    state: OrderStateSchema.enum.BOOKED,
+    ...overrides
+  })
+
+  static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
+    action: 'BULK_IMPORT',
+    performedByUserId: 1,
+    source: 'csv_billing',
+    ...overrides
+  })
+
+  static readonly defaultCreateOrdersResult = (overrides?: Partial<CreateOrdersResult>): CreateOrdersResult => ({
+    householdId: 1,
+    createdIds: [1, 2, 3],
+    ...overrides
+  })
+
+  /**
+   * Create a batch of orders for same household (for OrdersBatchSchema tests)
+   */
+  static readonly createOrdersBatch = (householdId: number, count: number): OrderCreateWithPrice[] =>
+    Array.from({length: count}, (_, i) => OrderFactory.defaultOrderCreateWithPrice(householdId, {inhabitantId: i + 1}))
 
   // === API METHODS ===
 
@@ -155,7 +217,8 @@ export class OrderFactory {
     context: BrowserContext,
     orderData?: Partial<CreateOrdersRequest>,
     expectedStatus: number = 201
-  ): Promise<Order[]> => {
+  ): Promise<CreateOrdersResult> => {
+    const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
 
     const response = await context.request.put(ORDER_ENDPOINT, {
@@ -167,13 +230,8 @@ export class OrderFactory {
     const errorBody = status !== expectedStatus ? await response.text() : ''
     expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-    if (expectedStatus === 201) {
-      const responseBody = await response.json()
-      expect(Array.isArray(responseBody), 'Response should be array of orders').toBe(true)
-      return responseBody
-    }
-
-    return await response.json()
+    const responseBody = await response.json()
+    return CreateOrdersResultSchema.parse(responseBody)
   }
 
   static readonly getOrder = async (
@@ -198,7 +256,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
@@ -216,7 +274,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
 
     const status = response.status()
@@ -235,7 +293,7 @@ export class OrderFactory {
     orderId: number,
     swapData?: Partial<SwapOrderRequest>,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const data = this.defaultSwapOrderRequest(swapData)
 
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {

@@ -58,6 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   activate: []
+  deactivate: []
 }>()
 
 const planStore = usePlanStore()
@@ -140,21 +141,35 @@ const alertConfig = computed(() => {
   }
 })
 
-// Show button only if season is eligible (can be activated or already active)
+// Button configuration based on active state
+const buttonConfig = {
+  activate: {
+    name: 'activate-season',
+    color: 'success' as const,
+    icon: 'i-heroicons-check-circle',
+    label: 'Aktiver Sæson',
+    emoji: '🟢',
+    action: () => emit('activate')
+  },
+  deactivate: {
+    name: 'deactivate-season',
+    color: 'warning' as const,
+    icon: 'i-heroicons-pause-circle',
+    label: 'Deaktiver Sæson',
+    emoji: '🟡',
+    action: () => emit('deactivate')
+  }
+}
+
+// Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
   if (!props.showActivationButton || !season.value) return false
-  // Show if already active (will be disabled) or if can be activated
   return season.value.isActive || canSeasonBeActive(season.value)
 })
 
-// Disable button if already active
-const isActivateButtonDisabled = computed(() => {
-  return season.value?.isActive ?? false
-})
-
-const handleActivate = () => {
-  emit('activate')
-}
+const currentButton = computed(() =>
+  season.value?.isActive ? buttonConfig.deactivate : buttonConfig.activate
+)
 </script>
 
 <template>
@@ -167,20 +182,24 @@ const handleActivate = () => {
     :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
-      <UButton
-        name="activate-season"
-        color="success"
-        icon="i-heroicons-check-circle"
-        :size="getIsMd ? 'md' : 'sm'"
-        :disabled="isActivateButtonDisabled"
-        :square="!getIsMd"
-        :loading="isActiveSeasonIdLoading"
-        @click="handleActivate"
-      >
-        <template v-if="getIsMd">
-          {{ isActivateButtonDisabled ? 'Fællesspisnings sæson er i gang 🟢' : 'Aktiver Sæson' }}
-        </template>
-      </UButton>
+      <UFormField :hint="getIsMd ? (season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv') : undefined">
+        <UButton
+          :name="currentButton.name"
+          :color="currentButton.color"
+          :trailing-icon="currentButton.icon"
+          :size="getIsMd ? 'md' : 'sm'"
+          :square="!getIsMd"
+          :loading="isActiveSeasonIdLoading"
+          @click="currentButton.action"
+        >
+          <template #leading>
+            {{ currentButton.emoji }}
+          </template>
+          <template v-if="getIsMd" #default>
+            {{ currentButton.label }}
+          </template>
+        </UButton>
+      </UFormField>
     </template>
   </UAlert>
 </template>

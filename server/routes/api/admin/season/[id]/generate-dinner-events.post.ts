@@ -1,6 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason} from "~~/server/data/prismaRepository"
-import {saveDinnerEvent} from "~~/server/data/financesRepository"
+import {saveDinnerEvents} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
 import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    // Input validation try-catch - FAIL EARLY
+    // Input validation - FAIL EARLY
     let seasonId!: number
     try {
         const params = await getValidatedRouterParams(event, idSchema.parse)
@@ -31,24 +31,20 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
         return throwH3Error('🗓️ > SEASON > [GENERATE_EVENTS] Input validation error', error)
     }
 
-    // Business logic try-catch - separate concerns
+    // Business logic
     try {
         console.info(`🗓️ > SEASON > [GENERATE_EVENTS] Generating dinner events for season ${seasonId}`)
 
-        // Fetch season from database (repository returns domain object with Date objects)
         const season = await fetchSeason(d1Client, seasonId)
         if (!season) {
             return throwH3Error(`🗓️ > SEASON > [GENERATE_EVENTS] Season ${seasonId} not found`, new Error('Not found'), 404)
         }
 
-        // Generate dinner event data using composable (call at request time, not module load time)
         const {generateDinnerEventDataForSeason} = useSeason()
         const dinnerEventDataArray = generateDinnerEventDataForSeason(season)
 
-        // Persist all dinner events
-        const savedEvents = await Promise.all(
-            dinnerEventDataArray.map(eventData => saveDinnerEvent(d1Client, eventData))
-        )
+        // Bulk insert with createManyAndReturn
+        const savedEvents = await saveDinnerEvents(d1Client, dinnerEventDataArray)
 
         console.info(`🗓️ > SEASON > [GENERATE_EVENTS] Successfully generated ${savedEvents.length} dinner events for season ${seasonId}`)
 

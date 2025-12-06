@@ -32,11 +32,11 @@ interface Slots {
 defineSlots<Slots>()
 
 // Design system
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UCard class="rounded-none" :ui="{ root: 'flex flex-col h-full' }">
+  <UCard :class="LAYOUTS.cardResponsive" :ui="{ root: 'flex flex-col h-full' }">
     <template #header>
       <h3 :class="TYPOGRAPHY.cardTitle">{{ title }}</h3>
     </template>

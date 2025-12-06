@@ -321,8 +321,29 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        const deactivateSeason = async () => {
+            try {
+                console.info(`🌞 > PLAN_STORE > Deactivating active season`)
+                await $fetch<Season | null>('/api/admin/season/deactivate', {
+                    method: 'POST'
+                })
+                // Refresh
+                await loadActiveSeason()
+                await loadSeasons()
+                // Refresh selected season to get updated isActive state
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
+            } catch (e: unknown) {
+                handleApiError(e, 'deactivateSeason')
+                throw e
+            }
+        }
+
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamDetail | CookingTeamDetail[]): Promise<CookingTeamDetail[]> => {
+        // ADR-009: Accept Display type for input (lightweight), return Detail type (mutation response)
+        const createTeam = async (teamOrTeams: CookingTeamDisplay | CookingTeamDisplay[]): Promise<CookingTeamDetail[]> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
@@ -347,7 +368,8 @@ export const usePlanStore = defineStore("Plan", () => {
             return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
         }
 
-        const updateTeam = async (team: CookingTeamDetail) => {
+        // ADR-009: Accept Display type for input (lightweight)
+        const updateTeam = async (team: CookingTeamDisplay) => {
             try {
                 await $fetch(`/api/admin/team/${team.id}`, {
                     method: 'post',
@@ -382,7 +404,9 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
-        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+        // Input: Assignment data without id/inhabitant (cookingTeamId in body, inhabitant populated on return)
+        // Output: CookingTeamAssignment (with inhabitant populated by Prisma include)
+        const addTeamMember = async (assignment: Omit<CookingTeamAssignment, 'id' | 'inhabitant'>): Promise<CookingTeamAssignment> => {
             try {
                 const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
                     method: 'PUT',
@@ -493,6 +517,7 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             activateSeason,
+            deactivateSeason,
             generateDinnerEvents,
             assignTeamAffinitiesAndEvents,
             createTeam,

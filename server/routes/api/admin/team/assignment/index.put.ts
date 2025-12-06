@@ -12,11 +12,12 @@ const {throwH3Error} = eventHandlerHelper
 // Get base schema from composable
 const {CookingTeamAssignmentSchema} = useCookingTeamValidation()
 
-// For this endpoint, cookingTeamId is in body (not URL param), so only omit id
-const AssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true })
+// For this endpoint, cookingTeamId is in body (not URL param), so only omit id and inhabitant
+// inhabitant is populated by Prisma include on response, not provided by client
+const AssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, inhabitant: true })
 
-// Input type: assignment without id (cookingTeamId required in body)
-type AssignmentCreateInput = Omit<CookingTeamAssignment, 'id'>
+// Input type: assignment without id and inhabitant (cookingTeamId required in body)
+type AssignmentCreateInput = Omit<CookingTeamAssignment, 'id' | 'inhabitant'>
 
 export default defineEventHandler(async (event): Promise<CookingTeamAssignment> => {
     const {cloudflare} = event.context

@@ -6,7 +6,7 @@ SHELL := /bin/bash
 # ENVIRONMENT CONFIGS
 # ============================================================================
 ENV_local := .env
-ENV_dev   := .env.test
+ENV_dev   := .env.dev
 ENV_prod  := .env.prod
 
 URL_local := http://localhost:3000
@@ -31,7 +31,7 @@ define theslope_call
 endef
 
 define heynabo_call
-	@source $(1) && HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+	@source $(1) && HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
 	curl -s -H "Accept: application/json" -H "Authorization: Bearer $$HEY_TOKEN" $(2) | jq
 endef
@@ -131,23 +131,6 @@ d1-seed-master-data-prod: ## Load master data to prod
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
-# ============================================================================
-# ORDER IMPORT (Billing CSV)
-# ============================================================================
-.PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
-
-define theslope_import_orders
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
-endef
-
-theslope-import-orders-local: ## Import orders CSV to localhost
-	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
-
-theslope-import-orders-dev: ## Import orders CSV to dev
-	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
-
-theslope-import-orders-prod: ## Import orders CSV to production
-	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
 
 # ============================================================================
 # DATABASE QUERIES
@@ -179,9 +162,15 @@ d1-nuke-households: ## Delete test households (local)
 	@echo "✅ Cleanup complete!"
 
 # ============================================================================
-# LOGS
+# DEPLOYMENT & LOGS
 # ============================================================================
-.PHONY: logs-dev logs-prod
+.PHONY: deploy-dev deploy-prod logs-dev logs-prod
+
+deploy-dev: ## Deploy to dev with git commit ID
+	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy
+
+deploy-prod: ## Deploy to prod with git commit ID
+	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy:prod
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty
@@ -194,19 +183,20 @@ logs-prod: ## Tail prod logs
 # ============================================================================
 .PHONY: theslope-login-local theslope-login-dev theslope-login-prod theslope-admin-get-households theslope-admin-import theslope-put-user
 
-define theslope_login
-	@source $(1) && curl -s -c .cookies.txt "$(2)/api/auth/login" \
-		-H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
-endef
-
 theslope-login-local: ## Login to localhost
-	$(call theslope_login,$(ENV_local),$(URL_local))
+	@source $(ENV_local) && curl -s -c .cookies.txt "$(URL_local)/api/auth/login" \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-login-dev: ## Login to dev
-	$(call theslope_login,$(ENV_dev),$(URL_dev))
+	@source $(ENV_dev) && curl -s -c .cookies.txt "$(URL_dev)/api/auth/login" \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-login-prod: ## Login to prod
-	$(call theslope_login,$(ENV_prod),$(URL_prod))
+	@source $(ENV_prod) && curl -s -c .cookies.txt "$(URL_prod)/api/auth/login" \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-admin-get-households:
 	@curl -s -b .cookies.txt $(URL_local)/api/admin/household | jq
@@ -221,47 +211,80 @@ theslope-put-user:
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
+theslope-import-orders-dev-manual: theslope-login-dev
+	@curl -b .cookies.txt -X POST "$(URL_local)/api/admin/billing/import" \
+		-H "Content-Type: application/json" \
+		-d '{"csvContent": $(shell cat $(CSV_TEST) | jq -Rs .)}' | jq
+
+# ============================================================================
+# ORDER IMPORT (Billing CSV)
+# ============================================================================
+.PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
+
+define theslope_import_orders
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
+endef
+
+theslope-import-orders-local: ## Import orders CSV to localhost
+	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
+
+theslope-import-orders-dev: ## Import orders CSV to dev
+	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
+
+theslope-import-orders-prod: ## Import orders CSV to production
+	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
+
 # ============================================================================
 # HEYNABO API
 # ============================================================================
 .PHONY: heynabo-login heynabo-get-events heynabo-get-event heynabo-patch-event heynabo-delete-event heynabo-upload-image heynabo-get-locations heynabo-get-nhbrs
 
-heynabo-login: ## Login to HeyNabo (prints token)
-	$(call with_env,$(ENV_local),curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" -d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq)
+heynabo-login-dev: ## Login to HeyNabo (prints token)
+	@source $(ENV_dev) && curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
-heynabo-get-events: ## List all events
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/")
+heynabo-login-prod: ## Login to HeyNabo (prints token)
+	@source $(ENV_prod) && curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" \
+		-H "Content-Type: application/json" \
+		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
-heynabo-get-event: ## Get event (EVENT_ID=xxx)
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/events/$(EVENT_ID)")
+heynabo-get-events-dev: ## List all events
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/events/")
 
-heynabo-patch-event: ## Update event status (EVENT_ID=xxx)
-	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+heynabo-get-event-dev: ## Get event (EVENT_ID=xxx)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)")
+
+heynabo-patch-event-dev: ## Update event status (EVENT_ID=xxx)
+	@source $(ENV_local) && \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -s -X PATCH "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
+		curl -s -X PATCH "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)" \
 			-H "Content-Type: application/json" -H "Authorization: Bearer $$HEY_TOKEN" \
-			-d '{"status": "CANCELED"}' | jq)
+			-d '{"status": "CANCELED"}' | jq
 
-heynabo-delete-event: ## Delete event (EVENT_ID=xxx)
-	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+heynabo-delete-event-dev: ## Delete event (EVENT_ID=xxx)
+	@source $(ENV_local) && \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -s -X DELETE "$$HEY_NABO_API/members/events/$(EVENT_ID)" \
-			-H "Authorization: Bearer $$HEY_TOKEN" | jq)
+		curl -s -X DELETE "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)" \
+			-H "Authorization: Bearer $$HEY_TOKEN" | jq
 
-heynabo-upload-image: ## Upload image to event (EVENT_ID=xxx)
-	$(call with_env,$(ENV_local),\
-		HEY_TOKEN=$$(curl -s -X POST "$$HEY_NABO_API/login" -H "Content-Type: application/json" \
+heynabo-upload-image-dev: ## Upload image to event (EVENT_ID=xxx)
+	@source $(ENV_local) && \
+		HEY_TOKEN=$$(curl -s -X POST "$$NUXT_PUBLIC_HEY_NABO_API/login" -H "Content-Type: application/json" \
 			-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -r '.token') && \
-		curl -v -X POST "$$HEY_NABO_API/members/events/$(EVENT_ID)/files" \
-			-H "Authorization: Bearer $$HEY_TOKEN" -F "file=@public/fællesspisning_0.jpeg")
+		curl -v -X POST "$$NUXT_PUBLIC_HEY_NABO_API/members/events/$(EVENT_ID)/files" \
+			-H "Authorization: Bearer $$HEY_TOKEN" -F "file=@public/fællesspisning_0.jpeg"
 
-heynabo-get-locations:
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/locations/")
+heynabo-get-locations-dev: ## List all locations (dev)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/locations/")
 
-heynabo-get-nhbrs:
-	$(call heynabo_call,$(ENV_local),"$$HEY_NABO_API/members/users/")
+heynabo-get-locations-prod: ## List all locations (prod)
+	$(call heynabo_call,$(ENV_prod),"$$NUXT_PUBLIC_HEY_NABO_API/members/locations/")
+
+heynabo-get-nhbrs-dev: ## List all neighbors (dev)
+	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/users/")
 
 # ============================================================================
 # TESTING

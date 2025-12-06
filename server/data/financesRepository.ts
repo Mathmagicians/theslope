@@ -6,9 +6,14 @@ import type {
     OrderCreate,
     OrderDisplay,
     OrderDetail,
+    OrderCreateWithPrice,
+    AuditContext,
+    CreateOrdersResult,
     DinnerEventCreate,
     DinnerEventDisplay,
-    DinnerEventDetail
+    DinnerEventDetail,
+    OrderHistoryDetail,
+    OrderHistoryCreate
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -27,6 +32,56 @@ import {useCoreValidation} from '~/composables/useCoreValidation'
  */
 
 const {throwH3Error} = eventHandlerHelper
+
+/*** ORDER AUDIT ***/
+
+/**
+ * Create an audit entry in OrderHistory.
+ *
+ * Used for tracking order lifecycle events (creation, cancellation, etc.)
+ * Denormalized fields (inhabitantId, dinnerEventId, seasonId) persist even
+ * after order deletion, enabling cancellation queries for scaffolding.
+ *
+ * ADR-011: OrderHistory with denormalized fields for cancellation tracking
+ * ADR-010: Repository-layer serialization with validated types
+ * ADR-009: Mutations return Detail schema
+ */
+export async function createOrderAuditEntry(
+    d1Client: D1Database,
+    entry: OrderHistoryCreate
+): Promise<OrderHistoryDetail> {
+    const {OrderHistoryCreateSchema, OrderHistoryDetailSchema, deserializeOrder} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Validate input with schema
+    const validatedEntry = OrderHistoryCreateSchema.parse(entry)
+
+    const created = await prisma.orderHistory.create({
+        data: validatedEntry,
+        include: {
+            order: {
+                include: {
+                    ticketPrice: {
+                        select: {ticketType: true}
+                    }
+                }
+            }
+        }
+    })
+
+    console.info(`📋 > ORDER_AUDIT > [CREATE] Created ${validatedEntry.action} entry for order ${validatedEntry.orderId}`)
+
+    // ADR-010: Transform to domain type with proper order deserialization
+    const orderHistoryDetail = {
+        ...created,
+        order: created.order ? {
+            ...deserializeOrder(created.order),
+            ticketType: created.order.ticketPrice.ticketType
+        } : null
+    }
+
+    return OrderHistoryDetailSchema.parse(orderHistoryDetail)
+}
 
 /*** ORDERS ***/
 
@@ -75,113 +130,65 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
 }
 
 /**
- * Batch create multiple orders for a household (parent booking for family + guests)
- * Business rules:
- * - ONE user (bookedByUserId) books for entire family
- * - Can have different inhabitantIds from same household
- * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
- * - All orders must have same bookedByUserId
- * - All inhabitants must be from same household
+ * Batch create orders for a single household with audit trail.
+ *
+ * Trusts caller for validation (OrdersBatchSchema ensures same householdId, max 8 orders).
+ * Uses createManyAndReturn for efficient D1 insertion.
+ *
+ * ADR-009: Returns IDs only (DB is source of truth)
+ * ADR-011: Creates OrderHistory audit entries atomically
+ *
  * @param d1Client - D1 database client
- * @param ordersData - Array of order creation data
- * @returns Promise<OrderDisplay[]> - All orders for this dinner from this household
+ * @param householdId - Household ID (for result tracking)
+ * @param ordersData - Pre-validated array of orders (max 8, same householdId)
+ * @param auditContext - Audit context for OrderHistory entries
+ * @returns CreateOrdersResult with householdId and created order IDs
  */
-export async function createOrders(d1Client: D1Database, ordersData: OrderCreate[]): Promise<OrderDisplay[]> {
-    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household`)
-    const {OrderDisplaySchema} = useBookingValidation()
+export async function createOrders(
+    d1Client: D1Database,
+    householdId: number,
+    ordersData: OrderCreateWithPrice[],
+    auditContext: AuditContext
+): Promise<CreateOrdersResult> {
+    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Business validation: All inhabitants must be from same household (requires DB lookup)
-        const inhabitantIds = [...new Set(ordersData.map(o => o.inhabitantId))]
-        const inhabitants = await prisma.inhabitant.findMany({
-            where: { id: { in: inhabitantIds } },
-            select: { id: true, householdId: true }
+        // Insert orders with createManyAndReturn (Prisma 5.14+, returns IDs)
+        const createdOrders = await prisma.order.createManyAndReturn({
+            data: ordersData.map(order => ({
+                dinnerEventId: order.dinnerEventId,
+                inhabitantId: order.inhabitantId,
+                bookedByUserId: order.bookedByUserId,
+                ticketPriceId: order.ticketPriceId,
+                priceAtBooking: order.priceAtBooking,
+                dinnerMode: order.dinnerMode,
+                state: order.state
+            })),
+            select: { id: true }
         })
 
-        if (inhabitants.length !== inhabitantIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some inhabitants not found`
-            })
-        }
+        const createdIds = createdOrders.map(o => o.id)
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Created order IDs: ${createdIds.join(', ')}`)
 
-        const householdIds = [...new Set(inhabitants.map(i => i.householdId))]
-        if (householdIds.length > 1) {
-            throw createError({
-                statusCode: 400,
-                message: `All inhabitants must be from the same household. Found ${householdIds.length} different households.`
-            })
-        }
-
-        const householdId = householdIds[0]
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Validated: All ${inhabitantIds.length} inhabitants from household ${householdId}`)
-
-        // Validate all ticket prices exist
-        const ticketPriceIds = [...new Set(ordersData.map(o => o.ticketPriceId))]
-        const ticketPrices = await prisma.ticketPrice.findMany({
-            where: { id: { in: ticketPriceIds } }
-        })
-
-        if (ticketPrices.length !== ticketPriceIds.length) {
-            throw createError({
-                statusCode: 404,
-                message: `Some ticket prices not found`
-            })
-        }
-
-        // Create price lookup map
-        const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp]))
-
-        // Create orders individually to get IDs back (avoids race conditions)
-        // Note: Not using createMany since it doesn't return created records
-        const createdOrders = await Promise.all(
-            ordersData.map(async orderData => {
-                const priceAtBooking = priceMap.get(orderData.ticketPriceId)!.price
-
-                return prisma.order.create({
-                    data: {
-                        ...orderData,
-                        priceAtBooking
-                    },
-                    select: {
-                        id: true,
-                        dinnerEventId: true,
-                        inhabitantId: true,
-                        bookedByUserId: true,
-                        ticketPriceId: true,
-                        priceAtBooking: true,
-                        dinnerMode: true,
-                        state: true,
-                        releasedAt: true,
-                        closedAt: true,
-                        createdAt: true,
-                        updatedAt: true,
-                        ticketPrice: {
-                            select: {
-                                id: true,
-                                ticketType: true,
-                                price: true,
-                                description: true,
-                                maximumAgeLimit: true
-                            }
-                        }
-                    }
+        // Create audit trail entries atomically
+        await prisma.orderHistory.createMany({
+            data: createdIds.map((orderId, index) => ({
+                orderId,
+                action: auditContext.action,
+                performedByUserId: auditContext.performedByUserId,
+                auditData: JSON.stringify({
+                    source: auditContext.source,
+                    orderData: ordersData[index]
                 })
-            })
-        )
-
-        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully created ${createdOrders.length} orders for household ${householdId}`)
-
-        // Transform to domain type with ticketType (use included relation instead of priceMap)
-        return createdOrders.map(order => {
-            return OrderDisplaySchema.parse({
-                ...order,
-                ticketType: order.ticketPrice.ticketType
-            })
+            }))
         })
+
+        console.info(`🎟️ > ORDER > [BATCH CREATE] Successfully created ${createdIds.length} orders with audit trail for household ${householdId}`)
+
+        return { householdId, createdIds }
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [CREATE]: Error batch creating ${ordersData.length} orders`, error)
+        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${ordersData.length} orders for household ${householdId}`, error)
     }
 }
 
@@ -255,25 +262,79 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
     }
 }
 
-export async function deleteOrder(d1Client: D1Database, id: number): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [DELETE] Deleting order with ID ${id}`)
+/**
+ * Delete an order and create audit trail entry.
+ *
+ * @param d1Client - D1 database client
+ * @param id - Order ID to delete
+ * @param performedByUserId - User ID who performed deletion (null = admin/system)
+ *
+ * Audit action is determined by performedByUserId:
+ * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
+ * - Null: ADMIN_DELETED (admin deleted, may be recreated by scaffolder)
+ *
+ * ADR-011: Creates OrderHistory entry with denormalized fields before deletion.
+ * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
+ */
+export async function deleteOrder(
+    d1Client: D1Database,
+    id: number,
+    performedByUserId: number | null = null
+): Promise<OrderDisplay> {
+    const action = performedByUserId ? 'USER_CANCELLED' : 'ADMIN_DELETED'
+    console.info(`🎟️ > ORDER > [DELETE] Deleting order ${id} (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
     const {OrderDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Delete order - cascade handles strong associations (Transaction) automatically
-        const deletedOrder = await prisma.order.delete({
+        // 1. Fetch order with relations to get denormalized fields and seasonId
+        const orderToDelete = await prisma.order.findUniqueOrThrow({
             where: {id},
             include: {
                 ticketPrice: {
-                    select: {
-                        ticketType: true
-                    }
+                    select: {ticketType: true}
+                },
+                dinnerEvent: {
+                    select: {seasonId: true}
                 }
             }
         })
 
-        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order with ID ${deletedOrder.id}`)
+        // 2. Create audit entry with denormalized fields BEFORE deletion
+        // (orderId becomes NULL after deletion due to SET NULL, but denormalized fields persist)
+        await prisma.orderHistory.create({
+            data: {
+                orderId: id,
+                action,
+                performedByUserId,
+                inhabitantId: orderToDelete.inhabitantId,
+                dinnerEventId: orderToDelete.dinnerEventId,
+                seasonId: orderToDelete.dinnerEvent?.seasonId ?? null,
+                auditData: JSON.stringify({
+                    orderSnapshot: {
+                        id: orderToDelete.id,
+                        inhabitantId: orderToDelete.inhabitantId,
+                        dinnerEventId: orderToDelete.dinnerEventId,
+                        ticketPriceId: orderToDelete.ticketPriceId,
+                        priceAtBooking: orderToDelete.priceAtBooking,
+                        dinnerMode: orderToDelete.dinnerMode,
+                        state: orderToDelete.state
+                    }
+                })
+            }
+        })
+
+        // 3. Delete order - cascade handles strong associations (Transaction) automatically
+        const deletedOrder = await prisma.order.delete({
+            where: {id},
+            include: {
+                ticketPrice: {
+                    select: {ticketType: true}
+                }
+            }
+        })
+
+        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id} with ${action} audit entry`)
 
         // Transform Prisma type to domain type and validate (ADR-010)
         const {ticketPrice, ...orderWithoutRelation} = deletedOrder
@@ -334,30 +395,34 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
 // - Weak to CookingTeam (event can exist without assigned team)
 // - Weak to Inhabitant chef (event can exist without assigned chef)
 
-export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
+/**
+ * Save one or more dinner events. Accepts single or array, returns Display[] (ADR-009).
+ * Uses createManyAndReturn for efficient D1 insertion.
+ */
+export async function saveDinnerEvents(
+    d1Client: D1Database,
+    dinnerEventInput: DinnerEventCreate | DinnerEventCreate[]
+): Promise<DinnerEventDisplay[]> {
+    // Normalize to array
+    const dinnerEvents = Array.isArray(dinnerEventInput) ? dinnerEventInput : [dinnerEventInput]
+    if (dinnerEvents.length === 0) return []
 
-    // Exclude relation fields that Prisma doesn't accept in create data
-    const {allergens, ...createData} = dinnerEvent
+    console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving ${dinnerEvents.length} dinner event(s)`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventDisplaySchema} = useBookingValidation()
 
     try {
-        const newDinnerEvent = await prisma.dinnerEvent.create({
+        // Strip relation fields, keep only create data
+        const createData = dinnerEvents.map(({allergens, ...data}) => data)
+
+        const created = await prisma.dinnerEvent.createManyAndReturn({
             data: createData
         })
 
-        // ADR-009: mutations return Detail - newly created events have no chef/cookingTeam yet
-        const dinnerEventToValidate = {
-            ...newDinnerEvent,
-            chef: null,
-            cookingTeam: null
-        }
-
-        console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
-        return DinnerEventDetailSchema.parse(dinnerEventToValidate)
+        console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved ${created.length} dinner event(s)`)
+        return created.map(de => DinnerEventDisplaySchema.parse(de))
     } catch (error) {
-        return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
+        return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving ${dinnerEvents.length} dinner event(s)`, error)
     }
 }
 
@@ -411,6 +476,9 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                             include: {
                                 inhabitant: true
                             }
+                        },
+                        _count: {
+                            select: {dinners: true}
                         }
                     }
                 },
@@ -438,36 +506,12 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
         })
 
         if (dinnerEvent) {
-            // Transform tickets to include flattened ticketType and dinnerEvent relation
-            const transformedTickets = dinnerEvent.tickets.map(ticket => ({
-                ...ticket,
-                ticketType: ticket.ticketPrice.ticketType,  // Flatten from nested relation
-                dinnerEvent: {  // Add the parent dinner event (excluding tickets to avoid circular ref)
-                    id: dinnerEvent.id,
-                    date: dinnerEvent.date,
-                    menuTitle: dinnerEvent.menuTitle,
-                    menuDescription: dinnerEvent.menuDescription,
-                    menuPictureUrl: dinnerEvent.menuPictureUrl,
-                    state: dinnerEvent.state,
-                    totalCost: dinnerEvent.totalCost,
-                    chefId: dinnerEvent.chefId,
-                    cookingTeamId: dinnerEvent.cookingTeamId,
-                    heynaboEventId: dinnerEvent.heynaboEventId,
-                    seasonId: dinnerEvent.seasonId,
-                    createdAt: dinnerEvent.createdAt,
-                    updatedAt: dinnerEvent.updatedAt
-                }
-            }))
-
-            // ADR-010: Deserialize all nested relations with JSON string fields
+            // ADR-010: Deserialize handles all transformations:
             // - allergens: flatten join table
             // - chef: Inhabitant with dinnerPreferences JSON string
             // - cookingTeam: CookingTeam with affinity and assignments JSON strings
-            // - tickets: Order with nested inhabitant's dinnerPreferences
-            const dinnerEventToValidate = deserializeDinnerEventDetail({
-                ...dinnerEvent,
-                tickets: transformedTickets
-            })
+            // - tickets: flatten ticketType, add dinnerEvent ref, deserialize inhabitant
+            const dinnerEventToValidate = deserializeDinnerEventDetail(dinnerEvent)
 
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
             return DinnerEventDetailSchema.parse(dinnerEventToValidate)
@@ -503,7 +547,6 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                                 inhabitant: true
                             }
                         },
-                        dinners: true,
                         _count: {
                             select: {dinners: true}
                         }
@@ -520,6 +563,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                                 }
                             }
                         },
+                        bookedByUser: true,
                         ticketPrice: true
                     }
                 },
@@ -531,7 +575,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
             }
         })
 
-        // ADR-010: Deserialize all nested JSON string fields (chef.dinnerPreferences, cookingTeam.affinity, ticket.inhabitant.dinnerPreferences)
+        // ADR-010: Deserialize handles all transformations (same as fetchDinnerEvent)
         const dinnerEventToValidate = deserializeDinnerEventDetail(updatedDinnerEvent)
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)

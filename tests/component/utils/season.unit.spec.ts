@@ -1272,6 +1272,30 @@ describe('Active Season Management utilities', () => {
             // THEN: Should return null
             expect(result).toBeNull()
         })
+
+        describe('timezone handling for Heynabo integration (ADR-013)', () => {
+            // Verifies dinner times are correctly represented when converted to ISO strings
+            // 18:00 Copenhagen should be 17:00 UTC (winter) or 16:00 UTC (summer)
+
+            it.each([
+                {
+                    scenario: 'winter (CET, UTC+1)',
+                    dinnerDate: new Date(2030, 0, 15), // Jan 15, 2030 (future)
+                    expectedUtcHour: 17 // 18:00 Copenhagen = 17:00 UTC
+                },
+                {
+                    scenario: 'summer (CEST, UTC+2)',
+                    dinnerDate: new Date(2030, 6, 15), // July 15, 2030 (future)
+                    expectedUtcHour: 16 // 18:00 Copenhagen = 16:00 UTC
+                }
+            ])('$scenario: 18:00 Copenhagen → $expectedUtcHour:00 UTC', ({ dinnerDate, expectedUtcHour }) => {
+                const getNext = getNextDinnerDate(60)
+                const result = getNext([dinnerDate], 18)
+
+                expect(result).not.toBeNull()
+                expect(result!.start.getUTCHours()).toBe(expectedUtcHour)
+            })
+        })
     })
 
     describe('isBeforeDeadline', () => {

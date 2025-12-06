@@ -7,7 +7,7 @@ main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
 
 [vars]
-HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
 [limits]
@@ -32,7 +32,7 @@ routes = [
 ]
 
 [env.dev.vars]
-HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
 [[env.dev.d1_databases]]
@@ -51,7 +51,7 @@ routes = [
 ]
 
 [env.prod.vars]
-HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope-prod"
 
 [[env.prod.d1_databases]]

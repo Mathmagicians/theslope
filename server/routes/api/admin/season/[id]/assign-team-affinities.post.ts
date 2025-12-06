@@ -1,6 +1,7 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {fetchSeason, updateTeam} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
+import {useCookingTeam} from "~/composables/useCookingTeam"
 import type {CookingTeamDetail} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
@@ -43,20 +44,26 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
 
         // Compute affinities for teams using composable (call at request time, not module load time)
         const {assignAffinitiesToTeams} = useSeason()
+        const {chunkTeamAffinities} = useCookingTeam()
         const teamsWithAffinities = assignAffinitiesToTeams(season)
 
-        // Update each team with computed affinity
-        // Transform to CookingTeamUpdate format (strip read-only fields, keep only updateable fields)
-        const updatedTeams = await Promise.all(
-            teamsWithAffinities.map(team => {
-                // CookingTeamUpdate: only id (required) + optional updateable fields (name, seasonId, affinity)
-                const teamForUpdate = {
-                    id: team.id!,
-                    affinity: team.affinity
-                }
-                return updateTeam(d1Client, team.id!, teamForUpdate)
-            })
-        )
+        // Process in batches to avoid D1 rate limits
+        const batches = chunkTeamAffinities(teamsWithAffinities)
+        const updatedTeams: CookingTeamDetail[] = []
+
+        for (const batch of batches) {
+            const batchResults = await Promise.all(
+                batch.map(team => {
+                    // CookingTeamUpdate: only id (required) + optional updateable fields (name, seasonId, affinity)
+                    const teamForUpdate = {
+                        id: team.id!,
+                        affinity: team.affinity
+                    }
+                    return updateTeam(d1Client, team.id!, teamForUpdate)
+                })
+            )
+            updatedTeams.push(...batchResults)
+        }
 
         console.info(`👥 > SEASON > [ASSIGN_AFFINITIES] Successfully assigned affinities to ${updatedTeams.length} teams for season ${seasonId}`)
 

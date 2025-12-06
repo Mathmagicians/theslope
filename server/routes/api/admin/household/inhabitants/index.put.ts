@@ -1,7 +1,7 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {saveInhabitant} from "~~/server/data/prismaRepository"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import type {InhabitantDetail} from "~/composables/useCoreValidation"
+import type {InhabitantCreate, InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
@@ -11,7 +11,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let inhabitantData!: InhabitantDetail
+    let inhabitantData!: InhabitantCreate
     let householdId!: number
     try {
         const {InhabitantCreateSchema} = useCoreValidation()

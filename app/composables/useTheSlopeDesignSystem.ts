@@ -3,8 +3,8 @@ import type {AvatarProps, ButtonProps} from '@nuxt/ui'
 import heynaboLogo from '~/assets/heynabo.jpeg'
 
 // NuxtUI size types extracted from component props
-type NuxtUISize = NonNullable<ButtonProps['size']>
-type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUISize = NonNullable<ButtonProps['size']>
+export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
 
 /**
  * Color System - TheSlope Design System
@@ -289,6 +289,17 @@ export const LAYOUTS = {
   gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
   gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
 
+  // Master-detail page layout (for UPage :ui prop)
+  // 1/4 master (left), 3/4 detail (center) on desktop, stacked on mobile
+  masterDetailPage: {
+    root: 'flex flex-col md:grid md:grid-cols-12 gap-2',
+    left: 'md:col-span-3',
+    center: 'md:col-span-9'
+  },
+
+  // Responsive card rounding: no rounding on mobile (full-bleed), rounded on desktop
+  cardResponsive: 'rounded-none md:rounded-lg',
+
   // Section content (card body sections)
   sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
   sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
@@ -373,7 +384,12 @@ export const COMPONENTS = {
   // Table interactions - row selection and click patterns
   table: {
     selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
-    clickableCell: 'cursor-pointer'
+    clickableCell: 'cursor-pointer',
+    /**
+     * UTable :ui prop for consistent cell styling
+     * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2)
+     */
+    ui: { td: 'py-1 md:py-2' }
   },
 
   // Calendar UI configuration (UCalendar)
@@ -476,6 +492,8 @@ export const ICONS = {
   exclamationCircle: 'i-heroicons-exclamation-circle',
   xMark: 'i-heroicons-x-mark',
   arrowRight: 'i-heroicons-arrow-right',
+  arrowLeft: 'i-heroicons-arrow-left',
+  arrowUp: 'i-heroicons-arrow-up',
 
   // Empty states
   robotDead: 'i-mage-robot-dead'
@@ -546,6 +564,9 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
   get calendarAccordionDefault(): string | undefined { return isMd.value ? '0' : undefined },
 
+  // Agenda page size: 3 on mobile, 5 on desktop
+  get agendaPageSize(): number { return isMd.value ? 5 : 3 },
+
   // Empty state avatar: 2xl on mobile, 3xl on desktop
   get emptyStateAvatar(): NuxtUIAvatarSize { return isMd.value ? '3xl' : '2xl' },
 
@@ -557,6 +578,19 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
   xl: 'xl' as const,
   '2xl': '2xl' as const,
   '3xl': '3xl' as const
+})
+
+/**
+ * createResponsiveIcons - Responsive icon patterns
+ *
+ * Provides icons that change based on layout direction (mobile stacked vs desktop side-by-side).
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Icon helpers
+ */
+const createResponsiveIcons = (isMd: Ref<boolean>) => ({
+  // Arrow pointing to master panel: up on mobile (stacked), left on desktop (side-by-side)
+  get arrowToMaster(): string { return isMd.value ? ICONS.arrowLeft : ICONS.arrowUp }
 })
 
 /**
@@ -609,7 +643,7 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
   titleBadgeProps: {
     color: 'neutral' as const,
     variant: 'outline' as const,
-    ui: { rounded: 'rounded-none md:rounded-md' }
+    class: 'rounded-none md:rounded-md'
   },
 
   /**
@@ -891,6 +925,9 @@ export const useTheSlopeDesignSystem = () => {
 
     // Navigation configuration
     NAVIGATION: createNavigation(isMd),
+
+    // Responsive icons
+    RESPONSIVE_ICONS: createResponsiveIcons(isMd),
 
     // Low-level builders (only if you need custom combinations)
     BG,

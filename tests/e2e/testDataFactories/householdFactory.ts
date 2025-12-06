@@ -83,8 +83,9 @@ export class HouseholdFactory {
 
         // Refetch household to include newly created inhabitants (ADR-009: mutations return Detail with relations)
         const householdWithInhabitants = await this.getHouseholdById(context, household.id)
+        expect(householdWithInhabitants, `Household ${household.id} should exist after creation`).not.toBeNull()
 
-        return {household: householdWithInhabitants, inhabitants}
+        return {household: householdWithInhabitants!, inhabitants}
     }
 
 

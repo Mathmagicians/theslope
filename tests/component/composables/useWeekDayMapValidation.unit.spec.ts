@@ -138,3 +138,55 @@ testConfigurations.forEach(({ name, options, selectedValue, unselectedValue, val
         })
     })
 })
+
+describe('maskWeekDayMap', () => {
+    const {maskWeekDayMap} = useWeekDayMapValidation({
+        valueSchema: z.nativeEnum(DinnerMode),
+        defaultValue: DinnerMode.DINEIN
+    })
+
+    const createMask = (pattern: boolean[]) =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: pattern[i]}), {} as Record<string, boolean>)
+
+    const createPrefs = (values: DinnerMode[]) =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as Record<string, DinnerMode>)
+
+    it('should create defaults when source is null', () => {
+        const mask = createMask([true, false, true, false, true, false, false]) // Mon, Wed, Fri
+        const result = maskWeekDayMap(null, mask, DinnerMode.DINEIN, DinnerMode.NONE)
+
+        WEEKDAYS.forEach(day => {
+            const expected = mask[day] ? DinnerMode.DINEIN : DinnerMode.NONE
+            expect(result[day], `${day}`).toBe(expected)
+        })
+    })
+
+    it('should preserve masked values and clip unmasked to maskedValue', () => {
+        const mask = createMask([true, false, true, false, true, false, false])
+        const source = createPrefs([
+            DinnerMode.TAKEAWAY,   // Mon - masked, preserve
+            DinnerMode.DINEIN,     // Tue - unmasked, clip
+            DinnerMode.DINEINLATE, // Wed - masked, preserve
+            DinnerMode.TAKEAWAY,   // Thu - unmasked, clip
+            DinnerMode.NONE,       // Fri - masked, preserve
+            DinnerMode.DINEIN,     // Sat - unmasked, clip
+            DinnerMode.DINEINLATE  // Sun - unmasked, clip
+        ])
+
+        const result = maskWeekDayMap(source, mask, DinnerMode.DINEIN, DinnerMode.NONE)
+
+        const expected = [
+            DinnerMode.TAKEAWAY,   // Preserved
+            DinnerMode.NONE,       // Clipped
+            DinnerMode.DINEINLATE, // Preserved
+            DinnerMode.NONE,       // Clipped
+            DinnerMode.NONE,       // Preserved (was NONE)
+            DinnerMode.NONE,       // Clipped
+            DinnerMode.NONE        // Clipped
+        ]
+
+        WEEKDAYS.forEach((day, i) => {
+            expect(result[day], `${day}`).toBe(expected[i])
+        })
+    })
+})

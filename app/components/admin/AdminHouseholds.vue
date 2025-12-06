@@ -9,7 +9,7 @@ const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = s
 householdsStore.initHouseholdsStore()
 
 // Design system
-const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -54,7 +54,10 @@ const columns = [
   }
 ]
 
-// Pagination
+// Table ref for pagination control (same pattern as InhabitantSelector)
+const table = useTemplateRef('table')
+
+// Pagination - initial state, controlled via table API
 const pagination = ref({
   pageIndex: 0,
   pageSize: 10
@@ -87,24 +90,25 @@ class="w-full px-0"
           data-test-id="household-search"
           class="flex-1 md:max-w-md"
       />
-      <!-- Pagination -->
+      <!-- Pagination - controlled via table API (same pattern as InhabitantSelector) -->
       <UPagination
-          v-if="filteredHouseholds.length > pagination.pageSize"
-          :page="pagination.pageIndex + 1"
-          :items-per-page="pagination.pageSize"
-          :total="filteredHouseholds.length"
+          v-if="(table?.tableApi?.getFilteredRowModel().rows.length || 0) > pagination.pageSize"
+          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
+          :total="table?.tableApi?.getFilteredRowModel().rows.length"
           :size="SIZES.standard"
           :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p: number) => pagination.pageIndex = p - 1"
+          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
       />
     </div>
 
     <UTable
+        ref="table"
         v-model:pagination="pagination"
         :columns="columns"
         :data="filteredHouseholds"
         :loading="isHouseholdsLoading"
-        :ui="{ td: 'py-2' }"
+        :ui="COMPONENTS.table.ui"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"

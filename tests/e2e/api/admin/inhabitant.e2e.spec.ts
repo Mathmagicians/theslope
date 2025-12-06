@@ -85,7 +85,9 @@ test.describe('Admin Inhabitant API', () => {
 
         test('PUT /api/admin/inhabitant should create inhabitant with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', 'usertest@example.com')
+            const testSalt = temporaryAndRandom()
+            const testEmail = salt('usertest', testSalt) + '@example.com'
+            const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', testEmail)
             expect(testInhabitant.id).toBeDefined()
 
             // Verify inhabitant has user association
@@ -94,7 +96,8 @@ test.describe('Admin Inhabitant API', () => {
 
         test('DELETE inhabitant should clear weak association with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const testEmail = 'userdelete@example.com'
+            const testSalt = temporaryAndRandom()
+            const testEmail = salt('userdelete', testSalt) + '@example.com'
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Delete-Test-Inhabitant', testEmail)
 
             const userId = testInhabitant.userId

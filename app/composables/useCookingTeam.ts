@@ -1,4 +1,5 @@
 import {useCookingTeamValidation, type CookingTeamDisplay} from './useCookingTeamValidation'
+import {chunkArray} from '~/utils/batchUtils'
 
 const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
 export type TeamColor = typeof TEAM_COLORS[number]
@@ -95,11 +96,16 @@ export const useCookingTeam = () => {
         }
     }
 
+    // Team affinity batching (D1 rate limit safe, though typically only 3-8 teams)
+    const TEAM_AFFINITY_BATCH_SIZE = 50
+    const chunkTeamAffinities = chunkArray<CookingTeamDisplay>(TEAM_AFFINITY_BATCH_SIZE)
+
     return {
         CookingTeamSchema,
         getTeamColor,
         createDefaultTeamName,
         getDefaultCookingTeam,
-        useInhabitantsWithAssignments
+        useInhabitantsWithAssignments,
+        chunkTeamAffinities
     }
 }

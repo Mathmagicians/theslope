@@ -2,6 +2,7 @@ import {useSeasonValidation, type Season} from "~/composables/useSeasonValidatio
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
+    CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
     TeamRole
@@ -113,13 +114,33 @@ export class SeasonFactory {
         ...overrides
     })
 
-    static readonly defaultCookingTeamAssignment = (overrides = {}): CookingTeamAssignment => ({
-        cookingTeamId: 1,
-        inhabitantId: 42,
-        role: 'CHEF' as const,
-        allocationPercentage: 100,
-        ...overrides
-    })
+    /**
+     * Default cooking team assignment with inhabitant for OUTPUT schema testing
+     * inhabitant is required in CookingTeamAssignmentSchema (ADR-009: output always includes relations)
+     * Validates against schema for fast failure on invalid test data
+     */
+    static readonly defaultCookingTeamAssignment = (overrides: Partial<CookingTeamAssignment> = {}): CookingTeamAssignment => {
+        const inhabitantId = overrides.inhabitantId ?? 42
+        const data = {
+            cookingTeamId: 1,
+            inhabitantId,
+            role: 'CHEF' as const,
+            allocationPercentage: 100,
+            inhabitant: {
+                id: inhabitantId,
+                heynaboId: 900000 + inhabitantId,
+                householdId: 1,
+                name: 'Test',
+                lastName: 'Inhabitant',
+                pictureUrl: null,
+                birthDate: null,
+                dinnerPreferences: null
+            },
+            ...overrides
+        }
+        // Validate against schema for fast failure
+        return CookingTeamAssignmentSchema.parse(data)
+    }
 
     static readonly defaultSeason = (testSalt: string = temporaryAndRandom()): Season => {
         return {
@@ -649,8 +670,9 @@ export class SeasonFactory {
 
         // Return team with member assignments and household for cleanup
         const teamWithAssignments = await this.getCookingTeamById(context, team.id!)
+        expect(teamWithAssignments, `Team ${team.id} should exist after creation`).not.toBeNull()
         return {
-            ...teamWithAssignments,
+            ...teamWithAssignments!,
             householdId: householdWithInhabitants.household.id
         }
     }

@@ -99,7 +99,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
         <div class="space-y-4 ">
           <div class="flex items-center gap-4">
             <UAvatar
-                :src="avatar"
+                :src="avatar ?? undefined"
                 class="border-2 border-pink-200 ring-2 ring-pink-300"
                 size="lg"
                 :alt="fullName"

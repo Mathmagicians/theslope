@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {AllergyFactory} from '../../testDataFactories/allergyFactory'
 import testHelpers from '../../testHelpers'
+import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 const {validatedBrowserContext} = testHelpers
 
@@ -39,10 +40,11 @@ test.describe('AllergyType API - CRUD Operations', () => {
         const fetched = await AllergyFactory.getAllergyType(context, created.id)
 
         // THEN: Verify it matches
-        expect(fetched.id).toBe(created.id)
-        expect(fetched.name).toBe(allergyTypeData.name)
-        expect(fetched.description).toBe(allergyTypeData.description)
-        expect(fetched.icon).toBe(allergyTypeData.icon)
+        expect(fetched).not.toBeNull()
+        expect(fetched!.id).toBe(created.id)
+        expect(fetched!.name).toBe(allergyTypeData.name)
+        expect(fetched!.description).toBe(allergyTypeData.description)
+        expect(fetched!.icon).toBe(allergyTypeData.icon)
     })
 
     test('GIVEN allergy types exist WHEN fetching all THEN returns array with all types', async ({browser}) => {
@@ -60,13 +62,13 @@ test.describe('AllergyType API - CRUD Operations', () => {
         expect(Array.isArray(allergyTypes)).toBe(true)
         expect(allergyTypes.length).toBeGreaterThanOrEqual(2)
 
-        const found1 = allergyTypes.find((at: unknown) => at.id === allergyType1.id)
-        const found2 = allergyTypes.find((at: unknown) => at.id === allergyType2.id)
+        const found1 = allergyTypes.find((at: AllergyTypeDetail) => at.id === allergyType1.id)
+        const found2 = allergyTypes.find((at: AllergyTypeDetail) => at.id === allergyType2.id)
 
-        expect(found1).toBeTruthy()
-        expect(found2).toBeTruthy()
-        expect(found1.name).toBe(allergyType1.name)
-        expect(found2.name).toBe(allergyType2.name)
+        expect(found1).toBeDefined()
+        expect(found2).toBeDefined()
+        expect(found1!.name).toBe(allergyType1.name)
+        expect(found2!.name).toBe(allergyType2.name)
     })
 
     test('GIVEN allergy type exists WHEN updating THEN updates successfully', async ({browser}) => {
@@ -92,8 +94,9 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
         // Verify via GET to ensure persistence
         const fetched = await AllergyFactory.getAllergyType(context, original.id)
-        expect(fetched.name).toBe(updateData.name)
-        expect(fetched.description).toBe(updateData.description)
+        expect(fetched).not.toBeNull()
+        expect(fetched!.name).toBe(updateData.name)
+        expect(fetched!.description).toBe(updateData.description)
     })
 
     test('GIVEN allergy type exists WHEN deleting THEN deletes successfully', async ({browser}) => {
@@ -107,7 +110,8 @@ test.describe('AllergyType API - CRUD Operations', () => {
         const deleted = await AllergyFactory.deleteAllergyType(context, created.id)
 
         // THEN: Verify deletion
-        expect(deleted.id).toBe(created.id)
+        expect(deleted).not.toBeNull()
+        expect(deleted!.id).toBe(created.id)
 
         // Verify it no longer exists (should return 404)
         const response = await context.request.get(`/api/admin/allergy-type/${created.id}`)
@@ -167,7 +171,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
                 AllergyFactory.createAllergy(context, {
                     inhabitantId: inhabitant.id,
                     allergyTypeId: allergyType.id,
-                    inhabitantComment: inhabitantsData[index].comment
+                    inhabitantComment: inhabitantsData[index]!.comment
                 })
             )
         )
@@ -176,21 +180,21 @@ test.describe('AllergyType API - CRUD Operations', () => {
         const allergyTypes = await AllergyFactory.getAllergyTypes(context)
 
         // THEN: Find our allergy type and verify structure
-        const found = allergyTypes.find((at: unknown) => at.id === allergyType.id)
-        expect(found).toBeTruthy()
-        expect(found.inhabitants).toBeDefined()
-        expect(Array.isArray(found.inhabitants)).toBe(true)
-        expect(found.inhabitants.length).toBe(2)
+        const found = allergyTypes.find((at: AllergyTypeDetail) => at.id === allergyType.id)
+        expect(found).toBeDefined()
+        expect(found!.inhabitants).toBeDefined()
+        expect(Array.isArray(found!.inhabitants)).toBe(true)
+        expect(found!.inhabitants!.length).toBe(2)
 
         // Verify each inhabitant (parametrized)
         inhabitants.forEach((inhabitant, index) => {
-            const foundInhabitant = found.inhabitants.find((i: unknown) => i.id === inhabitant.id)
+            const foundInhabitant = found!.inhabitants!.find((i) => i.id === inhabitant.id)
             expect(foundInhabitant).toBeDefined()
-            expect(foundInhabitant.name).toBe(inhabitantsData[index].name)
-            expect(foundInhabitant.householdId).toBe(household.id)
-            expect(foundInhabitant.inhabitantComment).toBe(inhabitantsData[index].comment)
-            expect(foundInhabitant.allergyUpdatedAt).toBeDefined()
-            expect(new Date(foundInhabitant.allergyUpdatedAt).getTime()).not.toBeNaN()
+            expect(foundInhabitant!.name).toBe(inhabitantsData[index]!.name)
+            expect(foundInhabitant!.householdId).toBe(household.id)
+            expect(foundInhabitant!.inhabitantComment).toBe(inhabitantsData[index]!.comment)
+            expect(foundInhabitant!.allergyUpdatedAt).toBeDefined()
+            expect(new Date(foundInhabitant!.allergyUpdatedAt!).getTime()).not.toBeNaN()
         })
 
         // Cleanup: Delete household (CASCADE removes inhabitants and their allergies per ADR-005)

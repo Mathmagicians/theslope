@@ -2,7 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema} from '~~/prisma/generated/zod'
+import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} from '~~/prisma/generated/zod'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import type {SafeParseReturnType} from 'zod'
@@ -23,11 +23,13 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     CreateOrdersRequestSchema,
-    OrderHistorySchema,
+    OrderHistoryDisplaySchema,
+    OrderHistoryDetailSchema,
+    OrderHistoryCreateSchema,
     serializeOrder,
     deserializeOrder,
-    serializeOrderHistory,
-    deserializeOrderHistory,
+    serializeOrderHistoryDisplay,
+    deserializeOrderHistoryDisplay,
     deserializeDinnerEvent,
     deserializeDinnerEventDetail
   } = useBookingValidation()
@@ -227,21 +229,138 @@ describe('useBookingValidation', () => {
 
     })
 
-    describe('OrderHistorySchema', () => {
-      it('GIVEN valid history WHEN parsing THEN succeeds', () => {
-        const validHistory = OrderFactory.defaultOrderHistory()
-        const result = OrderHistorySchema.safeParse(validHistory)
+    describe.each([
+      {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
+      {name: 'OrderHistoryDetailSchema', schema: OrderHistoryDetailSchema, factory: () => OrderFactory.defaultOrderHistoryDetail()},
+      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()}
+    ])('$name', ({schema, factory}) => {
+      it('GIVEN valid data WHEN parsing THEN succeeds', () => {
+        const result = schema.safeParse(factory())
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderStateSchema.options.map(action => ({action})))(
+      it.each(OrderAuditActionSchema.options.map(action => ({action})))(
         'GIVEN action $action WHEN parsing THEN succeeds',
-        ({action}: {action: z.infer<typeof OrderStateSchema>}) => {
-          const history = OrderFactory.defaultOrderHistory(undefined, {action})
-          const result = OrderHistorySchema.safeParse(history)
+        ({action}) => {
+          const result = schema.safeParse({...factory(), action})
           expect(result.success, getValidationError(result)).toBe(true)
         }
       )
+    })
+
+    describe('OrderHistoryDetailSchema nullable order', () => {
+      it('GIVEN null order WHEN parsing THEN succeeds', () => {
+        const result = OrderHistoryDetailSchema.safeParse(OrderFactory.defaultOrderHistoryDetail(undefined, {order: null}))
+        expect(result.success, getValidationError(result)).toBe(true)
+      })
+    })
+  })
+
+  describe('Orders Creation (Batch)', () => {
+    const {
+      OrderAuditActionSchema,
+      AuditContextSchema,
+      OrderCreateWithPriceSchema,
+      OrdersBatchSchema,
+      CreateOrdersResultSchema,
+      ORDER_BATCH_SIZE
+    } = useBookingValidation()
+
+    describe('OrderAuditActionSchema', () => {
+      it.each(OrderAuditActionSchema.options.map(a => ({action: a})))(
+        'GIVEN $action WHEN parsing THEN succeeds',
+        ({action}) => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow()
+      )
+
+      it('GIVEN invalid action WHEN parsing THEN throws', () => {
+        expect(() => OrderAuditActionSchema.parse('INVALID')).toThrow()
+      })
+    })
+
+    describe('AuditContextSchema', () => {
+      it.each([
+        {desc: 'with userId', ctx: OrderFactory.defaultAuditContext()},
+        {desc: 'null userId (system)', ctx: OrderFactory.defaultAuditContext({performedByUserId: null})}
+      ])('GIVEN valid context $desc WHEN parsing THEN succeeds', ({ctx}) => {
+        expect(() => AuditContextSchema.parse(ctx)).not.toThrow()
+      })
+
+      it('GIVEN empty source WHEN parsing THEN throws', () => {
+        expect(() => AuditContextSchema.parse(OrderFactory.defaultAuditContext({source: ''}))).toThrow()
+      })
+    })
+
+    describe('OrderCreateWithPriceSchema', () => {
+      it('GIVEN valid order WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(OrderFactory.defaultOrderCreateWithPrice())).not.toThrow()
+      })
+
+      it.each([
+        {field: 'householdId' as const, desc: 'missing householdId'},
+        {field: 'priceAtBooking' as const, desc: 'missing priceAtBooking'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({field}) => {
+        const order = OrderFactory.defaultOrderCreateWithPrice()
+        const {[field]: _removed, ...orderWithoutField} = order
+        expect(() => OrderCreateWithPriceSchema.parse(orderWithoutField)).toThrow()
+      })
+
+      it('GIVEN negative priceAtBooking WHEN parsing THEN throws', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: -100})
+        )).toThrow()
+      })
+
+      it('GIVEN zero priceAtBooking (free ticket) WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: 0})
+        )).not.toThrow()
+      })
+    })
+
+    describe('OrdersBatchSchema', () => {
+      it.each([
+        {count: 1, desc: 'min'},
+        {count: ORDER_BATCH_SIZE, desc: 'max'}
+      ])('GIVEN batch of $desc ($count) orders WHEN parsing THEN succeeds', ({count}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).not.toThrow()
+      })
+
+      it.each([
+        {count: 0, desc: 'empty', errorMatch: /Mindst én/},
+        {count: ORDER_BATCH_SIZE + 1, desc: 'exceeds max', errorMatch: /Maksimalt/}
+      ])('GIVEN $desc batch WHEN parsing THEN throws', ({count, errorMatch}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).toThrow(errorMatch)
+      })
+
+      it('GIVEN batch with same householdId WHEN parsing THEN succeeds', () => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(42, 3))).not.toThrow()
+      })
+
+      it('GIVEN batch with different householdIds WHEN parsing THEN throws', () => {
+        const mixedBatch = [
+          OrderFactory.defaultOrderCreateWithPrice(1),
+          OrderFactory.defaultOrderCreateWithPrice(2)
+        ]
+        expect(() => OrdersBatchSchema.parse(mixedBatch)).toThrow(/samme husstand/)
+      })
+    })
+
+    describe('CreateOrdersResultSchema', () => {
+      it.each([
+        {result: OrderFactory.defaultCreateOrdersResult(), desc: 'with ids'},
+        {result: OrderFactory.defaultCreateOrdersResult({createdIds: []}), desc: 'empty ids'}
+      ])('GIVEN valid result $desc WHEN parsing THEN succeeds', ({result}) => {
+        expect(() => CreateOrdersResultSchema.parse(result)).not.toThrow()
+      })
+
+      it.each([
+        {override: {householdId: 0}, desc: 'zero householdId'},
+        {override: {householdId: -1}, desc: 'negative householdId'},
+        {override: {createdIds: [0]}, desc: 'zero in createdIds'},
+        {override: {createdIds: [-1]}, desc: 'negative in createdIds'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
+        expect(() => CreateOrdersResultSchema.parse(OrderFactory.defaultCreateOrdersResult(override))).toThrow()
+      })
     })
   })
 
@@ -281,24 +400,24 @@ describe('useBookingValidation', () => {
       )
     })
 
-    describe('serializeOrderHistory / deserializeOrderHistory', () => {
+    describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {
       it('GIVEN history WHEN round-tripping THEN preserves data', () => {
-        const originalHistory = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(originalHistory)
-        const deserialized = deserializeOrderHistory(serialized)
+        const originalHistory = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(originalHistory)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized).toEqual(originalHistory)
       })
 
       it('GIVEN history WHEN serializing THEN converts timestamp to string', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
         expect(typeof serialized.timestamp).toBe('string')
       })
 
       it('GIVEN serialized history WHEN deserializing THEN converts to Date', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
-        const deserialized = deserializeOrderHistory(serialized)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized.timestamp).toBeInstanceOf(Date)
       })
     })
