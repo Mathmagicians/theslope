@@ -370,3 +370,11 @@ export async function deleteHeynaboEventAsSystem(eventId: number): Promise<void>
         }
     })
 }
+
+/**
+ * Fetch Heynabo event using system credentials (for testing/verification)
+ */
+export async function fetchHeynaboEventAsSystem(eventId: number): Promise<HeynaboEventResponse> {
+    const token = await getSystemToken()
+    return fetchHeynaboEvent(token, eventId)
+}

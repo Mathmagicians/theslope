@@ -91,7 +91,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createSeason, updateSeason, generateDinnerEvents, activateSeason} = store
+const {createSeason, updateSeason, generateDinnerEvents, activateSeason, deactivateSeason} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
 const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
@@ -184,6 +184,15 @@ const handleActivateSeason = async () => {
   }
 }
 
+const handleDeactivateSeason = async () => {
+  try {
+    await deactivateSeason()
+    showSuccessToast('Sæson deaktiveret', 'Der er nu ingen aktiv sæson')
+  } catch (error) {
+    console.error('Failed to deactivate season:', error)
+  }
+}
+
 </script>
 
 <template>
@@ -217,6 +226,7 @@ const handleActivateSeason = async () => {
             :show-activation-button="true"
             class="mb-6"
             @activate="handleActivateSeason"
+            @deactivate="handleDeactivateSeason"
         />
 
         <AdminPlanningSeason

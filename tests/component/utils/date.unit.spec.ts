@@ -17,6 +17,7 @@ import {
     toCalendarDate,
     toDate,
     calculateCountdown,
+    createDateInTimezone,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -720,5 +721,53 @@ describe('calculateCountdown', () => {
             expect(result.minutes).toBe(expectedMinutes)
             expect(result.formatted).toBe(expectedFormatted)
         })
+    })
+})
+
+describe('createDateInTimezone', () => {
+    it.each([
+        {
+            scenario: 'winter (CET, UTC+1)',
+            date: new Date(2030, 0, 15), // Jan 15, 2030
+            hour: 18,
+            expectedUtcHour: 17 // 18:00 Copenhagen = 17:00 UTC
+        },
+        {
+            scenario: 'summer (CEST, UTC+2)',
+            date: new Date(2030, 6, 15), // July 15, 2030
+            hour: 18,
+            expectedUtcHour: 16 // 18:00 Copenhagen = 16:00 UTC
+        },
+        {
+            scenario: 'midnight winter',
+            date: new Date(2030, 0, 15),
+            hour: 0,
+            expectedUtcHour: 23 // 00:00 Copenhagen Jan 15 = 23:00 UTC Jan 14
+        },
+        {
+            scenario: 'midnight summer',
+            date: new Date(2030, 6, 15),
+            hour: 0,
+            expectedUtcHour: 22 // 00:00 Copenhagen = 22:00 UTC previous day
+        }
+    ])('$scenario: $hour:00 Copenhagen → $expectedUtcHour:00 UTC', ({ date, hour, expectedUtcHour }) => {
+        const result = createDateInTimezone(date, hour)
+
+        expect(result.getUTCHours()).toBe(expectedUtcHour)
+    })
+
+    it('preserves date correctly for evening times', () => {
+        const result = createDateInTimezone(new Date(2030, 0, 15), 18)
+
+        expect(result.getUTCFullYear()).toBe(2030)
+        expect(result.getUTCMonth()).toBe(0) // January
+        expect(result.getUTCDate()).toBe(15)
+    })
+
+    it('handles minute parameter', () => {
+        const result = createDateInTimezone(new Date(2030, 0, 15), 18, 30)
+
+        expect(result.getUTCHours()).toBe(17)
+        expect(result.getUTCMinutes()).toBe(30)
     })
 })

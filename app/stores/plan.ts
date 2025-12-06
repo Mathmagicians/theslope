@@ -321,6 +321,26 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
+        const deactivateSeason = async () => {
+            try {
+                console.info(`🌞 > PLAN_STORE > Deactivating active season`)
+                await $fetch<Season | null>('/api/admin/season/deactivate', {
+                    method: 'POST'
+                })
+                // Refresh
+                await loadActiveSeason()
+                await loadSeasons()
+                // Refresh selected season to get updated isActive state
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+                console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
+            } catch (e: unknown) {
+                handleApiError(e, 'deactivateSeason')
+                throw e
+            }
+        }
+
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
         // ADR-009: Accept Display type for input (lightweight), return Detail type (mutation response)
         const createTeam = async (teamOrTeams: CookingTeamDisplay | CookingTeamDisplay[]): Promise<CookingTeamDetail[]> => {
@@ -497,6 +517,7 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             activateSeason,
+            deactivateSeason,
             generateDinnerEvents,
             assignTeamAffinitiesAndEvents,
             createTeam,

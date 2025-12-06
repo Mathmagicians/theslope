@@ -2,6 +2,7 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import type {PreferenceUpdate} from '~/composables/useSeason'
 
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
@@ -380,6 +381,39 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
     }
 }
 
+/**
+ * Bulk update inhabitant dinner preferences.
+ * ADR-009: Batch operations return count (Display-weight) to avoid D1 rate limits.
+ *
+ * @param updates - Array of {inhabitantId, dinnerPreferences} to update
+ * @returns Number of successfully updated inhabitants
+ */
+export async function updateInhabitantPreferencesBulk(
+    d1Client: D1Database,
+    updates: PreferenceUpdate[]
+): Promise<number> {
+    console.info(`👩‍🏠 > INHABITANT > [BULK_PREFS] Updating preferences for ${updates.length} inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {serializeWeekDayMap} = useCoreValidation()
+
+    try {
+        const results = await Promise.all(
+            updates.map(({inhabitantId, dinnerPreferences}) =>
+                prisma.inhabitant.update({
+                    where: {id: inhabitantId},
+                    data: {dinnerPreferences: serializeWeekDayMap(dinnerPreferences)},
+                    select: {id: true} // Minimal select for performance
+                })
+            )
+        )
+
+        console.info(`👩‍🏠 > INHABITANT > [BULK_PREFS] Successfully updated ${results.length} inhabitants`)
+        return results.length
+    } catch (error) {
+        return throwH3Error('👩‍🏠 > INHABITANT > [BULK_PREFS]: Error updating inhabitant preferences', error)
+    }
+}
+
 /*** HOUSEHOLDS ***/
 
 export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<HouseholdDetail> {
@@ -596,6 +630,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
+// Returns active season or null if none active
 export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching current active season`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -655,12 +690,34 @@ export async function fetchActiveSeasonId(d1Client: D1Database): Promise<number 
 }
 
 /**
- * Activate a season - ensures only one season is active at a time
- * Validates that season exists before deactivating other seasons
+ * Deactivate the current active season (idempotent - returns null if none active)
  * @param d1Client - D1 database client
- * @param seasonId - ID of season to activate
- * @returns Activated season
+ * @returns Deactivated season or null if none was active
  */
+export async function deactivateSeason(d1Client: D1Database): Promise<Season | null> {
+    console.info(`🌞 > SEASON > [DEACTIVATE] Deactivating active season`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        if (!activeSeason) {
+            console.info(`🌞 > SEASON > [DEACTIVATE] No active season to deactivate`)
+            return null
+        }
+
+        await prisma.season.update({
+            where: {id: activeSeason.id},
+            data: {isActive: false}
+        })
+
+        const season = await fetchSeason(d1Client, activeSeason.id)
+        console.info(`🌞 > SEASON > [DEACTIVATE] Deactivated season ${season?.shortName}`)
+        return season
+    } catch (error) {
+        return throwH3Error('🌞 > SEASON > [DEACTIVATE] Error deactivating season', error)
+    }
+}
+
 export async function activateSeason(d1Client: D1Database, seasonId: number): Promise<Season> {
     console.info(`🌞 > SEASON > [POST] Activating season ID ${seasonId}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -882,9 +939,14 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
             const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
 
             for (const tp of create) {
-                const { id: _tpId, seasonId: _seasonId, ...priceData } = tp
                 await prisma.ticketPrice.create({
-                    data: { ...priceData, seasonId: validatedSeasonData.id }
+                    data: {
+                        seasonId: validatedSeasonData.id,
+                        ticketType: tp.ticketType,
+                        price: tp.price,
+                        description: tp.description,
+                        maximumAgeLimit: tp.maximumAgeLimit
+                    }
                 })
             }
 

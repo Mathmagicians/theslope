@@ -47,7 +47,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         selectedAllergyTypeKey,
         () => {
             if (!selectedAllergyTypeId.value) return Promise.resolve(null)
-            return $fetch(`/api/admin/allergy-type/${selectedAllergyTypeId.value}`)
+            return $fetch<AllergyTypeDetail>(`/api/admin/allergy-type/${selectedAllergyTypeId.value}`)
         },
         {
             default: () => null

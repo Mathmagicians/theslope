@@ -1,22 +1,30 @@
-import type {DateRange} from '~/types/dateTypes'
+import type {DateRange, WeekDayMap} from '~/types/dateTypes'
+import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {type TicketPrice, useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useTicket} from '~/composables/useTicket'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason} from "~/utils/season"
+    selectMostAppropriateActiveSeason, dateToWeekDay} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
-import {chunkArray} from '~/utils/batchUtils'
+import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
  * Deadline urgency levels for dinner events
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export type DeadlineUrgency = 0 | 1 | 2
+
+/**
+ * Preference update for batch inhabitant preference clipping
+ */
+export type PreferenceUpdate = { inhabitantId: number, dinnerPreferences: WeekDayMap<DinnerMode> }
 
 /**
  * Temporal category for dinner events relative to current time
@@ -196,6 +204,130 @@ export const useSeason = () => {
     const TEAM_ASSIGNMENT_BATCH_SIZE = 50
     const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(TEAM_ASSIGNMENT_BATCH_SIZE)
 
+    // ========================================================================
+    // PREFERENCE CLIPPING - Align inhabitant preferences to season cooking days
+    // ========================================================================
+
+    const {maskWeekDayMap} = useCoreValidation()
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    /**
+     * Curried preference clipper factory.
+     *
+     * Given season cooking days, returns a function that:
+     * - Takes inhabitants with optional preferences
+     * - Returns PreferenceUpdate[] for only those needing updates
+     *
+     * Business rules:
+     * - Cooking days: keep existing value or default to DINEIN
+     * - Non-cooking days: always NONE
+     *
+     * @example
+     * const clipper = createPreferenceClipper(season.cookingDays)
+     * const updates = clipper(inhabitants)
+     * const batches = chunkPreferenceUpdates(updates)
+     */
+    const createPreferenceClipper = (cookingDays: WeekDayMap<boolean>) => {
+        const needsClipping = (prefs: WeekDayMap<DinnerMode> | null): boolean => {
+            if (!prefs) return true
+            return WEEKDAYS.some(day => !cookingDays[day] && prefs[day] !== DinnerMode.NONE)
+        }
+
+        // Return the curried function that processes inhabitants
+        return <T extends { id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null }>(
+            inhabitants: T[]
+        ): PreferenceUpdate[] =>
+            inhabitants
+                .filter(i => needsClipping(i.dinnerPreferences))
+                .map(i => ({
+                    inhabitantId: i.id,
+                    dinnerPreferences: maskWeekDayMap(i.dinnerPreferences, cookingDays, DinnerMode.DINEIN, DinnerMode.NONE)
+                }))
+    }
+
+    // Preference update batching (D1 rate limit safe)
+    const PREFERENCE_BATCH_SIZE = 50
+    const chunkPreferenceUpdates = chunkArray<PreferenceUpdate>(PREFERENCE_BATCH_SIZE)
+
+    // ========================================================================
+    // PRE-BOOKING SCAFFOLDING - Create/prune orders based on preferences
+    // ========================================================================
+
+    const {OrderStateSchema, OrderCreateWithPriceSchema, chunkOrderBatch} = useBookingValidation()
+    const OrderState = OrderStateSchema.enum
+    const {determineTicketType} = useTicket()
+
+    /**
+     * Configure pruneAndCreate for pre-bookings.
+     * Key: composite inhabitantId-dinnerEventId
+     * Equal: same dinnerMode (no update needed if preference matches)
+     */
+    const reconcilePreBookings = pruneAndCreate<OrderCreateWithPrice, string>(
+        (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
+        (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
+    )
+
+    /**
+     * Curried pre-booking generator factory.
+     *
+     * Given season config, returns function that generates desired pre-bookings
+     * for a household's inhabitants based on their preferences.
+     *
+     * @throws Error if inhabitant has no dinnerPreferences (malformed data)
+     * @throws Error if no matching ticket price for inhabitant
+     *
+     * @example
+     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents)
+     * const desired = generateDesired(inhabitants)
+     * const result = reconcilePreBookings(existingOrders)(desired)
+     */
+    const createPreBookingGenerator = (
+        householdId: number,
+        ticketPrices: TicketPrice[],
+        dinnerEvents: DinnerEventDisplay[]
+    ) => {
+        // Build lookup: ticketType -> ticketPrice (with id)
+        const ticketPriceByType = new Map(
+            ticketPrices.filter(tp => tp.id).map(tp => [tp.ticketType, tp])
+        )
+
+        return <T extends { id: number, name: string, birthDate: Date | null, dinnerPreferences: WeekDayMap<DinnerMode> | null }>(
+            inhabitants: T[]
+        ): OrderCreateWithPrice[] =>
+            inhabitants.flatMap(inhabitant => {
+                if (!inhabitant.dinnerPreferences) {
+                    throw new Error(`Inhabitant ${inhabitant.name} (${inhabitant.id}) has no dinnerPreferences - malformed data`)
+                }
+                const prefs = inhabitant.dinnerPreferences
+
+                return dinnerEvents
+                    .map(de => {
+                        const weekDay = dateToWeekDay(de.date)
+                        const preference = prefs[weekDay]
+                        if (preference === DinnerMode.NONE) return null
+
+                        // Determine ticket type based on age at dinner date
+                        const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
+                        const ticketPrice = ticketPriceByType.get(ticketType)
+                        if (!ticketPrice?.id) {
+                            throw new Error(`No ticket price for type ${ticketType} - inhabitant ${inhabitant.name}`)
+                        }
+
+                        return OrderCreateWithPriceSchema.parse({
+                            dinnerEventId: de.id,
+                            inhabitantId: inhabitant.id,
+                            householdId,
+                            bookedByUserId: null,
+                            ticketPriceId: ticketPrice.id,
+                            priceAtBooking: ticketPrice.price,
+                            dinnerMode: preference,
+                            state: OrderState.BOOKED
+                        })
+                    })
+                    .filter((o): o is OrderCreateWithPrice => o !== null)
+            })
+    }
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
@@ -339,6 +471,16 @@ export const useSeason = () => {
         assignAffinitiesToTeams,
         assignTeamsToEvents,
         chunkTeamAssignments,
+
+        // Preference clipping (season activation)
+        createPreferenceClipper,
+        chunkPreferenceUpdates,
+
+        // Pre-booking scaffolding (season activation)
+        reconcilePreBookings,
+        createPreBookingGenerator,
+        chunkOrderBatch,
+
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,

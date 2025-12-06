@@ -198,6 +198,34 @@ const toast = useToast()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
+// Announce dinner with useAsyncData for loading state (ADR-007: component-local data)
+const announceParams = ref<{dinnerEventId: number} | null>(null)
+const {
+  status: announceStatus,
+  execute: executeAnnounce
+} = useAsyncData(
+    'chef-page-announce-dinner',
+    () => announceParams.value
+        ? bookingsStore.announceDinner(announceParams.value.dinnerEventId)
+        : Promise.resolve(null),
+    { immediate: false }
+)
+const isAnnouncingDinner = computed(() => announceStatus.value === 'pending')
+
+// Cancel dinner with useAsyncData for loading state (ADR-007: component-local data)
+const cancelParams = ref<{dinnerEventId: number} | null>(null)
+const {
+  status: cancelStatus,
+  execute: executeCancel
+} = useAsyncData(
+    'chef-page-cancel-dinner',
+    () => cancelParams.value
+        ? bookingsStore.cancelDinner(cancelParams.value.dinnerEventId)
+        : Promise.resolve(null),
+    { immediate: false }
+)
+const isCancellingDinner = computed(() => cancelStatus.value === 'pending')
+
 const handleAllergenUpdate = async (allergenIds: number[]) => {
   if (!selectedDinnerId.value) return
 
@@ -243,7 +271,8 @@ const handleAdvanceState = async (newState: string) => {
   if (newState !== DinnerState.ANNOUNCED) return
 
   try {
-    await bookingsStore.announceDinner(selectedDinnerId.value)
+    announceParams.value = {dinnerEventId: selectedDinnerId.value}
+    await executeAnnounce()
     await refreshDinnerEventDetail() // Refresh page-owned data
     toast.add({
       title: 'Menu annonceret',
@@ -263,7 +292,8 @@ const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
 
   try {
-    await bookingsStore.cancelDinner(selectedDinnerId.value)
+    cancelParams.value = {dinnerEventId: selectedDinnerId.value}
+    await executeCancel()
     await refreshDinnerEventDetail() // Refresh page-owned data
     toast.add({
       title: 'Middag aflyst',
@@ -389,6 +419,8 @@ useHead({
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :show-allergens="true"
+              :is-announcing="isAnnouncingDinner"
+              :is-cancelling="isCancellingDinner"
               @update:form="handleFormUpdate"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"

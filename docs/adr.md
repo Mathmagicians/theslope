@@ -65,6 +65,160 @@ Default dinner pictures are stored in `public/` (Nuxt static assets) and uploade
 
 ---
 
+## ADR-014: Batch Operations and Utility Functions
+
+**Status:** Accepted | **Date:** 2025-12-06
+
+### Decision
+
+**Batch operations use curried chunking utilities and Prisma bulk methods to stay within D1 limits.**
+
+Cloudflare D1 enforces a **1,000 query limit** and **100 bound parameters per statement**. Bulk operations must batch appropriately.
+
+### Prisma Bulk Operations
+
+**Use `createManyAndReturn` for bulk inserts:**
+```typescript
+// ✅ CORRECT: Single bulk insert (1 query for N entities)
+const created = await prisma.dinnerEvent.createManyAndReturn({
+    data: dinnerEvents  // Array of create data
+})
+
+// ❌ WRONG: N concurrent create calls (N queries)
+await Promise.all(dinnerEvents.map(de => prisma.dinnerEvent.create({ data: de })))
+```
+
+**For updates with different data per entity** (no `updateManyAndReturn`), batch with sequential `Promise.all`:
+```typescript
+// Process in batches of 50 to avoid overwhelming D1
+for (const batch of batches) {
+    const results = await Promise.all(
+        batch.map(item => prisma.entity.update({ where: { id: item.id }, data: item }))
+    )
+    allResults.push(...results)
+}
+```
+
+### Batch Utility Functions
+
+**Location:** `~/utils/batchUtils.ts`
+
+#### `chunkArray<T>(size: number)`
+
+Curried function to split arrays into batches:
+
+```typescript
+import {chunkArray} from '~/utils/batchUtils'
+
+// Create curried chunker with batch size
+const chunkOrderBatch = chunkArray<Order>(12)  // 12 for param-heavy inserts
+const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(50)  // 50 for lightweight updates
+
+// Use in endpoint
+const batches = chunkOrderBatch(orders)
+for (const batch of batches) {
+    await Promise.all(batch.map(order => createOrder(d1, order)))
+}
+```
+
+**Batch size guidelines:**
+| Operation | Batch Size | Rationale |
+|-----------|------------|-----------|
+| Order inserts | 12 | 7 params each → 100/7 ≈ 14, use 12 for safety |
+| Team assignments | 50 | 2 params each (id + cookingTeamId) |
+| Affinity updates | 50 | Lightweight update operations |
+
+#### `pruneAndCreate<T, K>(getKey, isEqual)`
+
+Curried function to reconcile existing vs incoming arrays (create/update/delete):
+
+```typescript
+import {pruneAndCreate} from '~/utils/batchUtils'
+
+// Configure reconciliation
+const reconcileTicketPrices = pruneAndCreate<TicketPrice, number>(
+    tp => tp.id,  // Key extractor (undefined = new item)
+    (a, b) => a.price === b.price && a.ticketType === b.ticketType  // Equality check
+)
+
+// Apply to data
+const result = reconcileTicketPrices(existingPrices)(incomingPrices)
+// Returns: { create: T[], update: T[], idempotent: T[], delete: T[] }
+```
+
+**Use cases:**
+- Updating nested collections (e.g., season ticket prices)
+- Sync operations where items may be added, modified, or removed
+- Avoiding unnecessary database writes for unchanged items
+
+### Composable Pattern
+
+**Curried chunkers live in composables, exported for endpoint use:**
+
+```typescript
+// In composable (e.g., useBookingValidation.ts)
+const ORDER_BATCH_SIZE = 12
+const chunkOrderBatch = chunkArray<OrderCreateWithPrice>(ORDER_BATCH_SIZE)
+
+return {
+    // ... other exports
+    chunkOrderBatch
+}
+
+// In endpoint
+const {chunkOrderBatch} = useBookingValidation()
+const batches = chunkOrderBatch(orders)
+```
+
+**Current chunkers:**
+| Composable | Chunker | Type | Batch Size |
+|------------|---------|------|------------|
+| `useBookingValidation` | `chunkOrderBatch` | `OrderCreateWithPrice` | 12 |
+| `useSeason` | `chunkTeamAssignments` | `DinnerEventDisplay` | 50 |
+| `useCookingTeam` | `chunkTeamAffinities` | `CookingTeamDisplay` | 50 |
+
+### Repository Functions for Bulk Operations
+
+**Functions accepting union types for DRY single/bulk handling:**
+
+```typescript
+// Accept single or array, normalize immediately
+export async function saveDinnerEvents(
+    d1Client: D1Database,
+    input: DinnerEventCreate | DinnerEventCreate[]
+): Promise<DinnerEventDisplay[]> {
+    const events = Array.isArray(input) ? input : [input]
+    if (events.length === 0) return []
+
+    const created = await prisma.dinnerEvent.createManyAndReturn({ data: events })
+    return created.map(de => DinnerEventDisplaySchema.parse(de))
+}
+```
+
+**Single mutations that need Detail response:** Fetch after bulk create:
+```typescript
+// PUT endpoint returns Detail (ADR-009)
+const [created] = await saveDinnerEvents(d1Client, dinnerEventData)
+const detail = await fetchDinnerEvent(d1Client, created!.id)
+return detail
+```
+
+### Compliance
+
+1. Bulk inserts MUST use `createManyAndReturn` (not `Promise.all` of individual creates)
+2. Bulk updates MUST batch with sequential `for...of` + `Promise.all` per batch
+3. Batch sizes MUST account for D1's 100 bound parameter limit
+4. Curried chunkers MUST be defined in composables, not endpoints
+5. Repository functions MAY accept union type `T | T[]` for DRY handling
+6. Single mutations returning Detail MUST fetch after bulk create (ADR-009 compliance)
+7. `pruneAndCreate` SHOULD be used for nested collection reconciliation
+
+### Related ADRs
+- **ADR-009:** Batch operations use Display types
+- **ADR-010:** Repository-layer serialization
+
+---
+
 ## ADR-012: Prisma.skip for Optional Field Updates
 
 **Status:** Accepted | **Date:** 2025-11-24
@@ -328,6 +482,8 @@ for (const event of dinnerEvents) {
 - Batch assignments/reassignments
 - Mass state transitions
 - Any operation where N × queries_per_entity could exceed 1,000
+
+**See ADR-014** for batch utilities (`chunkArray`, `pruneAndCreate`) and Prisma bulk methods (`createManyAndReturn`).
 
 ### Compliance
 

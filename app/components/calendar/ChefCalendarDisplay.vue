@@ -250,10 +250,6 @@ const accordionValue = computed({
   set: (v) => { accordionOpen.value = v === '0' }
 })
 
-// Ensure accordion opens when tab is clicked (never closes on tab click)
-const handleTabClick = () => {
-  accordionOpen.value = true
-}
 </script>
 
 <template>

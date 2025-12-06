@@ -5,7 +5,8 @@ import {
     DinnerStateSchema,
     DinnerModeSchema,
     TicketPriceSchema as _TicketPriceSchema,
-    RoleSchema
+    RoleSchema,
+    OrderAuditActionSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -182,11 +183,11 @@ export const useBookingValidation = () => {
      * Order with price and household - for batch creation
      * Extends OrderCreateSchema with required fields for batch operations:
      * - householdId: Required for same-household validation (Zod validates)
-     * - priceAtBooking: Required (caller enriches from ticket prices)
+     * - priceAtBooking: Required (caller enriches from ticket prices, can be 0 for free tickets)
      */
     const OrderCreateWithPriceSchema = OrderCreateSchema.extend({
         householdId: z.number().int().positive(),
-        priceAtBooking: z.number().int().positive()  // Override to required
+        priceAtBooking: z.number().int().nonnegative()  // Override to required, allows 0 for free tickets
     })
 
     // D1 constraint: max 100 bound params per query
@@ -194,8 +195,11 @@ export const useBookingValidation = () => {
     // Max: 100 / 7 ≈ 14 orders, using 12 for safety margin
     const ORDER_BATCH_SIZE = 12
 
+    // Local type for batch chunking (avoids circular reference with exported type)
+    type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
+
     // Curried chunk function for order batches
-    const chunkOrderBatch = chunkArray<OrderCreateWithPrice>(ORDER_BATCH_SIZE)
+    const chunkOrderBatch = chunkArray<_OrderCreateWithPrice>(ORDER_BATCH_SIZE)
 
     /**
      * Batch of orders for batch creation - validates business rules:
@@ -429,6 +433,8 @@ export const useBookingValidation = () => {
     const HeynaboEventResponseSchema = z.object({
         id: z.coerce.number().int().positive(),
         name: z.string().optional(),
+        start: z.string().optional(), // ISO 8601 with timezone offset
+        end: z.string().optional(),   // ISO 8601 with timezone offset
         imageUrl: z.string().url().nullable().optional(),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional()

@@ -586,6 +586,323 @@ describe('isOnTeam', () => {
     })
 })
 
+describe('createPreferenceClipper', () => {
+    const {createPreferenceClipper} = useSeason()
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    // Helper to create cooking days (Mon, Wed, Fri by default)
+    const createCookingDays = (selected: boolean[] = [true, false, true, false, true, false, false]) =>
+        createDefaultWeekdayMap(selected)
+
+    // Helper to create preferences
+    const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+
+    describe('needsClipping detection', () => {
+        it('should detect inhabitant without preferences needs clipping', () => {
+            // GIVEN: Inhabitant with null preferences
+            const cookingDays = createCookingDays()
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [{id: 1, dinnerPreferences: null}]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Returns update for inhabitant
+            expect(updates).toHaveLength(1)
+            expect(updates[0].inhabitantId).toBe(1)
+        })
+
+        it('should detect non-cooking day with value != NONE needs clipping', () => {
+            // GIVEN: Inhabitant with DINEIN on non-cooking day (Tuesday)
+            const cookingDays = createCookingDays([true, false, true, false, true, false, false]) // Mon, Wed, Fri
+            const preferences = createPreferences([
+                DinnerMode.DINEIN,     // Mon - cooking day, OK
+                DinnerMode.DINEIN,     // Tue - NON-cooking, needs clip!
+                DinnerMode.DINEIN,     // Wed - cooking day, OK
+                DinnerMode.NONE,       // Thu - non-cooking, already NONE
+                DinnerMode.TAKEAWAY,   // Fri - cooking day, OK
+                DinnerMode.NONE,       // Sat - non-cooking, already NONE
+                DinnerMode.NONE        // Sun - non-cooking, already NONE
+            ])
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [{id: 1, dinnerPreferences: preferences}]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Returns update (Tuesday needs clipping)
+            expect(updates).toHaveLength(1)
+        })
+
+        it('should not clip when all non-cooking days are already NONE', () => {
+            // GIVEN: Inhabitant with all non-cooking days already NONE
+            const cookingDays = createCookingDays([true, false, true, false, true, false, false]) // Mon, Wed, Fri
+            const preferences = createPreferences([
+                DinnerMode.DINEIN,   // Mon - cooking day
+                DinnerMode.NONE,     // Tue - non-cooking, NONE
+                DinnerMode.TAKEAWAY, // Wed - cooking day
+                DinnerMode.NONE,     // Thu - non-cooking, NONE
+                DinnerMode.DINEIN,   // Fri - cooking day
+                DinnerMode.NONE,     // Sat - non-cooking, NONE
+                DinnerMode.NONE      // Sun - non-cooking, NONE
+            ])
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [{id: 1, dinnerPreferences: preferences}]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Returns no updates (already properly clipped)
+            expect(updates).toHaveLength(0)
+        })
+    })
+
+    describe('clip function', () => {
+        it('should create defaults for null preferences', () => {
+            // GIVEN: Cooking days Mon, Wed, Fri
+            const cookingDays = createCookingDays([true, false, true, false, true, false, false])
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [{id: 1, dinnerPreferences: null}]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Creates defaults (cooking days = DINEIN, non-cooking = NONE)
+            expect(updates).toHaveLength(1)
+            const prefs = updates[0].dinnerPreferences
+            WEEKDAYS.forEach(day => {
+                const expected = cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE
+                expect(prefs[day], `${day} should be ${expected}`).toBe(expected)
+            })
+        })
+
+        it('should preserve cooking day values and clip non-cooking to NONE', () => {
+            // GIVEN: Inhabitant with various modes on all days
+            const cookingDays = createCookingDays([true, false, true, false, true, false, false])
+            const originalValues = [
+                DinnerMode.TAKEAWAY,   // Mon - cooking, should preserve
+                DinnerMode.DINEIN,     // Tue - non-cooking, should clip to NONE
+                DinnerMode.DINEINLATE, // Wed - cooking, should preserve
+                DinnerMode.TAKEAWAY,   // Thu - non-cooking, should clip to NONE
+                DinnerMode.NONE,       // Fri - cooking, should preserve (even NONE)
+                DinnerMode.DINEIN,     // Sat - non-cooking, should clip to NONE
+                DinnerMode.DINEINLATE  // Sun - non-cooking, should clip to NONE
+            ]
+            const originalPrefs = createPreferences(originalValues)
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [{id: 1, dinnerPreferences: originalPrefs}]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Preserves cooking day values, clips non-cooking to NONE
+            expect(updates).toHaveLength(1)
+            const prefs = updates[0].dinnerPreferences
+            WEEKDAYS.forEach((day, i) => {
+                const expected = cookingDays[day] ? originalValues[i] : DinnerMode.NONE
+                expect(prefs[day], `${day} should be ${expected}`).toBe(expected)
+            })
+        })
+    })
+
+    describe('multiple inhabitants', () => {
+        it('should only return updates for inhabitants that need clipping', () => {
+            // GIVEN: 3 inhabitants - one null, one needs clip, one already OK
+            const cookingDays = createCookingDays([true, false, true, false, true, false, false])
+            const okPrefs = createPreferences([
+                DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN,
+                DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE
+            ])
+            const needsClipPrefs = createPreferences([
+                DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN,  // Tue needs clip
+                DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE
+            ])
+
+            const clipper = createPreferenceClipper(cookingDays)
+            const inhabitants = [
+                {id: 1, dinnerPreferences: null},          // Needs clipping
+                {id: 2, dinnerPreferences: okPrefs},       // Already OK
+                {id: 3, dinnerPreferences: needsClipPrefs} // Needs clipping
+            ]
+
+            // WHEN: Processing inhabitants
+            const updates = clipper(inhabitants)
+
+            // THEN: Returns updates for inhabitants 1 and 3 only
+            expect(updates).toHaveLength(2)
+            expect(updates.map(u => u.inhabitantId)).toEqual([1, 3])
+        })
+    })
+})
+
+describe('createPreBookingGenerator', () => {
+    const {createPreBookingGenerator, reconcilePreBookings} = useSeason()
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    // Helper to create preferences
+    const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+
+    // Standard ticket prices with IDs
+    const ticketPrices = [
+        {id: 1, ticketType: 'ADULT' as const, price: 4000, seasonId: 1, description: null, maximumAgeLimit: null},
+        {id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12},
+        {id: 3, ticketType: 'BABY' as const, price: 0, seasonId: 1, description: null, maximumAgeLimit: 2}
+    ]
+
+    // Dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
+    const dinnerEvents = [
+        {id: 101, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
+        {id: 102, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
+        {id: 103, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()}
+    ]
+
+    describe('generator function', () => {
+        it('should throw if inhabitant has no dinnerPreferences', () => {
+            // GIVEN: Inhabitant with null preferences (malformed data)
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
+            const inhabitants = [{id: 1, name: 'Test', birthDate: null, dinnerPreferences: null}]
+
+            // WHEN/THEN: Should throw
+            expect(() => generator(inhabitants)).toThrow('no dinnerPreferences')
+        })
+
+        it('should throw if no matching ticket price for type', () => {
+            // GIVEN: Ticket prices missing ADULT type
+            const incompleteTicketPrices = [
+                {id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12}
+            ]
+            const generator = createPreBookingGenerator(1, incompleteTicketPrices, dinnerEvents)
+            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
+            const inhabitants = [{id: 1, name: 'Adult', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+
+            // WHEN/THEN: Should throw (no ADULT ticket price)
+            expect(() => generator(inhabitants)).toThrow('No ticket price for type')
+        })
+
+        it.each([
+            {
+                description: 'adult with DINEIN on all cooking days',
+                birthDate: new Date(1990, 0, 1),  // Adult
+                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
+                expectedCount: 3,
+                expectedTicketType: 'ADULT',
+                expectedPrice: 4000
+            },
+            {
+                description: 'child (age 8) with TAKEAWAY on cooking days',
+                birthDate: new Date(2017, 0, 1),  // ~8 years old in 2025
+                preferences: [DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE],
+                expectedCount: 3,
+                expectedTicketType: 'CHILD',
+                expectedPrice: 2000
+            },
+            {
+                description: 'baby (age 1) with DINEIN on cooking days',
+                birthDate: new Date(2024, 0, 1),  // ~1 year old in 2025
+                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
+                expectedCount: 3,
+                expectedTicketType: 'BABY',
+                expectedPrice: 0
+            },
+            {
+                description: 'adult with NONE on some cooking days',
+                birthDate: new Date(1990, 0, 1),
+                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
+                expectedCount: 2,  // Only Mon and Fri
+                expectedTicketType: 'ADULT',
+                expectedPrice: 4000
+            },
+            {
+                description: 'inhabitant with NONE on all days',
+                birthDate: new Date(1990, 0, 1),
+                preferences: [DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE],
+                expectedCount: 0,
+                expectedTicketType: 'ADULT',
+                expectedPrice: 4000
+            }
+        ])('should generate $expectedCount orders for $description', ({birthDate, preferences, expectedCount, expectedPrice}) => {
+            // GIVEN: Generator and inhabitant
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
+            const prefs = createPreferences(preferences)
+            const inhabitants = [{id: 1, name: 'Test', birthDate, dinnerPreferences: prefs}]
+
+            // WHEN: Generating pre-bookings
+            const orders = generator(inhabitants)
+
+            // THEN: Returns expected count with correct price
+            expect(orders).toHaveLength(expectedCount)
+            orders.forEach(order => {
+                expect(order.priceAtBooking).toBe(expectedPrice)
+                expect(order.householdId).toBe(1)
+                expect(order.state).toBe('BOOKED')
+            })
+        })
+    })
+
+    describe('reconcilePreBookings', () => {
+        it.each([
+            {
+                description: 'all new orders (no existing)',
+                existing: [],
+                incoming: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                expectedCreate: 1,
+                expectedDelete: 0,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'existing matches incoming (idempotent)',
+                existing: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                incoming: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                expectedCreate: 0,
+                expectedDelete: 0,
+                expectedIdempotent: 1
+            },
+            {
+                description: 'existing not in incoming (delete)',
+                existing: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                incoming: [],
+                expectedCreate: 0,
+                expectedDelete: 1,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'mixed: some new, some existing, some deleted',
+                existing: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const},
+                    {inhabitantId: 1, dinnerEventId: 102, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                incoming: [
+                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const},
+                    {inhabitantId: 1, dinnerEventId: 103, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
+                ],
+                expectedCreate: 1,  // 103 is new
+                expectedDelete: 1,  // 102 is deleted
+                expectedIdempotent: 1  // 101 unchanged
+            }
+        ])('should handle $description', ({existing, incoming, expectedCreate, expectedDelete, expectedIdempotent}) => {
+            // WHEN: Reconciling pre-bookings
+            const result = reconcilePreBookings(existing)(incoming)
+
+            // THEN: Returns expected counts
+            expect(result.create).toHaveLength(expectedCreate)
+            expect(result.delete).toHaveLength(expectedDelete)
+            expect(result.idempotent).toHaveLength(expectedIdempotent)
+        })
+    })
+})
+
 describe('isChefFor', () => {
     const { isChefFor } = useSeason()
     const { TeamRoleSchema } = useCookingTeamValidation()

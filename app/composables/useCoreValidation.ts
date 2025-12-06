@@ -71,7 +71,8 @@ export const useCoreValidation = () => {
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection,
-        createDefaultWeekdayMap
+        createDefaultWeekdayMap,
+        maskWeekDayMap
     } = useWeekDayMapValidation({
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
@@ -481,7 +482,8 @@ export const useCoreValidation = () => {
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createDefaultWeekdayMap,
-        createWeekDayMapFromSelection
+        createWeekDayMapFromSelection,
+        maskWeekDayMap
     }
 }
 

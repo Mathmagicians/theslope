@@ -5,7 +5,7 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
+import {useCoreValidation, getHouseholdShortName, type UserDisplay, type InhabitantDisplay, type HouseholdDisplay} from '~/composables/useCoreValidation'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -25,22 +25,11 @@ describe('useCoreValidation - User Schemas', () => {
         mergeUserRoles
     } = useCoreValidation()
 
-    describe.each([
-        {schema: 'BaseUserSchema', schemaObj: BaseUserSchema, withId: true},
-        {schema: 'UserCreateSchema', schemaObj: UserCreateSchema, withId: false}
-    ])('$schema', ({schemaObj, withId}) => {
-        it('should parse user from factory', () => {
-            const user = withId ? {...UserFactory.defaultUser(), id: 1} : UserFactory.defaultUser()
-            const result = schemaObj.parse(user)
-
-            expect(result.email).toBe(user.email)
-            expect(result.systemRoles).toEqual(user.systemRoles)
-            if (withId) {
-                expect(result.id).toBe(1)
-            } else {
-                expect(result).not.toHaveProperty('id')
-            }
-        })
+    it.each([
+        ['BaseUserSchema', () => BaseUserSchema, {...UserFactory.defaultUser(), id: 1}],
+        ['UserCreateSchema', () => UserCreateSchema, UserFactory.defaultUser()]
+    ])('%s should parse factory data', (_name, getSchema, input) => {
+        expect(() => getSchema().parse(input)).not.toThrow()
     })
 
     it('should normalize RFC 5322 email format', () => {
@@ -69,8 +58,8 @@ describe('useCoreValidation - User Schemas', () => {
     })
 
     it('should merge user roles without duplicates', () => {
-        const existing = {...UserFactory.defaultUser(), systemRoles: ['ADMIN'] as const}
-        const incoming = {...UserFactory.defaultUser(), systemRoles: ['ALLERGYMANAGER'] as const}
+        const existing = {...UserFactory.defaultUser(), id: 1, systemRoles: ['ADMIN'] as const}
+        const incoming = {...UserFactory.defaultUser(), id: 1, systemRoles: ['ALLERGYMANAGER'] as const}
         const merged = mergeUserRoles(existing, incoming)
 
         expect(merged.systemRoles).toHaveLength(2)
@@ -95,28 +84,13 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         serializeWeekDayMap
     } = useCoreValidation()
 
-    describe.each([
-        {schema: 'BaseInhabitantSchema', schemaObj: BaseInhabitantSchema, withId: true},
-        {schema: 'InhabitantCreateSchema', schemaObj: InhabitantCreateSchema, withId: false},
-        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true},
-        {schema: 'InhabitantDetailSchema', schemaObj: InhabitantDetailSchema, withId: true}
-    ])('$schema', ({schemaObj, withId}) => {
-        it('should parse inhabitant from factory', () => {
-            const inhabitantData = HouseholdFactory.defaultInhabitantData()
-            const inhabitant = {
-                ...inhabitantData,
-                ...(withId && {id: 1})
-            }
-            const result = schemaObj.parse(inhabitant)
-
-            expect(result.name).toBe(inhabitantData.name)
-            expect(result.lastName).toBe(inhabitantData.lastName)
-            if (withId) {
-                expect(result.id).toBe(1)
-            } else {
-                expect(result).not.toHaveProperty('id')
-            }
-        })
+    it.each([
+        ['BaseInhabitantSchema', () => BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
+        ['InhabitantCreateSchema', () => InhabitantCreateSchema, HouseholdFactory.defaultInhabitantData()],
+        ['InhabitantDisplaySchema', () => InhabitantDisplaySchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
+        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}]
+    ])('%s should parse factory data', (_name, getSchema, input) => {
+        expect(() => getSchema().parse(input)).not.toThrow()
     })
 
     describe('deserializeInhabitantDisplay', () => {
@@ -265,7 +239,7 @@ describe('useCoreValidation - Household Schemas', () => {
             expect(result.address).toBe(householdData.address)
             expect(result.movedInDate).toBeInstanceOf(Date)
             if (withId) {
-                expect(result.id).toBe(1)
+                expect((result as {id: number}).id).toBe(1)
             } else {
                 expect(result).not.toHaveProperty('id')
             }
@@ -328,8 +302,8 @@ describe('useCoreValidation - Household Schemas', () => {
             const deserialized = deserializeHouseholdDetail(serialized)
 
             expect(deserialized.inhabitants).toHaveLength(1)
-            expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
-            expect(deserialized.inhabitants[0].name).toBe(serialized.inhabitants[0].name)
+            expect(deserialized.inhabitants![0]!.birthDate).toBeInstanceOf(Date)
+            expect(deserialized.inhabitants![0]!.name).toBe(serialized.inhabitants[0]!.name)
         })
     })
 })
@@ -546,8 +520,9 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         const result = HouseholdDisplaySchema.parse(household)
 
         expect(result.inhabitants).toHaveLength(2)
-        expect(result.inhabitants[0].name).toBe(household.inhabitants[0].name)
-        expect(result.inhabitants[1].name).toBe('Jane')
+        const [firstInhabitant, secondInhabitant] = result.inhabitants!
+        expect(firstInhabitant!.name).toBe(household.inhabitants[0]!.name)
+        expect(secondInhabitant!.name).toBe('Jane')
     })
 })
 

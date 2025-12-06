@@ -1,6 +1,216 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-05
+**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-06
+
+## Already Implemented
+
+- ✅ `maskWeekDayMap` - Generic pure function in `useWeekDayMapValidation.ts`
+- ✅ `createPreferenceClipper` - Curried function in `useSeason.ts` using `maskWeekDayMap`
+- ✅ `chunkPreferenceUpdates` - Uses `chunkArray` from `batchUtils.ts`
+- ✅ `updateInhabitantPreferencesBulk` - Bulk update in repository
+- ✅ Preference clipping on season activation (`POST /api/admin/season/active`)
+- ✅ Season deactivation (`POST /api/admin/season/deactivate`)
+- ✅ UI for activate/deactivate in `SeasonStatusDisplay.vue`
+- ✅ `createOrders` bulk function with audit trail in `financesRepository.ts`
+- ✅ `dateToWeekDay` - Exported utility in `utils/season.ts`
+- ✅ `reconcilePreBookings` - Curried function configured from `pruneAndCreate`
+- ✅ `createPreBookingGenerator` - Curried function for generating desired orders from preferences
+- ✅ `determineTicketType` - Age-based ticket type lookup in `useTicket.ts`
+- ✅ Unit tests for `createPreBookingGenerator` and `reconcilePreBookings`
+
+## Next: User Cancellation Tracking & Scaffold Endpoint
+
+### Decision: Filter Cancelled Orders Inside Generator
+
+**Problem:** User deletes a BOOKED order → order is gone → System scaffolds → creates new order (unwanted!)
+
+**Solution:** Track user cancellations in OrderHistory, query latest action per inhabitant-dinnerEvent, pass excluded keys INTO `createPreBookingGenerator` (not post-processing).
+
+### Implementation Tasks
+
+#### 1. Schema Changes (Prisma)
+
+Add `OrderAuditAction` enum and denormalized columns to `OrderHistory`:
+
+```prisma
+enum OrderAuditAction {
+  USER_BOOKED      // User manually booked
+  USER_CANCELLED   // User cancelled their booking (respect in scaffolding)
+  ADMIN_DELETED    // Admin deleted (may recreate)
+  SYSTEM_SCAFFOLD  // System auto-created from preferences
+  SYSTEM_PRUNED    // System removed (preference changed to NONE)
+  BULK_IMPORT      // Imported from billing CSV
+}
+
+model OrderHistory {
+  id                Int              @id @default(autoincrement())
+  orderId           Int?
+  order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  action            OrderAuditAction // Changed from String to enum
+  performedByUserId Int?
+  performedByUser   User?            @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  auditData         String
+  timestamp         DateTime         @default(now())
+
+  // Denormalized for cancellation queries (orderId becomes NULL after deletion)
+  inhabitantId      Int?
+  dinnerEventId     Int?
+
+  @@index([orderId])
+  @@index([performedByUserId])
+  @@index([timestamp])
+  @@index([inhabitantId, dinnerEventId, action]) // For cancellation lookups
+}
+```
+
+**Why denormalized columns?** When Order is deleted, `orderId` becomes NULL (SET NULL). We need `inhabitantId` + `dinnerEventId` to query "which combinations were cancelled by user".
+
+#### 2. Zod Schema Updates (`useBookingValidation.ts`)
+
+Update `AuditActionSchema` to match Prisma enum:
+
+```typescript
+const OrderAuditActionSchema = z.enum([
+  'USER_BOOKED',
+  'USER_CANCELLED',
+  'ADMIN_DELETED',
+  'SYSTEM_SCAFFOLD',
+  'SYSTEM_PRUNED',
+  'BULK_IMPORT'
+])
+
+// Update AuditContextSchema to use new enum
+const AuditContextSchema = z.object({
+  action: OrderAuditActionSchema,
+  performedByUserId: z.number().int().positive().nullable(),
+  source: z.string().min(1)
+})
+```
+
+#### 3. Repository Changes
+
+**`deleteOrder` in `financesRepository.ts`:**
+- Before deleting, create OrderHistory entry with denormalized fields
+- Accept `performedByUserId` to distinguish USER_CANCELLED vs ADMIN_DELETED
+
+```typescript
+async function deleteOrder(
+  d1Client: D1Database,
+  id: number,
+  performedByUserId: number | null  // null = admin, non-null = user
+): Promise<OrderDisplay> {
+  // 1. Fetch order to get inhabitantId, dinnerEventId
+  const order = await prisma.order.findUnique({ where: { id } })
+
+  // 2. Create audit entry with denormalized fields
+  await prisma.orderHistory.create({
+    data: {
+      orderId: id,
+      action: performedByUserId ? 'USER_CANCELLED' : 'ADMIN_DELETED',
+      performedByUserId,
+      inhabitantId: order.inhabitantId,      // Denormalized
+      dinnerEventId: order.dinnerEventId,    // Denormalized
+      auditData: JSON.stringify({ orderSnapshot: order })
+    }
+  })
+
+  // 3. Delete order (orderId in OrderHistory becomes NULL)
+  return prisma.order.delete({ where: { id } })
+}
+```
+
+**New `fetchLatestCancellations` in `financesRepository.ts`:**
+
+```typescript
+type CancelledBookingKey = `${number}-${number}` // inhabitantId-dinnerEventId
+
+async function fetchLatestCancellations(
+  d1Client: D1Database,
+  dinnerEventIds: number[]
+): Promise<Set<CancelledBookingKey>> {
+  // Get latest action per inhabitant-dinnerEvent combination
+  // Only return keys where latest action is USER_CANCELLED
+  const cancellations = await prisma.$queryRaw`
+    SELECT inhabitantId, dinnerEventId
+    FROM OrderHistory h1
+    WHERE action = 'USER_CANCELLED'
+      AND dinnerEventId IN (${Prisma.join(dinnerEventIds)})
+      AND timestamp = (
+        SELECT MAX(timestamp) FROM OrderHistory h2
+        WHERE h2.inhabitantId = h1.inhabitantId
+          AND h2.dinnerEventId = h1.dinnerEventId
+      )
+  `
+
+  return new Set(
+    cancellations.map(c => `${c.inhabitantId}-${c.dinnerEventId}`)
+  )
+}
+```
+
+#### 4. Generator Changes (`useSeason.ts`)
+
+Update `createPreBookingGenerator` to accept excluded keys:
+
+```typescript
+const createPreBookingGenerator = (
+  householdId: number,
+  ticketPrices: TicketPrice[],
+  dinnerEvents: DinnerEventDisplay[],
+  excludedKeys?: Set<string>  // inhabitantId-dinnerEventId combinations to skip
+) => {
+  const excluded = excludedKeys ?? new Set()
+
+  return (inhabitants) =>
+    inhabitants.flatMap(inhabitant => {
+      // ... existing validation ...
+
+      return dinnerEvents
+        .map(de => {
+          // Skip if user previously cancelled this combination
+          const key = `${inhabitant.id}-${de.id}`
+          if (excluded.has(key)) return null
+
+          // ... rest of existing logic ...
+        })
+        .filter(...)
+    })
+}
+```
+
+#### 5. Rebooking Handling
+
+When user rebooks (creates order after cancelling), the new `USER_BOOKED` entry becomes the latest action. Next scaffold query will see `USER_BOOKED` as latest, not `USER_CANCELLED` → order gets created.
+
+**No history rewriting needed** - query always gets latest action per key.
+
+### Scaffold Endpoint
+
+**Endpoint:** `POST /api/admin/dinner-event/scaffold-prebookings`
+- Called by: activate season (days 1-60) OR daily cron (day 61)
+- Input: `{ dinnerEventIds: number[] }`
+
+**Flow:**
+1. Fetch dinner events for given IDs
+2. Fetch all households with inhabitants
+3. Fetch ticket prices for season
+4. **Fetch latest cancellations** for dinner event IDs
+5. For each household:
+   - Generate desired orders (passing excludedKeys)
+   - Reconcile with existing orders
+   - Create/delete as needed
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `prisma/schema.prisma` | Add `OrderAuditAction` enum, denormalized columns to `OrderHistory` |
+| `composables/useBookingValidation.ts` | Update `AuditActionSchema` to match enum |
+| `server/data/financesRepository.ts` | Update `deleteOrder`, add `fetchLatestCancellations` |
+| `composables/useSeason.ts` | Add `excludedKeys` param to `createPreBookingGenerator` |
+| Migration | Create migration for schema changes |
+
+---
 
 ## Summary
 

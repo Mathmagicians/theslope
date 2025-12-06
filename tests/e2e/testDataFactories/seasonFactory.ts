@@ -2,6 +2,7 @@ import {useSeasonValidation, type Season} from "~/composables/useSeasonValidatio
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
+    CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
     TeamRole
@@ -669,8 +670,9 @@ export class SeasonFactory {
 
         // Return team with member assignments and household for cleanup
         const teamWithAssignments = await this.getCookingTeamById(context, team.id!)
+        expect(teamWithAssignments, `Team ${team.id} should exist after creation`).not.toBeNull()
         return {
-            ...teamWithAssignments,
+            ...teamWithAssignments!,
             householdId: householdWithInhabitants.household.id
         }
     }

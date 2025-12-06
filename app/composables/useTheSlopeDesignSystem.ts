@@ -3,8 +3,8 @@ import type {AvatarProps, ButtonProps} from '@nuxt/ui'
 import heynaboLogo from '~/assets/heynabo.jpeg'
 
 // NuxtUI size types extracted from component props
-type NuxtUISize = NonNullable<ButtonProps['size']>
-type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUISize = NonNullable<ButtonProps['size']>
+export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
 
 /**
  * Color System - TheSlope Design System

@@ -90,7 +90,8 @@ const diningModeStats = computed(() => {
     const portions = calculateTotalPortionsFromPrices(modeOrders)
 
     // For dine-in modes, calculate chairs (ADULT + CHILD, no BABY)
-    const chairs = [DinnerMode.DINEIN, DinnerMode.DINEINLATE].includes(mode)
+    const isDineIn = mode === DinnerMode.DINEIN || mode === DinnerMode.DINEINLATE
+    const chairs = isDineIn
       ? modeOrders.filter(o => requiresChair(o.ticketPrice.ticketType)).length
       : null
 
@@ -106,7 +107,7 @@ const diningModeStats = computed(() => {
 
     return {
       key: mode,
-      label: labels[mode],
+      label: labels[mode]!,
       percentage,
       count,
       portions: Math.round(portions),

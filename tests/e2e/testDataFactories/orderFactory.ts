@@ -45,12 +45,6 @@ export class OrderFactory {
     closedAt: null,
     createdAt: SeasonFactory.generateUniqueDate(),
     updatedAt: SeasonFactory.generateUniqueDate(),
-    ticketPrice: {
-      id: 1,
-      ticketType: TicketTypeSchema.enum.ADULT,
-      price: 45,
-      description: 'Adult ticket'
-    },
     ...overrides
   })
 
@@ -78,7 +72,6 @@ export class OrderFactory {
       name: 'Test',
       lastName: 'User',
       pictureUrl: null,
-      dinnerPreferences: null,
       allergies: []
     },
     bookedByUser: {
@@ -228,7 +221,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}`, { headers })
 
     const status = response.status()
@@ -246,7 +239,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
 
     const status = response.status()
@@ -265,7 +258,7 @@ export class OrderFactory {
     orderId: number,
     swapData?: Partial<SwapOrderRequest>,
     expectedStatus: number = 200
-  ): Promise<Order | null> => {
+  ): Promise<OrderDisplay | null> => {
     const data = this.defaultSwapOrderRequest(swapData)
 
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {

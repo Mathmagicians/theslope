@@ -293,13 +293,16 @@ describe('useBookingValidation', () => {
         expect(() => OrderCreateWithPriceSchema.parse(orderWithoutField)).toThrow()
       })
 
-      it.each([
-        {price: 0, desc: 'zero'},
-        {price: -100, desc: 'negative'}
-      ])('GIVEN $desc priceAtBooking WHEN parsing THEN throws', ({price}) => {
+      it('GIVEN negative priceAtBooking WHEN parsing THEN throws', () => {
         expect(() => OrderCreateWithPriceSchema.parse(
-          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: price})
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: -100})
         )).toThrow()
+      })
+
+      it('GIVEN zero priceAtBooking (free ticket) WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: 0})
+        )).not.toThrow()
       })
     })
 

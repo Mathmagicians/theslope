@@ -56,6 +56,15 @@ enum OrderState {
   CLOSED
 }
 
+enum OrderAuditAction {
+  USER_BOOKED // User manually booked
+  USER_CANCELLED // User cancelled their booking (respect in scaffolding)
+  ADMIN_DELETED // Admin deleted (may recreate)
+  SYSTEM_SCAFFOLD // System auto-created from preferences
+  SYSTEM_PRUNED // System removed (preference changed to NONE)
+  BULK_IMPORT // Imported from billing CSV
+}
+
 model AllergyType {
   id                   Int                   @id @default(autoincrement())
   name                 String
@@ -279,16 +288,22 @@ model TicketPrice {
 }
 
 model OrderHistory {
-  id                Int      @id @default(autoincrement())
+  id                Int              @id @default(autoincrement())
   orderId           Int?
-  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  action            String
+  order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  action            OrderAuditAction
   performedByUserId Int?
-  performedByUser   User?    @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  performedByUser   User?            @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
   auditData         String
-  timestamp         DateTime @default(now())
+  timestamp         DateTime         @default(now())
+
+  // Denormalized for cancellation queries (orderId becomes NULL after deletion)
+  inhabitantId  Int?
+  dinnerEventId Int?
+  seasonId      Int?
 
   @@index([orderId])
   @@index([performedByUserId])
   @@index([timestamp])
+  @@index([seasonId, inhabitantId, dinnerEventId, action]) // For cancellation lookups by season
 }

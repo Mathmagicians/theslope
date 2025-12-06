@@ -2,6 +2,7 @@ import {
     type DinnerEventDisplay,
     type DinnerEventDetail,
     type DinnerEventCreate,
+    type HeynaboEventResponse,
     useBookingValidation
 } from "~/composables/useBookingValidation"
 import type { TeamRole } from "~/composables/useCookingTeamValidation"
@@ -350,6 +351,22 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
+        return await response.json()
+    }
+
+    /**
+     * Fetch Heynabo event details via test endpoint
+     *
+     * @param context - Browser context for API requests
+     * @param heynaboEventId - Heynabo event ID
+     * @returns Promise<HeynaboEventResponse> - Event details from Heynabo including start/end times
+     */
+    static readonly getHeynaboEvent = async (
+        context: BrowserContext,
+        heynaboEventId: number
+    ): Promise<HeynaboEventResponse> => {
+        const response = await context.request.get(`/api/test/heynabo/event/${heynaboEventId}`)
+        expect(response.status()).toBe(200)
         return await response.json()
     }
 }

@@ -39,7 +39,7 @@ const allergyData = computed(() => {
         const children: AllergyInhabitant[] = []
 
         allergyType.inhabitants?.forEach(inhabitant => {
-          const age = calculateAge(inhabitant.birthDate)
+          const age = calculateAge(inhabitant.birthDate ?? null)
           if (age !== null && age < 18) {
             children.push(inhabitant)
           } else {

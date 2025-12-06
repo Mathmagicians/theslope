@@ -2,7 +2,7 @@
  * Business logic composable for Allergy domain
  * Following ADR-001: Business logic in composables
  */
-import type {AllergyTypeDetail, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {AllergyTypeDetail, AllergyTypeDisplay, AllergyDisplay} from '~/composables/useAllergyValidation'
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 
@@ -54,7 +54,7 @@ export const useAllergy = () => {
 
     orders.forEach(order => {
       const matchingAllergies = order.inhabitant.allergies?.filter(
-        allergy => menuAllergenIdSet.has(allergy.allergyTypeId)
+        (allergy: AllergyDisplay) => menuAllergenIdSet.has(allergy.allergyTypeId)
       ) ?? []
 
       if (matchingAllergies.length > 0) {
@@ -62,12 +62,12 @@ export const useAllergy = () => {
         if (!affectedInhabitants.has(order.inhabitant.id)) {
           affectedInhabitants.set(order.inhabitant.id, {
             inhabitant: order.inhabitant,
-            matchingAllergens: matchingAllergies.map(a => a.allergyType)
+            matchingAllergens: matchingAllergies.map((a: AllergyDisplay) => a.allergyType)
           })
         }
 
         // Count per allergen
-        matchingAllergies.forEach(allergy => {
+        matchingAllergies.forEach((allergy: AllergyDisplay) => {
           const key = allergy.allergyType.name
           const existing = allergenCounts.get(key)
           if (existing) {

@@ -49,18 +49,27 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Child detection (under 18 years old)
 const isChild = (inhabitant: InhabitantDisplay): boolean => {
-  const age = calculateAge(inhabitant.birthDate)
+  const age = calculateAge(inhabitant.birthDate ?? null)
   return age !== null && age < 18
 }
 
 // Use provided propertyCheck or default to isChild
 const checkProperty = computed(() => props.propertyCheck ?? isChild)
 
-// Mode detection
+// Mode detection - create typed computed properties for template type safety
 const isGroup = computed(() => Array.isArray(props.inhabitants))
-const count = computed(() =>
-  isGroup.value ? props.inhabitants.length : (props.inhabitants ? 1 : 0)
+
+// Typed computed for group mode (array)
+const inhabitantsList = computed((): InhabitantDisplay[] =>
+  Array.isArray(props.inhabitants) ? props.inhabitants : [props.inhabitants]
 )
+
+// Typed computed for single mode (single inhabitant)
+const singleInhabitant = computed((): InhabitantDisplay | null =>
+  Array.isArray(props.inhabitants) ? null : props.inhabitants
+)
+
+const count = computed(() => inhabitantsList.value.length)
 
 // Duplicate first name detection
 const duplicateFirstNames = computed(() => {
@@ -108,7 +117,7 @@ const {getUserUrl} = useHeynabo()
   <!-- GROUP MODE -->
   <div v-if="isGroup" class="flex items-center gap-2">
     <UAvatarGroup :max="maxAvatars" :size="avatarSize">
-      <template v-for="inhabitant in inhabitants" :key="inhabitant.heynaboId">
+      <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
         <ULink
           :to="getUserUrl(inhabitant.heynaboId)"
           target="_blank"
@@ -116,7 +125,7 @@ const {getUserUrl} = useHeynabo()
         >
           <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
             <UAvatar
-              :src="inhabitant.pictureUrl || undefined"
+              :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
               icon="i-heroicons-user"
               :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
@@ -139,47 +148,47 @@ const {getUserUrl} = useHeynabo()
   </div>
 
   <!-- SINGLE MODE: COMPACT -->
-  <div v-else-if="compact" class="inline-flex items-center gap-2">
+  <div v-else-if="compact && singleInhabitant" class="inline-flex items-center gap-2">
     <ULink
-      :to="getUserUrl(inhabitants.heynaboId)"
+      :to="getUserUrl(singleInhabitant.heynaboId)"
       target="_blank"
       class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
     >
       <UAvatar
-        :src="inhabitants.pictureUrl || undefined"
-        :alt="`${inhabitants.name} ${inhabitants.lastName}`"
+        :src="singleInhabitant.pictureUrl ?? undefined"
+        :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
         :size="avatarSize"
         icon="i-heroicons-user"
         :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
       />
     </ULink>
     <div class="flex items-center gap-1">
-      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(inhabitants) }}</span>
-      <UBadge v-if="checkProperty(inhabitants)" size="xs" color="blue">
+      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(singleInhabitant) }}</span>
+      <UBadge v-if="checkProperty(singleInhabitant)" size="xs" color="info">
         Barn
       </UBadge>
     </div>
   </div>
 
   <!-- SINGLE MODE: NOT COMPACT -->
-  <UCard v-else>
+  <UCard v-else-if="singleInhabitant">
     <div class="flex items-center gap-3">
       <ULink
-        :to="getUserUrl(inhabitants.heynaboId)"
+        :to="getUserUrl(singleInhabitant.heynaboId)"
         target="_blank"
         class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
       >
         <UAvatar
-          :src="inhabitants.pictureUrl || undefined"
-          :alt="`${inhabitants.name} ${inhabitants.lastName}`"
+          :src="singleInhabitant.pictureUrl ?? undefined"
+          :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
           :size="avatarSize"
           icon="i-heroicons-user"
           :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
         />
       </ULink>
       <div class="flex items-center gap-2">
-        <span class="font-semibold">{{ inhabitants.name }} {{ inhabitants.lastName }}</span>
-        <UBadge v-if="checkProperty(inhabitants)" size="sm" color="blue">
+        <span class="font-semibold">{{ singleInhabitant.name }} {{ singleInhabitant.lastName }}</span>
+        <UBadge v-if="checkProperty(singleInhabitant)" size="sm" color="info">
           Barn
         </UBadge>
       </div>

@@ -84,6 +84,8 @@ interface Props {
   isCompact?: boolean           // Compact mode for calendar list items
   budget?: number               // Budget in øre (optional override)
   selected?: boolean            // For compact mode selection state
+  isAnnouncing?: boolean        // Loading state for announce button
+  isCancelling?: boolean        // Loading state for cancel button
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -92,7 +94,9 @@ const props = withDefaults(defineProps<Props>(), {
   showAllergens: true,
   isCompact: false,
   budget: undefined,
-  selected: false
+  selected: false,
+  isAnnouncing: false,
+  isCancelling: false
 })
 
 const emit = defineEmits<{
@@ -142,7 +146,7 @@ const stateBadge = computed(() => {
 
 // Dinner step (from useBooking business logic)
 const _currentStep = computed(() => getStepConfig(props.dinnerEvent).step)
-const _isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Menu display
 const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
@@ -401,8 +405,17 @@ const handleCardClick = () => {
     v-else
     :name="`chef-menu-card-${dinnerEvent.id}`"
     :class="LAYOUTS.cardResponsive"
-    :ui="{ root: 'ring-amber-500', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+    :ui="{ root: 'ring-amber-500 relative overflow-hidden', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
   >
+    <!-- Cancelled ribbon -->
+    <div
+      v-if="isCancelled"
+      class="absolute top-4 -right-8 z-10 bg-red-600 text-white text-xs font-bold py-1 px-10 rotate-45 shadow-md"
+      data-testid="cancelled-ribbon"
+    >
+      AFLYST
+    </div>
+
     <template #header>
       <DinnerDetailHeader :dinner-event="dinnerEvent" />
     </template>
@@ -539,7 +552,8 @@ const handleCardClick = () => {
             variant="solid"
             :size="SIZES.standard"
             :icon="nextState.icon"
-            :disabled="!canAdvanceState"
+            :disabled="!canAdvanceState || isAnnouncing"
+            :loading="isAnnouncing"
             block
             name="advance-dinner-state"
             @click="handleAdvanceState"
@@ -563,6 +577,8 @@ const handleCardClick = () => {
             variant="outline"
             :size="SIZES.standard"
             icon="i-heroicons-x-mark"
+            :disabled="isCancelling"
+            :loading="isCancelling"
             block
             name="cancel-dinner"
             @click="handleCancelDinner"

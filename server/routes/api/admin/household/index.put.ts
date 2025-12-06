@@ -27,6 +27,6 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         setResponseStatus(event, 201)
         return savedHousehold
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [PUT] Error creating household', error)
     }
 })
