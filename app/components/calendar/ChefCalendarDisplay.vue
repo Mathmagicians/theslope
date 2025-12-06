@@ -64,6 +64,7 @@ import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {toDate} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
+import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
   seasonDates: DateRange
@@ -84,7 +85,7 @@ const emit = defineEmits<{
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
 
 // Focus date for calendar navigation (from selected dinner)
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
@@ -97,6 +98,7 @@ const viewTabs = [
   { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
 ]
 const viewMode = defineModel<'agenda' | 'calendar'>('viewMode', { required: true })
+const accordionOpen = defineModel<boolean>('accordionOpen', { default: true })
 
 // Temporal splitting using shared composable
 const {
@@ -184,6 +186,20 @@ const sortedDinnerEvents = computed(() =>
   sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
 )
 
+// Agenda table configuration (UTable + UPagination pattern from AdminHouseholds)
+const agendaTable = useTemplateRef('agendaTable')
+const agendaPagination = computed(() => ({
+  pageIndex: 0,
+  pageSize: SIZES.agendaPageSize
+}))
+
+const agendaColumns = [
+  {
+    accessorKey: 'dinner',
+    header: 'Fællesspisning'
+  }
+]
+
 // Deadline urgency ring logic (shared across calendars)
 const URGENCY_TO_RING_CLASS = {
   0: CALENDAR.deadline.onTrack,
@@ -227,8 +243,17 @@ const legendItems = computed(() => [
   }
 ])
 
-const accordionItems = [{ label: 'Kalender', slot: 'calendar-content' }]
-const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefined)
+// Accordion item value: '0' = open (first item), undefined = closed
+const accordionItems = [{ slot: 'calendar-content', value: '0' }]
+const accordionValue = computed({
+  get: () => accordionOpen.value ? '0' : undefined,
+  set: (v) => { accordionOpen.value = v === '0' }
+})
+
+// Ensure accordion opens when tab is clicked (never closes on tab click)
+const handleTabClick = () => {
+  accordionOpen.value = true
+}
 </script>
 
 <template>
@@ -277,28 +302,64 @@ const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefin
     </div>
 
     <!-- Accordion wraps both view toggle and content (collapsed on mobile, open on desktop) -->
-    <UAccordion :items="accordionItems" :default-value="accordionDefault" class="flex-1">
-      <template #calendar-content>
-        <!-- View Toggle -->
-        <div class="px-4 pt-2 md:pt-4">
-          <UTabs
-            v-model="viewMode"
-            :items="viewTabs"
-            orientation="horizontal"
-            variant="link"
-          />
-        </div>
+    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+      <!-- Custom leading slot: tabs instead of label -->
+      <template #leading>
+        <UTabs
+          v-model="viewMode"
+          :items="viewTabs"
+          orientation="horizontal"
+          variant="link"
+        />
+      </template>
 
-        <!-- Agenda View -->
-        <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-          <ChefDinnerCard
-            v-for="dinner in sortedDinnerEvents"
-            :key="dinner.id"
-            :dinner-event="dinner"
-            :selected="dinner.id === selectedDinnerId"
-            :temporal-category="dinner.temporalCategory"
-            @select="emit('select', $event)"
-          />
+      <template #calendar-content>
+
+        <!-- Agenda View (UTable + UPagination) -->
+        <div v-if="viewMode === 'agenda'" class="flex-1 flex flex-col">
+          <UTable
+            ref="agendaTable"
+            v-model:pagination="agendaPagination"
+            :columns="agendaColumns"
+            :data="sortedDinnerEvents"
+            :ui="{ ...COMPONENTS.table.ui, th: 'border-b-0' }"
+            :pagination-options="{
+              getPaginationRowModel: getPaginationRowModel()
+            }"
+          >
+            <!-- Custom header: title + pagination -->
+            <template #dinner-header>
+              <div class="flex items-center justify-between w-full">
+                <span :class="TYPOGRAPHY.bodyTextSmall">Maddage</span>
+                <UPagination
+                  v-if="(agendaTable?.tableApi?.getFilteredRowModel().rows.length || 0) > agendaPagination.pageSize"
+                  :default-page="(agendaTable?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+                  :items-per-page="agendaTable?.tableApi?.getState().pagination.pageSize"
+                  :total="agendaTable?.tableApi?.getFilteredRowModel().rows.length"
+                  :size="SIZES.small"
+                  :sibling-count="PAGINATION.siblingCount.value"
+                  @update:page="(p: number) => agendaTable?.tableApi?.setPageIndex(p - 1)"
+                />
+              </div>
+            </template>
+
+            <!-- Custom cell with ChefDinnerCard -->
+            <template #dinner-cell="{ row }">
+              <ChefDinnerCard
+                :dinner-event="row.original"
+                :selected="row.original.id === selectedDinnerId"
+                :temporal-category="row.original.temporalCategory"
+                @select="emit('select', $event)"
+              />
+            </template>
+
+            <template #empty-state>
+              <div class="flex flex-col items-center justify-center py-6 gap-3">
+                <UIcon name="i-heroicons-calendar" class="w-8 h-8 text-gray-400"/>
+                <p class="text-sm text-gray-500">Ingen fællesspisninger planlagt for dette hold</p>
+              </div>
+            </template>
+          </UTable>
         </div>
 
         <!-- Calendar View -->

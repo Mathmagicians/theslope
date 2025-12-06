@@ -72,6 +72,7 @@
  * - Uses design system (useTheSlopeDesignSystem)
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
+import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { FormSubmitEvent } from '#ui/types'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
@@ -103,7 +104,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -131,8 +132,6 @@ const { allergyTypes } = storeToRefs(allergiesStore)
 // Is the component in EDIT mode?
 const isEditing = computed(() => props.formMode === FORM_MODES.EDIT)
 
-// Card title based on mode
-const cardTitle = computed(() => isEditing.value ? 'Administrer middagen' : 'Middag')
 
 // ========== SHARED COMPUTEDS ==========
 
@@ -188,7 +187,7 @@ const menuStatusBadge = computed(() => {
 // Selected allergen IDs from dinner event (allergens is AllergyType[] after deserialize)
 const selectedAllergenIds = computed(() => {
   if (!props.dinnerEvent?.allergens) return []
-  return props.dinnerEvent.allergens.map(a => a.id)
+  return props.dinnerEvent.allergens.map((a: AllergyTypeDisplay) => a.id)
 })
 
 // Draft allergen selection for editing
@@ -258,6 +257,33 @@ const costAlternativeDisplay = computed(() => {
 })
 
 const isEditingMenu = ref(false)
+
+// Inline edit button configs - switches between edit pencil and ok/cancel
+const menuEditButtons = computed(() => {
+  if (!isEditing.value) return []
+  if (isEditingMenu.value) {
+    return [
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-menu-inline', onClick: () => { emit('update:form', formState.value); isEditingMenu.value = false } },
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-menu-inline', onClick: handleMenuCancel }
+    ]
+  }
+  return [
+    { icon: ICONS.edit, color: HERO_BUTTON.primaryButton, variant: 'ghost' as const, name: 'edit-menu', onClick: () => { isEditingMenu.value = true } }
+  ]
+})
+
+const allergenEditButtons = computed(() => {
+  if (!isEditing.value) return []
+  if (isEditingAllergens.value) {
+    return [
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave },
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-allergens-inline', onClick: handleAllergenCancel }
+    ]
+  }
+  return [
+    { icon: ICONS.edit, color: HERO_BUTTON.primaryButton, variant: 'ghost' as const, name: 'edit-allergens', onClick: () => { isEditingAllergens.value = true } }
+  ]
+})
 
 // Next state logic
 const nextState = computed(() => {
@@ -371,39 +397,43 @@ const handleCardClick = () => {
   </UCard>
 
   <!-- ========== FULL MODE (VIEW or EDIT) ========== -->
-  <UCard v-else :name="`chef-menu-card-${dinnerEvent.id}`">
+  <UCard
+    v-else
+    :name="`chef-menu-card-${dinnerEvent.id}`"
+    :class="LAYOUTS.cardResponsive"
+    :ui="{ root: 'ring-amber-500', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+  >
     <template #header>
-      <div class="flex items-start justify-between gap-2">
-        <h3 :class="TYPOGRAPHY.cardTitle">{{ cardTitle }}</h3>
-        <UBadge :color="stateBadge.color" :icon="stateBadge.icon" variant="subtle" :size="SIZES.small">
-          {{ stateBadge.label }}
-        </UBadge>
-      </div>
+      <DinnerDetailHeader :dinner-event="dinnerEvent" />
     </template>
 
     <div class="space-y-6">
       <!-- ========== MENU SECTION ========== -->
-      <!-- VIEW mode: Display menu -->
-      <div v-if="!isEditing || !isEditingMenu">
-        <div :class="['text-lg font-medium', isMenuAnnounced ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
-          {{ menuTitle }}
-        </div>
+      <!-- Menu display with inline edit buttons -->
+      <div v-if="!isEditingMenu">
+        <UFormField :hint="isEditing ? 'Rediger menu' : undefined" :ui="{ hint: 'hidden md:block' }">
+          <template #default>
+            <div class="flex items-center gap-1 md:gap-2">
+              <div :class="['text-lg font-medium flex-1', isMenuAnnounced ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+                {{ menuTitle }}
+              </div>
+              <UButton
+                v-for="btn in menuEditButtons"
+                :key="btn.name"
+                :icon="btn.icon"
+                :color="btn.color"
+                :variant="btn.variant"
+                size="xs"
+                square
+                :name="btn.name"
+                @click="btn.onClick"
+              />
+            </div>
+          </template>
+        </UFormField>
         <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
-        <!-- Edit button (EDIT mode only, when not already editing) -->
-        <UButton
-          v-if="isEditing && !isEditingMenu"
-          :icon="ICONS.edit"
-          :color="COLOR.neutral"
-          variant="ghost"
-          size="xs"
-          name="edit-menu"
-          class="mt-2"
-          @click="isEditingMenu = true"
-        >
-          Rediger menu
-        </UButton>
       </div>
 
       <!-- EDIT mode: Edit menu fields with Zod validation -->
@@ -437,7 +467,24 @@ const handleCardClick = () => {
 
       <!-- ========== ALLERGEN SECTION ========== -->
       <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">
-        <h4 :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Allergener i menuen</h4>
+        <UFormField :hint="isEditing ? (isEditingAllergens ? 'Gem eller annuller' : 'Rediger allergener') : undefined" :ui="{ hint: 'hidden md:block' }">
+          <template #default>
+            <div class="flex items-center gap-1 md:gap-2 mb-2">
+              <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
+              <UButton
+                v-for="btn in allergenEditButtons"
+                :key="btn.name"
+                :icon="btn.icon"
+                :color="btn.color"
+                :variant="btn.variant"
+                size="xs"
+                square
+                :name="btn.name"
+                @click="btn.onClick"
+              />
+            </div>
+          </template>
+        </UFormField>
 
         <!-- VIEW mode: Display allergens -->
         <div v-if="!isEditingAllergens">
@@ -447,33 +494,16 @@ const handleCardClick = () => {
             mode="view"
             readonly
           />
-          <!-- Edit button (EDIT mode only) -->
-          <UButton
-            v-if="isEditing"
-            :icon="ICONS.edit"
-            :color="COLOR.neutral"
-            variant="ghost"
-            size="xs"
-            name="edit-allergens"
-            class="mt-2"
-            @click="isEditingAllergens = true"
-          >
-            Rediger allergener
-          </UButton>
         </div>
 
         <!-- EDIT mode: Edit allergens -->
-        <div v-else class="space-y-4">
+        <div v-else>
           <AllergenMultiSelector
             v-model="draftAllergenIds"
             :allergy-types="allergyTypes"
             mode="edit"
             :show-statistics="true"
           />
-          <div class="flex gap-2 justify-end">
-            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" name="cancel-allergen-edit" @click="handleAllergenCancel">Annuller</UButton>
-            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" name="save-allergen-edit" @click="handleAllergenSave">Gem</UButton>
-          </div>
         </div>
       </div>
 

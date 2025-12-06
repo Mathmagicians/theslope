@@ -1,6 +1,7 @@
 import {z} from 'zod'
 // Import TicketType enum from generated Zod schemas (single source of truth)
 import { TicketTypeSchema } from '~~/prisma/generated/zod'
+import { pruneAndCreate } from '~/utils/batchUtils'
 
 /**
  * Validation schemas for TicketPrice objects
@@ -69,6 +70,20 @@ export const useTicketPriceValidation = () => {
     const CreateTicketPriceSchema = TicketPriceSchema.omit({ id: true, seasonId: true })
     const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
 
+    /**
+     * Curried reconcile function for ticket prices
+     * Used to compare existing vs incoming ticket prices and categorize into create/update/idempotent/delete
+     *
+     * Respects FK constraint: Order.ticketPriceId has onDelete: Restrict
+     */
+    const reconcileTicketPrices = pruneAndCreate<TicketPrice, number>(
+        tp => tp.id,
+        (a, b) => a.price === b.price &&
+                  a.ticketType === b.ticketType &&
+                  a.description === b.description &&
+                  a.maximumAgeLimit === b.maximumAgeLimit
+    )
+
     return {
         TicketTypeSchema,
         TicketPriceSchema,
@@ -77,7 +92,8 @@ export const useTicketPriceValidation = () => {
         CreateTicketPricesArraySchema,
         validateTicketPrice,
         validateTicketPrices,
-        createTicketPrice
+        createTicketPrice,
+        reconcileTicketPrices
     }
 }
 

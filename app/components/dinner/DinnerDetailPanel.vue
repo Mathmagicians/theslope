@@ -12,8 +12,7 @@
  * - isError: boolean - error state
  *
  * SLOTS (pure layout, no props):
- * - #top   - Header bar area
- * - #hero  - Menu hero area
+ * - #hero  - Menu hero area (includes header via ChefMenuCard)
  * - #team  - Cooking team section
  * - #stats - Kitchen statistics section
  *
@@ -39,7 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { TYPOGRAPHY, IMG } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, IMG, LAYOUTS, RESPONSIVE_ICONS } = useTheSlopeDesignSystem()
 
 // Effective picture URL: use menu picture if available, otherwise default dinner picture
 const effectivePictureUrl = computed(() =>
@@ -51,34 +50,34 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
 </script>
 
 <template>
-  <UPageBody data-testid="dinner-detail-panel">
+  <UPageBody class="!mt-0 !space-y-2 md:!space-y-8">
     <!-- Loading state -->
-    <UPageCard v-if="isLoading">
+    <UPageCard v-if="isLoading" :class="LAYOUTS.cardResponsive">
       <Loader text="Henter fællesspisning..." />
     </UPageCard>
 
     <!-- Error state -->
-    <UPageCard v-else-if="isError">
+    <UPageCard v-else-if="isError" :class="LAYOUTS.cardResponsive">
       <ViewError text="Kan ikke hente fællesspisning" />
     </UPageCard>
 
     <!-- No dinner selected -->
     <UPageCard
       v-else-if="hasNoDinnerSelected"
-      icon="i-heroicons-arrow-left"
+      :class="LAYOUTS.cardResponsive"
+      :icon="RESPONSIVE_ICONS.arrowToMaster"
       title="Vælg en fællesspisning"
       description="Vælg en fællesspisning fra kalenderen for at se detaljer."
     />
 
     <!-- Main content when dinner is loaded -->
     <template v-else-if="dinnerEvent">
-      <!-- #top: Header bar area -->
-      <slot name="top" />
-
       <!-- #hero: Menu content with background image -->
       <UPageHero
+data-testid="dinner-detail-panel"
+        :class="LAYOUTS.cardResponsive"
         :ui="{
-          root: 'relative bg-cover bg-center min-h-[300px] md:min-h-[400px]'
+          root: `relative bg-cover bg-center min-h-[300px] md:min-h-[400px] overflow-hidden`
         }"
         :style="{ backgroundImage: `url(${effectivePictureUrl})` }"
       >
@@ -91,7 +90,7 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
       </UPageHero>
 
       <!-- #team: Cooking team section -->
-      <UPageCard class="mt-6">
+      <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
         <template #title>
           <h3 :class="TYPOGRAPHY.cardTitle">Hvem laver maden?</h3>
         </template>
@@ -100,7 +99,7 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
       </UPageCard>
 
       <!-- #stats: Kitchen statistics section -->
-      <UPageCard class="mt-6">
+      <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
         <template #title>
           <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
         </template>

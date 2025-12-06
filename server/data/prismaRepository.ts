@@ -862,6 +862,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {SeasonSchema} = useSeasonValidation()
+    const {reconcileTicketPrices} = useTicketPriceValidation()
 
     // ADR-010: Validate input BEFORE writing to database
     const validatedSeasonData = SeasonSchema.parse(seasonData)
@@ -872,18 +873,40 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     // Exclude id and read-only relation fields from update
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
+        // Handle ticket prices using reconcileTicketPrices to respect FK constraint (Order.ticketPriceId onDelete: Restrict)
+        if (ticketPrices && ticketPrices.length > 0) {
+            const existingPrices = await prisma.ticketPrice.findMany({
+                where: { seasonId: validatedSeasonData.id }
+            })
+
+            const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
+
+            for (const tp of create) {
+                const { id: _tpId, seasonId: _seasonId, ...priceData } = tp
+                await prisma.ticketPrice.create({
+                    data: { ...priceData, seasonId: validatedSeasonData.id }
+                })
+            }
+
+            for (const tp of update) {
+                const { id: tpId, seasonId: _seasonId, ...priceData } = tp
+                if (tpId) await prisma.ticketPrice.update({ where: { id: tpId }, data: priceData })
+            }
+
+            for (const tp of toDelete) {
+                if (tp.id) {
+                    try {
+                        await prisma.ticketPrice.delete({ where: { id: tp.id } })
+                    } catch {
+                        console.warn(`🌞 > SEASON > [UPDATE] Cannot delete ticket price ${tp.id} - referenced by orders`)
+                    }
+                }
+            }
+        }
 
         const updatedSeason = await prisma.season.update({
             where: {id: validatedSeasonData.id},
-            data: {
-                ...updateData,
-                // Replace all ticket prices (delete existing, create new)
-                ticketPrices: ticketPrices ? {
-                    deleteMany: {},  // Delete all existing ticket prices for this season
-                    // Strip id and seasonId - Prisma auto-generates id and sets seasonId from relation
-                    create: ticketPrices.map(({id, seasonId, ...price}) => price)
-                } : Prisma.skip
-            },
+            data: updateData,
             include: {
                 ticketPrices: true
             }

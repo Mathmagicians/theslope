@@ -49,7 +49,7 @@ householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
 // Design system
-const { COMPONENTS, SIZES, COLOR } = useTheSlopeDesignSystem()
+const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Ticket business logic
 const {getTicketTypeConfig} = useTicket()
@@ -73,7 +73,7 @@ const emptyStateMessages = [
 const emptyStateMessage = computed(() => {
   const id = props.dinnerEvent?.id || 0
   const index = id % emptyStateMessages.length
-  return emptyStateMessages[index]
+  return emptyStateMessages[index]!
 })
 
 // UTable columns
@@ -201,20 +201,20 @@ const handlePowerModeUpdate = () => {
       <!-- Ticket Type Column -->
       <template #ticketType-cell="{ row }">
         <UBadge
-          v-if="row.ticketConfig"
-          :color="row.ticketConfig.color"
+          v-if="row.original.ticketConfig"
+          :color="row.original.ticketConfig.color"
           variant="subtle"
           size="sm"
         >
-          {{ row.ticketConfig.label }}
+          {{ row.original.ticketConfig.label }}
         </UBadge>
-        <span v-else class="text-gray-400 text-sm">-</span>
+        <span v-else :class="TYPOGRAPHY.bodyTextMuted">-</span>
       </template>
 
       <!-- Name Column -->
       <template #name-cell="{ row }">
         <UserListItem
-          :inhabitants="row"
+          :inhabitants="row.original"
           compact
           :property-check="() => false"
         />
@@ -225,22 +225,22 @@ const handlePowerModeUpdate = () => {
         <!-- VIEW mode: Show badge -->
         <DinnerModeSelector
           v-if="formMode === FORM_MODES.VIEW"
-          :model-value="row.dinnerMode"
+          :model-value="row.original.dinnerMode"
           :form-mode="FORM_MODES.VIEW"
           size="sm"
-          :name="`inhabitant-${row.id}-mode-view`"
+          :name="`inhabitant-${row.original.id}-mode-view`"
         />
 
         <!-- EDIT mode: Show selector + price -->
         <div v-else-if="formMode === FORM_MODES.EDIT" class="flex items-center gap-4">
           <DinnerModeSelector
-            :model-value="row.dinnerMode"
+            :model-value="row.original.dinnerMode"
             :form-mode="FORM_MODES.EDIT"
             size="sm"
-            :name="`inhabitant-${row.id}-mode-edit`"
-            @update:model-value="(mode) => emit('updateBooking', row.id, mode, row.order?.ticketPriceId ?? 0)"
+            :name="`inhabitant-${row.original.id}-mode-edit`"
+            @update:model-value="(mode) => emit('updateBooking', row.original.id, mode, row.original.order?.ticketPriceId ?? 0)"
           />
-          <span class="text-sm font-semibold whitespace-nowrap">{{ row.price }} kr</span>
+          <span :class="[TYPOGRAPHY.bodyTextMedium, 'whitespace-nowrap']">{{ row.original.price }} kr</span>
         </div>
       </template>
     </UTable>

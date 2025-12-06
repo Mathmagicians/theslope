@@ -28,11 +28,12 @@
 -->
 <script setup lang="ts">
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   inhabitants: InhabitantDisplay | InhabitantDisplay[]
   compact?: boolean
-  size?: 'xs' | 'sm' | 'md' | 'lg'
+  size?: NuxtUISize
   ringColor?: string
   label?: string
   propertyCheck?: (inhabitant: InhabitantDisplay) => boolean

@@ -1,5 +1,5 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
-import {saveDinnerEvent} from "~~/server/data/financesRepository"
+import {saveDinnerEvents, fetchDinnerEvent} from "~~/server/data/financesRepository"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 import type {DinnerEventCreate, DinnerEventDetail} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -22,10 +22,12 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     // Database operations try-catch - separate concerns
     try {
         console.info(`🍽️ > DINNER_EVENT > [PUT] Creating dinner event ${dinnerEventData.menuTitle}`)
-        const savedDinnerEvent = await saveDinnerEvent(d1Client, dinnerEventData)
-        console.info(`🍽️ > DINNER_EVENT > [PUT] Successfully created dinner event ${savedDinnerEvent.menuTitle}`)
+        const [created] = await saveDinnerEvents(d1Client, dinnerEventData)
+        // Fetch full detail to return (ADR-009: mutations return Detail type)
+        const savedDinnerEvent = await fetchDinnerEvent(d1Client, created!.id)
+        console.info(`🍽️ > DINNER_EVENT > [PUT] Successfully created dinner event ${savedDinnerEvent!.menuTitle}`)
         setResponseStatus(event, 201)
-        return savedDinnerEvent
+        return savedDinnerEvent!
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [PUT] Error creating dinner event`, error)
     }

@@ -34,7 +34,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Design system
-const { COMPONENTS } = useTheSlopeDesignSystem()
+const { COMPONENTS, ICONS } = useTheSlopeDesignSystem()
 
 // Store integration
 const planStore = usePlanStore()
@@ -83,48 +83,46 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
   <UFieldGroup
     label="🍽️ Vil du hjælpe til med madlavningen?"
     :class="COMPONENTS.heroPanel.light.container"
-    class="mt-4"
+    class="mt-2 md:mt-4"
+    orientation="horizontal"
     data-testid="work-assignment"
   >
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+    <div class="flex gap-1 md:gap-2">
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-chef"
-        icon="i-heroicons-plus"
+        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
-        block
         @click="handleRoleAssignment(TeamRole.CHEF)"
       >
-        Bliv chefkok 👨‍🍳
+        👨‍🍳 Chef
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-cook"
-        icon="i-heroicons-plus"
+        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
-        block
         @click="handleRoleAssignment(TeamRole.COOK)"
       >
-        Bliv kok 👥
+        👥 Kok
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-helper"
-        icon="i-heroicons-plus"
+        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
-        block
         @click="handleRoleAssignment(TeamRole.JUNIORHELPER)"
       >
-        Bliv kokkespire 🌱
+        🌱 Spire
       </UButton>
     </div>
   </UFieldGroup>

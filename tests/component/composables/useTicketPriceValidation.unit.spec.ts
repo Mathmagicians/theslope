@@ -124,4 +124,54 @@ describe('useTicketPriceValidation', () => {
             })
         })
     })
+
+    describe('reconcileTicketPrices', () => {
+        const { reconcileTicketPrices } = useTicketPriceValidation()
+
+        // Helper to add ids to factory data
+        const withIds = (prices: ReturnType<typeof TicketFactory.defaultTicketPrices>, startId = 1) =>
+            prices.map((p, i) => ({ ...p, id: startId + i }))
+
+        const existing = withIds(TicketFactory.defaultTicketPrices({ seasonId: 1 }))
+
+        it.each([
+            {
+                scenario: 'new ticket price (no id) → create',
+                incoming: [...existing, { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0], description: 'New price' }],
+                expected: { create: 1, update: 0, idempotent: 4, delete: 0 }
+            },
+            {
+                scenario: 'unchanged prices → idempotent',
+                incoming: existing,
+                expected: { create: 0, update: 0, idempotent: 4, delete: 0 }
+            },
+            {
+                scenario: 'changed price → update',
+                incoming: existing.map((p, i) => i === 0 ? { ...p, price: 9999 } : p),
+                expected: { create: 0, update: 1, idempotent: 3, delete: 0 }
+            },
+            {
+                scenario: 'removed price → delete',
+                incoming: existing.slice(0, 3),
+                expected: { create: 0, update: 0, idempotent: 3, delete: 1 }
+            },
+            {
+                scenario: 'mixed: create + update + delete',
+                incoming: [
+                    existing[0],                                    // idempotent
+                    { ...existing[1], price: 2000 },                // update
+                    { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0], description: 'Brand new' } // create
+                    // existing[2] and existing[3] removed → delete
+                ],
+                expected: { create: 1, update: 1, idempotent: 1, delete: 2 }
+            }
+        ])('$scenario', ({ incoming, expected }) => {
+            const result = reconcileTicketPrices(existing)(incoming)
+
+            expect(result.create).toHaveLength(expected.create)
+            expect(result.update).toHaveLength(expected.update)
+            expect(result.idempotent).toHaveLength(expected.idempotent)
+            expect(result.delete).toHaveLength(expected.delete)
+        })
+    })
 })

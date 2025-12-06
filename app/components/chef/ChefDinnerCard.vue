@@ -79,12 +79,12 @@ const handleClick = () => {
     :name="`chef-dinner-card-${dinnerEvent.id}`"
     :ui="{
       root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
-      body: 'p-3'
+      body: 'p-1.5 md:p-3'
     }"
     @click="handleClick"
   >
     <!-- Compact vertical layout (fits narrow sidebar) -->
-    <div class="text-center space-y-1">
+    <div class="text-center space-y-0.5 md:space-y-1">
       <!-- Date with weekday (color matches temporal category) -->
       <div :class="dateColorClass" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
         {{ formattedDate }}
@@ -96,7 +96,7 @@ const handleClick = () => {
       </div>
 
       <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events -->
-      <div v-if="temporalCategory !== 'past'" class="pt-1">
+      <div v-if="temporalCategory !== 'past'" class="pt-0.5 md:pt-1">
         <DinnerDeadlineBadges :dinner-event="dinnerEvent" mode="standalone" />
       </div>
     </div>

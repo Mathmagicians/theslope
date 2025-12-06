@@ -289,30 +289,34 @@ export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number):
 // - Weak to CookingTeam (event can exist without assigned team)
 // - Weak to Inhabitant chef (event can exist without assigned chef)
 
-export async function saveDinnerEvent(d1Client: D1Database, dinnerEvent: DinnerEventCreate): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving dinner event ${dinnerEvent.menuTitle} on ${dinnerEvent.date}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
+/**
+ * Save one or more dinner events. Accepts single or array, returns Display[] (ADR-009).
+ * Uses createManyAndReturn for efficient D1 insertion.
+ */
+export async function saveDinnerEvents(
+    d1Client: D1Database,
+    dinnerEventInput: DinnerEventCreate | DinnerEventCreate[]
+): Promise<DinnerEventDisplay[]> {
+    // Normalize to array
+    const dinnerEvents = Array.isArray(dinnerEventInput) ? dinnerEventInput : [dinnerEventInput]
+    if (dinnerEvents.length === 0) return []
 
-    // Exclude relation fields that Prisma doesn't accept in create data
-    const {allergens, ...createData} = dinnerEvent
+    console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving ${dinnerEvents.length} dinner event(s)`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {DinnerEventDisplaySchema} = useBookingValidation()
 
     try {
-        const newDinnerEvent = await prisma.dinnerEvent.create({
+        // Strip relation fields, keep only create data
+        const createData = dinnerEvents.map(({allergens, ...data}) => data)
+
+        const created = await prisma.dinnerEvent.createManyAndReturn({
             data: createData
         })
 
-        // ADR-009: mutations return Detail - newly created events have no chef/cookingTeam yet
-        const dinnerEventToValidate = {
-            ...newDinnerEvent,
-            chef: null,
-            cookingTeam: null
-        }
-
-        console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved dinner event ${newDinnerEvent.menuTitle} with ID ${newDinnerEvent.id}`)
-        return DinnerEventDetailSchema.parse(dinnerEventToValidate)
+        console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved ${created.length} dinner event(s)`)
+        return created.map(de => DinnerEventDisplaySchema.parse(de))
     } catch (error) {
-        return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving dinner event ${dinnerEvent?.menuTitle}`, error)
+        return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving ${dinnerEvents.length} dinner event(s)`, error)
     }
 }
 

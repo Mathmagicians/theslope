@@ -10,6 +10,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
+import {chunkArray} from '~/utils/batchUtils'
 
 /**
  * Deadline urgency levels for dinner events
@@ -190,6 +191,11 @@ export const useSeason = () => {
         return computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, dinnerEvents, holidays)
     }
 
+    // Team assignment batching (D1 rate limit safe)
+    // Update is lightweight: 2 params (dinnerEventId, cookingTeamId), batch of 50 is safe
+    const TEAM_ASSIGNMENT_BATCH_SIZE = 50
+    const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(TEAM_ASSIGNMENT_BATCH_SIZE)
+
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
@@ -332,6 +338,7 @@ export const useSeason = () => {
         generateDinnerEventDataForSeason,
         assignAffinitiesToTeams,
         assignTeamsToEvents,
+        chunkTeamAssignments,
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,

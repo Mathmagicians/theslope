@@ -26,6 +26,7 @@
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { DeadlineBadge } from '~/components/chef/DinnerDeadlineBadges.vue'
+import DinnerDeadlineBadges from '~/components/chef/DinnerDeadlineBadges.vue'
 import { DINNER_STEP_MAP } from '~/composables/useBooking'
 
 interface Props {
@@ -121,7 +122,7 @@ const steps = computed(() => {
           >
             {{ getBadgeForStep(1)!.value }}
           </UBadge>
-          <p v-if="mode === 'full'" :class="TYPOGRAPHY.help">
+          <p v-if="mode === 'full'" :class="TYPOGRAPHY.bodyTextMuted">
             {{ getBadgeForStep(1)!.helpText }}
           </p>
         </div>
@@ -137,7 +138,7 @@ const steps = computed(() => {
           >
             {{ getBadgeForStep(2)!.value }}
           </UBadge>
-          <p v-if="mode === 'full'" :class="TYPOGRAPHY.help">
+          <p v-if="mode === 'full'" :class="TYPOGRAPHY.bodyTextMuted">
             {{ getBadgeForStep(2)!.helpText }}
           </p>
         </div>
