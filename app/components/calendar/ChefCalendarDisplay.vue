@@ -85,7 +85,9 @@ const emit = defineEmits<{
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, BG, TEXT} = useTheSlopeDesignSystem()
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 // Focus date for calendar navigation (from selected dinner)
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
@@ -174,6 +176,11 @@ const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
   )
 }
 
+const isCancelledDay = (day: DateValue): boolean => {
+  const dinner = getDinnerForDay(day)
+  return dinner?.state === DinnerState.CANCELLED
+}
+
 const isSelected = (day: DateValue): boolean => {
   if (!props.selectedDinnerId || !props.showSelection) return false
   const dinner = getDinnerForDay(day)
@@ -188,10 +195,10 @@ const sortedDinnerEvents = computed(() =>
 
 // Agenda table configuration (UTable + UPagination pattern from AdminHouseholds)
 const agendaTable = useTemplateRef('agendaTable')
-const agendaPagination = computed(() => ({
+const agendaPagination = ref({
   pageIndex: 0,
   pageSize: SIZES.agendaPageSize
-}))
+})
 
 const agendaColumns = [
   {
@@ -240,6 +247,10 @@ const legendItems = computed(() => [
   {
     label: 'Deadline snart (24-72t)',
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+  },
+  {
+    label: 'Aflyst madlavning',
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past} line-through`
   }
 ])
 
@@ -255,7 +266,14 @@ const accordionValue = computed({
 <template>
   <div class="flex flex-col h-full">
     <!-- Countdown Timer (Train Station Style) -->
-    <div :class="[CALENDAR.countdown.container, CHEF_CALENDAR.countdown.border]">
+    <div
+      :class="[
+        CALENDAR.countdown.container,
+        CHEF_CALENDAR.countdown.border,
+        nextDinner ? 'cursor-pointer hover:ring-2 hover:ring-ocean-300 dark:hover:ring-ocean-700 transition-all' : ''
+      ]"
+      @click="nextDinner ? emit('select', nextDinner.id) : null"
+    >
       <!-- Active cooking event state -->
       <div v-if="nextDinner && countdown" class="text-center space-y-2">
         <!-- Title -->
@@ -373,8 +391,8 @@ const accordionValue = computed({
                 :class="[
                   SIZES.calendarCircle,
                   CALENDAR.day.shape,
-                  getDayColorClass(getDayType(eventLists)!),
-                  getDayType(eventLists) !== 'past' ? getDeadlineRingClass(day) : '',
+                  isCancelledDay(day) ? `${CALENDAR.day.past} line-through` : getDayColorClass(getDayType(eventLists)!),
+                  getDayType(eventLists) !== 'past' && !isCancelledDay(day) ? getDeadlineRingClass(day) : '',
                   isSelected(day) ? CHEF_CALENDAR.selection : ''
                 ]"
                 @click="handleDateClick(day)"

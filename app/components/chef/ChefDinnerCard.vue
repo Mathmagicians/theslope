@@ -54,12 +54,14 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
 
 // Get color class based on temporal category (matches calendar view)
-const dateColorClass = computed(() =>
-  props.temporalCategory === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[props.temporalCategory]
-)
+// Use past styling for cancelled dinners
+const dateColorClass = computed(() => {
+  if (isCancelled.value) return CALENDAR.day.past
+  return props.temporalCategory === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[props.temporalCategory]
+})
 
 // Format dinner date with weekday (matches countdown timer style: "Lør 16/01")
 const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.date))
@@ -67,6 +69,11 @@ const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.d
 // Menu title or placeholder
 const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
 const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
+
+// Check if dinner is cancelled
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
+const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Handle card click
 const handleClick = () => {
@@ -87,7 +94,7 @@ const handleClick = () => {
     <div class="space-y-0.5 md:space-y-1 w-full">
       <!-- Date with weekday (color matches temporal category) -->
       <div class="text-center">
-        <div :class="dateColorClass" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
+        <div :class="[dateColorClass, isCancelled ? 'line-through' : '']" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
           {{ formattedDate }}
         </div>
       </div>
@@ -103,8 +110,8 @@ const handleClick = () => {
         {{ menuTitle }}
       </div>
 
-      <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events -->
-      <div v-if="temporalCategory !== 'past'" class="pt-0.5 md:pt-1">
+      <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events and cancelled -->
+      <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1">
         <DinnerDeadlineBadges :dinner-event="dinnerEvent" mode="standalone" />
       </div>
     </div>
