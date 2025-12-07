@@ -54,7 +54,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { CALENDAR, CHEF_CALENDAR } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get color class based on temporal category (matches calendar view)
 const dateColorClass = computed(() =>
@@ -78,20 +78,28 @@ const handleClick = () => {
   <UCard
     :name="`chef-dinner-card-${dinnerEvent.id}`"
     :ui="{
-      root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
-      body: 'p-1.5 md:p-3'
+      root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
+      body: 'p-1.5 md:p-3 w-full'
     }"
     @click="handleClick"
   >
     <!-- Compact vertical layout (fits narrow sidebar) -->
-    <div class="text-center space-y-0.5 md:space-y-1">
+    <div class="space-y-0.5 md:space-y-1 w-full">
       <!-- Date with weekday (color matches temporal category) -->
-      <div :class="dateColorClass" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
-        {{ formattedDate }}
+      <div class="text-center">
+        <div :class="dateColorClass" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
+          {{ formattedDate }}
+        </div>
       </div>
 
       <!-- Menu title -->
-      <div :class="['text-sm truncate', isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500']">
+      <div
+        :class="[
+          TYPOGRAPHY.bodyTextMedium,
+          'line-clamp-2 text-balance text-center',
+          isMenuAnnounced ? '' : 'italic text-neutral-500'
+        ]"
+      >
         {{ menuTitle }}
       </div>
 

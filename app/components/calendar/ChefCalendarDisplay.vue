@@ -312,13 +312,18 @@ const accordionValue = computed({
       <template #calendar-content>
 
         <!-- Agenda View (UTable + UPagination) -->
-        <div v-if="viewMode === 'agenda'" class="flex-1 flex flex-col">
+        <div v-if="viewMode === 'agenda'" class="flex-1 flex flex-col overflow-x-hidden">
           <UTable
             ref="agendaTable"
             v-model:pagination="agendaPagination"
             :columns="agendaColumns"
             :data="sortedDinnerEvents"
-            :ui="{ ...COMPONENTS.table.ui, th: 'border-b-0' }"
+            :ui="{
+              ...COMPONENTS.table.ui,
+              th: 'border-b-0',
+              td: 'py-1 md:py-2 max-w-0 w-full',
+              base: 'table-fixed w-full'
+            }"
             :pagination-options="{
               getPaginationRowModel: getPaginationRowModel()
             }"

@@ -5,6 +5,7 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 
 const DinnerMode = DinnerModeSchema.enum
+type DinnerModeType = z.infer<typeof DinnerModeSchema>
 
 const selectionTestCases = [
     { desc: 'Mon, Wed, Fri', selectedDays: [WEEKDAYS[0], WEEKDAYS[2], WEEKDAYS[4]], expectedPattern: [true, false, true, false, true, false, false] },
