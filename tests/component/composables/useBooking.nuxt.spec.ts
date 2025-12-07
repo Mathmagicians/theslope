@@ -44,10 +44,10 @@ describe('useBooking', () => {
 
     describe('HEYNABO_EVENT_TEMPLATE', () => {
         it('contains required template parts', () => {
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_HEADER).toContain('synkroniseres fra skraaningen.dk')
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_HEADER).toContain('ændringer overskrives')
-            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_LINK_PREFIX).toContain('Book din billet')
-            expect(HEYNABO_EVENT_TEMPLATE.COOKING_TEAM_PREFIX).toContain('Madhold')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('synkroniseres fra skraaningen.dk')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toContain('ændringer overskrives')
+            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI).toBe('📅')
+            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toContain('hilsner')
         })
     })
 
@@ -154,9 +154,9 @@ describe('useBooking', () => {
             })
 
             it.each([
-                {name: 'includes cooking team when provided', cookingTeam: 'Team Alpha', shouldContain: 'Madhold: Team Alpha'},
-                {name: 'excludes cooking team when null', cookingTeam: null, shouldNotContain: 'Madhold:'},
-                {name: 'excludes cooking team when undefined', cookingTeam: undefined, shouldNotContain: 'Madhold:'}
+                {name: 'includes cooking team when provided', cookingTeam: 'Team Alpha', shouldContain: '// Team Alpha'},
+                {name: 'uses default when null', cookingTeam: null, shouldContain: '// Køkkenholdet'},
+                {name: 'uses default when undefined', cookingTeam: undefined, shouldContain: '// Køkkenholdet'}
             ])('$name', ({cookingTeam, shouldContain, shouldNotContain}) => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl, cookingTeam)
 
