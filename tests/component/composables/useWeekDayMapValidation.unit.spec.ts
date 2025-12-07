@@ -1,8 +1,10 @@
 import {describe, it, expect} from 'vitest'
-import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {WEEKDAYS, createDefaultWeekdayMap} from '~/types/dateTypes'
-import {DinnerMode} from '@prisma/client'
 import {z} from 'zod'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {WEEKDAYS} from '~/types/dateTypes'
+import {DinnerModeSchema} from '~~/prisma/generated/zod'
+
+const DinnerMode = DinnerModeSchema.enum
 
 const selectionTestCases = [
     { desc: 'Mon, Wed, Fri', selectedDays: [WEEKDAYS[0], WEEKDAYS[2], WEEKDAYS[4]], expectedPattern: [true, false, true, false, true, false, false] },
@@ -45,7 +47,7 @@ const testConfigurations = [
 testConfigurations.forEach(({ name, options, selectedValue, unselectedValue, validInputs, hasRequiredSchema, requiredMessage }) => {
     describe(`useWeekDayMapValidation - ${name}`, () => {
         const composable = useWeekDayMapValidation(options)
-        const { WeekDayMapSchema, WeekDayMapSchemaRequired, WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap, createWeekDayMapFromSelection } = composable
+        const { WeekDayMapSchema, WeekDayMapSchemaRequired, WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap, createWeekDayMapFromSelection, createDefaultWeekdayMap } = composable
 
         describe('WeekDayMapSchema', () => {
             validInputs.forEach(({ desc, input }) => {

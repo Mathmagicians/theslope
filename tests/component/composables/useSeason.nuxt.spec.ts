@@ -841,6 +841,60 @@ describe('createPreBookingGenerator', () => {
                 expect(order.state).toBe('BOOKED')
             })
         })
+
+        it('should exclude orders matching excludedKeys (user cancellations)', () => {
+            // GIVEN: Inhabitant with DINEIN on all cooking days, but one dinner was cancelled
+            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
+            const inhabitants = [{id: 1, name: 'Test', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+
+            // User previously cancelled order for inhabitant 1, dinner event 102
+            const excludedKeys = new Set(['1-102'])
+
+            // WHEN: Generator with exclusion
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, excludedKeys)
+            const orders = generator(inhabitants)
+
+            // THEN: Should generate 2 orders (dinner 101 and 103), not 3
+            expect(orders).toHaveLength(2)
+            expect(orders.map(o => o.dinnerEventId)).toEqual([101, 103])
+        })
+
+        it('should generate all orders when excludedKeys is empty', () => {
+            // GIVEN: Inhabitant with DINEIN on all cooking days
+            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
+            const inhabitants = [{id: 1, name: 'Test', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+
+            // WHEN: Generator with empty exclusion set
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set())
+            const orders = generator(inhabitants)
+
+            // THEN: Should generate all 3 orders
+            expect(orders).toHaveLength(3)
+            expect(orders.map(o => o.dinnerEventId)).toEqual([101, 102, 103])
+        })
+
+        it('should handle multiple inhabitants with different exclusions', () => {
+            // GIVEN: Two inhabitants, each with different cancelled bookings
+            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
+            const inhabitants = [
+                {id: 1, name: 'Anna', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences},
+                {id: 2, name: 'Bob', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}
+            ]
+
+            // Anna cancelled dinner 101, Bob cancelled dinner 102
+            const excludedKeys = new Set(['1-101', '2-102'])
+
+            // WHEN: Generator with exclusions
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, excludedKeys)
+            const orders = generator(inhabitants)
+
+            // THEN: Should generate 4 orders (Anna: 102,103 + Bob: 101,103)
+            expect(orders).toHaveLength(4)
+            const annaOrders = orders.filter(o => o.inhabitantId === 1)
+            const bobOrders = orders.filter(o => o.inhabitantId === 2)
+            expect(annaOrders.map(o => o.dinnerEventId)).toEqual([102, 103])
+            expect(bobOrders.map(o => o.dinnerEventId)).toEqual([101, 103])
+        })
     })
 
     describe('reconcilePreBookings', () => {

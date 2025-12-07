@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY, URGENCY_TO_BADGE } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
 const { getStepConfig, getStepDeadline } = useBooking()
@@ -74,7 +74,8 @@ const steps = computed(() => {
     title: config.title,
     description: config.step === step && props.showDeadlines ? deadline.description : config.text,
     icon: config.icon,
-    disabled: config.step > step
+    disabled: config.step > step,
+    color: getBadgeForStep(config.step)?.color ?? COLOR.neutral
   }))
 })
 </script>
@@ -111,6 +112,7 @@ const steps = computed(() => {
       :size="SIZES.small"
       :orientation="ORIENTATIONS.responsive.value"
       :color="COLOR.primary"
+      :ui="{ description: TYPOGRAPHY.finePrint }"
     >
       <!-- Step 1 (Annonceret): Menu deadline badge -->
       <template #step-1>

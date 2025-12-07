@@ -274,18 +274,26 @@ export const useSeason = () => {
      * Given season config, returns function that generates desired pre-bookings
      * for a household's inhabitants based on their preferences.
      *
+     * @param householdId - Household ID for order tracking
+     * @param ticketPrices - Available ticket prices (with ids)
+     * @param dinnerEvents - Dinner events to generate orders for
+     * @param excludedKeys - Optional set of "inhabitantId-dinnerEventId" keys to exclude
+     *                       (typically user cancellations that should not be recreated)
+     *
      * @throws Error if inhabitant has no dinnerPreferences (malformed data)
      * @throws Error if no matching ticket price for inhabitant
      *
      * @example
-     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents)
+     * const cancellations = await fetchUserCancellationKeys(d1, seasonId)
+     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents, cancellations)
      * const desired = generateDesired(inhabitants)
      * const result = reconcilePreBookings(existingOrders)(desired)
      */
     const createPreBookingGenerator = (
         householdId: number,
         ticketPrices: TicketPrice[],
-        dinnerEvents: DinnerEventDisplay[]
+        dinnerEvents: DinnerEventDisplay[],
+        excludedKeys: Set<string> = new Set()
     ) => {
         // Build lookup: ticketType -> ticketPrice (with id)
         const ticketPriceByType = new Map(
@@ -306,6 +314,10 @@ export const useSeason = () => {
                         const weekDay = dateToWeekDay(de.date)
                         const preference = prefs[weekDay]
                         if (preference === DinnerMode.NONE) return null
+
+                        // Skip if user previously cancelled this booking
+                        const key = `${inhabitant.id}-${de.id}`
+                        if (excludedKeys.has(key)) return null
 
                         // Determine ticket type based on age at dinner date
                         const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)

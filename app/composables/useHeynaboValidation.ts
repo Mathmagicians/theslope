@@ -1,8 +1,13 @@
 import {z} from "zod";
 import type { HouseholdCreate, InhabitantCreate, UserCreate } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
+import { pruneAndCreate } from '~/utils/batchUtils'
 
 export const useHeynaboValidation = () => {
+
+    // ========================================================================
+    // HEYNABO API SCHEMAS - External data validation
+    // ========================================================================
 
     const HeynaboMemberSchema = z.object({
         id: z.number(),
@@ -143,11 +148,25 @@ export const useHeynaboValidation = () => {
         return households
     }
 
+    // ========================================================================
+    // HEYNABO IMPORT RESPONSE SCHEMA - Summary of sync operation (ADR-009: batch ops use lightweight types)
+    // ========================================================================
+
+    const HeynaboImportResponseSchema = z.object({
+        householdsCreated: z.number(),
+        householdsDeleted: z.number(),
+        householdsUnchanged: z.number(),
+        inhabitantsCreated: z.number(),
+        inhabitantsDeleted: z.number(),
+        usersCreated: z.number()
+    })
+
     return {
         HeynaboMemberSchema,
         HeynaboUserSchema,
         LoggedInHeynaboUserSchema,
         HeynaboLocationSchema,
+        HeynaboImportResponseSchema,
         // Transformation functions
         mapHeynaboRoleToSystemRole,
         inhabitantFromMember,
@@ -161,3 +180,4 @@ export type HeynaboMember = z.infer<ReturnType<typeof useHeynaboValidation>['Hey
 export type HeynaboUser = z.infer<ReturnType<typeof useHeynaboValidation>['HeynaboUserSchema']>
 export type LoggedInHeynaboUser = z.infer<ReturnType<typeof useHeynaboValidation>['LoggedInHeynaboUserSchema']>
 export type HeynaboLocation = z.infer<ReturnType<typeof useHeynaboValidation>['HeynaboLocationSchema']>
+export type HeynaboImportResponse = z.infer<ReturnType<typeof useHeynaboValidation>['HeynaboImportResponseSchema']>

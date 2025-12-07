@@ -1,5 +1,6 @@
-import type {UserDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
+import type {UserDisplay} from '~/composables/useCoreValidation'
 import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
+import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 
 export const useUsersStore = defineStore("Users", () => {
     // DEPENDENCIES
@@ -41,11 +42,11 @@ export const useUsersStore = defineStore("Users", () => {
         status: heynaboImportStatus,
         error: heynaboImportError,
         refresh: refreshHeynaboImport
-    } = useAsyncData<HouseholdDetail[]>(
+    } = useAsyncData<HeynaboImportResponse | null>(
         '/api/admin/heynabo/import',
-        () => $fetch<HouseholdDetail[]>('/api/admin/heynabo/import'),
+        () => $fetch<HeynaboImportResponse>('/api/admin/heynabo/import'),
         {
-            default: () => [],
+            default: () => null,
             immediate: false // only when triggered by admin, not on store creation
         }
     )
@@ -107,14 +108,28 @@ export const useUsersStore = defineStore("Users", () => {
     }
 
 
+    const toast = useToast()
+
     const importHeynaboData = async () => {
         await refreshHeynaboImport()
         if (heynaboImportError.value) {
-            handleApiError(heynaboImportError.value, 'importHeynaboData')
+            handleApiError(heynaboImportError.value, 'Heynabo import fejlede')
             throw heynaboImportError.value
         }
-        console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Loaded ${heynaboImport.value?.length} households from Heynabo`)
-        loadUsers()
+
+        const result = heynaboImport.value
+        if (result) {
+            console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Synced: ${result.householdsCreated} households created, ${result.householdsDeleted} deleted, ${result.inhabitantsCreated} inhabitants created, ${result.usersCreated} users created`)
+
+            // Show success toast with import summary
+            toast.add({
+                title: 'Heynabo import fuldført',
+                description: `Oprettet: ${result.householdsCreated} husstande, ${result.inhabitantsCreated} beboere, ${result.usersCreated} brugere. Slettet: ${result.householdsDeleted} husstande, ${result.inhabitantsDeleted} beboere.`,
+                color: 'success'
+            })
+        }
+
+        await loadUsers()
     }
 
     const loadMyTeams = async () => {

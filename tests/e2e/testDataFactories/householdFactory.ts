@@ -109,7 +109,7 @@ export class HouseholdFactory {
 
     /**
      * Delete household(s) - accepts single ID or array of IDs
-     * Returns: HouseholdDetail for single ID, HouseholdDetail[] for array
+     * Always returns HouseholdDetail[] for consistent typing
      * For cleanup (afterAll): Don't pass expectedStatus - silent on success, logs only failures
      * For API tests: Pass expectedStatus (e.g. 200) - validates status for each deletion
      */
@@ -117,10 +117,9 @@ export class HouseholdFactory {
         context: BrowserContext,
         householdIds: number | number[],
         expectedStatus?: number
-    ): Promise<HouseholdDetail | HouseholdDetail[]> => {
+    ): Promise<HouseholdDetail[]> => {
         const {HouseholdDetailSchema} = useCoreValidation()
         const ids = Array.isArray(householdIds) ? householdIds : [householdIds]
-        const isSingleId = !Array.isArray(householdIds)
 
         // Delete households (repository handles Invoice cleanup + cascades for inhabitants, orders, allergies, assignments)
         const results = await Promise.all(
@@ -160,11 +159,9 @@ export class HouseholdFactory {
         )
 
         // Validate and return
-        const validResults = results.filter(r => r !== null).map(r => {
+        return results.filter(r => r !== null).map(r => {
             return HouseholdDetailSchema.parse(r)
         }) as HouseholdDetail[]
-
-        return isSingleId ? validResults[0]! : validResults
     }
 
     // === INHABITANT METHODS ===

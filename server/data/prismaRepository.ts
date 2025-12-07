@@ -271,6 +271,78 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
     }
 }
 
+/**
+ * Batch create inhabitants using createManyAndReturn (ADR-009).
+ * Returns created inhabitant IDs only - caller refetches if details needed.
+ *
+ * @param d1Client - D1 database client
+ * @param inhabitants - Array of inhabitants without householdId (max 8 per call due to D1 limits)
+ * @param householdId - Household ID to assign to all inhabitants
+ * @returns Array of created inhabitant IDs
+ */
+export async function createInhabitantsBatch(
+    d1Client: D1Database,
+    inhabitants: Omit<InhabitantCreate, 'householdId'>[],
+    householdId: number
+): Promise<number[]> {
+    console.info(`👩‍🏠 > INHABITANT > [BATCH CREATE] Creating ${inhabitants.length} inhabitants for household ${householdId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const { InhabitantCreateSchema } = useCoreValidation()
+
+    try {
+        // ADR-010: Validate input with schema (add householdId for validation)
+        const validatedInhabitants = inhabitants.map(i =>
+            InhabitantCreateSchema.parse({ ...i, householdId })
+        )
+
+        const created = await prisma.inhabitant.createManyAndReturn({
+            data: validatedInhabitants.map(i => ({
+                heynaboId: i.heynaboId,
+                householdId: householdId,
+                pictureUrl: i.pictureUrl,
+                name: i.name,
+                lastName: i.lastName,
+                birthDate: i.birthDate
+            })),
+            select: { id: true, heynaboId: true }
+        })
+
+        const createdIds = created.map(i => i.id)
+        console.info(`👩‍🏠 > INHABITANT > [BATCH CREATE] Created ${createdIds.length} inhabitants: ${createdIds.join(', ')}`)
+
+        return createdIds
+    } catch (error) {
+        return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH CREATE]: Error creating ${inhabitants.length} inhabitants for household ${householdId}`, error)
+    }
+}
+
+/**
+ * Batch delete inhabitants by heynaboId (ADR-005: Prisma handles CASCADE).
+ * Used by Heynabo sync when inhabitants are removed from source system.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of Heynabo IDs to delete
+ * @returns Number of deleted inhabitants
+ */
+export async function deleteInhabitantsByHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleting ${heynaboIds.length} inhabitants by heynaboId`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const result = await prisma.inhabitant.deleteMany({
+            where: { heynaboId: { in: heynaboIds } }
+        })
+
+        console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleted ${result.count} inhabitants`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH DELETE]: Error deleting inhabitants`, error)
+    }
+}
+
 export async function fetchInhabitants(d1Client: D1Database): Promise<InhabitantDetail[]> {
     console.info(`👩‍🏠 > INHABITANT > [GET] Fetching inhabitants`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -457,6 +529,74 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
         return householdDetail
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLD > [SAVE]: Error saving household at ${household?.address}`, error)
+    }
+}
+
+/**
+ * Batch create households using createManyAndReturn (ADR-009).
+ * Returns created household IDs only - caller refetches if details needed.
+ *
+ * @param d1Client - D1 database client
+ * @param households - Array of HouseholdCreate (max 8 per call due to D1 limits)
+ * @returns Array of created household IDs
+ */
+export async function createHouseholdsBatch(
+    d1Client: D1Database,
+    households: HouseholdCreate[]
+): Promise<number[]> {
+    console.info(`🏠 > HOUSEHOLD > [BATCH CREATE] Creating ${households.length} households`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const { HouseholdCreateSchema } = useCoreValidation()
+
+    try {
+        // ADR-010: Validate input with schema
+        const validatedHouseholds = households.map(h => HouseholdCreateSchema.parse(h))
+
+        const created = await prisma.household.createManyAndReturn({
+            data: validatedHouseholds.map(h => ({
+                heynaboId: h.heynaboId,
+                pbsId: h.pbsId,
+                movedInDate: h.movedInDate,
+                moveOutDate: h.moveOutDate ?? undefined,
+                name: h.name,
+                address: h.address
+            })),
+            select: { id: true, heynaboId: true }
+        })
+
+        const createdIds = created.map(h => h.id)
+        console.info(`🏠 > HOUSEHOLD > [BATCH CREATE] Created ${createdIds.length} households: ${createdIds.join(', ')}`)
+
+        return createdIds
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLD > [BATCH CREATE]: Error creating ${households.length} households`, error)
+    }
+}
+
+/**
+ * Batch delete households by heynaboId (ADR-005: Prisma handles CASCADE).
+ * Used by Heynabo sync when households are removed from source system.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of Heynabo IDs to delete
+ * @returns Number of deleted households
+ */
+export async function deleteHouseholdsByHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleting ${heynaboIds.length} households by heynaboId`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const result = await prisma.household.deleteMany({
+            where: { heynaboId: { in: heynaboIds } }
+        })
+
+        console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleted ${result.count} households`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLD > [BATCH DELETE]: Error deleting households`, error)
     }
 }
 

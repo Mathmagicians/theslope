@@ -136,7 +136,7 @@ const {getUserUrl} = useHeynabo()
     </UAvatarGroup>
 
     <!-- Compact: Badge only | Not compact: Badge + count + label -->
-    <UBadge v-if="compact" size="xs" color="primary">
+    <UBadge v-if="compact" size="sm" color="primary">
       {{ count }}
     </UBadge>
     <div v-else class="flex items-center gap-1">

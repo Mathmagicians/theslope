@@ -1,3 +1,48 @@
+import type { HouseholdCreate, InhabitantCreate } from './useCoreValidation'
+import { pruneAndCreate } from '~/utils/batchUtils'
+
+// ========================================================================
+// EQUALITY FUNCTIONS - Named for testability (not exported)
+// ========================================================================
+
+const isHouseholdEqual = (existing: HouseholdCreate, incoming: HouseholdCreate): boolean =>
+    existing.name === incoming.name &&
+    existing.address === incoming.address &&
+    existing.pbsId === incoming.pbsId
+
+const isInhabitantEqual = (
+    existing: Omit<InhabitantCreate, 'householdId'>,
+    incoming: Omit<InhabitantCreate, 'householdId'>
+): boolean =>
+    existing.name === incoming.name &&
+    existing.lastName === incoming.lastName &&
+    existing.pictureUrl === incoming.pictureUrl
+
+// ========================================================================
+// RECONCILIATION FUNCTIONS - Heynabo is source of truth (ADR-013)
+// Uses pruneAndCreate pattern (ADR-009) for sync operations
+// ========================================================================
+
+/**
+ * Reconciles households between existing (local) and incoming (Heynabo) data.
+ * Heynabo is source of truth - households not in Heynabo will be marked for deletion.
+ * Uses heynaboId as the unique key for matching.
+ */
+export const reconcileHouseholds = pruneAndCreate<HouseholdCreate, number>(
+    h => h.heynaboId,
+    isHouseholdEqual
+)
+
+/**
+ * Reconciles inhabitants between existing (local) and incoming (Heynabo) data.
+ * Heynabo is source of truth - inhabitants not in Heynabo will be marked for deletion.
+ * Uses heynaboId as the unique key for matching.
+ */
+export const reconcileInhabitants = pruneAndCreate<Omit<InhabitantCreate, 'householdId'>, number>(
+    i => i.heynaboId,
+    isInhabitantEqual
+)
+
 /**
  * Heynabo Integration Composable
  *

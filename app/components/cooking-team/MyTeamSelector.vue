@@ -105,8 +105,7 @@ const teamTabs = computed(() => {
         <CookingTeamBadges
           :team-number="item.value + 1"
           :team-name="item.label"
-          :member-count="item.memberCount"
-          :cooking-days-count="item.cookingDaysCount"
+          :show-counts="false"
           compact
         />
       </template>

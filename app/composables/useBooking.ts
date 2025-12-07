@@ -1,6 +1,7 @@
 import {useBookingValidation, type DinnerEventDisplay, type HeynaboEventCreate} from '~/composables/useBookingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {calculateCountdown} from '~/utils/date'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -44,8 +45,8 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
     [DinnerStepState.SCHEDULED]: {
         step: 0,
         title: 'Planlagt',
-        icon: 'i-heroicons-pencil-square',
-        text: 'Menu planlægges',
+        icon: ICONS.calendar,
+        text: 'Fællesspisningen er i kalenderen',
         getDeadline: (countdown, isPastMenuDeadline, thresholds) => {
             if (isPastMenuDeadline) return { description: 'Deadline overskredet', alarm: 2 }
             if (countdown.hours < thresholds.critical) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 2 }
@@ -55,30 +56,30 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
     },
     [DinnerStepState.ANNOUNCED]: {
         step: 1,
-        title: 'Annonceret',
-        icon: 'i-heroicons-megaphone',
-        text: 'Tilmelding åben',
+        title: 'Publiceret',
+        icon: ICONS.megaphone,
+        text: 'Chefkokken har publiceret sin menu',
         getDeadline: countdownDeadline('Tilmelding lukker om', 'Booking åben')
     },
     [DinnerStepState.BOOKING_CLOSED]: {
         step: 2,
-        title: 'Tilmelding lukket',
-        icon: 'i-heroicons-lock-closed',
-        text: 'Lukket for nye tilmeldinger',
+        title: 'Lukket for ændringer',
+        icon: ICONS.ticket,
+        text: 'Man kan ikke længere framelde sig',
         getDeadline: staticDeadline('Bestillinger låst')
     },
     [DinnerStepState.GROCERIES_DONE]: {
         step: 3,
         title: 'Madbestilling klar',
-        icon: 'i-heroicons-shopping-cart',
+        icon: ICONS.shoppingCart,
         text: 'Chefkokken har bestilt madvarer',
         getDeadline: countdownDeadline('Middag om', 'Klar til madlavning')
     },
     [DinnerStepState.CONSUMED]: {
         step: 4,
         title: 'Afholdt',
-        icon: 'i-heroicons-face-smile',
-        text: 'Fællesspisning gennemført',
+        icon: ICONS.checkCircle,
+        text: 'Vi har spist den dejlige mad',
         getDeadline: staticDeadline('Fællesspisning')
     }
 }
@@ -175,12 +176,14 @@ export const useBooking = () => {
     }
 
     /**
-     * Event description template for Heynabo sync
+     * Event description template for Heynabo sync (HTML formatted)
+     * Format: Each emoji on its own line, URL as HTML link, signature at the end
      */
     const HEYNABO_EVENT_TEMPLATE = {
-        WARNING_HEADER: '🤖 Denne begivenhed synkroniseres fra skraaningen.dk\n⚠️ Ret ikke her - ændringer overskrives!\n\n',
-        BOOKING_LINK_PREFIX: '\n\n📅 Book din billet: ',
-        COOKING_TEAM_PREFIX: '\n\nMadhold: '
+        WARNING_ROBOT: '🤖 Denne begivenhed synkroniseres fra skraaningen.dk',
+        WARNING_EDIT: '⚠️ Ret ikke her - ændringer overskrives!',
+        BOOKING_EMOJI: '📅',
+        SIGNATURE_PREFIX: 'De bedste hilsner'
     }
 
     /**
@@ -209,13 +212,19 @@ export const useBooking = () => {
     ): HeynaboEventCreate => {
         const dinnerUrl = buildDinnerUrl(baseUrl, dinnerEvent.date)
 
-        // Build description with template
-        let description = HEYNABO_EVENT_TEMPLATE.WARNING_HEADER
-        description += dinnerEvent.menuDescription || dinnerEvent.menuTitle
-        description += HEYNABO_EVENT_TEMPLATE.BOOKING_LINK_PREFIX + dinnerUrl
-        if (cookingTeamName) {
-            description += HEYNABO_EVENT_TEMPLATE.COOKING_TEAM_PREFIX + cookingTeamName
-        }
+        // Build description with HTML formatting
+        // Each emoji on its own line, URL as clickable link, signature at the end
+        const lines = [
+            HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT,
+            HEYNABO_EVENT_TEMPLATE.WARNING_EDIT,
+            '',
+            dinnerEvent.menuDescription || dinnerEvent.menuTitle,
+            '',
+            `${HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI} <a href="${dinnerUrl}">Book din billet</a>`,
+            '',
+            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} // ${cookingTeamName || 'Køkkenholdet'}`
+        ]
+        const description = lines.join('<br>')
 
         // Use pre-configured getNextDinnerDate (duration already baked in from useSeason)
         // Same pattern as DinnerCalendarDisplay line 73

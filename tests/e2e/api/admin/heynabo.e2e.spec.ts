@@ -1,19 +1,34 @@
 import {test, expect} from '@playwright/test'
 import testHelpers from '../../testHelpers'
+import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 
 const {validatedBrowserContext} = testHelpers
+const {HeynaboImportResponseSchema} = useHeynaboValidation()
 
 test.describe('Heynabo Integration API', () => {
-    test('GET /api/admin/heynabo/import should import households from Heynabo', async ({browser}) => {
+    test('GET /api/admin/heynabo/import should sync households from Heynabo', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // Call the import endpoint
         const response = await context.request.get('/api/admin/heynabo/import')
         expect(response.status()).toBe(200)
 
-        const households = await response.json()
+        const result = await response.json()
 
-        // Verify response structure
+        // Verify response parses correctly with schema (ADR-009: batch ops use lightweight types)
+        const parsed = HeynaboImportResponseSchema.parse(result)
+        expect(parsed.householdsCreated).toBeGreaterThanOrEqual(0)
+        expect(parsed.householdsDeleted).toBeGreaterThanOrEqual(0)
+        expect(parsed.householdsUnchanged).toBeGreaterThanOrEqual(0)
+        expect(parsed.inhabitantsCreated).toBeGreaterThanOrEqual(0)
+        expect(parsed.inhabitantsDeleted).toBeGreaterThanOrEqual(0)
+        expect(parsed.usersCreated).toBeGreaterThanOrEqual(0)
+
+        // Verify households were synced to database
+        const householdsResponse = await context.request.get('/api/admin/household')
+        expect(householdsResponse.status()).toBe(200)
+
+        const households = await householdsResponse.json()
         expect(Array.isArray(households)).toBe(true)
         expect(households.length).toBeGreaterThan(0)
 
@@ -22,26 +37,6 @@ test.describe('Heynabo Integration API', () => {
         expect(firstHousehold).toHaveProperty('id')
         expect(firstHousehold).toHaveProperty('heynaboId')
         expect(firstHousehold).toHaveProperty('address')
-        expect(firstHousehold).toHaveProperty('pbsId')
-        expect(firstHousehold).toHaveProperty('name')
-        expect(firstHousehold).toHaveProperty('movedInDate')
-
-        // Verify household was saved to database - fetch it back with inhabitants
-        const fetchResponse = await context.request.get(`/api/admin/household/${firstHousehold.id}`)
-        expect(fetchResponse.status()).toBe(200)
-
-        const fetchedHousehold = await fetchResponse.json()
-        expect(fetchedHousehold).toHaveProperty('inhabitants')
-        expect(Array.isArray(fetchedHousehold.inhabitants)).toBe(true)
-
-        // Verify inhabitants with users have systemRoles properly set
-        if (fetchedHousehold.inhabitants.length > 0) {
-            const inhabitantWithUser = fetchedHousehold.inhabitants.find((i: unknown) => i.user)
-            if (inhabitantWithUser) {
-                expect(inhabitantWithUser.user).toHaveProperty('systemRoles')
-                // systemRoles should be an array (deserialized by repository)
-                expect(Array.isArray(inhabitantWithUser.user.systemRoles)).toBe(true)
-            }
-        }
+        expect(firstHousehold).toHaveProperty('inhabitants')
     })
 })

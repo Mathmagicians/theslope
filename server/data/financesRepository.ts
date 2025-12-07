@@ -83,6 +83,50 @@ export async function createOrderAuditEntry(
     return OrderHistoryDetailSchema.parse(orderHistoryDetail)
 }
 
+/**
+ * Fetch user cancellation keys for a season to exclude from scaffolding.
+ *
+ * Returns unique inhabitantId-dinnerEventId pairs where:
+ * 1. action = USER_CANCELLED (admin deletions can be recreated)
+ * 2. seasonId matches (scoped to season being activated)
+ *
+ * These pairs represent bookings the user explicitly cancelled and should
+ * not be recreated by the scaffolder when activating a season.
+ *
+ * ADR-011: Uses denormalized fields (inhabitantId, dinnerEventId, seasonId)
+ * which persist even after order deletion.
+ */
+export async function fetchUserCancellationKeys(
+    d1Client: D1Database,
+    seasonId: number
+): Promise<Set<string>> {
+    const {OrderAuditActionSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const cancellations = await prisma.orderHistory.findMany({
+        where: {
+            action: OrderAuditActionSchema.enum.USER_CANCELLED,
+            seasonId: seasonId,
+            // Denormalized fields are non-null for cancellations
+            inhabitantId: { not: null },
+            dinnerEventId: { not: null }
+        },
+        select: {
+            inhabitantId: true,
+            dinnerEventId: true
+        }
+    })
+
+    // Create unique keys for inhabitant-dinnerEvent pairs
+    const keys = new Set(
+        cancellations.map(c => `${c.inhabitantId}-${c.dinnerEventId}`)
+    )
+
+    console.info(`📋 > ORDER_AUDIT > [FETCH_CANCELLATIONS] Found ${keys.size} user cancellation keys for season ${seasonId}`)
+
+    return keys
+}
+
 /*** ORDERS ***/
 
 // ADR-005: Order relationships:
@@ -281,9 +325,11 @@ export async function deleteOrder(
     id: number,
     performedByUserId: number | null = null
 ): Promise<OrderDisplay> {
-    const action = performedByUserId ? 'USER_CANCELLED' : 'ADMIN_DELETED'
+    const {OrderDisplaySchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const action = performedByUserId
+        ? OrderAuditActionSchema.enum.USER_CANCELLED
+        : OrderAuditActionSchema.enum.ADMIN_DELETED
     console.info(`🎟️ > ORDER > [DELETE] Deleting order ${id} (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
-    const {OrderDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -302,26 +348,14 @@ export async function deleteOrder(
 
         // 2. Create audit entry with denormalized fields BEFORE deletion
         // (orderId becomes NULL after deletion due to SET NULL, but denormalized fields persist)
-        await prisma.orderHistory.create({
-            data: {
-                orderId: id,
-                action,
-                performedByUserId,
-                inhabitantId: orderToDelete.inhabitantId,
-                dinnerEventId: orderToDelete.dinnerEventId,
-                seasonId: orderToDelete.dinnerEvent?.seasonId ?? null,
-                auditData: JSON.stringify({
-                    orderSnapshot: {
-                        id: orderToDelete.id,
-                        inhabitantId: orderToDelete.inhabitantId,
-                        dinnerEventId: orderToDelete.dinnerEventId,
-                        ticketPriceId: orderToDelete.ticketPriceId,
-                        priceAtBooking: orderToDelete.priceAtBooking,
-                        dinnerMode: orderToDelete.dinnerMode,
-                        state: orderToDelete.state
-                    }
-                })
-            }
+        await createOrderAuditEntry(d1Client, {
+            orderId: id,
+            action,
+            performedByUserId,
+            inhabitantId: orderToDelete.inhabitantId,
+            dinnerEventId: orderToDelete.dinnerEventId,
+            seasonId: orderToDelete.dinnerEvent?.seasonId ?? null,
+            auditData: createOrderAuditData(orderToDelete)
         })
 
         // 3. Delete order - cascade handles strong associations (Transaction) automatically

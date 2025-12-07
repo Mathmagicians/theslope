@@ -1,6 +1,5 @@
 import type {WeekDay} from '~/types/dateTypes'
 import type {AvatarProps, ButtonProps} from '@nuxt/ui'
-import heynaboLogo from '~/assets/heynabo.jpeg'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -494,6 +493,7 @@ export const ICONS = {
   arrowRight: 'i-heroicons-arrow-right',
   arrowLeft: 'i-heroicons-arrow-left',
   arrowUp: 'i-heroicons-arrow-up',
+  shoppingCart: 'i-heroicons-shopping-cart',
 
   // Empty states
   robotDead: 'i-mage-robot-dead'
@@ -511,7 +511,11 @@ export const ICONS = {
  * ```
  */
 export const IMG = {
-  heynabo: heynaboLogo,
+  /**
+   * Heynabo logo for external service links
+   * Located in public/ folder, accessible from root URL
+   */
+  heynabo: '/heynabo.jpeg',
   /**
    * Default dinner picture for heroes without custom menu pictures
    * Located in public/ folder (ADR-013), accessible from root URL

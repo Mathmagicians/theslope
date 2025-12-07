@@ -244,7 +244,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             return updated
         } catch (e: unknown) {
             const errorMessages = {
-                [DinnerState.ANNOUNCED]: 'Kunne ikke annoncere menuen til beboerne',
+                [DinnerState.ANNOUNCED]: 'Kunne ikke annoncere fællesspisningen',
                 [DinnerState.CANCELLED]: 'Kunne ikke aflyse fællesspisningen'
             } as const
             handleApiError(e, errorMessages[targetState as keyof typeof errorMessages] || 'Kunne ikke ændre fællesspisningens status')

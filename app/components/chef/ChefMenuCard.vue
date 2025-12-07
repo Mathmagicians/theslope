@@ -289,22 +289,15 @@ const allergenEditButtons = computed(() => {
   ]
 })
 
-// Next state logic
-const nextState = computed(() => {
-  switch (props.dinnerEvent.state) {
-    case DinnerState.SCHEDULED:
-      return { state: DinnerState.ANNOUNCED, label: 'Annoncer menu', icon: ICONS.megaphone }
-    case DinnerState.ANNOUNCED:
-      return { state: DinnerState.CONSUMED, label: 'Marker som afholdt', icon: ICONS.check }
-    default:
-      return null
-  }
+// Can publish: not cancelled or consumed
+// - SCHEDULED: creates Heynabo event
+// - ANNOUNCED: updates existing Heynabo event (republish)
+const canAnnounce = computed(() => {
+  return props.dinnerEvent.state !== DinnerState.CANCELLED &&
+         props.dinnerEvent.state !== DinnerState.CONSUMED
 })
 
-// Can announce: dinner is SCHEDULED (announce is the only manual state transition)
-const canAnnounce = computed(() => props.dinnerEvent.state === DinnerState.SCHEDULED)
-
-// Can actually submit announce: menu title must be set
+// Can actually submit: menu title must be set
 const canAdvanceState = computed(() => {
   if (!canAnnounce.value) return false
   return !!props.dinnerEvent.menuTitle?.trim()
@@ -466,35 +459,35 @@ const handleCardClick = () => {
                   v-for="btn in menuEditButtons"
                   :key="btn.name"
                   :icon="btn.icon"
-                  :color="HERO_BUTTON.primaryButton"
-                  variant="ghost"
-                  size="xs"
+                  :color="btn.color"
+                  :variant="btn.variant"
+                  :size="SIZES.standard"
                   square
                   :name="btn.name"
                   @click="btn.onClick"
                 />
 
-                <!-- Announce button -->
+                <!-- Publish button (announce or republish to Heynabo) -->
                 <UButton
                   v-if="canAnnounce"
                   :color="HERO_BUTTON.primaryButton"
-                  variant="ghost"
-                  size="xs"
+                  variant="outline"
+                  :size="SIZES.standard"
                   :icon="ICONS.megaphone"
                   :disabled="!canAdvanceState || isAnnouncing"
                   :loading="isAnnouncing"
                   name="announce-dinner"
                   @click="handleAdvanceState"
                 >
-                  Annoncer
+                  Publicer
                 </UButton>
 
                 <!-- Cancel button -->
                 <div v-if="canCancelDinner(dinnerEvent)" ref="cancelButtonRef">
                   <UButton
                     :color="isCancelConfirmMode ? COLOR.error : HERO_BUTTON.primaryButton"
-                    :variant="isCancelConfirmMode ? 'solid' : 'ghost'"
-                    size="xs"
+                    :variant="isCancelConfirmMode ? 'solid' : 'outline'"
+                    :size="SIZES.standard"
                     icon="i-heroicons-x-mark"
                     :disabled="isCancelling"
                     :loading="isCancelling"
@@ -521,7 +514,7 @@ const handleCardClick = () => {
           icon="i-heroicons-information-circle"
           :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
         >
-          <template #description>Indtast menu titel for at annoncere</template>
+          <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
         </UAlert>
       </div>
 
@@ -566,7 +559,7 @@ const handleCardClick = () => {
                 :icon="btn.icon"
                 :color="btn.color"
                 :variant="btn.variant"
-                size="xs"
+                :size="SIZES.standard"
                 square
                 :name="btn.name"
                 @click="btn.onClick"

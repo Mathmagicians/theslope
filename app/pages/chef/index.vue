@@ -273,22 +273,25 @@ const handleAdvanceState = async (newState: string) => {
   // Only handle ANNOUNCED - CONSUMED is set automatically by cron job
   if (newState !== DinnerState.ANNOUNCED) return
 
-  try {
-    announceParams.value = {dinnerEventId: selectedDinnerId.value}
-    await executeAnnounce()
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    toast.add({
-      title: 'Menu annonceret',
-      description: 'Beboerne kan nu tilmelde sig fællesspisningen',
-      icon: ICONS.megaphone,
-      color: COLOR.success
-    })
-    // Refresh team data to show updated state in calendar
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    // Error already handled by store with handleApiError
-    console.error('Failed to advance state:', error)
+  // Check if this is a republish (already announced) or first publish
+  const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
+
+  announceParams.value = {dinnerEventId: selectedDinnerId.value}
+  await executeAnnounce()
+
+  // Check if announce succeeded (useAsyncData captures errors, doesn't throw)
+  if (announceStatus.value === 'error') {
+    return
   }
+
+  await refreshDinnerEventDetail() // Refresh page-owned data
+  toast.add({
+    title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
+    icon: ICONS.megaphone,
+    color: COLOR.success
+  })
+  // Refresh team data to show updated state in calendar
+  await usersStore.loadMyTeams()
 }
 
 const handleCancelDinner = async () => {

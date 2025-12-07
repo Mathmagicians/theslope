@@ -313,6 +313,27 @@ export const useBookingValidation = () => {
         timestamp: true
     })
 
+    /**
+     * Order snapshot for audit data - captures order state at deletion time
+     * Derived from OrderDisplaySchema, picking only essential fields for audit trail
+     */
+    const OrderSnapshotSchema = OrderDisplaySchema.pick({
+        id: true,
+        inhabitantId: true,
+        dinnerEventId: true,
+        ticketPriceId: true,
+        priceAtBooking: true,
+        dinnerMode: true,
+        state: true
+    })
+
+    /**
+     * Create serialized audit data for OrderHistory
+     */
+    function createOrderAuditData(orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string {
+        return JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
+    }
+
     // ============================================================================
     // Serialization (ADR-010 - Repository layer)
     // ============================================================================
@@ -512,6 +533,8 @@ export const useBookingValidation = () => {
         OrderHistoryDisplaySchema,
         OrderHistoryDetailSchema,
         OrderHistoryCreateSchema,
+        OrderSnapshotSchema,
+        createOrderAuditData,
 
         // Batch Order Creation
         OrderAuditActionSchema,
@@ -569,6 +592,7 @@ export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQ
 export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
 export type OrderHistoryDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDetailSchema']>
 export type OrderHistoryCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryCreateSchema']>
+export type OrderSnapshot = z.infer<ReturnType<typeof useBookingValidation>['OrderSnapshotSchema']>
 export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>
 export type SerializedOrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistoryDisplaySchema']>
 

@@ -26,6 +26,8 @@ describe('useBookingValidation', () => {
     OrderHistoryDisplaySchema,
     OrderHistoryDetailSchema,
     OrderHistoryCreateSchema,
+    OrderSnapshotSchema,
+    createOrderAuditData,
     serializeOrder,
     deserializeOrder,
     serializeOrderHistoryDisplay,
@@ -252,6 +254,31 @@ describe('useBookingValidation', () => {
       it('GIVEN null order WHEN parsing THEN succeeds', () => {
         const result = OrderHistoryDetailSchema.safeParse(OrderFactory.defaultOrderHistoryDetail(undefined, {order: null}))
         expect(result.success, getValidationError(result)).toBe(true)
+      })
+    })
+
+    describe('OrderSnapshotSchema', () => {
+      it('GIVEN valid snapshot WHEN parsing THEN succeeds', () => {
+        const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot())
+        expect(result.success, getValidationError(result)).toBe(true)
+      })
+
+      it.each(OrderStateSchema.options.map(state => ({state})))(
+        'GIVEN state $state WHEN parsing THEN succeeds',
+        ({state}) => {
+          const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot({state}))
+          expect(result.success, getValidationError(result)).toBe(true)
+        }
+      )
+    })
+
+    describe('createOrderAuditData', () => {
+      it('GIVEN snapshot WHEN creating audit data THEN returns valid JSON string', () => {
+        const snapshot = OrderFactory.defaultOrderSnapshot()
+        const auditData = createOrderAuditData(snapshot)
+        expect(typeof auditData).toBe('string')
+        const parsed = JSON.parse(auditData)
+        expect(parsed.orderSnapshot).toEqual(snapshot)
       })
     })
   })

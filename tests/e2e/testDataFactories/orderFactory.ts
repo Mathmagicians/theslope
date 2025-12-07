@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -175,6 +175,21 @@ export class OrderFactory {
     inhabitantId: null,
     dinnerEventId: null,
     seasonId: null,
+    ...overrides
+  })
+
+  /**
+   * OrderSnapshot - for audit data (derived from OrderDisplaySchema)
+   * No salting needed - all fields are numeric IDs or enums
+   */
+  static readonly defaultOrderSnapshot = (overrides?: Partial<OrderSnapshot>): OrderSnapshot => ({
+    id: 1,
+    inhabitantId: 10,
+    dinnerEventId: 5,
+    ticketPriceId: 1,
+    priceAtBooking: 4500,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    state: OrderStateSchema.enum.BOOKED,
     ...overrides
   })
 
