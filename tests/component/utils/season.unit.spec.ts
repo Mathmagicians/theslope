@@ -51,7 +51,7 @@ const createTeam = (id: number, name: string, affinity: WeekDayMap | null | unde
 const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEvent => ({
     id,
     date,
-    menuTitle: 'TBD',
+    menuTitle: '',
     dinnerMode: 'NONE',
     cookingTeamId: teamId,
     seasonId: 1,

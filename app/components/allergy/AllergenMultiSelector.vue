@@ -197,9 +197,7 @@ const columns = computed(() => {
     <UAlert
         v-if="selectedAllergies.length === 0"
         icon="i-mdi-food-allergy-off-outline"
-        :color="COLOR.neutral"
-        variant="soft"
-        :ui="COMPONENTS.emptyStateAlert"
+        :ui="COMPONENTS.emptyStateAlertCompact"
     >
       <template #title>
         Ingen allergener valgt
@@ -347,9 +345,7 @@ v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
       <UAlert
           v-else
           icon="i-mdi-food-allergy-off-outline"
-          :color="COLOR.neutral"
-          variant="soft"
-          :ui="COMPONENTS.emptyStateAlert"
+          :ui="COMPONENTS.emptyStateAlertCompact"
       >
         <template #title>
           Vælg allergier for at se statistik

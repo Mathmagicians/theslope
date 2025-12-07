@@ -150,7 +150,7 @@ export const useSeason = () => {
         const now = new Date()
         return cookingDates.map(date => ({
             date,
-            menuTitle: 'TBD',
+            menuTitle: '',
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,

@@ -685,7 +685,7 @@ describe('calculateCountdown', () => {
             targetDate: new Date(2025, 0, 15, 18, 0, 0),
             expectedHours: 0,
             expectedMinutes: 0,
-            expectedFormatted: 'NU'
+            expectedFormatted: 'Overskredet'
         },
         {
             description: 'target is in the past',
@@ -693,7 +693,7 @@ describe('calculateCountdown', () => {
             targetDate: new Date(2025, 0, 15, 18, 0, 0),
             expectedHours: 0,
             expectedMinutes: 0,
-            expectedFormatted: 'NU'
+            expectedFormatted: 'Overskredet'
         },
         {
             description: 'target is 10 hours away',

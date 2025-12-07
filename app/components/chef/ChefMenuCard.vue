@@ -596,7 +596,7 @@ const handleCardClick = () => {
 
       <!-- ========== STATE CONTROLS (showStateControls only) ========== -->
       <template v-if="showStateControls">
-        <!-- Status stepper -->
+        <!-- Status stepper (includes deadline badges) -->
         <div class="pt-4 border-t">
           <DinnerStatusStepper
             :dinner-event="dinnerEvent"
@@ -604,9 +604,6 @@ const handleCardClick = () => {
             :show-deadlines="isEditing"
           />
         </div>
-
-        <!-- Status/deadline badges (shared component - broad mode with help text) -->
-        <DinnerDeadlineBadges :dinner-event="dinnerEvent" />
 
         <!-- Budget section (chef's financial overview) -->
         <div class="pt-4 border-t">

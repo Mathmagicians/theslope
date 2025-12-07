@@ -21,7 +21,6 @@ const props = defineProps<Props>()
 
 // Design system
 const { COLOR, ICONS } = useTheSlopeDesignSystem()
-const { getTeamColor } = useCookingTeam()
 
 // Validation schemas
 const { TeamRoleSchema } = useCookingTeamValidation()
@@ -63,12 +62,6 @@ const roleConfig = computed(() => {
   return configs[userRole.value as keyof typeof configs]
 })
 
-// Team number for color matching
-const teamNumber = computed(() => {
-  // Team is already loaded with all details
-  const teamIndex = props.team.id ? props.team.id - 1 : 0
-  return teamIndex
-})
 </script>
 
 <template>

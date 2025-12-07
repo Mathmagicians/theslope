@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {z} from 'zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {WEEKDAYS} from '~/types/dateTypes'
+import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 
 const DinnerMode = DinnerModeSchema.enum
@@ -9,12 +9,23 @@ type DinnerModeType = z.infer<typeof DinnerModeSchema>
 
 const selectionTestCases = [
     { desc: 'Mon, Wed, Fri', selectedDays: [WEEKDAYS[0], WEEKDAYS[2], WEEKDAYS[4]], expectedPattern: [true, false, true, false, true, false, false] },
-    { desc: 'no days', selectedDays: [], expectedPattern: [false, false, false, false, false, false, false] },
-    { desc: 'all days', selectedDays: WEEKDAYS, expectedPattern: [true, true, true, true, true, true, true] },
+    { desc: 'no days', selectedDays: [] as string[], expectedPattern: [false, false, false, false, false, false, false] },
+    { desc: 'all days', selectedDays: [...WEEKDAYS], expectedPattern: [true, true, true, true, true, true, true] },
     { desc: 'invalid strings filtered', selectedDays: ['mandag', 'invalid', 'onsdag', '', 'fredag', 'notaday'], expectedPattern: [true, false, true, false, true, false, false] }
 ]
 
-const testConfigurations = [
+type TestValue = boolean | DinnerModeType
+type TestInput = TestValue | TestValue[]
+
+const testConfigurations: Array<{
+    name: string
+    options: { valueSchema: z.ZodType<DinnerModeType>; defaultValue: DinnerModeType } | undefined
+    selectedValue: TestValue
+    unselectedValue: TestValue
+    validInputs: Array<{ desc: string; input: TestInput }>
+    hasRequiredSchema: boolean
+    requiredMessage?: string
+}> = [
     {
         name: 'boolean (backward compatibility)',
         options: undefined,
@@ -102,7 +113,7 @@ testConfigurations.forEach(({ name, options, selectedValue, unselectedValue, val
                     const map = createWeekDayMapFromSelection(selectedDays, selectedValue, unselectedValue)
                     const expected = expectedPattern.map(isSelected => isSelected ? selectedValue : unselectedValue)
                     expected.forEach((value, index) => {
-                        expect(map[WEEKDAYS[index]]).toBe(value)
+                        expect(map[WEEKDAYS[index]!]).toBe(value)
                     })
                 })
             })
@@ -148,11 +159,11 @@ describe('maskWeekDayMap', () => {
         defaultValue: DinnerMode.DINEIN
     })
 
-    const createMask = (pattern: boolean[]) =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: pattern[i]}), {} as Record<string, boolean>)
+    const createMask = (pattern: boolean[]): WeekDayMap<boolean> =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: pattern[i]!}), {} as WeekDayMap<boolean>)
 
-    const createPrefs = (values: DinnerMode[]) =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as Record<string, DinnerMode>)
+    const createPrefs = (values: DinnerModeType[]): WeekDayMap<DinnerModeType> =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]!}), {} as WeekDayMap<DinnerModeType>)
 
     it('should create defaults when source is null', () => {
         const mask = createMask([true, false, true, false, true, false, false]) // Mon, Wed, Fri

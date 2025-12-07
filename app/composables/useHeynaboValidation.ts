@@ -1,7 +1,6 @@
 import {z} from "zod";
 import type { HouseholdCreate, InhabitantCreate, UserCreate } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
-import { pruneAndCreate } from '~/utils/batchUtils'
 
 export const useHeynaboValidation = () => {
 

@@ -273,7 +273,7 @@ export function calculateCountdown(
     currentDate: Date = new Date()
 ): { hours: number; minutes: number; formatted: string } {
     if (targetDate <= currentDate) {
-        return { hours: 0, minutes: 0, formatted: 'NU' }
+        return { hours: 0, minutes: 0, formatted: 'Overskredet' }
     }
 
     const totalHours = differenceInHours(targetDate, currentDate)

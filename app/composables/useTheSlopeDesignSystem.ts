@@ -364,6 +364,13 @@ export const COMPONENTS = {
     description: 'text-sm md:text-base'
   },
 
+  // Empty state alert compact - subtle inline empty state (mocha/past color)
+  emptyStateAlertCompact: {
+    root: `text-center py-2 ${BG.mocha[100]} ${TEXT.mocha[900]} rounded-lg`,
+    title: 'text-sm font-normal',
+    description: 'text-xs'
+  },
+
   // Power mode - family-wide bulk editing pattern
   powerMode: {
     color: 'warning' as const,

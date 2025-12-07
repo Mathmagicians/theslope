@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY, URGENCY_TO_BADGE } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
 const { getStepConfig, getStepDeadline } = useBooking()
@@ -59,18 +59,21 @@ const currentDeadline = computed(() => getStepDeadline(props.dinnerEvent))
 // Is cancelled?
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
+// Is past/consumed event? (no badges shown for past events, like in dinner card view)
+const isPastEvent = computed(() => props.dinnerEvent.state === DinnerState.CONSUMED)
+
 // Get badge for a specific step (from DinnerDeadlineBadges via ref)
 const getBadgeForStep = (step: number): DeadlineBadge | null => {
   return deadlineBadgesRef.value?.getBadgeForStep(step) ?? null
 }
 
-// Build stepper items from DINNER_STEP_MAP with slot names for custom rendering
+// Build stepper items from DINNER_STEP_MAP
 const steps = computed(() => {
   const step = currentStep.value
   const deadline = currentDeadline.value
 
   return Object.values(DINNER_STEP_MAP).map((config) => ({
-    slot: `step-${config.step}` as const,
+    step: config.step,
     title: config.title,
     description: config.step === step && props.showDeadlines ? deadline.description : config.text,
     icon: config.icon,
@@ -82,11 +85,12 @@ const steps = computed(() => {
 
 <template>
   <div>
-    <!-- Hidden data provider for deadline badges -->
+    <!-- Data provider for deadline badges (hidden in stepper mode) -->
     <DinnerDeadlineBadges
       ref="deadlineBadgesRef"
       :dinner-event="dinnerEvent"
       mode="stepper"
+      class="hidden"
     />
 
     <!-- Cancelled: Empty state -->
@@ -114,35 +118,13 @@ const steps = computed(() => {
       :color="COLOR.primary"
       :ui="{ description: TYPOGRAPHY.finePrint }"
     >
-      <!-- Step 1 (Annonceret): Menu deadline badge -->
-      <template #step-1>
-        <div v-if="getBadgeForStep(1)" class="mt-1">
-          <UBadge
-            :color="getBadgeForStep(1)!.color"
-            variant="soft"
-            :size="SIZES.small"
-          >
-            {{ getBadgeForStep(1)!.value }}
-          </UBadge>
-          <p v-if="mode === 'full'" :class="TYPOGRAPHY.bodyTextMuted">
-            {{ getBadgeForStep(1)!.helpText }}
-          </p>
-        </div>
-      </template>
-
-      <!-- Step 2 (Tilmelding lukket): Tilmelding status badge -->
-      <template #step-2>
-        <div v-if="getBadgeForStep(2)" class="mt-1">
-          <UBadge
-            :color="getBadgeForStep(2)!.color"
-            variant="soft"
-            :size="SIZES.small"
-          >
-            {{ getBadgeForStep(2)!.value }}
-          </UBadge>
-          <p v-if="mode === 'full'" :class="TYPOGRAPHY.bodyTextMuted">
-            {{ getBadgeForStep(2)!.helpText }}
-          </p>
+      <!-- Custom description: text + badge below (no badges for past events) -->
+      <template #description="{ item }">
+        <div>
+          <span>{{ item.description }}</span>
+          <div v-if="!isPastEvent && getBadgeForStep(item.step)" class="mt-1">
+            <span>{{ getBadgeForStep(item.step)!.value }}</span>
+          </div>
         </div>
       </template>
     </UStepper>

@@ -5,8 +5,8 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import {z} from 'zod'
-import {useCoreValidation, getHouseholdShortName, type UserDisplay, type InhabitantDisplay, type HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {z} from 'zod'
+import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'

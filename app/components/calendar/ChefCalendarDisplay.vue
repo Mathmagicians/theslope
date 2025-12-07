@@ -85,7 +85,7 @@ const emit = defineEmits<{
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, BG, TEXT} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 

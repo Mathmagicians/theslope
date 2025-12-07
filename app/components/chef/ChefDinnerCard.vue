@@ -54,7 +54,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get color class based on temporal category (matches calendar view)
 // Use past styling for cancelled dinners
@@ -67,8 +67,8 @@ const dateColorClass = computed(() => {
 const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.date))
 
 // Menu title or placeholder
-const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
-const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
+const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Ingen menu endnu')
+const isMenuAnnounced = computed(() => !!props.dinnerEvent.menuTitle)
 
 // Check if dinner is cancelled
 const {DinnerStateSchema} = useBookingValidation()

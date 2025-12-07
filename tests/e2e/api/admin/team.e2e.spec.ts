@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {useCookingTeamValidation, type CookingTeamDetail, type CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'

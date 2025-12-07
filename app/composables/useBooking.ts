@@ -49,6 +49,7 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
         text: 'Fællesspisningen er i kalenderen',
         getDeadline: (countdown, isPastMenuDeadline, thresholds) => {
             if (isPastMenuDeadline) return { description: 'Deadline overskredet', alarm: 2 }
+            if (countdown.hours <= 0) return { description: 'Deadline overskredet', alarm: 2 }
             if (countdown.hours < thresholds.critical) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 2 }
             if (countdown.hours < thresholds.warning) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 1 }
             return { description: 'Menu planlægges', alarm: 0 }

@@ -311,10 +311,10 @@ describe('assignTeamsToEvents', () => {
                 { id: 2, name: 'Hold 2', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] }
             ],
             dinnerEvents: [
-                { id: 1, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 2, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 3, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 4, date: new Date(2025, 0, 13), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
+                { id: 1, date: new Date(2025, 0, 6), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 2, date: new Date(2025, 0, 8), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 3, date: new Date(2025, 0, 10), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
+                { id: 4, date: new Date(2025, 0, 13), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
             ]
         }
 
@@ -755,9 +755,9 @@ describe('createPreBookingGenerator', () => {
 
     // Dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
     const dinnerEvents = [
-        {id: 101, date: new Date(2025, 0, 6), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
-        {id: 102, date: new Date(2025, 0, 8), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
-        {id: 103, date: new Date(2025, 0, 10), menuTitle: 'TBD', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()}
+        {id: 101, date: new Date(2025, 0, 6), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
+        {id: 102, date: new Date(2025, 0, 8), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
+        {id: 103, date: new Date(2025, 0, 10), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()}
     ]
 
     describe('generator function', () => {
