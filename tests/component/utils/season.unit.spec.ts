@@ -26,6 +26,7 @@ import {
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
+import {createDateInTimezone} from '~/utils/date'
 import {createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeam} from '~/composables/useCookingTeamValidation'
 import type {DinnerEvent} from '~/composables/useBookingValidation'
@@ -1242,9 +1243,10 @@ describe('Active Season Management utilities', () => {
     describe('getNextDinnerDate', () => {
         it('should find next dinner when there are future dates', () => {
             // GIVEN: Dinner dates with mix of past and future
+            const futureDate = new Date(2030, 10, 17)  // Nov 17, 2030 (future)
             const dinnerDates = [
-                new Date(2020, 10, 3, 18, 0),  // Nov 3, 2020 (past)
-                new Date(2030, 10, 17, 18, 0)  // Nov 17, 2030 (future)
+                new Date(2020, 10, 3),  // Nov 3, 2020 (past)
+                futureDate
             ]
             const dinnerStartHour = 18
 
@@ -1252,9 +1254,9 @@ describe('Active Season Management utilities', () => {
             const getNext = getNextDinnerDate(60)
             const result = getNext(dinnerDates, dinnerStartHour)
 
-            // THEN: Should return the next future date (skipping past dates)
+            // THEN: Should return the next future date with Copenhagen timezone-aware time
             expect(result).not.toBeNull()
-            expect(result?.start).toEqual(new Date(2030, 10, 17, 18, 0))
+            expect(result?.start).toEqual(createDateInTimezone(futureDate, dinnerStartHour))
         })
 
         it('should return null when all dates are in the past', () => {
