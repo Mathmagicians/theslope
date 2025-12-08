@@ -346,6 +346,51 @@ export class OrderFactory {
   }
 
   /**
+   * Get orders for a dinner event
+   * @param context - Browser context for API requests
+   * @param dinnerEventId - Dinner event ID to fetch orders for
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @returns Array of OrderDisplay
+   */
+  static readonly getOrdersForDinnerEvent = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    expectedStatus: number = 200
+  ): Promise<OrderDisplay[]> => {
+    const { OrderDisplaySchema } = useBookingValidation()
+    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventId=${dinnerEventId}`, { headers })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      const orders = await response.json()
+      return orders.map((o: unknown) => OrderDisplaySchema.parse(o))
+    }
+
+    return []
+  }
+
+  /**
+   * Get orders for multiple dinner events
+   * @param context - Browser context for API requests
+   * @param dinnerEventIds - Array of dinner event IDs
+   * @returns Array of OrderDisplay for all events
+   */
+  static readonly getOrdersForDinnerEvents = async (
+    context: BrowserContext,
+    dinnerEventIds: number[]
+  ): Promise<OrderDisplay[]> => {
+    const allOrders: OrderDisplay[] = []
+    for (const dinnerEventId of dinnerEventIds) {
+      const orders = await OrderFactory.getOrdersForDinnerEvent(context, dinnerEventId)
+      allOrders.push(...orders)
+    }
+    return allOrders
+  }
+
+  /**
    * Cleanup multiple orders by ID (for test afterAll hooks)
    * Gracefully handles 404 errors for already-deleted orders
    */

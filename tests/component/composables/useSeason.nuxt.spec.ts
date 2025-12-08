@@ -764,13 +764,16 @@ describe('createPreBookingGenerator', () => {
     ]
 
     describe('generator function', () => {
-        it('should throw if inhabitant has no dinnerPreferences', () => {
-            // GIVEN: Inhabitant with null preferences (malformed data)
+        it('should skip inhabitants with no dinnerPreferences', () => {
+            // GIVEN: Inhabitant with null preferences
             const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
             const inhabitants = [{id: 1, name: 'Test', birthDate: null, dinnerPreferences: null}]
 
-            // WHEN/THEN: Should throw
-            expect(() => generator(inhabitants)).toThrow('no dinnerPreferences')
+            // WHEN: Generate orders
+            const result = generator(inhabitants)
+
+            // THEN: Should return empty array (skip inhabitant)
+            expect(result).toEqual([])
         })
 
         it('should throw if no matching ticket price for type', () => {

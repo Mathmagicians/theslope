@@ -7,7 +7,7 @@ import type {
     CookingTeamAssignment,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
-import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
+import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult} from "~/composables/useBookingValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -558,6 +558,35 @@ export class SeasonFactory {
         return {season, teams}
     }
 
+    /**
+     * Create a short season with dinner events for isolated testing
+     * Uses unique salted shortName to avoid conflicts with parallel tests
+     * Season spans 3 days with all days as cooking days for fast test execution
+     *
+     * @param context - Browser context for API requests
+     * @param testSalt - Unique salt for test isolation
+     * @param seasonData - Optional season data overrides
+     * @returns Season with generated dinner events (typically 3 events)
+     */
+    static readonly createSeasonWithDinnerEvents = async (
+        context: BrowserContext,
+        testSalt: string,
+        seasonData: Partial<Season> = {}
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        // Create short 3-day season with all days as cooking days
+        const season = await this.createSeason(context, {
+            ...this.defaultSeason(testSalt),
+            seasonDates: { start: new Date('2099-01-01'), end: new Date('2099-01-03') },
+            cookingDays: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
+            ...seasonData
+        })
+
+        // Generate dinner events for the season
+        const result = await this.generateDinnerEventsForSeason(context, season.id!)
+
+        return { season, dinnerEvents: result.events }
+    }
+
     static readonly generateDinnerEventsForSeason = async (
         context: BrowserContext,
         seasonId: number,
@@ -580,6 +609,36 @@ export class SeasonFactory {
         }
 
         return await response.json()
+    }
+
+    /**
+     * Scaffold pre-bookings for a season
+     * Creates orders for all inhabitants based on their dinner preferences
+     * @param context - Browser context for API requests
+     * @param seasonId - Season ID to scaffold pre-bookings for
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns ScaffoldResult with counts of created, deleted, unchanged orders
+     */
+    static readonly scaffoldPrebookingsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 200
+    ): Promise<ScaffoldResult> => {
+        const {ScaffoldResultSchema} = useBookingValidation()
+        const response = await context.request.post(`/api/admin/season/${seasonId}/scaffold-prebookings`, {
+            headers: headers
+        })
+
+        const status = response.status()
+        const responseBody = await response.json()
+
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return ScaffoldResultSchema.parse(responseBody)
+        }
+
+        return responseBody
     }
 
     /**

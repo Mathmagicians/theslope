@@ -282,7 +282,7 @@ export const useSeason = () => {
      * @param excludedKeys - Optional set of "inhabitantId-dinnerEventId" keys to exclude
      *                       (typically user cancellations that should not be recreated)
      *
-     * @throws Error if inhabitant has no dinnerPreferences (malformed data)
+     * Note: Inhabitants without dinnerPreferences are skipped (no orders created)
      * @throws Error if no matching ticket price for inhabitant
      *
      * @example
@@ -304,8 +304,9 @@ export const useSeason = () => {
 
         return (inhabitants: InhabitantDisplay[]): OrderCreateWithPrice[] =>
             inhabitants.flatMap(inhabitant => {
+                // Skip inhabitants without preferences (no orders created)
                 if (!inhabitant.dinnerPreferences) {
-                    throw new Error(`Inhabitant ${inhabitant.name} (${inhabitant.id}) has no dinnerPreferences - malformed data`)
+                    return []
                 }
                 const prefs = inhabitant.dinnerPreferences
 

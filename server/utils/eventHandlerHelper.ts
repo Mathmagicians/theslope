@@ -160,11 +160,41 @@ const throwH3Error = (prepend: string, error: unknown, statusCode: number = 500)
     throw h3e
 }
 
+import type {H3Event} from 'h3'
+import type {UserDetail} from '~/composables/useCoreValidation'
+
+/**
+ * Get authenticated user from session
+ * Returns null if no session or user not found
+ *
+ * @param event - H3 event with session context
+ * @returns UserDetail or null
+ */
+const getSessionUser = async (event: H3Event): Promise<UserDetail | null> => {
+    const session = await getUserSession(event)
+    return (session?.user as UserDetail) ?? null
+}
+
+/**
+ * Get authenticated user ID from session
+ * Returns null if no session or user not found
+ * Useful for audit trails where userId is optional
+ *
+ * @param event - H3 event with session context
+ * @returns User ID or null
+ */
+const getSessionUserId = async (event: H3Event): Promise<number | null> => {
+    const user = await getSessionUser(event)
+    return user?.id ?? null
+}
+
 const eventHandlerHelper = {
     h3eFromCatch,
     h3eFromPrismaError,
     logH3Error,
-    throwH3Error
+    throwH3Error,
+    getSessionUser,
+    getSessionUserId
 }
 
 export default eventHandlerHelper

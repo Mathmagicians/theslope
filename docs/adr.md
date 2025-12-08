@@ -2,69 +2,6 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
-## ADR-013: External System Integration Pattern
-
-**Status:** Accepted | **Date:** 2025-01-30
-**Updated:** 2025-11-26 (Heynabo API specifics, credential separation)
-
-### Decision
-
-**TheSlope is source of truth; external systems are sync targets.**
-
-| Principle | Rule |
-|-----------|------|
-| **Ownership** | Chef operations use user's token; admin operations use system credentials |
-| **Sync Direction** | Push on state change; lazy fetch for inbound data |
-| **Idempotency** | Store external system IDs (e.g., `heynaboEventId`) to prevent duplicates |
-| **Error Handling** | Chef ops: fail and show error. Admin ops: best-effort (warn, don't fail) |
-| **Logging** | Log external API failures with full context (ADR-004) |
-
-### Heynabo API Specifics (verified 2025-11-26)
-
-| Method | Endpoint | Status |
-|--------|----------|--------|
-| POST | `/members/events/` | ✅ Create event |
-| GET | `/members/events/` | ✅ List events |
-| GET | `/members/events/{id}` | ✅ Get single event |
-| **PATCH** | `/members/events/{id}` | ✅ Update event (partial) |
-| DELETE | `/members/events/{id}` | ✅ Delete event |
-| POST | `/members/events/{id}/files` | ✅ Upload image (FormData with `file` field) |
-| PUT | `/members/events/{id}` | ❌ 501 Not Implemented |
-
-**Important:** Heynabo uses American spelling `CANCELED` (one L), not `CANCELLED`.
-
-### Default Event Pictures
-
-Default dinner pictures are stored in `public/` (Nuxt static assets) and uploaded to Heynabo on announce:
-
-| File | Location | Access |
-|------|----------|--------|
-| `fællesspisning_0.jpeg` | `public/` | Root URL (`/fællesspisning_0.jpeg`) |
-| `fællesspisning_1.jpeg` | `public/` | Root URL (`/fællesspisning_1.jpeg`) |
-
-**Pattern:** Random rotation via `getRandomDefaultDinnerPicture()` in `heynaboClient.ts`. Image upload is non-blocking (warn on failure, don't fail announce).
-
-### Credential Separation
-
-| Operation | Credentials | Rationale |
-|-----------|-------------|-----------|
-| Chef announce/cancel | User's Heynabo token | User owns event in Heynabo |
-| Admin update/delete | System credentials | Admin may not have chef's token |
-
-### Compliance
-
-1. External IDs MUST be nullable fields on domain entities
-2. Chef sync operations MUST use user's session token
-3. Admin sync operations MUST use system credentials (best-effort, warn on failure)
-4. External failures on chef operations MUST return error to user
-5. External failures on admin operations MUST NOT block local state changes
-6. Inbound sync MUST be lazy (on fetch, not scheduled)
-7. Heynabo updates MUST use PATCH (not PUT)
-8. Image uploads MUST be non-blocking (warn on failure, don't fail parent operation)
-9. Static assets for external upload MUST be in `public/` directory (Nuxt convention)
-
----
-
 ## ADR-014: Batch Operations and Utility Functions
 
 **Status:** Accepted | **Date:** 2025-12-06
@@ -73,149 +10,85 @@ Default dinner pictures are stored in `public/` (Nuxt static assets) and uploade
 
 **Batch operations use curried chunking utilities and Prisma bulk methods to stay within D1 limits.**
 
-Cloudflare D1 enforces a **1,000 query limit** and **100 bound parameters per statement**. Bulk operations must batch appropriately.
+D1 limits: **1,000 queries/invocation**, **100 bound parameters/statement**.
 
 ### Prisma Bulk Operations
 
-**Use `createManyAndReturn` for bulk inserts:**
 ```typescript
-// ✅ CORRECT: Single bulk insert (1 query for N entities)
-const created = await prisma.dinnerEvent.createManyAndReturn({
-    data: dinnerEvents  // Array of create data
-})
+// ✅ Use createManyAndReturn (1 query for N entities)
+await prisma.dinnerEvent.createManyAndReturn({ data: dinnerEvents })
 
-// ❌ WRONG: N concurrent create calls (N queries)
-await Promise.all(dinnerEvents.map(de => prisma.dinnerEvent.create({ data: de })))
-```
+// ❌ Not Promise.all of individual creates (N queries)
+await Promise.all(events.map(e => prisma.dinnerEvent.create({ data: e })))
 
-**For updates with different data per entity** (no `updateManyAndReturn`), batch with sequential `Promise.all`:
-```typescript
-// Process in batches of 50 to avoid overwhelming D1
+// For updates (no updateManyAndReturn), batch with sequential Promise.all:
 for (const batch of batches) {
-    const results = await Promise.all(
-        batch.map(item => prisma.entity.update({ where: { id: item.id }, data: item }))
-    )
-    allResults.push(...results)
+    await Promise.all(batch.map(item => prisma.entity.update({ where: { id: item.id }, data: item })))
 }
 ```
 
-### Batch Utility Functions
+### Batch Utilities (`~/utils/batchUtils.ts`)
 
-**Location:** `~/utils/batchUtils.ts`
-
-#### `chunkArray<T>(size: number)`
-
-Curried function to split arrays into batches:
-
+**`chunkArray<T>(size)`** - Curried array chunker:
 ```typescript
-import {chunkArray} from '~/utils/batchUtils'
-
-// Create curried chunker with batch size
-const chunkOrderBatch = chunkArray<Order>(12)  // 12 for param-heavy inserts
-const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(50)  // 50 for lightweight updates
-
-// Use in endpoint
+const chunkOrderBatch = chunkArray<Order>(12)  // 12 for param-heavy (7 params → 100/7 ≈ 14)
 const batches = chunkOrderBatch(orders)
-for (const batch of batches) {
-    await Promise.all(batch.map(order => createOrder(d1, order)))
-}
 ```
 
-**Batch size guidelines:**
 | Operation | Batch Size | Rationale |
 |-----------|------------|-----------|
-| Order inserts | 12 | 7 params each → 100/7 ≈ 14, use 12 for safety |
-| Team assignments | 50 | 2 params each (id + cookingTeamId) |
-| Affinity updates | 50 | Lightweight update operations |
+| Order inserts | 12 | 7 params each |
+| Team assignments | 50 | 2 params each |
 
-#### `pruneAndCreate<T, K>(getKey, isEqual)`
-
-Curried function to reconcile existing vs incoming arrays (create/update/delete):
-
+**`pruneAndCreate<T, K>(getKey, isEqual)`** - Reconcile existing vs incoming arrays:
 ```typescript
-import {pruneAndCreate} from '~/utils/batchUtils'
-
-// Configure reconciliation
-const reconcileTicketPrices = pruneAndCreate<TicketPrice, number>(
-    tp => tp.id,  // Key extractor (undefined = new item)
-    (a, b) => a.price === b.price && a.ticketType === b.ticketType  // Equality check
+const reconcile = pruneAndCreate<TicketPrice, number>(
+    tp => tp.id,
+    (a, b) => a.price === b.price && a.ticketType === b.ticketType
 )
-
-// Apply to data
-const result = reconcileTicketPrices(existingPrices)(incomingPrices)
-// Returns: { create: T[], update: T[], idempotent: T[], delete: T[] }
-```
-
-**Use cases:**
-- Updating nested collections (e.g., season ticket prices)
-- Sync operations where items may be added, modified, or removed
-- Avoiding unnecessary database writes for unchanged items
-
-### Composable Pattern
-
-**Curried chunkers live in composables, exported for endpoint use:**
-
-```typescript
-// In composable (e.g., useBookingValidation.ts)
-const ORDER_BATCH_SIZE = 12
-const chunkOrderBatch = chunkArray<OrderCreateWithPrice>(ORDER_BATCH_SIZE)
-
-return {
-    // ... other exports
-    chunkOrderBatch
-}
-
-// In endpoint
-const {chunkOrderBatch} = useBookingValidation()
-const batches = chunkOrderBatch(orders)
-```
-
-**Current chunkers:**
-| Composable | Chunker | Type | Batch Size |
-|------------|---------|------|------------|
-| `useBookingValidation` | `chunkOrderBatch` | `OrderCreateWithPrice` | 12 |
-| `useSeason` | `chunkTeamAssignments` | `DinnerEventDisplay` | 50 |
-| `useCookingTeam` | `chunkTeamAffinities` | `CookingTeamDisplay` | 50 |
-
-### Repository Functions for Bulk Operations
-
-**Functions accepting union types for DRY single/bulk handling:**
-
-```typescript
-// Accept single or array, normalize immediately
-export async function saveDinnerEvents(
-    d1Client: D1Database,
-    input: DinnerEventCreate | DinnerEventCreate[]
-): Promise<DinnerEventDisplay[]> {
-    const events = Array.isArray(input) ? input : [input]
-    if (events.length === 0) return []
-
-    const created = await prisma.dinnerEvent.createManyAndReturn({ data: events })
-    return created.map(de => DinnerEventDisplaySchema.parse(de))
-}
-```
-
-**Single mutations that need Detail response:** Fetch after bulk create:
-```typescript
-// PUT endpoint returns Detail (ADR-009)
-const [created] = await saveDinnerEvents(d1Client, dinnerEventData)
-const detail = await fetchDinnerEvent(d1Client, created!.id)
-return detail
+const { create, update, idempotent, delete: toDelete } = reconcile(existing)(incoming)
 ```
 
 ### Compliance
 
-1. Bulk inserts MUST use `createManyAndReturn` (not `Promise.all` of individual creates)
-2. Bulk updates MUST batch with sequential `for...of` + `Promise.all` per batch
-3. Batch sizes MUST account for D1's 100 bound parameter limit
-4. Curried chunkers MUST be defined in composables, not endpoints
-5. Repository functions MAY accept union type `T | T[]` for DRY handling
-6. Single mutations returning Detail MUST fetch after bulk create (ADR-009 compliance)
-7. `pruneAndCreate` SHOULD be used for nested collection reconciliation
+1. Bulk inserts MUST use `createManyAndReturn`
+2. Bulk updates MUST batch with sequential `for...of` + `Promise.all`
+3. Curried chunkers MUST be defined in composables, not endpoints
+4. Single mutations returning Detail MUST fetch after bulk create (ADR-009)
 
-### Related ADRs
-- **ADR-009:** Batch operations use Display types
-- **ADR-010:** Repository-layer serialization
+---
+
+## ADR-013: External System Integration Pattern
+
+**Status:** Accepted | **Date:** 2025-01-30 | **Updated:** 2025-11-26
+
+### Decision
+
+**TheSlope is source of truth; external systems are sync targets.**
+
+| Principle | Rule |
+|-----------|------|
+| **Ownership** | Chef ops: user's token. Admin ops: system credentials |
+| **Sync Direction** | Push on state change; lazy fetch inbound |
+| **Idempotency** | Store external IDs (e.g., `heynaboEventId`) |
+| **Error Handling** | Chef: fail with error. Admin: best-effort (warn, don't fail) |
+
+### Heynabo API
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| POST/GET/PATCH/DELETE | `/members/events/{id}` | ✅ PATCH for updates (PUT returns 501) |
+| POST | `/members/events/{id}/files` | Image upload (FormData) |
+
+**Note:** Heynabo uses `CANCELED` (one L).
+
+### Compliance
+
+1. External IDs MUST be nullable fields
+2. Chef sync: use user's token, fail on error
+3. Admin sync: use system credentials, warn on error (don't block local changes)
+4. Heynabo updates MUST use PATCH
+5. Image uploads: non-blocking (warn on failure)
 
 ---
 
@@ -225,41 +98,23 @@ return detail
 
 ### Decision
 
-**Use `Prisma.skip` to omit optional fields from mutations** - Never pass explicit `undefined` to Prisma's `data` object in create/update/upsert operations.
+**Use `Prisma.skip` to omit optional fields** - Never pass explicit `undefined` to Prisma `data` objects.
 
-**Pattern:**
 ```typescript
-// ✅ CORRECT - Use Prisma.skip
-await prisma.entity.update({
-  where: { id },
-  data: {
-    requiredField: value,
-    optionalField: field === undefined ? Prisma.skip : serializeField(field)
-  }
-})
+// ✅ Use Prisma.skip
+data: { optionalField: field === undefined ? Prisma.skip : serializeField(field) }
 
-// ❌ INCORRECT - Explicit undefined causes runtime error
-await prisma.entity.update({
-  where: { id },
-  data: {
-    requiredField: value,
-    optionalField: field ? serializeField(field) : undefined  // ERROR!
-  }
-})
+// ❌ Explicit undefined causes runtime error
+data: { optionalField: field ? serializeField(field) : undefined }
 ```
 
-### Rationale
-
-1. **Prisma constraint**: Explicitly `undefined` values violate Prisma's type system
-2. **Intent clarity**: `Prisma.skip` explicitly means "omit this field from operation"
-3. **Null semantics**: Distinguishes between "don't update" (skip) vs "set to NULL" (null)
+**Semantics:** `Prisma.skip` = "don't update", `null` = "set to NULL"
 
 ### Compliance
 
-1. MUST use `Prisma.skip` (or `PrismaFromClient.skip`) when conditionally omitting fields
-2. MUST NOT use spread patterns like `...(condition && {field})` - use ternary with `Prisma.skip`
-3. Repository layer MUST handle all optional field serialization (ADR-010)
-4. `undefined` in `where` clauses is acceptable (means "no filter")
+1. MUST use `Prisma.skip` for conditional field omission
+2. MUST NOT use spread patterns `...(condition && {field})`
+3. `undefined` in `where` clauses is acceptable
 
 ---
 
@@ -269,32 +124,25 @@ await prisma.entity.update({
 
 ### Decision
 
-**Three-state order model with comprehensive audit trail** - Orders transition through BOOKED→RELEASED→CLOSED states with full audit logging for dispute resolution.
+**Three-state order model with audit trail:** BOOKED → RELEASED → CLOSED
 
-**Schema Design:**
-- **OrderState enum**: BOOKED, RELEASED, CLOSED (no CANCELLED - deleted instead)
-- **Order model**: Tracks `bookedByUserId` (financial owner), `inhabitantId` (ticket holder), `priceAtBooking` (frozen), state timestamps
-- **OrderAudit model**: Preserves full history including deletions via `orderSnapshot` JSON
+| Model | Key Fields |
+|-------|------------|
+| **Order** | `bookedByUserId` (payer), `inhabitantId` (eater), `priceAtBooking` (frozen), state timestamps |
+| **OrderAudit** | `orderSnapshot` JSON preserves history including deletions |
 
-**CASCADE/SET NULL Strategy:**
-- **CASCADE**: Order→DinnerEvent, Order→Inhabitant, Transaction→Order (existential dependencies)
-- **SET NULL**: Order→User(bookedByUserId), OrderAudit→Order, OrderAudit→all actors (preserve history)
-
-### Rationale
-
-1. **Financial clarity**: Explicit `bookedByUserId` tracks who pays vs who eats
-2. **Audit resilience**: SET NULL on audit relations preserves dispute evidence
-3. **State simplicity**: Three states match business flow (no complex pending states)
-4. **Price integrity**: Frozen `priceAtBooking` prevents retroactive changes
-5. **D1 compatibility**: No database transactions needed - atomic operations only
+**Cascade Strategy:**
+- **CASCADE:** Order→DinnerEvent, Order→Inhabitant, Transaction→Order
+- **SET NULL:** Order→User, OrderAudit→Order (preserve audit history)
 
 ### Compliance
 
-1. Orders MUST track both `bookedByUserId` (payer) and `inhabitantId` (eater)
-2. Audit entries MUST survive order/user deletion (SET NULL relations)
-3. Deleted orders MUST capture `orderSnapshot` JSON before removal
-4. State transitions MUST create audit entries with performer tracking
-5. Migration MUST populate existing orders: CLOSED if transaction exists, BOOKED otherwise
+1. Orders MUST track both `bookedByUserId` and `inhabitantId`
+2. Audit entries MUST survive order/user deletion (SET NULL)
+3. Deleted orders MUST capture `orderSnapshot` before removal
+4. State transitions MUST create audit entries
+
+---
 
 ## ADR-010: Domain-Driven Serialization Architecture
 
@@ -302,199 +150,76 @@ await prisma.entity.update({
 
 ### Decision
 
-**Repository-layer serialization** - Move database format conversion (JSON strings, SQLite constraints) to repository layer, keeping all other layers working with domain types.
-
-**Data Flow:**
+**Repository-layer serialization** - All layers work with domain types; only repository handles DB format.
 
 ```
-UI/Client ←→ HTTP ←→ API ←→ Store ←→ Repository ⟷ Database
-(Season)     (Season)  (Season) (Season)  (Season ⟷ SerializedSeason)
+UI ←→ HTTP ←→ API ←→ Store ←→ Repository ⟷ Database
+(Season)                        (Season ⟷ SerializedSeason)
 ```
 
-**Layer responsibilities:**
-- **UI/Client**: Domain types (Season with Date objects, arrays)
-- **HTTP**: Domain types (transparent transport via $fetch auto-serialization)
-- **API**: Domain types (validate with SeasonSchema, accept/return Season)
-- **Store**: Domain types (work with Season directly)
-- **Repository**: Serialize before DB write, deserialize after DB read
-
-**Elegant Schema Pattern** in composables:
-
+**Pattern in composables:**
 ```typescript
-// Domain schema
-const SeasonSchema = z.object({
-  cookingDays: z.record(z.enum(WEEKDAYS), z.boolean()),
-  holidays: z.array(DateRangeSchema)
-})
+// Domain schema (arrays, objects)
+const SeasonSchema = z.object({ holidays: z.array(DateRangeSchema) })
 
-// Serialized schema (database format)
-const SerializedSeasonSchema = z.object({
-  cookingDays: z.string(), // JSON stringified
-  holidays: z.string()     // JSON stringified
-})
+// Serialized schema (JSON strings)
+const SerializedSeasonSchema = z.object({ holidays: z.string() })
 
 // Transform functions
-export function serializeSeason(season: Season): SerializedSeason {
-  return { ...season, cookingDays: JSON.stringify(season.cookingDays) }
-}
-
-export function deserializeSeason(serialized: SerializedSeason): Season {
-  return { ...serialized, cookingDays: JSON.parse(serialized.cookingDays) }
-}
+export const serializeSeason = (s: Season) => ({ ...s, holidays: JSON.stringify(s.holidays) })
+export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSON.parse(s.holidays) })
 ```
-
-**Repository implementation:**
-
-```typescript
-async function createSeason(d1: D1Database, season: Season): Promise<Season> {
-  const serialized = serializeSeason(season)
-  const created = await prisma.season.create({ data: serialized })
-  return deserializeSeason(created)
-}
-```
-
-### Rationale
-
-1. **Separation of concerns**: DB format is implementation detail, not API contract
-2. **Type safety**: Domain types throughout application code, serialization isolated
-3. **Migration flexibility**: Can change DB from SQLite JSON strings to PostgreSQL JSONB without touching API/UI
-4. **Clean testing**: Factories work with domain types, no serialization in tests
 
 ### Compliance
 
-1. API endpoints MUST accept/return domain types (Season, not SerializedSeason)
-2. Validation schemas MUST use domain types (SeasonSchema for API, SerializedSeasonSchema for repository only)
-3. Composables MUST export: domain schema, serialized schema, serialize/deserialize functions
-4. Repository MUST serialize before writes, deserialize after reads
-5. Tests MUST use domain types (no manual serialization in factories)
-
-### Related ADRs
-- **ADR-001:** Zod schemas in composables
-- **ADR-002:** API validation patterns
-- **ADR-005:** Repository pattern
+1. API endpoints MUST accept/return domain types
+2. Repository MUST serialize before writes, deserialize after reads
+3. Composables MUST export: domain schema, serialized schema, transform functions
+4. Tests MUST use domain types (no manual serialization)
 
 ---
 
 ## ADR-009: API Index Endpoint Data Inclusion Strategy
 
-**Status:** Accepted | **Date:** 2025-01-28
-**Updated:** 2025-12-01 (Batch operations and D1 rate limits)
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2025-12-01
 
 ### Decision
 
-**Weight-based relation inclusion for index endpoints** - Include relations if ALL criteria met:
+**Include relations in index endpoints only if ALL criteria met:**
+1. Bounded cardinality (max ~20 items)
+2. Lightweight data (scalars only, 1 level deep)
+3. Essential context
+4. Performance safe
 
-1. **Bounded Cardinality** (1:1 or 1:few, max ~20 items)
-2. **Lightweight Data** (scalar fields only, max 1 level)
-3. **Essential Context** (necessary to understand list item)
-4. **Performance Safe** (no degradation at scale)
+**Two types per entity only:**
+- `EntityDisplay` - Index endpoints (lightweight)
+- `EntityDetail` - Detail endpoints + mutations (comprehensive)
 
-**Index endpoints** (`GET /api/admin/[entity]`): Display-ready data with lightweight relations
-**Detail endpoints** (`GET /api/admin/[entity]/[id]`): Operation-ready data with comprehensive relations
-
-### Examples
-
-**✅ Household → Inhabitants (basic)**
 ```typescript
-// GET /api/admin/household - Returns HouseholdListItem[]
-export type HouseholdListItem = Household & {
-  inhabitants: Pick<Inhabitant, 'id' | 'name' | 'lastName' | 'pictureUrl' | 'birthDate'>[]
-}
-
-fetchHouseholds() {
-    return prisma.household.findMany({
-        include: {
-            inhabitants: {
-                select: { id: true, name: true, lastName: true, pictureUrl: true, birthDate: true }
-            }
-        }
-    })
-}
-```
-Bounded (~5-10), lightweight (scalars), essential (identity), performant (single JOIN)
-
-**❌ Season → DinnerEvents**
-```typescript
-// GET /api/admin/season - Returns Season[]
-fetchSeasons() {
-    return prisma.season.findMany() // No includes
-}
-```
-Unbounded (100+), heavy (nested), not essential, performance risk
-
-### Mutation Response Types
-
-Mutations (PUT/POST/DELETE) return the same **Zod-validated Detail schema** as GET/:id endpoints, not a separate Response schema.
-
-**CRITICAL: Only 2 types per entity** - Display (lists) and Detail (detail + mutations). NO third type.
-
-**Schema pattern:**
-```typescript
-// validation composable exports Zod schemas
-export const useHouseholdValidation = () => {
-  const HouseholdDisplaySchema = z.object({...})  // Index only
-  const HouseholdDetailSchema = z.object({...})   // GET/:id + mutations
-  const HouseholdCreateSchema = z.object({...})   // PUT input
-  const HouseholdUpdateSchema = z.object({...})   // POST input
-
-  return { HouseholdDisplaySchema, HouseholdDetailSchema, ... }
-}
-
-// TypeScript types exported
-export type HouseholdDisplay = z.infer<...>  // Lists
-export type HouseholdDetail = z.infer<...>   // Detail + mutations
-// NO separate Household, HouseholdResponse, or similar third type
-
-// API endpoints use Zod types
-GET  /api/admin/household     → HouseholdDisplay[]
-GET  /api/admin/household/:id → HouseholdDetail
-PUT  /api/admin/household     → HouseholdDetail  // Same as GET/:id
-POST /api/admin/household/:id → HouseholdDetail  // Same as GET/:id
+GET  /api/admin/entity     → EntityDisplay[]
+GET  /api/admin/entity/:id → EntityDetail
+PUT  /api/admin/entity     → EntityDetail
+POST /api/admin/entity/:id → EntityDetail
 ```
 
-**Rationale:** Small payloads make separate Response schemas unjustified complexity. Two types are sufficient and prevent type explosion.
+### Batch Operations and D1 Limits
 
-### Batch Operations and D1 Rate Limits
+**Batch operations MUST use Display types** to avoid exceeding D1's 1,000 query limit.
 
-**CRITICAL: Batch operations MUST use Display types to avoid D1 query limits.**
-
-Cloudflare D1 enforces a **1,000 query limit per worker invocation**. Detail types with nested includes multiply queries per entity.
-
-**Example: assign-cooking-teams endpoint**
 ```typescript
-// ❌ WRONG: Detail type with nested includes (~10 queries per event)
-// 170 events × 10 queries = 1,700 queries → EXCEEDS D1 LIMIT
-for (const event of dinnerEvents) {
-  await updateDinnerEvent(d1, event.id, { cookingTeamId })
-  // Returns DinnerEventDetail with chef, cookingTeam, orders, allergens...
-}
-
-// ✅ CORRECT: Display type with no includes (1 query per event)
-// 170 events × 1 query = 170 queries → WITHIN LIMIT
-for (const event of dinnerEvents) {
-  await assignCookingTeamToDinnerEvent(d1, event.id, cookingTeamId)
-  // Returns DinnerEventDisplay (scalar fields only)
-}
+// ❌ Detail type: 170 events × 10 queries = 1,700 queries (EXCEEDS LIMIT)
+// ✅ Display type: 170 events × 1 query = 170 queries (OK)
 ```
 
-**When to create lightweight repository functions:**
-- Bulk updates (>10 entities)
-- Batch assignments/reassignments
-- Mass state transitions
-- Any operation where N × queries_per_entity could exceed 1,000
-
-**See ADR-014** for batch utilities (`chunkArray`, `pruneAndCreate`) and Prisma bulk methods (`createManyAndReturn`).
+Create lightweight repository functions for bulk updates (>10 entities).
 
 ### Compliance
 
-1. Use Prisma Payload types: `EntityListItem` vs `EntityDetail`
-2. Use `select` for lightweight fields in included relations
-3. Document criteria decisions in repository comments
-4. Index = display-ready, Detail = operation-ready
-5. Mutations MUST return Detail schema (same Zod type as GET/:id)
-6. **ONLY 2 types per entity:** `EntityDisplay` and `EntityDetail` - NO third type (Entity, EntityResponse, etc.)
-7. Prisma types MUST NOT leave repository layer (ADR-010)
-8. **Batch operations MUST use Display types** - Create lightweight repository functions for bulk updates to stay within D1's 1,000 query limit
+1. Index = display-ready, Detail = operation-ready
+2. Mutations MUST return Detail schema
+3. **ONLY 2 types per entity** - NO EntityResponse, Entity, etc.
+4. Batch operations MUST use Display types
+5. Prisma types MUST NOT leave repository layer (ADR-010)
 
 ---
 
@@ -504,342 +229,112 @@ for (const event of dinnerEvents) {
 
 ### Decision
 
-**`useEntityFormManager` composable extracts common form management logic:**
-- Form mode state (`formMode`)
-- URL query synchronization (`?mode=create|edit|view`)
-- Mode transitions (`onModeChange`)
-- Optional: Draft entity management (`currentModel`)
+**Extract common form management:** mode state, URL sync (`?mode=create|edit|view`), transitions.
 
-**Two usage patterns:**
+**Two patterns:**
 
-1. **Full usage** - Deferred save (AdminPlanning):
-   - Use `currentModel` for draft management
-   - Explicit save button ("Gem ændringer")
-   - Static default entity generation
+| Pattern | Usage | Draft Management |
+|---------|-------|------------------|
+| **Full** | Deferred save (AdminPlanning) | Use `currentModel` from composable |
+| **Partial** | Immediate save (AdminTeams) | Component owns draft |
 
-2. **Partial usage** - Immediate operations (AdminTeams):
-   - Use only `formMode` + `onModeChange` for URL/mode management
-   - Component owns draft (dynamic generation)
-   - Operations save immediately (no explicit save button)
-
-### Implementation
-
-**Full usage (static defaults, deferred save):**
 ```typescript
+// Full usage
 const { formMode, currentModel, onModeChange } = useEntityFormManager<Season>({
   getDefaultEntity: getDefaultSeason,
   selectedEntity: computed(() => store.selectedSeason)
 })
-// currentModel used directly in form
-```
 
-**Partial usage (dynamic generation, immediate save):**
-```typescript
-const { formMode, onModeChange } = useEntityFormManager<CookingTeam[]>({
-  getDefaultEntity: () => [],
-  selectedEntity: computed(() => store.teams)
-})
-
-// Component owns draft
+// Partial usage - component owns draft
+const { formMode, onModeChange } = useEntityFormManager<CookingTeam[]>({ ... })
 const createDraft = ref<CookingTeam[]>([])
-watch([formMode, teamCount], () => {
-  if (formMode.value === FORM_MODES.CREATE) {
-    createDraft.value = generateTeams(teamCount.value)
-  }
-})
 ```
 
 ### Compliance
 
-1. MUST use `useEntityFormManager` for URL/mode synchronization in all CRUD forms
-2. MAY skip `currentModel` when component needs custom draft logic
-3. MUST initialize mode synchronously from URL (SSR-safe)
-
-### Related ADRs
-- **ADR-007:** Separation of Concerns (component owns formMode/draft, store owns data)
-- **ADR-006:** URL-Based Navigation (mode in query parameters)
+1. MUST use `useEntityFormManager` for URL/mode sync in CRUD forms
+2. MUST initialize mode synchronously from URL (SSR-safe)
 
 ---
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28
-**Updated:** 2025-11-11 (prefer useAsyncData over useFetch; component-local data exception)
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2025-11-11
 
 ### Decision
 
-**Stores prefer `useAsyncData` for both list and detail endpoints with status-derived state. Components own UI state. Stores handle initialization timing internally via watchers - NO AWAITS anywhere.**
+**Stores use `useAsyncData` with status-derived state. NO AWAITS anywhere.**
 
-**Why `useAsyncData` over `useFetch`:**
-- ✅ Explicit refresh capability via `refresh()` function
-- ✅ Immediate initialization with full control
-- ✅ Comprehensive error and status refs (`status`, `error`, `data`)
-- ✅ Works for both static and reactive URLs
-- ⚠️ `useFetch` acceptable only for rare cases needing singleton behavior across components
+**Why `useAsyncData`:** Explicit `refresh()`, comprehensive status refs, works for static and reactive URLs.
 
-### Store Pattern
-
-**Reference implementation:** `app/stores/plan.ts`
+### Store Pattern (Reference: `app/stores/plan.ts`)
 
 ```typescript
-// List endpoint - static URL with useAsyncData (PREFERRED)
-const {
-    data: seasons, status: seasonsStatus,
-    error: seasonsError, refresh: refreshSeasons
-} = useAsyncData<Season[]>(
-    'plan-store-seasons', // Unique key for caching
+// List endpoint
+const { data: seasons, status, error, refresh } = useAsyncData<Season[]>(
+    'plan-store-seasons',
     () => $fetch('/api/admin/season'),
-    {
-        default: () => [],
-        transform: (data: any[]) => {
-            try {
-                return data.map(season => SeasonSchema.parse(season))
-            } catch (e) {
-                console.error('Error parsing seasons:', e)
-                throw e
-            }
-        }
-    }
+    { default: () => [], transform: data => data.map(s => SeasonSchema.parse(s)) }
 )
 
-// Detail endpoint - reactive URL with useAsyncData
-const selectedSeasonId = ref<number | null>(null)
-const selectedSeasonKey = computed(() => `plan-store-season-${selectedSeasonId.value || 'null'}`)
-
-const {
-    data: selectedSeason, status: selectedSeasonStatus,
-    error: selectedSeasonError, refresh: refreshSelectedSeason
-} = useAsyncData<Season | null>(
-    selectedSeasonKey, // Reactive key triggers refetch when ID changes
-    () => {
-        if (!selectedSeasonId.value) return Promise.resolve(null)
-        return $fetch(`/api/admin/season/${selectedSeasonId.value}`)
-    },
-    {
-        default: () => null,
-        transform: (data: any) => data ? SeasonSchema.parse(data) : null
-    }
+// Detail endpoint with reactive key
+const selectedId = ref<number | null>(null)
+const { data: selected } = useAsyncData<Season | null>(
+    computed(() => `season-${selectedId.value}`),
+    () => selectedId.value ? $fetch(`/api/admin/season/${selectedId.value}`) : null
 )
 
-// Status-derived computed (4-state UI)
-const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
-const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
-const isSeasonsInitialized = computed(() => seasonsStatus.value === 'success')
-const isNoSeasons = computed(() => isSeasonsInitialized.value && seasons.value.length === 0)
-
-const isSelectedSeasonLoading = computed(() => {
-    if (isNoSeasons.value) return false
-    return selectedSeasonStatus.value === 'pending'
-})
-const isSelectedSeasonErrored = computed(() => selectedSeasonStatus.value === 'error')
-const isSelectedSeasonInitialized = computed(() => {
-    if (isNoSeasons.value) return true
-    return selectedSeasonStatus.value === 'success' && selectedSeason.value !== null
-})
-
-// Convenience computed for components
-const isPlanStoreReady = computed(() =>
-    isSeasonsInitialized.value && (isNoSeasons.value || isSelectedSeasonInitialized.value)
-)
-
-// Actions - simple, synchronous ID setters trigger reactive fetches
-const loadSeason = (id: number) => {
-    selectedSeasonId.value = id
-    // Setting selectedSeasonId triggers reactive useAsyncData fetch via key change
-}
-
-const loadSeasons = async () => {
-    await refreshSeasons()
-    if (seasonsError.value) {
-        console.error('Error loading seasons:', seasonsError.value)
-        throw seasonsError.value
-    }
-    console.info(`Loaded ${seasons.value.length} seasons`)
-}
+// Status computeds (4-state UI)
+const isLoading = computed(() => status.value === 'pending')
+const isErrored = computed(() => status.value === 'error')
+const isInitialized = computed(() => status.value === 'success' && data.value !== null)
+const isStoreReady = computed(() => /* combine all checks */)
 ```
 
 ### Responsibilities
 
-**Store:** Server data, CRUD actions, business logic computed (disabledModes), **initialization timing**
-**Component:** UI state (formMode, draft), URL sync, mode transitions, **show loaders reactively**
-**Page:** Call `initStore()` (synchronous) - no await
-
-### Reactive Initialization Pattern
-
-**NO AWAITS** - Store initialization is fully reactive:
-
-**Store (plan.ts:321-342):**
-```typescript
-const initPlanStore = (shortName?: string) => {
-    console.info('initPlanStore > shortName:', shortName,
-        'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
-
-    // Synchronous - just sets reactive IDs
-    if (shortName) {
-        loadSeasonByShortName(shortName)
-    } else if (activeSeasonId.value) {
-        loadSeason(activeSeasonId.value)
-    }
-}
-
-// Internal watcher handles timing automatically
-watch([isSeasonsInitialized, activeSeasonId], () => {
-    if (!isSeasonsInitialized.value) return
-    if (activeSeasonId.value === undefined) return // Wait for activeSeasonId to load
-    if (selectedSeasonId.value !== null) return // Already selected
-
-    console.info('Seasons loaded, calling initPlanStore')
-    initPlanStore()
-})
-
-// Call init immediately (may run before data arrives)
-initPlanStore()
-```
-
-**Component/Page:**
-```typescript
-// Call init immediately (synchronous)
-planStore.initPlanStore()
-
-// Show reactive loaders
-<template>
-  <Loader v-if="!isPlanStoreReady" text="Loading..."/>
-  <Content v-else :data="selectedSeason"/>
-</template>
-```
-
-**Why This Works:**
-- `useAsyncData` auto-loads on mount (immediate: true by default)
-- Reactive keys trigger automatic refetch when dependencies change
-- `refresh()` function provides explicit reload capability
-- Store watcher auto-calls init when data arrives
-- Components show loaders while data loads
-- No SSR hydration mismatch
-
-### Dynamic Tab Pattern
-
-For pages with dynamic tabs:
-
-**Parent page** (e.g., `/household/[shortname]/[tab]`):
-```typescript
-const householdStore = useHouseholdsStore()
-householdStore.initHouseholdsStore(shortname.value) // Synchronous
-
-// Pass minimal props
-<component :is="asyncComponents[tab]" :household="selectedHousehold"/>
-```
-
-**Tab component** (e.g., `HouseholdBookings.vue`):
-```typescript
-const planStore = usePlanStore()
-const { isPlanStoreReady } = storeToRefs(planStore)
-planStore.initPlanStore() // Synchronous
-
-<template>
-  <Loader v-if="!isPlanStoreReady" text="Loading..."/>
-  <Content v-else :data="activeSeason"/>
-</template>
-```
-
-**Benefits:**
-- Performance: Only load data when tab viewed
-- Separation: Parent manages navigation, tabs manage data needs
-- No hydration errors: Consistent server/client rendering
-- Reactive: Loaders automatically show/hide based on status
-
-### Error Handling
-
-Error type is `FetchError` with `statusCode`:
-```typescript
-// Store exposes raw error
-seasonsError  // Ref<FetchError | undefined>
-
-// Component accesses
-<ViewError :error="seasonsError?.statusCode" :cause="seasonsError" />
-```
-
-### Compliance
-
-1. MUST prefer `useAsyncData` over `useFetch` for store data fetching
-2. MUST use unique string keys for static endpoints, computed keys for reactive endpoints
-3. MUST expose 4 status computeds: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`
-4. `isInitialized` MUST check actual data exists (not just status='success')
-5. MUST expose convenience `isStoreReady` computed combining all initialization checks
-6. MUST expose raw error ref for statusCode access
-7. MUST provide `refresh()` action wrapping the `refresh()` function from `useAsyncData`
-8. Init methods MUST be synchronous (no async/await)
-9. Stores MAY use internal watchers to auto-call init when data arrives
-10. Components MUST NOT contain server data state (exception: component-local data, see below)
-11. Components MUST show loaders based on `isStoreReady` flag
-12. MUST have component tests covering store initialization, status computeds, and CRUD actions
+| Layer | Owns |
+|-------|------|
+| **Store** | Server data, CRUD, business logic, initialization timing |
+| **Component** | UI state (formMode, draft), URL sync, reactive loaders |
+| **Page** | Call `initStore()` (synchronous, no await) |
 
 ### Component-Local Data Exception
 
-Components MAY use `useAsyncData` directly for **component-specific** data with local status when:
+Components MAY use `useAsyncData` directly when:
+- Data is component-specific (not shared)
+- Multiple instances need separate data
+- Fetch calls **store methods** (NEVER direct `$fetch`)
 
-1. ✅ Data is component-specific (not shared across app)
-2. ✅ Multiple instances need separate data (e.g., card components)
-3. ✅ Fetch calls **store methods** (NEVER direct `$fetch`)
-4. ✅ Status tied to component lifecycle
+### Compliance
 
-**Reference implementation:** `app/components/cooking-team/CookingTeamCard.vue`
-
-```typescript
-// Component-local fetch using store method
-const {data: team, status, error} = useAsyncData(
-  `cooking-team-detail-${props.teamId}`,  // Unique per instance
-  () => planStore.fetchTeamDetail(props.teamId),  // Store method (not $fetch)
-  { watch: [() => props.teamId], immediate: true }
-)
-```
-
-**When to use:**
-- ✅ Card/list item components fetching their own detail
-- ✅ Modal/dialog components fetching context-specific data
-- ✅ Tab components with independent data needs
-
-**When NOT to use (use store instead):**
-- ❌ Application-level state (selected season, active user)
-- ❌ Data shared across multiple components
-- ❌ Data needed for business logic computeds
-- ❌ Direct `$fetch` calls (always use store methods)
-
-### Critical Pattern: Data Presence Check
-
-When using `useAsyncData` with nullable returns, status alone is insufficient:
-
-```typescript
-// ✅ CORRECT - check actual data exists
-const isInitialized = computed(() =>
-    status.value === 'success' && data.value !== null
-)
-```
-
-**Why:** `Promise.resolve(null)` returns status='success', causing premature "ready" state. This creates hydration mismatches where server shows nothing (null → not ready) but client shows content (success → ready).
+1. MUST prefer `useAsyncData` over `useFetch`
+2. MUST expose: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`, `isStoreReady`
+3. `isInitialized` MUST check data exists (not just status='success')
+4. Init methods MUST be synchronous
+5. Components MUST NOT contain server data (exception: component-local)
+6. Components MUST show loaders based on `isStoreReady`
 
 ---
 
 ## ADR-006: URL-Based Navigation and Client-Side State
 
 **Status:** Accepted | **Date:** 2025-01-27
-**Updated:** 2025-01-28 (moved draft state to component per ADR-007)
 
 ### Decision
 
-**Path-based navigation + query parameters for form mode**
-
 ```
-/admin/planning              # Tab navigation
-/admin/planning?mode=edit    # Form mode state
+/admin/planning              # Path-based tab navigation
+/admin/planning?mode=edit    # Query param for form mode
 ```
 
-**Client-side draft state:** In-memory Vue ref in component (`app/components/admin/AdminPlanning.vue`)
+Draft state: In-memory Vue ref in component (no persistence).
 
 ### Compliance
 
-1. Path-based routing for tabs (`/admin/[tab].vue`)
-2. Query parameter `?mode=edit|create|view` for form mode
-3. Client-side refs for draft data (no persistence) - lives in component, not store
+1. Path-based routing for tabs
+2. Query param `?mode=edit|create|view` for form mode
+3. Draft data in component refs, not store
 
 ---
 
@@ -849,37 +344,27 @@ const isInitialized = computed(() =>
 
 ### Decision
 
-**Prisma Schema-Driven Deletion** - Leverage database-level constraints to prevent race conditions (D1 has no transactions).
+**Schema-driven deletion** - Let Prisma handle cascading (D1 has no transactions).
 
-#### Strong vs Weak Relationships
-
-**Strong (CASCADE):** Existential dependency - child cannot exist without parent
-- Inhabitant → Household, DinnerEvent → Season, CookingTeamAssignment → CookingTeam, Order → DinnerEvent
-
-**Weak (SET NULL):** Optional association - child can exist independently
-- Inhabitant → User, DinnerEvent → CookingTeam, DinnerEvent → Inhabitant (chef)
-
-#### Implementation Pattern
+| Type | Behavior | Examples |
+|------|----------|----------|
+| **CASCADE** | Child deleted with parent | Inhabitant→Household, Order→DinnerEvent |
+| **SET NULL** | Child preserved, FK nulled | Inhabitant→User, DinnerEvent→CookingTeam |
 
 ```typescript
-// ✅ CORRECT: Single atomic operation, Prisma handles cascading
-export async function deleteSeason(d1Client: D1Database, seasonId: number): Promise<Season> {
-    const prisma = await getPrismaClientConnection(d1Client)
-    return await prisma.season.delete({ where: { id: seasonId } })
-    // Prisma automatically cascades strong relations, sets weak relations to null
-}
+// ✅ Single atomic operation - Prisma handles cascading
+await prisma.season.delete({ where: { id: seasonId } })
 
-// ❌ WRONG: Manual multi-step deletion creates race conditions
-await prisma.cookingTeamAssignment.deleteMany({ /* ... */ })
-await prisma.cookingTeam.deleteMany({ /* ... */ })
-await prisma.season.delete({ /* ... */ })
+// ❌ Manual multi-step deletion creates race conditions
 ```
 
 ### Compliance
 
-1. Check Prisma schema for onDelete behavior before implementing deletion
-2. Use single atomic delete operation - let Prisma handle cascading
-3. E2E tests must verify both CASCADE and SET NULL behaviors
+1. Check Prisma schema for `onDelete` behavior before implementing
+2. Use single atomic delete - let Prisma cascade
+3. E2E tests must verify CASCADE and SET NULL behaviors
+
+---
 
 ## ADR-004: Logging and Security Standards
 
@@ -887,22 +372,17 @@ await prisma.season.delete({ /* ... */ })
 
 ### Decision
 
-**Log Levels:**
-- `console.info` - Expected operations (200/201 responses)
-- `console.warn` - Validation failures (400 responses)
-- `console.error` - Server errors (500 responses)
+| Level | Usage |
+|-------|-------|
+| `console.info` | Expected operations (200/201) |
+| `console.warn` | Validation failures (400) |
+| `console.error` | Server errors (500) |
 
-**Security Rules:**
-- NEVER log: `password`, `passwordHash`, `token`, full user objects
-- SAFE: Log email/ID for identification, field names for validation errors
+**NEVER log:** `password`, `passwordHash`, `token`, full user objects
 
 **Format:** `👨‍💻 > [MODULE] > [METHOD] message`
 
-### Compliance
-
-1. Use appropriate log level for error type
-2. Never log sensitive data
-3. Extract validation messages safely from Zod errors
+---
 
 ## ADR-003: BDD-Driven Testing Strategy with Factory Pattern
 
@@ -910,43 +390,25 @@ await prisma.season.delete({ /* ... */ })
 
 ### Decision
 
-**Test-First Development:** E2E Test (BDD) → Unit Tests → Implementation → Tests Pass
+**Test-First:** E2E Test (BDD) → Unit Tests → Implementation → Tests Pass
 
-#### Factory Pattern
-
-**Location:** `/tests/e2e/testDataFactories/`
+**Factory Location:** `/tests/e2e/testDataFactories/`
 
 ```typescript
 export class EntityFactory {
-    // Data creation
-    static readonly defaultEntity = (testSalt?: string) => ({
-        entity: saltedEntity,
-        serializedEntity: serialize(saltedEntity)
-    })
-
-    // HTTP operations with built-in assertions
-    static readonly createEntity = async (context: BrowserContext, entity: Entity): Promise<Entity> => {
-        const response = await context.request.put('/api/admin/entity', { headers, data: serialize(entity) })
-        expect(response.status()).toBe(201)
-        return await response.json()
-    }
+    static readonly defaultEntity = (testSalt?: string) => ({ entity, serializedEntity })
+    static readonly createEntity = async (context, entity) => { /* PUT + assert 201 */ }
 }
 ```
-
-#### Test Structure
-
-- **E2E tests:** GIVEN/WHEN/THEN structure, use factories, cleanup in afterAll
-- **Factory methods:** `defaultEntity()`, `createEntity()`, `deleteEntity()`, `getEntity()`
-- **Singleton pattern:** Shared test data (e.g., active season) cleaned up by global teardown only
 
 ### Compliance
 
 1. Start with E2E tests defining business behavior
-2. Use Factory pattern in `/tests/e2e/testDataFactories/`
-3. Implement code only after tests are written
-4. Include cleanup using factories in `afterAll` blocks
-5. Singleton test data (shared across parallel tests) MUST be cleaned up by global teardown only
-6. Individual test `afterAll` hooks MUST NOT delete singleton test data
+2. Use Factory pattern for test data
+3. Cleanup in `afterAll` using factories
+4. Singleton test data cleaned up by global teardown only
+
+---
 
 ## ADR-002: Event Handler Error Handling and Validation Patterns
 
@@ -954,241 +416,87 @@ export class EntityFactory {
 
 ### Decision
 
-**Separate Try-Catch Blocks** for validation and business logic:
+**Separate try-catch blocks** for validation vs business logic:
 
 ```typescript
 export default defineEventHandler(async (event) => {
-    const {cloudflare} = event.context
-    const d1Client = cloudflare.env.DB
+    const d1Client = event.context.cloudflare.env.DB
 
-    // Input validation - FAIL EARLY
-    let id, requestData
+    // Validation - FAIL EARLY (400)
+    let id, data
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        id = params.id
-        requestData = await readValidatedBody(event, bodySchema.parse)
-    } catch (error) {
-        throw createError({ statusCode: 400, message: 'Invalid input', cause: error })
-    }
+        id = (await getValidatedRouterParams(event, idSchema.parse)).id
+        data = await readValidatedBody(event, bodySchema.parse)
+    } catch (e) { throw createError({ statusCode: 400, message: 'Invalid input', cause: e }) }
 
-    // Business logic
+    // Business logic (500)
     try {
-        const result = await businessLogic(d1Client, requestData)
-        setResponseStatus(event, 200)
-        return result
-    } catch (error) {
-        throw createError({ statusCode: 500, message: 'Server Error', cause: error })
-    }
+        return await businessLogic(d1Client, data)
+    } catch (e) { throw createError({ statusCode: 500, message: 'Server Error', cause: e }) }
 })
 ```
 
-**Always use H3 validation:**
-- `getValidatedRouterParams(event, schema.parse)` for route parameters
-- `readValidatedBody(event, schema.parse)` for request bodies
-- `getValidatedQuery(event, schema.parse)` for query parameters
+**H3 validation:** `getValidatedRouterParams`, `readValidatedBody`, `getValidatedQuery`
 
-**Error codes:**
-- 400: Input validation failures
-- 404: Resource not found
-- 500: Database/server errors
+**Error codes:** 400 (validation), 404 (not found), 500 (server)
 
-### Compliance
-
-1. Use H3 validation methods for all inputs
-2. Separate try-catch blocks for validation and business logic
-3. Use schema refinements for complex validation
-4. Return consistent error status codes
+---
 
 ## ADR-001: Core Framework and Technology Stack
 
-**Status:** Accepted | **Date:** 2025-01-22
-**Updated:** 2025-11-11 (Clarified generated types and validation schema boundaries)
+**Status:** Accepted | **Date:** 2025-01-22 | **Updated:** 2025-11-11
 
 ### Decision
 
-**Stack:**
-- Nuxt 4.1.1 + Vue 3 Composition API
-- TypeScript 5.7.3 (strict mode)
-- Zod 3.24.1 for runtime validation
-- Prisma 6.3.1 + D1 (Cloudflare SQLite)
-- zod-prisma-types (auto-generates Zod schemas from Prisma)
-- Nuxt UI 3.3.3 + Tailwind CSS 4.1.13
-- Cloudflare Workers/Pages deployment
+**Stack:** Nuxt 4.1.1, Vue 3, TypeScript 5.7.3 (strict), Zod 3.24.1, Prisma 6.3.1 + D1, zod-prisma-types, Nuxt UI 3.3.3, Tailwind 4.1.13, Cloudflare Workers/Pages
 
-### Generated Types and Validation Boundaries
+### Three-Layer Type Architecture
 
-**CRITICAL PRINCIPLE:** Generated Zod schemas live in `~~/prisma/generated/zod` and are **ONLY** imported by validation composables.
-
-**Three-layer architecture:**
-
-1. **Generated Layer** (`~~/prisma/generated/zod/`) - Repository artifact
-   - Auto-generated by `zod-prisma-types` from Prisma schema
-   - Contains Zod enum schemas and base types
-   - **STAYS IN REPOSITORY** (committed to git)
-   - **ONLY** imported by `useEntityValidation()` composables
-
-2. **Validation Layer** (`composables/use*Validation.ts`) - Single source of truth
-   - Imports from generated layer
-   - Defines validation schemas using Zod
-   - Re-exports enum schemas for application use
-   - Exports TypeScript types via `z.infer`
-
-3. **Application Layer** (stores, components, pages, server)
-   - Imports **ONLY** from validation composables
-   - **NEVER** imports from `~~/prisma/generated/zod` directly
-   - Uses enum values via `.enum` property
-
-**Validation Composable Pattern (single source of truth):**
-```typescript
-// composables/useOrderValidation.ts
-// ✅ ONLY validation composables import from generated layer
-import { TicketTypeSchema, OrderStateSchema } from '~~/prisma/generated/zod'
-
-export const useOrderValidation = () => {
-  // Define validation schemas using Zod
-  const OrderSchema = z.object({
-    id: z.number().int().positive().optional(),
-    state: OrderStateSchema,  // Use generated Zod enum
-    ticketType: TicketTypeSchema,  // Type-safe across stack
-    // ...
-  })
-
-  return {
-    OrderSchema,          // For validation
-    OrderStateSchema,     // Re-export enum for application code
-    TicketTypeSchema      // Re-export enum for application code
-  }
-}
-
-// Export types via z.infer
-export type Order = z.infer<ReturnType<typeof useOrderValidation>['OrderSchema']>
+```
+Generated Layer          →  Validation Layer              →  Application Layer
+(~~/prisma/generated/zod)   (composables/use*Validation.ts)  (stores, components, pages)
 ```
 
-**Composable Naming Conventions and Responsibilities:**
+| Layer | Imports From | Exports |
+|-------|--------------|---------|
+| **Generated** | Prisma schema (auto) | Zod enum schemas, base types |
+| **Validation** | Generated layer ONLY | Schemas, types (`z.infer`), re-exported enums |
+| **Application** | Validation composables ONLY | N/A |
 
-TheSlope uses two composable patterns for domain logic:
-
-1. **`useEntityValidation`** - Schemas and transformations
-   - Zod validation schemas
-   - Type definitions (via `z.infer`)
-   - Transformation functions (serialize/deserialize, mapping)
-   - Simple helper functions
-   - Examples: `useSeasonValidation`, `useHeynaboValidation`, `useUserValidation`
-
-2. **`useEntity`** - Business logic (when intricate)
-   - Complex business logic and calculations
-   - Default value creation
-   - Domain-specific utilities
-   - Functions that depend on multiple composables
-   - Examples: `useSeason` (generateDinnerEventDataForSeason), `useCookingTeam` (getTeamColor, useInhabitantsWithAssignments), `useHeynabo` (getUserUrl)
-
-**When to use which:**
-- **Validation composable**: Always required for entities with database persistence
-- **Business logic composable**: Optional, create only when business logic is intricate enough to warrant separation
-
-**In Application Code (stores, components, pages, app.config):**
+**Pattern:**
 ```typescript
-// ✅ CORRECT - Import from composables (Nuxt auto-imports)
-const { TicketTypeSchema } = useTicketPriceValidation()
-const TicketType = TicketTypeSchema.enum
-
-// Use enum values
-const config = {
-  ticketType: TicketType.ADULT,  // Type-safe enum value
-  price: 4000
-}
-
-// Check enum values
-if (systemRoles.value.includes(SystemRoleSchema.enum.ADMIN)) {
-  // ...
-}
-```
-
-**In Server Code (API routes):**
-```typescript
-// Server code can import from composables or directly from generated files
+// Validation composable
 import { OrderStateSchema } from '~~/prisma/generated/zod'
 
-export default defineEventHandler(async (event) => {
-    const data = await readValidatedBody(event, OrderSchema.parse)
-    // ...
+export const useOrderValidation = () => ({
+    OrderSchema: z.object({ state: OrderStateSchema, ... }),
+    OrderStateSchema  // Re-export for app code
 })
+export type Order = z.infer<...>
+
+// Application code
+const { OrderStateSchema } = useOrderValidation()
+if (order.state === OrderStateSchema.enum.BOOKED) { }
 ```
 
-**Zod Enum Type Safety Pattern:**
-
-**❌ WRONG - Using Prisma enums directly:**
-```typescript
-import { OrderState } from '@prisma/client'  // ❌ No runtime validation
-const state: OrderState = 'BOOKED'  // Only TypeScript type checking
-```
-
-**❌ WRONG - Using string literals:**
-```typescript
-if (role === 'ADMIN') { }  // ❌ No type safety, typo-prone
-const config = { ticketType: 'ADULT' }  // ❌ Magic strings
-```
-
-**✅ CORRECT - Import from composables:**
-```typescript
-// In stores, components, pages, app.config
-const { SystemRoleSchema } = useUserValidation()
-const SystemRole = SystemRoleSchema.enum
-
-if (systemRoles.value.includes(SystemRole.ADMIN)) { }  // ✅ Type-safe
-const config = { ticketType: TicketType.ADULT }  // ✅ Enum value
-```
-
-**Benefits:**
-1. **Single source of truth** - Prisma schema defines enums once
-2. **Auto-sync** - `make prisma` updates Zod schemas automatically
-3. **Runtime validation** - Catch invalid enum values at API boundary
-4. **Type safety** - Compile-time checking across client/server
-5. **DRY** - No manual enum duplication between Prisma and Zod
-
-**Auto-imports:** Utils (`~/utils/*`), composables (`~/composables/*`), components
-
-**Repository pattern:** CRUD functions in `server/data/prismaRepository.ts`
-
-### Rationale
-
-- End-to-end type safety from database to frontend
-- Shared validation schemas (client + server)
-- Auto-generated Zod enums eliminate schema drift
-- Edge deployment with global distribution
-- Developer productivity through auto-imports
+**Composable naming:**
+- `useEntityValidation` - Schemas, types, transformations (required)
+- `useEntity` - Business logic, calculations (optional, when intricate)
 
 ### Compliance
 
-**Generated Types Repository:**
-1. Generated Zod schemas in `~~/prisma/generated/zod` MUST stay in repository (committed to git)
-2. MUST run `make prisma` after Prisma schema changes to regenerate types
-3. Generated files are build artifacts but treated as source for version control
+**Generated:** Committed to git, regenerate with `make prisma`
 
-**Validation Composables (`composables/use*Validation.ts`):**
-4. MUST import enum schemas from `~~/prisma/generated/zod` (NOT from `@prisma/client`)
-5. MUST re-export enum schemas for application code
-6. MUST use generated Zod enum schemas in validation schemas
-7. MUST define all validation logic using Zod schemas
-8. MUST export TypeScript types via `z.infer`
+**Validation composables:**
+1. MUST import enums from generated layer
+2. MUST re-export enums for application code
+3. MUST export types via `z.infer`
 
-**Application Code (stores, components, pages):**
-9. MUST import enum schemas from validation composables (e.g., `useTicketPriceValidation()`)
-10. MUST use `.enum` property for runtime values (e.g., `TicketTypeSchema.enum.ADULT`)
-11. MUST NOT use string literals for enum values (e.g., `'ADMIN'`, `'BABY'`)
-12. MUST NOT import directly from `~~/prisma/generated/zod` (import from validation composables instead)
-13. MUST NOT import from `@prisma/client` for enums (use validation composables)
+**Application code:**
+1. MUST import from validation composables
+2. MUST use `.enum` property for values
+3. MUST NOT import from `~~/prisma/generated/zod` or `@prisma/client`
 
-**Build-time Configuration (app.config.ts, nuxt.config.ts):**
-14. MUST import directly from `~~/prisma/generated/zod` (composables not available at build time)
-
-**Server Code (API routes, server utilities):**
-15. **API event handlers:** SHOULD use validation composables for consistency, MAY import from `~~/prisma/generated/zod` if needed
-16. **Server integration/utility files:** MUST import directly from `~~/prisma/generated/zod` (auto-imports not available at module load time)
-17. MUST use H3 validation helpers (readValidatedBody, getValidatedRouterParams) in all API routes
-18. MUST use Zod schemas for all input validation
-
-**Repository Pattern:**
-19. Repository functions MUST be in `server/data/prismaRepository.ts`
-20. Repository MUST handle all database operations (CRUD)
-21. Leverage Nuxt auto-imports (no manual imports for composables in runtime application code)
+**Exceptions:**
+- Build-time config (`app.config.ts`): MUST import from generated layer
+- Server utilities: MUST import from generated layer (no auto-imports)

@@ -499,6 +499,22 @@ export const useBookingValidation = () => {
         visibleToEveryone: z.boolean()
     })
 
+    // ============================================================================
+    // SCAFFOLD PRE-BOOKINGS RESULT
+    // ============================================================================
+
+    /**
+     * Result schema for scaffold-prebookings endpoint
+     * Used to validate API response structure
+     */
+    const ScaffoldResultSchema = z.object({
+        seasonId: z.number().int().positive(),
+        created: z.number().int().nonnegative(),
+        deleted: z.number().int().nonnegative(),
+        unchanged: z.number().int().nonnegative(),
+        households: z.number().int().nonnegative()
+    })
+
     /**
      * Schema for Heynabo event response (incoming from API)
      * Note: API returns id as string, some fields may be omitted
@@ -569,7 +585,10 @@ export const useBookingValidation = () => {
         // Heynabo Event Sync (ADR-013)
         HeynaboEventCreateSchema,
         HeynaboEventResponseSchema,
-        HeynaboEventStatusSchema
+        HeynaboEventStatusSchema,
+
+        // Scaffold Pre-bookings
+        ScaffoldResultSchema
     }
 }
 
@@ -616,3 +635,6 @@ export type CreateOrdersResult = z.infer<ReturnType<typeof useBookingValidation>
 export type HeynaboEventCreate = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventCreateSchema']>
 export type HeynaboEventResponse = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventResponseSchema']>
 export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventStatusSchema']>
+
+// Scaffold Pre-bookings
+export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
