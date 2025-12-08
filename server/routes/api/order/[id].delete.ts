@@ -23,9 +23,10 @@ export default defineEventHandler(async (event):Promise<OrderDisplay> => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.info(`🎟️ > ORDER > [DELETE] Deleting order ${id}`)
-        const deletedOrder = await deleteOrder(d1Client, id)
-        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id}`)
+        const [deletedOrder] = await deleteOrder(d1Client, id)
+        if (!deletedOrder) {
+            return throwH3Error(`🎟️ > ORDER > [DELETE] Order ${id} not found`, new Error('Not found'), 404)
+        }
         return deletedOrder
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [DELETE] Error deleting order ${id}`, error)

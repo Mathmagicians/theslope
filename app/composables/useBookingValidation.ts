@@ -192,11 +192,18 @@ export const useBookingValidation = () => {
     // Max: 100 / 7 ≈ 14 orders, using 12 for safety margin
     const ORDER_BATCH_SIZE = 12
 
+    // Delete operations use 1 param per ID, but keeping same batch size for consistency
+    // and to avoid long-running queries that could timeout
+    const DELETE_BATCH_SIZE = 50
+
     // Local type for batch chunking (avoids circular reference with exported type)
     type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
 
     // Curried chunk function for order batches
     const chunkOrderBatch = chunkArray<_OrderCreateWithPrice>(ORDER_BATCH_SIZE)
+
+    // Curried chunk function for ID arrays (used for batch deletes)
+    const chunkIds = chunkArray<number>(DELETE_BATCH_SIZE)
 
     /**
      * Batch of orders for batch creation - validates business rules:
@@ -543,7 +550,9 @@ export const useBookingValidation = () => {
         OrdersBatchSchema,
         CreateOrdersResultSchema,
         ORDER_BATCH_SIZE,
+        DELETE_BATCH_SIZE,
         chunkOrderBatch,
+        chunkIds,
 
         // Serialization
         SerializedOrderSchema,

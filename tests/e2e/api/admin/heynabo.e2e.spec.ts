@@ -11,9 +11,12 @@ test.describe('Heynabo Integration API', () => {
 
         // Call the import endpoint
         const response = await context.request.get('/api/admin/heynabo/import')
-        expect(response.status()).toBe(200)
+        const responseBody = await response.text()
+        const status = response.status()
 
-        const result = await response.json()
+        expect(status, `Expected 200 but got ${status}: ${responseBody}`).toBe(200)
+
+        const result = JSON.parse(responseBody)
 
         // Verify response parses correctly with schema (ADR-009: batch ops use lightweight types)
         const parsed = HeynaboImportResponseSchema.parse(result)

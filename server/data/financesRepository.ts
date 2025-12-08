@@ -317,108 +317,107 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
  * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
  * - Null: ADMIN_DELETED (admin deleted, may be recreated by scaffolder)
  *
- * ADR-011: Creates OrderHistory entry with denormalized fields before deletion.
+ * ADR-011: Creates OrderHistory entries with denormalized fields before deletion.
  * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
+ *
+ * @param orderIds - Single ID or array of IDs
+ * @param performedByUserId - User ID if user-initiated, null for admin/system
  */
 export async function deleteOrder(
     d1Client: D1Database,
-    id: number,
+    orderIds: number | number[],
     performedByUserId: number | null = null
-): Promise<OrderDisplay> {
+): Promise<OrderDisplay[]> {
+    const LOG = '🎟️ > ORDER > [DELETE]'
+    // Normalize to array, return early for empty
+    const ids = [orderIds].flat()
+    if (ids.length === 0) return []
+
     const {OrderDisplaySchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
     const action = performedByUserId
         ? OrderAuditActionSchema.enum.USER_CANCELLED
         : OrderAuditActionSchema.enum.ADMIN_DELETED
-    console.info(`🎟️ > ORDER > [DELETE] Deleting order ${id} (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
+    console.info(`${LOG} Deleting ${ids.length} order(s) (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // 1. Fetch order with relations to get denormalized fields and seasonId
-        const orderToDelete = await prisma.order.findUniqueOrThrow({
-            where: {id},
+        // 1. Fetch orders with relations to get denormalized fields and seasonId
+        const ordersToDelete = await prisma.order.findMany({
+            where: { id: { in: ids } },
             include: {
-                ticketPrice: {
-                    select: {ticketType: true}
-                },
-                dinnerEvent: {
-                    select: {seasonId: true}
-                }
+                ticketPrice: { select: { ticketType: true } },
+                dinnerEvent: { select: { seasonId: true } }
             }
         })
 
-        // 2. Create audit entry with denormalized fields BEFORE deletion
-        // (orderId becomes NULL after deletion due to SET NULL, but denormalized fields persist)
-        await createOrderAuditEntry(d1Client, {
-            orderId: id,
-            action,
-            performedByUserId,
-            inhabitantId: orderToDelete.inhabitantId,
-            dinnerEventId: orderToDelete.dinnerEventId,
-            seasonId: orderToDelete.dinnerEvent?.seasonId ?? null,
-            auditData: createOrderAuditData(orderToDelete)
-        })
-
-        // 3. Delete order - cascade handles strong associations (Transaction) automatically
-        const deletedOrder = await prisma.order.delete({
-            where: {id},
-            include: {
-                ticketPrice: {
-                    select: {ticketType: true}
-                }
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [DELETE] Successfully deleted order ${deletedOrder.id} with ${action} audit entry`)
-
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const {ticketPrice, ...orderWithoutRelation} = deletedOrder
-        const domainOrder = {
-            ...orderWithoutRelation,
-            ticketType: ticketPrice.ticketType
+        if (ordersToDelete.length === 0) {
+            console.warn(`${LOG} No orders found for IDs: ${ids.join(', ')}`)
+            return []
         }
 
-        return OrderDisplaySchema.parse(domainOrder)
+        // 2. Create audit entries with denormalized fields BEFORE deletion
+        await prisma.orderHistory.createMany({
+            data: ordersToDelete.map(order => ({
+                orderId: order.id,
+                action,
+                performedByUserId,
+                inhabitantId: order.inhabitantId,
+                dinnerEventId: order.dinnerEventId,
+                seasonId: order.dinnerEvent?.seasonId ?? null,
+                auditData: createOrderAuditData(order)
+            }))
+        })
+
+        // 3. Delete orders
+        await prisma.order.deleteMany({
+            where: { id: { in: ids } }
+        })
+
+        console.info(`${LOG} Successfully deleted ${ordersToDelete.length} order(s) with ${action} audit entries`)
+
+        // Transform Prisma types to domain types and validate (ADR-010)
+        return ordersToDelete.map(order => {
+            const {ticketPrice, ...rest} = order
+            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice.ticketType })
+        })
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [DELETE] : Error deleting order with ID ${id}`, error)
+        return throwH3Error(`${LOG} Error deleting ${ids.length} order(s)`, error)
     }
 }
 
-export async function fetchOrders(d1Client: D1Database, dinnerEventId?: number): Promise<OrderDisplay[]> {
-    console.info(`🎟️ > ORDER > [GET] Fetching orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
+/**
+ * Fetch orders, optionally filtered by dinner event ID(s).
+ * @param dinnerEventIds - Single ID, array of IDs, or undefined for all orders
+ */
+export async function fetchOrders(
+    d1Client: D1Database,
+    dinnerEventIds?: number | number[]
+): Promise<OrderDisplay[]> {
+    // Normalize to array, return early for empty
+    const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
+    if (ids?.length === 0) return []
+
+    const filterDesc = ids ? `${ids.length} dinner event(s)` : 'all'
+    console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
+
     const {OrderDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Build where clause explicitly - field name must be specified
-        const whereClause = dinnerEventId ? { dinnerEventId: dinnerEventId } : {}
-
         const orders = await prisma.order.findMany({
-            where: whereClause,
-            include: {
-                ticketPrice: {
-                    select: {
-                        ticketType: true
-                    }
-                }
-            },
-            orderBy: {
-                createdAt: 'asc'
-            }
+            where: ids ? { dinnerEventId: { in: ids } } : {},
+            include: { ticketPrice: { select: { ticketType: true } } },
+            orderBy: { createdAt: 'asc' }
         })
 
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched ${orders.length} orders${dinnerEventId ? ` for dinner event ${dinnerEventId}` : ''}`)
+        console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)
 
-        // Transform Prisma types to domain types and validate (ADR-010)
         return orders.map(order => {
-            const {ticketPrice, ...orderWithoutRelation} = order
-            const domainOrder = {
-                ...orderWithoutRelation,
-                ticketType: ticketPrice.ticketType
-            }
-            return OrderDisplaySchema.parse(domainOrder)
+            const {ticketPrice, ...rest} = order
+            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice.ticketType })
         })
     } catch (error) {
-        return throwH3Error(`🍽️ > DINNER_EVENT > [GET] : Error fetching orders for dinner event ${dinnerEventId}`, error)
+        return throwH3Error(`🎟️ > ORDER > [GET] : Error fetching orders for ${filterDesc}`, error)
     }
 }
 

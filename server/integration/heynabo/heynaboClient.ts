@@ -19,15 +19,6 @@ const {
 
 /* ==== INITIALIZATION ==== */
 dotenv.config()
-
-// DEBUG: Log env var availability at module load time
-console.info('🔑 > HEYNABO > ENV DEBUG:', {
-    HEY_NABO_USERNAME: process.env.HEY_NABO_USERNAME ? '✓ set' : '✗ missing',
-    HEY_NABO_PASSWORD: process.env.HEY_NABO_PASSWORD ? '✓ set' : '✗ missing',
-    HEY_NABO_API: process.env.HEY_NABO_API ? '✓ set' : '✗ missing',
-    NUXT_PUBLIC_HEY_NABO_API: process.env.NUXT_PUBLIC_HEY_NABO_API ? '✓ set' : '✗ missing'
-})
-
 const heyNaboUserName = process.env.HEY_NABO_USERNAME as string // will give runtime error if env variable is undefined - this is intentional
 const heyNaboPassword = process.env.HEY_NABO_PASSWORD as string
 const heyNaboApi = process.env.NUXT_PUBLIC_HEY_NABO_API as string

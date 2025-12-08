@@ -6,6 +6,9 @@ import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
@@ -954,6 +957,102 @@ describe('createPreBookingGenerator', () => {
             expect(result.delete).toHaveLength(expectedDelete)
             expect(result.idempotent).toHaveLength(expectedIdempotent)
         })
+    })
+})
+
+describe('createHouseholdOrderScaffold', () => {
+    const {createHouseholdOrderScaffold} = useSeason()
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+
+    // Use factory for ticket prices with IDs
+    const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
+
+    // Use factory for dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
+    const dinnerEvents = [
+        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 101, date: new Date(2025, 0, 6)},
+        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 102, date: new Date(2025, 0, 8)},
+        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 103, date: new Date(2025, 0, 10)}
+    ]
+
+    // Helper using factory pattern
+    const createInhabitant = (id: number, prefs: (typeof DinnerMode)[keyof typeof DinnerMode][]) => ({
+        ...HouseholdFactory.defaultInhabitantData(),
+        id,
+        householdId: 1,
+        dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: prefs[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+    })
+
+    const createOrder = (inhabitantId: number, dinnerEventId: number, mode = DinnerMode.DINEIN) => ({
+        inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 5000, dinnerMode: mode, state: OrderState.BOOKED
+    })
+
+    // Mon, Wed, Fri preferences (matches dinner events)
+    const allDineIn = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
+    const allNone = Array(7).fill(DinnerMode.NONE) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+
+    it.each([
+        {
+            desc: 'creates all orders for household with no existing',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [],
+            cancelled: new Set<string>(),
+            expected: {create: 3, delete: 0, idempotent: 0}
+        },
+        {
+            desc: 'recognizes matching orders as idempotent',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [createOrder(1, 101), createOrder(1, 102), createOrder(1, 103)],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, idempotent: 3}
+        },
+        {
+            desc: 'marks orders for deletion when preferences change to NONE',
+            inhabitants: [createInhabitant(1, allNone)],
+            existing: [createOrder(1, 101), createOrder(1, 102)],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 2, idempotent: 0}
+        },
+        {
+            desc: 'excludes user-cancelled bookings',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [],
+            cancelled: new Set(['1-102']),
+            expected: {create: 2, delete: 0, idempotent: 0}
+        },
+        {
+            desc: 'handles empty household (no inhabitants)',
+            inhabitants: [],
+            existing: [],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, idempotent: 0}
+        },
+        {
+            desc: 'deletes orphan orders when inhabitants leave',
+            inhabitants: [],
+            existing: [createOrder(1, 101), createOrder(1, 102)],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 2, idempotent: 0}
+        }
+    ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
+        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+        const result = scaffolder({id: 1, inhabitants}, existing, cancelled)
+
+        expect(result.create).toHaveLength(expected.create)
+        expect(result.delete).toHaveLength(expected.delete)
+        expect(result.idempotent).toHaveLength(expected.idempotent)
+    })
+
+    it('applies same scaffolder to multiple households (curried pattern)', () => {
+        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+        const monFri = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
+
+        const result1 = scaffolder({id: 1, inhabitants: [createInhabitant(1, allDineIn)]}, [], new Set())
+        const result2 = scaffolder({id: 2, inhabitants: [createInhabitant(2, monFri)]}, [], new Set())
+
+        expect(result1.create).toHaveLength(3)
+        expect(result2.create).toHaveLength(2)
     })
 })
 

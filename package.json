@@ -80,6 +80,7 @@
     "prisma": "^6.16.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",
+    "vue-tsc": "^3.1.7",
     "wrangler": "^4.42.1",
     "zod-prisma-types": "^3.2.4"
   }

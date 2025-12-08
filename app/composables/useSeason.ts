@@ -341,6 +341,43 @@ export const useSeason = () => {
             })
     }
 
+    /**
+     * Curried household order scaffolder factory.
+     *
+     * Given season config (ticket prices, dinner events), returns a function that
+     * generates the reconciliation result for a household - what orders to create,
+     * update, delete, or leave unchanged.
+     *
+     * @param ticketPrices - Available ticket prices (with ids) for the season
+     * @param dinnerEvents - Dinner events to scaffold orders for
+     *
+     * @returns Function that takes household data and returns reconciliation result
+     *
+     * @example
+     * const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+     * const result = scaffolder(household, existingOrders, cancelledKeys)
+     * // result.create = orders to insert
+     * // result.delete = orders to remove
+     * // result.idempotent = orders unchanged
+     */
+    const createHouseholdOrderScaffold = (
+        ticketPrices: TicketPrice[],
+        dinnerEvents: DinnerEventDisplay[]
+    ) => <T extends { id: number, inhabitants: Array<{ id: number, name: string, birthDate: Date | null, dinnerPreferences: WeekDayMap<DinnerMode> | null }> }>(
+        household: T,
+        existingOrders: OrderCreateWithPrice[],
+        cancelledKeys: Set<string> = new Set()
+    ) => {
+        const generator = createPreBookingGenerator(
+            household.id,
+            ticketPrices,
+            dinnerEvents,
+            cancelledKeys
+        )
+        const desiredOrders = generator(household.inhabitants)
+        return reconcilePreBookings(existingOrders)(desiredOrders)
+    }
+
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
@@ -491,6 +528,7 @@ export const useSeason = () => {
         // Pre-booking scaffolding (season activation)
         reconcilePreBookings,
         createPreBookingGenerator,
+        createHouseholdOrderScaffold,
         chunkOrderBatch,
 
         getHolidaysForSeason,
