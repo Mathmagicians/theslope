@@ -342,6 +342,24 @@ export const useSeason = () => {
     }
 
     /**
+     * Inhabitant shape required for scaffolding (minimal fields needed)
+     */
+    type ScaffoldInhabitant = {
+        id: number
+        name: string
+        birthDate: Date | null
+        dinnerPreferences: WeekDayMap<DinnerMode> | null
+    }
+
+    /**
+     * Household shape required for scaffolding (minimal fields needed)
+     */
+    type ScaffoldHousehold = {
+        id: number
+        inhabitants: ScaffoldInhabitant[]
+    }
+
+    /**
      * Curried household order scaffolder factory.
      *
      * Given season config (ticket prices, dinner events), returns a function that
@@ -357,14 +375,14 @@ export const useSeason = () => {
      * const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
      * const result = scaffolder(household, existingOrders, cancelledKeys)
      * // result.create = orders to insert
-     * // result.delete = orders to remove
+     * // result.delete = orders to remove (existing orders with id)
      * // result.idempotent = orders unchanged
      */
     const createHouseholdOrderScaffold = (
         ticketPrices: TicketPrice[],
         dinnerEvents: DinnerEventDisplay[]
-    ) => <T extends { id: number, inhabitants: Array<{ id: number, name: string, birthDate: Date | null, dinnerPreferences: WeekDayMap<DinnerMode> | null }> }>(
-        household: T,
+    ) => (
+        household: ScaffoldHousehold,
         existingOrders: OrderCreateWithPrice[],
         cancelledKeys: Set<string> = new Set()
     ) => {
