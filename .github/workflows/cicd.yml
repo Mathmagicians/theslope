@@ -15,7 +15,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
       HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
-      NUXT_PUBLIC_HEY_NABO_API: ${{ vars.HEY_NABO_API }}
+      NUXT_PUBLIC_HEY_NABO_API: ${{ vars.NUXT_PUBLIC_HEY_NABO_API }}
       DB_D1_NAME: ${{ vars.DB_D1_NAME }}
       DB_D1_ID: ${{ secrets.DB_D1_ID }}
       NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
