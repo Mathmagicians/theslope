@@ -76,7 +76,7 @@ export const useTicketPriceValidation = () => {
      *
      * Respects FK constraint: Order.ticketPriceId has onDelete: Restrict
      */
-    const reconcileTicketPrices = pruneAndCreate<TicketPrice, number>(
+    const reconcileTicketPrices = pruneAndCreate<TicketPrice, TicketPrice, number>(
         tp => tp.id,
         (a, b) => a.price === b.price &&
                   a.ticketType === b.ticketType &&

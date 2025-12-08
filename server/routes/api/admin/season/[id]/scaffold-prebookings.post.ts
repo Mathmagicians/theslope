@@ -88,7 +88,7 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
                 const batches = chunkOrderBatch(result.create)
                 for (const batch of batches) {
                     await createOrders(d1Client, household.id, batch, {
-                        action: OrderAuditActionSchema.enum.SYSTEM_SCAFFOLDED,
+                        action: OrderAuditActionSchema.enum.SYSTEM_SCAFFOLD,
                         performedByUserId: null,
                         source: 'scaffold-prebookings'
                     })
@@ -96,9 +96,9 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
                 totalCreated += result.create.length
             }
 
-            // Delete obsolete orders in batches
-            const deleteIds = result.delete.filter(o => 'id' in o && o.id).map(o => (o as {id: number}).id)
-            if (deleteIds.length > 0) {
+            // Delete obsolete orders in batches (result.delete is OrderDisplay[] with id)
+            if (result.delete.length > 0) {
+                const deleteIds = result.delete.map(o => o.id)
                 const deleteBatches = chunkIds(deleteIds)
                 for (const batch of deleteBatches) {
                     await deleteOrder(d1Client, batch, null)

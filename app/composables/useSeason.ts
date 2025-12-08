@@ -3,10 +3,10 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {type TicketPrice, useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {type HouseholdDisplay, type InhabitantDisplay, useCoreValidation} from '~/composables/useCoreValidation'
 import {useTicket} from '~/composables/useTicket'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
@@ -260,10 +260,12 @@ export const useSeason = () => {
 
     /**
      * Configure pruneAndCreate for pre-bookings.
+     * E = OrderDisplay (existing orders from DB, has id for deletion)
+     * I = OrderCreateWithPrice (incoming orders from generator, no id)
      * Key: composite inhabitantId-dinnerEventId
      * Equal: same dinnerMode (no update needed if preference matches)
      */
-    const reconcilePreBookings = pruneAndCreate<OrderCreateWithPrice, string>(
+    const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
         (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
         (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
     )
@@ -300,9 +302,7 @@ export const useSeason = () => {
             ticketPrices.filter(tp => tp.id).map(tp => [tp.ticketType, tp])
         )
 
-        return <T extends { id: number, name: string, birthDate: Date | null, dinnerPreferences: WeekDayMap<DinnerMode> | null }>(
-            inhabitants: T[]
-        ): OrderCreateWithPrice[] =>
+        return (inhabitants: InhabitantDisplay[]): OrderCreateWithPrice[] =>
             inhabitants.flatMap(inhabitant => {
                 if (!inhabitant.dinnerPreferences) {
                     throw new Error(`Inhabitant ${inhabitant.name} (${inhabitant.id}) has no dinnerPreferences - malformed data`)
@@ -342,24 +342,6 @@ export const useSeason = () => {
     }
 
     /**
-     * Inhabitant shape required for scaffolding (minimal fields needed)
-     */
-    type ScaffoldInhabitant = {
-        id: number
-        name: string
-        birthDate: Date | null
-        dinnerPreferences: WeekDayMap<DinnerMode> | null
-    }
-
-    /**
-     * Household shape required for scaffolding (minimal fields needed)
-     */
-    type ScaffoldHousehold = {
-        id: number
-        inhabitants: ScaffoldInhabitant[]
-    }
-
-    /**
      * Curried household order scaffolder factory.
      *
      * Given season config (ticket prices, dinner events), returns a function that
@@ -382,8 +364,8 @@ export const useSeason = () => {
         ticketPrices: TicketPrice[],
         dinnerEvents: DinnerEventDisplay[]
     ) => (
-        household: ScaffoldHousehold,
-        existingOrders: OrderCreateWithPrice[],
+        household: HouseholdDisplay,
+        existingOrders: OrderDisplay[],
         cancelledKeys: Set<string> = new Set()
     ) => {
         const generator = createPreBookingGenerator(

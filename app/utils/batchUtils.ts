@@ -12,40 +12,55 @@ export const chunkArray = <T>(size: number) => (arr: T[]): T[][] =>
 
 /**
  * Result of pruneAndCreate operation
+ * @template E - Type of existing items (used for delete array)
+ * @template I - Type of incoming items (used for create/update/idempotent arrays)
  */
-export interface PruneAndCreateResult<T> {
-    create: T[]
-    update: T[]
-    idempotent: T[]
-    delete: T[]
+export interface PruneAndCreateResult<E, I = E> {
+    create: I[]
+    update: I[]
+    idempotent: I[]
+    delete: E[]
 }
 
 /**
  * Curried function to compare two arrays and categorize items into create/update/idempotent/delete
  *
- * @param getKey - Extract unique key from item (undefined = new item)
- * @param isEqual - Compare two items for equality (default: always false = always update)
- * @returns Curried function that takes existing and incoming arrays
+ * @template E - Type of existing items (preserved in delete array)
+ * @template I - Type of incoming items (used in create/update/idempotent arrays)
+ * @template K - Type of the key used for comparison
+ *
+ * @param getKey - Extract unique key from item (works on both E and I, undefined = new item)
+ * @param isEqual - Compare existing item (E) with incoming item (I) for equality
+ * @returns Curried function that takes existing (E[]) and incoming (I[]) arrays
  *
  * @example
  * ```ts
- * const reconcileTicketPrices = pruneAndCreate<TicketPrice, number>(
+ * // Same types (E = I = TicketPrice)
+ * const reconcileTicketPrices = pruneAndCreate<TicketPrice, TicketPrice, number>(
  *     tp => tp.id,
  *     (a, b) => a.price === b.price && a.ticketType === b.ticketType
  * )
- * const result = reconcileTicketPrices(existingPrices)(incomingPrices)
+ *
+ * // Different types (E = OrderDisplay with id, I = OrderCreateWithPrice without id)
+ * const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
+ *     (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
+ *     (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
+ * )
+ * const result = reconcilePreBookings(existingOrders)(desiredOrders)
+ * // result.delete is OrderDisplay[] (with id!)
+ * // result.create is OrderCreateWithPrice[]
  * ```
  */
-export const pruneAndCreate = <T, K = number | string>(
-    getKey: (item: T) => K | undefined,
-    isEqual: (existing: T, incoming: T) => boolean = () => false
-) => (existing: T[]) => (incoming: T[]): PruneAndCreateResult<T> => {
+export const pruneAndCreate = <E, I = E, K = number | string>(
+    getKey: (item: E | I) => K | undefined,
+    isEqual: (existing: E, incoming: I) => boolean = () => false
+) => (existing: E[]) => (incoming: I[]): PruneAndCreateResult<E, I> => {
     const existingByKey = existing.reduce(
         (map, item) => {
             const key = getKey(item)
             return key !== undefined ? map.set(key, item) : map
         },
-        new Map<K, T>()
+        new Map<K, E>()
     )
 
     const { result, seenKeys } = incoming.reduce(
@@ -64,7 +79,7 @@ export const pruneAndCreate = <T, K = number | string>(
             }
             return { seenKeys: newSeenKeys, result: { ...acc.result, update: [...acc.result.update, item] } }
         },
-        { result: { create: [], update: [], idempotent: [], delete: [] } as PruneAndCreateResult<T>, seenKeys: new Set<K>() }
+        { result: { create: [], update: [], idempotent: [], delete: [] } as PruneAndCreateResult<E, I>, seenKeys: new Set<K>() }
     )
 
     return {

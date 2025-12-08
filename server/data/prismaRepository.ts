@@ -299,10 +299,10 @@ export async function createInhabitantsBatch(
             data: validatedInhabitants.map(i => ({
                 heynaboId: i.heynaboId,
                 householdId: householdId,
-                pictureUrl: i.pictureUrl,
+                pictureUrl: i.pictureUrl ?? Prisma.skip,
                 name: i.name,
                 lastName: i.lastName,
-                birthDate: i.birthDate
+                birthDate: i.birthDate ?? Prisma.skip
             })),
             select: { id: true, heynaboId: true }
         })
@@ -557,7 +557,7 @@ export async function createHouseholdsBatch(
                 heynaboId: h.heynaboId,
                 pbsId: h.pbsId,
                 movedInDate: h.movedInDate,
-                moveOutDate: h.moveOutDate ?? undefined,
+                moveOutDate: h.moveOutDate ?? Prisma.skip,
                 name: h.name,
                 address: h.address
             })),
