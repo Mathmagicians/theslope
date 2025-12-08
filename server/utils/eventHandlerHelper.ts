@@ -1,6 +1,8 @@
 import {Prisma} from "@prisma/client"
 import {ZodError} from "zod"
 import {H3Error} from "h3"
+import type {H3Event} from 'h3'
+import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 
@@ -159,9 +161,6 @@ const throwH3Error = (prepend: string, error: unknown, statusCode: number = 500)
     logH3Error(h3e, error)
     throw h3e
 }
-
-import type {H3Event} from 'h3'
-import type {UserDetail} from '~/composables/useCoreValidation'
 
 /**
  * Get authenticated user from session

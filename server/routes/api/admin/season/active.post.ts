@@ -1,12 +1,10 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {activateSeason, fetchInhabitants, updateInhabitantPreferencesBulk} from "~~/server/data/prismaRepository"
-import {fetchOrders, createOrders, deleteOrder, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
-import {fetchHouseholds, fetchSeason} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeason} from "~/composables/useSeason"
-import {useBookingValidation} from "~/composables/useBookingValidation"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -59,6 +57,10 @@ export default defineEventHandler(async (event): Promise<Season> => {
         } else {
             console.info(`🌞 > SEASON > [POST /active] No preference clipping needed`)
         }
+
+        // 3. Scaffold pre-bookings for the activated season
+        const result = await scaffoldPrebookings(d1Client, activatedSeason.id)
+        console.info(`🌞 > SEASON > [POST /active] Scaffold pre-bookings result:`, result)
 
         setResponseStatus(event, 200)
         return activatedSeason
