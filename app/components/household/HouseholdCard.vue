@@ -240,7 +240,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
               v-if="row.original.isSynthetic"
               :inhabitants="household.inhabitants"
               compact
-              :property-check="() => false"
+              :show-names="false"
               ring-color="warning"
               label="beboere"
           />
@@ -249,7 +249,6 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
               v-else
               :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
               compact
-              :property-check="() => false"
               ring-color="primary"
           />
         </template>

@@ -216,7 +216,6 @@ const handlePowerModeUpdate = () => {
         <UserListItem
           :inhabitants="row.original"
           compact
-          :property-check="() => false"
         />
       </template>
 

@@ -3,22 +3,13 @@ import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
 
 const authStore = useAuthStore()
-const {loggedIn, greeting, name, lastName, avatar, email, phone, systemRoles, isAdmin, isAllergyManager} = storeToRefs(authStore)
-const {signIn, clear} = authStore
-const {LoginSchema, SystemRoleSchema} = useCoreValidation()
+const {loggedIn, greeting} = storeToRefs(authStore)
+const {signIn} = authStore
+const {LoginSchema} = useCoreValidation()
 const {handleApiError} = useApiHandler()
-const {TYPOGRAPHY, LAYOUTS, SIZES, COLOR, BG, ICONS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, COLOR, BG, ICONS} = useTheSlopeDesignSystem()
 
-const fullName = computed(() => `${name.value} ${lastName.value}`.trim())
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
-const householdName = computed(() => authStore.user?.Inhabitant?.household?.name || null)
-const householdAddress = computed(() => authStore.user?.Inhabitant?.household?.address || null)
-
-// Role display labels
-const roleLabels: Record<string, { label: string; icon: string; color: string }> = {
-  [SystemRoleSchema.enum.ADMIN]: { label: 'Admin', icon: 'i-heroicons-shield-check', color: 'primary' },
-  [SystemRoleSchema.enum.ALLERGYMANAGER]: { label: 'Allergichef', icon: 'i-heroicons-heart', color: 'success' }
-}
 
 const state = reactive<LoginCredentials>({
   email: '',
@@ -45,7 +36,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-pink-50">
+  <div >
     <!-- LOGIN FORM (not logged in) -->
     <div v-if="!loggedIn" class="flex items-center justify-center py-12">
       <div class="max-w-md w-full px-4">
@@ -102,64 +93,14 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
 
     <!-- DASHBOARD (logged in) -->
     <div v-else class="py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6">
+      <!-- Welcome Title -->
+      <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl md:text-3xl']">Hej {{ greeting }}! 👋</h1>
+
       <!-- User Profile Card -->
-      <UCard>
-        <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <!-- User info -->
-          <div class="flex items-start gap-4">
-            <UAvatar
-              :src="avatar ?? undefined"
-              :alt="fullName"
-              :size="SIZES.large"
-              icon="i-heroicons-user"
-              class="ring-2 ring-pink-300"
-            />
-            <div class="space-y-2">
-              <!-- Name and email -->
-              <div>
-                <h2 :class="TYPOGRAPHY.cardTitle">{{ fullName }}</h2>
-                <p :class="TYPOGRAPHY.bodyTextMuted">{{ email }}</p>
-                <p v-if="phone" :class="TYPOGRAPHY.bodyTextMuted">{{ phone }}</p>
-              </div>
-
-              <!-- System role badges -->
-              <div v-if="systemRoles.length > 0" class="flex flex-wrap gap-2">
-                <UBadge
-                  v-for="role in systemRoles"
-                  :key="role"
-                  :color="roleLabels[role]?.color || 'neutral'"
-                  variant="subtle"
-                  size="sm"
-                >
-                  <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
-                  {{ roleLabels[role]?.label || role }}
-                </UBadge>
-              </div>
-
-              <!-- Household info -->
-              <div v-if="householdName" class="flex items-center gap-2 pt-2">
-                <UIcon name="i-heroicons-home" class="opacity-70" />
-                <span :class="TYPOGRAPHY.bodyTextSmall">{{ householdName }}</span>
-                <span v-if="householdAddress" :class="TYPOGRAPHY.bodyTextMuted">{{ householdAddress }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Logout button -->
-          <UButton
-            icon="i-heroicons-arrow-right-on-rectangle"
-            color="neutral"
-            variant="outline"
-            :size="SIZES.small"
-            @click="clear"
-          >
-            Log ud
-          </UButton>
-        </div>
-      </UCard>
+      <UserProfileCard v-if="authStore.user" :user="authStore.user" :show-actions="true" />
 
       <!-- Section header -->
-      <h2 :class="[TYPOGRAPHY.sectionSubheading, 'pt-4']">Hvad vil du i dag?</h2>
+      <h2 :class="[TYPOGRAPHY.sectionSubheadingLight, 'pt-4']">Hvad vil du lave i dag?</h2>
 
       <!-- Action Cards Grid -->
       <div :class="LAYOUTS.gridThreeCol">

@@ -28,7 +28,7 @@ const isInhabitantEqual = (
  * Heynabo is source of truth - households not in Heynabo will be marked for deletion.
  * Uses heynaboId as the unique key for matching.
  */
-export const reconcileHouseholds = pruneAndCreate<HouseholdCreate, number>(
+export const reconcileHouseholds = pruneAndCreate<HouseholdCreate, HouseholdCreate, number>(
     h => h.heynaboId,
     isHouseholdEqual
 )
@@ -38,7 +38,7 @@ export const reconcileHouseholds = pruneAndCreate<HouseholdCreate, number>(
  * Heynabo is source of truth - inhabitants not in Heynabo will be marked for deletion.
  * Uses heynaboId as the unique key for matching.
  */
-export const reconcileInhabitants = pruneAndCreate<Omit<InhabitantCreate, 'householdId'>, number>(
+export const reconcileInhabitants = pruneAndCreate<Omit<InhabitantCreate, 'householdId'>, Omit<InhabitantCreate, 'householdId'>, number>(
     i => i.heynaboId,
     isInhabitantEqual
 )

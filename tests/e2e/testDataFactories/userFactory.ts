@@ -3,6 +3,7 @@ import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {UserDetail, UserCreate} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
+import {HouseholdFactory} from "./householdFactory"
 
 const {salt, headers} = testHelpers
 const {SystemRoleSchema} = useCoreValidation()
@@ -17,12 +18,56 @@ export class UserFactory {
         systemRoles: [] // Regular user has empty roles array
     }
 
-    static readonly defaultUser = (testSalt: string = Date.now().toString()): UserCreate => {
-        const saltedUser = {
+    static readonly defaultUser = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {
+        return {
             ...this.defaultUserData,
             email: salt('minnie-admin-users', testSalt) + '@andeby.dk'
         }
-        return saltedUser
+    }
+
+    /**
+     * Create test UserDetail with Inhabitant data for component tests
+     * Combines UserCreate and InhabitantCreate data patterns
+     * Uses schema validation to ensure data integrity
+     */
+    static readonly defaultUserWithInhabitant = (
+        testSalt: string = testHelpers.temporaryAndRandom(),
+        overrides?: Partial<UserDetail>
+    ): UserDetail => {
+        const {UserDetailSchema} = useCoreValidation()
+        const userData = this.defaultUser(testSalt)
+        const inhabitantData = HouseholdFactory.defaultInhabitantData(testSalt)
+        const householdData = HouseholdFactory.defaultHouseholdData(testSalt)
+
+        const userDetail: UserDetail = {
+            id: overrides?.id ?? 1,
+            email: overrides?.email ?? userData.email,
+            phone: overrides?.phone ?? userData.phone,
+            systemRoles: overrides?.systemRoles ?? userData.systemRoles,
+            createdAt: overrides?.createdAt ?? new Date(),
+            updatedAt: overrides?.updatedAt ?? new Date(),
+            Inhabitant: overrides?.Inhabitant ?? {
+                id: 1,
+                heynaboId: inhabitantData.heynaboId,
+                householdId: 1,
+                name: inhabitantData.name,
+                lastName: inhabitantData.lastName,
+                pictureUrl: inhabitantData.pictureUrl,
+                birthDate: inhabitantData.birthDate,
+                household: {
+                    id: 1,
+                    heynaboId: householdData.heynaboId,
+                    pbsId: householdData.pbsId,
+                    movedInDate: householdData.movedInDate,
+                    name: householdData.name,
+                    shortName: salt('TH', testSalt), // Computed from address in real data
+                    address: householdData.address
+                }
+            }
+        }
+
+        // Validate with schema
+        return UserDetailSchema.parse(userDetail)
     }
 
     static readonly createUser = async (context: BrowserContext, aUser: UserCreate = this.defaultUser() ): Promise<UserDetail> => {
@@ -62,28 +107,28 @@ export class UserFactory {
         }))
     }
 
-    static readonly createAdmin = (testSalt: string = Date.now().toString()) => {
+    static readonly createAdmin = (testSalt: string = testHelpers.temporaryAndRandom()) => {
         return {
             ...this.defaultUser(testSalt),
             systemRoles: [SystemRole.ADMIN] as const
         }
     }
 
-    static readonly createAllergyManager = (testSalt: string = Date.now().toString()) => {
+    static readonly createAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()) => {
         return {
             ...this.defaultUser(testSalt),
             systemRoles: [SystemRole.ALLERGYMANAGER] as const
         }
     }
 
-    static readonly createAdminAndAllergyManager = (testSalt: string = Date.now().toString()) => {
+    static readonly createAdminAndAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()) => {
         return {
             ...this.defaultUser(testSalt),
             systemRoles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER] as const
         }
     }
 
-    static readonly createChef = (testSalt: string = Date.now().toString()) => {
+    static readonly createChef = (testSalt: string = testHelpers.temporaryAndRandom()) => {
         return {
             ...this.defaultUser(testSalt),
             systemRoles: [] as const // Chefs are regular users with inhabitant roles

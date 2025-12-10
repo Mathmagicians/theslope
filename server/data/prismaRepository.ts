@@ -188,7 +188,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
 export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
     console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeUserWithInhabitant} = useCoreValidation()
+    const {deserializeUserDetail} = useCoreValidation()
 
     try {
         const user = await prisma.user.findUnique({
@@ -210,7 +210,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
             console.info(`🪪 > USER > [GET] Inhabitant: ${inhabitantInfo}`)
 
             // Use composable deserialization function (ADR-010)
-            return deserializeUserWithInhabitant(user)
+            return deserializeUserDetail(user)
         } else {
             console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
@@ -846,11 +846,11 @@ export async function deactivateSeason(d1Client: D1Database): Promise<Season | n
         }
 
         await prisma.season.update({
-            where: {id: activeSeason.id},
+            where: {id: activeSeason.id!},
             data: {isActive: false}
         })
 
-        const season = await fetchSeason(d1Client, activeSeason.id)
+        const season = await fetchSeason(d1Client, activeSeason.id!)
         console.info(`🌞 > SEASON > [DEACTIVATE] Deactivated season ${season?.shortName}`)
         return season
     } catch (error) {

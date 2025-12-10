@@ -4,7 +4,7 @@ import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadHeynab
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
-import type {UserDetail} from '~/composables/useCoreValidation'
+import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {z} from 'zod'
 
@@ -41,9 +41,9 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         return throwH3Error(PREFIX + 'Input validation error', error, 400)
     }
 
-    // Get user session and Heynabo token
+    // Get user session and Heynabo token (passwordHash stores Heynabo token in session)
     const session = await getUserSession(event)
-    const user = session?.user as UserDetail | undefined
+    const user = session?.user as UserSession | undefined
     const heynaboToken = user?.passwordHash
 
     if (!heynaboToken) {
@@ -59,6 +59,9 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
         const {createHeynaboEventPayload, canCancelDinner} = useBooking()
         const baseUrl = process.env.NUXT_PUBLIC_BASE_URL
+        if (!baseUrl) {
+            throw createError({statusCode: 500, message: PREFIX + 'Server configuration error: NUXT_PUBLIC_BASE_URL not set'})
+        }
 
         switch (targetState) {
             case DinnerState.ANNOUNCED: {

@@ -46,7 +46,7 @@ function weekDayMapToDays(cookingDays: WeekDayMap) {
 }
 
 export function dateToWeekDay(date: Date): WeekDay {
-    return WEEKDAYS[getISODay(date) - 1]
+    return WEEKDAYS[getISODay(date) - 1]!
 }
 
 /**

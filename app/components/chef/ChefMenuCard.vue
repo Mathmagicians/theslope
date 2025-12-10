@@ -326,8 +326,8 @@ const handleAllergenCancel = () => {
 }
 
 const handleAdvanceState = () => {
-  if (!nextState.value || !canAdvanceState.value) return
-  emit('advance-state', nextState.value.state)
+  if (!canAdvanceState.value) return
+  emit('advance-state', DinnerState.ANNOUNCED)
 }
 
 // Two-step cancel confirmation (GitHub-style)

@@ -43,7 +43,7 @@ interface Props {
   to: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   stats: () => [],
   buttonIcon: 'i-heroicons-arrow-right'
 })

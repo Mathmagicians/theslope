@@ -1,7 +1,7 @@
 import {defineEventHandler, readValidatedBody, createError} from "h3"
 import {loginUserIntoHeynabo} from "~~/server/integration/heynabo/heynaboClient"
 import {fetchUser} from "~~/server/data/prismaRepository"
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, type UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Get schemas inside handler to avoid circular dependency
-    const {LoginSchema, UserWithInhabitantSchema} = useCoreValidation()
+    const {LoginSchema, UserSessionSchema} = useCoreValidation()
 
     // Input validation  FAIL EARLY
     let loginData
@@ -40,7 +40,8 @@ export default defineEventHandler(async (event) => {
         }
 
         // Validate response structure (ADR-009: User includes Inhabitant with household)
-        const validatedUser = UserWithInhabitantSchema.parse(theSlopeUser)
+        // UserSessionSchema includes passwordHash for session token storage
+        const validatedUser: UserSession = UserSessionSchema.parse(theSlopeUser)
 
         validatedUser.passwordHash = heynaboLoggedIn.token
         await setUserSession(event, {

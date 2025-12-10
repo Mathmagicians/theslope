@@ -15,9 +15,13 @@
  */
 
 const route = useRoute()
-const {loggedIn, greeting} = storeToRefs(useAuthStore())
+const authStore = useAuthStore()
+const {loggedIn, user} = storeToRefs(authStore)
 const {myHousehold} = storeToRefs(useHouseholdsStore())
 const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
+
+// Get inhabitant data for UserListItem
+const inhabitant = computed(() => user.value?.Inhabitant ?? null)
 
 // Check if route is active
 const isActive = (to: string): boolean => route.path.startsWith(to)
@@ -31,15 +35,15 @@ const mainLinks = computed(() => loggedIn.value ? [
     active: isActive('/dinner')
   },
   {
-    label: 'Husholdning',
+    label: 'Husstand',
     to: myHousehold.value
         ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings`
         : '/household',
-    icon: ICONS.users,
+    icon: ICONS.household,
     active: isActive('/household')
   },
   {
-    label: 'Chefkok',
+    label: 'Madhold',
     to: '/chef',
     icon: ICONS.chef,
     active: isActive('/chef')

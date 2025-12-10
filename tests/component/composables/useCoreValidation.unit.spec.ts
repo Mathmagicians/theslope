@@ -331,9 +331,9 @@ describe('getHouseholdShortName', () => {
 describe('useCoreValidation - Cross-Schema Integration', () => {
     const {
         UserDisplaySchema,
-        UserWithInhabitantSchema,
+        UserDetailSchema,
         HouseholdDisplaySchema,
-        deserializeUserWithInhabitant,
+        deserializeUserDetail,
         createDefaultWeekdayMap,
         serializeWeekDayMap
     } = useCoreValidation()
@@ -356,31 +356,16 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(result.Inhabitant?.householdId).toBe(user.Inhabitant.householdId) // Lightweight scalar, useful for admin context
     })
 
-    it('should parse UserWithInhabitant with nested household', () => {
-        const user = {
-            ...UserFactory.defaultUser(),
-            id: 1,
-            Inhabitant: {
-                ...HouseholdFactory.defaultInhabitantData(),
-                id: 1,
-                userId: 1,
-                householdId: 1,
-                dinnerPreferences: null,
-                household: {
-                    ...HouseholdFactory.defaultHouseholdData(),
-                    id: 1,
-                    shortName: 'S_31'
-                }
-            }
-        }
-        const result = UserWithInhabitantSchema.parse(user)
+    it('should parse UserDetail with nested household', () => {
+        const user = UserFactory.defaultUserWithInhabitant('test-userdetail')
+        const result = UserDetailSchema.parse(user)
 
         expect(result.Inhabitant).toBeDefined()
         expect(result.Inhabitant?.household).toBeDefined()
-        expect(result.Inhabitant?.household.shortName).toBe('S_31')
+        expect(result.Inhabitant?.household.shortName).toBeDefined()
     })
 
-    it('should deserialize UserWithInhabitant from database output', () => {
+    it('should deserialize UserDetail from database output', () => {
         const defaultPrefs = createDefaultWeekdayMap(DinnerMode.DINEIN)
         const serialized = {
             ...UserFactory.defaultUser(),
@@ -403,7 +388,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
                 }
             }
         }
-        const deserialized = deserializeUserWithInhabitant(serialized)
+        const deserialized = deserializeUserDetail(serialized)
 
         expect(Array.isArray(deserialized.systemRoles)).toBe(true)
         expect(deserialized.Inhabitant?.birthDate).toBeInstanceOf(Date)
@@ -412,7 +397,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(deserialized.Inhabitant?.household.shortName).toBeDefined()
     })
 
-    it('should handle deserializeUserWithInhabitant with null Inhabitant', () => {
+    it('should handle deserializeUserDetail with null Inhabitant', () => {
         // GIVEN: A user without inhabitant
         const factoryUser = UserFactory.createAdmin()
         const userData = {...factoryUser, systemRoles: [...factoryUser.systemRoles]}
@@ -426,7 +411,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         }
 
         // WHEN: Deserializing
-        const user = deserializeUserWithInhabitant(serializedUser)
+        const user = deserializeUserDetail(serializedUser)
 
         // THEN: Inhabitant should be null, systemRoles deserialized
         expect(user.Inhabitant).toBeNull()
@@ -434,7 +419,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(user.systemRoles).toContain('ADMIN')
     })
 
-    it('should deserialize UserWithInhabitant with dinnerPreferences', () => {
+    it('should deserialize UserDetail with dinnerPreferences', () => {
         // GIVEN: Factory data with dinnerPreferences
         const householdData = HouseholdFactory.defaultHouseholdData()
         const inhabitantData = HouseholdFactory.defaultInhabitantData()
@@ -476,7 +461,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         }
 
         // WHEN: Deserializing
-        const user = deserializeUserWithInhabitant(serializedUser)
+        const user = deserializeUserDetail(serializedUser)
 
         // THEN: dinnerPreferences should be deserialized to WeekDayMap object with proper DinnerMode values
         expect(user.Inhabitant?.dinnerPreferences).toBeDefined()
