@@ -1073,7 +1073,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
         // Handle ticket prices using reconcileTicketPrices to respect FK constraint (Order.ticketPriceId onDelete: Restrict)
         if (ticketPrices && ticketPrices.length > 0) {
             const existingPrices = await prisma.ticketPrice.findMany({
-                where: { seasonId: validatedSeasonData.id }
+                where: { seasonId: validatedSeasonData.id! }
             })
 
             const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
@@ -1081,7 +1081,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
             for (const tp of create) {
                 await prisma.ticketPrice.create({
                     data: {
-                        seasonId: validatedSeasonData.id,
+                        seasonId: validatedSeasonData.id!,
                         ticketType: tp.ticketType,
                         price: tp.price,
                         // ADR-012: Use Prisma.skip for optional fields that may be undefined

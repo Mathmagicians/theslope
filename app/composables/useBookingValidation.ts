@@ -345,11 +345,15 @@ export const useBookingValidation = () => {
     // Serialization (ADR-010 - Repository layer)
     // ============================================================================
 
+    // Date schema that accepts both strings (wire format) and Date objects (Prisma)
+    const flexibleDateSchema = z.union([z.string(), z.date()]).transform(val => new Date(val))
+    const flexibleDateNullableSchema = z.union([z.string(), z.date()]).nullable().transform(val => val ? new Date(val) : null)
+
     const SerializedOrderSchema = OrderDisplaySchema.extend({
-        releasedAt: z.string().nullable(),
-        closedAt: z.string().nullable(),
-        createdAt: z.string(),
-        updatedAt: z.string()
+        releasedAt: flexibleDateNullableSchema,
+        closedAt: flexibleDateNullableSchema,
+        createdAt: flexibleDateSchema,
+        updatedAt: flexibleDateSchema
     })
 
     const SerializedOrderHistoryDisplaySchema = OrderHistoryDisplaySchema.extend({
@@ -366,14 +370,8 @@ export const useBookingValidation = () => {
         }
     }
 
-    function deserializeOrder(serialized: z.infer<typeof SerializedOrderSchema>): z.infer<typeof OrderDisplaySchema> {
-        return {
-            ...serialized,
-            releasedAt: serialized.releasedAt ? new Date(serialized.releasedAt) : null,
-            closedAt: serialized.closedAt ? new Date(serialized.closedAt) : null,
-            createdAt: new Date(serialized.createdAt),
-            updatedAt: new Date(serialized.updatedAt)
-        }
+    function deserializeOrder(serialized: Record<string, unknown>): z.infer<typeof OrderDisplaySchema> {
+        return SerializedOrderSchema.parse(serialized)
     }
 
     function serializeOrderHistoryDisplay(history: z.infer<typeof OrderHistoryDisplaySchema>): z.infer<typeof SerializedOrderHistoryDisplaySchema> {

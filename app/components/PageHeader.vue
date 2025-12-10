@@ -15,13 +15,9 @@
  */
 
 const route = useRoute()
-const authStore = useAuthStore()
-const {loggedIn, user} = storeToRefs(authStore)
+const {loggedIn, greeting, avatar} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
 const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
-
-// Get inhabitant data for UserListItem
-const inhabitant = computed(() => user.value?.Inhabitant ?? null)
 
 // Check if route is active
 const isActive = (to: string): boolean => route.path.startsWith(to)
@@ -59,7 +55,7 @@ const mainLinks = computed(() => loggedIn.value ? [
 // Drawer menu items (admin + user)
 const drawerLinks = computed(() => [
   {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
-  {label: greeting.value, to: '/login', icon: ICONS.user, active: isActive('/login')}
+  {label: greeting.value, to: '/login', avatar: {src: avatar.value, icon: ICONS.user}, active: isActive('/login')}
 ])
 
 // Swap links based on breakpoint: on desktop drawer links go to main nav

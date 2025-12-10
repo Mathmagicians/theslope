@@ -79,7 +79,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             if (!filterInhabitantId.value && !filterHouseholdId.value) {
                 return Promise.resolve([])
             }
-            return $fetch(allergiesQueryKey.value)
+            return $fetch<AllergyDetail[]>(allergiesQueryKey.value)
         },
         {
             immediate: true,

@@ -59,7 +59,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
         }
 
         // 3. Scaffold pre-bookings for the activated season
-        const result = await scaffoldPrebookings(d1Client, activatedSeason.id)
+        const result = await scaffoldPrebookings(d1Client, activatedSeason.id!)
         console.info(`🌞 > SEASON > [POST /active] Scaffold pre-bookings result:`, result)
 
         setResponseStatus(event, 200)

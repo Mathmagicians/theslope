@@ -72,12 +72,13 @@ export async function createOrderAuditEntry(
     console.info(`📋 > ORDER_AUDIT > [CREATE] Created ${validatedEntry.action} entry for order ${validatedEntry.orderId}`)
 
     // ADR-010: Transform to domain type with proper order deserialization
+    // Flatten ticketType from ticketPrice relation before deserializing (ADR-009: flattened ticketType in OrderDisplay)
     const orderHistoryDetail = {
         ...created,
-        order: created.order ? {
-            ...deserializeOrder(created.order),
+        order: created.order ? deserializeOrder({
+            ...created.order,
             ticketType: created.order.ticketPrice.ticketType
-        } : null
+        }) : null
     }
 
     return OrderHistoryDetailSchema.parse(orderHistoryDetail)

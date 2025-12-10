@@ -35,7 +35,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             if (selectedDinnerEventId.value) params.append('dinnerEventId', String(selectedDinnerEventId.value))
             if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
             const queryString = params.toString()
-            return $fetch(`/api/order${queryString ? `?${queryString}` : ''}`)
+            return $fetch<OrderDisplay[]>(`/api/order${queryString ? `?${queryString}` : ''}`)
         },
         {
             default: () => [],

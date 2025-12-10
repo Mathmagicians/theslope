@@ -62,13 +62,17 @@ const {roleLabels} = useUserRoles()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
 
+// Type guard to check if user has full detail with household
+const hasHousehold = (user: UserDetail | UserDisplay): user is UserDetail =>
+  user.Inhabitant !== null && 'household' in (user.Inhabitant || {})
+
 // Extract user data from nested structure
 const inhabitant = computed(() => props.user.Inhabitant)
 const email = computed(() => props.user.email)
 const phone = computed(() => props.user.phone || null)
 const systemRoles = computed(() => props.user.systemRoles || [])
-const householdShortName = computed(() => props.user.Inhabitant?.household?.shortName || null)
-const householdAddress = computed(() => props.user.Inhabitant?.household?.address || null)
+const householdShortName = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.shortName : null)
+const householdAddress = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.address : null)
 const heynaboProfileUrl = computed(() => inhabitant.value ? getUserUrl(inhabitant.value.heynaboId) : null)
 
 // Get visible roles using roleLabels from composable
