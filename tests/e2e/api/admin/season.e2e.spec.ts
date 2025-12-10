@@ -731,24 +731,30 @@ test.describe('Season API Tests', () => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
             createdSeasonIds.push(season.id!)
 
             const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
                 context, HouseholdFactory.defaultHouseholdData(testSalt), 1
             )
             createdHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
 
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn})
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn})
 
-            const firstResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-            expect(firstResult.created).toBeGreaterThan(0)
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+            const ordersAfterFirst = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrdersAfterFirst.length).toBe(3)
 
-            const secondResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+            const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
 
-            expect(secondResult.created).toBe(0)
-            expect(secondResult.unchanged).toBe(firstResult.created)
+            // Same orders exist - no duplicates created
+            expect(inhabitantOrdersAfterSecond.length).toBe(3)
+            expect(inhabitantOrdersAfterSecond.map(o => o.id).sort()).toEqual(inhabitantOrdersAfterFirst.map(o => o.id).sort())
         })
 
         test('POST /api/admin/season/[id]/scaffold-prebookings should return 404 for non-existent season', async ({browser}) => {

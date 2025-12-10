@@ -32,6 +32,9 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
     // Business logic
     try {
         const result = await scaffoldPrebookings(d1Client, seasonId)
+        if (!result) {
+            return throwH3Error(`${LOG} Season ${seasonId} not found`, new Error('Not found'), 404)
+        }
         setResponseStatus(event, 200)
         return result
     } catch (error) {

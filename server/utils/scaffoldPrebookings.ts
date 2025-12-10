@@ -17,15 +17,16 @@ export type ScaffoldResult = {
 /**
  * Scaffolds pre-bookings for season's dinner events based on inhabitant preferences.
  * Core business logic shared between endpoints and activation workflow.
+ * @returns ScaffoldResult or null if season not found
  */
-export async function scaffoldPrebookings(d1Client: D1Database, seasonId: number): Promise<ScaffoldResult> {
+export async function scaffoldPrebookings(d1Client: D1Database, seasonId: number): Promise<ScaffoldResult | null> {
     const {createHouseholdOrderScaffold, chunkOrderBatch} = useSeason()
     const {OrderAuditActionSchema, chunkIds} = useBookingValidation()
 
     // 1. Fetch season with dinner events and ticket prices
     const season = await fetchSeason(d1Client, seasonId)
     if (!season) {
-        throw new Error(`Season ${seasonId} not found`)
+        return null
     }
 
     const dinnerEvents = season.dinnerEvents ?? []
