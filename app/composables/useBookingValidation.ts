@@ -349,18 +349,29 @@ export const useBookingValidation = () => {
     const flexibleDateSchema = z.union([z.string(), z.date()]).transform(val => new Date(val))
     const flexibleDateNullableSchema = z.union([z.string(), z.date()]).nullable().transform(val => val ? new Date(val) : null)
 
-    const SerializedOrderSchema = OrderDisplaySchema.extend({
+    // Schema for deserializing - accepts strings or Dates, outputs Dates
+    const SerializedOrderSchema = OrderDisplaySchema.omit({
+        releasedAt: true, closedAt: true, createdAt: true, updatedAt: true
+    }).extend({
         releasedAt: flexibleDateNullableSchema,
         closedAt: flexibleDateNullableSchema,
         createdAt: flexibleDateSchema,
         updatedAt: flexibleDateSchema
     })
 
+    // Type for serialized output (wire format with string dates)
+    type SerializedOrder = Omit<z.infer<typeof OrderDisplaySchema>, 'releasedAt' | 'closedAt' | 'createdAt' | 'updatedAt'> & {
+        releasedAt: string | null
+        closedAt: string | null
+        createdAt: string
+        updatedAt: string
+    }
+
     const SerializedOrderHistoryDisplaySchema = OrderHistoryDisplaySchema.extend({
         timestamp: z.string()
     })
 
-    function serializeOrder(order: z.infer<typeof OrderDisplaySchema>): z.infer<typeof SerializedOrderSchema> {
+    function serializeOrder(order: z.infer<typeof OrderDisplaySchema>): SerializedOrder {
         return {
             ...order,
             releasedAt: order.releasedAt?.toISOString() ?? null,
