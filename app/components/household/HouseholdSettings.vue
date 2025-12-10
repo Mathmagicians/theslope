@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Mockup: Calendar feed subscription (from old household/_id.vue)
-const calendarFeed = ref(null)
+const calendarFeed = ref<string | null>(null)
 const getCalendarFeedForUser = async (userName: string) => {
   console.info('getCalendarFeedForUser', userName)
-  calendarFeed.value = await $fetch('/api/calendar/feed')
+  calendarFeed.value = await $fetch<string>('/api/calendar/feed')
 }
 </script>
 

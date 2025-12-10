@@ -40,10 +40,12 @@ export default defineEventHandler(async (event) => {
         }
 
         // Validate response structure (ADR-009: User includes Inhabitant with household)
-        // UserSessionSchema includes passwordHash for session token storage
-        const validatedUser: UserSession = UserSessionSchema.parse(theSlopeUser)
+        // UserSessionSchema includes passwordHash - provide Heynabo token during parse
+        const validatedUser: UserSession = UserSessionSchema.parse({
+            ...theSlopeUser,
+            passwordHash: heynaboLoggedIn.token
+        })
 
-        validatedUser.passwordHash = heynaboLoggedIn.token
         await setUserSession(event, {
             user: validatedUser,
             loggedInAt: new Date(),

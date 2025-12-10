@@ -59,7 +59,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonKey,
             () => {
                 if (!selectedSeasonId.value) return Promise.resolve(null)
-                return $fetch(`/api/admin/season/${selectedSeasonId.value}`)
+                return $fetch<Season>(`/api/admin/season/${selectedSeasonId.value}`)
             },
             {
                 default: () => null,

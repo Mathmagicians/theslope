@@ -253,9 +253,10 @@ export async function uploadHeynaboEventImage(
     const formData = new FormData()
     formData.append('file', imageBlob, filename)
 
-    let response: {list: Array<{id: number, url: string}>}
+    type ImageUploadResponse = {list: Array<{id: number, url: string}>}
+    let response: ImageUploadResponse
     try {
-        response = await $fetch(url, {
+        response = await $fetch<ImageUploadResponse>(url, {
             method: 'POST',
             body: formData,
             headers: {
