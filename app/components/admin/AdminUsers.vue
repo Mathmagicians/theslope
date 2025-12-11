@@ -4,8 +4,7 @@ import {h, resolveComponent} from 'vue'
 const UButton = resolveComponent('UButton')
 
 const store = useUsersStore()
-const {isImportHeynaboLoading, users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
-const {importHeynaboData} = store
+const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRoles()
@@ -108,19 +107,10 @@ const userColumns = [
     <template #header>
       <UAlert
           title=" Brugere"
-          description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har."
+          description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import."
           icon="i-hugeicons-authorized"
           variant="outline"
-          :actions="[
-      {
-        label: 'Importer data fra Heynabo',
-        size: 'lg',
-        variant: 'soft',
-        color: 'info',
-        icon: 'i-pajamas-admin',
-        loading: isImportHeynaboLoading,
-        onClick: importHeynaboData
-      }    ]"/>
+      />
     </template>
 
     <!-- Show when users are loaded -->

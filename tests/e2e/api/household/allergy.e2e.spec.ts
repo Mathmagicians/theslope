@@ -64,16 +64,17 @@ test.describe('Allergy API - CRUD Operations', () => {
         const fetched = await AllergyFactory.getAllergy(context, created.id)
 
         // THEN: Verify it matches
-        expect(fetched.id).toBe(created.id)
-        expect(fetched.inhabitantId).toBe(inhabitant.id)
-        expect(fetched.allergyTypeId).toBe(allergyType.id)
-        expect(fetched.inhabitantComment).toBe('Cøliaki')
+        expect(fetched).not.toBeNull()
+        expect(fetched!.id).toBe(created.id)
+        expect(fetched!.inhabitantId).toBe(inhabitant.id)
+        expect(fetched!.allergyTypeId).toBe(allergyType.id)
+        expect(fetched!.inhabitantComment).toBe('Cøliaki')
 
         // Verify nested relations are included
-        expect(fetched.allergyType).toBeDefined()
-        expect(fetched.allergyType.name).toBe('Gluten')
-        expect(fetched.inhabitant).toBeDefined()
-        expect(fetched.inhabitant.name).toBe('Bob')
+        expect(fetched!.allergyType).toBeDefined()
+        expect(fetched!.allergyType.name).toBe('Gluten')
+        expect(fetched!.inhabitant).toBeDefined()
+        expect(fetched!.inhabitant.name).toBe('Bob')
     })
 
     test('GIVEN inhabitant has allergies WHEN fetching by inhabitantId THEN returns all allergies', async ({browser}) => {
@@ -107,13 +108,13 @@ test.describe('Allergy API - CRUD Operations', () => {
         expect(Array.isArray(allergies)).toBe(true)
         expect(allergies.length).toBe(2)
 
-        const foundAllergy1 = allergies.find((a: unknown) => a.allergyTypeId === allergyType1.id)
-        const foundAllergy2 = allergies.find((a: unknown) => a.allergyTypeId === allergyType2.id)
+        const foundAllergy1 = allergies.find((a) => a.allergyTypeId === allergyType1.id)
+        const foundAllergy2 = allergies.find((a) => a.allergyTypeId === allergyType2.id)
 
         expect(foundAllergy1).toBeTruthy()
-        expect(foundAllergy1.inhabitantComment).toBe('Severe')
+        expect(foundAllergy1!.inhabitantComment).toBe('Severe')
         expect(foundAllergy2).toBeTruthy()
-        expect(foundAllergy2.inhabitantComment).toBeNull()
+        expect(foundAllergy2!.inhabitantComment).toBeNull()
     })
 
     test('GIVEN household members have allergies WHEN fetching by householdId THEN returns all allergies', async ({browser}) => {
@@ -147,8 +148,8 @@ test.describe('Allergy API - CRUD Operations', () => {
         expect(Array.isArray(allergies)).toBe(true)
         expect(allergies.length).toBe(2)
 
-        const allergiesForInhabitant1 = allergies.filter((a: unknown) => a.inhabitantId === inhabitant1.id)
-        const allergiesForInhabitant2 = allergies.filter((a: unknown) => a.inhabitantId === inhabitant2.id)
+        const allergiesForInhabitant1 = allergies.filter((a) => a.inhabitantId === inhabitant1.id)
+        const allergiesForInhabitant2 = allergies.filter((a) => a.inhabitantId === inhabitant2.id)
 
         expect(allergiesForInhabitant1.length).toBe(1)
         expect(allergiesForInhabitant2.length).toBe(1)
@@ -184,7 +185,8 @@ test.describe('Allergy API - CRUD Operations', () => {
 
         // Verify via GET to ensure persistence
         const fetched = await AllergyFactory.getAllergy(context, original.id)
-        expect(fetched.inhabitantComment).toBe(updateData.inhabitantComment)
+        expect(fetched).not.toBeNull()
+        expect(fetched!.inhabitantComment).toBe(updateData.inhabitantComment)
     })
 
     test('GIVEN allergy exists WHEN deleting THEN deletes successfully', async ({browser}) => {
@@ -208,7 +210,8 @@ test.describe('Allergy API - CRUD Operations', () => {
         const deleted = await AllergyFactory.deleteAllergy(context, created.id)
 
         // THEN: Verify deletion
-        expect(deleted.id).toBe(created.id)
+        expect(deleted).not.toBeNull()
+        expect(deleted!.id).toBe(created.id)
 
         // Verify it no longer exists (should return 404)
         const response = await context.request.get(`/api/household/allergy/${created.id}`)

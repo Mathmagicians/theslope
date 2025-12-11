@@ -41,7 +41,7 @@ import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -167,18 +167,8 @@ const handleDelete = () => {
 const isEditable = computed(() => props.mode === 'edit')
 const hasNoMembers = computed(() => assignments.value.length === 0)
 
-// Funny empty state messages (rotates based on team number for consistency)
-const emptyStateMessages = [
-  { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
-  { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
-  { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
-  { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
-  { emoji: '🏃‍♀️🏃‍♂️', text: 'Køkkenholdet er løbet ud at lege' }
-]
-const emptyStateMessage = computed(() => {
-  const index = (props.teamNumber - 1) % emptyStateMessages.length
-  return emptyStateMessages[index]!  // Index is always valid (modulo ensures bounds)
-})
+// Random fun empty state message from design system
+const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
 </script>
 
 <template>

@@ -524,6 +524,44 @@ export const useBookingValidation = () => {
         households: z.number().int().nonnegative()
     })
 
+    // ============================================================================
+    // Daily Maintenance Result Schemas
+    // ============================================================================
+
+    /**
+     * Result of consumeDinners operation
+     * Marks past ANNOUNCED dinners as CONSUMED
+     */
+    const ConsumeResultSchema = z.object({
+        consumed: z.number().int().nonnegative()
+    })
+
+    /**
+     * Result of closeOrders operation
+     * Marks BOOKED orders on CONSUMED dinners as CLOSED
+     */
+    const CloseOrdersResultSchema = z.object({
+        closed: z.number().int().nonnegative()
+    })
+
+    /**
+     * Result of createTransactions operation
+     * Creates transactions for CLOSED orders without one
+     */
+    const CreateTransactionsResultSchema = z.object({
+        created: z.number().int().nonnegative()
+    })
+
+    /**
+     * Combined result of daily maintenance endpoint
+     */
+    const DailyMaintenanceResultSchema = z.object({
+        consume: ConsumeResultSchema,
+        close: CloseOrdersResultSchema,
+        transact: CreateTransactionsResultSchema,
+        scaffold: ScaffoldResultSchema.nullable()
+    })
+
     /**
      * Schema for Heynabo event response (incoming from API)
      * Note: API returns id as string, some fields may be omitted
@@ -597,7 +635,13 @@ export const useBookingValidation = () => {
         HeynaboEventStatusSchema,
 
         // Scaffold Pre-bookings
-        ScaffoldResultSchema
+        ScaffoldResultSchema,
+
+        // Daily Maintenance
+        ConsumeResultSchema,
+        CloseOrdersResultSchema,
+        CreateTransactionsResultSchema,
+        DailyMaintenanceResultSchema
     }
 }
 
@@ -647,3 +691,9 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
+
+// Daily Maintenance
+export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>
+export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CloseOrdersResultSchema']>
+export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
+export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>

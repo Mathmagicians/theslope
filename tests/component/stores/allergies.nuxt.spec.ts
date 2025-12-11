@@ -55,7 +55,7 @@ describe('Allergies Store - AllergyTypes', () => {
 
         expect(store.isAllergyTypesInitialized).toBe(true)
         expect(store.allergyTypes).toHaveLength(2)
-        expect(store.allergyTypes[0].name).toBe('Peanuts')
+        expect(store.allergyTypes[0]!.name).toBe('Peanuts')
     })
 
     it('exposes error when fetch fails', async () => {
@@ -118,7 +118,7 @@ describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
         await new Promise(resolve => setTimeout(resolve, 0))
 
         expect(store.allergies).toHaveLength(1)
-        expect(store.allergies[0].inhabitantId).toBe(1)
+        expect(store.allergies[0]!.inhabitantId).toBe(1)
     })
 
     it('loads allergies for household', async () => {

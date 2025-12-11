@@ -92,6 +92,32 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
+        // Activate/Deactivate season operation - useAsyncData pattern for loading state
+        const activateSeasonParams = ref<{ seasonId: number | null, action: 'activate' | 'deactivate' }>({ seasonId: null, action: 'activate' })
+        const {
+            status: activateSeasonStatus,
+            error: activateSeasonError,
+            execute: executeActivateSeason
+        } = useAsyncData(
+            'plan-store-activate-season',
+            async () => {
+                const { seasonId, action } = activateSeasonParams.value
+                if (action === 'activate' && seasonId) {
+                    return await $fetch<Season>('/api/admin/season/active', {
+                        method: 'POST',
+                        body: { seasonId },
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                } else if (action === 'deactivate') {
+                    return await $fetch<Season | null>('/api/admin/season/deactivate', {
+                        method: 'POST'
+                    })
+                }
+                return null
+            },
+            { immediate: false }
+        )
+
 
         // ========================================
         // Computed - Public API (derived from status)
@@ -99,6 +125,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const isActiveSeasonIdLoading = computed(() => activeSeasonIdStatus.value === 'pending')
         const isActiveSeasonIdErrored = computed(() => activeSeasonIdStatus.value === 'error')
         const isActiveSeasonIdInitialized = computed(() => activeSeasonIdStatus.value === 'success')
+        const isActivatingSeason = computed(() => activateSeasonStatus.value === 'pending')
 
         const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
         const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
@@ -302,43 +329,41 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const activateSeason = async (seasonId: number) => {
-            try {
-                console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
-                await $fetch<Season>('/api/admin/season/active', {
-                    method: 'POST',
-                    body: {seasonId},
-                    headers: {'Content-Type': 'application/json'}
-                })
-                // Refresh
-                await loadActiveSeason()
-                await loadSeasons()
-                // Switch to the newly activated season
-                loadSeason(seasonId)
-                console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
-            } catch (e: unknown) {
-                handleApiError(e, 'activateSeason')
-                throw e
+            console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
+            activateSeasonParams.value = { seasonId, action: 'activate' }
+            await executeActivateSeason()
+
+            if (activateSeasonError.value) {
+                handleApiError(activateSeasonError.value, 'activateSeason')
+                throw activateSeasonError.value
             }
+
+            // Refresh
+            await loadActiveSeason()
+            await loadSeasons()
+            // Switch to the newly activated season
+            loadSeason(seasonId)
+            console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
         }
 
         const deactivateSeason = async () => {
-            try {
-                console.info(`🌞 > PLAN_STORE > Deactivating active season`)
-                await $fetch<Season | null>('/api/admin/season/deactivate', {
-                    method: 'POST'
-                })
-                // Refresh
-                await loadActiveSeason()
-                await loadSeasons()
-                // Refresh selected season to get updated isActive state
-                if (selectedSeasonId.value) {
-                    await refreshSelectedSeason()
-                }
-                console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
-            } catch (e: unknown) {
-                handleApiError(e, 'deactivateSeason')
-                throw e
+            console.info(`🌞 > PLAN_STORE > Deactivating active season`)
+            activateSeasonParams.value = { seasonId: null, action: 'deactivate' }
+            await executeActivateSeason()
+
+            if (activateSeasonError.value) {
+                handleApiError(activateSeasonError.value, 'deactivateSeason')
+                throw activateSeasonError.value
             }
+
+            // Refresh
+            await loadActiveSeason()
+            await loadSeasons()
+            // Refresh selected season to get updated isActive state
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
+            }
+            console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
@@ -493,6 +518,7 @@ export const usePlanStore = defineStore("Plan", () => {
             isActiveSeasonIdLoading,
             isActiveSeasonIdErrored,
             isActiveSeasonIdInitialized,
+            isActivatingSeason,
             activeSeasonIdError,
             isSeasonsLoading,
             isNoSeasons,

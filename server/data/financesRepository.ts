@@ -706,6 +706,192 @@ export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEve
     }
 }
 
+/*** DAILY MAINTENANCE ***/
+
+// ADR-010: Repository handles all Prisma operations
+// These functions support the daily maintenance cron (consume, close, transact)
+
+/**
+ * Fetch all dinner events in active season that are not CONSUMED or CANCELLED
+ * Used by consumeDinners to find dinners ready to be marked consumed
+ */
+export async function fetchPendingDinnersInActiveSeason(
+    d1Client: D1Database
+): Promise<{id: number, date: Date}[]> {
+    const {DinnerStateSchema} = useBookingValidation()
+    const DinnerState = DinnerStateSchema.enum
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const activeSeason = await prisma.season.findFirst({
+        where: { isActive: true },
+        select: { id: true }
+    })
+
+    if (!activeSeason) {
+        return []
+    }
+
+    return prisma.dinnerEvent.findMany({
+        where: {
+            seasonId: activeSeason.id,
+            state: { notIn: [DinnerState.CONSUMED, DinnerState.CANCELLED] }
+        },
+        select: { id: true, date: true }
+    })
+}
+
+/**
+ * Update dinner events to CONSUMED state in batch
+ */
+export async function updateDinnersToConsumed(
+    d1Client: D1Database,
+    dinnerIds: number[]
+): Promise<number> {
+    if (dinnerIds.length === 0) return 0
+
+    const {DinnerStateSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const result = await prisma.dinnerEvent.updateMany({
+        where: { id: { in: dinnerIds } },
+        data: { state: DinnerStateSchema.enum.CONSUMED }
+    })
+
+    return result.count
+}
+
+/**
+ * Fetch all BOOKED or RELEASED orders on CONSUMED dinners in active season
+ * Used by closeOrders to find orders ready to be closed
+ */
+export async function fetchPendingOrdersOnConsumedDinners(
+    d1Client: D1Database
+): Promise<{id: number}[]> {
+    const {DinnerStateSchema, OrderStateSchema} = useBookingValidation()
+    const DinnerState = DinnerStateSchema.enum
+    const OrderState = OrderStateSchema.enum
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const activeSeason = await prisma.season.findFirst({
+        where: { isActive: true },
+        select: { id: true }
+    })
+
+    if (!activeSeason) {
+        return []
+    }
+
+    return prisma.order.findMany({
+        where: {
+            state: { in: [OrderState.BOOKED, OrderState.RELEASED] },
+            dinnerEvent: {
+                seasonId: activeSeason.id,
+                state: DinnerState.CONSUMED
+            }
+        },
+        select: { id: true }
+    })
+}
+
+/**
+ * Update orders to CLOSED state with timestamp in batch
+ */
+export async function updateOrdersToClosed(
+    d1Client: D1Database,
+    orderIds: number[]
+): Promise<number> {
+    if (orderIds.length === 0) return 0
+
+    const {OrderStateSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const result = await prisma.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: {
+            state: OrderStateSchema.enum.CLOSED,
+            closedAt: new Date()
+        }
+    })
+
+    return result.count
+}
+
+/**
+ * Fetch all CLOSED orders in active season without a transaction
+ * Returns full order data needed for transaction snapshots
+ */
+export async function fetchClosedOrdersWithoutTransaction(
+    d1Client: D1Database
+): Promise<Array<{
+    id: number
+    dinnerEventId: number
+    inhabitantId: number
+    bookedByUserId: number | null
+    priceAtBooking: number
+    dinnerMode: string
+    state: string
+    closedAt: Date | null
+    bookedByUser: { id: number, email: string } | null
+    inhabitant: { id: number, name: string, lastName: string, householdId: number }
+    dinnerEvent: { id: number, date: Date, menuTitle: string }
+    ticketPrice: { ticketType: string }
+}>> {
+    const {OrderStateSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const activeSeason = await prisma.season.findFirst({
+        where: { isActive: true },
+        select: { id: true }
+    })
+
+    if (!activeSeason) {
+        return []
+    }
+
+    return prisma.order.findMany({
+        where: {
+            state: OrderStateSchema.enum.CLOSED,
+            dinnerEvent: { seasonId: activeSeason.id },
+            Transaction: null
+        },
+        include: {
+            bookedByUser: { select: { id: true, email: true } },
+            inhabitant: { select: { id: true, name: true, lastName: true, householdId: true } },
+            dinnerEvent: { select: { id: true, date: true, menuTitle: true } },
+            ticketPrice: { select: { ticketType: true } }
+        }
+    })
+}
+
+/**
+ * Transaction create data for batch operations
+ */
+export type TransactionCreateData = {
+    orderId: number
+    orderSnapshot: string
+    userSnapshot: string
+    amount: number
+    userEmailHandle: string
+}
+
+/**
+ * Create transactions in batch
+ */
+export async function createTransactionsBatch(
+    d1Client: D1Database,
+    transactions: TransactionCreateData[]
+): Promise<number> {
+    if (transactions.length === 0) return 0
+
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    await prisma.transaction.createMany({
+        data: transactions
+    })
+
+    return transactions.length
+}
+
 /*** INVOICES ***/
 // TODO: Add invoice functions (fetchInvoices, createInvoice, etc.)
 // ADR-005: Invoice relationships:

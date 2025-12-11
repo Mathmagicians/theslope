@@ -145,6 +145,8 @@ export const useUsersStore = defineStore("Users", () => {
         importHeynaboData,
         isImportHeynaboLoading,
         isImportHeynaboErrored,
+        heynaboImport,
+        heynaboImportError,
         users,
         loadUsers,
         isUsersLoading,

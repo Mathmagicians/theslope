@@ -331,7 +331,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     expectedStatus: number = 200
-  ): Promise<OrderHistory[]> => {
+  ): Promise<OrderHistoryDisplay[]> => {
     const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}/history`, { headers })
 
     const status = response.status()

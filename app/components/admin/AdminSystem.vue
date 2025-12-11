@@ -1,0 +1,316 @@
+<!--
+AdminSystem - System administration panel with job history and manual triggers
+
+UX MOCKUP: Admin System Jobs Panel
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🔄 SYSTEM JOBS                                                               │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
+│  │       🔄        │  │       🔄        │  │       🔄        │              │
+│  │                 │  │                 │  │                 │              │
+│  │ Daglig          │  │ Månedlig        │  │ Heynabo         │              │
+│  │ Vedligeholdelse │  │ Fakturering     │  │ Import          │              │
+│  │                 │  │                 │  │                 │              │
+│  │ [  Kør nu  →  ] │  │ [  Kør nu  →  ] │  │ [  Kør nu  →  ] │              │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Jobs run automatically via Nitro scheduledTasks + Cloudflare Cron Triggers.
+Admins can manually re-trigger jobs if they failed.
+-->
+
+<script setup lang="ts">
+// Design system
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+
+// Auth - check admin role
+const authStore = useAuthStore()
+const { isAdmin } = storeToRefs(authStore)
+
+// Users store - for Heynabo import
+const usersStore = useUsersStore()
+const { isImportHeynaboLoading, heynaboImport, isImportHeynaboErrored, heynaboImportError } = storeToRefs(usersStore)
+const { importHeynaboData } = usersStore
+
+// Bookings store - for daily maintenance
+const bookingsStore = useBookingsStore()
+const { isDailyMaintenanceRunning, hasDailyMaintenanceResult, hasDailyMaintenanceError, dailyMaintenanceResult, dailyMaintenanceError } = storeToRefs(bookingsStore)
+const { runDailyMaintenance } = bookingsStore
+
+// Empty state for job history table
+const jobHistoryEmptyMessage = getRandomEmptyMessage('jobHistory')
+const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessage.text}`
+
+// ============================================================================
+// JOB HISTORY TABLE
+// ============================================================================
+
+const jobHistoryColumns = [
+  { accessorKey: 'date', header: 'Dato' },
+  { accessorKey: 'jobType', header: 'Job' },
+  { accessorKey: 'status', header: 'Status' },
+  { accessorKey: 'duration', header: 'Varighed' },
+  { accessorKey: 'result', header: 'Resultat' }
+]
+
+// ============================================================================
+// APP CONFIG TREE
+// ============================================================================
+
+const appConfig = useAppConfig()
+
+// Convert object to tree items recursively
+const objectToTreeItems = (obj: Record<string, unknown>, prefix = ''): { label: string; children?: { label: string }[] }[] => {
+  return Object.entries(obj).map(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return {
+        label: key,
+        children: objectToTreeItems(value as Record<string, unknown>, `${prefix}${key}.`)
+      }
+    }
+    const displayValue = Array.isArray(value) ? `[${value.length} items]` : String(value)
+    return { label: `${key}: ${displayValue}` }
+  })
+}
+
+const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as Record<string, unknown>))
+
+// ============================================================================
+// DAILY MAINTENANCE JOB - uses bookings store (ADR-007)
+// ============================================================================
+
+// Format daily maintenance stats
+const dailyMaintenanceStats = computed(() => {
+  if (!hasDailyMaintenanceResult.value || !dailyMaintenanceResult.value) return []
+  const r = dailyMaintenanceResult.value
+  const stats: { icon: string; text: string }[] = [
+    { icon: ICONS.checkCircle, text: `Middage afholdt: ${r.consume.consumed}` },
+    { icon: ICONS.ticket, text: `Ordrer lukket: ${r.close.closed}` },
+    { icon: ICONS.shoppingCart, text: `Transaktioner: ${r.transact.created}` }
+  ]
+  if (r.scaffold) {
+    stats.push({ icon: ICONS.calendar, text: `Bookinger: +${r.scaffold.created}, -${r.scaffold.deleted}` })
+  }
+  return stats
+})
+
+// ============================================================================
+// HEYNABO IMPORT JOB - uses users store (ADR-007)
+// ============================================================================
+
+const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
+
+// Format heynabo import stats
+const heynaboImportStats = computed(() => {
+  if (!hasHeynaboImportResult.value || !heynaboImport.value) return []
+  const r = heynaboImport.value
+  return [
+    { icon: ICONS.household, text: `Husstande: +${r.householdsCreated}, -${r.householdsDeleted}` },
+    { icon: ICONS.users, text: `Beboere: +${r.inhabitantsCreated}, -${r.inhabitantsDeleted}` },
+    { icon: ICONS.user, text: `Brugere oprettet: ${r.usersCreated}` }
+  ]
+})
+
+// ============================================================================
+// JOB DEFINITIONS
+// ============================================================================
+
+// Job definitions following feature-proposal-season-activation.md
+const systemJobs = appConfig.theslope.systemJobs
+const jobDefinitions = computed(() => [
+  {
+    key: 'DAILY_MAINTENANCE',
+    title: 'Daglig Vedligeholdelse',
+    buttonLabel: 'Kør daglig vedligeholdelse',
+    description: 'Markér middage som afholdt, luk ordrer, opret transaktioner, opret automatiske bookinger',
+    schedule: systemJobs.dailyMaintenance.description,
+    color: COLOR.peach,
+    headerBg: BG.peach[50],
+    icon: ICONS.sync,
+    // Wired up via bookings store
+    isRunning: isDailyMaintenanceRunning.value,
+    hasResult: hasDailyMaintenanceResult.value,
+    hasError: hasDailyMaintenanceError.value,
+    stats: dailyMaintenanceStats.value,
+    error: dailyMaintenanceError.value,
+    trigger: runDailyMaintenance
+  },
+  {
+    key: 'MONTHLY_BILLING',
+    title: 'Månedlig Fakturering',
+    buttonLabel: 'Kør fakturering',
+    description: 'Generer fakturaer for foregående måned',
+    schedule: systemJobs.monthlyBilling.description,
+    color: COLOR.secondary,
+    headerBg: BG.pink[50],
+    icon: ICONS.ticket,
+    // Not yet implemented
+    isRunning: false,
+    hasResult: false,
+    hasError: false,
+    stats: [],
+    error: null,
+    trigger: null
+  },
+  {
+    key: 'HEYNABO_IMPORT',
+    title: 'Heynabo Import',
+    buttonLabel: 'Kør import',
+    description: 'Synkroniser husstande og beboere fra Heynabo',
+    schedule: systemJobs.heynaboImport.description,
+    color: COLOR.ocean,
+    headerBg: BG.ocean[50],
+    icon: ICONS.users,
+    // Wired up via users store
+    isRunning: isImportHeynaboLoading.value,
+    hasResult: hasHeynaboImportResult.value,
+    hasError: isImportHeynaboErrored.value,
+    stats: heynaboImportStats.value,
+    error: heynaboImportError.value,
+    trigger: importHeynaboData
+  }
+])
+</script>
+
+<template>
+  <div data-testid="admin-system" class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-3">
+      <UIcon :name="ICONS.sync" :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl']" />
+      <h1 :class="TYPOGRAPHY.sectionSubheadingLight">Systemjobs</h1>
+    </div>
+
+    <!-- System Jobs - ActionCard grid -->
+    <div :class="LAYOUTS.gridThreeCol">
+      <UCard
+        v-for="job in jobDefinitions"
+        :key="job.key"
+        :ui="{ root: 'h-full flex flex-col', body: 'flex-1 flex flex-col' }"
+      >
+        <!-- Colored header with icon -->
+        <template #header>
+          <div
+            :class="[job.headerBg, 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2']"
+          >
+            <UIcon
+              :name="job.icon"
+              :class="['text-5xl md:text-6xl opacity-80', job.isRunning ? 'animate-spin' : '']"
+            />
+            <UBadge :color="COLOR.neutral" variant="outline" size="xs">
+              {{ job.schedule }}
+            </UBadge>
+          </div>
+        </template>
+
+        <!-- Title -->
+        <h3 :class="[TYPOGRAPHY.cardTitle, 'mb-2']">
+          {{ job.title }}
+        </h3>
+
+        <!-- Description - fixed height area -->
+        <p :class="[TYPOGRAPHY.bodyTextMuted, 'mb-4 min-h-[3rem]']">
+          {{ job.description }}
+        </p>
+
+        <!-- Status / Stats - this area grows to fill available space -->
+        <div class="flex-1">
+          <div v-if="job.hasResult && job.stats.length > 0" class="space-y-1">
+            <div
+              v-for="(stat, index) in job.stats"
+              :key="index"
+              class="flex items-center gap-2"
+            >
+              <UIcon :name="stat.icon" class="text-sm text-success-500" />
+              <span :class="TYPOGRAPHY.bodyTextSmall">{{ stat.text }}</span>
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <UAlert
+            v-else-if="job.hasError && job.error"
+            :color="COLOR.error"
+            variant="subtle"
+            :icon="ICONS.exclamationCircle"
+          >
+            <template #title>Fejl</template>
+            <template #description>{{ job.error.message }}</template>
+          </UAlert>
+
+          <!-- Skeleton placeholder for not-implemented jobs OR jobs that haven't run yet -->
+          <div v-else class="space-y-2">
+            <div class="flex items-center gap-2">
+              <USkeleton class="h-4 w-4 rounded-full" />
+              <USkeleton class="h-4 w-32" />
+            </div>
+            <div class="flex items-center gap-2">
+              <USkeleton class="h-4 w-4 rounded-full" />
+              <USkeleton class="h-4 w-24" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer with CTA button -->
+        <template #footer>
+          <UButton
+            v-if="job.trigger"
+            :color="job.color"
+            :size="SIZES.standard"
+            :trailing-icon="ICONS.arrowRight"
+            :loading="job.isRunning"
+            :disabled="job.isRunning || !isAdmin"
+            :name="`trigger-${job.key.toLowerCase()}`"
+            block
+            @click="job.trigger"
+          >
+            {{ job.isRunning ? 'Kører...' : job.buttonLabel }}
+          </UButton>
+          <UButton
+            v-else
+            :color="job.color"
+            :size="SIZES.standard"
+            :trailing-icon="ICONS.arrowRight"
+            disabled
+            :name="`trigger-${job.key.toLowerCase()}`"
+            block
+          >
+            {{ job.buttonLabel }}
+          </UButton>
+        </template>
+      </UCard>
+    </div>
+
+    <!-- Job History Panel -->
+    <UCard>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-clock" class="text-lg" />
+          <span class="font-semibold">Jobhistorik</span>
+        </div>
+      </template>
+
+      <UTable
+        :data="[]"
+        :columns="jobHistoryColumns"
+        :empty="jobHistoryEmpty"
+        caption="Seneste jobkørsler"
+        class="w-full"
+      />
+    </UCard>
+
+    <!-- System Settings - App Config Tree -->
+    <UCard>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-adjustments-horizontal" class="text-lg" />
+          <span class="font-semibold">Systemindstillinger</span>
+        </div>
+      </template>
+
+      <UTree :items="configTreeItems" :default-expanded="['defaultSeason', 'cookingDeadlines', 'kitchen', 'billing']" />
+    </UCard>
+  </div>
+</template>

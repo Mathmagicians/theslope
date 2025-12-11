@@ -2,6 +2,7 @@ import {useBookingValidation, type DinnerEventDisplay, type HeynaboEventCreate} 
 import {useSeason} from '~/composables/useSeason'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {chunkArray} from '~/utils/batchUtils'
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -253,6 +254,17 @@ export const useBooking = () => {
         }
     }
 
+    // ============================================================================
+    // Daily Maintenance - Batch Configuration
+    // ============================================================================
+
+    // D1 constraint: updateMany uses ~2 params per ID + filter params
+    // Conservative: 40 IDs per batch for bulk state updates
+    const DINNER_BATCH_SIZE = 40
+
+    // Curried chunk function for dinner event IDs (used for bulk state updates)
+    const chunkDinnerIds = chunkArray<number>(DINNER_BATCH_SIZE)
+
     return {
         // Dinner step workflow
         getDinnerStepState,
@@ -263,6 +275,9 @@ export const useBooking = () => {
         // Heynabo sync
         buildDinnerUrl,
         createHeynaboEventPayload,
-        HEYNABO_EVENT_TEMPLATE
+        HEYNABO_EVENT_TEMPLATE,
+        // Daily Maintenance
+        DINNER_BATCH_SIZE,
+        chunkDinnerIds
     }
 }

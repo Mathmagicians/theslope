@@ -9,6 +9,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
@@ -259,17 +260,13 @@ describe('assignAffinitiesToTeams', () => {
     })
 
     it('should call computeAffinitiesForTeams with destructured season data', () => {
-        // GIVEN: Valid season with teams
+        // GIVEN: Valid season with teams (using factory)
         const season: Season = {
             ...SeasonFactory.defaultSeason(),
             id: 1,
             consecutiveCookingDays: 2,
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            CookingTeams: [
-                { id: 1, name: 'Hold 1', seasonId: 1, affinity: null, assignments: [] },
-                { id: 2, name: 'Hold 2', seasonId: 1, affinity: null, assignments: [] },
-                { id: 3, name: 'Hold 3', seasonId: 1, affinity: null, assignments: [] }
-            ]
+            CookingTeams: [1, 2, 3].map(id => SeasonFactory.defaultCookingTeamDisplay({ id, name: `Hold ${id}`, affinity: null }))
         }
 
         // WHEN: Assigning affinities to teams
@@ -303,22 +300,17 @@ describe('assignTeamsToEvents', () => {
     })
 
     it('should call computeTeamAssignmentsForEvents with destructured season data', () => {
-        // GIVEN: Valid season with teams and events (simple happy path)
+        // GIVEN: Valid season with teams and events (using factories)
+        const mwfAffinity = createDefaultWeekdayMap([true, false, true, false, true, false, false])
+        const eventDates = [new Date(2025, 0, 6), new Date(2025, 0, 8), new Date(2025, 0, 10), new Date(2025, 0, 13)]
+
         const season: Season = {
             ...SeasonFactory.defaultSeason(),
             id: 1,
             consecutiveCookingDays: 2,
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            CookingTeams: [
-                { id: 1, name: 'Hold 1', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] },
-                { id: 2, name: 'Hold 2', seasonId: 1, affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), assignments: [] }
-            ],
-            dinnerEvents: [
-                { id: 1, date: new Date(2025, 0, 6), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 2, date: new Date(2025, 0, 8), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 3, date: new Date(2025, 0, 10), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() },
-                { id: 4, date: new Date(2025, 0, 13), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date() }
-            ]
+            cookingDays: mwfAffinity,
+            CookingTeams: [1, 2].map(id => SeasonFactory.defaultCookingTeamDisplay({ id, name: `Hold ${id}`, affinity: mwfAffinity })),
+            dinnerEvents: eventDates.map((date, i) => ({ ...DinnerEventFactory.defaultDinnerEventDisplay(), id: i + 1, date, seasonId: 1, cookingTeamId: null }))
         }
 
         // WHEN: Assigning teams to events
@@ -614,7 +606,7 @@ describe('createPreferenceClipper', () => {
 
             // THEN: Returns update for inhabitant
             expect(updates).toHaveLength(1)
-            expect(updates[0].inhabitantId).toBe(1)
+            expect(updates[0]!.inhabitantId).toBe(1)
         })
 
         it('should detect non-cooking day with value != NONE needs clipping', () => {
@@ -674,7 +666,7 @@ describe('createPreferenceClipper', () => {
 
             // THEN: Creates defaults (cooking days = DINEIN, non-cooking = NONE)
             expect(updates).toHaveLength(1)
-            const prefs = updates[0].dinnerPreferences
+            const prefs = updates[0]!.dinnerPreferences
             WEEKDAYS.forEach(day => {
                 const expected = cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE
                 expect(prefs[day], `${day} should be ${expected}`).toBe(expected)
@@ -702,7 +694,7 @@ describe('createPreferenceClipper', () => {
 
             // THEN: Preserves cooking day values, clips non-cooking to NONE
             expect(updates).toHaveLength(1)
-            const prefs = updates[0].dinnerPreferences
+            const prefs = updates[0]!.dinnerPreferences
             WEEKDAYS.forEach((day, i) => {
                 const expected = cookingDays[day] ? originalValues[i] : DinnerMode.NONE
                 expect(prefs[day], `${day} should be ${expected}`).toBe(expected)
@@ -749,25 +741,32 @@ describe('createPreBookingGenerator', () => {
     const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
         WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
 
-    // Standard ticket prices with IDs
-    const ticketPrices = [
-        {id: 1, ticketType: 'ADULT' as const, price: 4000, seasonId: 1, description: null, maximumAgeLimit: null},
-        {id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12},
-        {id: 3, ticketType: 'BABY' as const, price: 0, seasonId: 1, description: null, maximumAgeLimit: 2}
-    ]
+    // Helper to create test inhabitant with all required fields (using factory pattern)
+    const createTestInhabitant = (id: number, birthDate: Date | null, dinnerPreferences: WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]> | null) => ({
+        ...HouseholdFactory.defaultInhabitantData(),
+        id,
+        birthDate,
+        dinnerPreferences
+    })
 
-    // Dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
-    const dinnerEvents = [
-        {id: 101, date: new Date(2025, 0, 6), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
-        {id: 102, date: new Date(2025, 0, 8), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()},
-        {id: 103, date: new Date(2025, 0, 10), menuTitle: '', state: 'SCHEDULED' as const, totalCost: 0, heynaboEventId: null, cookingTeamId: null, seasonId: 1, menuDescription: null, menuPictureUrl: null, chefId: null, createdAt: new Date(), updatedAt: new Date()}
-    ]
+    // Standard ticket prices with IDs (using factory)
+    const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
+
+    // Dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025) - using factory
+    const eventDates = [new Date(2025, 0, 6), new Date(2025, 0, 8), new Date(2025, 0, 10)]
+    const dinnerEvents = eventDates.map((date, i) => ({
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
+        id: 101 + i,
+        date,
+        seasonId: 1,
+        cookingTeamId: null
+    }))
 
     describe('generator function', () => {
         it('should skip inhabitants with no dinnerPreferences', () => {
-            // GIVEN: Inhabitant with null preferences
+            // GIVEN: Inhabitant with null preferences (using factory helper)
             const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
-            const inhabitants = [{id: 1, name: 'Test', birthDate: null, dinnerPreferences: null}]
+            const inhabitants = [createTestInhabitant(1, null, null)]
 
             // WHEN: Generate orders
             const result = generator(inhabitants)
@@ -783,58 +782,54 @@ describe('createPreBookingGenerator', () => {
             ]
             const generator = createPreBookingGenerator(1, incompleteTicketPrices, dinnerEvents)
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [{id: 1, name: 'Adult', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
             // WHEN/THEN: Should throw (no ADULT ticket price)
             expect(() => generator(inhabitants)).toThrow('No ticket price for type')
         })
 
+        // Factory default prices: BABY=0, CHILD=3000, ADULT=5000 (from TicketFactory)
         it.each([
             {
                 description: 'adult with DINEIN on all cooking days',
                 birthDate: new Date(1990, 0, 1),  // Adult
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
-                expectedTicketType: 'ADULT',
-                expectedPrice: 4000
+                expectedPrice: 5000
             },
             {
                 description: 'child (age 8) with TAKEAWAY on cooking days',
                 birthDate: new Date(2017, 0, 1),  // ~8 years old in 2025
                 preferences: [DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
-                expectedTicketType: 'CHILD',
-                expectedPrice: 2000
+                expectedPrice: 3000
             },
             {
                 description: 'baby (age 1) with DINEIN on cooking days',
                 birthDate: new Date(2024, 0, 1),  // ~1 year old in 2025
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
-                expectedTicketType: 'BABY',
-                expectedPrice: 0
+                expectedPrice: 1500  // Factory has 2 BABY prices - Map uses last one (Hungry Baby @ 1500)
             },
             {
                 description: 'adult with NONE on some cooking days',
                 birthDate: new Date(1990, 0, 1),
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 2,  // Only Mon and Fri
-                expectedTicketType: 'ADULT',
-                expectedPrice: 4000
+                expectedPrice: 5000
             },
             {
                 description: 'inhabitant with NONE on all days',
                 birthDate: new Date(1990, 0, 1),
                 preferences: [DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 0,
-                expectedTicketType: 'ADULT',
-                expectedPrice: 4000
+                expectedPrice: 5000
             }
         ])('should generate $expectedCount orders for $description', ({birthDate, preferences, expectedCount, expectedPrice}) => {
-            // GIVEN: Generator and inhabitant
+            // GIVEN: Generator and inhabitant (using factory helper)
             const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
             const prefs = createPreferences(preferences)
-            const inhabitants = [{id: 1, name: 'Test', birthDate, dinnerPreferences: prefs}]
+            const inhabitants = [createTestInhabitant(1, birthDate, prefs)]
 
             // WHEN: Generating pre-bookings
             const orders = generator(inhabitants)
@@ -851,7 +846,7 @@ describe('createPreBookingGenerator', () => {
         it('should exclude orders matching excludedKeys (user cancellations)', () => {
             // GIVEN: Inhabitant with DINEIN on all cooking days, but one dinner was cancelled
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [{id: 1, name: 'Test', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
             // User previously cancelled order for inhabitant 1, dinner event 102
             const excludedKeys = new Set(['1-102'])
@@ -868,7 +863,7 @@ describe('createPreBookingGenerator', () => {
         it('should generate all orders when excludedKeys is empty', () => {
             // GIVEN: Inhabitant with DINEIN on all cooking days
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [{id: 1, name: 'Test', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}]
+            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
             // WHEN: Generator with empty exclusion set
             const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set())
@@ -880,11 +875,11 @@ describe('createPreBookingGenerator', () => {
         })
 
         it('should handle multiple inhabitants with different exclusions', () => {
-            // GIVEN: Two inhabitants, each with different cancelled bookings
+            // GIVEN: Two inhabitants, each with different cancelled bookings (using factory helper)
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
             const inhabitants = [
-                {id: 1, name: 'Anna', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences},
-                {id: 2, name: 'Bob', birthDate: new Date(1990, 0, 1), dinnerPreferences: preferences}
+                createTestInhabitant(1, new Date(1990, 0, 1), preferences),
+                createTestInhabitant(2, new Date(1990, 0, 1), preferences)
             ]
 
             // Anna cancelled dinner 101, Bob cancelled dinner 102
@@ -904,49 +899,43 @@ describe('createPreBookingGenerator', () => {
     })
 
     describe('reconcilePreBookings', () => {
+        // Helper using factory for proper OrderDisplay type
+        const createExistingOrder = (inhabitantId: number, dinnerEventId: number) =>
+            OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId })
+
+        // Helper for incoming orders (OrderCreateWithPrice - does NOT have id, createdAt, updatedAt, ticketType)
+        const createIncomingOrder = (inhabitantId: number, dinnerEventId: number) =>
+            ({ inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const })
+
         it.each([
             {
                 description: 'all new orders (no existing)',
-                existing: [],
-                incoming: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
+                existing: [] as ReturnType<typeof createExistingOrder>[],
+                incoming: [createIncomingOrder(1, 101)],
                 expectedCreate: 1,
                 expectedDelete: 0,
                 expectedIdempotent: 0
             },
             {
                 description: 'existing matches incoming (idempotent)',
-                existing: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
-                incoming: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
+                existing: [createExistingOrder(1, 101)],
+                incoming: [createIncomingOrder(1, 101)],
                 expectedCreate: 0,
                 expectedDelete: 0,
                 expectedIdempotent: 1
             },
             {
                 description: 'existing not in incoming (delete)',
-                existing: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
-                incoming: [],
+                existing: [createExistingOrder(1, 101)],
+                incoming: [] as ReturnType<typeof createIncomingOrder>[],
                 expectedCreate: 0,
                 expectedDelete: 1,
                 expectedIdempotent: 0
             },
             {
                 description: 'mixed: some new, some existing, some deleted',
-                existing: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const},
-                    {inhabitantId: 1, dinnerEventId: 102, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
-                incoming: [
-                    {inhabitantId: 1, dinnerEventId: 101, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const},
-                    {inhabitantId: 1, dinnerEventId: 103, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const}
-                ],
+                existing: [createExistingOrder(1, 101), createExistingOrder(1, 102)],
+                incoming: [createIncomingOrder(1, 101), createIncomingOrder(1, 103)],
                 expectedCreate: 1,  // 103 is new
                 expectedDelete: 1,  // 102 is deleted
                 expectedIdempotent: 1  // 101 unchanged
@@ -965,21 +954,21 @@ describe('createPreBookingGenerator', () => {
 
 describe('createHouseholdOrderScaffold', () => {
     const {createHouseholdOrderScaffold} = useSeason()
-    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const {DinnerModeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
-    const OrderState = OrderStateSchema.enum
 
     // Use factory for ticket prices with IDs
     const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
 
     // Use factory for dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
-    const dinnerEvents = [
-        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 101, date: new Date(2025, 0, 6)},
-        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 102, date: new Date(2025, 0, 8)},
-        {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 103, date: new Date(2025, 0, 10)}
-    ]
+    const eventDates = [new Date(2025, 0, 6), new Date(2025, 0, 8), new Date(2025, 0, 10)]
+    const dinnerEvents = eventDates.map((date, i) => ({
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
+        id: 101 + i,
+        date
+    }))
 
-    // Helper using factory pattern
+    // Helper to create test inhabitant with all required fields (using factory pattern)
     const createInhabitant = (id: number, prefs: (typeof DinnerMode)[keyof typeof DinnerMode][]) => ({
         ...HouseholdFactory.defaultInhabitantData(),
         id,
@@ -987,9 +976,18 @@ describe('createHouseholdOrderScaffold', () => {
         dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: prefs[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
     })
 
-    const createOrder = (inhabitantId: number, dinnerEventId: number, mode = DinnerMode.DINEIN) => ({
-        inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 5000, dinnerMode: mode, state: OrderState.BOOKED
+    // Helper to create HouseholdDisplay with all required fields
+    type InhabitantDisplay = ReturnType<typeof createInhabitant>
+    const createHousehold = (id: number, inhabitants: InhabitantDisplay[]) => ({
+        ...HouseholdFactory.defaultHouseholdData(),
+        id,
+        shortName: `H${id}`,
+        inhabitants
     })
+
+    // Helper to create order with all required fields (using factory)
+    const createOrder = (inhabitantId: number, dinnerEventId: number, mode = DinnerMode.DINEIN) =>
+        OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId, dinnerMode: mode })
 
     // Mon, Wed, Fri preferences (matches dinner events)
     const allDineIn = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
@@ -1026,21 +1024,21 @@ describe('createHouseholdOrderScaffold', () => {
         },
         {
             desc: 'handles empty household (no inhabitants)',
-            inhabitants: [],
+            inhabitants: [] as InhabitantDisplay[],
             existing: [],
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 0, idempotent: 0}
         },
         {
             desc: 'deletes orphan orders when inhabitants leave',
-            inhabitants: [],
+            inhabitants: [] as InhabitantDisplay[],
             existing: [createOrder(1, 101), createOrder(1, 102)],
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 2, idempotent: 0}
         }
     ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
         const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
-        const result = scaffolder({id: 1, inhabitants}, existing, cancelled)
+        const result = scaffolder(createHousehold(1, inhabitants), existing, cancelled)
 
         expect(result.create).toHaveLength(expected.create)
         expect(result.delete).toHaveLength(expected.delete)
@@ -1051,8 +1049,8 @@ describe('createHouseholdOrderScaffold', () => {
         const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
         const monFri = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
 
-        const result1 = scaffolder({id: 1, inhabitants: [createInhabitant(1, allDineIn)]}, [], new Set())
-        const result2 = scaffolder({id: 2, inhabitants: [createInhabitant(2, monFri)]}, [], new Set())
+        const result1 = scaffolder(createHousehold(1, [createInhabitant(1, allDineIn)]), [], new Set())
+        const result2 = scaffolder(createHousehold(2, [createInhabitant(2, monFri)]), [], new Set())
 
         expect(result1.create).toHaveLength(3)
         expect(result2.create).toHaveLength(2)

@@ -39,6 +39,10 @@ export const HELP_TEXTS = {
         settings: {
             title: 'Indstillinger',
             content: '⚙️ Systemindstillinger for fællesspisningen. Administrer globale præferencer og konfigurationer.'
+        },
+        system: {
+            title: 'Systemjobs',
+            content: '⚙️ Alle jobs kører automatisk efter tidsplan - du kan altid trygt genkøre dem manuelt. 🔄 Daglig vedligeholdelse lukker ordrer og opretter transaktioner. 💳 Månedlig fakturering genererer PBS-filer. 👥 Heynabo import synkroniserer husstande og beboere. 📋 Jobhistorik viser tidligere kørsler og eventuelle fejl.'
         }
     },
     household: {

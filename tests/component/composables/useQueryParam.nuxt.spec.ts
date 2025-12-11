@@ -57,7 +57,7 @@ describe('useQueryParam.ts', () => {
     })
 
     describe('Reading from URL', () => {
-      const readCases = [
+      const readCases: { query: Record<string, string>, expected: string, description: string }[] = [
         {query: {}, expected: 'view', description: 'no query param'},
         {query: {mode: 'edit'}, expected: 'edit', description: 'valid mode'},
         {query: {mode: 'create'}, expected: 'create', description: 'another valid mode'},
@@ -82,11 +82,11 @@ describe('useQueryParam.ts', () => {
         await flushPromises()
 
         expect(mockNavigateTo).toHaveBeenCalled()
-        expect(mockNavigateTo.mock.calls[0][0]).toEqual({
+        expect(mockNavigateTo.mock.calls[0]![0]).toEqual({
           path: '/test',
           query: {mode: 'edit'}
         })
-        expect(mockNavigateTo.mock.calls[0][1]).toEqual({replace: true})
+        expect(mockNavigateTo.mock.calls[0]![1]).toEqual({replace: true})
       })
 
       it('should preserve other query params', async () => {
@@ -96,7 +96,7 @@ describe('useQueryParam.ts', () => {
         value.value = 'edit'
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][0].query).toEqual({
+        expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
           other: 'value',
           mode: 'edit'
         })
@@ -186,7 +186,7 @@ describe('useQueryParam.ts', () => {
         value.value = testDate
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][0].query).toEqual({
+        expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
           date: '15/01/2025'
         })
       })
@@ -229,7 +229,7 @@ describe('useQueryParam.ts', () => {
       value.value = 'view'
       await flushPromises()
 
-      expect(mockNavigateTo.mock.calls[0][0].query).toEqual({
+      expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
         other: 'value'
         // mode is removed
       })
@@ -249,7 +249,7 @@ describe('useQueryParam.ts', () => {
         value.value = 'new'
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][0].query).toEqual({
+        expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
           other: 'value',
           test: 'new'
         })
@@ -267,7 +267,7 @@ describe('useQueryParam.ts', () => {
         value.value = 'new'
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][0].query).toEqual({
+        expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
           test: 'new'
         })
       })
@@ -285,7 +285,7 @@ describe('useQueryParam.ts', () => {
         value.value = 'new'
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][1]).toEqual({replace: true})
+        expect(mockNavigateTo.mock.calls[0]![1]).toEqual({replace: true})
       })
 
       it('should push to history when replaceHistory is false', async () => {
@@ -300,7 +300,7 @@ describe('useQueryParam.ts', () => {
         value.value = 'new'
         await flushPromises()
 
-        expect(mockNavigateTo.mock.calls[0][1]).toEqual({replace: false})
+        expect(mockNavigateTo.mock.calls[0]![1]).toEqual({replace: false})
       })
     })
 
@@ -332,7 +332,7 @@ describe('useQueryParam.ts', () => {
         const {value} = useQueryParam<string>('test', {defaultValue: 'default'})
         value.value = 'test'
         await flushPromises()
-        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('test')
+        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('test')
       })
     })
 
@@ -358,7 +358,7 @@ describe('useQueryParam.ts', () => {
         const {value} = useQueryParam<number>('test', numberOptions)
         value.value = 42
         await flushPromises()
-        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('42')
+        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('42')
       })
     })
 
@@ -381,7 +381,7 @@ describe('useQueryParam.ts', () => {
         const {value} = useQueryParam<boolean>('test', boolOptions)
         value.value = true
         await flushPromises()
-        expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('true')
+        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('true')
       })
     })
   })
@@ -498,7 +498,7 @@ describe('useQueryParam.ts', () => {
       value.value = 'value/with/slashes'
       await flushPromises()
 
-      expect(mockNavigateTo.mock.calls[0][0].query.test).toBe('value/with/slashes')
+      expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('value/with/slashes')
     })
 
     it('should handle validation returning false', () => {

@@ -82,11 +82,11 @@ const tabs = [
     component: 'AdminEconomy'
   },
   {
-    key: 'settings',
-    label: 'Indstillinger',
+    key: 'system',
+    label: 'System',
     icon: 'i-heroicons-cog-6-tooth',
-    content: 'Se systemindstillinger. Ændre systemindstillinger.',
-    component: 'AdminSettings'
+    content: 'Systemjobs, vedligeholdelse og indstillinger.',
+    component: 'AdminSystem'
   }
 ]
 

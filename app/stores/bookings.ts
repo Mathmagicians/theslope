@@ -1,9 +1,9 @@
-import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
@@ -256,6 +256,45 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const announceDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.ANNOUNCED)
     const cancelDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.CANCELLED)
 
+    // ========================================
+    // DAILY MAINTENANCE JOB (ADR-007)
+    // ========================================
+    const toast = useToast()
+
+    const {
+        data: dailyMaintenanceResult,
+        status: dailyMaintenanceStatus,
+        error: dailyMaintenanceError,
+        execute: executeDailyMaintenance
+    } = useAsyncData<DailyMaintenanceResult | null>(
+        'bookings-store-daily-maintenance',
+        () => $fetch<DailyMaintenanceResult>('/api/admin/maintenance/daily', { method: 'POST' }),
+        {
+            immediate: false,
+            transform: (data) => data ? DailyMaintenanceResultSchema.parse(data) : null
+        }
+    )
+
+    const isDailyMaintenanceRunning = computed(() => dailyMaintenanceStatus.value === 'pending')
+    const hasDailyMaintenanceResult = computed(() => dailyMaintenanceStatus.value === 'success' && dailyMaintenanceResult.value !== null)
+    const hasDailyMaintenanceError = computed(() => dailyMaintenanceStatus.value === 'error')
+
+    const runDailyMaintenance = async () => {
+        await executeDailyMaintenance()
+
+        if (hasDailyMaintenanceError.value) {
+            handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
+        } else if (hasDailyMaintenanceResult.value) {
+            const r = dailyMaintenanceResult.value!
+            console.info(CTX, `Daily maintenance completed: Consumed: ${r.consume.consumed}, Closed: ${r.close.closed}, Transactions: ${r.transact.created}`)
+            toast.add({
+                title: 'Daglig vedligeholdelse afsluttet',
+                description: `Middage: ${r.consume.consumed}, Ordrer lukket: ${r.close.closed}, Transaktioner: ${r.transact.created}`,
+                color: 'success'
+            })
+        }
+    }
+
     return {
         // state
         orders,
@@ -292,6 +331,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateDinnerEventField,
         updateDinnerEventAllergens,
         announceDinner,
-        cancelDinner
+        cancelDinner,
+
+        // daily maintenance
+        dailyMaintenanceResult,
+        dailyMaintenanceError,
+        isDailyMaintenanceRunning,
+        hasDailyMaintenanceResult,
+        hasDailyMaintenanceError,
+        runDailyMaintenance
     }
 })

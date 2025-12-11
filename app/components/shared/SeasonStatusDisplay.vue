@@ -74,8 +74,8 @@ const season = computed(() => {
   return planStore.seasons.find(s => s.id === props.seasonId) ?? null
 })
 
-// Get loading state from store
-const isActiveSeasonIdLoading = computed(() => planStore.isActiveSeasonIdLoading)
+// Get loading state from store for activation operations
+const isActivatingSeason = computed(() => planStore.isActivatingSeason)
 
 // Compute season status
 const status = computed(() => {
@@ -189,7 +189,8 @@ const currentButton = computed(() =>
           :trailing-icon="currentButton.icon"
           :size="getIsMd ? 'md' : 'sm'"
           :square="!getIsMd"
-          :loading="isActiveSeasonIdLoading"
+          :loading="isActivatingSeason"
+          :disabled="isActivatingSeason"
           @click="currentButton.action"
         >
           <template #leading>

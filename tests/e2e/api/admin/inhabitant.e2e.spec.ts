@@ -37,9 +37,10 @@ test.describe('Admin Inhabitant API', () => {
             expect(testInhabitant.householdId).toEqual(testHouseholdId)
 
             const retrievedInhabitant = await HouseholdFactory.getInhabitantById(context, testInhabitant.id)
-            expect(retrievedInhabitant.id).toBe(testInhabitant.id)
-            expect(retrievedInhabitant.name).toBe(testInhabitant.name)
-            expect(retrievedInhabitant.householdId).toBe(testInhabitant.householdId)
+            expect(retrievedInhabitant).not.toBeNull()
+            expect(retrievedInhabitant!.id).toBe(testInhabitant.id)
+            expect(retrievedInhabitant!.name).toBe(testInhabitant.name)
+            expect(retrievedInhabitant!.householdId).toBe(testInhabitant.householdId)
         })
 
         test('GET /api/admin/inhabitant should list all inhabitants', async ({browser}) => {
@@ -62,9 +63,10 @@ test.describe('Admin Inhabitant API', () => {
 
             // Get inhabitant details
             const inhabitantDetails = await HouseholdFactory.getInhabitantById(context, createdInhabitant.id)
-            expect(inhabitantDetails.id).toBe(createdInhabitant.id)
-            expect(inhabitantDetails.name).toBe(createdInhabitant.name)
-            expect(inhabitantDetails.householdId).toBe(testHouseholdId)
+            expect(inhabitantDetails).not.toBeNull()
+            expect(inhabitantDetails!.id).toBe(createdInhabitant.id)
+            expect(inhabitantDetails!.name).toBe(createdInhabitant.name)
+            expect(inhabitantDetails!.householdId).toBe(testHouseholdId)
         })
 
         test('DELETE /api/admin/inhabitant/[id] should delete the inhabitant', async ({browser}) => {
@@ -138,8 +140,8 @@ test.describe('Admin Inhabitant API', () => {
             // Verify the team and assignment exist
             expect(team.id).toBeDefined()
             expect(team.assignments.length).toBe(1)
-            const assignmentId = team.assignments[0].id
-            const inhabitantId = team.assignments[0].inhabitantId
+            const assignmentId = team.assignments[0]!.id
+            const inhabitantId = team.assignments[0]!.inhabitantId
             expect(assignmentId).toBeDefined()
             expect(inhabitantId).toBeDefined()
 

@@ -9,7 +9,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '../../testHelpers'
 
 const {validatedBrowserContext} = testHelpers
-const {DinnerStateSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Variables to store for cleanup and test data
@@ -61,28 +61,30 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // AND: Create tickets for the dinner event using database ticket price
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
-        const inhabitant = inhabitants[0]
+        expect(inhabitants).toHaveLength(1)
+        const inhabitant = inhabitants[0]!
 
         // Verify ticket price ID is from database
         expect(adultPrice!.id).toBeGreaterThan(0)
         expect(adultPrice!.id).not.toBe(1) // Should not be factory default
 
+        const orderData = {
+            inhabitantId: inhabitant.id,
+            ticketPriceId: adultPrice!.id!,
+            bookedByUserId: 1, // Factory default user ID
+            dinnerMode: DinnerModeSchema.enum.DINEIN
+        }
+
         const [result1, result2] = await Promise.all([
             OrderFactory.createOrder(context, {
                 householdId: household.id,
                 dinnerEventId: createdDinnerEvent.id!,
-                orders: [{
-                    inhabitantId: inhabitant.id,
-                    ticketPriceId: adultPrice!.id!
-                }]
+                orders: [orderData]
             }),
             OrderFactory.createOrder(context, {
                 householdId: household.id,
                 dinnerEventId: createdDinnerEvent.id!,
-                orders: [{
-                    inhabitantId: inhabitant.id,
-                    ticketPriceId: adultPrice!.id!
-                }]
+                orders: [orderData]
             })
         ])
 
@@ -96,19 +98,21 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         if (detailWithTickets?.cookingTeam) {
             expect(detailWithTickets.cookingTeam.assignments.length).toBeGreaterThanOrEqual(0)
             if (detailWithTickets.cookingTeam.assignments.length > 0) {
-                expect(detailWithTickets.cookingTeam.assignments[0].inhabitant.id).toBeDefined()
+                expect(detailWithTickets.cookingTeam.assignments[0]!.inhabitant.id).toBeDefined()
             }
         }
 
         // AND: Detail includes tickets with full relations (ADR-009: detail endpoint comprehensive)
-        expect(detailWithTickets?.tickets).toBeDefined()
-        expect(detailWithTickets!.tickets.length).toBe(2)
-        const ticket = detailWithTickets!.tickets[0]
-        expect(ticket.inhabitant.id).toBe(inhabitant.id)
-        expect(ticket.inhabitant.name).toBeDefined()
-        expect(ticket.ticketPrice.id).toBe(adultPrice!.id)
-        expect(ticket.ticketPrice.ticketType).toBe(TicketType.ADULT)
-        expect(ticket.ticketPrice.price).toBe(5000)
+        expect(detailWithTickets).not.toBeNull()
+        expect(detailWithTickets!.tickets).toBeDefined()
+        expect(detailWithTickets!.tickets!.length).toBe(2)
+        const ticket = detailWithTickets!.tickets![0]
+        expect(ticket).toBeDefined()
+        expect(ticket!.inhabitant.id).toBe(inhabitant.id)
+        expect(ticket!.inhabitant.name).toBeDefined()
+        expect(ticket!.ticketPrice.id).toBe(adultPrice!.id)
+        expect(ticket!.ticketPrice.ticketType).toBe(TicketType.ADULT)
+        expect(ticket!.ticketPrice.price).toBe(5000)
 
         // Cleanup orders before season deletion (ticketPrice has onDelete: Restrict)
         await Promise.all([
@@ -180,7 +184,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         // AND: Should include our created events
         const createdEventIds = [dinnerEvent1.id, dinnerEvent2.id]
-        const foundEvents = events.filter((e: unknown) => createdEventIds.includes(e.id))
+        const foundEvents = events.filter((e: { id: number }) => createdEventIds.includes(e.id))
         expect(foundEvents.length).toBe(2)
     })
 
@@ -203,12 +207,12 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(Array.isArray(events)).toBe(true)
 
         // AND: All events should belong to testSeasonId
-        events.forEach((event: unknown) => {
+        events.forEach((event: { seasonId: number }) => {
             expect(event.seasonId).toBe(testSeasonId)
         })
 
         // AND: Should include our created event
-        const foundEvent = events.find((e: unknown) => e.id === dinnerEvent.id)
+        const foundEvent = events.find((e: { id: number }) => e.id === dinnerEvent.id)
         expect(foundEvent).toBeDefined()
     })
 

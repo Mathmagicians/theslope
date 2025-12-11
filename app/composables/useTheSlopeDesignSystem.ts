@@ -511,6 +511,7 @@ export const ICONS = {
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
     arrowUp: 'i-heroicons-arrow-up',
+    sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
 
     // Empty states
@@ -942,6 +943,61 @@ export const URGENCY_TO_BADGE = {
     2: DEADLINE_BADGES.CRITICAL
 } as const
 
+// ============================================================================
+// PART 7: Empty State Messages (fun placeholders)
+// ============================================================================
+
+/**
+ * EMPTY_STATE_MESSAGES - Fun empty state messages by context
+ */
+export const EMPTY_STATE_MESSAGES = {
+    cookingTeam: [
+        { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
+        { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
+        { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
+        { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
+        { emoji: '🏃‍♀️🏃‍♂️', text: 'Køkkenholdet er løbet ud at lege' }
+    ],
+    household: [
+        { emoji: '👻', text: 'Husstanden er forsvundet i tågen' },
+        { emoji: '🏝️', text: 'Alle på ferie - ingen hjemme!' },
+        { emoji: '🎪', text: 'Familien er stukket af med cirkus' },
+        { emoji: '🧘', text: 'Familien mediterer i bjergene' },
+        { emoji: '🚀', text: 'Husstanden tog til månen... uden WiFi' }
+    ],
+    allergy: [
+        { emoji: '🤷', text: 'Ingen beboere har denne allergi... endnu' },
+        { emoji: '✨', text: 'Kan spises af alle - så er køkkenlivet lidt lettere!' },
+        { emoji: '🎉', text: 'Hurra! Ingen allergiske reaktioner her' },
+        { emoji: '👍', text: 'Alle har sagt god for denne ingrediens' },
+        { emoji: '😌', text: 'Ingen bekymringer med denne ingrediens' }
+    ],
+    noTeamAssigned: [
+        { emoji: '🤔', text: 'Hvem laver maden? Det finder vi ud af!' },
+        { emoji: '🎲', text: 'Madholdet er stadig i puljen' },
+        { emoji: '🔮', text: 'Krystalkuglen ved ikke hvem der laver mad endnu' },
+        { emoji: '🎯', text: 'Administratoren sigter efter et madhold' },
+        { emoji: '🧩', text: 'Puslespillet mangler et madhold' }
+    ],
+    jobHistory: [
+        { emoji: '😴', text: 'Bytenisserne sover endnu' },
+        { emoji: '🐱', text: 'Katten har ædt kildekoden til systemjobbet' },
+        { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
+        { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
+        { emoji: '🔧', text: 'Tandhjulene er ved at blive poleret' }
+    ]
+} as const
+
+/** Pick a random message from a context - uses date-based seed for SSR consistency */
+export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
+    const messages = EMPTY_STATE_MESSAGES[context]
+    // Use current date as seed so server and client get the same "random" message
+    const today = new Date()
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
+    const index = seed % messages.length
+    return messages[index]!
+}
+
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean>>('isMd', ref(false))
@@ -989,7 +1045,9 @@ export const useTheSlopeDesignSystem = () => {
         BORDER,
 
         // Helpers
-        getKitchenPanelClasses
+        getKitchenPanelClasses,
+        getRandomEmptyMessage,
+        EMPTY_STATE_MESSAGES
     }
 }
 

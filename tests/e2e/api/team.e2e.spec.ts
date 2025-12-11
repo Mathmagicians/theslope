@@ -28,7 +28,7 @@ test.describe('Team API - My Teams', () => {
             const userResponse = await context.request.get('/api/admin/users', { headers: testHelpers.headers })
             expect(userResponse.status(), 'GET /api/admin/users should return 200').toBe(200)
             const users = await userResponse.json()
-            const testUser = users.find((u: unknown) => u.email === process.env.HEY_NABO_USERNAME)
+            const testUser = users.find((u: { email: string }) => u.email === process.env.HEY_NABO_USERNAME)
             expect(testUser, `Test user with email ${process.env.HEY_NABO_USERNAME} should exist`).toBeDefined()
             expect(testUser.Inhabitant, `Test user should have an Inhabitant. User: ${JSON.stringify(testUser, null, 2)}`).toBeDefined()
             const testInhabitantId = testUser.Inhabitant.id
@@ -36,20 +36,21 @@ test.describe('Team API - My Teams', () => {
 
             // Create teams and assign logged-in user to them
             const team1 = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, "My-Team-1")
-            const assignment1 = await SeasonFactory.assignMemberToTeam(context, team1.id, testInhabitantId, 'CHEF')
-            expect(assignment1, 'Team 1 assignment should be created').toBeDefined()
-            expect(assignment1.inhabitantId, 'Assignment 1 should reference test inhabitant').toBe(testInhabitantId)
+            const assignment1 = await SeasonFactory.assignMemberToTeam(context, team1.id!, testInhabitantId, 'CHEF')
+            expect(assignment1, 'Team 1 assignment should be created').not.toBeNull()
+            expect(assignment1!.inhabitantId, 'Assignment 1 should reference test inhabitant').toBe(testInhabitantId)
 
             const team2 = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, "My-Team-2")
-            const assignment2 = await SeasonFactory.assignMemberToTeam(context, team2.id, testInhabitantId, 'COOK')
-            expect(assignment2, 'Team 2 assignment should be created').toBeDefined()
-            expect(assignment2.inhabitantId, 'Assignment 2 should reference test inhabitant').toBe(testInhabitantId)
+            const assignment2 = await SeasonFactory.assignMemberToTeam(context, team2.id!, testInhabitantId, 'COOK')
+            expect(assignment2, 'Team 2 assignment should be created').not.toBeNull()
+            expect(assignment2!.inhabitantId, 'Assignment 2 should reference test inhabitant').toBe(testInhabitantId)
 
             // Verify teams have the assignments
-            const team1Verify = await SeasonFactory.getCookingTeamById(context, team1.id)
-            expect(team1Verify.assignments, 'Team 1 should have assignments').toBeDefined()
-            expect(team1Verify.assignments.length, `Team 1 should have at least 1 assignment. Assignments: ${JSON.stringify(team1Verify.assignments)}`).toBeGreaterThan(0)
-            expect(team1Verify.assignments.some((a: unknown) => a.inhabitantId === testInhabitantId), `Team 1 should have assignment for inhabitant ${testInhabitantId}`).toBe(true)
+            const team1Verify = await SeasonFactory.getCookingTeamById(context, team1.id!)
+            expect(team1Verify, 'Team 1 should exist').not.toBeNull()
+            expect(team1Verify!.assignments, 'Team 1 should have assignments').toBeDefined()
+            expect(team1Verify!.assignments.length, `Team 1 should have at least 1 assignment. Assignments: ${JSON.stringify(team1Verify!.assignments)}`).toBeGreaterThan(0)
+            expect(team1Verify!.assignments.some((a) => a.inhabitantId === testInhabitantId), `Team 1 should have assignment for inhabitant ${testInhabitantId}`).toBe(true)
 
             // Fetch my teams
             const response = await context.request.get(MY_TEAM_ENDPOINT)
@@ -60,12 +61,12 @@ test.describe('Team API - My Teams', () => {
             expect(myTeams.length, `Should return 2+ teams. Received ${myTeams.length} teams. Test inhabitant ID: ${testInhabitantId}. Response: ${JSON.stringify(myTeams)}`).toBeGreaterThanOrEqual(2)
 
             // Verify returned teams include created teams
-            const teamIds = myTeams.map((t: unknown) => t.id)
+            const teamIds = myTeams.map((t: { id: number }) => t.id)
             expect(teamIds).toContain(team1.id)
             expect(teamIds).toContain(team2.id)
 
             // Verify structure includes dinnerEvents and assignments
-            const myTeam = myTeams.find((t: unknown) => t.id === team1.id)
+            const myTeam = myTeams.find((t: { id: number }) => t.id === team1.id)
             expect(myTeam).toBeDefined()
             expect(myTeam.seasonId).toBe(activeSeason.id!)
             expect(Array.isArray(myTeam.dinnerEvents)).toBe(true)
@@ -88,7 +89,7 @@ test.describe('Team API - My Teams', () => {
             expect(Array.isArray(myTeams)).toBe(true)
 
             // Should not include the team without user assignment
-            const teamIds = myTeams.map((t: unknown) => t.id)
+            const teamIds = myTeams.map((t: { id: number }) => t.id)
             expect(teamIds).not.toContain(otherTeam.id)
         })
     })
