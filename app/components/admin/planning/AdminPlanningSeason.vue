@@ -8,6 +8,10 @@ const {SeasonSchema, createSeasonName} = useSeason()
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
 
+// Get loading state from store (ADR-007: store owns loading states)
+const planStore = usePlanStore()
+const {isSavingSeason} = storeToRefs(planStore)
+
 // COMPONENT DEFINITION
 const props = defineProps<{ mode: FormMode }>()
 const model = defineModel<Season>({required: true})
@@ -52,6 +56,7 @@ const onSubmitSeason = () => {
 
 // UI METHODS
 const buttonText = computed(() => {
+  if (isSavingSeason.value) return 'Arbejder...'
   switch (props.mode) {
     case 'create':
       return 'Opret ny sæson'
@@ -186,7 +191,7 @@ class="mx-auto"
               <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
                 Annuller
               </UButton>
-              <UButton name="submit-season" type="submit" color="info" icon="i-heroicons-check-circle">
+              <UButton name="submit-season" type="submit" color="info" icon="i-heroicons-check-circle" :loading="isSavingSeason" :disabled="isSavingSeason">
                 {{ buttonText }}
               </UButton>
             </div>

@@ -59,7 +59,7 @@ describe('AllergenMultiSelector', () => {
             {
                 name: 'empty state',
                 modelValue: [],
-                expectedTexts: ['Ingen allergener valgt'],
+                expectedTexts: ['Ingen allergener'],  // Less verbatim - matches "Ingen allergener i menuen"
                 notExpectedText: 'Mælk'
             }
         ])('renders $name', async ({ modelValue, expectedTexts, notExpectedText }) => {

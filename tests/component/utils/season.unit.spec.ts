@@ -28,8 +28,8 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone} from '~/utils/date'
 import {createWeekDayMapFromSelection} from '~/types/dateTypes'
-import type {CookingTeam} from '~/composables/useCookingTeamValidation'
-import type {DinnerEvent} from '~/composables/useBookingValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 
 // Schema for splitDinnerEvents return structure
@@ -42,14 +42,14 @@ const SplitDinnerEventsResultSchema = z.object({
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
 // Factory functions for test data
-const createTeam = (id: number, name: string, affinity: WeekDayMap | null | undefined = null): CookingTeam => ({
+const createTeam = (id: number, name: string, affinity: WeekDayMap | null | undefined = null): CookingTeamDisplay => ({
     id,
     name,
     seasonId: 1,
     affinity
 })
 
-const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEvent => ({
+const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEventDisplay => ({
     id,
     date,
     menuTitle: '',

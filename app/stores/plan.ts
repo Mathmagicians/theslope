@@ -78,17 +78,55 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // Create team operation - useAsyncData pattern for mutations
-        const createTeamData = ref<CookingTeamDetail | CookingTeamDetail[]>([])
+        const createTeamData = ref<CookingTeamDisplay[]>([])
         const {
+            data: createdTeams,
             status: createTeamStatus,
             error: createTeamError,
             execute: executeCreateTeam
         } = useAsyncData(
             'plan-store-create-team',
-            () => Promise.resolve(createTeamData.value),
+            async () => {
+                return await $fetch<CookingTeamDetail[]>('/api/admin/team', {
+                    method: 'PUT',
+                    body: createTeamData.value,
+                    headers: {'Content-Type': 'application/json'}
+                })
+            },
             {
                 immediate: false,
                 default: () => []
+            }
+        )
+
+        // Save season operation - useAsyncData pattern for mutations
+        const saveSeasonData = ref<{ season: Season, isCreate: boolean }>({ season: {} as Season, isCreate: false })
+        const {
+            data: savedSeason,
+            status: saveSeasonStatus,
+            error: saveSeasonError,
+            execute: executeSaveSeason
+        } = useAsyncData(
+            'plan-store-save-season',
+            async () => {
+                const { season, isCreate } = saveSeasonData.value
+                if (isCreate) {
+                    return await $fetch<Season>('/api/admin/season', {
+                        method: 'PUT',
+                        body: season,
+                        headers: {'Content-Type': 'application/json'}
+                    })
+                } else {
+                    return await $fetch<Season>(`/api/admin/season/${season.id}`, {
+                        method: 'POST',
+                        body: season,
+                        headers: {'Content-Type': 'application/json'}
+                    })
+                }
+            },
+            {
+                immediate: false,
+                default: () => null
             }
         )
 
@@ -126,6 +164,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const isActiveSeasonIdErrored = computed(() => activeSeasonIdStatus.value === 'error')
         const isActiveSeasonIdInitialized = computed(() => activeSeasonIdStatus.value === 'success')
         const isActivatingSeason = computed(() => activateSeasonStatus.value === 'pending')
+        const isSavingSeason = computed(() => saveSeasonStatus.value === 'pending')
 
         const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
         const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
@@ -241,19 +280,16 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const createSeason = async (season: Season): Promise<Season> => {
-            try {
-                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
-                const createdSeason = await $fetch<Season>('/api/admin/season', {
-                    method: 'PUT',
-                    body: season,
-                    headers: {'Content-Type': 'application/json'}
-                })
-                await loadSeasons()
-                return createdSeason
-            } catch (e: unknown) {
-                handleApiError(e, 'createSeason')
-                throw e
+            saveSeasonData.value = { season, isCreate: true }
+            await executeSaveSeason()
+
+            if (saveSeasonError.value) {
+                handleApiError(saveSeasonError.value, 'createSeason')
+                throw saveSeasonError.value
             }
+
+            await loadSeasons()
+            return savedSeason.value!
         }
 
         const generateDinnerEvents = async (seasonId: number) => {
@@ -310,21 +346,18 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const updateSeason = async (season: Season) => {
-            try {
-                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
-                await $fetch(`/api/admin/season/${season.id}`, {
-                    method: 'POST',
-                    body: season,
-                    headers: {'Content-Type': 'application/json'}
-                })
-                await loadSeasons()
-                // Refresh the selected season to get updated data
-                if (selectedSeasonId.value) {
-                    await refreshSelectedSeason()
-                }
-            } catch (e: unknown) {
-                handleApiError(e, 'updateSeason')
-                throw e
+            saveSeasonData.value = { season, isCreate: false }
+            await executeSaveSeason()
+
+            if (saveSeasonError.value) {
+                handleApiError(saveSeasonError.value, 'updateSeason')
+                throw saveSeasonError.value
+            }
+
+            await loadSeasons()
+            // Refresh the selected season to get updated data
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
             }
         }
 
@@ -370,12 +403,7 @@ export const usePlanStore = defineStore("Plan", () => {
         // ADR-009: Accept Display type for input (lightweight), return Detail type (mutation response)
         const createTeam = async (teamOrTeams: CookingTeamDisplay | CookingTeamDisplay[]): Promise<CookingTeamDetail[]> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
-
-            createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
-                method: 'PUT',
-                body: teams,
-                headers: {'Content-Type': 'application/json'}
-            })
+            createTeamData.value = teams
 
             await executeCreateTeam()
 
@@ -384,13 +412,13 @@ export const usePlanStore = defineStore("Plan", () => {
                 throw createTeamError.value
             }
 
-            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.length} team(s)`)
+            console.info(`👥 > PLAN_STORE > Created ${createdTeams.value.length} team(s)`)
 
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
 
-            return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
+            return createdTeams.value
         }
 
         // ADR-009: Accept Display type for input (lightweight)
@@ -519,6 +547,7 @@ export const usePlanStore = defineStore("Plan", () => {
             isActiveSeasonIdErrored,
             isActiveSeasonIdInitialized,
             isActivatingSeason,
+            isSavingSeason,
             activeSeasonIdError,
             isSeasonsLoading,
             isNoSeasons,

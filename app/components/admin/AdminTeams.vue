@@ -588,7 +588,7 @@ v-else
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
         <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
-          Opret madhold
+          {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
         <UButton color="neutral" variant="ghost" @click="handleCancel">
           Annuller
@@ -604,7 +604,7 @@ v-else
             :disabled="isActionLoading"
             @click="handleAddTeam"
         >
-          Tilføj madhold
+          {{ isActionLoading ? 'Arbejder...' : 'Tilføj madhold' }}
         </UButton>
         <UButton color="secondary" variant="ghost" @click="handleCancel">
           Annuller

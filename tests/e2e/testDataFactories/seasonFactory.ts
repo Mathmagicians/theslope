@@ -7,7 +7,7 @@ import type {
     CookingTeamAssignment,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
-import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult} from "~/composables/useBookingValidation"
+import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -871,6 +871,38 @@ export class SeasonFactory {
         const response = await context.request.post(`/api/admin/season/${seasonId}/assign-cooking-teams`)
         expect(response.status()).toBe(200)
         return response.json()
+    }
+
+    // === DAILY MAINTENANCE METHODS ===
+
+    /**
+     * Run daily maintenance endpoint
+     * Executes: consumeDinners → closeOrders → createTransactions → scaffoldPrebookings
+     * All operations are idempotent - safe to run multiple times
+     *
+     * @param context - Browser context for API requests
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns DailyMaintenanceResult with counts from each step
+     */
+    static readonly runDailyMaintenance = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<DailyMaintenanceResult> => {
+        const {DailyMaintenanceResultSchema} = useBookingValidation()
+        const response = await context.request.post('/api/admin/maintenance/daily', {
+            headers: headers
+        })
+
+        const status = response.status()
+        const responseBody = await response.json()
+
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return DailyMaintenanceResultSchema.parse(responseBody)
+        }
+
+        return responseBody
     }
 
 }

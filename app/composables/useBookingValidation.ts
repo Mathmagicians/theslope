@@ -403,12 +403,12 @@ export const useBookingValidation = () => {
      * Transform DinnerEvent from Prisma format to domain format (ADR-010)
      * Handles join table flattening for allergens only (for Display schema)
      */
-    function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): Record<string, unknown> {
+    function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): z.infer<typeof DinnerEventDisplaySchema> {
         const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
-        return {
+        return DinnerEventDisplaySchema.parse({
             ...prismaEvent,
             allergens: allergens ? allergens.map((a) => a.allergyType) : []
-        }
+        })
     }
 
     /**
