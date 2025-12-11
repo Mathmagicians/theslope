@@ -1,6 +1,7 @@
 import type {D1Database} from "@cloudflare/workers-types"
 import {fetchClosedOrdersWithoutTransaction, createTransactionsBatch, type TransactionCreateData} from "~~/server/data/financesRepository"
-import {useBookingValidation, type CreateTransactionsResult} from "~/composables/useBookingValidation"
+import type {CreateTransactionsResult} from "~/composables/useBookingValidation"
+import {useBooking} from "~/composables/useBooking"
 
 const LOG = '💰 > DAILY > [CREATE_TRANSACTIONS]'
 
@@ -17,7 +18,7 @@ const LOG = '💰 > DAILY > [CREATE_TRANSACTIONS]'
  * @returns CreateTransactionsResult with count of created transactions
  */
 export async function createTransactions(d1Client: D1Database): Promise<CreateTransactionsResult> {
-    const {chunkIds} = useBookingValidation()
+    const {chunkTransactions} = useBooking()
 
     // Fetch all CLOSED orders without transaction from repository
     const closedOrders = await fetchClosedOrdersWithoutTransaction(d1Client)
@@ -51,8 +52,7 @@ export async function createTransactions(d1Client: D1Database): Promise<CreateTr
     }))
 
     // Batch create via repository
-    // Reuse chunkIds for transaction batching (same D1 limits apply)
-    const batches = chunkIds(transactionData)
+    const batches = chunkTransactions(transactionData)
     let totalCreated = 0
 
     for (const batch of batches) {

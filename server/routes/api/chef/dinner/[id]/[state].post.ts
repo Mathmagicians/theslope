@@ -58,10 +58,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         }
 
         const {createHeynaboEventPayload, canCancelDinner} = useBooking()
-        const baseUrl = process.env.NUXT_PUBLIC_BASE_URL
-        if (!baseUrl) {
-            throw createError({statusCode: 500, message: PREFIX + 'Server configuration error: NUXT_PUBLIC_BASE_URL not set'})
-        }
+        const baseUrl = getRequestURL(event).origin
 
         switch (targetState) {
             case DinnerState.ANNOUNCED: {
@@ -69,11 +66,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     throw createError({statusCode: 400, message: PREFIX + `Cannot announce cancelled dinner event ${id}`})
                 }
 
-                const heynaboPayload = createHeynaboEventPayload(
-                    {date: dinner.date, menuTitle: dinner.menuTitle, menuDescription: dinner.menuDescription},
-                    baseUrl,
-                    dinner.cookingTeam?.name
-                )
+                const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
 
                 let heynaboEventId = dinner.heynaboEventId
                 if (heynaboEventId) {
@@ -121,11 +114,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
                 // Cancel in Heynabo if it was announced (has heynaboEventId)
                 if (dinner.heynaboEventId) {
-                    const heynaboPayload = createHeynaboEventPayload(
-                        {date: dinner.date, menuTitle: dinner.menuTitle, menuDescription: dinner.menuDescription},
-                        baseUrl,
-                        dinner.cookingTeam?.name
-                    )
+                    const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
                     await cancelHeynaboEvent(heynaboToken, dinner.heynaboEventId, heynaboPayload)
                 }
 

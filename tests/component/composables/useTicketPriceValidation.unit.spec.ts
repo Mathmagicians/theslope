@@ -1,4 +1,5 @@
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
+import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {describe, expect, it} from "vitest"
 import {TicketFactory} from "../../e2e/testDataFactories/ticketFactory"
 
@@ -158,15 +159,15 @@ describe('useTicketPriceValidation', () => {
             {
                 scenario: 'mixed: create + update + delete',
                 incoming: [
-                    existing[0],                                    // idempotent
-                    { ...existing[1], price: 2000 },                // update
-                    { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0], description: 'Brand new' } // create
+                    existing[0]!,                                   // idempotent
+                    { ...existing[1]!, price: 2000 },               // update
+                    { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0]!, description: 'Brand new' } // create
                     // existing[2] and existing[3] removed → delete
                 ],
                 expected: { create: 1, update: 1, idempotent: 1, delete: 2 }
             }
         ])('$scenario', ({ incoming, expected }) => {
-            const result = reconcileTicketPrices(existing)(incoming)
+            const result = reconcileTicketPrices(existing)(incoming as TicketPrice[])
 
             expect(result.create).toHaveLength(expected.create)
             expect(result.update).toHaveLength(expected.update)

@@ -65,11 +65,11 @@ const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMo
 // Random fun empty state message from design system
 const emptyStateMessage = getRandomEmptyMessage('household')
 
-// UTable columns
+// UTable columns - 2 columns for mobile-friendly layout
+// Ticket type badge shown inline via UserListItem #badge slot
 const columns = [
-  {id: 'ticketType', header: 'Billet'},
-  {id: 'name', header: 'Navn'},
-  {id: 'mode', header: 'Booking'}
+  {id: 'name', header: 'Hvem'},
+  {id: 'mode', header: 'Tilmelding'}
 ]
 
 // Table data: inhabitants with their ticket configs and orders
@@ -187,25 +187,23 @@ const handlePowerModeUpdate = () => {
       :columns="columns"
       row-key="id"
     >
-      <!-- Ticket Type Column -->
-      <template #ticketType-cell="{ row }">
-        <UBadge
-          v-if="row.original.ticketConfig"
-          :color="row.original.ticketConfig.color"
-          variant="subtle"
-          size="sm"
-        >
-          {{ row.original.ticketConfig.label }}
-        </UBadge>
-        <span v-else :class="TYPOGRAPHY.bodyTextMuted">-</span>
-      </template>
-
-      <!-- Name Column -->
+      <!-- Name Column - includes ticket type badge via #badge slot -->
       <template #name-cell="{ row }">
         <UserListItem
           :inhabitants="row.original"
           compact
-        />
+        >
+          <template #badge>
+            <UBadge
+              v-if="row.original.ticketConfig"
+              :color="row.original.ticketConfig.color"
+              variant="subtle"
+              size="sm"
+            >
+              {{ row.original.ticketConfig.label }}
+            </UBadge>
+          </template>
+        </UserListItem>
       </template>
 
       <!-- Mode Column -->

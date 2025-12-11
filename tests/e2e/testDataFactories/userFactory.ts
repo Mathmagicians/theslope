@@ -107,24 +107,24 @@ export class UserFactory {
         }))
     }
 
-    static readonly createAdmin = (testSalt: string = testHelpers.temporaryAndRandom()) => {
+    static readonly createAdmin = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: [SystemRole.ADMIN] as const
+            systemRoles: [SystemRole.ADMIN]
         }
     }
 
-    static readonly createAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()) => {
+    static readonly createAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: [SystemRole.ALLERGYMANAGER] as const
+            systemRoles: [SystemRole.ALLERGYMANAGER]
         }
     }
 
-    static readonly createAdminAndAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()) => {
+    static readonly createAdminAndAllergyManager = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {
         return {
             ...this.defaultUser(testSalt),
-            systemRoles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER] as const
+            systemRoles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]
         }
     }
 

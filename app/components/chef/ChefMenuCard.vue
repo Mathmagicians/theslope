@@ -548,28 +548,26 @@ const handleCardClick = () => {
       </UForm>
 
       <!-- ========== ALLERGEN SECTION ========== -->
+      <!-- AllergenMultiSelector handles its own title/empty state in view mode -->
       <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">
-        <UFormField :hint="isEditing ? (isEditingAllergens ? 'Gem eller annuller' : 'Rediger allergener') : undefined" :ui="{ hint: 'hidden md:block' }">
-          <template #default>
-            <div class="flex items-center gap-1 md:gap-2 mb-2">
-              <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
-              <UButton
-                v-for="btn in allergenEditButtons"
-                :key="btn.name"
-                :icon="btn.icon"
-                :color="btn.color"
-                :variant="btn.variant"
-                :size="SIZES.standard"
-                square
-                :name="btn.name"
-                @click="btn.onClick"
-              />
-            </div>
-          </template>
-        </UFormField>
-
-        <!-- VIEW mode: Display allergens -->
+        <!-- VIEW allergens (not editing allergens) -->
         <div v-if="!isEditingAllergens">
+          <!-- Edit button row (only when form is in EDIT mode) -->
+          <div v-if="isEditing" class="flex items-center gap-1 md:gap-2 mb-2">
+            <span class="flex-1" />
+            <UButton
+              v-for="btn in allergenEditButtons"
+              :key="btn.name"
+              :icon="btn.icon"
+              :color="btn.color"
+              :variant="btn.variant"
+              :size="SIZES.standard"
+              square
+              :name="btn.name"
+              @click="btn.onClick"
+            />
+          </div>
+          <!-- AllergenMultiSelector shows title when has allergens, subtle empty state when none -->
           <AllergenMultiSelector
             :model-value="selectedAllergenIds"
             :allergy-types="allergyTypes"
@@ -578,8 +576,26 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- EDIT mode: Edit allergens -->
+        <!-- EDIT allergens: Show header with save/cancel buttons -->
         <div v-else>
+          <UFormField hint="Gem eller annuller" :ui="{ hint: 'hidden md:block' }">
+            <template #default>
+              <div class="flex items-center gap-1 md:gap-2 mb-2">
+                <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
+                <UButton
+                  v-for="btn in allergenEditButtons"
+                  :key="btn.name"
+                  :icon="btn.icon"
+                  :color="btn.color"
+                  :variant="btn.variant"
+                  :size="SIZES.standard"
+                  square
+                  :name="btn.name"
+                  @click="btn.onClick"
+                />
+              </div>
+            </template>
+          </UFormField>
           <AllergenMultiSelector
             v-model="draftAllergenIds"
             :allergy-types="allergyTypes"

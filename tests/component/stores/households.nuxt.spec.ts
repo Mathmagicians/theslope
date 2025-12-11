@@ -66,7 +66,8 @@ const createMockHouseholdDetail = (): HouseholdDetail => ({
       lastName: 'Anderson',
       birthDate: new Date('1990-01-01'),
       pictureUrl: null,
-      userId: null
+      userId: null,
+      dinnerPreferences: null
     }
   ]
 })

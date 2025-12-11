@@ -16,9 +16,10 @@ async function performLogin(request: APIRequestContext) {
     expect(responseBody).toHaveProperty('email', userName)
 
     const responseHeaders = response.headers()
-    const responseCookies = new Map(responseHeaders['set-cookie']
+    const setCookieHeader = responseHeaders['set-cookie'] ?? ''
+    const responseCookies = new Map(setCookieHeader
         .split('\n')
-        .map((c: string) => c.split(';', 2)[0].split('=') as [string, string]))
+        .map((c: string) => (c.split(';', 2)[0] ?? '').split('=') as [string, string]))
 
     expect(responseCookies.size).toBeGreaterThan(0)
     const nuxtCookie = responseCookies.get('nuxt-session')

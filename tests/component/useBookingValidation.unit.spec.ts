@@ -4,57 +4,42 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 describe('useBookingValidation - CreateOrdersRequestSchema Business Rules', () => {
     const {CreateOrdersRequestSchema, DinnerModeSchema} = useBookingValidation()
+    const DINEIN = DinnerModeSchema.enum.DINEIN
+    const TAKEAWAY = DinnerModeSchema.enum.TAKEAWAY
 
-    describe('Business Rule: ONE user books for entire family', () => {
-        it('WHEN all orders have same bookedByUserId THEN validates successfully', () => {
-            const request = OrderFactory.defaultCreateOrdersRequest({
-                orders: [
-                    {inhabitantId: 10, ticketPriceId: 1, bookedByUserId: 42},
-                    {inhabitantId: 11, ticketPriceId: 2, bookedByUserId: 42}
-                ]
-            })
-            const result = CreateOrdersRequestSchema.safeParse(request)
-            expect(result.success).toBe(true)
-        })
+    // Helper to create order with defaults
+    const order = (inhabitantId: number, ticketPriceId: number, bookedByUserId: number, dinnerMode = DINEIN) =>
+        ({inhabitantId, ticketPriceId, bookedByUserId, dinnerMode})
 
-        it('WHEN orders have different bookedByUserId THEN fails validation', () => {
-            const request = OrderFactory.defaultCreateOrdersRequest({
-                orders: [
-                    {inhabitantId: 10, ticketPriceId: 1, bookedByUserId: 42},
-                    {inhabitantId: 11, ticketPriceId: 2, bookedByUserId: 99}
-                ]
-            })
-            const result = CreateOrdersRequestSchema.safeParse(request)
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.issues[0]?.message).toContain('samme bruger')
-            }
-        })
-    })
+    it.each([
+        {
+            scenario: 'same bookedByUserId for all orders',
+            orders: [order(10, 1, 42), order(11, 2, 42)],
+            shouldSucceed: true
+        },
+        {
+            scenario: 'different bookedByUserId across orders',
+            orders: [order(10, 1, 42), order(11, 2, 99)],
+            shouldSucceed: false,
+            expectedError: 'samme bruger'
+        },
+        {
+            scenario: 'multiple orders for same inhabitant',
+            orders: [order(10, 1, 42), order(10, 2, 42)],
+            shouldSucceed: true
+        },
+        {
+            scenario: 'different dinner modes for family members',
+            orders: [order(10, 1, 42, DINEIN), order(11, 2, 42, TAKEAWAY)],
+            shouldSucceed: true
+        }
+    ])('GIVEN $scenario THEN validation $shouldSucceed', ({orders, shouldSucceed, expectedError}) => {
+        const request = OrderFactory.defaultCreateOrdersRequest({orders})
+        const result = CreateOrdersRequestSchema.safeParse(request)
 
-    describe('Business Rule: Multiple orders for same inhabitant allowed', () => {
-        it('WHEN same inhabitant has multiple orders THEN validates successfully', () => {
-            const request = OrderFactory.defaultCreateOrdersRequest({
-                orders: [
-                    {inhabitantId: 10, ticketPriceId: 1, bookedByUserId: 42},
-                    {inhabitantId: 10, ticketPriceId: 2, bookedByUserId: 42}
-                ]
-            })
-            const result = CreateOrdersRequestSchema.safeParse(request)
-            expect(result.success).toBe(true)
-        })
-    })
-
-    describe('Business Rule: Different dinner modes allowed', () => {
-        it('WHEN different family members have different dinner modes THEN validates successfully', () => {
-            const request = OrderFactory.defaultCreateOrdersRequest({
-                orders: [
-                    {inhabitantId: 10, ticketPriceId: 1, dinnerMode: DinnerModeSchema.enum.DINEIN, bookedByUserId: 42},
-                    {inhabitantId: 11, ticketPriceId: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY, bookedByUserId: 42}
-                ]
-            })
-            const result = CreateOrdersRequestSchema.safeParse(request)
-            expect(result.success).toBe(true)
-        })
+        expect(result.success).toBe(shouldSucceed)
+        if (!shouldSucceed && expectedError && !result.success) {
+            expect(result.error.issues[0]?.message).toContain(expectedError)
+        }
     })
 })

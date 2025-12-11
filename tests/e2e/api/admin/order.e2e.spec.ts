@@ -7,7 +7,7 @@ import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
 const { validatedBrowserContext, salt, headers } = testHelpers
-const { TicketTypeSchema } = useBookingValidation()
+const { TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
@@ -30,10 +30,10 @@ test.describe('Order API', () => {
       1
     )
     testHouseholdId = household.id
-    testInhabitantId = inhabitants[0].id
+    testInhabitantId = inhabitants[0]!.id
 
     const season = await SeasonFactory.createSeason(context)
-    testSeasonId = season.id
+    testSeasonId = season.id!
 
     const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
     const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
@@ -45,8 +45,8 @@ test.describe('Order API', () => {
     testAdultTicketPriceId = adultTicketPrice.id
     testChildTicketPriceId = childTicketPrice.id
 
-    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id)
-    testDinnerEventId = generatedEvents.events[0].id
+    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
+    testDinnerEventId = generatedEvents.events[0]!.id
   })
 
   test.afterAll(async ({ browser }) => {
@@ -80,7 +80,9 @@ test.describe('Order API', () => {
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })
@@ -109,7 +111,9 @@ test.describe('Order API', () => {
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId
+          ticketPriceId: testChildTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })

@@ -8,17 +8,16 @@ describe('useTicket', () => {
     const ticketPrices = TicketFactory.defaultTicketPrices()
 
     describe('ticketTypeConfig', () => {
-        it('GIVEN ticketTypeConfig WHEN checking structure THEN has all required properties', () => {
-            const expectedTypes = ['ADULT', 'CHILD', 'BABY']
-            const expectedProps = ['label', 'color', 'icon']
-
-            expectedTypes.forEach(type => {
-                expect(ticketTypeConfig[type]).toBeDefined()
-                expectedProps.forEach(prop => {
-                    expect(ticketTypeConfig[type][prop]).toBeDefined()
-                })
-            })
-        })
+        it.each(['ADULT', 'CHILD', 'BABY'] as const)(
+            'GIVEN ticketTypeConfig WHEN checking %s THEN has all required properties',
+            (type) => {
+                const config = ticketTypeConfig[type]
+                expect(config).toBeDefined()
+                expect(config.label).toBeDefined()
+                expect(config.color).toBeDefined()
+                expect(config.icon).toBeDefined()
+            }
+        )
     })
 
     describe('determineTicketType', () => {

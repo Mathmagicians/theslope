@@ -1,8 +1,9 @@
-import {useBookingValidation, type DinnerEventDisplay, type HeynaboEventCreate} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate} from '~/composables/useBookingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
+import type {TransactionCreateData} from '~~/server/data/financesRepository'
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -202,15 +203,13 @@ export const useBooking = () => {
     /**
      * Transform a DinnerEvent to Heynabo event payload (ADR-013)
      *
-     * @param dinnerEvent - The dinner event to transform
+     * @param dinnerEvent - The dinner event to transform (DinnerEventDetail with cookingTeam)
      * @param baseUrl - Base URL for building dinner link (e.g., 'https://skraaningen.dk')
-     * @param cookingTeamName - Optional cooking team name
      * @returns Heynabo event create payload
      */
     const createHeynaboEventPayload = (
-        dinnerEvent: { date: Date; menuTitle: string; menuDescription: string | null },
-        baseUrl: string,
-        cookingTeamName?: string | null
+        dinnerEvent: DinnerEventDetail,
+        baseUrl: string
     ): HeynaboEventCreate => {
         const dinnerUrl = buildDinnerUrl(baseUrl, dinnerEvent.date)
 
@@ -224,7 +223,7 @@ export const useBooking = () => {
             '',
             `${HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI} <a href="${dinnerUrl}">Book din billet</a>`,
             '',
-            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} // ${cookingTeamName || 'Køkkenholdet'}`
+            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} // ${dinnerEvent.cookingTeam?.name || 'Køkkenholdet'}`
         ]
         const description = lines.join('<br>')
 
@@ -265,6 +264,13 @@ export const useBooking = () => {
     // Curried chunk function for dinner event IDs (used for bulk state updates)
     const chunkDinnerIds = chunkArray<number>(DINNER_BATCH_SIZE)
 
+    // Transaction insert: 5 params (orderId, orderSnapshot, userSnapshot, amount, userEmailHandle)
+    // D1 max params: 100 / 5 = 20 transactions per batch
+    const TRANSACTION_BATCH_SIZE = 20
+
+    // Curried chunk function for transaction create data (used for bulk inserts)
+    const chunkTransactions = chunkArray<TransactionCreateData>(TRANSACTION_BATCH_SIZE)
+
     return {
         // Dinner step workflow
         getDinnerStepState,
@@ -276,8 +282,8 @@ export const useBooking = () => {
         buildDinnerUrl,
         createHeynaboEventPayload,
         HEYNABO_EVENT_TEMPLATE,
-        // Daily Maintenance
-        DINNER_BATCH_SIZE,
-        chunkDinnerIds
+        // Daily Maintenance - chunk functions for batch operations
+        chunkDinnerIds,
+        chunkTransactions
     }
 }

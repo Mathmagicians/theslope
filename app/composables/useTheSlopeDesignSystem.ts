@@ -241,7 +241,8 @@ export const TYPOGRAPHY = {
     sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
     cardTitle: 'text-lg font-semibold',
     sectionSubheading: 'text-sm font-semibold text-gray-700 dark:text-gray-300',
-    sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-gray-300',
+    sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-amber-100',
+    sectionIconLight: 'text-2xl text-amber-50 dark:text-amber-100',
 
     // Body text
     bodyText: 'text-base',

@@ -180,7 +180,7 @@ const jobDefinitions = computed(() => [
   <div data-testid="admin-system" class="space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-3">
-      <UIcon :name="ICONS.sync" :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl']" />
+      <UIcon :name="ICONS.sync" :class="TYPOGRAPHY.sectionIconLight" />
       <h1 :class="TYPOGRAPHY.sectionSubheadingLight">Systemjobs</h1>
     </div>
 

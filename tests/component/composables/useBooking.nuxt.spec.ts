@@ -1,5 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState} from '~/composables/useBooking'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 describe('useBooking', () => {
     const {
@@ -55,14 +57,16 @@ describe('useBooking', () => {
         const baseUrl = 'https://skraaningen.dk'
 
         // Use future date to ensure getNextDinnerDate returns a valid range
-        const futureDinnerEvent = () => {
+        const futureDinnerEvent = (overrides: Partial<ReturnType<typeof DinnerEventFactory.defaultDinnerEventDetail>> = {}) => {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 7) // 1 week from now
             futureDate.setHours(0, 0, 0, 0)
             return {
+                ...DinnerEventFactory.defaultDinnerEventDetail(),
                 date: futureDate,
                 menuTitle: 'Pasta Carbonara',
-                menuDescription: 'Creamy Italian pasta with bacon'
+                menuDescription: 'Creamy Italian pasta with bacon',
+                ...overrides
             }
         }
 
@@ -148,20 +152,18 @@ describe('useBooking', () => {
                     shouldContain: 'Pasta Carbonara'
                 }
             ])('$name', ({menuDescription, shouldContain}) => {
-                const event = {...futureDinnerEvent(), menuDescription}
-                const payload = createHeynaboEventPayload(event, baseUrl)
+                const payload = createHeynaboEventPayload(futureDinnerEvent({menuDescription}), baseUrl)
                 expect(payload.description).toContain(shouldContain)
             })
 
             it.each([
-                {name: 'includes cooking team when provided', cookingTeam: 'Team Alpha', shouldContain: '// Team Alpha'},
+                {name: 'includes cooking team when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: '// Team Alpha'},
                 {name: 'uses default when null', cookingTeam: null, shouldContain: '// Køkkenholdet'},
                 {name: 'uses default when undefined', cookingTeam: undefined, shouldContain: '// Køkkenholdet'}
-            ])('$name', ({cookingTeam, shouldContain, shouldNotContain}) => {
-                const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl, cookingTeam)
+            ])('$name', ({cookingTeam, shouldContain}) => {
+                const payload = createHeynaboEventPayload(futureDinnerEvent({cookingTeam}), baseUrl)
 
-                if (shouldContain) expect(payload.description).toContain(shouldContain)
-                if (shouldNotContain) expect(payload.description).not.toContain(shouldNotContain)
+                expect(payload.description).toContain(shouldContain)
             })
         })
     })
