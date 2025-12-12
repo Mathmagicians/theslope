@@ -563,6 +563,9 @@ export class SeasonFactory {
      * Uses unique salted shortName to avoid conflicts with parallel tests
      * Season spans 3 days with all days as cooking days for fast test execution
      *
+     * IMPORTANT: Dates are within the 60-day prebooking window (today + 1-3 days)
+     * so that scaffold-prebookings and other date-filtered operations work correctly.
+     *
      * @param context - Browser context for API requests
      * @param testSalt - Unique salt for test isolation
      * @param seasonData - Optional season data overrides
@@ -573,10 +576,19 @@ export class SeasonFactory {
         testSalt: string,
         seasonData: Partial<Season> = {}
     ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
-        // Create short 3-day season with all days as cooking days
+        // Create short 3-day season with dates WITHIN the 60-day prebooking window
+        // Starting tomorrow to avoid timezone issues with "today"
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        tomorrow.setHours(0, 0, 0, 0)
+
+        const threeDaysFromNow = new Date()
+        threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3)
+        threeDaysFromNow.setHours(0, 0, 0, 0)
+
         const season = await this.createSeason(context, {
             ...this.defaultSeason(testSalt),
-            seasonDates: { start: new Date('2099-01-01'), end: new Date('2099-01-03') },
+            seasonDates: { start: tomorrow, end: threeDaysFromNow },
             cookingDays: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
             ...seasonData
         })

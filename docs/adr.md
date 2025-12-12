@@ -2,6 +2,95 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-015: Idempotent Automated Jobs with Rolling Window
+
+**Status:** Accepted | **Date:** 2025-12-12
+
+### Context
+
+TheSlope runs automated maintenance jobs (daily cron, season activation, billing imports) that must be resilient to failures, retries, and manual re-runs. In a serverless environment (Cloudflare Workers), jobs can fail mid-execution, be triggered multiple times, or need manual intervention after outages.
+
+### Decision
+
+**All automated jobs are idempotent and operate within a rolling time window.**
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Idempotent operations** | Running a job twice produces the same result as running it once |
+| **Rolling window** | Pre-bookings scaffold for `today → today + 60 days` (configurable via `prebookingWindowDays`) |
+| **Catch-up resilient** | Jobs process all qualifying records, not just "since last run" |
+| **User agency preserved** | Users can manually book beyond the automated window |
+
+### Rolling Window Pattern
+
+```
+Day 0 (Season Activation):
+├── Scaffold pre-bookings: Day 1 → Day 60
+└── Users can manually book: Day 61+
+
+Day 1 (Daily Maintenance):
+├── Consume past dinners (SCHEDULED/ANNOUNCED → CONSUMED)
+├── Close orders on consumed dinners (BOOKED/RELEASED → CLOSED)
+├── Create transactions for closed orders without one
+└── Scaffold pre-bookings: Day 2 → Day 61 (window rolls forward)
+
+Day N (After 3-day outage, manual re-run):
+├── Consume ALL past unconsumed dinners (catch-up)
+├── Close ALL pending orders on consumed dinners (catch-up)
+├── Create transactions for ALL untransacted closed orders (catch-up)
+└── Scaffold: Day N+1 → Day N+60 (current window)
+```
+
+### Idempotency Patterns
+
+| Job | Idempotency Mechanism |
+|-----|----------------------|
+| **scaffoldPrebookings** | `pruneAndCreate` reconciles existing vs desired orders by `inhabitantId-dinnerEventId` key |
+| **consumeDinners** | Only updates dinners with `state NOT IN (CONSUMED, CANCELLED)` that are past (already consumed = no-op) |
+| **closeOrders** | Only updates orders with `state IN (BOOKED, RELEASED)` on CONSUMED dinners (already closed = no-op) |
+| **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
+| **generateDinnerEvents** | Uses `pruneAndCreate` to reconcile by date key |
+
+### Configuration
+
+```typescript
+// app.config.ts
+theslope: {
+    prebookingWindowDays: 60  // Rolling window size
+}
+```
+
+### Test Requirements
+
+**E2E tests using date-filtered operations MUST create data within the rolling window:**
+
+```typescript
+// ❌ WRONG: Far-future dates outside 60-day window
+seasonDates: { start: new Date('2099-01-01'), end: new Date('2099-01-03') }
+
+// ✅ CORRECT: Dates within prebooking window
+const tomorrow = new Date()
+tomorrow.setDate(tomorrow.getDate() + 1)
+seasonDates: { start: tomorrow, end: threeDaysFromNow }
+```
+
+### Benefits
+
+1. **Resilience**: Server outages don't corrupt state - just re-run the job
+2. **Simplicity**: No "last run" tracking or complex delta logic
+3. **Debuggability**: Admin can trigger any job manually at any time
+4. **User flexibility**: 60-day automated booking + unlimited manual booking ahead
+
+### Compliance
+
+1. Automated jobs MUST be safe to re-run at any time
+2. Jobs MUST NOT depend on "time since last run" - always process current state
+3. Jobs MUST use reconciliation patterns (`pruneAndCreate`, state checks) for idempotency
+4. Date-filtered operations MUST respect the rolling window (`getPrebookingWindowDays()`)
+5. Tests MUST use dates within the rolling window when testing scaffolding/maintenance
+
+---
+
 ## ADR-014: Batch Operations and Utility Functions
 
 **Status:** Accepted | **Date:** 2025-12-06
