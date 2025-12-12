@@ -1,5 +1,5 @@
 import type {Season} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -59,7 +59,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonKey,
             () => {
                 if (!selectedSeasonId.value) return Promise.resolve(null)
-                return $fetch(`/api/admin/season/${selectedSeasonId.value}`)
+                return $fetch<Season>(`/api/admin/season/${selectedSeasonId.value}`)
             },
             {
                 default: () => null,
@@ -393,7 +393,7 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamDetail | CookingTeamDetail[]): Promise<CookingTeamDetail[]> => {
+        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CookingTeamDetail[]> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
@@ -418,14 +418,14 @@ export const usePlanStore = defineStore("Plan", () => {
             return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
         }
 
-        const updateTeam = async (team: CookingTeamDetail) => {
+        const updateTeam = async (team: CookingTeamUpdate) => {
             try {
                 await $fetch(`/api/admin/team/${team.id}`, {
                     method: 'post',
                     body: team,
                     headers: {'Content-Type': 'application/json'}
                 })
-                console.info(`👥 > PLAN_STORE > Updated team "${team.name}"`)
+                console.info(`👥 > PLAN_STORE > Updated team "${team.name ?? team.id}"`)
                 // Refresh selected season to get updated teams
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
@@ -453,7 +453,7 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
-        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+        const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
             try {
                 const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
                     method: 'PUT',

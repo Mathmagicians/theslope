@@ -312,7 +312,7 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
   const team = teams.value.find(t => t.id === teamId)
   if (!team) return
 
-  await updateTeam({...team, name: newName}) // Immediate save to DB
+  await updateTeam({id: teamId, name: newName}) // Immediate save to DB
   // No toast for individual name updates (too noisy)
   // teams reactively updates from store refresh - no manual update needed
 }
@@ -322,7 +322,7 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
   const team = teams.value.find(t => t.id === teamId)
   if (!team || !affinity) return
 
-  await updateTeam({...team, affinity}) // Immediate save to DB
+  await updateTeam({id: teamId, affinity}) // Immediate save to DB
   showSuccessToast('Madlavningsdage for teams opdateret')
   // teams reactively updates from store refresh - no manual update needed
 }
