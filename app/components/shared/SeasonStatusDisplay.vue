@@ -63,6 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
+const {ICONS} = useTheSlopeDesignSystem()
 
 // Inject responsive breakpoint
 const isMd = inject<Ref<boolean>>('isMd')
@@ -74,8 +75,8 @@ const season = computed(() => {
   return planStore.seasons.find(s => s.id === props.seasonId) ?? null
 })
 
-// Get loading state from store for activation operations
-const isActivatingSeason = computed(() => planStore.isActivatingSeason)
+// Get loading state from store for activation operations (compound state tracks API + refreshes)
+const isActivatingSeason = computed(() => planStore.isActivatingSeasonFlowInProgress)
 
 // Compute season status
 const status = computed(() => {
@@ -142,34 +143,40 @@ const alertConfig = computed(() => {
 })
 
 // Button configuration based on active state
-const buttonConfig = {
+const buttonConfig = computed(() => ({
   activate: {
     name: 'activate-season',
     color: 'success' as const,
-    icon: 'i-heroicons-check-circle',
+    leadingIcon: ICONS.playCircle,
+    trailingIcon: ICONS.arrowRight,
     label: 'Aktiver Sæson',
-    emoji: '🟢',
     action: () => emit('activate')
   },
   deactivate: {
     name: 'deactivate-season',
     color: 'warning' as const,
-    icon: 'i-heroicons-pause-circle',
+    leadingIcon: ICONS.pauseCircle,
+    trailingIcon: ICONS.arrowRight,
     label: 'Deaktiver Sæson',
-    emoji: '🟡',
     action: () => emit('deactivate')
   }
-}
+}))
+
+const currentButton = computed(() =>
+  season.value?.isActive ? buttonConfig.value.deactivate : buttonConfig.value.activate
+)
+
+// Button text - shows "Arbejder..." when loading
+const buttonText = computed(() => {
+  if (isActivatingSeason.value) return 'Arbejder...'
+  return currentButton.value.label
+})
 
 // Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
   if (!props.showActivationButton || !season.value) return false
   return season.value.isActive || canSeasonBeActive(season.value)
 })
-
-const currentButton = computed(() =>
-  season.value?.isActive ? buttonConfig.deactivate : buttonConfig.activate
-)
 </script>
 
 <template>
@@ -186,19 +193,14 @@ const currentButton = computed(() =>
         <UButton
           :name="currentButton.name"
           :color="currentButton.color"
-          :trailing-icon="currentButton.icon"
+          :leading-icon="currentButton.leadingIcon"
+          :trailing-icon="currentButton.trailingIcon"
           :size="getIsMd ? 'md' : 'sm'"
-          :square="!getIsMd"
           :loading="isActivatingSeason"
           :disabled="isActivatingSeason"
           @click="currentButton.action"
         >
-          <template #leading>
-            {{ currentButton.emoji }}
-          </template>
-          <template v-if="getIsMd" #default>
-            {{ currentButton.label }}
-          </template>
+          {{ buttonText }}
         </UButton>
       </UFormField>
     </template>

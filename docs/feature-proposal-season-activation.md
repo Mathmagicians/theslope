@@ -1,6 +1,6 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-07
+**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-12
 
 ## Already Implemented
 
@@ -24,32 +24,41 @@
   - `fetchUserCancellationKeys` - Returns Set of cancelled inhabitant-dinnerEvent keys
   - `createPreBookingGenerator` accepts `excludedKeys` to skip cancelled bookings
   - ADR-009 compliant OrderHistory schemas (Display/Detail/Create)
+- ✅ **Scaffold Pre-bookings:**
+  - `scaffoldPrebookings` utility in `server/utils/scaffoldPrebookings.ts`
+  - Integrated with season activation flow (`POST /api/admin/season/[id]/scaffold-prebookings`)
+  - `splitDinnerEvents` enhanced with `maxDaysAhead` parameter for rolling window
+  - `prebookingWindowDays` config (60 days) in `app.config.ts`
+  - `getPrebookingWindowDays()` getter in `useSeason.ts`
+  - Scaffolder only processes **future** dinner events within the prebooking window
+- ✅ **Daily Maintenance Utilities:**
+  - `consumeDinners` - Marks past ANNOUNCED dinners → CONSUMED (resilient catch-up)
+  - `closeOrders` - Marks BOOKED orders on CONSUMED dinners → CLOSED
+  - `createTransactions` - Creates transaction records for CLOSED orders without one
+  - All utilities use chunking for D1 query limits (ADR-009)
+- ✅ **Daily Maintenance Endpoint:**
+  - `POST /api/admin/maintenance/daily` - Runs all 4 maintenance steps
+  - Returns `DailyMaintenanceResult` with counts (consume, close, transact, scaffold)
+  - Idempotent - safe to run multiple times or after missed crons
+- ✅ **E2E Tests for Daily Maintenance:**
+  - Tests for `consumeDinners` (past ANNOUNCED/SCHEDULED → CONSUMED)
+  - Tests for `closeOrders` + `createTransactions` (BOOKED → CLOSED with transaction)
+  - Tests verify idempotent behavior and correct state transitions
+  - Tests run in parallel with proper isolation
 
-## Next: Scaffold Endpoint
+## Next: UI Integration & Cron Triggers
 
-**Endpoint:** `POST /api/admin/dinner-event/scaffold-prebookings`
-- Called by: activate season (days 1-60) OR daily cron (day 61)
-- Input: `{ dinnerEventIds: number[] }`
+### Remaining Tasks
 
-**Flow:**
-1. Fetch dinner events for given IDs
-2. Fetch all households with inhabitants
-3. Fetch ticket prices for season
-4. **Fetch latest cancellations** for dinner event IDs
-5. For each household:
-   - Generate desired orders (passing excludedKeys)
-   - Reconcile with existing orders
-   - Create/delete as needed
+1. **UI Trigger Button** - Add button in `AdminEconomy.vue` to manually trigger daily maintenance
+   - Button label: "Kør daglig vedligeholdelse" (Run daily maintenance)
+   - Calls `POST /api/admin/maintenance/daily`
+   - Shows toast with results (consumed, closed, transactions created, scaffolded)
 
-### Files to Modify
-
-| File | Change |
-|------|--------|
-| `prisma/schema.prisma` | Add `OrderAuditAction` enum, denormalized columns to `OrderHistory` |
-| `composables/useBookingValidation.ts` | Update `AuditActionSchema` to match enum |
-| `server/data/financesRepository.ts` | Update `deleteOrder`, add `fetchLatestCancellations` |
-| `composables/useSeason.ts` | Add `excludedKeys` param to `createPreBookingGenerator` |
-| Migration | Create migration for schema changes |
+2. **Cron Trigger Configuration** - Wire up scheduled tasks
+   - Configure Nitro scheduled tasks in `nuxt.config.ts`
+   - Configure Cloudflare cron triggers in `wrangler.toml`
+   - Create `server/tasks/daily-maintenance.ts` task definition
 
 ---
 

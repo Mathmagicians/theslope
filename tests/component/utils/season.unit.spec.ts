@@ -29,8 +29,8 @@ import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone} from '~/utils/date'
 import {createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 
 // Schema for splitDinnerEvents return structure
 const SplitDinnerEventsResultSchema = z.object({
@@ -41,26 +41,16 @@ const SplitDinnerEventsResultSchema = z.object({
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
-// Factory functions for test data
-const createTeam = (id: number, name: string, affinity: WeekDayMap | null | undefined = null): CookingTeamDisplay => ({
-    id,
-    name,
-    seasonId: 1,
-    affinity
-})
+// Factory functions for test data - use factories with overrides
+const createTeam = (id: number, name: string, affinity: WeekDayMap | null | undefined = null) =>
+    SeasonFactory.defaultCookingTeamDisplay({id, name, seasonId: 1, affinity})
 
-const createEvent = (id: number, date: Date, teamId: number | null = null): DinnerEventDisplay => ({
+const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
+    ...DinnerEventFactory.defaultDinnerEventDisplay(),
     id,
     date,
-    menuTitle: '',
-    dinnerMode: 'NONE',
     cookingTeamId: teamId,
-    seasonId: 1,
-    menuDescription: null,
-    menuPictureUrl: null,
-    chefId: null,
-    createdAt: new Date(),
-    updatedAt: new Date()
+    seasonId: 1
 })
 
 describe('computeCookingDates', () => {
@@ -373,7 +363,7 @@ describe('computeAffinitiesForTeams', () => {
 
     it('should return empty array when no teams', () => {
         // GIVEN: No teams
-        const teams: CookingTeam[] = []
+        const teams: CookingTeamDisplay[] = []
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
         const firstDay = new Date(2025, 0, 6) // Monday, Jan 6
 
@@ -556,7 +546,7 @@ describe('createSortedAffinitiesToTeamsMap', () => {
 
         // Verify teams within each key
         expectedKeys.forEach(weekday => {
-            expect(result.get(weekday as WeekDay)?.map(t => t.name)).toEqual(expectedTeams[weekday])
+            expect(result.get(weekday as WeekDay)?.map(t => t.name)).toEqual(expectedTeams[weekday as keyof typeof expectedTeams])
         })
     })
 })
@@ -1191,6 +1181,66 @@ describe('Active Season Management utilities', () => {
             expect(result.nextDinner).toBeNull()
             const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
             expect(allOtherDates).toHaveLength(expectedOtherCount)
+        })
+
+        describe('with maxDaysAhead parameter', () => {
+            const referenceDate = new Date(2025, 5, 15, 12, 0) // June 15, 2025 noon
+
+            beforeEach(() => {
+                vi.useFakeTimers()
+                vi.setSystemTime(referenceDate)
+            })
+
+            afterEach(() => {
+                vi.useRealTimers()
+            })
+
+            it.each([
+                {
+                    scenario: 'filters future events beyond maxDaysAhead',
+                    events: [
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - within window
+                        { id: 2, date: new Date(2025, 5, 25, 18, 0) },  // +10 days - within window
+                        { id: 3, date: new Date(2025, 6, 20, 18, 0) }   // +35 days - outside 30-day window
+                    ],
+                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
+                    maxDaysAhead: 30,
+                    expectedFutureCount: 1  // Only event id=2 (id=1 is nextDinner)
+                },
+                {
+                    scenario: 'includes all future events when maxDaysAhead is undefined',
+                    events: [
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },
+                        { id: 2, date: new Date(2025, 11, 20, 18, 0) }  // +6 months
+                    ],
+                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
+                    maxDaysAhead: undefined,
+                    expectedFutureCount: 1  // Event id=2
+                },
+                {
+                    scenario: 'includes events at boundary end of day',
+                    events: [
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days
+                        { id: 2, date: new Date(2025, 5, 25, 18, 0) }   // +10 days - at boundary
+                    ],
+                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
+                    maxDaysAhead: 10,
+                    expectedFutureCount: 1  // Event id=2 is within window (end of day 10)
+                },
+                {
+                    scenario: 'works with null nextDinnerDateRange',
+                    events: [
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - within window
+                        { id: 2, date: new Date(2025, 6, 20, 18, 0) }   // +35 days - outside window
+                    ],
+                    nextDinnerDateRange: null,
+                    maxDaysAhead: 30,
+                    expectedFutureCount: 1  // Only event id=1
+                }
+            ])('$scenario', ({ events, nextDinnerDateRange, maxDaysAhead, expectedFutureCount }) => {
+                const result = splitDinnerEvents(events, nextDinnerDateRange, maxDaysAhead)
+                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+            })
         })
     })
 

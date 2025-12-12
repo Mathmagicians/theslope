@@ -149,6 +149,7 @@ const handleSeasonUpdate = async (updatedSeason: Season) => {
   if (formMode.value === FORM_MODES.CREATE) {
     // Step 1: Create season
     const createdSeason = await createSeason(updatedSeason)
+    if (!createdSeason) return
 
     // Step 2: Generate dinner events for the new season
     if (createdSeason.id) {

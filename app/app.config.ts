@@ -37,7 +37,8 @@ export default defineAppConfig({
             dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 02:00' },
             monthlyBilling: { cron: '0 4 17 * *', description: 'D. 17. hver måned kl. 04:00' },
             heynaboImport: { cron: '0 3 * * *', description: 'Dagligt kl. 03:00' }
-        }
+        },
+        prebookingWindowDays: 60  // Rolling window: scaffold pre-bookings for dinners within next N days
     },
     ui: {
         colors: {

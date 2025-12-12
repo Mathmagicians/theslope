@@ -34,7 +34,7 @@ describe('batchUtils', () => {
 
         const getKey = (item: Item) => item.id
         const isEqual = (a: Item, b: Item) => a.value === b.value
-        const reconcile = pruneAndCreate<Item, number>(getKey, isEqual)
+        const reconcile = pruneAndCreate<Item, Item, number | undefined>(getKey, isEqual)
 
         it.each([
             {
@@ -88,7 +88,7 @@ describe('batchUtils', () => {
         })
 
         it('without isEqual → identical items categorized as update', () => {
-            const reconcileNoEqual = pruneAndCreate<Item, number>(getKey)
+            const reconcileNoEqual = pruneAndCreate<Item, Item, number | undefined>(getKey)
             const result = reconcileNoEqual([{ id: 1, value: 'same' }])([{ id: 1, value: 'same' }])
 
             expect(result.update).toHaveLength(1)

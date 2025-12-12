@@ -389,6 +389,12 @@ export const useSeason = () => {
     const getDefaultDinnerStartTime = (): number => theslope.defaultDinnerStartTime
 
     /**
+     * Get the prebooking window in days from app configuration
+     * @returns Number of days for the rolling prebooking window
+     */
+    const getPrebookingWindowDays = (): number => theslope.prebookingWindowDays
+
+    /**
      * Check if a calendar day is the next upcoming dinner event
      * @param day - Calendar day to check
      * @param nextDinner - Next dinner event (or null if none)
@@ -536,6 +542,7 @@ export const useSeason = () => {
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
         getDefaultDinnerStartTime,
+        getPrebookingWindowDays,
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,

@@ -162,6 +162,10 @@ describe('useHeynaboValidation', () => {
             createHouseholdsFromImport
         } = useHeynaboValidation()
 
+        // Parse sample data once at describe level for use across all tests
+        const parsedMembers = sampleHeynaboMembers.map(m => HeynaboMemberSchema.parse(m))
+        const parsedLocations = sampleHeynaboLocations.map(l => HeynaboLocationSchema.parse(l))
+
         describe('mapHeynaboRoleToSystemRole', () => {
             it.each([
                 {role: 'admin', expected: ['ADMIN']},
@@ -175,14 +179,14 @@ describe('useHeynaboValidation', () => {
 
         describe('inhabitantFromMember', () => {
             it.each([
-                {member: sampleHeynaboMembers[0], hasUser: true, systemRoles: ['ADMIN']},
-                {member: {...sampleHeynaboMembers[2], email: 'valid@email.com'}, hasUser: true, systemRoles: []},
-                {member: sampleHeynaboMembers[1], hasUser: false, systemRoles: []},
-                {member: {...sampleHeynaboMembers[0], role: 'limited'}, hasUser: false, systemRoles: []}
+                {member: parsedMembers[0]!, hasUser: true, systemRoles: ['ADMIN']},
+                {member: {...parsedMembers[2]!, email: 'valid@email.com'}, hasUser: true, systemRoles: []},
+                {member: parsedMembers[1]!, hasUser: false, systemRoles: []},
+                {member: {...parsedMembers[0]!, role: 'limited'}, hasUser: false, systemRoles: []}
             ])('creates inhabitant with hasUser=$hasUser for member $member.id', ({member, hasUser, systemRoles}) => {
                 const result = inhabitantFromMember(member)
 
-                expect(result.heynaboId).toBe(member.id)
+                expect(result.heynaboId).toBe(member!.id)
                 // householdId is NOT included - repository handles it during nested creation
                 expect(result).not.toHaveProperty('householdId')
                 if (hasUser) {
@@ -197,7 +201,7 @@ describe('useHeynaboValidation', () => {
                 {dateOfBirth: '1990-01-15', expected: new Date('1990-01-15')},
                 {dateOfBirth: null, expected: null}
             ])('handles dateOfBirth=$dateOfBirth', ({dateOfBirth, expected}) => {
-                const member = {...sampleHeynaboMembers[0], dateOfBirth}
+                const member = {...parsedMembers[0]!, dateOfBirth}
                 const result = inhabitantFromMember(member)
                 expect(result.birthDate).toEqual(expected)
             })
@@ -209,7 +213,7 @@ describe('useHeynaboValidation', () => {
                 {locationId: 116, expectedCount: 1, expectedIds: [219]},
                 {locationId: 999, expectedCount: 0, expectedIds: []}
             ])('filters locationId=$locationId returns $expectedCount inhabitants', ({locationId, expectedCount, expectedIds}) => {
-                const result = findInhabitantsByLocation(locationId, sampleHeynaboMembers)
+                const result = findInhabitantsByLocation(locationId, parsedMembers)
                 expect(result).toHaveLength(expectedCount)
                 expect(result.map(i => i.heynaboId)).toEqual(expectedIds)
             })
@@ -237,14 +241,14 @@ describe('useHeynaboValidation', () => {
                 }
             ])('creates $expectedHouseholds households with inhabitants $expectedInhabitantCounts',
                 ({locationIds, memberLocations, expectedHouseholds, expectedInhabitantCounts}) => {
-                const locations = locationIds.map(id => sampleHeynaboLocations.find(l => l.id === id)!)
-                const members = memberLocations.map((locId, idx) => ({...sampleHeynaboMembers[idx], locationId: locId}))
+                const locations = locationIds.map(id => parsedLocations.find(l => l.id === id)!)
+                const members = memberLocations.map((locId, idx) => ({...parsedMembers[idx]!, locationId: locId}))
 
                 const result = createHouseholdsFromImport(locations, members)
 
                 expect(result).toHaveLength(expectedHouseholds)
                 result.forEach((household, idx) => {
-                    expect(household.inhabitants).toHaveLength(expectedInhabitantCounts[idx])
+                    expect(household.inhabitants).toHaveLength(expectedInhabitantCounts[idx]!)
                     expect(household.heynaboId).toBe(household.pbsId)
                     expect(household.movedInDate).toBeInstanceOf(Date)
                 })

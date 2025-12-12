@@ -474,20 +474,35 @@ export const getNextDinnerDate = (dinnerDurationMinutes: number): (dinnerDates: 
  * Split dinner events into next dinner and others in a single pass
  * @param dinnerEvents - Array of dinner events to split
  * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
+ * @param maxDaysAhead - Optional max days ahead to include in futureDinnerDates (for prebooking window)
  * @returns Object with nextDinner event and array of other dinner dates
  */
 export const splitDinnerEvents = <T extends { date: Date }>(
     dinnerEvents: T[],
-    nextDinnerDateRange: DateRange | null
+    nextDinnerDateRange: DateRange | null,
+    maxDaysAhead?: number
 ): { nextDinner: T | null; pastDinnerDates: Date[]; futureDinnerDates: Date[] } => {
     const now = new Date()
+
+    // Calculate max future date if maxDaysAhead is provided
+    const maxFutureDate = maxDaysAhead !== undefined
+        ? (() => {
+            const max = new Date()
+            max.setDate(max.getDate() + maxDaysAhead)
+            max.setHours(23, 59, 59, 999)
+            return max
+        })()
+        : null
+
+    const isWithinWindow = (date: Date): boolean =>
+        maxFutureDate === null || date <= maxFutureDate
 
     if (!nextDinnerDateRange) {
         const allDates = dinnerEvents.map(e => e.date)
         return {
             nextDinner: null,
             pastDinnerDates: allDates.filter(d => d < now),
-            futureDinnerDates: allDates.filter(d => d >= now)
+            futureDinnerDates: allDates.filter(d => d >= now && isWithinWindow(d))
         }
     }
 
@@ -497,7 +512,7 @@ export const splitDinnerEvents = <T extends { date: Date }>(
                 acc.nextDinner = event
             } else if (event.date < now) {
                 acc.pastDinnerDates.push(event.date)
-            } else {
+            } else if (isWithinWindow(event.date)) {
                 acc.futureDinnerDates.push(event.date)
             }
             return acc

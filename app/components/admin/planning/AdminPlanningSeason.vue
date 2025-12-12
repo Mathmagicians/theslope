@@ -10,7 +10,7 @@ const {theslope} = appConfig  //some default values
 
 // Get loading state from store (ADR-007: store owns loading states)
 const planStore = usePlanStore()
-const {isSavingSeason} = storeToRefs(planStore)
+const {isSavingSeasonFlowInProgress: isSavingSeason} = storeToRefs(planStore)
 
 // COMPONENT DEFINITION
 const props = defineProps<{ mode: FormMode }>()

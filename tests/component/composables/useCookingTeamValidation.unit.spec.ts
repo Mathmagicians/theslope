@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
+import { useCoreValidation } from '~/composables/useCoreValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
+const { serializeWeekDayMap: serializeDinnerPreferences } = useCoreValidation()
 
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
@@ -349,8 +351,6 @@ describe('useCookingTeamValidation', () => {
       })
 
       it('should deserialize assignment with nested inhabitant (dinnerPreferences as JSON string)', () => {
-        const { serializeWeekDayMap } = useWeekDayMapValidation()
-
         // Use factory for inhabitant data (has dinnerPreferences as object)
         const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42 }
 
@@ -359,7 +359,7 @@ describe('useCookingTeamValidation', () => {
           ...SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF' }),
           inhabitant: {
             ...inhabitant,
-            dinnerPreferences: serializeWeekDayMap(inhabitant.dinnerPreferences!)
+            dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences!)
           }
         }
 
@@ -491,7 +491,7 @@ describe('useCookingTeamValidation', () => {
 
         // Verify assignments affinity serialization
         if (serialized.assignments && serialized.assignments.length > 0) {
-          serialized.assignments.forEach((assignment: CookingTeamAssignment, index: number) => {
+          serialized.assignments.forEach((assignment, index) => {
             if (team.assignments[index]?.affinity) {
               expect(typeof assignment.affinity).toBe('string')
             } else {
@@ -577,7 +577,7 @@ describe('useCookingTeamValidation', () => {
         }
       ])('should preserve $name', ({ team, field, expectedValue }) => {
         const result = fn(team)
-        expect(result[field]).toBe(expectedValue)
+        expect(result[field as keyof typeof result]).toBe(expectedValue)
       })
 
       it('should serialize affinity WeekDayMap to JSON string', () => {

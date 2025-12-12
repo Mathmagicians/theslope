@@ -506,6 +506,8 @@ export const ICONS = {
     check: 'i-heroicons-check',
     checkCircle: 'i-heroicons-check-circle',
     plusCircle: 'i-heroicons-plus-circle',
+    playCircle: 'i-heroicons-play-circle',
+    pauseCircle: 'i-heroicons-pause-circle',
     megaphone: 'i-heroicons-megaphone',
     exclamationCircle: 'i-heroicons-exclamation-circle',
     xMark: 'i-heroicons-x-mark',

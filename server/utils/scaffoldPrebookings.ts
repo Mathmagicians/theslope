@@ -3,6 +3,7 @@ import {fetchOrders, createOrders, deleteOrder, fetchUserCancellationKeys} from 
 import {fetchHouseholds, fetchSeason} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation} from "~/composables/useBookingValidation"
+import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 
@@ -20,7 +21,7 @@ export type ScaffoldResult = {
  * @returns ScaffoldResult or null if season not found
  */
 export async function scaffoldPrebookings(d1Client: D1Database, seasonId: number): Promise<ScaffoldResult | null> {
-    const {createHouseholdOrderScaffold, chunkOrderBatch} = useSeason()
+    const {createHouseholdOrderScaffold, chunkOrderBatch, getNextDinnerDate, getDefaultDinnerStartTime, splitDinnerEvents, getPrebookingWindowDays} = useSeason()
     const {OrderAuditActionSchema, chunkIds} = useBookingValidation()
 
     // 1. Fetch season with dinner events and ticket prices
@@ -29,9 +30,22 @@ export async function scaffoldPrebookings(d1Client: D1Database, seasonId: number
         return null
     }
 
-    const dinnerEvents = season.dinnerEvents ?? []
-    if (dinnerEvents.length === 0) {
+    const allDinnerEvents = season.dinnerEvents ?? []
+    if (allDinnerEvents.length === 0) {
         console.info(`${LOG} No dinner events for season ${seasonId}`)
+        return { seasonId, created: 0, deleted: 0, unchanged: 0, households: 0 }
+    }
+
+    // Filter to future dinner events within prebooking window (today to today + N days)
+    const dinnerDates = allDinnerEvents.map(d => d.date)
+    const nextDinnerRange = getNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
+    const prebookingWindow = getPrebookingWindowDays()
+    const {futureDinnerDates} = splitDinnerEvents(allDinnerEvents, nextDinnerRange, prebookingWindow)
+    const futureDateSet = new Set(futureDinnerDates.map(d => d.getTime()))
+    const dinnerEvents = allDinnerEvents.filter((de: DinnerEventDisplay) => futureDateSet.has(de.date.getTime()))
+
+    if (dinnerEvents.length === 0) {
+        console.info(`${LOG} No future dinner events within ${prebookingWindow}-day window for season ${seasonId}`)
         return { seasonId, created: 0, deleted: 0, unchanged: 0, households: 0 }
     }
 

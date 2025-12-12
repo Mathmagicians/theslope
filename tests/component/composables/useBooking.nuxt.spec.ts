@@ -2,7 +2,6 @@ import {describe, it, expect} from 'vitest'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState} from '~/composables/useBooking'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import type {TransactionCreateData} from '~~/server/data/financesRepository'
 
 describe('useBooking', () => {
     const {
@@ -11,9 +10,7 @@ describe('useBooking', () => {
         HEYNABO_EVENT_TEMPLATE,
         canCancelDinner,
         getStepConfig,
-        getDinnerStepState,
-        chunkDinnerIds,
-        chunkTransactions
+        getDinnerStepState
     } = useBooking()
 
     describe('buildDinnerUrl', () => {
