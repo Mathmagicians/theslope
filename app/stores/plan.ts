@@ -294,23 +294,6 @@ export const usePlanStore = defineStore("Plan", () => {
             return season
         }
 
-        const generateDinnerEvents = async (seasonId: number) => {
-            try {
-                const result = await $fetch<{
-                    seasonId: number,
-                    eventCount: number,
-                    events: unknown[]
-                }>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
-                    method: 'POST'
-                })
-                console.info(`🗓️ > PLAN_STORE > Generated ${result.eventCount} dinner events for season ${seasonId}`)
-                return result
-            } catch (e: unknown) {
-                handleApiError(e, 'generateDinnerEvents')
-                throw e
-            }
-        }
-
         const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
             try {
                 // Step 1: Assign affinities to teams
@@ -567,7 +550,6 @@ export const usePlanStore = defineStore("Plan", () => {
             updateSeason,
             activateSeason,
             deactivateSeason,
-            generateDinnerEvents,
             assignTeamAffinitiesAndEvents,
             createTeam,
             updateTeam,

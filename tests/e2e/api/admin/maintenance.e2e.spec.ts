@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
+import {useMaintenanceValidation} from '~~/app/composables/useMaintenanceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -9,6 +10,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import type {BrowserContext} from '@playwright/test'
 
 const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {JobType, JobStatus} = useMaintenanceValidation()
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -98,15 +100,24 @@ test.describe('Daily Maintenance API', () => {
         }
     })
 
-    test('returns valid result structure with active season', async ({browser}) => {
+    test('returns valid result structure with active season and creates job run', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const result = await SeasonFactory.runDailyMaintenance(context)
 
         // Verify result structure (counts may vary due to parallel tests)
+        expect(result.jobRunId).toBeGreaterThan(0)
         expect(result.consume.consumed).toBeGreaterThanOrEqual(0)
         expect(result.close.closed).toBeGreaterThanOrEqual(0)
         expect(result.transact.created).toBeGreaterThanOrEqual(0)
         expect(result.scaffold).not.toBeNull()
+
+        // Verify job run was created and completed (parallel-safe via jobRunId)
+        const jobRun = await SeasonFactory.getJobRun(context, result.jobRunId)
+        expect(jobRun).not.toBeNull()
+        expect(jobRun!.jobType).toBe(JobType.DAILY_MAINTENANCE)
+        expect(jobRun!.status).toBe(JobStatus.SUCCESS)
+        expect(jobRun!.completedAt).not.toBeNull()
+        expect(jobRun!.durationMs).toBeGreaterThanOrEqual(0)
     })
 
     test('is idempotent - second run succeeds with valid result', async ({browser}) => {

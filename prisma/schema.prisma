@@ -65,6 +65,21 @@ enum OrderAuditAction {
   BULK_IMPORT // Imported from billing CSV
 }
 
+enum JobType {
+  DAILY_MAINTENANCE
+  MONTHLY_BILLING
+  HEYNABO_IMPORT
+  MAINTENANCE_IMPORT
+  MAINTENANCE_EXPORT
+}
+
+enum JobStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
 model AllergyType {
   id                   Int                   @id @default(autoincrement())
   name                 String
@@ -186,8 +201,8 @@ model Order {
   inhabitant     Inhabitant     @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   bookedByUserId Int?
   bookedByUser   User?          @relation("BookedByUser", fields: [bookedByUserId], references: [id], onDelete: SetNull)
-  ticketPriceId  Int
-  ticketPrice    TicketPrice    @relation(fields: [ticketPriceId], references: [id], onDelete: Restrict)
+  ticketPriceId  Int?
+  ticketPrice    TicketPrice?   @relation(fields: [ticketPriceId], references: [id], onDelete: SetNull)
   priceAtBooking Int
   dinnerMode     DinnerMode     @default(DINEIN)
   state          OrderState     @default(BOOKED)
@@ -306,4 +321,18 @@ model OrderHistory {
   @@index([performedByUserId])
   @@index([timestamp])
   @@index([seasonId, inhabitantId, dinnerEventId, action]) // For cancellation lookups by season
+}
+
+model JobRun {
+  id            Int       @id @default(autoincrement())
+  jobType       JobType
+  status        JobStatus
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  durationMs    Int?
+  resultSummary String? // JSON - flexible per job type
+  errorMessage  String?
+  triggeredBy   String    @default("CRON") // "CRON" | "ADMIN:<userId>"
+
+  @@index([jobType, startedAt])
 }

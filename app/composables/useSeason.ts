@@ -12,7 +12,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, dateToWeekDay} from "~/utils/season"
-import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
+import {getEachDayOfIntervalWithSelectedWeekdays, formatDate} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
@@ -382,6 +382,38 @@ export const useSeason = () => {
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
+    // ========================================================================
+    // DINNER EVENT RECONCILIATION - ADR-015 idempotent pruneAndCreate
+    // ========================================================================
+
+    const toDateKey = (date: Date): string => formatDate(date, 'yyyy-MM-dd')
+
+    const getDinnerEventDateKey = (event: DinnerEventDisplay | DinnerEventCreate): string =>
+        toDateKey(event.date)
+
+    const reconcileDinnerEvents = pruneAndCreate<DinnerEventDisplay, DinnerEventCreate, string>(
+        getDinnerEventDateKey,
+        (existing, incoming) => getDinnerEventDateKey(existing) === getDinnerEventDateKey(incoming)
+    )
+
+    /**
+     * Compare schedule and return desired events if changed.
+     * Computes cooking dates once and reuses for both check and generation.
+     *
+     * @returns null if no change, or desired DinnerEventCreate[] if schedule changed
+     */
+    const getScheduleChangeDesiredEvents = (
+        oldSeason: Season,
+        newSeason: Season
+    ): DinnerEventCreate[] | null => {
+        const oldKeys = computeCookingDates(oldSeason.cookingDays, oldSeason.seasonDates, oldSeason.holidays).map(toDateKey)
+        const desiredEvents = generateDinnerEventDataForSeason(newSeason)
+        const newKeys = desiredEvents.map(e => toDateKey(e.date))
+
+        if (oldKeys.join(',') === newKeys.join(',')) return null
+        return desiredEvents
+    }
+
     /**
      * Get the default dinner start time (hour) from app configuration
      * @returns Hour (0-23) for dinner start time
@@ -564,7 +596,11 @@ export const useSeason = () => {
         canSeasonBeActive,
         getSeasonStatus,
         sortSeasonsByActivePriority,
-        selectMostAppropriateActiveSeason
+        selectMostAppropriateActiveSeason,
+
+        // Dinner event reconciliation (ADR-015)
+        reconcileDinnerEvents,
+        getScheduleChangeDesiredEvents
     }
 }
 

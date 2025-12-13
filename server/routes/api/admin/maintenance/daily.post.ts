@@ -1,10 +1,12 @@
-import {defineEventHandler, setResponseStatus} from "h3"
+import {defineEventHandler, setResponseStatus, getQuery} from "h3"
 import {consumeDinners} from "~~/server/utils/consumeDinners"
 import {closeOrders} from "~~/server/utils/closeOrders"
 import {createTransactions} from "~~/server/utils/createTransactions"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {fetchActiveSeasonId} from "~~/server/data/prismaRepository"
+import {createJobRun, completeJobRun} from "~~/server/data/maintenanceRepository"
 import {useBookingValidation, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
+import {useMaintenanceValidation} from "~/composables/useMaintenanceValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
@@ -19,14 +21,29 @@ const LOG = '🔧 > DAILY > [MAINTENANCE]'
  * 3. createTransactions - Create transactions for closed orders
  * 4. scaffoldPrebookings - Create pre-bookings for upcoming dinners
  *
- * All operations are idempotent and resilient to missed crons.
+ * All operations are idempotent and resilient to missed crons (ADR-015).
+ * Records job execution in JobRun table for observability.
+ *
+ * Query params:
+ * - triggeredBy: "CRON" (default) or "ADMIN:<userId>" for manual triggers
  */
 export default defineEventHandler(async (event): Promise<DailyMaintenanceResult> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     const {DailyMaintenanceResultSchema} = useBookingValidation()
+    const {JobType, JobStatus} = useMaintenanceValidation()
 
-    console.info(`${LOG} Starting daily maintenance`)
+    // Get triggeredBy from query params (CRON for scheduled, ADMIN:<userId> for manual)
+    const query = getQuery(event)
+    const triggeredBy = (query.triggeredBy as string) || 'CRON'
+
+    console.info(`${LOG} Starting daily maintenance (triggeredBy=${triggeredBy})`)
+
+    // Create job run record
+    const jobRun = await createJobRun(d1Client, {
+        jobType: JobType.DAILY_MAINTENANCE,
+        triggeredBy
+    })
 
     try {
         // 1. Consume past dinners
@@ -52,16 +69,28 @@ export default defineEventHandler(async (event): Promise<DailyMaintenanceResult>
         }
 
         const result: DailyMaintenanceResult = {
+            jobRunId: jobRun.id,
             consume: consumeResult,
             close: closeResult,
             transact: transactResult,
             scaffold: scaffoldResult
         }
 
-        console.info(`${LOG} Daily maintenance complete`)
+        // Complete job run with success (ADR-010: repository serializes)
+        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+
+        console.info(`${LOG} Daily maintenance complete (jobRunId=${jobRun.id})`)
         setResponseStatus(event, 200)
         return DailyMaintenanceResultSchema.parse(result)
     } catch (error) {
+        // Complete job run with failure
+        await completeJobRun(
+            d1Client,
+            jobRun.id,
+            JobStatus.FAILED,
+            undefined,
+            error instanceof Error ? error.message : 'Unknown error'
+        )
         return throwH3Error(`${LOG} Error during daily maintenance`, error)
     }
 })

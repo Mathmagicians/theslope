@@ -93,7 +93,7 @@ export const useBookingValidation = () => {
         dinnerEventId: z.number().int().positive(),
         inhabitantId: z.number().int().positive(),
         bookedByUserId: z.number().int().positive().nullable(),
-        ticketPriceId: z.number().int().positive(),
+        ticketPriceId: z.number().int().positive().nullable(), // Nullable: SET NULL when TicketPrice deleted (priceAtBooking preserved)
         priceAtBooking: z.number().int(),
         dinnerMode: DinnerModeSchema,
         state: OrderStateSchema,
@@ -109,7 +109,7 @@ export const useBookingValidation = () => {
      */
     const OrderDisplaySchema = OrderBaseSchema.extend({
         id: z.number().int().positive(),
-        ticketType: TicketTypeSchema // Flattened from ticketPrice relation (ADR-009)
+        ticketType: TicketTypeSchema.nullable() // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
     })
 
     /**
@@ -126,13 +126,13 @@ export const useBookingValidation = () => {
             id: z.number().int().positive(),
             email: z.string()
         }).nullable(),
-        // TicketPrice relation
+        // TicketPrice relation - nullable when TicketPrice deleted (priceAtBooking preserved)
         ticketPrice: z.object({
             id: z.number().int().positive(),
             ticketType: TicketTypeSchema,
             price: z.number().int(),
             description: z.string().nullable()
-        })
+        }).nullable()
     })
 
     // ============================================================================
@@ -187,14 +187,13 @@ export const useBookingValidation = () => {
         priceAtBooking: z.number().int().nonnegative()  // Override to required, allows 0 for free tickets
     })
 
-    // D1 constraint: max 100 bound params per query
-    // Order insert: 7 params (dinnerEventId, inhabitantId, bookedByUserId, ticketPriceId, priceAtBooking, dinnerMode, state)
-    // Max: 100 / 7 ≈ 14 orders, using 12 for safety margin
-    const ORDER_BATCH_SIZE = 12
+    // ADR-014: Prisma D1 adapter auto-chunks createManyAndReturn
+    // Manual chunking is defense-in-depth; 200 is conservative (needs investigation for actual limits)
+    const ORDER_BATCH_SIZE = 200
 
-    // Delete operations use 1 param per ID, but keeping same batch size for consistency
-    // and to avoid long-running queries that could timeout
-    const DELETE_BATCH_SIZE = 50
+    // updateMany/deleteMany: D1 limit is 100 total params (IDs + data fields)
+    // updateOrdersToClosed uses 2 data params, so max ~98 IDs. Using 90 for safety.
+    const DELETE_BATCH_SIZE = 90
 
     // Local type for batch chunking (avoids circular reference with exported type)
     type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
@@ -207,12 +206,12 @@ export const useBookingValidation = () => {
 
     /**
      * Batch of orders for batch creation - validates business rules:
-     * - Array size: 1-ORDER_BATCH_SIZE orders (D1 bound param limit)
+     * - Array size: 1-ORDER_BATCH_SIZE orders (defense-in-depth, Prisma auto-chunks)
      * - Same household: All orders must have same householdId
      */
     const OrdersBatchSchema = z.array(OrderCreateWithPriceSchema)
         .min(1, 'Mindst én ordre er påkrævet')
-        .max(ORDER_BATCH_SIZE, `Maksimalt ${ORDER_BATCH_SIZE} ordrer per batch (D1 grænse)`)
+        .max(ORDER_BATCH_SIZE, `Maksimalt ${ORDER_BATCH_SIZE} ordrer per batch`)
         .refine(
             orders => new Set(orders.map(o => o.householdId)).size === 1,
             { message: 'Alle ordrer skal være fra samme husstand' }
@@ -509,6 +508,41 @@ export const useBookingValidation = () => {
     })
 
     // ============================================================================
+    // ORDER FOR TRANSACTION (batch operation - lean schema per ADR-009)
+    // ============================================================================
+
+    /**
+     * Lean order schema for transaction creation batch operations
+     * Only includes fields needed for transaction snapshots (ADR-009: batch = lean)
+     */
+    const OrderForTransactionSchema = z.object({
+        id: z.number().int().positive(),
+        dinnerEventId: z.number().int().positive(),
+        inhabitantId: z.number().int().positive(),
+        bookedByUserId: z.number().int().positive().nullable(),
+        ticketType: TicketTypeSchema.nullable(),
+        priceAtBooking: z.number().int(),
+        dinnerMode: DinnerModeSchema,
+        state: OrderStateSchema,
+        closedAt: z.coerce.date().nullable(),
+        bookedByUser: z.object({
+            id: z.number().int().positive(),
+            email: z.string()
+        }).nullable(),
+        inhabitant: z.object({
+            id: z.number().int().positive(),
+            name: z.string(),
+            lastName: z.string(),
+            householdId: z.number().int().positive()
+        }),
+        dinnerEvent: z.object({
+            id: z.number().int().positive(),
+            date: z.coerce.date(),
+            menuTitle: z.string()
+        })
+    })
+
+    // ============================================================================
     // SCAFFOLD PRE-BOOKINGS RESULT
     // ============================================================================
 
@@ -554,8 +588,10 @@ export const useBookingValidation = () => {
 
     /**
      * Combined result of daily maintenance endpoint
+     * Includes jobRunId for observability and parallel-safe test assertions
      */
     const DailyMaintenanceResultSchema = z.object({
+        jobRunId: z.number().int().positive(),
         consume: ConsumeResultSchema,
         close: CloseOrdersResultSchema,
         transact: CreateTransactionsResultSchema,
@@ -616,6 +652,9 @@ export const useBookingValidation = () => {
         DELETE_BATCH_SIZE,
         chunkOrderBatch,
         chunkIds,
+
+        // Transaction Creation (lean batch schema - ADR-009)
+        OrderForTransactionSchema,
 
         // Serialization
         SerializedOrderSchema,
@@ -683,6 +722,9 @@ export type AuditContext = z.infer<ReturnType<typeof useBookingValidation>['Audi
 export type OrderCreateWithPrice = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateWithPriceSchema']>
 export type OrdersBatch = z.infer<ReturnType<typeof useBookingValidation>['OrdersBatchSchema']>
 export type CreateOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersResultSchema']>
+
+// Transaction Creation (lean batch schema - ADR-009)
+export type OrderForTransaction = z.infer<ReturnType<typeof useBookingValidation>['OrderForTransactionSchema']>
 
 // Heynabo Event Sync (ADR-013)
 export type HeynaboEventCreate = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventCreateSchema']>

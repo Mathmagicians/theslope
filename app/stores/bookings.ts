@@ -67,7 +67,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const ordersByTicketType = computed(() => {
         const byType: Record<string, number> = {}
         orders.value.forEach(order => {
-            byType[order.ticketType] = (byType[order.ticketType] || 0) + 1
+            if (order.ticketType) {
+                byType[order.ticketType] = (byType[order.ticketType] || 0) + 1
+            }
         })
         return byType
     })

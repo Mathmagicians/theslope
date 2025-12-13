@@ -24,8 +24,22 @@ Admins can manually re-trigger jobs if they failed.
 -->
 
 <script setup lang="ts">
+import type {JobRunDisplay} from '~/composables/useMaintenanceValidation'
+
 // Design system
 const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+
+// Maintenance helpers
+const {
+    jobTypeLabels,
+    jobStatusLabels,
+    getJobStatusColor,
+    getJobStatusIcon,
+    formatDuration,
+    formatTriggeredBy,
+    formatResultSummary
+} = useMaintenance()
+const {JobRunDisplaySchema} = useMaintenanceValidation()
 
 // Auth - check admin role
 const authStore = useAuthStore()
@@ -41,6 +55,35 @@ const bookingsStore = useBookingsStore()
 const { isDailyMaintenanceRunning, hasDailyMaintenanceResult, hasDailyMaintenanceError, dailyMaintenanceResult, dailyMaintenanceError } = storeToRefs(bookingsStore)
 const { runDailyMaintenance } = bookingsStore
 
+// ============================================================================
+// JOB HISTORY - fetch from API (ADR-007: useAsyncData)
+// ============================================================================
+
+const { data: jobRuns, refresh: refreshJobRuns } = useAsyncData<JobRunDisplay[]>(
+    'admin-system-job-runs',
+    () => $fetch<JobRunDisplay[]>('/api/admin/maintenance/job-run', { query: { limit: 20 } }),
+    {
+        default: () => [],
+        transform: (data) => data.map(jr => JobRunDisplaySchema.parse(jr))
+    }
+)
+
+// Refresh job runs after manual trigger
+const runDailyMaintenanceAndRefresh = async () => {
+    await runDailyMaintenance()
+    await refreshJobRuns()
+}
+
+const importHeynaboDataAndRefresh = async () => {
+    await importHeynaboData()
+    await refreshJobRuns()
+}
+
+// Get latest job run by type (for showing history when no fresh result)
+const getLatestJobRunByType = (jobType: string): JobRunDisplay | null => {
+    return jobRuns.value.find(jr => jr.jobType === jobType) ?? null
+}
+
 // Empty state for job history table
 const jobHistoryEmptyMessage = getRandomEmptyMessage('jobHistory')
 const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessage.text}`
@@ -50,12 +93,29 @@ const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessag
 // ============================================================================
 
 const jobHistoryColumns = [
-  { accessorKey: 'date', header: 'Dato' },
+  { accessorKey: 'startedAt', header: 'Dato' },
   { accessorKey: 'jobType', header: 'Job' },
   { accessorKey: 'status', header: 'Status' },
-  { accessorKey: 'duration', header: 'Varighed' },
-  { accessorKey: 'result', header: 'Resultat' }
+  { accessorKey: 'durationMs', header: 'Varighed' },
+  { accessorKey: 'triggeredBy', header: 'Kilde' },
+  { accessorKey: 'resultSummary', header: 'Resultat' }
 ]
+
+// Format job runs for table display
+const jobHistoryRows = computed(() => {
+  return jobRuns.value.map(jr => ({
+    id: jr.id,
+    startedAt: jr.startedAt.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }),
+    jobType: jobTypeLabels[jr.jobType as keyof typeof jobTypeLabels] ?? jr.jobType,
+    status: jr.status,
+    statusColor: getJobStatusColor(jr.status),
+    statusIcon: getJobStatusIcon(jr.status),
+    statusLabel: jobStatusLabels[jr.status as keyof typeof jobStatusLabels] ?? jr.status,
+    durationMs: formatDuration(jr.durationMs),
+    triggeredBy: formatTriggeredBy(jr.triggeredBy),
+    resultSummary: formatResultSummary(jr.jobType, jr.resultSummary)
+  }))
+})
 
 // ============================================================================
 // APP CONFIG TREE
@@ -121,6 +181,22 @@ const heynaboImportStats = computed(() => {
 
 // Job definitions following feature-proposal-season-activation.md
 const systemJobs = appConfig.theslope.systemJobs
+
+// Get latest job run result formatted for display (fallback when no fresh result)
+const getLatestJobStats = (jobType: string): { icon: string; text: string }[] => {
+  const latestRun = getLatestJobRunByType(jobType)
+  if (!latestRun || !latestRun.resultSummary) return []
+
+  const resultText = formatResultSummary(latestRun.jobType, latestRun.resultSummary)
+  const timeText = latestRun.startedAt.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })
+
+  return [
+    { icon: getJobStatusIcon(latestRun.status), text: `${jobStatusLabels[latestRun.status as keyof typeof jobStatusLabels]}` },
+    { icon: ICONS.clock, text: timeText },
+    { icon: ICONS.info, text: resultText }
+  ]
+}
+
 const jobDefinitions = computed(() => [
   {
     key: 'DAILY_MAINTENANCE',
@@ -135,9 +211,9 @@ const jobDefinitions = computed(() => [
     isRunning: isDailyMaintenanceRunning.value,
     hasResult: hasDailyMaintenanceResult.value,
     hasError: hasDailyMaintenanceError.value,
-    stats: dailyMaintenanceStats.value,
+    stats: hasDailyMaintenanceResult.value ? dailyMaintenanceStats.value : getLatestJobStats('DAILY_MAINTENANCE'),
     error: dailyMaintenanceError.value,
-    trigger: runDailyMaintenance
+    trigger: runDailyMaintenanceAndRefresh
   },
   {
     key: 'MONTHLY_BILLING',
@@ -148,11 +224,11 @@ const jobDefinitions = computed(() => [
     color: COLOR.secondary,
     headerBg: BG.pink[50],
     icon: ICONS.ticket,
-    // Not yet implemented
+    // Not yet implemented - show latest from history if available
     isRunning: false,
     hasResult: false,
     hasError: false,
-    stats: [],
+    stats: getLatestJobStats('MONTHLY_BILLING'),
     error: null,
     trigger: null
   },
@@ -169,9 +245,9 @@ const jobDefinitions = computed(() => [
     isRunning: isImportHeynaboLoading.value,
     hasResult: hasHeynaboImportResult.value,
     hasError: isImportHeynaboErrored.value,
-    stats: heynaboImportStats.value,
+    stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
     error: heynaboImportError.value,
-    trigger: importHeynaboData
+    trigger: importHeynaboDataAndRefresh
   }
 ])
 </script>
@@ -200,9 +276,9 @@ const jobDefinitions = computed(() => [
               :name="job.icon"
               :class="['text-5xl md:text-6xl opacity-80', job.isRunning ? 'animate-spin' : '']"
             />
-            <UBadge :color="COLOR.neutral" variant="outline" size="xs">
+            <span :class="TYPOGRAPHY.bodyTextSmall">
               {{ job.schedule }}
-            </UBadge>
+            </span>
           </div>
         </template>
 
@@ -293,12 +369,20 @@ const jobDefinitions = computed(() => [
       </template>
 
       <UTable
-        :data="[]"
+        :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
         class="w-full"
-      />
+      >
+        <!-- Custom status cell with color and icon -->
+        <template #status-cell="{ row }">
+          <UBadge :color="row.original.statusColor" variant="subtle" class="gap-1">
+            <UIcon :name="row.original.statusIcon" class="text-xs" />
+            {{ row.original.statusLabel }}
+          </UBadge>
+        </template>
+      </UTable>
     </UCard>
 
     <!-- System Settings - App Config Tree -->

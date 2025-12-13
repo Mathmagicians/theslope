@@ -42,6 +42,8 @@ export const TicketPriceScalarFieldEnumSchema = z.enum(['id','seasonId','ticketT
 
 export const OrderHistoryScalarFieldEnumSchema = z.enum(['id','orderId','action','performedByUserId','auditData','timestamp','inhabitantId','dinnerEventId','seasonId']);
 
+export const JobRunScalarFieldEnumSchema = z.enum(['id','jobType','status','startedAt','completedAt','durationMs','resultSummary','errorMessage','triggeredBy']);
+
 export const SortOrderSchema = z.enum(['asc','desc']);
 
 export const NullsOrderSchema = z.enum(['first','last']);
@@ -73,6 +75,14 @@ export type OrderStateType = `${z.infer<typeof OrderStateSchema>}`
 export const OrderAuditActionSchema = z.enum(['USER_BOOKED','USER_CANCELLED','ADMIN_DELETED','SYSTEM_SCAFFOLD','SYSTEM_PRUNED','BULK_IMPORT']);
 
 export type OrderAuditActionType = `${z.infer<typeof OrderAuditActionSchema>}`
+
+export const JobTypeSchema = z.enum(['DAILY_MAINTENANCE','MONTHLY_BILLING','HEYNABO_IMPORT','MAINTENANCE_IMPORT','MAINTENANCE_EXPORT']);
+
+export type JobTypeType = `${z.infer<typeof JobTypeSchema>}`
+
+export const JobStatusSchema = z.enum(['RUNNING','SUCCESS','PARTIAL','FAILED']);
+
+export type JobStatusType = `${z.infer<typeof JobStatusSchema>}`
 
 /////////////////////////////////////////
 // MODELS
@@ -201,7 +211,7 @@ export const OrderSchema = z.object({
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().nullable(),
   priceAtBooking: z.number().int(),
   releasedAt: z.coerce.date().nullable(),
   closedAt: z.coerce.date().nullable(),
@@ -324,6 +334,24 @@ export const OrderHistorySchema = z.object({
 })
 
 export type OrderHistory = z.infer<typeof OrderHistorySchema>
+
+/////////////////////////////////////////
+// JOB RUN SCHEMA
+/////////////////////////////////////////
+
+export const JobRunSchema = z.object({
+  jobType: JobTypeSchema,
+  status: JobStatusSchema,
+  id: z.number().int(),
+  startedAt: z.coerce.date(),
+  completedAt: z.coerce.date().nullable(),
+  durationMs: z.number().int().nullable(),
+  resultSummary: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  triggeredBy: z.string(),
+})
+
+export type JobRun = z.infer<typeof JobRunSchema>
 
 /////////////////////////////////////////
 // SELECT & INCLUDE
@@ -847,6 +875,21 @@ export const OrderHistorySelectSchema: z.ZodType<Prisma.OrderHistorySelect> = z.
   seasonId: z.boolean().optional(),
   order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
   performedByUser: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
+}).strict()
+
+// JOB RUN
+//------------------------------------------------------
+
+export const JobRunSelectSchema: z.ZodType<Prisma.JobRunSelect> = z.object({
+  id: z.boolean().optional(),
+  jobType: z.boolean().optional(),
+  status: z.boolean().optional(),
+  startedAt: z.boolean().optional(),
+  completedAt: z.boolean().optional(),
+  durationMs: z.boolean().optional(),
+  resultSummary: z.boolean().optional(),
+  errorMessage: z.boolean().optional(),
+  triggeredBy: z.boolean().optional(),
 }).strict()
 
 
@@ -1485,7 +1528,7 @@ export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.object
   dinnerEventId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   bookedByUserId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
-  ticketPriceId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  ticketPriceId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
@@ -1496,7 +1539,7 @@ export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.object
   dinnerEvent: z.union([ z.lazy(() => DinnerEventScalarRelationFilterSchema), z.lazy(() => DinnerEventWhereInputSchema) ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
   bookedByUser: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
-  ticketPrice: z.union([ z.lazy(() => TicketPriceScalarRelationFilterSchema), z.lazy(() => TicketPriceWhereInputSchema) ]).optional(),
+  ticketPrice: z.union([ z.lazy(() => TicketPriceNullableScalarRelationFilterSchema), z.lazy(() => TicketPriceWhereInputSchema) ]).optional().nullable(),
   Transaction: z.union([ z.lazy(() => TransactionNullableScalarRelationFilterSchema), z.lazy(() => TransactionWhereInputSchema) ]).optional().nullable(),
   orderHistory: z.lazy(() => OrderHistoryListRelationFilterSchema).optional(),
 }).strict();
@@ -1506,7 +1549,7 @@ export const OrderOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderOrderByW
   dinnerEventId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   bookedByUserId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
-  ticketPriceId: z.lazy(() => SortOrderSchema).optional(),
+  ticketPriceId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
@@ -1533,7 +1576,7 @@ export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput
   dinnerEventId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   bookedByUserId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
-  ticketPriceId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  ticketPriceId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
@@ -1544,7 +1587,7 @@ export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput
   dinnerEvent: z.union([ z.lazy(() => DinnerEventScalarRelationFilterSchema), z.lazy(() => DinnerEventWhereInputSchema) ]).optional(),
   inhabitant: z.union([ z.lazy(() => InhabitantScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional(),
   bookedByUser: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
-  ticketPrice: z.union([ z.lazy(() => TicketPriceScalarRelationFilterSchema), z.lazy(() => TicketPriceWhereInputSchema) ]).optional(),
+  ticketPrice: z.union([ z.lazy(() => TicketPriceNullableScalarRelationFilterSchema), z.lazy(() => TicketPriceWhereInputSchema) ]).optional().nullable(),
   Transaction: z.union([ z.lazy(() => TransactionNullableScalarRelationFilterSchema), z.lazy(() => TransactionWhereInputSchema) ]).optional().nullable(),
   orderHistory: z.lazy(() => OrderHistoryListRelationFilterSchema).optional(),
 }).strict());
@@ -1554,7 +1597,7 @@ export const OrderOrderByWithAggregationInputSchema: z.ZodType<Prisma.OrderOrder
   dinnerEventId: z.lazy(() => SortOrderSchema).optional(),
   inhabitantId: z.lazy(() => SortOrderSchema).optional(),
   bookedByUserId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
-  ticketPriceId: z.lazy(() => SortOrderSchema).optional(),
+  ticketPriceId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
@@ -1577,7 +1620,7 @@ export const OrderScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.OrderSc
   dinnerEventId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   bookedByUserId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
-  ticketPriceId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  ticketPriceId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
   priceAtBooking: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeWithAggregatesFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateWithAggregatesFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
@@ -2148,6 +2191,83 @@ export const OrderHistoryScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.
   seasonId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
 }).strict();
 
+export const JobRunWhereInputSchema: z.ZodType<Prisma.JobRunWhereInput> = z.object({
+  AND: z.union([ z.lazy(() => JobRunWhereInputSchema), z.lazy(() => JobRunWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => JobRunWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => JobRunWhereInputSchema), z.lazy(() => JobRunWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  jobType: z.union([ z.lazy(() => EnumJobTypeFilterSchema), z.lazy(() => JobTypeSchema) ]).optional(),
+  status: z.union([ z.lazy(() => EnumJobStatusFilterSchema), z.lazy(() => JobStatusSchema) ]).optional(),
+  startedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  completedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  durationMs: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
+  resultSummary: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  errorMessage: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  triggeredBy: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+}).strict();
+
+export const JobRunOrderByWithRelationInputSchema: z.ZodType<Prisma.JobRunOrderByWithRelationInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  jobType: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  startedAt: z.lazy(() => SortOrderSchema).optional(),
+  completedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  durationMs: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  resultSummary: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  errorMessage: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const JobRunWhereUniqueInputSchema: z.ZodType<Prisma.JobRunWhereUniqueInput> = z.object({
+  id: z.number().int(),
+})
+.and(z.object({
+  id: z.number().int().optional(),
+  AND: z.union([ z.lazy(() => JobRunWhereInputSchema), z.lazy(() => JobRunWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => JobRunWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => JobRunWhereInputSchema), z.lazy(() => JobRunWhereInputSchema).array() ]).optional(),
+  jobType: z.union([ z.lazy(() => EnumJobTypeFilterSchema), z.lazy(() => JobTypeSchema) ]).optional(),
+  status: z.union([ z.lazy(() => EnumJobStatusFilterSchema), z.lazy(() => JobStatusSchema) ]).optional(),
+  startedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  completedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  durationMs: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
+  resultSummary: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  errorMessage: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  triggeredBy: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+}).strict());
+
+export const JobRunOrderByWithAggregationInputSchema: z.ZodType<Prisma.JobRunOrderByWithAggregationInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  jobType: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  startedAt: z.lazy(() => SortOrderSchema).optional(),
+  completedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  durationMs: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  resultSummary: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  errorMessage: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+  _count: z.lazy(() => JobRunCountOrderByAggregateInputSchema).optional(),
+  _avg: z.lazy(() => JobRunAvgOrderByAggregateInputSchema).optional(),
+  _max: z.lazy(() => JobRunMaxOrderByAggregateInputSchema).optional(),
+  _min: z.lazy(() => JobRunMinOrderByAggregateInputSchema).optional(),
+  _sum: z.lazy(() => JobRunSumOrderByAggregateInputSchema).optional(),
+}).strict();
+
+export const JobRunScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.JobRunScalarWhereWithAggregatesInput> = z.object({
+  AND: z.union([ z.lazy(() => JobRunScalarWhereWithAggregatesInputSchema), z.lazy(() => JobRunScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  OR: z.lazy(() => JobRunScalarWhereWithAggregatesInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => JobRunScalarWhereWithAggregatesInputSchema), z.lazy(() => JobRunScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  jobType: z.union([ z.lazy(() => EnumJobTypeWithAggregatesFilterSchema), z.lazy(() => JobTypeSchema) ]).optional(),
+  status: z.union([ z.lazy(() => EnumJobStatusWithAggregatesFilterSchema), z.lazy(() => JobStatusSchema) ]).optional(),
+  startedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  completedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
+  durationMs: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
+  resultSummary: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  errorMessage: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  triggeredBy: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+}).strict();
+
 export const AllergyTypeCreateInputSchema: z.ZodType<Prisma.AllergyTypeCreateInput> = z.object({
   name: z.string(),
   description: z.string(),
@@ -2671,7 +2791,7 @@ export const OrderCreateInputSchema: z.ZodType<Prisma.OrderCreateInput> = z.obje
   dinnerEvent: z.lazy(() => DinnerEventCreateNestedOneWithoutTicketsInputSchema),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutOrderInputSchema),
   bookedByUser: z.lazy(() => UserCreateNestedOneWithoutBookedOrdersInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   Transaction: z.lazy(() => TransactionCreateNestedOneWithoutOrderInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 }).strict();
@@ -2681,7 +2801,7 @@ export const OrderUncheckedCreateInputSchema: z.ZodType<Prisma.OrderUncheckedCre
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -2704,7 +2824,7 @@ export const OrderUpdateInputSchema: z.ZodType<Prisma.OrderUpdateInput> = z.obje
   dinnerEvent: z.lazy(() => DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutOrderNestedInputSchema).optional(),
   bookedByUser: z.lazy(() => UserUpdateOneWithoutBookedOrdersNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   Transaction: z.lazy(() => TransactionUpdateOneWithoutOrderNestedInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 }).strict();
@@ -2714,7 +2834,7 @@ export const OrderUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderUncheckedUpd
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -2731,7 +2851,7 @@ export const OrderCreateManyInputSchema: z.ZodType<Prisma.OrderCreateManyInput> 
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -2756,7 +2876,7 @@ export const OrderUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderUnchecke
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3266,6 +3386,87 @@ export const OrderHistoryUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderH
   inhabitantId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   seasonId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+}).strict();
+
+export const JobRunCreateInputSchema: z.ZodType<Prisma.JobRunCreateInput> = z.object({
+  jobType: z.lazy(() => JobTypeSchema),
+  status: z.lazy(() => JobStatusSchema),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().optional().nullable(),
+  durationMs: z.number().int().optional().nullable(),
+  resultSummary: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  triggeredBy: z.string().optional(),
+}).strict();
+
+export const JobRunUncheckedCreateInputSchema: z.ZodType<Prisma.JobRunUncheckedCreateInput> = z.object({
+  id: z.number().int().optional(),
+  jobType: z.lazy(() => JobTypeSchema),
+  status: z.lazy(() => JobStatusSchema),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().optional().nullable(),
+  durationMs: z.number().int().optional().nullable(),
+  resultSummary: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  triggeredBy: z.string().optional(),
+}).strict();
+
+export const JobRunUpdateInputSchema: z.ZodType<Prisma.JobRunUpdateInput> = z.object({
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const JobRunUncheckedUpdateInputSchema: z.ZodType<Prisma.JobRunUncheckedUpdateInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const JobRunCreateManyInputSchema: z.ZodType<Prisma.JobRunCreateManyInput> = z.object({
+  id: z.number().int().optional(),
+  jobType: z.lazy(() => JobTypeSchema),
+  status: z.lazy(() => JobStatusSchema),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().optional().nullable(),
+  durationMs: z.number().int().optional().nullable(),
+  resultSummary: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  triggeredBy: z.string().optional(),
+}).strict();
+
+export const JobRunUpdateManyMutationInputSchema: z.ZodType<Prisma.JobRunUpdateManyMutationInput> = z.object({
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const JobRunUncheckedUpdateManyInputSchema: z.ZodType<Prisma.JobRunUncheckedUpdateManyInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const IntFilterSchema: z.ZodType<Prisma.IntFilter> = z.object({
@@ -3894,9 +4095,9 @@ export const EnumOrderStateFilterSchema: z.ZodType<Prisma.EnumOrderStateFilter> 
   not: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => NestedEnumOrderStateFilterSchema) ]).optional(),
 }).strict();
 
-export const TicketPriceScalarRelationFilterSchema: z.ZodType<Prisma.TicketPriceScalarRelationFilter> = z.object({
-  is: z.lazy(() => TicketPriceWhereInputSchema).optional(),
-  isNot: z.lazy(() => TicketPriceWhereInputSchema).optional(),
+export const TicketPriceNullableScalarRelationFilterSchema: z.ZodType<Prisma.TicketPriceNullableScalarRelationFilter> = z.object({
+  is: z.lazy(() => TicketPriceWhereInputSchema).optional().nullable(),
+  isNot: z.lazy(() => TicketPriceWhereInputSchema).optional().nullable(),
 }).strict();
 
 export const TransactionNullableScalarRelationFilterSchema: z.ZodType<Prisma.TransactionNullableScalarRelationFilter> = z.object({
@@ -4416,6 +4617,86 @@ export const EnumOrderAuditActionWithAggregatesFilterSchema: z.ZodType<Prisma.En
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedEnumOrderAuditActionFilterSchema).optional(),
   _max: z.lazy(() => NestedEnumOrderAuditActionFilterSchema).optional(),
+}).strict();
+
+export const EnumJobTypeFilterSchema: z.ZodType<Prisma.EnumJobTypeFilter> = z.object({
+  equals: z.lazy(() => JobTypeSchema).optional(),
+  in: z.lazy(() => JobTypeSchema).array().optional(),
+  notIn: z.lazy(() => JobTypeSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => NestedEnumJobTypeFilterSchema) ]).optional(),
+}).strict();
+
+export const EnumJobStatusFilterSchema: z.ZodType<Prisma.EnumJobStatusFilter> = z.object({
+  equals: z.lazy(() => JobStatusSchema).optional(),
+  in: z.lazy(() => JobStatusSchema).array().optional(),
+  notIn: z.lazy(() => JobStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => NestedEnumJobStatusFilterSchema) ]).optional(),
+}).strict();
+
+export const JobRunCountOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunCountOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  jobType: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  startedAt: z.lazy(() => SortOrderSchema).optional(),
+  completedAt: z.lazy(() => SortOrderSchema).optional(),
+  durationMs: z.lazy(() => SortOrderSchema).optional(),
+  resultSummary: z.lazy(() => SortOrderSchema).optional(),
+  errorMessage: z.lazy(() => SortOrderSchema).optional(),
+  triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const JobRunAvgOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunAvgOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  durationMs: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const JobRunMaxOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunMaxOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  jobType: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  startedAt: z.lazy(() => SortOrderSchema).optional(),
+  completedAt: z.lazy(() => SortOrderSchema).optional(),
+  durationMs: z.lazy(() => SortOrderSchema).optional(),
+  resultSummary: z.lazy(() => SortOrderSchema).optional(),
+  errorMessage: z.lazy(() => SortOrderSchema).optional(),
+  triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const JobRunMinOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunMinOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  jobType: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  startedAt: z.lazy(() => SortOrderSchema).optional(),
+  completedAt: z.lazy(() => SortOrderSchema).optional(),
+  durationMs: z.lazy(() => SortOrderSchema).optional(),
+  resultSummary: z.lazy(() => SortOrderSchema).optional(),
+  errorMessage: z.lazy(() => SortOrderSchema).optional(),
+  triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const JobRunSumOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunSumOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  durationMs: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const EnumJobTypeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumJobTypeWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => JobTypeSchema).optional(),
+  in: z.lazy(() => JobTypeSchema).array().optional(),
+  notIn: z.lazy(() => JobTypeSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => NestedEnumJobTypeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumJobTypeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumJobTypeFilterSchema).optional(),
+}).strict();
+
+export const EnumJobStatusWithAggregatesFilterSchema: z.ZodType<Prisma.EnumJobStatusWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => JobStatusSchema).optional(),
+  in: z.lazy(() => JobStatusSchema).array().optional(),
+  notIn: z.lazy(() => JobStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => NestedEnumJobStatusWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumJobStatusFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumJobStatusFilterSchema).optional(),
 }).strict();
 
 export const AllergyCreateNestedManyWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateNestedManyWithoutAllergyTypeInput> = z.object({
@@ -5208,10 +5489,12 @@ export const UserUpdateOneWithoutBookedOrdersNestedInputSchema: z.ZodType<Prisma
   update: z.union([ z.lazy(() => UserUpdateToOneWithWhereWithoutBookedOrdersInputSchema), z.lazy(() => UserUpdateWithoutBookedOrdersInputSchema), z.lazy(() => UserUncheckedUpdateWithoutBookedOrdersInputSchema) ]).optional(),
 }).strict();
 
-export const TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema: z.ZodType<Prisma.TicketPriceUpdateOneRequiredWithoutOrdersNestedInput> = z.object({
+export const TicketPriceUpdateOneWithoutOrdersNestedInputSchema: z.ZodType<Prisma.TicketPriceUpdateOneWithoutOrdersNestedInput> = z.object({
   create: z.union([ z.lazy(() => TicketPriceCreateWithoutOrdersInputSchema), z.lazy(() => TicketPriceUncheckedCreateWithoutOrdersInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => TicketPriceCreateOrConnectWithoutOrdersInputSchema).optional(),
   upsert: z.lazy(() => TicketPriceUpsertWithoutOrdersInputSchema).optional(),
+  disconnect: z.union([ z.boolean(),z.lazy(() => TicketPriceWhereInputSchema) ]).optional(),
+  delete: z.union([ z.boolean(),z.lazy(() => TicketPriceWhereInputSchema) ]).optional(),
   connect: z.lazy(() => TicketPriceWhereUniqueInputSchema).optional(),
   update: z.union([ z.lazy(() => TicketPriceUpdateToOneWithWhereWithoutOrdersInputSchema), z.lazy(() => TicketPriceUpdateWithoutOrdersInputSchema), z.lazy(() => TicketPriceUncheckedUpdateWithoutOrdersInputSchema) ]).optional(),
 }).strict();
@@ -5710,6 +5993,14 @@ export const UserUpdateOneWithoutOrderHistoryNestedInputSchema: z.ZodType<Prisma
   update: z.union([ z.lazy(() => UserUpdateToOneWithWhereWithoutOrderHistoryInputSchema), z.lazy(() => UserUpdateWithoutOrderHistoryInputSchema), z.lazy(() => UserUncheckedUpdateWithoutOrderHistoryInputSchema) ]).optional(),
 }).strict();
 
+export const EnumJobTypeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumJobTypeFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => JobTypeSchema).optional(),
+}).strict();
+
+export const EnumJobStatusFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumJobStatusFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => JobStatusSchema).optional(),
+}).strict();
+
 export const NestedIntFilterSchema: z.ZodType<Prisma.NestedIntFilter> = z.object({
   equals: z.number().optional(),
   in: z.number().array().optional(),
@@ -6011,6 +6302,40 @@ export const NestedEnumOrderAuditActionWithAggregatesFilterSchema: z.ZodType<Pri
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedEnumOrderAuditActionFilterSchema).optional(),
   _max: z.lazy(() => NestedEnumOrderAuditActionFilterSchema).optional(),
+}).strict();
+
+export const NestedEnumJobTypeFilterSchema: z.ZodType<Prisma.NestedEnumJobTypeFilter> = z.object({
+  equals: z.lazy(() => JobTypeSchema).optional(),
+  in: z.lazy(() => JobTypeSchema).array().optional(),
+  notIn: z.lazy(() => JobTypeSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => NestedEnumJobTypeFilterSchema) ]).optional(),
+}).strict();
+
+export const NestedEnumJobStatusFilterSchema: z.ZodType<Prisma.NestedEnumJobStatusFilter> = z.object({
+  equals: z.lazy(() => JobStatusSchema).optional(),
+  in: z.lazy(() => JobStatusSchema).array().optional(),
+  notIn: z.lazy(() => JobStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => NestedEnumJobStatusFilterSchema) ]).optional(),
+}).strict();
+
+export const NestedEnumJobTypeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumJobTypeWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => JobTypeSchema).optional(),
+  in: z.lazy(() => JobTypeSchema).array().optional(),
+  notIn: z.lazy(() => JobTypeSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => NestedEnumJobTypeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumJobTypeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumJobTypeFilterSchema).optional(),
+}).strict();
+
+export const NestedEnumJobStatusWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumJobStatusWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => JobStatusSchema).optional(),
+  in: z.lazy(() => JobStatusSchema).array().optional(),
+  notIn: z.lazy(() => JobStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => NestedEnumJobStatusWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumJobStatusFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumJobStatusFilterSchema).optional(),
 }).strict();
 
 export const AllergyCreateWithoutAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateWithoutAllergyTypeInput> = z.object({
@@ -6400,7 +6725,7 @@ export const OrderCreateWithoutBookedByUserInputSchema: z.ZodType<Prisma.OrderCr
   updatedAt: z.coerce.date().optional(),
   dinnerEvent: z.lazy(() => DinnerEventCreateNestedOneWithoutTicketsInputSchema),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutOrderInputSchema),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   Transaction: z.lazy(() => TransactionCreateNestedOneWithoutOrderInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 }).strict();
@@ -6409,7 +6734,7 @@ export const OrderUncheckedCreateWithoutBookedByUserInputSchema: z.ZodType<Prism
   id: z.number().int().optional(),
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -6524,7 +6849,7 @@ export const OrderScalarWhereInputSchema: z.ZodType<Prisma.OrderScalarWhereInput
   dinnerEventId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   inhabitantId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   bookedByUserId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
-  ticketPriceId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  ticketPriceId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
@@ -6695,7 +7020,7 @@ export const OrderCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.OrderCrea
   updatedAt: z.coerce.date().optional(),
   dinnerEvent: z.lazy(() => DinnerEventCreateNestedOneWithoutTicketsInputSchema),
   bookedByUser: z.lazy(() => UserCreateNestedOneWithoutBookedOrdersInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   Transaction: z.lazy(() => TransactionCreateNestedOneWithoutOrderInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 }).strict();
@@ -6704,7 +7029,7 @@ export const OrderUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.
   id: z.number().int().optional(),
   dinnerEventId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -7106,7 +7431,7 @@ export const OrderCreateWithoutDinnerEventInputSchema: z.ZodType<Prisma.OrderCre
   updatedAt: z.coerce.date().optional(),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutOrderInputSchema),
   bookedByUser: z.lazy(() => UserCreateNestedOneWithoutBookedOrdersInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   Transaction: z.lazy(() => TransactionCreateNestedOneWithoutOrderInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 }).strict();
@@ -7115,7 +7440,7 @@ export const OrderUncheckedCreateWithoutDinnerEventInputSchema: z.ZodType<Prisma
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -7701,7 +8026,7 @@ export const OrderCreateWithoutTransactionInputSchema: z.ZodType<Prisma.OrderCre
   dinnerEvent: z.lazy(() => DinnerEventCreateNestedOneWithoutTicketsInputSchema),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutOrderInputSchema),
   bookedByUser: z.lazy(() => UserCreateNestedOneWithoutBookedOrdersInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 }).strict();
 
@@ -7710,7 +8035,7 @@ export const OrderUncheckedCreateWithoutTransactionInputSchema: z.ZodType<Prisma
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -7772,7 +8097,7 @@ export const OrderUpdateWithoutTransactionInputSchema: z.ZodType<Prisma.OrderUpd
   dinnerEvent: z.lazy(() => DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutOrderNestedInputSchema).optional(),
   bookedByUser: z.lazy(() => UserUpdateOneWithoutBookedOrdersNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 }).strict();
 
@@ -7781,7 +8106,7 @@ export const OrderUncheckedUpdateWithoutTransactionInputSchema: z.ZodType<Prisma
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8529,7 +8854,7 @@ export const OrderCreateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.OrderCr
   dinnerEvent: z.lazy(() => DinnerEventCreateNestedOneWithoutTicketsInputSchema),
   inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutOrderInputSchema),
   bookedByUser: z.lazy(() => UserCreateNestedOneWithoutBookedOrdersInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema),
+  ticketPrice: z.lazy(() => TicketPriceCreateNestedOneWithoutOrdersInputSchema).optional(),
   Transaction: z.lazy(() => TransactionCreateNestedOneWithoutOrderInputSchema).optional(),
 }).strict();
 
@@ -8538,7 +8863,7 @@ export const OrderUncheckedCreateWithoutOrderHistoryInputSchema: z.ZodType<Prism
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -8604,7 +8929,7 @@ export const OrderUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.OrderUp
   dinnerEvent: z.lazy(() => DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutOrderNestedInputSchema).optional(),
   bookedByUser: z.lazy(() => UserUpdateOneWithoutBookedOrdersNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   Transaction: z.lazy(() => TransactionUpdateOneWithoutOrderNestedInputSchema).optional(),
 }).strict();
 
@@ -8613,7 +8938,7 @@ export const OrderUncheckedUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prism
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8712,7 +9037,7 @@ export const OrderCreateManyBookedByUserInputSchema: z.ZodType<Prisma.OrderCreat
   id: z.number().int().optional(),
   dinnerEventId: z.number().int(),
   inhabitantId: z.number().int(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -8743,7 +9068,7 @@ export const OrderUpdateWithoutBookedByUserInputSchema: z.ZodType<Prisma.OrderUp
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEvent: z.lazy(() => DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutOrderNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   Transaction: z.lazy(() => TransactionUpdateOneWithoutOrderNestedInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 }).strict();
@@ -8752,7 +9077,7 @@ export const OrderUncheckedUpdateWithoutBookedByUserInputSchema: z.ZodType<Prism
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8768,7 +9093,7 @@ export const OrderUncheckedUpdateManyWithoutBookedByUserInputSchema: z.ZodType<P
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8837,7 +9162,7 @@ export const OrderCreateManyInhabitantInputSchema: z.ZodType<Prisma.OrderCreateM
   id: z.number().int().optional(),
   dinnerEventId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -8938,7 +9263,7 @@ export const OrderUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.OrderUpda
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEvent: z.lazy(() => DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema).optional(),
   bookedByUser: z.lazy(() => UserUpdateOneWithoutBookedOrdersNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   Transaction: z.lazy(() => TransactionUpdateOneWithoutOrderNestedInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 }).strict();
@@ -8947,7 +9272,7 @@ export const OrderUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8963,7 +9288,7 @@ export const OrderUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Pri
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerEventId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9094,7 +9419,7 @@ export const OrderCreateManyDinnerEventInputSchema: z.ZodType<Prisma.OrderCreate
   id: z.number().int().optional(),
   inhabitantId: z.number().int(),
   bookedByUserId: z.number().int().optional().nullable(),
-  ticketPriceId: z.number().int(),
+  ticketPriceId: z.number().int().optional().nullable(),
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
@@ -9119,7 +9444,7 @@ export const OrderUpdateWithoutDinnerEventInputSchema: z.ZodType<Prisma.OrderUpd
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitant: z.lazy(() => InhabitantUpdateOneRequiredWithoutOrderNestedInputSchema).optional(),
   bookedByUser: z.lazy(() => UserUpdateOneWithoutBookedOrdersNestedInputSchema).optional(),
-  ticketPrice: z.lazy(() => TicketPriceUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  ticketPrice: z.lazy(() => TicketPriceUpdateOneWithoutOrdersNestedInputSchema).optional(),
   Transaction: z.lazy(() => TransactionUpdateOneWithoutOrderNestedInputSchema).optional(),
   orderHistory: z.lazy(() => OrderHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 }).strict();
@@ -9128,7 +9453,7 @@ export const OrderUncheckedUpdateWithoutDinnerEventInputSchema: z.ZodType<Prisma
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9144,7 +9469,7 @@ export const OrderUncheckedUpdateManyWithoutDinnerEventInputSchema: z.ZodType<Pr
   id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   inhabitantId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   bookedByUserId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
-  ticketPriceId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  ticketPriceId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10468,6 +10793,63 @@ export const OrderHistoryFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.OrderHist
   where: OrderHistoryWhereUniqueInputSchema, 
 }).strict();
 
+export const JobRunFindFirstArgsSchema: z.ZodType<Prisma.JobRunFindFirstArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereInputSchema.optional(), 
+  orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
+  cursor: JobRunWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ JobRunScalarFieldEnumSchema, JobRunScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const JobRunFindFirstOrThrowArgsSchema: z.ZodType<Prisma.JobRunFindFirstOrThrowArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereInputSchema.optional(), 
+  orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
+  cursor: JobRunWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ JobRunScalarFieldEnumSchema, JobRunScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const JobRunFindManyArgsSchema: z.ZodType<Prisma.JobRunFindManyArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereInputSchema.optional(), 
+  orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
+  cursor: JobRunWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ JobRunScalarFieldEnumSchema, JobRunScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const JobRunAggregateArgsSchema: z.ZodType<Prisma.JobRunAggregateArgs> = z.object({
+  where: JobRunWhereInputSchema.optional(), 
+  orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
+  cursor: JobRunWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const JobRunGroupByArgsSchema: z.ZodType<Prisma.JobRunGroupByArgs> = z.object({
+  where: JobRunWhereInputSchema.optional(), 
+  orderBy: z.union([ JobRunOrderByWithAggregationInputSchema.array(), JobRunOrderByWithAggregationInputSchema ]).optional(),
+  by: JobRunScalarFieldEnumSchema.array(), 
+  having: JobRunScalarWhereWithAggregatesInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const JobRunFindUniqueArgsSchema: z.ZodType<Prisma.JobRunFindUniqueArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereUniqueInputSchema, 
+}).strict();
+
+export const JobRunFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.JobRunFindUniqueOrThrowArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereUniqueInputSchema, 
+}).strict();
+
 export const AllergyTypeCreateArgsSchema: z.ZodType<Prisma.AllergyTypeCreateArgs> = z.object({
   select: AllergyTypeSelectSchema.optional(),
   include: AllergyTypeIncludeSchema.optional(),
@@ -11245,5 +11627,53 @@ export const OrderHistoryUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.OrderHi
 
 export const OrderHistoryDeleteManyArgsSchema: z.ZodType<Prisma.OrderHistoryDeleteManyArgs> = z.object({
   where: OrderHistoryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const JobRunCreateArgsSchema: z.ZodType<Prisma.JobRunCreateArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  data: z.union([ JobRunCreateInputSchema, JobRunUncheckedCreateInputSchema ]),
+}).strict();
+
+export const JobRunUpsertArgsSchema: z.ZodType<Prisma.JobRunUpsertArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereUniqueInputSchema, 
+  create: z.union([ JobRunCreateInputSchema, JobRunUncheckedCreateInputSchema ]),
+  update: z.union([ JobRunUpdateInputSchema, JobRunUncheckedUpdateInputSchema ]),
+}).strict();
+
+export const JobRunCreateManyArgsSchema: z.ZodType<Prisma.JobRunCreateManyArgs> = z.object({
+  data: z.union([ JobRunCreateManyInputSchema, JobRunCreateManyInputSchema.array() ]),
+}).strict();
+
+export const JobRunCreateManyAndReturnArgsSchema: z.ZodType<Prisma.JobRunCreateManyAndReturnArgs> = z.object({
+  data: z.union([ JobRunCreateManyInputSchema, JobRunCreateManyInputSchema.array() ]),
+}).strict();
+
+export const JobRunDeleteArgsSchema: z.ZodType<Prisma.JobRunDeleteArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  where: JobRunWhereUniqueInputSchema, 
+}).strict();
+
+export const JobRunUpdateArgsSchema: z.ZodType<Prisma.JobRunUpdateArgs> = z.object({
+  select: JobRunSelectSchema.optional(),
+  data: z.union([ JobRunUpdateInputSchema, JobRunUncheckedUpdateInputSchema ]),
+  where: JobRunWhereUniqueInputSchema, 
+}).strict();
+
+export const JobRunUpdateManyArgsSchema: z.ZodType<Prisma.JobRunUpdateManyArgs> = z.object({
+  data: z.union([ JobRunUpdateManyMutationInputSchema, JobRunUncheckedUpdateManyInputSchema ]),
+  where: JobRunWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const JobRunUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.JobRunUpdateManyAndReturnArgs> = z.object({
+  data: z.union([ JobRunUpdateManyMutationInputSchema, JobRunUncheckedUpdateManyInputSchema ]),
+  where: JobRunWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const JobRunDeleteManyArgsSchema: z.ZodType<Prisma.JobRunDeleteManyArgs> = z.object({
+  where: JobRunWhereInputSchema.optional(), 
   limit: z.number().optional(),
 }).strict();

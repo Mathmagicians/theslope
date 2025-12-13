@@ -30,7 +30,7 @@ export async function createTransactions(d1Client: D1Database): Promise<CreateTr
 
     console.info(`${LOG} Found ${closedOrders.length} CLOSED orders without transactions`)
 
-    // Prepare all transaction data
+    // Prepare all transaction data (uses flattened ticketType from lean schema)
     const transactionData: TransactionCreateData[] = closedOrders.map(order => ({
         orderId: order.id,
         orderSnapshot: JSON.stringify({
@@ -38,7 +38,7 @@ export async function createTransactions(d1Client: D1Database): Promise<CreateTr
             dinnerEventId: order.dinnerEventId,
             inhabitantId: order.inhabitantId,
             bookedByUserId: order.bookedByUserId,
-            ticketType: order.ticketPrice.ticketType,
+            ticketType: order.ticketType,
             priceAtBooking: order.priceAtBooking,
             dinnerMode: order.dinnerMode,
             state: order.state,

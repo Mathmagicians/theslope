@@ -1,6 +1,7 @@
-import {defineEventHandler, setResponseStatus} from 'h3'
+import {defineEventHandler, setResponseStatus, getQuery} from 'h3'
 import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {reconcileHouseholds, reconcileInhabitants} from '~/composables/useHeynabo'
 import {
     fetchHouseholds,
@@ -10,6 +11,7 @@ import {
     deleteInhabitantsByHeynaboId,
     saveUser
 } from '~~/server/data/prismaRepository'
+import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {chunkArray} from '~/utils/batchUtils'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import type {HouseholdCreate, HouseholdDisplay} from '~/composables/useCoreValidation'
@@ -26,6 +28,7 @@ const chunkHouseholds = chunkArray<HouseholdCreate>(CHUNK_SIZE)
  *
  * Synchronizes households and inhabitants from Heynabo (source of truth).
  * Uses reconciliation pattern (ADR-013) with batch operations (ADR-009).
+ * Records job execution in JobRun table for observability.
  *
  * Flow:
  * 1. Fetch data from Heynabo API
@@ -33,10 +36,24 @@ const chunkHouseholds = chunkArray<HouseholdCreate>(CHUNK_SIZE)
  * 3. Reconcile with existing data (Heynabo is source of truth)
  * 4. Execute batch creates/deletes using chunking (max 8 per batch)
  * 5. Handle user creation for inhabitants with email
+ *
+ * Query params:
+ * - triggeredBy: "CRON" (default) or "ADMIN:<userId>" for manual triggers
  */
 export default defineEventHandler(async (event): Promise<HeynaboImportResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+    const {JobType, JobStatus} = useMaintenanceValidation()
+
+    // Get triggeredBy from query params
+    const query = getQuery(event)
+    const triggeredBy = (query.triggeredBy as string) || 'ADMIN'
+
+    // Create job run record
+    const jobRun = await createJobRun(d1Client, {
+        jobType: JobType.HEYNABO_IMPORT,
+        triggeredBy
+    })
 
     // Business logic - ADR-002 compliant
     try {
@@ -133,8 +150,8 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
         console.info(`🏠 > IMPORT > Inhabitants: created=${inhabitantsCreated}, deleted=${inhabitantsDeleted}`)
         console.info(`🏠 > IMPORT > Users created: ${usersCreated}`)
 
-        setResponseStatus(event, 200)
-        return {
+        const result: HeynaboImportResponse = {
+            jobRunId: jobRun.id,
             householdsCreated,
             householdsDeleted,
             householdsUnchanged: householdReconciliation.idempotent.length + householdReconciliation.update.length,
@@ -142,7 +159,21 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
             inhabitantsDeleted,
             usersCreated
         }
+
+        // Complete job run with success (ADR-010: repository serializes)
+        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+
+        setResponseStatus(event, 200)
+        return result
     } catch (error) {
+        // Complete job run with failure
+        await completeJobRun(
+            d1Client,
+            jobRun.id,
+            JobStatus.FAILED,
+            undefined,
+            error instanceof Error ? error.message : 'Unknown error'
+        )
         return throwH3Error("🏠 > IMPORT > Import operation failed", error)
     }
 })

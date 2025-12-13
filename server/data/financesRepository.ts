@@ -13,10 +13,10 @@ import type {
     DinnerEventDisplay,
     DinnerEventDetail,
     OrderHistoryDetail,
-    OrderHistoryCreate
+    OrderHistoryCreate,
+    OrderForTransaction
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
 
 /**
  * Finances Repository
@@ -77,7 +77,7 @@ export async function createOrderAuditEntry(
         ...created,
         order: created.order ? deserializeOrder({
             ...created.order,
-            ticketType: created.order.ticketPrice.ticketType
+            ticketType: created.order.ticketPrice?.ticketType ?? null
         }) : null
     }
 
@@ -300,7 +300,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
         // Transform to flatten ticketType from ticketPrice (ADR-009)
         return OrderDetailSchema.parse({
             ...order,
-            ticketType: order.ticketPrice.ticketType
+            ticketType: order.ticketPrice?.ticketType ?? null
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
@@ -379,7 +379,7 @@ export async function deleteOrder(
         // Transform Prisma types to domain types and validate (ADR-010)
         return ordersToDelete.map(order => {
             const {ticketPrice, ...rest} = order
-            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice.ticketType })
+            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
         })
     } catch (error) {
         return throwH3Error(`${LOG} Error deleting ${ids.length} order(s)`, error)
@@ -415,7 +415,7 @@ export async function fetchOrders(
 
         return orders.map(order => {
             const {ticketPrice, ...rest} = order
-            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice.ticketType })
+            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET] : Error fetching orders for ${filterDesc}`, error)
@@ -631,37 +631,48 @@ export async function assignCookingTeamToDinnerEvent(d1Client: D1Database, dinne
     return DinnerEventDisplaySchema.parse(updated)
 }
 
-export async function deleteDinnerEvent(d1Client: D1Database, id: number): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting dinner event with ID ${id}`)
+/**
+ * Delete dinner event(s). Accepts single ID or array of IDs (normalize early pattern).
+ * Handles Heynabo cleanup for announced events (ADR-013: best-effort, don't fail delete).
+ * Returns IDs of deleted events.
+ */
+export async function deleteDinnerEvent(
+    d1Client: D1Database,
+    idInput: number | number[],
+    deleteHeynaboEvent?: (heynaboEventId: number) => Promise<void>
+): Promise<number[]> {
+    // Normalize to array
+    const ids = Array.isArray(idInput) ? idInput : [idInput]
+    if (ids.length === 0) return []
+
+    console.info(`🍽️ > DINNER_EVENT > [DELETE] Deleting ${ids.length} dinner event(s)`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDetailSchema} = useBookingValidation()
-    const {deserializeInhabitantDisplay} = useCoreValidation()
 
     try {
-        // Fetch with relations before deleting (ADR-009: mutations return Detail)
-        const dinnerEventToDelete = await prisma.dinnerEvent.findUniqueOrThrow({
-            where: {id},
-            include: {
-                chef: true,
-                cookingTeam: true
-            }
+        // Fetch heynaboEventIds before delete for cleanup (ADR-013)
+        const eventsToDelete = await prisma.dinnerEvent.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, heynaboEventId: true }
         })
 
-        await prisma.dinnerEvent.delete({
-            where: {id}
+        await prisma.dinnerEvent.deleteMany({
+            where: { id: { in: ids } }
         })
 
-        // Deserialize chef inhabitant if present
-        const dinnerEventToValidate = {
-            ...dinnerEventToDelete,
-            chef: dinnerEventToDelete.chef ? deserializeInhabitantDisplay(dinnerEventToDelete.chef) : null,
-            cookingTeam: dinnerEventToDelete.cookingTeam
+        // ADR-013: Delete from Heynabo if announced (best-effort, parallel)
+        if (deleteHeynaboEvent) {
+            const heynaboDeletes = eventsToDelete
+                .filter(e => e.heynaboEventId)
+                .map(e => deleteHeynaboEvent(e.heynaboEventId!)
+                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}:`, err))
+                )
+            await Promise.all(heynaboDeletes)
         }
 
-        console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted dinner event ${dinnerEventToDelete.menuTitle}`)
-        return DinnerEventDetailSchema.parse(dinnerEventToValidate)
+        console.info(`🍽️ > DINNER_EVENT > [DELETE] Successfully deleted ${ids.length} dinner events`)
+        return ids
     } catch (error) {
-        return throwH3Error(`️ > DINNER_EVENT > [DELETE]: Error deleting dinner event with ID ${id}`, error)
+        return throwH3Error(`🍽️ > DINNER_EVENT > [DELETE]: Error deleting dinner event(s)`, error)
     }
 }
 
@@ -818,25 +829,13 @@ export async function updateOrdersToClosed(
 
 /**
  * Fetch all CLOSED orders in active season without a transaction
- * Returns full order data needed for transaction snapshots
+ * Returns lean OrderForTransaction[] for batch transaction creation (ADR-009: batch = lean)
+ * Only includes fields needed for transaction snapshots
  */
 export async function fetchClosedOrdersWithoutTransaction(
     d1Client: D1Database
-): Promise<Array<{
-    id: number
-    dinnerEventId: number
-    inhabitantId: number
-    bookedByUserId: number | null
-    priceAtBooking: number
-    dinnerMode: string
-    state: string
-    closedAt: Date | null
-    bookedByUser: { id: number, email: string } | null
-    inhabitant: { id: number, name: string, lastName: string, householdId: number }
-    dinnerEvent: { id: number, date: Date, menuTitle: string }
-    ticketPrice: { ticketType: string }
-}>> {
-    const {OrderStateSchema} = useBookingValidation()
+): Promise<OrderForTransaction[]> {
+    const {OrderStateSchema, OrderForTransactionSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const activeSeason = await prisma.season.findFirst({
@@ -848,7 +847,7 @@ export async function fetchClosedOrdersWithoutTransaction(
         return []
     }
 
-    return prisma.order.findMany({
+    const orders = await prisma.order.findMany({
         where: {
             state: OrderStateSchema.enum.CLOSED,
             dinnerEvent: { seasonId: activeSeason.id },
@@ -861,6 +860,12 @@ export async function fetchClosedOrdersWithoutTransaction(
             ticketPrice: { select: { ticketType: true } }
         }
     })
+
+    // Transform to lean domain type (ADR-010)
+    return orders.map(order => OrderForTransactionSchema.parse({
+        ...order,
+        ticketType: order.ticketPrice?.ticketType ?? null
+    }))
 }
 
 /**

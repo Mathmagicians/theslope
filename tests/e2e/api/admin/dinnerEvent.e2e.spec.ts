@@ -110,15 +110,10 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(ticket).toBeDefined()
         expect(ticket!.inhabitant.id).toBe(inhabitant.id)
         expect(ticket!.inhabitant.name).toBeDefined()
-        expect(ticket!.ticketPrice.id).toBe(adultPrice!.id)
-        expect(ticket!.ticketPrice.ticketType).toBe(TicketType.ADULT)
-        expect(ticket!.ticketPrice.price).toBe(5000)
-
-        // Cleanup orders before season deletion (ticketPrice has onDelete: Restrict)
-        await Promise.all([
-            OrderFactory.deleteOrder(context, result1.createdIds[0]!),
-            OrderFactory.deleteOrder(context, result2.createdIds[0]!)
-        ])
+        expect(ticket!.ticketPrice?.id).toBe(adultPrice!.id)
+        expect(ticket!.ticketPrice?.ticketType).toBe(TicketType.ADULT)
+        expect(ticket!.ticketPrice?.price).toBe(5000)
+        // No manual cleanup needed - cascade delete handles orders when season is deleted
     })
 
     test('POST can update existing dinner event with status 200', async ({browser}) => {

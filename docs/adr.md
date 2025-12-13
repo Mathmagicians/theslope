@@ -93,7 +93,7 @@ seasonDates: { start: tomorrow, end: threeDaysFromNow }
 
 ## ADR-014: Batch Operations and Utility Functions
 
-**Status:** Accepted | **Date:** 2025-12-06
+**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2025-12-13
 
 ### Decision
 
@@ -101,16 +101,31 @@ seasonDates: { start: tomorrow, end: threeDaysFromNow }
 
 D1 limits: **1,000 queries/invocation**, **100 bound parameters/statement**.
 
+### Prisma D1 Adapter Auto-Chunking
+
+Since Prisma 5.15.0, the D1 adapter automatically chunks certain queries to stay within D1's 100 variable limit.
+
+**Confirmed behavior (tested 2025-12-13):**
+
+| Operation | Auto-chunks? | Manual chunking needed? |
+|-----------|--------------|------------------------|
+| `createManyAndReturn` | ✅ Yes | No - Prisma handles it |
+| `findMany` with includes | ✅ Yes | No - Prisma handles it |
+| `updateMany` with `WHERE IN` | ❌ No | **Yes** - must chunk IDs |
+| `deleteMany` with `WHERE IN` | ❌ No | **Yes** - must chunk IDs |
+
+**Production evidence:** `updateMany` with 100 IDs + 2 data params failed with `D1_ERROR: too many SQL variables`. Reduced to 90 IDs to stay under limit.
+
 ### Prisma Bulk Operations
 
 ```typescript
-// ✅ Use createManyAndReturn (1 query for N entities)
-await prisma.dinnerEvent.createManyAndReturn({ data: dinnerEvents })
+// ✅ Use createManyAndReturn (Prisma auto-chunks for D1)
+await prisma.order.createManyAndReturn({ data: orders })
 
-// ❌ Not Promise.all of individual creates (N queries)
+// ❌ Not Promise.all of individual creates (N queries, hits 1000 query limit)
 await Promise.all(events.map(e => prisma.dinnerEvent.create({ data: e })))
 
-// For updates (no updateManyAndReturn), batch with sequential Promise.all:
+// ✅ For updates - batch to avoid param limit on IN clause
 for (const batch of batches) {
     await Promise.all(batch.map(item => prisma.entity.update({ where: { id: item.id }, data: item })))
 }
@@ -120,14 +135,15 @@ for (const batch of batches) {
 
 **`chunkArray<T>(size)`** - Curried array chunker:
 ```typescript
-const chunkOrderBatch = chunkArray<Order>(12)  // 12 for param-heavy (7 params → 100/7 ≈ 14)
+const chunkOrderBatch = chunkArray<Order>(200)  // Conservative, Prisma may handle more
 const batches = chunkOrderBatch(orders)
 ```
 
 | Operation | Batch Size | Rationale |
 |-----------|------------|-----------|
-| Order inserts | 12 | 7 params each |
-| Team assignments | 50 | 2 params each |
+| Order inserts (`createManyAndReturn`) | 200 | Conservative; Prisma auto-chunks |
+| ID arrays for `updateMany`/`deleteMany` | 90 | D1 100 limit minus ~2 data params |
+| Individual updates (`Promise.all`) | 50 | Each update ~2 params |
 
 **`pruneAndCreate<T, K>(getKey, isEqual)`** - Reconcile existing vs incoming arrays:
 ```typescript
@@ -141,7 +157,7 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 ### Compliance
 
 1. Bulk inserts MUST use `createManyAndReturn`
-2. Bulk updates MUST batch with sequential `for...of` + `Promise.all`
+2. Manual chunking is defense-in-depth; Prisma auto-chunks for D1
 3. Curried chunkers MUST be defined in composables, not endpoints
 4. Single mutations returning Detail MUST fetch after bulk create (ADR-009)
 

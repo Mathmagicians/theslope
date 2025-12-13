@@ -87,6 +87,7 @@ const visibleDrawerLinks = computed((): NavItem[] => {
           root: 'bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg',
           toggle: 'md:hidden',
           left: 'md:flex-1',
+          center: 'hidden md:flex',
           right: 'flex items-center justify-end md:flex-1 gap-1.5'
         }"
     >

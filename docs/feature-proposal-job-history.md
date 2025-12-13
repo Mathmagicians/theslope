@@ -1,10 +1,12 @@
 # Feature Proposal: Admin Job History & Manual Re-Run
 
-**Status:** Draft | **Date:** 2025-12-11
+**Status:** Draft | **Date:** 2025-12-11 | **Updated:** 2025-12-12
 
 ## Summary
 
 Provides admins with visibility into scheduled job execution history and the ability to manually re-trigger failed jobs. Jobs run automatically per cron schedule; this feature adds observability and recovery controls.
+
+All automated jobs follow **ADR-015: Idempotent Automated Jobs with Rolling Window** - they are safe to re-run at any time and process current state rather than tracking "time since last run".
 
 ## Job Types
 
@@ -15,6 +17,8 @@ Following the scheduled task definitions from [feature-proposal-season-activatio
 | `DAILY_MAINTENANCE` | 02:00 Copenhagen | Consume dinners, close orders, create transactions, scaffold pre-bookings | `DailyMaintenanceResultSchema` |
 | `MONTHLY_BILLING` | 1st of month 04:00 | Generate invoices for previous month | N/A (future implementation) |
 | `HEYNABO_IMPORT` | Manual + Optional cron | Sync households/inhabitants from Heynabo | `HeynaboImportResponseSchema` |
+| `MAINTENANCE_IMPORT` | Manual | Import data from external sources (CSV billing, etc.) | Job-specific |
+| `MAINTENANCE_EXPORT` | Manual | Export data for external systems | Job-specific |
 
 **Note:** All result schemas already exist in validation composables (ADR-001 compliant):
 - `DailyMaintenanceResultSchema` in `useBookingValidation.ts`
@@ -90,13 +94,15 @@ The job history panel lives in the renamed "System" tab (previously "Indstilling
 
 ## Data Model
 
-### Prisma Schema Addition
+### Prisma Schema (✅ Implemented)
 
 ```prisma
 enum JobType {
   DAILY_MAINTENANCE
   MONTHLY_BILLING
   HEYNABO_IMPORT
+  MAINTENANCE_IMPORT
+  MAINTENANCE_EXPORT
 }
 
 enum JobStatus {
@@ -303,7 +309,7 @@ export default defineTask({
 
 ## Implementation Order
 
-1. **Schema & Migration**
+1. ✅ **Schema & Migration**
    - Add JobType, JobStatus enums
    - Add JobRun model
    - Run migration
@@ -335,3 +341,4 @@ export default defineTask({
 - **ADR-007:** Store pattern if needed for client-side caching
 - **ADR-009:** Single schema (Display) sufficient for this simple entity
 - **ADR-010:** No complex serialization needed (JSON string for resultSummary)
+- **ADR-015:** All jobs are idempotent and safe to re-run; manual triggers follow same pattern as cron

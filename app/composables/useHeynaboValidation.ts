@@ -152,6 +152,7 @@ export const useHeynaboValidation = () => {
     // ========================================================================
 
     const HeynaboImportResponseSchema = z.object({
+        jobRunId: z.number().int().positive(),
         householdsCreated: z.number(),
         householdsDeleted: z.number(),
         householdsUnchanged: z.number(),

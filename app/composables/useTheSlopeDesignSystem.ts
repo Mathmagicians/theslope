@@ -520,9 +520,13 @@ export const ICONS = {
     // Empty states
     robotDead: 'i-mage-robot-dead',
 
-    //descriptive
+    // Descriptive
     mail: 'i-guidance-mail',
-    phone: 'i-guidance-phone'
+    phone: 'i-guidance-phone',
+
+    // Time & info
+    clock: 'i-heroicons-clock',
+    info: 'i-heroicons-information-circle'
 } as const
 
 /**

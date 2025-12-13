@@ -1,6 +1,6 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-12
+**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-13
 
 ## Already Implemented
 
@@ -31,20 +31,32 @@
   - `prebookingWindowDays` config (60 days) in `app.config.ts`
   - `getPrebookingWindowDays()` getter in `useSeason.ts`
   - Scaffolder only processes **future** dinner events within the prebooking window
+  - **Verified in dev:** Scaffolder creates orders ONLY for future events, not past
 - ✅ **Daily Maintenance Utilities:**
-  - `consumeDinners` - Marks past ANNOUNCED dinners → CONSUMED (resilient catch-up)
-  - `closeOrders` - Marks BOOKED orders on CONSUMED dinners → CLOSED
+  - `consumeDinners` - Marks past SCHEDULED/ANNOUNCED dinners → CONSUMED (resilient catch-up)
+  - `closeOrders` - Marks BOOKED/RELEASED orders on CONSUMED dinners → CLOSED
   - `createTransactions` - Creates transaction records for CLOSED orders without one
-  - All utilities use chunking for D1 query limits (ADR-009)
+  - All utilities use chunking for D1 query limits (ADR-014)
 - ✅ **Daily Maintenance Endpoint:**
   - `POST /api/admin/maintenance/daily` - Runs all 4 maintenance steps
   - Returns `DailyMaintenanceResult` with counts (consume, close, transact, scaffold)
   - Idempotent - safe to run multiple times or after missed crons
+  - **Tested in production:** Successfully ran with 2555 historical orders
 - ✅ **E2E Tests for Daily Maintenance:**
   - Tests for `consumeDinners` (past ANNOUNCED/SCHEDULED → CONSUMED)
   - Tests for `closeOrders` + `createTransactions` (BOOKED → CLOSED with transaction)
   - Tests verify idempotent behavior and correct state transitions
   - Tests run in parallel with proper isolation
+- ✅ **Season + Dinner Event Orchestration (ADR-015):**
+  - `PUT /api/admin/season` - Creates season AND generates dinner events in one call
+  - `POST /api/admin/season/[id]` - Updates season AND reconciles dinner events when schedule changes
+  - `getScheduleChangeDesiredEvents` - Efficient single computation for change detection + event generation
+  - `reconcileDinnerEvents` - Uses `pruneAndCreate` pattern for idempotent reconciliation
+  - Removed separate `generateDinnerEvents` call from plan.ts store
+- ✅ **Batch Size Optimization (ADR-014):**
+  - `ORDER_BATCH_SIZE = 200` for `createManyAndReturn` (Prisma auto-chunks, no manual limit needed)
+  - `DELETE_BATCH_SIZE = 90` for `updateMany`/`deleteMany` (D1 100 param limit minus ~2 data params)
+  - **Confirmed:** Prisma auto-chunks `createManyAndReturn` but NOT `updateMany`/`deleteMany`
 
 ## Next: UI Integration & Cron Triggers
 

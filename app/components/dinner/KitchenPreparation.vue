@@ -92,7 +92,7 @@ const diningModeStats = computed(() => {
     // For dine-in modes, calculate chairs (ADULT + CHILD, no BABY)
     const isDineIn = mode === DinnerMode.DINEIN || mode === DinnerMode.DINEINLATE
     const chairs = isDineIn
-      ? modeOrders.filter(o => requiresChair(o.ticketPrice.ticketType)).length
+      ? modeOrders.filter(o => o.ticketType && requiresChair(o.ticketType)).length
       : null
 
     // Plates = portions rounded

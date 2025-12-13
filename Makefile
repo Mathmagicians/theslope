@@ -147,8 +147,6 @@ d1-list-tables-local:
 	$(call d1_exec,theslope,PRAGMA table_list,--local)
 
 d1-nuke-seasons:
-	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
-	$(call d1_exec,theslope,DELETE FROM 'Order',)
 	$(call d1_exec,theslope,DELETE FROM Season WHERE ShortName LIKE 'Test%',)
 	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
 
@@ -160,6 +158,9 @@ d1-nuke-households: ## Delete test households (local)
 	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'),--local)
 	$(call d1_exec,theslope,DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%',--local)
 	@echo "✅ Cleanup complete!"
+
+d1-nuke-all: d1-nuke-seasons d1-nuke-households
+	@echo "✅ Nuked all test data!"
 
 # ============================================================================
 # DEPLOYMENT & LOGS

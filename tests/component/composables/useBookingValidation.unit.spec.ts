@@ -635,6 +635,7 @@ describe('useBookingValidation', () => {
 
     describe('DailyMaintenanceResultSchema', () => {
       const validResult = {
+        jobRunId: 42,
         consume: {consumed: 5},
         close: {closed: 10},
         transact: {created: 8},
@@ -643,6 +644,7 @@ describe('useBookingValidation', () => {
 
       it('GIVEN valid maintenance result WHEN parsing THEN succeeds', () => {
         const result = DailyMaintenanceResultSchema.parse(validResult)
+        expect(result.jobRunId).toBe(42)
         expect(result.consume.consumed).toBe(5)
         expect(result.close.closed).toBe(10)
         expect(result.transact.created).toBe(8)
@@ -657,6 +659,7 @@ describe('useBookingValidation', () => {
 
       it('GIVEN all zero counts WHEN parsing THEN succeeds (idempotent run)', () => {
         const idempotentResult = {
+          jobRunId: 99,
           consume: {consumed: 0},
           close: {closed: 0},
           transact: {created: 0},
@@ -666,9 +669,11 @@ describe('useBookingValidation', () => {
       })
 
       it.each([
-        {desc: 'missing consume', data: {close: {closed: 0}, transact: {created: 0}, scaffold: null}},
-        {desc: 'missing close', data: {consume: {consumed: 0}, transact: {created: 0}, scaffold: null}},
-        {desc: 'missing transact', data: {consume: {consumed: 0}, close: {closed: 0}, scaffold: null}},
+        {desc: 'missing jobRunId', data: {consume: {consumed: 0}, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing consume', data: {jobRunId: 1, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing close', data: {jobRunId: 1, consume: {consumed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing transact', data: {jobRunId: 1, consume: {consumed: 0}, close: {closed: 0}, scaffold: null}},
+        {desc: 'invalid jobRunId', data: {...validResult, jobRunId: 0}},
         {desc: 'invalid consume', data: {...validResult, consume: {consumed: -1}}},
         {desc: 'invalid scaffold', data: {...validResult, scaffold: {seasonId: 0}}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {

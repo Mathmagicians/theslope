@@ -8,6 +8,8 @@ import type {
     TeamRole
 } from "~/composables/useCookingTeamValidation"
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
+import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
+import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -186,10 +188,29 @@ export class SeasonFactory {
             const result = SeasonSchema.safeParse(responseBody)
             expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
 
-            return result.data!
+            const season = result.data!
+
+            // Verify dinner events auto-generated with correct count (PUT orchestration)
+            const expectedEventCount = this.calculateExpectedEventCount(season)
+            expect(season.dinnerEvents?.length, `Expected ${expectedEventCount} dinner events`).toBe(expectedEventCount)
+
+            return season
         }
 
         return responseBody
+    }
+
+    /**
+     * Calculate expected dinner event count for a season
+     * Based on cooking days, season dates, and holidays
+     */
+    static readonly calculateExpectedEventCount = (season: Season): number => {
+        const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
+            season.seasonDates.start,
+            season.seasonDates.end,
+            season.cookingDays
+        )
+        return excludeDatesFromInterval(allCookingDates, season.holidays).length
     }
 
     /**
@@ -454,38 +475,6 @@ export class SeasonFactory {
         id: number,
         expectedStatus: number = 200
     ): Promise<Season | null> => {
-        // Delete all orders first (Order -> TicketPrice has onDelete: Restrict)
-        try {
-            const season = await this.getSeason(context, id)
-            if (season?.dinnerEvents) {
-                const {OrderFactory} = await import('./orderFactory')
-                for (const dinnerEvent of season.dinnerEvents) {
-                    try {
-                        const ordersResponse = await context.request.get(`/api/order?dinnerEventId=${dinnerEvent.id}`, { headers })
-                        if (ordersResponse.ok()) {
-                            const orders = await ordersResponse.json()
-                            for (const order of orders) {
-                                try {
-                                    await OrderFactory.deleteOrder(context, order.id)
-                                } catch (orderError) {
-                                    console.warn(`❌ Cleanup failed: Could not delete order ${order.id} for season ${id}:`, orderError)
-                                }
-                            }
-                        }
-                    } catch (fetchError) {
-                        console.warn(`❌ Cleanup failed: Could not fetch orders for dinner event ${dinnerEvent.id} (season ${id}):`, fetchError)
-                    }
-                }
-            }
-        } catch (error: unknown) {
-            // Only log if not a 404 (season already deleted is expected)
-            const matcherError = error as { matcherResult?: { actual?: number } }
-            if (matcherError?.matcherResult?.actual !== 404) {
-                console.warn(`❌ Cleanup failed: Could not fetch season ${id} for order cleanup:`, error)
-            }
-        }
-
-        // Try to delete season - be resilient in cleanup (expectedStatus === 200)
         try {
             const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
 
@@ -495,7 +484,6 @@ export class SeasonFactory {
                 }
                 return null
             } else if (deleteResponse.status() === 404 && expectedStatus === 200) {
-                // Already deleted - silent success for cleanup
                 return null
             } else {
                 const errorBody = await deleteResponse.text()
@@ -576,27 +564,15 @@ export class SeasonFactory {
         testSalt: string,
         seasonData: Partial<Season> = {}
     ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
-        // Create short 3-day season with dates WITHIN the 60-day prebooking window
-        // Starting tomorrow to avoid timezone issues with "today"
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const threeDaysFromNow = new Date()
-        threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3)
-        threeDaysFromNow.setHours(0, 0, 0, 0)
-
+        // Uses defaultSeason which has today-to-oneWeekLater dates and Mon/Wed/Fri cooking days
+        // This aligns with singleton season, avoiding preference clipping issues in parallel tests
         const season = await this.createSeason(context, {
             ...this.defaultSeason(testSalt),
-            seasonDates: { start: tomorrow, end: threeDaysFromNow },
-            cookingDays: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
             ...seasonData
         })
 
-        // Generate dinner events for the season
-        const result = await this.generateDinnerEventsForSeason(context, season.id!)
-
-        return { season, dinnerEvents: result.events }
+        // Dinner events are auto-generated - return them from created season
+        return { season, dinnerEvents: season.dinnerEvents ?? [] }
     }
 
     static readonly generateDinnerEventsForSeason = async (
@@ -915,6 +891,55 @@ export class SeasonFactory {
         }
 
         return responseBody
+    }
+
+    // === JOB RUN METHODS ===
+
+    /**
+     * Get job runs with optional filtering by job type
+     * @param context - Browser context for API requests
+     * @param jobType - Optional job type filter
+     * @param limit - Max results (default 10)
+     * @returns JobRunDisplay[] ordered by startedAt descending
+     */
+    static readonly getJobRuns = async (
+        context: BrowserContext,
+        jobType?: string,
+        limit: number = 10
+    ): Promise<JobRunDisplay[]> => {
+        const {JobRunDisplaySchema} = useMaintenanceValidation()
+        const params = new URLSearchParams()
+        if (jobType) params.set('jobType', jobType)
+        if (limit) params.set('limit', limit.toString())
+
+        const url = `/api/admin/maintenance/job-run${params.toString() ? `?${params}` : ''}`
+        const response = await context.request.get(url, { headers })
+
+        expect(response.status()).toBe(200)
+        const responseBody = await response.json()
+
+        return responseBody.map((jr: unknown) => JobRunDisplaySchema.parse(jr))
+    }
+
+    /**
+     * Get a single job run by ID
+     * @param context - Browser context for API requests
+     * @param id - Job run ID
+     * @returns JobRunDisplay or null if not found
+     */
+    static readonly getJobRun = async (
+        context: BrowserContext,
+        id: number
+    ): Promise<JobRunDisplay | null> => {
+        const {JobRunDisplaySchema} = useMaintenanceValidation()
+        const response = await context.request.get(`/api/admin/maintenance/job-run/${id}`, { headers })
+
+        if (response.status() === 404) {
+            return null
+        }
+
+        expect(response.status()).toBe(200)
+        return JobRunDisplaySchema.parse(await response.json())
     }
 
 }

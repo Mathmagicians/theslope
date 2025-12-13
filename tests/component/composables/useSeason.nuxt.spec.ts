@@ -1057,6 +1057,160 @@ describe('createHouseholdOrderScaffold', () => {
     })
 })
 
+describe('getScheduleChangeDesiredEvents', () => {
+    const {getScheduleChangeDesiredEvents} = useSeason()
+
+    // Base season for comparison
+    const baseSeason = (): Season => ({
+        ...SeasonFactory.defaultSeason(),
+        id: 1,
+        seasonDates: {
+            start: new Date(2025, 0, 6),  // Mon Jan 6
+            end: new Date(2025, 0, 12)    // Sun Jan 12
+        },
+        cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
+        holidays: []
+    })
+
+    it.each([
+        {
+            desc: 'identical seasons',
+            modify: (s: Season) => s,
+            expectNull: true
+        },
+        {
+            desc: 'different start date',
+            modify: (s: Season) => ({...s, seasonDates: {...s.seasonDates, start: new Date(2025, 0, 7)}}),
+            expectNull: false
+        },
+        {
+            desc: 'different end date',
+            modify: (s: Season) => ({...s, seasonDates: {...s.seasonDates, end: new Date(2025, 0, 13)}}),
+            expectNull: false
+        },
+        {
+            desc: 'added cooking day',
+            modify: (s: Season) => ({...s, cookingDays: createDefaultWeekdayMap([true, true, true, false, true, false, false])}),
+            expectNull: false
+        },
+        {
+            desc: 'removed cooking day',
+            modify: (s: Season) => ({...s, cookingDays: createDefaultWeekdayMap([true, false, false, false, true, false, false])}),
+            expectNull: false
+        },
+        {
+            desc: 'added holiday that affects cooking day',
+            modify: (s: Season) => ({...s, holidays: [{start: new Date(2025, 0, 8), end: new Date(2025, 0, 8)}]}), // Wed
+            expectNull: false
+        },
+        {
+            desc: 'added holiday on non-cooking day (no change)',
+            modify: (s: Season) => ({...s, holidays: [{start: new Date(2025, 0, 7), end: new Date(2025, 0, 7)}]}), // Tue
+            expectNull: true
+        },
+        {
+            desc: 'different shortName (no schedule change)',
+            modify: (s: Season) => ({...s, shortName: 'Different Name'}),
+            expectNull: true
+        },
+        {
+            desc: 'different isActive (no schedule change)',
+            modify: (s: Season) => ({...s, isActive: true}),
+            expectNull: true
+        }
+    ])('should return $expectNull for $desc', ({modify, expectNull}) => {
+        const oldSeason = baseSeason()
+        const newSeason = modify(baseSeason())
+
+        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason)
+
+        if (expectNull) {
+            expect(result).toBeNull()
+        } else {
+            expect(result).not.toBeNull()
+            expect(Array.isArray(result)).toBe(true)
+        }
+    })
+
+    it('should return desired events with correct dates when schedule changes', () => {
+        // GIVEN: Old season with Mon, Wed, Fri cooking days
+        const oldSeason = baseSeason()
+        // New season adds Tuesday as cooking day
+        const newSeason = {...baseSeason(), cookingDays: createDefaultWeekdayMap([true, true, true, false, true, false, false])}
+
+        // WHEN: Checking schedule change
+        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason)
+
+        // THEN: Returns array with 4 events (Mon, Tue, Wed, Fri)
+        expect(result).not.toBeNull()
+        expect(result!.length).toBe(4)
+        // Events should have seasonId from newSeason
+        expect(result!.every(e => e.seasonId === 1)).toBe(true)
+    })
+})
+
+describe('reconcileDinnerEvents', () => {
+    const {reconcileDinnerEvents} = useSeason()
+
+    // Helper to create existing dinner event (DinnerEventDisplay - has id)
+    const createExisting = (id: number, date: Date) => ({
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
+        id,
+        date,
+        seasonId: 1
+    })
+
+    // Helper to create incoming dinner event (DinnerEventCreate - no id)
+    const createIncoming = (date: Date) => ({
+        ...DinnerEventFactory.defaultDinnerEventCreate(),
+        date,
+        seasonId: 1
+    })
+
+    it.each([
+        {
+            desc: 'all new events (no existing)',
+            existing: [],
+            incoming: [createIncoming(new Date(2025, 0, 6))],
+            expected: {create: 1, delete: 0, idempotent: 0}
+        },
+        {
+            desc: 'matching dates (idempotent)',
+            existing: [createExisting(1, new Date(2025, 0, 6))],
+            incoming: [createIncoming(new Date(2025, 0, 6))],
+            expected: {create: 0, delete: 0, idempotent: 1}
+        },
+        {
+            desc: 'existing not in incoming (delete)',
+            existing: [createExisting(1, new Date(2025, 0, 6))],
+            incoming: [],
+            expected: {create: 0, delete: 1, idempotent: 0}
+        },
+        {
+            desc: 'mixed: some new, some existing, some deleted',
+            existing: [createExisting(1, new Date(2025, 0, 6)), createExisting(2, new Date(2025, 0, 8))],
+            incoming: [createIncoming(new Date(2025, 0, 6)), createIncoming(new Date(2025, 0, 10))],
+            expected: {create: 1, delete: 1, idempotent: 1}
+        }
+    ])('should handle $desc', ({existing, incoming, expected}) => {
+        const result = reconcileDinnerEvents(existing)(incoming)
+
+        expect(result.create).toHaveLength(expected.create)
+        expect(result.delete).toHaveLength(expected.delete)
+        expect(result.idempotent).toHaveLength(expected.idempotent)
+    })
+
+    it('should preserve existing event id in delete array', () => {
+        const existing = [createExisting(42, new Date(2025, 0, 6))]
+        const incoming: ReturnType<typeof createIncoming>[] = []
+
+        const result = reconcileDinnerEvents(existing)(incoming)
+
+        expect(result.delete).toHaveLength(1)
+        expect(result.delete[0]!.id).toBe(42)
+    })
+})
+
 describe('isChefFor', () => {
     const { isChefFor } = useSeason()
     const { TeamRoleSchema } = useCookingTeamValidation()

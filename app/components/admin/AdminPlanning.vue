@@ -91,7 +91,7 @@ const {
   seasons,
   disabledModes
 } = storeToRefs(store)
-const {createSeason, updateSeason, generateDinnerEvents, activateSeason, deactivateSeason} = store
+const {createSeason, updateSeason, activateSeason, deactivateSeason} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
 const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
@@ -143,31 +143,18 @@ const showSuccessToast = (title: string, description?: string) => {
 }
 
 // SEASON-SPECIFIC BUSINESS LOGIC
-const {handleApiError} = useApiHandler()
-
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   if (formMode.value === FORM_MODES.CREATE) {
-    // Step 1: Create season
+    // Create season (PUT auto-generates dinner events per ADR-015)
     const createdSeason = await createSeason(updatedSeason)
     if (!createdSeason) return
-
-    // Step 2: Generate dinner events for the new season
-    if (createdSeason.id) {
-      try {
-        const eventResult = await generateDinnerEvents(createdSeason.id)
-        showSuccessToast('Sæson oprettet', `${eventResult.eventCount} fællesspisninger genereret`)
-      } catch (error) {
-        // Season created but event generation failed - show proper error
-        handleApiError(error, 'generering af fællesspisninger')
-        showSuccessToast('Sæson oprettet', 'Men fællesspisninger kunne ikke genereres')
-      }
-    }
+    showSuccessToast('Sæson oprettet')
   } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
+    // Update season (POST reconciles dinner events if schedule changed per ADR-015)
     await updateSeason(updatedSeason)
     showSuccessToast('Sæson opdateret')
   }
   await onModeChange(FORM_MODES.VIEW)
-
 }
 
 const handleCancel = async () => {

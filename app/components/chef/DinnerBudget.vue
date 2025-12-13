@@ -65,9 +65,9 @@ const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePerce
 const revenueByType = computed(() => {
   return groupByTicketType(activeOrders.value).map(group => ({
     ...group,
-    unitPrice: activeOrders.value.find(o => o.ticketPrice.ticketType === group.ticketType)?.priceAtBooking || 0,
+    unitPrice: activeOrders.value.find(o => o.ticketType === group.ticketType)?.priceAtBooking || 0,
     revenue: activeOrders.value
-      .filter(o => o.ticketPrice.ticketType === group.ticketType)
+      .filter(o => o.ticketType === group.ticketType)
       .reduce((sum, o) => sum + o.priceAtBooking, 0)
   }))
 })
