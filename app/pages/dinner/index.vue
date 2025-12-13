@@ -49,7 +49,10 @@ import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+
+// Fun empty state for no team assigned
+const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
 
 // Booking form state
 const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
@@ -297,6 +300,35 @@ useHead({
             </div>
           </div>
         </ChefMenuCard>
+      </template>
+
+      <!-- #team: Cooking team info -->
+      <template #team>
+        <template v-if="dinnerEventDetail">
+          <CookingTeamCard
+            v-if="dinnerEventDetail.cookingTeamId"
+            :team-id="dinnerEventDetail.cookingTeamId"
+            :team-number="dinnerEventDetail.cookingTeamId"
+            mode="monitor"
+          />
+          <UAlert
+            v-else
+            variant="soft"
+            :color="COLOR.info"
+          >
+            <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
+          </UAlert>
+          <WorkAssignment :dinner-event="dinnerEventDetail"/>
+        </template>
+      </template>
+
+      <!-- #stats: Kitchen statistics -->
+      <template #stats>
+        <KitchenPreparation
+          v-if="dinnerEventDetail"
+          :orders="dinnerEventDetail.tickets ?? []"
+          :allergens="dinnerEventDetail.allergens"
+        />
       </template>
     </DinnerDetailPanel>
   </UPage>

@@ -1,4 +1,4 @@
-import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from "h3"
 import {updateDinnerEvent} from "~~/server/data/financesRepository"
 import {updateHeynaboEventAsSystem} from "~~/server/integration/heynabo/heynaboClient"
 import {useBookingValidation} from "~/composables/useBookingValidation"
@@ -44,16 +44,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         if (updatedDinnerEvent.heynaboEventId) {
             try {
                 const {createHeynaboEventPayload} = useBooking()
-                const baseUrl = process.env.NUXT_PUBLIC_BASE_URL || 'https://skraaningen.dk'
-                const heynaboPayload = createHeynaboEventPayload(
-                    {
-                        date: updatedDinnerEvent.date,
-                        menuTitle: updatedDinnerEvent.menuTitle,
-                        menuDescription: updatedDinnerEvent.menuDescription
-                    },
-                    baseUrl,
-                    updatedDinnerEvent.cookingTeam?.name
-                )
+                const baseUrl = getRequestURL(event).origin
+                const heynaboPayload = createHeynaboEventPayload(updatedDinnerEvent, baseUrl)
                 await updateHeynaboEventAsSystem(updatedDinnerEvent.heynaboEventId, heynaboPayload)
             } catch (heynaboError) {
                 console.warn(`${PREFIX} Failed to sync to Heynabo event ${updatedDinnerEvent.heynaboEventId}:`, heynaboError)

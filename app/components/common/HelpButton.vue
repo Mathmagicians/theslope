@@ -28,7 +28,7 @@ const helpContent = computed(() => {
     }
 
     if (current[segment]) {
-      current = current[segment]
+      current = current[segment] as Record<string, unknown>
     } else {
       return null
     }
@@ -55,19 +55,20 @@ watch(() => route.path, () => {
     />
 
     <template #content>
-      <UCard class="cursor-pointer" variant="outline" @click="doClose()">
+      <UCard class="cursor-pointer max-w-xs sm:max-w-sm mx-2" variant="outline" @click="doClose()">
         <template #header>
-          <div class="flex justify-between items-center">
+          <div class="flex justify-between items-center gap-2">
             <span class="text-sm font-semibold">{{ helpContent.title }}</span>
             <UButton
                 :icon="ICONS.xMark"
                 variant="ghost"
                 size="xs"
+                class="flex-shrink-0"
                 @click="doClose()"
             />
           </div>
         </template>
-        <p class="text-sm">{{ helpContent.content }}</p>
+        <p class="text-sm text-pretty break-words">{{ helpContent.content }}</p>
       </UCard>
     </template>
   </UPopover>

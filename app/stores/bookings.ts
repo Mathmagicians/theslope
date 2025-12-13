@@ -1,9 +1,9 @@
-import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
@@ -35,7 +35,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             if (selectedDinnerEventId.value) params.append('dinnerEventId', String(selectedDinnerEventId.value))
             if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
             const queryString = params.toString()
-            return $fetch(`/api/order${queryString ? `?${queryString}` : ''}`)
+            return $fetch<OrderDisplay[]>(`/api/order${queryString ? `?${queryString}` : ''}`)
         },
         {
             default: () => [],
@@ -67,7 +67,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const ordersByTicketType = computed(() => {
         const byType: Record<string, number> = {}
         orders.value.forEach(order => {
-            byType[order.ticketType] = (byType[order.ticketType] || 0) + 1
+            if (order.ticketType) {
+                byType[order.ticketType] = (byType[order.ticketType] || 0) + 1
+            }
         })
         return byType
     })
@@ -244,7 +246,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             return updated
         } catch (e: unknown) {
             const errorMessages = {
-                [DinnerState.ANNOUNCED]: 'Kunne ikke annoncere menuen til beboerne',
+                [DinnerState.ANNOUNCED]: 'Kunne ikke annoncere fællesspisningen',
                 [DinnerState.CANCELLED]: 'Kunne ikke aflyse fællesspisningen'
             } as const
             handleApiError(e, errorMessages[targetState as keyof typeof errorMessages] || 'Kunne ikke ændre fællesspisningens status')
@@ -255,6 +257,45 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Convenience wrappers for common state transitions
     const announceDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.ANNOUNCED)
     const cancelDinner = (dinnerEventId: number) => changeDinnerState(dinnerEventId, DinnerState.CANCELLED)
+
+    // ========================================
+    // DAILY MAINTENANCE JOB (ADR-007)
+    // ========================================
+    const toast = useToast()
+
+    const {
+        data: dailyMaintenanceResult,
+        status: dailyMaintenanceStatus,
+        error: dailyMaintenanceError,
+        execute: executeDailyMaintenance
+    } = useAsyncData<DailyMaintenanceResult | null>(
+        'bookings-store-daily-maintenance',
+        () => $fetch<DailyMaintenanceResult>('/api/admin/maintenance/daily', { method: 'POST' }),
+        {
+            immediate: false,
+            transform: (data) => data ? DailyMaintenanceResultSchema.parse(data) : null
+        }
+    )
+
+    const isDailyMaintenanceRunning = computed(() => dailyMaintenanceStatus.value === 'pending')
+    const hasDailyMaintenanceResult = computed(() => dailyMaintenanceStatus.value === 'success' && dailyMaintenanceResult.value !== null)
+    const hasDailyMaintenanceError = computed(() => dailyMaintenanceStatus.value === 'error')
+
+    const runDailyMaintenance = async () => {
+        await executeDailyMaintenance()
+
+        if (hasDailyMaintenanceError.value) {
+            handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
+        } else if (hasDailyMaintenanceResult.value) {
+            const r = dailyMaintenanceResult.value!
+            console.info(CTX, `Daily maintenance completed: Consumed: ${r.consume.consumed}, Closed: ${r.close.closed}, Transactions: ${r.transact.created}`)
+            toast.add({
+                title: 'Daglig vedligeholdelse afsluttet',
+                description: `Middage: ${r.consume.consumed}, Ordrer lukket: ${r.close.closed}, Transaktioner: ${r.transact.created}`,
+                color: 'success'
+            })
+        }
+    }
 
     return {
         // state
@@ -292,6 +333,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateDinnerEventField,
         updateDinnerEventAllergens,
         announceDinner,
-        cancelDinner
+        cancelDinner,
+
+        // daily maintenance
+        dailyMaintenanceResult,
+        dailyMaintenanceError,
+        isDailyMaintenanceRunning,
+        hasDailyMaintenanceResult,
+        hasDailyMaintenanceError,
+        runDailyMaintenance
     }
 })

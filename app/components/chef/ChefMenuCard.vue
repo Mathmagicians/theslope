@@ -72,6 +72,7 @@
  * - Uses design system (useTheSlopeDesignSystem)
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
+import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { FormSubmitEvent } from '#ui/types'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
@@ -83,6 +84,8 @@ interface Props {
   isCompact?: boolean           // Compact mode for calendar list items
   budget?: number               // Budget in øre (optional override)
   selected?: boolean            // For compact mode selection state
+  isAnnouncing?: boolean        // Loading state for announce button
+  isCancelling?: boolean        // Loading state for cancel button
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -91,7 +94,9 @@ const props = withDefaults(defineProps<Props>(), {
   showAllergens: true,
   isCompact: false,
   budget: undefined,
-  selected: false
+  selected: false,
+  isAnnouncing: false,
+  isCancelling: false
 })
 
 const emit = defineEmits<{
@@ -103,7 +108,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -131,8 +136,6 @@ const { allergyTypes } = storeToRefs(allergiesStore)
 // Is the component in EDIT mode?
 const isEditing = computed(() => props.formMode === FORM_MODES.EDIT)
 
-// Card title based on mode
-const cardTitle = computed(() => isEditing.value ? 'Administrer middagen' : 'Middag')
 
 // ========== SHARED COMPUTEDS ==========
 
@@ -143,11 +146,11 @@ const stateBadge = computed(() => {
 
 // Dinner step (from useBooking business logic)
 const _currentStep = computed(() => getStepConfig(props.dinnerEvent).step)
-const _isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Menu display
-const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
-const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
+const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())
+const menuTitle = computed(() => hasMenuTitle.value ? props.dinnerEvent.menuTitle : 'Chefkokken har ikke fundet på en god menu endnu')
 
 // Format dates (formatDate auto-imported from ~/utils/date, uses Danish locale)
 const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
@@ -188,7 +191,7 @@ const menuStatusBadge = computed(() => {
 // Selected allergen IDs from dinner event (allergens is AllergyType[] after deserialize)
 const selectedAllergenIds = computed(() => {
   if (!props.dinnerEvent?.allergens) return []
-  return props.dinnerEvent.allergens.map(a => a.id)
+  return props.dinnerEvent.allergens.map((a: AllergyTypeDisplay) => a.id)
 })
 
 // Draft allergen selection for editing
@@ -259,24 +262,45 @@ const costAlternativeDisplay = computed(() => {
 
 const isEditingMenu = ref(false)
 
-// Next state logic
-const nextState = computed(() => {
-  switch (props.dinnerEvent.state) {
-    case DinnerState.SCHEDULED:
-      return { state: DinnerState.ANNOUNCED, label: 'Annoncer menu', icon: ICONS.megaphone }
-    case DinnerState.ANNOUNCED:
-      return { state: DinnerState.CONSUMED, label: 'Marker som afholdt', icon: ICONS.check }
-    default:
-      return null
+// Inline edit button configs - switches between edit pencil and ok/cancel
+const menuEditButtons = computed(() => {
+  if (!isEditing.value) return []
+  if (isEditingMenu.value) {
+    return [
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-menu-inline', onClick: () => { emit('update:form', formState.value); isEditingMenu.value = false } },
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-menu-inline', onClick: handleMenuCancel }
+    ]
   }
+  return [
+    { icon: ICONS.edit, color: HERO_BUTTON.primaryButton, variant: 'ghost' as const, name: 'edit-menu', onClick: () => { isEditingMenu.value = true } }
+  ]
 })
 
-const canAdvanceState = computed(() => {
-  if (!nextState.value) return false
-  if (props.dinnerEvent.state === DinnerState.SCHEDULED) {
-    return !!props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD'
+const allergenEditButtons = computed(() => {
+  if (!isEditing.value) return []
+  if (isEditingAllergens.value) {
+    return [
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave },
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-allergens-inline', onClick: handleAllergenCancel }
+    ]
   }
-  return true
+  return [
+    { icon: ICONS.edit, color: HERO_BUTTON.primaryButton, variant: 'ghost' as const, name: 'edit-allergens', onClick: () => { isEditingAllergens.value = true } }
+  ]
+})
+
+// Can publish: not cancelled or consumed
+// - SCHEDULED: creates Heynabo event
+// - ANNOUNCED: updates existing Heynabo event (republish)
+const canAnnounce = computed(() => {
+  return props.dinnerEvent.state !== DinnerState.CANCELLED &&
+         props.dinnerEvent.state !== DinnerState.CONSUMED
+})
+
+// Can actually submit: menu title must be set
+const canAdvanceState = computed(() => {
+  if (!canAnnounce.value) return false
+  return !!props.dinnerEvent.menuTitle?.trim()
 })
 
 // ========== HANDLERS ==========
@@ -302,15 +326,39 @@ const handleAllergenCancel = () => {
 }
 
 const handleAdvanceState = () => {
-  if (!nextState.value || !canAdvanceState.value) return
-  emit('advance-state', nextState.value.state)
+  if (!canAdvanceState.value) return
+  emit('advance-state', DinnerState.ANNOUNCED)
 }
 
-const handleCancelDinner = () => {
-  if (confirm('Er du sikker på at du vil aflyse denne middag?')) {
+// Two-step cancel confirmation (GitHub-style)
+const isCancelConfirmMode = ref(false)
+const cancelButtonRef = ref<HTMLElement | null>(null)
+
+const handleCancelClick = () => {
+  if (isCancelConfirmMode.value) {
+    // Second click - actually cancel
     emit('cancel-dinner')
+    isCancelConfirmMode.value = false
+  } else {
+    // First click - enter confirm mode
+    isCancelConfirmMode.value = true
   }
 }
+
+// Reset confirm mode when clicking outside
+const handleClickOutside = (event: MouseEvent) => {
+  if (isCancelConfirmMode.value && cancelButtonRef.value && !cancelButtonRef.value.contains(event.target as Node)) {
+    isCancelConfirmMode.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 const handleCardClick = () => {
   if (props.isCompact) {
@@ -338,7 +386,7 @@ const handleCardClick = () => {
 
       <!-- Menu title -->
       <div class="flex-1 min-w-0">
-        <div :class="['text-sm truncate', isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500']">
+        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : 'italic text-neutral-500']">
           {{ menuTitle }}
         </div>
       </div>
@@ -371,39 +419,103 @@ const handleCardClick = () => {
   </UCard>
 
   <!-- ========== FULL MODE (VIEW or EDIT) ========== -->
-  <UCard v-else :name="`chef-menu-card-${dinnerEvent.id}`">
+  <UCard
+    v-else
+    :name="`chef-menu-card-${dinnerEvent.id}`"
+    :class="LAYOUTS.cardResponsive"
+    :ui="{ root: 'ring-amber-500 relative overflow-hidden', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+  >
+    <!-- Cancelled ribbon -->
+    <div
+      v-if="isCancelled"
+      class="absolute top-4 -right-8 z-10 bg-red-600 text-white text-xs font-bold py-1 px-10 rotate-45 shadow-md"
+      data-testid="cancelled-ribbon"
+    >
+      AFLYST
+    </div>
+
     <template #header>
-      <div class="flex items-start justify-between gap-2">
-        <h3 :class="TYPOGRAPHY.cardTitle">{{ cardTitle }}</h3>
-        <UBadge :color="stateBadge.color" :icon="stateBadge.icon" variant="subtle" :size="SIZES.small">
-          {{ stateBadge.label }}
-        </UBadge>
-      </div>
+      <DinnerDetailHeader :dinner-event="dinnerEvent" />
     </template>
 
     <div class="space-y-6">
       <!-- ========== MENU SECTION ========== -->
-      <!-- VIEW mode: Display menu -->
-      <div v-if="!isEditing || !isEditingMenu">
-        <div :class="['text-lg font-medium', isMenuAnnounced ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
-          {{ menuTitle }}
-        </div>
+      <!-- Menu display with inline action buttons (pencil, announce, cancel) -->
+      <div v-if="!isEditingMenu">
+        <UFormField
+          :hint="isEditing ? (canAnnounce ? 'Annoncer menuen så beboerne kan tilmelde sig' : (canCancelDinner(dinnerEvent) ? 'Aflys middagen hvis den ikke kan afholdes' : 'Rediger menu')) : undefined"
+          :ui="{ hint: 'hidden md:block' }"
+        >
+          <template #default>
+            <div class="flex items-center gap-1 md:gap-2">
+              <div :class="['text-lg font-medium flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+                {{ menuTitle }}
+              </div>
+
+              <!-- Action buttons (EDIT mode only) -->
+              <template v-if="isEditing">
+                <!-- Edit pencil button -->
+                <UButton
+                  v-for="btn in menuEditButtons"
+                  :key="btn.name"
+                  :icon="btn.icon"
+                  :color="btn.color"
+                  :variant="btn.variant"
+                  :size="SIZES.standard"
+                  square
+                  :name="btn.name"
+                  @click="btn.onClick"
+                />
+
+                <!-- Publish button (announce or republish to Heynabo) -->
+                <UButton
+                  v-if="canAnnounce"
+                  :color="HERO_BUTTON.primaryButton"
+                  variant="outline"
+                  :size="SIZES.standard"
+                  :icon="ICONS.megaphone"
+                  :disabled="!canAdvanceState || isAnnouncing"
+                  :loading="isAnnouncing"
+                  name="announce-dinner"
+                  @click="handleAdvanceState"
+                >
+                  Publicer
+                </UButton>
+
+                <!-- Cancel button -->
+                <div v-if="canCancelDinner(dinnerEvent)" ref="cancelButtonRef">
+                  <UButton
+                    :color="isCancelConfirmMode ? COLOR.error : HERO_BUTTON.primaryButton"
+                    :variant="isCancelConfirmMode ? 'solid' : 'outline'"
+                    :size="SIZES.standard"
+                    icon="i-heroicons-x-mark"
+                    :disabled="isCancelling"
+                    :loading="isCancelling"
+                    name="cancel-dinner"
+                    @click="handleCancelClick"
+                  >
+                    {{ isCancelConfirmMode ? `Aflys (${formattedShortDate})` : 'Aflys' }}
+                  </UButton>
+                </div>
+              </template>
+            </div>
+          </template>
+        </UFormField>
+
         <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
-        <!-- Edit button (EDIT mode only, when not already editing) -->
-        <UButton
-          v-if="isEditing && !isEditingMenu"
-          :icon="ICONS.edit"
-          :color="COLOR.neutral"
-          variant="ghost"
-          size="xs"
-          name="edit-menu"
-          class="mt-2"
-          @click="isEditingMenu = true"
+
+        <!-- Warning when menu title missing -->
+        <UAlert
+          v-if="isEditing && canAnnounce && !canAdvanceState"
+          :color="COLOR.warning"
+          variant="soft"
+          icon="i-heroicons-information-circle"
+          :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
         >
-          Rediger menu
-        </UButton>
+          <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
+        </UAlert>
       </div>
 
       <!-- EDIT mode: Edit menu fields with Zod validation -->
@@ -436,44 +548,60 @@ const handleCardClick = () => {
       </UForm>
 
       <!-- ========== ALLERGEN SECTION ========== -->
+      <!-- AllergenMultiSelector handles its own title/empty state in view mode -->
       <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">
-        <h4 :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Allergener i menuen</h4>
-
-        <!-- VIEW mode: Display allergens -->
+        <!-- VIEW allergens (not editing allergens) -->
         <div v-if="!isEditingAllergens">
+          <!-- Edit button row (only when form is in EDIT mode) -->
+          <div v-if="isEditing" class="flex items-center gap-1 md:gap-2 mb-2">
+            <span class="flex-1" />
+            <UButton
+              v-for="btn in allergenEditButtons"
+              :key="btn.name"
+              :icon="btn.icon"
+              :color="btn.color"
+              :variant="btn.variant"
+              :size="SIZES.standard"
+              square
+              :name="btn.name"
+              @click="btn.onClick"
+            />
+          </div>
+          <!-- AllergenMultiSelector shows title when has allergens, subtle empty state when none -->
           <AllergenMultiSelector
             :model-value="selectedAllergenIds"
             :allergy-types="allergyTypes"
             mode="view"
             readonly
           />
-          <!-- Edit button (EDIT mode only) -->
-          <UButton
-            v-if="isEditing"
-            :icon="ICONS.edit"
-            :color="COLOR.neutral"
-            variant="ghost"
-            size="xs"
-            name="edit-allergens"
-            class="mt-2"
-            @click="isEditingAllergens = true"
-          >
-            Rediger allergener
-          </UButton>
         </div>
 
-        <!-- EDIT mode: Edit allergens -->
-        <div v-else class="space-y-4">
+        <!-- EDIT allergens: Show header with save/cancel buttons -->
+        <div v-else>
+          <UFormField hint="Gem eller annuller" :ui="{ hint: 'hidden md:block' }">
+            <template #default>
+              <div class="flex items-center gap-1 md:gap-2 mb-2">
+                <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
+                <UButton
+                  v-for="btn in allergenEditButtons"
+                  :key="btn.name"
+                  :icon="btn.icon"
+                  :color="btn.color"
+                  :variant="btn.variant"
+                  :size="SIZES.standard"
+                  square
+                  :name="btn.name"
+                  @click="btn.onClick"
+                />
+              </div>
+            </template>
+          </UFormField>
           <AllergenMultiSelector
             v-model="draftAllergenIds"
             :allergy-types="allergyTypes"
             mode="edit"
             :show-statistics="true"
           />
-          <div class="flex gap-2 justify-end">
-            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" name="cancel-allergen-edit" @click="handleAllergenCancel">Annuller</UButton>
-            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" name="save-allergen-edit" @click="handleAllergenSave">Gem</UButton>
-          </div>
         </div>
       </div>
 
@@ -484,7 +612,7 @@ const handleCardClick = () => {
 
       <!-- ========== STATE CONTROLS (showStateControls only) ========== -->
       <template v-if="showStateControls">
-        <!-- Status stepper -->
+        <!-- Status stepper (includes deadline badges) -->
         <div class="pt-4 border-t">
           <DinnerStatusStepper
             :dinner-event="dinnerEvent"
@@ -493,52 +621,9 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- Status/deadline badges (shared component - broad mode with help text) -->
-        <DinnerDeadlineBadges :dinner-event="dinnerEvent" />
-
         <!-- Budget section (chef's financial overview) -->
         <div class="pt-4 border-t">
           <DinnerBudget :orders="dinnerEvent.tickets ?? []" mode="full" />
-        </div>
-
-        <!-- Action buttons (EDIT mode only) -->
-        <div v-if="isEditing" class="pt-4 border-t space-y-2">
-          <UButton
-            v-if="nextState"
-            :color="canAdvanceState ? HERO_BUTTON.primaryButton : COLOR.neutral"
-            variant="solid"
-            :size="SIZES.standard"
-            :icon="nextState.icon"
-            :disabled="!canAdvanceState"
-            block
-            name="advance-dinner-state"
-            @click="handleAdvanceState"
-          >
-            {{ nextState.label }}
-          </UButton>
-
-          <UAlert
-            v-if="nextState && !canAdvanceState && dinnerEvent.state === DinnerState.SCHEDULED"
-            :color="COLOR.warning"
-            variant="soft"
-            icon="i-heroicons-information-circle"
-            :ui="{ root: 'p-2', description: 'text-xs' }"
-          >
-            <template #description>Indtast menu titel for at annoncere</template>
-          </UAlert>
-
-          <UButton
-            v-if="canCancelDinner(dinnerEvent)"
-            :color="COLOR.error"
-            variant="outline"
-            :size="SIZES.standard"
-            icon="i-heroicons-x-mark"
-            block
-            name="cancel-dinner"
-            @click="handleCancelDinner"
-          >
-            Aflys middag
-          </UButton>
         </div>
       </template>
     </div>

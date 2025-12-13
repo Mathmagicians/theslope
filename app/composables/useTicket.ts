@@ -52,7 +52,7 @@ export const useTicket = () => {
      * @returns Ticket type enum value
      */
     const determineTicketType = (
-        birthDate: Date | null,
+        birthDate: Date | null | undefined,
         ticketPrices?: TicketPrice[],
         referenceDate: Date = new Date()
     ): typeof TicketType[keyof typeof TicketType] => {

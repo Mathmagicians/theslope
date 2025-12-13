@@ -16,7 +16,7 @@ describe('FormModeSelector', () => {
         create: 'form-mode-create'
     } as const
 
-    const modeSelectectorWithMode = async (modelValue: FORM_MODES) => {
+    const modeSelectectorWithMode = async (modelValue: typeof FORM_MODES[keyof typeof FORM_MODES]) => {
         const wrapper = await mountSuspended(FormModeSelector, {
             props: {
                 modelValue: modelValue

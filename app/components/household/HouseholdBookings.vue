@@ -10,7 +10,7 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import {formatDate, formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
 import type {WeekDayMap} from '~/types/dateTypes'
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 
 interface Inhabitant {
   id: number
@@ -44,17 +44,18 @@ const {activeSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSel
 planStore.initPlanStore()
 
 // Derive needed data from store
-const seasonDates = computed(() => activeSeason.value?.seasonDates)
+const seasonDates = computed(() => activeSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
 const dinnerEvents = computed(() => activeSeason.value?.dinnerEvents ?? [])
 const holidays = computed(() => activeSeason.value?.holidays ?? [])
-const orders = computed(() => activeSeason.value?.orders ?? [])
+// TODO: Orders should come from bookings store, not Season type
+const orders = computed((): OrderDisplay[] => [])
 
 // UI state
 // Selected day for detail panel (null = show today or next event)
 const selectedDate = ref<Date | null>(null)
 
 // Determine ticket type based on age and season ticket prices
-const determineTicketType = (birthDate: Date | null) => {
+const determineTicketType = (birthDate: Date | null | undefined) => {
   if (!birthDate) return TicketType.ADULT
   if (!activeSeason.value?.ticketPrices) return TicketType.ADULT
 
@@ -75,6 +76,12 @@ const ticketTypeConfig = {
   [TicketType.CHILD]: {label: 'Barn', color: 'success'},
   [TicketType.BABY]: {label: 'Baby', color: 'neutral'}
 } as const
+
+// Visible cooking days based on season config
+const visibleCookingDays = computed(() => {
+  if (!activeSeason.value?.cookingDays) return WEEKDAYS
+  return WEEKDAYS.filter(d => activeSeason.value!.cookingDays[d])
+})
 </script>
 
 <template>
@@ -130,7 +137,7 @@ const ticketTypeConfig = {
             </div>
             <div class="flex gap-1">
               <div
-                v-for="day in activeSeason.cookingDays ? WEEKDAYS.filter(d => activeSeason.cookingDays[d]) : WEEKDAYS"
+                v-for="day in visibleCookingDays"
                 :key="day"
                 class="flex flex-col items-center gap-1 min-w-[32px]"
               >

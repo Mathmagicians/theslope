@@ -2,7 +2,7 @@
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Households store for shortName lookup
 const householdsStore = useHouseholdsStore()
@@ -67,19 +67,8 @@ const hasRecentAllergies = computed(() =>
     props.allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
 )
 
-// Funny empty state messages (rotates based on allergy ID for consistency)
-const emptyStateMessages = [
-  { emoji: '🤷', text: 'Ingen beboere har denne allergi... endnu' },
-  { emoji: '✨', text: 'Kan spises af alle - så er køkkenlivet lidt lettere!' },
-  { emoji: '🎉', text: 'Hurra! Ingen allergiske reaktioner her' },
-  { emoji: '👍', text: 'Alle has sagt god for denne ingrediens' },
-  { emoji: '😌', text: 'Ingen bekymringer med denne ingrediens' }
-]
-const emptyStateMessage = computed(() => {
-  const id = props.allergyType.id || 0
-  const index = id % emptyStateMessages.length
-  return emptyStateMessages[index]
-})
+// Random fun empty state message from design system
+const emptyStateMessage = getRandomEmptyMessage('allergy')
 </script>
 
 <template>

@@ -1,9 +1,9 @@
 import {test, expect} from '@playwright/test'
-import {useCookingTeamValidation} from '../../../../app/composables/useCookingTeamValidation'
-import {useWeekDayMapValidation} from '../../../../app/composables/useWeekDayMapValidation'
-import {SeasonFactory} from "../../testDataFactories/seasonFactory"
-import {HouseholdFactory} from "../../testDataFactories/householdFactory"
-import testHelpers from '../../testHelpers'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validateCookingTeam, getTeamMemberCounts} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
@@ -37,10 +37,12 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.seasonId).toEqual(testSeasonId)
             expect(() => validateCookingTeam(testTeam)).not.toThrow()
 
-            const retrievedTeam = await SeasonFactory.getCookingTeamById(context, testTeam.id)
-            expect(retrievedTeam.id).toBe(testTeam.id)
-            expect(retrievedTeam.name).toBe(testTeam.name)
-            expect(retrievedTeam.seasonId).toBe(testTeam.seasonId)
+            expect(testTeam.id).toBeDefined()
+            const retrievedTeam = await SeasonFactory.getCookingTeamById(context, testTeam.id!)
+            expect(retrievedTeam).not.toBeNull()
+            expect(retrievedTeam!.id).toBe(testTeam.id)
+            expect(retrievedTeam!.name).toBe(testTeam.name)
+            expect(retrievedTeam!.seasonId).toBe(testTeam.seasonId)
         })
 
         test('PUT /api/admin/team creates a team with team assignments and delete removes team and team assignments', async ({browser}) => {
@@ -50,14 +52,15 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.seasonId).toBe(testSeasonId)
             expect(getTeamMemberCounts(testTeam)).toEqual(2)
             expect(testTeam.assignments.length).toBe(2)
-            const memberAssignmentIds = testTeam.assignments.map((a: {id: number}) => a.id)
+            const memberAssignmentIds = testTeam.assignments.map((a) => a.id!)
             const assignments = await Promise.all(
-                memberAssignmentIds.map((id: number) => SeasonFactory.getCookingTeamAssignment(context, id))
+                memberAssignmentIds.map((id) => SeasonFactory.getCookingTeamAssignment(context, id))
             )
-            expect(assignments.map((a: unknown) => a.id)).toEqual(memberAssignmentIds)
+            expect(assignments.map((a) => a?.id)).toEqual(memberAssignmentIds)
 
             // Now delete the team
-            await SeasonFactory.deleteCookingTeam(context, testTeam.id)
+            expect(testTeam.id).toBeDefined()
+            await SeasonFactory.deleteCookingTeam(context, testTeam.id!)
 
             const assignmentsAfterDelete = await Promise.all(
                 memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id, 404)
@@ -107,12 +110,13 @@ test.describe('Admin Teams API', () => {
             expect(createdTeam.id).toBeDefined()
 
             // Get team details
-            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
-            expect(teamDetails.id).toBe(createdTeam.id)
-            expect(teamDetails.name).toBe(createdTeam.name)
-            expect(teamDetails.seasonId).toBe(testSeasonId)
+            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+            expect(teamDetails).not.toBeNull()
+            expect(teamDetails!.id).toBe(createdTeam.id)
+            expect(teamDetails!.name).toBe(createdTeam.name)
+            expect(teamDetails!.seasonId).toBe(testSeasonId)
             expect(teamDetails).toHaveProperty('assignments')
-            expect(Array.isArray(teamDetails.assignments)).toBe(true)
+            expect(Array.isArray(teamDetails!.assignments)).toBe(true)
         })
 
         test('GET /api/admin/team/[id] should return Detail entity with dinnerEvents and cookingDaysCount (ADR-009)', async ({browser}) => {
@@ -149,7 +153,7 @@ test.describe('Admin Teams API', () => {
             expect(teamDetail).toHaveProperty('dinnerEvents')
             expect(Array.isArray(teamDetail.dinnerEvents)).toBe(true)
             expect(teamDetail.dinnerEvents.length).toBe(2)
-            expect(teamDetail.dinnerEvents.map((e: unknown) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
+            expect(teamDetail.dinnerEvents.map((e: {id: number}) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
 
             // AND: Contains cookingDaysCount aggregate
             expect(teamDetail).toHaveProperty('cookingDaysCount')
@@ -289,10 +293,10 @@ test.describe('Admin Teams API', () => {
             expect(getTeamMemberCounts(createdTeam)).toBe(3)
             expect(createdTeam.assignments.length).toBe(3)
             // Delete the team
-            await SeasonFactory.deleteCookingTeam(context, createdTeam.id)
+            await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
 
             // Verify team is deleted
-            await SeasonFactory.getCookingTeamById(context, createdTeam.id, 404)
+            await SeasonFactory.getCookingTeamById(context, createdTeam.id!, 404)
 
             // Cleanup household
             await HouseholdFactory.deleteHousehold(context, createdTeam.householdId)
@@ -309,11 +313,13 @@ test.describe('Admin Teams API', () => {
             testHouseholdIds.push(createdTeam.householdId)
 
             // Verify the team has the expected member structure
-            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id)
-            expect(getTeamMemberCounts(teamDetails)).toBe(3)
+            expect(createdTeam.id).toBeDefined()
+            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+            expect(teamDetails).not.toBeNull()
+            expect(getTeamMemberCounts(teamDetails!)).toBe(3)
 
             // Verify allocationPercentage is set (defaults to 100)
-            expect(teamDetails.assignments[0].allocationPercentage).toBe(100)
+            expect(teamDetails!.assignments[0]!.allocationPercentage).toBe(100)
         })
 
         test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {
@@ -327,8 +333,9 @@ test.describe('Admin Teams API', () => {
             expect(createdTeam.assignments.length).toBe(2)
 
             // Remove one assignment to test member removal
-            const firstAssignmentId = createdTeam.assignments[0].id
-            await SeasonFactory.removeMemberFromTeam(context, createdTeam.id, firstAssignmentId)
+            const firstAssignmentId = createdTeam.assignments[0]!.id!
+            expect(createdTeam.id).toBeDefined()
+            await SeasonFactory.removeMemberFromTeam(context, createdTeam.id!, firstAssignmentId)
 
             // Verify the assignment was removed
             await SeasonFactory.getCookingTeamAssignment(context, firstAssignmentId, 404)

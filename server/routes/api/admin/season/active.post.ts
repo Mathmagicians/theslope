@@ -1,8 +1,10 @@
 import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
-import {activateSeason} from "~~/server/data/prismaRepository"
+import {activateSeason, fetchInhabitants, updateInhabitantPreferencesBulk} from "~~/server/data/prismaRepository"
 import type {Season} from "~/composables/useSeasonValidation"
+import {useSeason} from "~/composables/useSeason"
 import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -14,6 +16,7 @@ const activateSeasonSchema = z.object({
 /**
  * POST /api/admin/season/active
  * Activates a season (ensures only one active season at a time)
+ * Also clips inhabitant dinner preferences to match season cooking days.
  * Request body: { seasonId: number }
  * Returns: Activated Season
  */
@@ -31,8 +34,36 @@ export default defineEventHandler(async (event): Promise<Season> => {
 
     // Database operations try-catch
     try {
+        // 1. Activate the season
         const activatedSeason = await activateSeason(d1Client, requestData.seasonId)
         console.info(`🌞 > SEASON > [POST /active] Successfully activated season ${activatedSeason.shortName}`)
+
+        // 2. Clip inhabitant preferences to match season cooking days
+        const {createPreferenceClipper, chunkPreferenceUpdates} = useSeason()
+        const clipper = createPreferenceClipper(activatedSeason.cookingDays)
+
+        const inhabitants = await fetchInhabitants(d1Client)
+        const updates = clipper(inhabitants)
+        console.info(`🌞 > SEASON > [POST /active] Preference updates needed: ${updates.length}/${inhabitants.length} inhabitants`)
+
+        if (updates.length > 0) {
+            console.info(`🌞 > SEASON > [POST /active] Clipping preferences for ${updates.length} inhabitants`)
+            const batches = chunkPreferenceUpdates(updates)
+
+            for (const batch of batches) {
+                await updateInhabitantPreferencesBulk(d1Client, batch)
+            }
+            console.info(`🌞 > SEASON > [POST /active] Successfully clipped ${updates.length} inhabitant preferences`)
+        } else {
+            console.info(`🌞 > SEASON > [POST /active] No preference clipping needed`)
+        }
+
+        // 3. Scaffold pre-bookings for the activated season
+        const scaffoldResult = await scaffoldPrebookings(d1Client, activatedSeason.id!)
+        if (scaffoldResult) {
+            console.info(`🌞 > SEASON > [POST /active] Scaffold pre-bookings: created=${scaffoldResult.created}, unchanged=${scaffoldResult.unchanged}`)
+        }
+
         setResponseStatus(event, 200)
         return activatedSeason
     } catch (error) {

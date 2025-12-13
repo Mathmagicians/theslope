@@ -28,6 +28,9 @@ Solve problems with signing up for meals, and paying for them
   - One-click activation for eligible seasons
   - Past seasons automatically archived (cannot be reactivated)
   - Smart sorting: active → future → past
+  - **Auto-scaffolds pre-bookings** based on inhabitant preferences
+  - Clips inhabitant preferences to match season cooking days
+  - Respects user cancellations (won't recreate cancelled orders)
 
 **Season Selector with Status:**
 ```

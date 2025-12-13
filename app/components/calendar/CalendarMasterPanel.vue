@@ -32,17 +32,17 @@ interface Slots {
 defineSlots<Slots>()
 
 // Design system
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UCard class="rounded-none" :ui="{ root: 'flex flex-col h-full' }">
+  <UCard :class="LAYOUTS.cardResponsive" :ui="{ root: 'flex flex-col h-full' }">
     <template #header>
       <h3 :class="TYPOGRAPHY.cardTitle">{{ title }}</h3>
     </template>
 
     <!-- Optional header content (selectors, filters) -->
-    <div v-if="$slots.header" class="pt-2 pb-2 md:pt-4 md:pb-6">
+    <div v-if="$slots.header" class="pb-2 md:pb-4">
       <slot name="header" />
     </div>
 

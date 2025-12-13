@@ -21,8 +21,8 @@
     "pre:all": "npm run lint && npm run ts",
     "test:unit": "npx vitest --run",
     "test:e2e": "npx playwright test --reporter=html,line",
-    "test:e2e:api": "npx playwright test tests/e2e/api --reporter=line",
-    "test:e2e:ui": "npx playwright test tests/e2e/ui --reporter=line",
+    "test:e2e:api": "npx playwright test tests/e2e/api --reporter=html,line",
+    "test:e2e:ui": "npx playwright test tests/e2e/ui --reporter=html,line",
     "test:all": "npm run test:unit && npm run test:e2e:api && npm run test:e2e:ui",
     "db:seed:local": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --local",
     "db:seed": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env=dev --remote",
@@ -80,6 +80,7 @@
     "prisma": "^6.16.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",
+    "vue-tsc": "^3.1.7",
     "wrangler": "^4.42.1",
     "zod-prisma-types": "^3.2.4"
   }

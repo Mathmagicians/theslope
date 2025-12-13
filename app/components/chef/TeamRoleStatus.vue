@@ -20,8 +20,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Design system
-const { COLOR } = useTheSlopeDesignSystem()
-const { getTeamColor } = useCookingTeam()
+const { COLOR, ICONS } = useTheSlopeDesignSystem()
 
 // Validation schemas
 const { TeamRoleSchema } = useCookingTeamValidation()
@@ -42,33 +41,27 @@ const isChef = computed(() => userRole.value === Role.CHEF)
 const roleConfig = computed(() => {
   const configs = {
     [Role.CHEF]: {
-      label: 'Chefkok',
-      icon: 'i-heroicons-star',
+      title: 'Du er chefkok',
+      icon: ICONS.chef,
       color: COLOR.warning,
-      description: 'Du er chefkok på dette hold, og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.'
+      description: `Du er chefkok på ${props.team.name} og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.`
     },
     [Role.COOK]: {
-      label: 'Kok',
+      title: 'Du er kok',
       icon: 'i-heroicons-user',
       color: COLOR.primary,
-      description: 'Du hjælper cheffen med at lave maden'
+      description: `Du hjælper cheffen på ${props.team.name} med at lave maden`
     },
     [Role.JUNIORHELPER]: {
-      label: 'Kokkespire',
+      title: 'Du er kokkespire',
       icon: 'i-heroicons-heart',
       color: COLOR.success,
-      description: 'Du lærer at lave mad sammen med holdet'
+      description: `Du er en sej kokkespire, som hjælper de voksne på ${props.team.name}`
     }
   }
   return configs[userRole.value as keyof typeof configs]
 })
 
-// Team number for color matching
-const teamNumber = computed(() => {
-  // Team is already loaded with all details
-  const teamIndex = props.team.id ? props.team.id - 1 : 0
-  return teamIndex
-})
 </script>
 
 <template>
@@ -80,16 +73,7 @@ const teamNumber = computed(() => {
     :ui="{ root: 'w-full' }"
   >
     <template #title>
-      <div class="flex items-center gap-2">
-        <span>{{ roleConfig.label }} på</span>
-        <UBadge
-          :color="getTeamColor(teamNumber)"
-          variant="solid"
-          size="sm"
-        >
-          {{ team.name }}
-        </UBadge>
-      </div>
+      {{ roleConfig.title }}
     </template>
     <template #description>
       {{ roleConfig.description }}

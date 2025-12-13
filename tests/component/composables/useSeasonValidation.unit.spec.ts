@@ -183,7 +183,7 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: []}],
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3}],
         ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000}]
       }
 

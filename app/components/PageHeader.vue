@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type {NavigationMenuItem} from '@nuxt/ui'
+
 /**
  * PageHeader - Main navigation header
  *
@@ -14,8 +16,11 @@
  * - Mobile-first design
  */
 
+// Navigation item type extending NuxtUI's type
+type NavItem = NavigationMenuItem & { active: boolean }
+
 const route = useRoute()
-const {loggedIn, greeting} = storeToRefs(useAuthStore())
+const {loggedIn, greeting, avatar} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
 const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
 
@@ -23,7 +28,7 @@ const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
 const isActive = (to: string): boolean => route.path.startsWith(to)
 
 // Main navigation links (always visible when logged in)
-const mainLinks = computed(() => loggedIn.value ? [
+const mainLinks = computed((): NavItem[] => loggedIn.value ? [
   {
     label: 'Fællesspisning',
     to: '/dinner',
@@ -31,15 +36,15 @@ const mainLinks = computed(() => loggedIn.value ? [
     active: isActive('/dinner')
   },
   {
-    label: 'Husholdning',
+    label: 'Husstand',
     to: myHousehold.value
         ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings`
         : '/household',
-    icon: ICONS.users,
+    icon: ICONS.household,
     active: isActive('/household')
   },
   {
-    label: 'Chefkok',
+    label: 'Madhold',
     to: '/chef',
     icon: ICONS.chef,
     active: isActive('/chef')
@@ -53,20 +58,20 @@ const mainLinks = computed(() => loggedIn.value ? [
 
 
 // Drawer menu items (admin + user)
-const drawerLinks = computed(() => [
+const drawerLinks = computed((): NavItem[] => [
   {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
-  {label: greeting.value, to: '/login', icon: ICONS.user, active: isActive('/login')}
+  {label: greeting.value, to: '/login', avatar: {src: avatar.value ?? undefined, icon: ICONS.user}, active: isActive('/login')}
 ])
 
 // Swap links based on breakpoint: on desktop drawer links go to main nav
-const visibleMainLinks = computed(() => {
+const visibleMainLinks = computed((): NavItem[] => {
   if (!loggedIn.value) return mainLinks.value
   return NAVIGATION.shouldSwapDrawerWithMain
     ? drawerLinks.value
     : mainLinks.value
 })
 
-const visibleDrawerLinks = computed(() => {
+const visibleDrawerLinks = computed((): NavItem[] => {
   if (!loggedIn.value) return []
   return NAVIGATION.shouldSwapDrawerWithMain
     ? mainLinks.value
@@ -82,6 +87,7 @@ const visibleDrawerLinks = computed(() => {
           root: 'bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg',
           toggle: 'md:hidden',
           left: 'md:flex-1',
+          center: 'hidden md:flex',
           right: 'flex items-center justify-end md:flex-1 gap-1.5'
         }"
     >

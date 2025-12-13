@@ -1,7 +1,7 @@
 import {defineEventHandler, readValidatedBody, createError} from "h3"
 import {loginUserIntoHeynabo} from "~~/server/integration/heynabo/heynaboClient"
 import {fetchUser} from "~~/server/data/prismaRepository"
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, type UserSession, type UserDetail} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Get schemas inside handler to avoid circular dependency
-    const {LoginSchema, UserWithInhabitantSchema} = useCoreValidation()
+    const {LoginSchema, UserSessionSchema} = useCoreValidation()
 
     // Input validation  FAIL EARLY
     let loginData
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
         const { email, password } = loginData
         console.info(`🔐 > LOGIN > Logging in for user ${email}`)
         heynaboLoggedIn = await loginUserIntoHeynabo(email, password)
-        console.log("🔐 > LOGIN > Logged into heynabo with user id: ", heynaboLoggedIn.id)
+        console.info("🔐 > LOGIN > Logged into heynabo with user id: ", heynaboLoggedIn.id)
     } catch (error) {
         return throwH3Error('🔐 > LOGIN > Invalid Heynabo credentials', error, 404)
     }
@@ -40,15 +40,20 @@ export default defineEventHandler(async (event) => {
         }
 
         // Validate response structure (ADR-009: User includes Inhabitant with household)
-        const validatedUser = UserWithInhabitantSchema.parse(theSlopeUser)
+        // UserSessionSchema includes passwordHash - provide Heynabo token during parse
+        const validatedUser: UserSession = UserSessionSchema.parse({
+            ...theSlopeUser,
+            passwordHash: heynaboLoggedIn.token
+        })
 
-        validatedUser.passwordHash = heynaboLoggedIn.token
         await setUserSession(event, {
             user: validatedUser,
             loggedInAt: new Date(),
         })
 
-        return validatedUser
+        // Return UserDetail (omits passwordHash) - never expose token to client
+        const {passwordHash: _, ...userResponse} = validatedUser
+        return userResponse as UserDetail
     } catch (error) {
         return throwH3Error('🔐 > LOGIN > Server error', error)
     }

@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormMode} from "~/types/form"
+import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName} = useSeason()
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
+
+// Get loading state from store (ADR-007: store owns loading states)
+const planStore = usePlanStore()
+const {isSavingSeasonFlowInProgress: isSavingSeason} = storeToRefs(planStore)
 
 // COMPONENT DEFINITION
 const props = defineProps<{ mode: FormMode }>()
@@ -51,6 +56,7 @@ const onSubmitSeason = () => {
 
 // UI METHODS
 const buttonText = computed(() => {
+  if (isSavingSeason.value) return 'Arbejder...'
   switch (props.mode) {
     case 'create':
       return 'Opret ny sæson'
@@ -176,8 +182,8 @@ class="mx-auto"
             <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
               <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
               <ul class="list-disc list-inside">
-                <li v-for="error in errors" :key="error.path">
-                  <span class="font-medium">{{ error.path }}:</span> {{ error.message }}
+                <li v-for="error in errors" :key="error.name">
+                  <span class="font-medium">{{ error.name }}:</span> {{ error.message }}
                 </li>
               </ul>
             </div>
@@ -185,7 +191,7 @@ class="mx-auto"
               <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
                 Annuller
               </UButton>
-              <UButton name="submit-season" type="submit" color="info" icon="i-heroicons-check-circle">
+              <UButton name="submit-season" type="submit" color="info" icon="i-heroicons-check-circle" :loading="isSavingSeason" :disabled="isSavingSeason">
                 {{ buttonText }}
               </UButton>
             </div>

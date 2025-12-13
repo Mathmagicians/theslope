@@ -71,7 +71,8 @@ export const useCoreValidation = () => {
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection,
-        createDefaultWeekdayMap
+        createDefaultWeekdayMap,
+        maskWeekDayMap
     } = useWeekDayMapValidation({
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
@@ -259,8 +260,8 @@ export const useCoreValidation = () => {
         inhabitants: z.array(InhabitantDetailSchema)
     })
 
-    // ADR-009: User with nested Inhabitant and Household (essential context for auth)
-    const UserWithInhabitantSchema = UserDisplaySchema.extend({
+    // ADR-009: User detail with nested Inhabitant and Household (essential context for auth)
+    const UserDetailSchema = UserDisplaySchema.extend({
         Inhabitant: InhabitantDisplaySchema.extend({
             userId: z.number().int().positive().nullable().optional(),
             householdId: z.number().int().positive(),
@@ -276,6 +277,12 @@ export const useCoreValidation = () => {
         }).nullable()
     })
 
+    // User session schema - extends UserDetail with passwordHash for auth purposes
+    // passwordHash stores Heynabo token for session management (not actual password)
+    const UserSessionSchema = UserDetailSchema.extend({
+        passwordHash: z.string()
+    })
+
     // ========================================================================
     // TYPE DEFINITIONS (ADR-009: Display vs Detail pattern)
     // ========================================================================
@@ -284,7 +291,7 @@ export const useCoreValidation = () => {
     // Display: Minimal user info for lists (allergy managers, etc.)
     type _UserDisplay = z.infer<typeof UserDisplaySchema>
     // Detail: Full user with nested inhabitant & household (auth context)
-    type _UserDetail = z.infer<typeof UserWithInhabitantSchema>
+    type _UserDetail = z.infer<typeof UserDetailSchema>
     // Mutations: Create/update operations
     type UserCreate = z.infer<typeof UserCreateSchema>
     type _UserUpdate = z.infer<typeof UserUpdateSchema>
@@ -377,14 +384,15 @@ export const useCoreValidation = () => {
     }
 
     /**
-     * Deserialize UserWithInhabitant from database output
+     * Deserialize UserDetail from database output with Date objects
      * Handles nested inhabitant with household and computes household.shortName
      */
-    const deserializeUserWithInhabitant = (serializedUser: Record<string, unknown>): z.infer<typeof UserWithInhabitantSchema> => {
+    const deserializeUserDetail = (serializedUser: Record<string, unknown>): z.infer<typeof UserDetailSchema> => {
+        const {deserializeInhabitantDisplay} = useCoreValidation()
         const inhabitant = serializedUser.Inhabitant as Record<string, unknown> | null
         const household = inhabitant?.household as Record<string, unknown> | null
 
-        return UserWithInhabitantSchema.parse({
+        return UserDetailSchema.parse({
             ...serializedUser,
             systemRoles: JSON.parse(serializedUser.systemRoles as string),
             Inhabitant: inhabitant ? {
@@ -451,7 +459,8 @@ export const useCoreValidation = () => {
         UserUpdateSchema,
         UserResponseSchema,
         UserDisplaySchema,
-        UserWithInhabitantSchema,
+        UserDetailSchema,
+        UserSessionSchema,
         LoginSchema,
         // Schemas - Inhabitant
         BaseInhabitantSchema,
@@ -469,7 +478,7 @@ export const useCoreValidation = () => {
         // Functions - User
         serializeUserInput,
         deserializeUser,
-        deserializeUserWithInhabitant,
+        deserializeUserDetail,
         mergeUserRoles,
         // Functions - Inhabitant
         deserializeInhabitantDisplay,
@@ -481,7 +490,8 @@ export const useCoreValidation = () => {
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createDefaultWeekdayMap,
-        createWeekDayMapFromSelection
+        createWeekDayMapFromSelection,
+        maskWeekDayMap
     }
 }
 
@@ -493,7 +503,9 @@ export const useCoreValidation = () => {
 // Display: Minimal user info for lists
 export type UserDisplay = z.infer<ReturnType<typeof useCoreValidation>['UserDisplaySchema']>
 // Detail: Full user with nested inhabitant & household (GET /api/admin/users/:id)
-export type UserDetail = z.infer<ReturnType<typeof useCoreValidation>['UserWithInhabitantSchema']>
+export type UserDetail = z.infer<ReturnType<typeof useCoreValidation>['UserDetailSchema']>
+// Session: UserDetail + passwordHash for auth/session (stores Heynabo token)
+export type UserSession = z.infer<ReturnType<typeof useCoreValidation>['UserSessionSchema']>
 // Mutations
 export type UserCreate = z.infer<ReturnType<typeof useCoreValidation>['UserCreateSchema']>
 export type UserUpdate = z.infer<ReturnType<typeof useCoreValidation>['UserUpdateSchema']>
@@ -517,15 +529,3 @@ export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['Hous
 // Mutations
 export type HouseholdCreate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdCreateSchema']>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
-
-// LEGACY TYPE ALIASES (for backward compatibility during migration - will be removed)
-/** @deprecated Use UserDisplay or UserDetail instead */
-export type User = UserDetail
-/** @deprecated Use UserDetail instead */
-export type UserWithInhabitant = UserDetail
-/** @deprecated Use InhabitantDetail instead */
-export type Inhabitant = InhabitantDetail
-/** @deprecated Use InhabitantDetail instead */
-export type InhabitantResponse = InhabitantDetail
-/** @deprecated Use HouseholdDetail instead */
-export type HouseholdResponse = HouseholdDetail

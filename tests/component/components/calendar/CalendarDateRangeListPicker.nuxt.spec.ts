@@ -63,7 +63,7 @@ describe('CalendarDateRangeListPicker', () => {
 
         const emitted = wrapper.emitted('update:modelValue')
         expect(emitted).toBeTruthy()
-        expect(emitted[0][0]).toEqual([
+        expect(emitted![0]![0]).toEqual([
             {
                 start: new Date(2025, 0, 1),
                 end: new Date(2025, 0, 5)

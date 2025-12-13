@@ -35,6 +35,12 @@ export interface UseWeekDayMapValidationReturn<T> {
         unselectedValue: T
     ) => WeekDayMap<T>
     createDefaultWeekdayMap: (value?: T | T[]) => WeekDayMap<T>
+    maskWeekDayMap: (
+        source: WeekDayMap<T> | null,
+        mask: WeekDayMap<boolean>,
+        defaultValue: T,
+        maskedValue: T
+    ) => WeekDayMap<T>
 }
 
 const DEFAULT_BOOLEAN_OPTIONS: UseWeekDayMapValidationOptions<boolean> = {
@@ -106,12 +112,29 @@ export const useWeekDayMapValidation = <T = boolean>(
         }), {} as WeekDayMap<T>)
     }
 
+    /**
+     * Apply a boolean mask to transform a WeekDayMap.
+     * Masked days (true) keep source value or get defaultValue if source is null.
+     * Unmasked days (false) get maskedValue.
+     */
+    const maskWeekDayMap = (
+        source: WeekDayMap<T> | null,
+        mask: WeekDayMap<boolean>,
+        defaultValue: T,
+        maskedValue: T
+    ): WeekDayMap<T> =>
+        WEEKDAYS.reduce((acc, day) => ({
+            ...acc,
+            [day]: mask[day] ? (source?.[day] ?? defaultValue) : maskedValue
+        }), {} as WeekDayMap<T>)
+
     return {
         WeekDayMapSchema,
         WeekDayMapSchemaRequired,
         WeekDayMapSchemaOptional,
         createWeekDayMapFromSelection,
         createDefaultWeekdayMap,
+        maskWeekDayMap,
         serializeWeekDayMap,
         serializeWeekDayMapNullable,
         deserializeWeekDayMap

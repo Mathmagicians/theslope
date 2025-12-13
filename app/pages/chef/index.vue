@@ -39,7 +39,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
 // Design system
-const { COLOR, ICONS } = useTheSlopeDesignSystem()
+const {COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
@@ -59,7 +59,7 @@ const bookingsStore = useBookingsStore()
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const { isChefFor, getDefaultDinnerStartTime, getNextDinnerDate } = useSeason()
+const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
 const authStore = useAuthStore()
 const dinnerStartTime = getDefaultDinnerStartTime()
 
@@ -86,12 +86,30 @@ const selectedTeam = computed(() => {
 
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
 
-// Calendar view mode via URL query param - survives component remounts (ADR-006)
-const {value: calendarViewMode, setValue: _setCalendarViewMode} = useQueryParam<'agenda' | 'calendar'>('view', {
-  serialize: (v) => v,
-  deserialize: (s) => (s === 'agenda' || s === 'calendar') ? s : null,
-  defaultValue: () => 'calendar',
+// Calendar view mode + accordion state via URL query param - survives component remounts (ADR-006)
+// Format: view=calendar:open or view=agenda:closed
+type ViewState = { mode: 'agenda' | 'calendar', open: boolean }
+const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('view', {
+  serialize: (v) => `${v.mode}:${v.open ? 'open' : 'closed'}`,
+  deserialize: (s) => {
+    const [mode, state] = s.split(':')
+    if ((mode === 'agenda' || mode === 'calendar') && (state === 'open' || state === 'closed')) {
+      return { mode, open: state === 'open' }
+    }
+    return null
+  },
+  defaultValue: () => ({ mode: 'calendar', open: true }),
   syncWhen: () => isPageReady.value
+})
+
+// Computed getters/setters for component v-model bindings
+const calendarViewMode = computed({
+  get: () => viewState.value.mode,
+  set: (mode) => setViewState({ ...viewState.value, mode })
+})
+const calendarAccordionOpen = computed({
+  get: () => viewState.value.open,
+  set: (open) => setViewState({ ...viewState.value, open })
 })
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
@@ -128,31 +146,34 @@ const selectedDinnerEvent = computed(() => {
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
 // Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
-const { DinnerEventDetailSchema } = useBookingValidation()
+const {DinnerEventDetailSchema} = useBookingValidation()
+
+// Reactive key for useAsyncData - follows ADR-007 pattern
+const dinnerDetailKey = computed(() => `chef-dinner-detail-${selectedDinnerId.value || 'null'}`)
 
 const {
   data: dinnerEventDetail,
   status: dinnerEventDetailStatus,
   refresh: refreshDinnerEventDetail
 } = useAsyncData(
-  computed(() => `chef-dinner-detail-${selectedDinnerId.value || 'null'}`),
-  () => selectedDinnerId.value
-    ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
-    : Promise.resolve(null),
-  {
-    default: () => null,
-    watch: [selectedDinnerId],
-    immediate: true,
-    transform: (data: unknown) => {
-      if (!data) return null
-      try {
-        return DinnerEventDetailSchema.parse(data)
-      } catch (e) {
-        console.error('Error parsing dinner event detail:', e)
-        throw e
+    dinnerDetailKey,
+    () => selectedDinnerId.value
+        ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
+        : Promise.resolve(null),
+    {
+      default: () => null,
+      watch: [selectedDinnerId],
+      immediate: true,
+      transform: (data: unknown) => {
+        if (!data) return null
+        try {
+          return DinnerEventDetailSchema.parse(data)
+        } catch (e) {
+          console.error('Error parsing dinner event detail:', e)
+          throw e
+        }
       }
     }
-  }
 )
 
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
@@ -177,8 +198,36 @@ const chefFormMode = computed<FormMode>(() => {
 
 // Event handlers
 const toast = useToast()
-const { DinnerStateSchema } = useBookingValidation()
+const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
+
+// Announce dinner with useAsyncData for loading state (ADR-007: component-local data)
+const announceParams = ref<{dinnerEventId: number} | null>(null)
+const {
+  status: announceStatus,
+  execute: executeAnnounce
+} = useAsyncData(
+    'chef-page-announce-dinner',
+    () => announceParams.value
+        ? bookingsStore.announceDinner(announceParams.value.dinnerEventId)
+        : Promise.resolve(null),
+    { immediate: false }
+)
+const isAnnouncingDinner = computed(() => announceStatus.value === 'pending')
+
+// Cancel dinner with useAsyncData for loading state (ADR-007: component-local data)
+const cancelParams = ref<{dinnerEventId: number} | null>(null)
+const {
+  status: cancelStatus,
+  execute: executeCancel
+} = useAsyncData(
+    'chef-page-cancel-dinner',
+    () => cancelParams.value
+        ? bookingsStore.cancelDinner(cancelParams.value.dinnerEventId)
+        : Promise.resolve(null),
+    { immediate: false }
+)
+const isCancellingDinner = computed(() => cancelStatus.value === 'pending')
 
 const handleAllergenUpdate = async (allergenIds: number[]) => {
   if (!selectedDinnerId.value) return
@@ -187,8 +236,8 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
     await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
     await refreshDinnerEventDetail() // Refresh page-owned data
     const message = allergenIds.length > 0
-      ? 'Beboerne kan nu se allergenerne i menuen'
-      : 'Menuen er markeret uden allergener'
+        ? 'Beboerne kan nu se allergenerne i menuen'
+        : 'Menuen er markeret uden allergener'
     toast.add({
       title: 'Allergeninformation gemt',
       description: message,
@@ -224,40 +273,48 @@ const handleAdvanceState = async (newState: string) => {
   // Only handle ANNOUNCED - CONSUMED is set automatically by cron job
   if (newState !== DinnerState.ANNOUNCED) return
 
-  try {
-    await bookingsStore.announceDinner(selectedDinnerId.value)
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    toast.add({
-      title: 'Menu annonceret',
-      description: 'Beboerne kan nu tilmelde sig fællesspisningen',
-      icon: ICONS.megaphone,
-      color: COLOR.success
-    })
-    // Refresh team data to show updated state in calendar
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    // Error already handled by store with handleApiError
-    console.error('Failed to advance state:', error)
+  // Check if this is a republish (already announced) or first publish
+  const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
+
+  announceParams.value = {dinnerEventId: selectedDinnerId.value}
+  await executeAnnounce()
+
+  // Check if announce succeeded (useAsyncData captures errors, doesn't throw)
+  if (announceStatus.value === 'error') {
+    return
   }
+
+  await refreshDinnerEventDetail() // Refresh page-owned data
+  toast.add({
+    title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
+    icon: ICONS.megaphone,
+    color: COLOR.success
+  })
+  // Refresh team data to show updated state in calendar
+  await usersStore.loadMyTeams()
 }
 
 const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
 
-  try {
-    await bookingsStore.cancelDinner(selectedDinnerId.value)
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    toast.add({
-      title: 'Middag aflyst',
-      description: 'Fællesspisningen er blevet aflyst',
-      icon: ICONS.xMark,
-      color: COLOR.warning
-    })
-    // Refresh team data to show updated state in calendar
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    console.error('Failed to cancel dinner:', error)
+  cancelParams.value = {dinnerEventId: selectedDinnerId.value}
+  await executeCancel()
+
+  // Check if cancel succeeded (useAsyncData doesn't throw, it captures errors)
+  if (cancelStatus.value === 'error') {
+    console.error('Failed to cancel dinner')
+    return
   }
+
+  await refreshDinnerEventDetail() // Refresh page-owned data
+  toast.add({
+    title: 'Middag aflyst',
+    description: 'Fællesspisningen er blevet aflyst',
+    icon: ICONS.xMark,
+    color: COLOR.warning
+  })
+  // Refresh team data to show updated state in calendar
+  await usersStore.loadMyTeams()
 }
 
 useHead({
@@ -272,141 +329,139 @@ useHead({
 </script>
 
 <template>
-  <UPage>
+  <UPage :ui="LAYOUTS.masterDetailPage">
     <!-- Master: Team selector and calendar (left slot) -->
     <template #left>
-      <CalendarMasterPanel title="Mine Madhold">
-        <!-- Header: Team selector and status -->
-        <template #header>
-          <!-- Loading teams -->
-          <Loader v-if="isMyTeamsLoading" text="Henter dine madhold..." />
+        <CalendarMasterPanel title="Mine Madhold">
+          <!-- Header: Team selector and status -->
+          <template #header>
+            <!-- Loading teams -->
+            <Loader v-if="isMyTeamsLoading" text="Henter dine madhold..."/>
 
-          <!-- Error loading teams -->
-          <ViewError
-            v-else-if="isMyTeamsErrored"
-            :error="myTeamsError?.statusCode"
-            message="Vi kan ikke hente dine madhold. Prøv at genindlæse siden."
-            :cause="myTeamsError"
-          />
-
-          <!-- Team selector and status -->
-          <div v-else class="space-y-4">
-            <!-- Team selector (always visible, handles own empty state) -->
-            <MyTeamSelector
-              :model-value="selectedTeamId"
-              :teams="myTeams"
-              @update:model-value="setSelectedTeamId"
+            <!-- Error loading teams -->
+            <ViewError
+                v-else-if="isMyTeamsErrored"
+                :error="myTeamsError?.statusCode"
+                message="Vi kan ikke hente dine madhold. Prøv at genindlæse siden."
+                :cause="myTeamsError"
             />
 
-            <!-- Team role status -->
-            <TeamRoleStatus
-              v-if="selectedTeam && authStore.user?.Inhabitant?.id"
-              :team="selectedTeam"
-              :inhabitant-id="authStore.user.Inhabitant.id"
+            <!-- Team selector and status -->
+            <div v-else class="space-y-1 md:space-y-4">
+              <!-- Team selector (always visible, handles own empty state) -->
+              <MyTeamSelector
+                  :model-value="selectedTeamId"
+                  :teams="myTeams"
+                  @update:model-value="setSelectedTeamId"
+              />
+
+              <!-- Team role status -->
+              <TeamRoleStatus
+                  v-if="selectedTeam && authStore.user?.Inhabitant?.id"
+                  :team="selectedTeam"
+                  :inhabitant-id="authStore.user.Inhabitant.id"
+              />
+            </div>
+          </template>
+
+          <!-- Calendar: Team calendar with agenda/calendar views -->
+          <template #calendar>
+            <!-- Loading calendar -->
+            <div v-if="!isPlanStoreReady && !isPlanStoreErrored" >
+              <Loader text="Henter kalender..."/>
+            </div>
+
+            <!-- Error loading calendar -->
+            <ViewError
+                v-else-if="isPlanStoreErrored"
+                :error="planStoreError?.statusCode"
+                message="Vi kan ikke hente data til kalenderen. Prøv at genindlæse siden 🔃."
+                :cause="planStoreError"
             />
-          </div>
-        </template>
 
-        <!-- Calendar: Team calendar with agenda/calendar views -->
-        <template #calendar>
-          <!-- Loading calendar -->
-          <div v-if="!isPlanStoreReady && !isPlanStoreErrored" class="px-4">
-            <Loader text="Henter kalender..." />
-          </div>
+            <!-- No events for team -->
+            <UAlert
+                v-else-if="teamDinnerEvents.length === 0"
+                type="info"
+                variant="soft"
+                :color="COLOR.info"
+                :icon="ICONS.calendarDays"
+            >
+              <template #title>
+                Holdet har ingen fællesspisninger
+              </template>
+              <template #description>
+                Dette madhold har ikke fået ansvar for nogen fællesspisninger endnu.
+              </template>
+            </UAlert>
 
-          <!-- Error loading calendar -->
-          <ViewError
-            v-else-if="isPlanStoreErrored"
-            :error="planStoreError?.statusCode"
-            message="Vi kan ikke hente sæsondata for kalenderen. Prøv at genindlæse siden."
-            :cause="planStoreError"
-          />
-
-          <!-- No events for team -->
-          <UAlert
-            v-else-if="teamDinnerEvents.length === 0"
-            type="info"
-            variant="soft"
-            :color="COLOR.info"
-            :icon="ICONS.calendarDays"
-          >
-            <template #title>
-              Holdet har ingen fællesspisninger
-            </template>
-            <template #description>
-              Dette madhold har ikke fået ansvaret for nogen fællesspisninger endnu.
-            </template>
-          </UAlert>
-
-          <!-- Calendar display -->
-          <div v-else>
-            <ChefCalendarDisplay
-              v-if="selectedSeason && selectedTeam"
-              v-model:view-mode="calendarViewMode"
-              :season-dates="selectedSeason.seasonDates"
-              :team="selectedTeam"
-              :dinner-events="teamDinnerEvents"
-              :selected-dinner-id="selectedDinnerId"
-              :show-selection="true"
-              @select="handleDinnerSelect"
-            />
-          </div>
-        </template>
-      </CalendarMasterPanel>
+            <!-- Calendar display -->
+            <div v-else>
+              <ChefCalendarDisplay
+                  v-if="selectedSeason && selectedTeam"
+                  v-model:view-mode="calendarViewMode"
+                  v-model:accordion-open="calendarAccordionOpen"
+                  :season-dates="selectedSeason.seasonDates"
+                  :team="selectedTeam"
+                  :dinner-events="teamDinnerEvents"
+                  :selected-dinner-id="selectedDinnerId"
+                  :show-selection="true"
+                  @select="handleDinnerSelect"
+              />
+            </div>
+          </template>
+        </CalendarMasterPanel>
     </template>
 
     <!-- Detail: Dinner management (page owns data, passes directly to components) -->
     <DinnerDetailPanel
-      :dinner-event="dinnerEventDetail"
-      :ticket-prices="selectedSeason?.ticketPrices ?? []"
-      :is-loading="isDinnerDetailLoading"
-      :is-error="isDinnerDetailError"
-    >
-      <!-- #top: Header bar -->
-      <template #top>
-        <DinnerDetailHeader v-if="dinnerEventDetail" :dinner-event="dinnerEventDetail" />
-      </template>
-
-      <!-- #hero: ChefMenuCard with chef/view mode based on permissions -->
-      <template #hero>
-        <ChefMenuCard
-          v-if="dinnerEventDetail"
           :dinner-event="dinnerEventDetail"
-          :form-mode="chefFormMode"
-          :show-state-controls="true"
-          :show-allergens="true"
-          @update:form="handleFormUpdate"
-          @update:allergens="handleAllergenUpdate"
-          @advance-state="handleAdvanceState"
-          @cancel-dinner="handleCancelDinner"
-        />
-      </template>
-
-      <!-- #team: Cooking team -->
-      <template #team>
-        <template v-if="dinnerEventDetail">
-          <CookingTeamCard
-            v-if="dinnerEventDetail.cookingTeamId"
-            :team-id="dinnerEventDetail.cookingTeamId"
-            :team-number="dinnerEventDetail.cookingTeamId"
-            mode="monitor"
+          :ticket-prices="selectedSeason?.ticketPrices ?? []"
+          :is-loading="isDinnerDetailLoading"
+          :is-error="isDinnerDetailError"
+      >
+        <!-- #hero: ChefMenuCard with chef/view mode based on permissions -->
+        <template #hero>
+          <ChefMenuCard
+              v-if="dinnerEventDetail"
+              :dinner-event="dinnerEventDetail"
+              :form-mode="chefFormMode"
+              :show-state-controls="true"
+              :show-allergens="true"
+              :is-announcing="isAnnouncingDinner"
+              :is-cancelling="isCancellingDinner"
+              @update:form="handleFormUpdate"
+              @update:allergens="handleAllergenUpdate"
+              @advance-state="handleAdvanceState"
+              @cancel-dinner="handleCancelDinner"
           />
-          <UAlert
-            v-else
-            variant="soft"
-            :color="COLOR.neutral"
-            :icon="ICONS.userGroup"
-          >
-            <template #title>Intet madhold tildelt endnu</template>
-          </UAlert>
-          <WorkAssignment :dinner-event="dinnerEventDetail" />
         </template>
-      </template>
 
-      <!-- #stats: Kitchen statistics -->
-      <template #stats>
-        <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" />
-      </template>
-    </DinnerDetailPanel>
+        <!-- #team: Cooking team -->
+        <template #team>
+          <template v-if="dinnerEventDetail">
+            <CookingTeamCard
+                v-if="dinnerEventDetail.cookingTeamId"
+                :team-id="dinnerEventDetail.cookingTeamId"
+                :team-number="dinnerEventDetail.cookingTeamId"
+                mode="monitor"
+            />
+            <UAlert
+                v-else
+                variant="soft"
+                :color="COLOR.neutral"
+                :icon="ICONS.userGroup"
+            >
+              <template #title>Intet madhold tildelt endnu</template>
+            </UAlert>
+            <WorkAssignment :dinner-event="dinnerEventDetail"/>
+          </template>
+        </template>
+
+        <!-- #stats: Kitchen statistics -->
+        <template #stats>
+          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []"/>
+        </template>
+      </DinnerDetailPanel>
   </UPage>
 </template>

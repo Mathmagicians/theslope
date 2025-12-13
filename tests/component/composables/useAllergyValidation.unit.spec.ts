@@ -424,9 +424,9 @@ describe('useAllergyValidation', () => {
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.inhabitants).toHaveLength(2)
-                expect(result.data.inhabitants[0].householdId).toBe(1)
-                expect(result.data.inhabitants[0].allergyUpdatedAt).toBeInstanceOf(Date)
-                expect(result.data.inhabitants[1].inhabitantComment).toBe('Mild')
+                expect(result.data.inhabitants[0]!.householdId).toBe(1)
+                expect(result.data.inhabitants[0]!.allergyUpdatedAt).toBeInstanceOf(Date)
+                expect(result.data.inhabitants[1]!.inhabitantComment).toBe('Mild')
             }
         })
 
@@ -471,7 +471,7 @@ describe('useAllergyValidation', () => {
             const result = AllergyTypeDetailSchema.safeParse(allergyTypeWithStringDate)
             expect(result.success).toBe(true)
             if (result.success) {
-                expect(result.data.inhabitants[0].allergyUpdatedAt).toBeInstanceOf(Date)
+                expect(result.data.inhabitants[0]!.allergyUpdatedAt).toBeInstanceOf(Date)
             }
         })
 
@@ -547,8 +547,8 @@ describe('useAllergyValidation', () => {
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.allergies).toHaveLength(2)
-                expect(result.data.allergies[0].allergyType.name).toBe('Peanuts')
-                expect(result.data.allergies[1].allergyType.name).toBe('Gluten')
+                expect(result.data.allergies[0]!.allergyType.name).toBe('Peanuts')
+                expect(result.data.allergies[1]!.allergyType.name).toBe('Gluten')
             }
         })
 

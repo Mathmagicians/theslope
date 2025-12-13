@@ -4,21 +4,21 @@
  *
  * Compact mode (in ChefMenuCard summary line):
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ 💰 1.781 kr                                                              │
+ * │ 💰 1.425 kr                                                              │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Full mode (title + 3-box with expandable details):
  * Budget                                                                  [▼]
  * ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
  * │ 💰 INDTÆGTER       │  │ 🛒 RÅDIGHEDSBELØB  │  │ 🏠 KØKKENBIDRAG    │
- * │     1.875 kr       │  │     1.781 kr       │  │       94 kr        │
- * │  (45 billetter)    │  │   (inkl. moms)     │  │    (5% af salg)    │
+ * │     1.875 kr       │  │   1.425 kr ex moms │  │     75 kr ex moms  │
+ * │   45 billetter     │  │   1.781 kr inkl.   │  │     94 kr inkl.    │
  * └────────────────────┘  └────────────────────┘  └────────────────────┘
  *
  * [When expanded - ticket breakdown table + summary lines]
  *
  * Formula: Indtægter - Køkkenbidrag (5%) = Rådighedsbeløb
- *          Rådighedsbeløb / 1.25 = ex moms (for grocery shopping)
+ *          Amount / 1.25 = ex moms (for grocery shopping)
  * Config:  app.config.ts → theslope.kitchen.baseRatePercent=5, vatPercent=25
  *
  * Used in:
@@ -65,9 +65,9 @@ const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePerce
 const revenueByType = computed(() => {
   return groupByTicketType(activeOrders.value).map(group => ({
     ...group,
-    unitPrice: activeOrders.value.find(o => o.ticketPrice.ticketType === group.ticketType)?.priceAtBooking || 0,
+    unitPrice: activeOrders.value.find(o => o.ticketType === group.ticketType)?.priceAtBooking || 0,
     revenue: activeOrders.value
-      .filter(o => o.ticketPrice.ticketType === group.ticketType)
+      .filter(o => o.ticketType === group.ticketType)
       .reduce((sum, o) => sum + o.priceAtBooking, 0)
   }))
 })
@@ -105,30 +105,31 @@ const revenueByType = computed(() => {
             <span>💰</span>
             <span>INDTÆGTER</span>
           </div>
-          <div :class="`${TYPOGRAPHY.cardTitle} font-bold`">
+          <div :class="`${TYPOGRAPHY.cardTitle} font-bold text-success`">
             {{ formatPrice(budget.totalRevenue) }} kr
           </div>
           <div :class="`${TYPOGRAPHY.finePrint} opacity-60`">
-            ({{ budget.ticketCount }} billetter)
+            {{ budget.ticketCount }} billetter
           </div>
         </div>
       </UCard>
 
-      <!-- Box 2: Rådighedsbeløb (Available Budget) - shows both inkl. and ex moms -->
-      <UCard :ui="{ body: 'p-3' }" class="bg-success-50 dark:bg-success-950">
+      <!-- Box 2: Rådighedsbeløb (Available Budget) -->
+      <UCard :ui="{ body: 'p-3' }">
         <div class="text-center">
           <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
             <span>🛒</span>
             <span>RÅDIGHEDSBELØB</span>
           </div>
-          <div :class="`${TYPOGRAPHY.cardTitle} font-bold text-success`">
-            {{ formatPrice(budget.availableBudget) }} kr
+          <!-- Ex moms (largest, primary display) -->
+          <div>
+            <span :class="`${TYPOGRAPHY.cardTitle} font-bold text-xl text-success`">{{ formatPrice(budget.availableBudgetExVat) }} kr</span>
+            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> ex moms</span>
           </div>
-          <div :class="`${TYPOGRAPHY.finePrint} opacity-60`">
-            (inkl. moms)
-          </div>
-          <div :class="`${TYPOGRAPHY.finePrint} opacity-50 mt-1`">
-            {{ formatPrice(budget.availableBudgetExVat) }} kr ex moms
+          <!-- Inkl moms (secondary) -->
+          <div class="mt-1">
+            <span :class="`${TYPOGRAPHY.bodyTextSmall} text-success`">{{ formatPrice(budget.availableBudget) }} kr</span>
+            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> inkl. moms</span>
           </div>
         </div>
       </UCard>
@@ -140,11 +141,15 @@ const revenueByType = computed(() => {
             <span>🏠</span>
             <span>KØKKENBIDRAG</span>
           </div>
-          <div :class="`${TYPOGRAPHY.cardTitle} font-bold`">
-            {{ formatPrice(budget.kitchenContribution) }} kr
+          <!-- Ex moms (largest, primary display) -->
+          <div>
+            <span :class="`${TYPOGRAPHY.cardTitle} font-bold text-xl text-success`">{{ formatPrice(budget.kitchenContributionExVat) }} kr</span>
+            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> ex moms</span>
           </div>
-          <div :class="`${TYPOGRAPHY.finePrint} opacity-60`">
-            ({{ budget.kitchenBaseRatePercent }}% af salg)
+          <!-- Inkl moms (secondary) -->
+          <div class="mt-1">
+            <span :class="`${TYPOGRAPHY.bodyTextSmall} text-success`">{{ formatPrice(budget.kitchenContribution) }} kr</span>
+            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> inkl. moms</span>
           </div>
         </div>
       </UCard>

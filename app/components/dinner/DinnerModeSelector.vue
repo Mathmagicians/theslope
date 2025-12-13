@@ -30,11 +30,12 @@
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type Badge from '#ui/components/Badge.vue'
-import type Button from '#ui/components/Button.vue'
+import type {BadgeProps, ButtonProps} from '@nuxt/ui'
 
-type BadgeColor = Badge['variants']['color']
-type ButtonSize = Button['size']
+type BadgeColor = NonNullable<BadgeProps['color']>
+type BadgeVariant = NonNullable<BadgeProps['variant']>
+type ButtonSize = NonNullable<ButtonProps['size']>
+type ButtonVariant = NonNullable<ButtonProps['variant']>
 
 // Local styling constants (used only in this component)
 const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1'
@@ -83,9 +84,9 @@ const dinnerModeConfig: Record<DinnerMode, {
   label: string
   icon: string
   activeColor: BadgeColor
-  viewVariant: 'solid' | 'ghost' | 'outline'
-  editActiveVariant: 'solid' | 'ghost'
-  editInactiveVariant: 'solid' | 'ghost'
+  viewVariant: BadgeVariant
+  editActiveVariant: ButtonVariant
+  editInactiveVariant: ButtonVariant
 }> = {
   [DinnerMode.DINEIN]: {
     label: 'Fællesspisning',
@@ -93,7 +94,7 @@ const dinnerModeConfig: Record<DinnerMode, {
     activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
+    editInactiveVariant: 'soft'
   },
   [DinnerMode.DINEINLATE]: {
     label: 'Fællesspisning (sen)',
@@ -101,7 +102,7 @@ const dinnerModeConfig: Record<DinnerMode, {
     activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
+    editInactiveVariant: 'soft'
   },
   [DinnerMode.TAKEAWAY]: {
     label: 'Takeaway',
@@ -109,15 +110,15 @@ const dinnerModeConfig: Record<DinnerMode, {
     activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
+    editInactiveVariant: 'soft'
   },
   [DinnerMode.NONE]: {
     label: 'Ingen spisning',
     icon: 'i-heroicons-x-circle',
     activeColor: 'error',
-    viewVariant: 'ghost',
+    viewVariant: 'soft',
     editActiveVariant: 'solid',
-    editInactiveVariant: 'ghost'
+    editInactiveVariant: 'soft'
   }
 }
 
@@ -132,34 +133,34 @@ const dinnerMode = computed(() => props.modelValue as DinnerMode)
 
 // Get icon for current mode
 const getModeIcon = (): string => {
-  return dinnerModeConfig[dinnerMode.value].icon
+  return dinnerModeConfig[dinnerMode.value]!.icon
 }
 
 // Get badge color for VIEW mode
 const getBadgeColor = (): BadgeColor => {
-  return dinnerModeConfig[dinnerMode.value].activeColor
+  return dinnerModeConfig[dinnerMode.value]!.activeColor
 }
 
 // Get badge variant for VIEW mode
-const getBadgeVariant = (): 'solid' | 'ghost' | 'outline' => {
-  return dinnerModeConfig[dinnerMode.value].viewVariant
+const getBadgeVariant = (): BadgeVariant => {
+  return dinnerModeConfig[dinnerMode.value]!.viewVariant
 }
 
 // Get button color for EDIT mode (active vs inactive)
 const getButtonColor = (mode: DinnerMode): BadgeColor => {
   const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode].activeColor : 'neutral'
+  return isActive ? dinnerModeConfig[mode]!.activeColor : 'neutral'
 }
 
 // Get button variant for EDIT mode (active vs inactive)
-const getButtonVariant = (mode: DinnerMode): 'solid' | 'ghost' => {
+const getButtonVariant = (mode: DinnerMode): ButtonVariant => {
   const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode].editActiveVariant : dinnerModeConfig[mode].editInactiveVariant
+  return isActive ? dinnerModeConfig[mode]!.editActiveVariant : dinnerModeConfig[mode]!.editInactiveVariant
 }
 
 // Get mode label
 const getModeLabel = (): string => {
-  return dinnerModeConfig[dinnerMode.value].label
+  return dinnerModeConfig[dinnerMode.value]!.label
 }
 </script>
 
@@ -205,13 +206,13 @@ const getModeLabel = (): string => {
       <UButton
         v-for="mode in dinnerModeOrder"
         :key="mode"
-        :icon="dinnerModeConfig[mode].icon"
+        :icon="dinnerModeConfig[mode]!.icon"
         :color="getButtonColor(mode)"
         :variant="getButtonVariant(mode)"
         :disabled="disabled"
         :size="size"
         :name="`${name}-${mode}`"
-        :ui="{ rounded: 'rounded-none md:rounded-md' }"
+        class="rounded-none md:rounded-md"
         @click="updateMode(mode)"
       />
     </UFieldGroup>

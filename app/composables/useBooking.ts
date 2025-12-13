@@ -1,6 +1,9 @@
-import {useBookingValidation, type DinnerEventDisplay, type HeynaboEventCreate} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate} from '~/composables/useBookingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {calculateCountdown} from '~/utils/date'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {chunkArray} from '~/utils/batchUtils'
+import type {TransactionCreateData} from '~~/server/data/financesRepository'
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -44,10 +47,11 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
     [DinnerStepState.SCHEDULED]: {
         step: 0,
         title: 'Planlagt',
-        icon: 'i-heroicons-pencil-square',
-        text: 'Menu planlægges',
+        icon: ICONS.calendar,
+        text: 'Fællesspisningen er i kalenderen',
         getDeadline: (countdown, isPastMenuDeadline, thresholds) => {
             if (isPastMenuDeadline) return { description: 'Deadline overskredet', alarm: 2 }
+            if (countdown.hours <= 0) return { description: 'Deadline overskredet', alarm: 2 }
             if (countdown.hours < thresholds.critical) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 2 }
             if (countdown.hours < thresholds.warning) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 1 }
             return { description: 'Menu planlægges', alarm: 0 }
@@ -55,30 +59,30 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
     },
     [DinnerStepState.ANNOUNCED]: {
         step: 1,
-        title: 'Annonceret',
-        icon: 'i-heroicons-megaphone',
-        text: 'Tilmelding åben',
+        title: 'Publiceret',
+        icon: ICONS.megaphone,
+        text: 'Chefkokken har publiceret sin menu',
         getDeadline: countdownDeadline('Tilmelding lukker om', 'Booking åben')
     },
     [DinnerStepState.BOOKING_CLOSED]: {
         step: 2,
-        title: 'Tilmelding lukket',
-        icon: 'i-heroicons-lock-closed',
-        text: 'Lukket for nye tilmeldinger',
+        title: 'Lukket for ændringer',
+        icon: ICONS.ticket,
+        text: 'Man kan ikke længere framelde sig',
         getDeadline: staticDeadline('Bestillinger låst')
     },
     [DinnerStepState.GROCERIES_DONE]: {
         step: 3,
         title: 'Madbestilling klar',
-        icon: 'i-heroicons-shopping-cart',
+        icon: ICONS.shoppingCart,
         text: 'Chefkokken har bestilt madvarer',
         getDeadline: countdownDeadline('Middag om', 'Klar til madlavning')
     },
     [DinnerStepState.CONSUMED]: {
         step: 4,
         title: 'Afholdt',
-        icon: 'i-heroicons-face-smile',
-        text: 'Fællesspisning gennemført',
+        icon: ICONS.checkCircle,
+        text: 'Vi har spist den dejlige mad',
         getDeadline: staticDeadline('Fællesspisning')
     }
 }
@@ -175,12 +179,14 @@ export const useBooking = () => {
     }
 
     /**
-     * Event description template for Heynabo sync
+     * Event description template for Heynabo sync (HTML formatted)
+     * Format: Each emoji on its own line, URL as HTML link, signature at the end
      */
     const HEYNABO_EVENT_TEMPLATE = {
-        WARNING_HEADER: '🤖 Denne begivenhed synkroniseres fra skraaningen.dk\n⚠️ Ret ikke her - ændringer overskrives!\n\n',
-        BOOKING_LINK_PREFIX: '\n\n📅 Book din billet: ',
-        COOKING_TEAM_PREFIX: '\n\nMadhold: '
+        WARNING_ROBOT: '🤖 Denne begivenhed synkroniseres fra skraaningen.dk',
+        WARNING_EDIT: '⚠️ Ret ikke her - ændringer overskrives!',
+        BOOKING_EMOJI: '📅',
+        SIGNATURE_PREFIX: 'De bedste hilsner'
     }
 
     /**
@@ -197,25 +203,29 @@ export const useBooking = () => {
     /**
      * Transform a DinnerEvent to Heynabo event payload (ADR-013)
      *
-     * @param dinnerEvent - The dinner event to transform
+     * @param dinnerEvent - The dinner event to transform (DinnerEventDetail with cookingTeam)
      * @param baseUrl - Base URL for building dinner link (e.g., 'https://skraaningen.dk')
-     * @param cookingTeamName - Optional cooking team name
      * @returns Heynabo event create payload
      */
     const createHeynaboEventPayload = (
-        dinnerEvent: { date: Date; menuTitle: string; menuDescription: string | null },
-        baseUrl: string,
-        cookingTeamName?: string | null
+        dinnerEvent: DinnerEventDetail,
+        baseUrl: string
     ): HeynaboEventCreate => {
         const dinnerUrl = buildDinnerUrl(baseUrl, dinnerEvent.date)
 
-        // Build description with template
-        let description = HEYNABO_EVENT_TEMPLATE.WARNING_HEADER
-        description += dinnerEvent.menuDescription || dinnerEvent.menuTitle
-        description += HEYNABO_EVENT_TEMPLATE.BOOKING_LINK_PREFIX + dinnerUrl
-        if (cookingTeamName) {
-            description += HEYNABO_EVENT_TEMPLATE.COOKING_TEAM_PREFIX + cookingTeamName
-        }
+        // Build description with HTML formatting
+        // Each emoji on its own line, URL as clickable link, signature at the end
+        const lines = [
+            HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT,
+            HEYNABO_EVENT_TEMPLATE.WARNING_EDIT,
+            '',
+            dinnerEvent.menuDescription || dinnerEvent.menuTitle,
+            '',
+            `${HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI} <a href="${dinnerUrl}">Book din billet</a>`,
+            '',
+            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} // ${dinnerEvent.cookingTeam?.name || 'Køkkenholdet'}`
+        ]
+        const description = lines.join('<br>')
 
         // Use pre-configured getNextDinnerDate (duration already baked in from useSeason)
         // Same pattern as DinnerCalendarDisplay line 73
@@ -243,6 +253,24 @@ export const useBooking = () => {
         }
     }
 
+    // ============================================================================
+    // Daily Maintenance - Batch Configuration
+    // ============================================================================
+
+    // D1 constraint: updateMany uses ~2 params per ID + filter params
+    // Conservative: 40 IDs per batch for bulk state updates
+    const DINNER_BATCH_SIZE = 40
+
+    // Curried chunk function for dinner event IDs (used for bulk state updates)
+    const chunkDinnerIds = chunkArray<number>(DINNER_BATCH_SIZE)
+
+    // Transaction insert: 5 params (orderId, orderSnapshot, userSnapshot, amount, userEmailHandle)
+    // D1 max params: 100 / 5 = 20 transactions per batch
+    const TRANSACTION_BATCH_SIZE = 20
+
+    // Curried chunk function for transaction create data (used for bulk inserts)
+    const chunkTransactions = chunkArray<TransactionCreateData>(TRANSACTION_BATCH_SIZE)
+
     return {
         // Dinner step workflow
         getDinnerStepState,
@@ -253,6 +281,9 @@ export const useBooking = () => {
         // Heynabo sync
         buildDinnerUrl,
         createHeynaboEventPayload,
-        HEYNABO_EVENT_TEMPLATE
+        HEYNABO_EVENT_TEMPLATE,
+        // Daily Maintenance - chunk functions for batch operations
+        chunkDinnerIds,
+        chunkTransactions
     }
 }

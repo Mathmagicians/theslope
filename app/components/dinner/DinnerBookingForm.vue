@@ -49,7 +49,7 @@ householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
 // Design system
-const { COMPONENTS, SIZES, COLOR } = useTheSlopeDesignSystem()
+const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Ticket business logic
 const {getTicketTypeConfig} = useTicket()
@@ -62,25 +62,14 @@ const DinnerMode = DinnerModeSchema.enum
 const isPowerModeActive = ref(false)
 const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMode.DINEIN)
 
-// Funny empty state messages (rotates based on dinner event ID for consistency)
-const emptyStateMessages = [
-  { emoji: '👻', text: 'Husstanden er forsvundet i tågen' },
-  { emoji: '🏝️', text: 'Alle på ferie - ingen hjemme!' },
-  { emoji: '🎪', text: 'Familien er stukket af med cirkus' },
-  { emoji: '🧘', text: 'Familien mediterer i bjergene' },
-  { emoji: '🚀', text: 'Husstanden tog til månen... uden WiFi' }
-]
-const emptyStateMessage = computed(() => {
-  const id = props.dinnerEvent?.id || 0
-  const index = id % emptyStateMessages.length
-  return emptyStateMessages[index]
-})
+// Random fun empty state message from design system
+const emptyStateMessage = getRandomEmptyMessage('household')
 
-// UTable columns
+// UTable columns - 2 columns for mobile-friendly layout
+// Ticket type badge shown inline via UserListItem #badge slot
 const columns = [
-  {id: 'ticketType', header: 'Billet'},
-  {id: 'name', header: 'Navn'},
-  {id: 'mode', header: 'Booking'}
+  {id: 'name', header: 'Hvem'},
+  {id: 'mode', header: 'Tilmelding'}
 ]
 
 // Table data: inhabitants with their ticket configs and orders
@@ -198,26 +187,23 @@ const handlePowerModeUpdate = () => {
       :columns="columns"
       row-key="id"
     >
-      <!-- Ticket Type Column -->
-      <template #ticketType-cell="{ row }">
-        <UBadge
-          v-if="row.ticketConfig"
-          :color="row.ticketConfig.color"
-          variant="subtle"
-          size="sm"
-        >
-          {{ row.ticketConfig.label }}
-        </UBadge>
-        <span v-else class="text-gray-400 text-sm">-</span>
-      </template>
-
-      <!-- Name Column -->
+      <!-- Name Column - includes ticket type badge via #badge slot -->
       <template #name-cell="{ row }">
         <UserListItem
-          :inhabitants="row"
+          :inhabitants="row.original"
           compact
-          :property-check="() => false"
-        />
+        >
+          <template #badge>
+            <UBadge
+              v-if="row.original.ticketConfig"
+              :color="row.original.ticketConfig.color"
+              variant="subtle"
+              size="sm"
+            >
+              {{ row.original.ticketConfig.label }}
+            </UBadge>
+          </template>
+        </UserListItem>
       </template>
 
       <!-- Mode Column -->
@@ -225,22 +211,22 @@ const handlePowerModeUpdate = () => {
         <!-- VIEW mode: Show badge -->
         <DinnerModeSelector
           v-if="formMode === FORM_MODES.VIEW"
-          :model-value="row.dinnerMode"
+          :model-value="row.original.dinnerMode"
           :form-mode="FORM_MODES.VIEW"
           size="sm"
-          :name="`inhabitant-${row.id}-mode-view`"
+          :name="`inhabitant-${row.original.id}-mode-view`"
         />
 
         <!-- EDIT mode: Show selector + price -->
         <div v-else-if="formMode === FORM_MODES.EDIT" class="flex items-center gap-4">
           <DinnerModeSelector
-            :model-value="row.dinnerMode"
+            :model-value="row.original.dinnerMode"
             :form-mode="FORM_MODES.EDIT"
             size="sm"
-            :name="`inhabitant-${row.id}-mode-edit`"
-            @update:model-value="(mode) => emit('updateBooking', row.id, mode, row.order?.ticketPriceId ?? 0)"
+            :name="`inhabitant-${row.original.id}-mode-edit`"
+            @update:model-value="(mode) => emit('updateBooking', row.original.id, mode, row.original.order?.ticketPriceId ?? 0)"
           />
-          <span class="text-sm font-semibold whitespace-nowrap">{{ row.price }} kr</span>
+          <span :class="[TYPOGRAPHY.bodyTextMedium, 'whitespace-nowrap']">{{ row.original.price }} kr</span>
         </div>
       </template>
     </UTable>

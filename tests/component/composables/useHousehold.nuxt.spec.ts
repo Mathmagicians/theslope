@@ -126,7 +126,9 @@ describe('useHousehold', () => {
     describe('null handling in input preferences', () => {
       it('treats null preference values as DINEIN default', () => {
         const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        const prefs2 = createDefaultWeekdayMap([null, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
+        // Build a map with null in first position to test null handling
+        const prefs2Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
+        const prefs2 = {...prefs2Base, mandag: null as unknown as typeof DinnerMode.DINEIN}
 
         const inhabitants = [
           { dinnerPreferences: prefs1 },
@@ -142,8 +144,11 @@ describe('useHousehold', () => {
 
       it('returns DINEIN when null values cause mismatch with non-default', () => {
         const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        const prefs2 = createDefaultWeekdayMap([null, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        const prefs3 = createDefaultWeekdayMap([DinnerMode.DINEIN, null, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
+        // Build maps with null in specific positions to test null handling
+        const prefs2Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
+        const prefs2 = {...prefs2Base, mandag: null as unknown as typeof DinnerMode.DINEIN}
+        const prefs3Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
+        const prefs3 = {...prefs3Base, tirsdag: null as unknown as typeof DinnerMode.DINEIN}
 
         const inhabitants = [
           { dinnerPreferences: prefs1 },

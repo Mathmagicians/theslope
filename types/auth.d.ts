@@ -2,7 +2,7 @@
 // NOTE: Module augmentation with `extends` doesn't properly expand inherited properties.
 // See: https://github.com/atinux/nuxt-auth-utils/issues/422
 // SOLUTION: Use type casting in code where User properties are accessed
-// Example: const user = session.user as UserDetail & {passwordHash: string}
+// Example: const user = session.user as UserSession (from useCoreValidation)
 
 declare module '#auth-utils' {
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type

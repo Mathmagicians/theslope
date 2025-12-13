@@ -95,10 +95,10 @@ test.describe('Chef Dinner Allergens API', () => {
 
             // THEN: Response should contain allergens array with exact count
             expect(updatedDinner.allergens).toBeDefined()
-            expect(updatedDinner.allergens.length).toBe(allergyTypeIds.length)
+            expect(updatedDinner.allergens!.length).toBe(allergyTypeIds.length)
 
             // CRITICAL: Verify allergens have `id` NOT `allergyTypeId` (bug fix verification)
-            updatedDinner.allergens.forEach((allergen: Record<string, unknown>, index: number) => {
+            updatedDinner.allergens!.forEach((allergen: Record<string, unknown>, index: number) => {
                 expect(allergen.id, `Allergen ${index} should have id`).toBeDefined()
                 expect(typeof allergen.id).toBe('number')
                 expect(allergen.allergyTypeId, `Allergen ${index} should NOT have allergyTypeId`).toBeUndefined()
@@ -118,8 +118,9 @@ test.describe('Chef Dinner Allergens API', () => {
                 [singleAllergenId]
             )
 
-            expect(updatedDinner.allergens.length).toBe(1)
-            expect(updatedDinner.allergens[0].id).toBe(singleAllergenId)
+            expect(updatedDinner.allergens).toBeDefined()
+            expect(updatedDinner.allergens!.length).toBe(1)
+            expect(updatedDinner.allergens![0]!.id).toBe(singleAllergenId)
         })
 
         test('GIVEN allergens WHEN clearing THEN returns empty array', async ({browser}) => {
@@ -141,7 +142,8 @@ test.describe('Chef Dinner Allergens API', () => {
                 []
             )
 
-            expect(updatedDinner.allergens.length).toBe(0)
+            expect(updatedDinner.allergens).toBeDefined()
+            expect(updatedDinner.allergens!.length).toBe(0)
         })
     })
 
@@ -200,8 +202,9 @@ test.describe('Chef Dinner Allergens API', () => {
 
             // Verify allergens persist with correct structure
             expect(fetchedDinner).not.toBeNull()
-            expect(fetchedDinner!.allergens.length).toBe(2)
-            fetchedDinner!.allergens.forEach((allergen: Record<string, unknown>) => {
+            expect(fetchedDinner!.allergens).toBeDefined()
+            expect(fetchedDinner!.allergens!.length).toBe(2)
+            fetchedDinner!.allergens!.forEach((allergen: Record<string, unknown>) => {
                 expect(allergen.id, 'Should have id').toBeDefined()
                 expect(allergen.allergyTypeId, 'Should NOT have allergyTypeId').toBeUndefined()
             })

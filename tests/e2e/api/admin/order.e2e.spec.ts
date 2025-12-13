@@ -7,7 +7,7 @@ import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
 const { validatedBrowserContext, salt, headers } = testHelpers
-const { TicketTypeSchema } = useBookingValidation()
+const { TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
@@ -30,10 +30,10 @@ test.describe('Order API', () => {
       1
     )
     testHouseholdId = household.id
-    testInhabitantId = inhabitants[0].id
+    testInhabitantId = inhabitants[0]!.id
 
     const season = await SeasonFactory.createSeason(context)
-    testSeasonId = season.id
+    testSeasonId = season.id!
 
     const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
     const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
@@ -45,8 +45,8 @@ test.describe('Order API', () => {
     testAdultTicketPriceId = adultTicketPrice.id
     testChildTicketPriceId = childTicketPrice.id
 
-    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id)
-    testDinnerEventId = generatedEvents.events[0].id
+    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
+    testDinnerEventId = generatedEvents.events[0]!.id
   })
 
   test.afterAll(async ({ browser }) => {
@@ -74,59 +74,58 @@ test.describe('Order API', () => {
   test('PUT can create and GET can retrieve order with status 200/201', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const orders = await OrderFactory.createOrder(context, {
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })
 
-    expect(orders).toBeDefined()
-    expect(orders.length).toBeGreaterThan(0)
-    const order = orders[0]
-    expect(order).toBeDefined()
-    expect(order!.id).toBeDefined()
-    testOrderIds.push(order!.id)
+    expect(result.householdId).toBe(testHouseholdId)
+    expect(result.createdIds).toHaveLength(1)
+    const orderId = result.createdIds[0]!
+    testOrderIds.push(orderId)
 
-    expect(order!.dinnerEventId).toBe(testDinnerEventId)
-    expect(order!.inhabitantId).toBe(testInhabitantId)
-    expect(order!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
-    expect(order!.createdAt).toBeDefined()
-
-    const retrievedOrder = await OrderFactory.getOrder(context, order!.id)
+    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
 
     expect(retrievedOrder).toBeDefined()
-    expect(retrievedOrder!.id).toBe(order!.id)
+    expect(retrievedOrder!.id).toBe(orderId)
+    expect(retrievedOrder!.dinnerEventId).toBe(testDinnerEventId)
+    expect(retrievedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
+    expect(retrievedOrder!.createdAt).toBeDefined()
   })
 
   test('DELETE can remove existing order with status 200', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const orders = await OrderFactory.createOrder(context, {
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId
+          ticketPriceId: testChildTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })
-    expect(orders).toBeDefined()
-    expect(orders.length).toBeGreaterThan(0)
-    const order = orders[0]
-    expect(order).toBeDefined()
-    expect(order!.id).toBeDefined()
+    expect(result.createdIds).toHaveLength(1)
+    const orderId = result.createdIds[0]!
 
-    const deletedOrder = await OrderFactory.deleteOrder(context, order!.id)
+    const deletedOrder = await OrderFactory.deleteOrder(context, orderId)
 
     expect(deletedOrder).toBeDefined()
-    expect(deletedOrder!.id).toBe(order!.id)
+    expect(deletedOrder!.id).toBe(orderId)
 
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${order!.id}`)
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`)
     expect(response.status()).toBe(404)
   })
 
@@ -173,6 +172,7 @@ test.describe('Order API', () => {
     const context = await validatedBrowserContext(browser)
 
     const invalidData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -207,6 +207,7 @@ test.describe('Order API', () => {
     const inhabitant2 = await HouseholdFactory.createInhabitantForHousehold(context, household2.id, 'TestPerson2')
 
     const invalidData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -240,6 +241,7 @@ test.describe('Order API', () => {
     const context = await validatedBrowserContext(browser)
 
     const validData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -264,12 +266,14 @@ test.describe('Order API', () => {
 
     const errorBody = response.status() !== 201 ? await response.json() : null
     expect(response.status(), `Expected 201 but got ${response.status()}: ${JSON.stringify(errorBody)}`).toBe(201)
-    const createdOrders = await response.json()
-    expect(Array.isArray(createdOrders)).toBe(true)
-    expect(createdOrders.length).toBeGreaterThanOrEqual(2)
+    const result = await response.json()
 
-    for (const order of createdOrders) {
-      testOrderIds.push(order.id)
+    // CreateOrdersResult: { householdId, createdIds }
+    expect(result.householdId).toBe(testHouseholdId)
+    expect(result.createdIds).toHaveLength(2)
+
+    for (const id of result.createdIds) {
+      testOrderIds.push(id)
     }
   })
 })

@@ -4,8 +4,8 @@ const userName = process.env.HEY_NABO_USERNAME as string
 const password = process.env.HEY_NABO_PASSWORD as string
 const headers = {'Content-Type': 'application/json'}
 
-test.describe('POST /api/auth/login - UserWithInhabitant schema (ADR-009)', () => {
-    test('should return UserWithInhabitant with nested household', async ({request}) => {
+test.describe('POST /api/auth/login - UserDetail schema (ADR-009)', () => {
+    test('should return UserDetail with nested household', async ({request}) => {
         // Login returns user data directly
         const response = await request.post('/api/auth/login', {
             headers,

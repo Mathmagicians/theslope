@@ -43,9 +43,19 @@ export const useOrder = () => {
   }
 
   /**
+   * Get portions for a ticket type (simple mapping)
+   * ADULT=1, CHILD=0.5, BABY=0
+   */
+  const getPortionsForTicketType = (ticketType: typeof TicketType[keyof typeof TicketType]): number => {
+    if (ticketType === TicketType.ADULT) return 1
+    if (ticketType === TicketType.CHILD) return 0.5
+    return 0 // BABY
+  }
+
+  /**
    * Calculate portion count from ticket price
    * TODO: When portionSize field is added to TicketPrice model, use that instead
-   * For now: ADULT=1, CHILD=0.5, BABY=0 (but can add special cases like HUNGRY_BABY=0.25)
+   * For now: Uses getPortionsForTicketType with description overrides for special cases
    */
   const getPortionsForTicketPrice = (ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null }): number => {
     // Future: return ticketPrice.portionSize ?? 0
@@ -59,34 +69,32 @@ export const useOrder = () => {
       if (ticketPrice.ticketType === TicketType.CHILD) return 0.75
     }
 
-    // Default ticket type mapping
-    if (ticketPrice.ticketType === TicketType.ADULT) return 1
-    if (ticketPrice.ticketType === TicketType.CHILD) return 0.5
-    return 0 // BABY
+    // Default: delegate to simple ticket type mapping
+    return getPortionsForTicketType(ticketPrice.ticketType)
   }
 
   /**
-   * Calculate total portions from orders with ticket prices (more accurate)
-   * Uses ticket price-specific portion sizes (supports HUNGRY_BABY, etc.)
-   * Requires OrderDetail (with nested ticketPrice relation)
+   * Calculate total portions from orders
+   * Uses order.ticketType (priceAtBooking preserves the price)
    */
   const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number => {
     return orders.reduce((sum, order) => {
-      return sum + getPortionsForTicketPrice(order.ticketPrice)
+      return sum + (order.ticketType ? getPortionsForTicketType(order.ticketType) : 0)
     }, 0)
   }
 
   /**
    * Group orders by ticket type with counts and portions
-   * Returns dynamic breakdown - no hardcoded ticket types
-   * Requires OrderDetail (with nested ticketPrice relation)
+   * Uses order.ticketType (priceAtBooking preserves the price)
    */
   const groupByTicketType = (orders: OrderDetail[]) => {
     const groups = new Map<string, { ticketType: string, count: number, portions: number, descriptions: Map<string, number> }>()
 
     orders.forEach(order => {
-      const ticketType = order.ticketPrice.ticketType
-      const description = order.ticketPrice.description || 'Standard'
+      const ticketType = order.ticketType
+      if (!ticketType) return
+
+      const description = order.ticketPrice?.description || 'Standard'
 
       if (!groups.has(ticketType)) {
         groups.set(ticketType, {
@@ -99,7 +107,7 @@ export const useOrder = () => {
 
       const group = groups.get(ticketType)!
       group.count++
-      group.portions += getPortionsForTicketPrice(order.ticketPrice)
+      group.portions += getPortionsForTicketType(ticketType)
 
       const currentCount = group.descriptions.get(description) || 0
       group.descriptions.set(description, currentCount + 1)
@@ -147,15 +155,17 @@ export const useOrder = () => {
     const ticketCount = activeOrders.length
     const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
+    const kitchenContributionExVat = convertVat(kitchenContribution, vatPercent, true)
     const availableBudget = totalRevenue - kitchenContribution
     const availableBudgetExVat = convertVat(availableBudget, vatPercent, true)
 
     return {
       ticketCount,
       totalRevenue,
-      kitchenContribution,
-      availableBudget,        // inkl. moms
-      availableBudgetExVat,   // ex moms (for grocery shopping)
+      kitchenContribution,        // inkl. moms
+      kitchenContributionExVat,   // ex moms
+      availableBudget,            // inkl. moms
+      availableBudgetExVat,       // ex moms (for grocery shopping)
       kitchenBaseRatePercent,
       vatPercent
     }

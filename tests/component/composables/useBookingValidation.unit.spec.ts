@@ -2,9 +2,10 @@ import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema} from '~~/prisma/generated/zod'
+import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} from '~~/prisma/generated/zod'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import type {SafeParseReturnType} from 'zod'
 
 const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
@@ -23,11 +24,15 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     CreateOrdersRequestSchema,
-    OrderHistorySchema,
+    OrderHistoryDisplaySchema,
+    OrderHistoryDetailSchema,
+    OrderHistoryCreateSchema,
+    OrderSnapshotSchema,
+    createOrderAuditData,
     serializeOrder,
     deserializeOrder,
-    serializeOrderHistory,
-    deserializeOrderHistory,
+    serializeOrderHistoryDisplay,
+    deserializeOrderHistoryDisplay,
     deserializeDinnerEvent,
     deserializeDinnerEventDetail
   } = useBookingValidation()
@@ -227,21 +232,163 @@ describe('useBookingValidation', () => {
 
     })
 
-    describe('OrderHistorySchema', () => {
-      it('GIVEN valid history WHEN parsing THEN succeeds', () => {
-        const validHistory = OrderFactory.defaultOrderHistory()
-        const result = OrderHistorySchema.safeParse(validHistory)
+    describe.each([
+      {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
+      {name: 'OrderHistoryDetailSchema', schema: OrderHistoryDetailSchema, factory: () => OrderFactory.defaultOrderHistoryDetail()},
+      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()}
+    ])('$name', ({schema, factory}) => {
+      it('GIVEN valid data WHEN parsing THEN succeeds', () => {
+        const result = schema.safeParse(factory())
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderStateSchema.options.map(action => ({action})))(
+      it.each(OrderAuditActionSchema.options.map(action => ({action})))(
         'GIVEN action $action WHEN parsing THEN succeeds',
-        ({action}: {action: z.infer<typeof OrderStateSchema>}) => {
-          const history = OrderFactory.defaultOrderHistory(undefined, {action})
-          const result = OrderHistorySchema.safeParse(history)
+        ({action}) => {
+          const result = schema.safeParse({...factory(), action})
           expect(result.success, getValidationError(result)).toBe(true)
         }
       )
+    })
+
+    describe('OrderHistoryDetailSchema nullable order', () => {
+      it('GIVEN null order WHEN parsing THEN succeeds', () => {
+        const result = OrderHistoryDetailSchema.safeParse(OrderFactory.defaultOrderHistoryDetail(undefined, {order: null}))
+        expect(result.success, getValidationError(result)).toBe(true)
+      })
+    })
+
+    describe('OrderSnapshotSchema', () => {
+      it('GIVEN valid snapshot WHEN parsing THEN succeeds', () => {
+        const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot())
+        expect(result.success, getValidationError(result)).toBe(true)
+      })
+
+      it.each(OrderStateSchema.options.map(state => ({state})))(
+        'GIVEN state $state WHEN parsing THEN succeeds',
+        ({state}) => {
+          const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot({state}))
+          expect(result.success, getValidationError(result)).toBe(true)
+        }
+      )
+    })
+
+    describe('createOrderAuditData', () => {
+      it('GIVEN snapshot WHEN creating audit data THEN returns valid JSON string', () => {
+        const snapshot = OrderFactory.defaultOrderSnapshot()
+        const auditData = createOrderAuditData(snapshot)
+        expect(typeof auditData).toBe('string')
+        const parsed = JSON.parse(auditData)
+        expect(parsed.orderSnapshot).toEqual(snapshot)
+      })
+    })
+  })
+
+  describe('Orders Creation (Batch)', () => {
+    const {
+      OrderAuditActionSchema,
+      AuditContextSchema,
+      OrderCreateWithPriceSchema,
+      OrdersBatchSchema,
+      CreateOrdersResultSchema,
+      ORDER_BATCH_SIZE
+    } = useBookingValidation()
+
+    describe('OrderAuditActionSchema', () => {
+      it.each(OrderAuditActionSchema.options.map(a => ({action: a})))(
+        'GIVEN $action WHEN parsing THEN succeeds',
+        ({action}) => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow()
+      )
+
+      it('GIVEN invalid action WHEN parsing THEN throws', () => {
+        expect(() => OrderAuditActionSchema.parse('INVALID')).toThrow()
+      })
+    })
+
+    describe('AuditContextSchema', () => {
+      it.each([
+        {desc: 'with userId', ctx: OrderFactory.defaultAuditContext()},
+        {desc: 'null userId (system)', ctx: OrderFactory.defaultAuditContext({performedByUserId: null})}
+      ])('GIVEN valid context $desc WHEN parsing THEN succeeds', ({ctx}) => {
+        expect(() => AuditContextSchema.parse(ctx)).not.toThrow()
+      })
+
+      it('GIVEN empty source WHEN parsing THEN throws', () => {
+        expect(() => AuditContextSchema.parse(OrderFactory.defaultAuditContext({source: ''}))).toThrow()
+      })
+    })
+
+    describe('OrderCreateWithPriceSchema', () => {
+      it('GIVEN valid order WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(OrderFactory.defaultOrderCreateWithPrice())).not.toThrow()
+      })
+
+      it.each([
+        {field: 'householdId' as const, desc: 'missing householdId'},
+        {field: 'priceAtBooking' as const, desc: 'missing priceAtBooking'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({field}) => {
+        const order = OrderFactory.defaultOrderCreateWithPrice()
+        const {[field]: _removed, ...orderWithoutField} = order
+        expect(() => OrderCreateWithPriceSchema.parse(orderWithoutField)).toThrow()
+      })
+
+      it('GIVEN negative priceAtBooking WHEN parsing THEN throws', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: -100})
+        )).toThrow()
+      })
+
+      it('GIVEN zero priceAtBooking (free ticket) WHEN parsing THEN succeeds', () => {
+        expect(() => OrderCreateWithPriceSchema.parse(
+          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: 0})
+        )).not.toThrow()
+      })
+    })
+
+    describe('OrdersBatchSchema', () => {
+      it.each([
+        {count: 1, desc: 'min'},
+        {count: ORDER_BATCH_SIZE, desc: 'max'}
+      ])('GIVEN batch of $desc ($count) orders WHEN parsing THEN succeeds', ({count}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).not.toThrow()
+      })
+
+      it.each([
+        {count: 0, desc: 'empty', errorMatch: /Mindst én/},
+        {count: ORDER_BATCH_SIZE + 1, desc: 'exceeds max', errorMatch: /Maksimalt/}
+      ])('GIVEN $desc batch WHEN parsing THEN throws', ({count, errorMatch}) => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).toThrow(errorMatch)
+      })
+
+      it('GIVEN batch with same householdId WHEN parsing THEN succeeds', () => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(42, 3))).not.toThrow()
+      })
+
+      it('GIVEN batch with different householdIds WHEN parsing THEN throws', () => {
+        const mixedBatch = [
+          OrderFactory.defaultOrderCreateWithPrice(1),
+          OrderFactory.defaultOrderCreateWithPrice(2)
+        ]
+        expect(() => OrdersBatchSchema.parse(mixedBatch)).toThrow(/samme husstand/)
+      })
+    })
+
+    describe('CreateOrdersResultSchema', () => {
+      it.each([
+        {result: OrderFactory.defaultCreateOrdersResult(), desc: 'with ids'},
+        {result: OrderFactory.defaultCreateOrdersResult({createdIds: []}), desc: 'empty ids'}
+      ])('GIVEN valid result $desc WHEN parsing THEN succeeds', ({result}) => {
+        expect(() => CreateOrdersResultSchema.parse(result)).not.toThrow()
+      })
+
+      it.each([
+        {override: {householdId: 0}, desc: 'zero householdId'},
+        {override: {householdId: -1}, desc: 'negative householdId'},
+        {override: {createdIds: [0]}, desc: 'zero in createdIds'},
+        {override: {createdIds: [-1]}, desc: 'negative in createdIds'}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
+        expect(() => CreateOrdersResultSchema.parse(OrderFactory.defaultCreateOrdersResult(override))).toThrow()
+      })
     })
   })
 
@@ -281,44 +428,47 @@ describe('useBookingValidation', () => {
       )
     })
 
-    describe('serializeOrderHistory / deserializeOrderHistory', () => {
+    describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {
       it('GIVEN history WHEN round-tripping THEN preserves data', () => {
-        const originalHistory = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(originalHistory)
-        const deserialized = deserializeOrderHistory(serialized)
+        const originalHistory = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(originalHistory)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized).toEqual(originalHistory)
       })
 
       it('GIVEN history WHEN serializing THEN converts timestamp to string', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
         expect(typeof serialized.timestamp).toBe('string')
       })
 
       it('GIVEN serialized history WHEN deserializing THEN converts to Date', () => {
-        const history = OrderFactory.defaultOrderHistory()
-        const serialized = serializeOrderHistory(history)
-        const deserialized = deserializeOrderHistory(serialized)
+        const history = OrderFactory.defaultOrderHistoryDisplay()
+        const serialized = serializeOrderHistoryDisplay(history)
+        const deserialized = deserializeOrderHistoryDisplay(serialized)
         expect(deserialized.timestamp).toBeInstanceOf(Date)
       })
     })
 
     describe('deserializeDinnerEvent', () => {
       it('GIVEN allergens as join table WHEN deserializing THEN flattens to array', () => {
+        const mockAllergyTypes = AllergyFactory.createMockAllergyTypes()
         const prismaEvent = {
-          id: 1,
-          allergens: [
-            {allergyType: {id: 1, name: 'Gluten'}},
-            {allergyType: {id: 2, name: 'Dairy'}}
-          ]
+          ...DinnerEventFactory.defaultDinnerEventDisplay(),
+          allergens: mockAllergyTypes.map(at => ({allergyType: at}))
         }
         const result = deserializeDinnerEvent(prismaEvent)
+        expect(result.allergens).toBeDefined()
         expect(result.allergens).toHaveLength(2)
-        expect(result.allergens[0]).toEqual({id: 1, name: 'Gluten'})
+        expect(result.allergens![0]).toEqual(mockAllergyTypes[0])
       })
 
       it('GIVEN null allergens WHEN deserializing THEN returns empty array', () => {
-        const result = deserializeDinnerEvent({id: 1, allergens: null})
+        const prismaEvent = {
+          ...DinnerEventFactory.defaultDinnerEventDisplay(),
+          allergens: null
+        }
+        const result = deserializeDinnerEvent(prismaEvent)
         expect(result.allergens).toEqual([])
       })
     })
@@ -376,7 +526,8 @@ describe('useBookingValidation', () => {
           }),
           assertion: (result: Record<string, unknown>) => {
             const tickets = result.tickets as Array<Record<string, unknown>>
-            const inhabitant = tickets[0].inhabitant as Record<string, unknown>
+            expect(tickets[0]).toBeDefined()
+            const inhabitant = tickets[0]!.inhabitant as Record<string, unknown>
             expect(typeof inhabitant.dinnerPreferences).toBe('object')
             expect(inhabitant.dinnerPreferences).toHaveProperty('mandag')
           }
@@ -384,6 +535,149 @@ describe('useBookingValidation', () => {
       ])('GIVEN $desc WHEN deserializing THEN converts JSON strings to objects', ({input, assertion}) => {
         const result = deserializeDinnerEventDetail(input())
         assertion(result)
+      })
+    })
+  })
+
+  describe('Daily Maintenance Result Schemas', () => {
+    const {
+      ConsumeResultSchema,
+      CloseOrdersResultSchema,
+      CreateTransactionsResultSchema,
+      DailyMaintenanceResultSchema,
+      ScaffoldResultSchema
+    } = useBookingValidation()
+
+    describe('ConsumeResultSchema', () => {
+      it.each([
+        {consumed: 0},
+        {consumed: 5},
+        {consumed: 100}
+      ])('GIVEN valid consumed count $consumed WHEN parsing THEN succeeds', (data) => {
+        expect(() => ConsumeResultSchema.parse(data)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'negative consumed', data: {consumed: -1}},
+        {desc: 'missing consumed', data: {}},
+        {desc: 'non-integer consumed', data: {consumed: 1.5}},
+        {desc: 'string consumed', data: {consumed: 'five'}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => ConsumeResultSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('CloseOrdersResultSchema', () => {
+      it.each([
+        {closed: 0},
+        {closed: 10},
+        {closed: 500}
+      ])('GIVEN valid closed count $closed WHEN parsing THEN succeeds', (data) => {
+        expect(() => CloseOrdersResultSchema.parse(data)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'negative closed', data: {closed: -5}},
+        {desc: 'missing closed', data: {}},
+        {desc: 'non-integer closed', data: {closed: 2.5}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => CloseOrdersResultSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('CreateTransactionsResultSchema', () => {
+      it.each([
+        {created: 0},
+        {created: 25},
+        {created: 1000}
+      ])('GIVEN valid created count $created WHEN parsing THEN succeeds', (data) => {
+        expect(() => CreateTransactionsResultSchema.parse(data)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'negative created', data: {created: -10}},
+        {desc: 'missing created', data: {}},
+        {desc: 'non-integer created', data: {created: 3.7}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => CreateTransactionsResultSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('ScaffoldResultSchema', () => {
+      const validScaffoldResult = {
+        seasonId: 1,
+        created: 10,
+        deleted: 2,
+        unchanged: 50,
+        households: 5
+      }
+
+      it('GIVEN valid scaffold result WHEN parsing THEN succeeds', () => {
+        expect(() => ScaffoldResultSchema.parse(validScaffoldResult)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'zero counts', data: {seasonId: 1, created: 0, deleted: 0, unchanged: 0, households: 0}},
+        {desc: 'large counts', data: {seasonId: 99, created: 1000, deleted: 500, unchanged: 2000, households: 100}}
+      ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
+        expect(() => ScaffoldResultSchema.parse(data)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'missing seasonId', data: {created: 10, deleted: 2, unchanged: 50, households: 5}},
+        {desc: 'negative created', data: {...validScaffoldResult, created: -1}},
+        {desc: 'non-integer deleted', data: {...validScaffoldResult, deleted: 1.5}},
+        {desc: 'zero seasonId', data: {...validScaffoldResult, seasonId: 0}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => ScaffoldResultSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('DailyMaintenanceResultSchema', () => {
+      const validResult = {
+        jobRunId: 42,
+        consume: {consumed: 5},
+        close: {closed: 10},
+        transact: {created: 8},
+        scaffold: {seasonId: 1, created: 20, deleted: 0, unchanged: 100, households: 10}
+      }
+
+      it('GIVEN valid maintenance result WHEN parsing THEN succeeds', () => {
+        const result = DailyMaintenanceResultSchema.parse(validResult)
+        expect(result.jobRunId).toBe(42)
+        expect(result.consume.consumed).toBe(5)
+        expect(result.close.closed).toBe(10)
+        expect(result.transact.created).toBe(8)
+        expect(result.scaffold?.seasonId).toBe(1)
+      })
+
+      it('GIVEN null scaffold (no active season) WHEN parsing THEN succeeds', () => {
+        const resultWithNullScaffold = {...validResult, scaffold: null}
+        const result = DailyMaintenanceResultSchema.parse(resultWithNullScaffold)
+        expect(result.scaffold).toBeNull()
+      })
+
+      it('GIVEN all zero counts WHEN parsing THEN succeeds (idempotent run)', () => {
+        const idempotentResult = {
+          jobRunId: 99,
+          consume: {consumed: 0},
+          close: {closed: 0},
+          transact: {created: 0},
+          scaffold: {seasonId: 1, created: 0, deleted: 0, unchanged: 150, households: 15}
+        }
+        expect(() => DailyMaintenanceResultSchema.parse(idempotentResult)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'missing jobRunId', data: {consume: {consumed: 0}, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing consume', data: {jobRunId: 1, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing close', data: {jobRunId: 1, consume: {consumed: 0}, transact: {created: 0}, scaffold: null}},
+        {desc: 'missing transact', data: {jobRunId: 1, consume: {consumed: 0}, close: {closed: 0}, scaffold: null}},
+        {desc: 'invalid jobRunId', data: {...validResult, jobRunId: 0}},
+        {desc: 'invalid consume', data: {...validResult, consume: {consumed: -1}}},
+        {desc: 'invalid scaffold', data: {...validResult, scaffold: {seasonId: 0}}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => DailyMaintenanceResultSchema.parse(data)).toThrow()
       })
     })
   })

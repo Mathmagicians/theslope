@@ -12,6 +12,7 @@
  */
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
+import type { TeamColor } from '~/composables/useCookingTeam'
 
 interface Inhabitant {
   id: number
@@ -19,7 +20,7 @@ interface Inhabitant {
   lastName: string
   pictureUrl: string | null
   CookingTeamAssignment?: Array<{
-    id: number
+    id?: number
     role: TeamRole
     cookingTeamId: number
     cookingTeam: {
@@ -32,7 +33,7 @@ interface Inhabitant {
 interface Props {
   teamId: number
   teamName: string
-  teamColor: string   // For color matching
+  teamColor: TeamColor   // For color matching
   teams?: Array<{ id: number, name: string }>  // All teams in season for lookup
 }
 
@@ -44,7 +45,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { SIZES, PAGINATION } = useTheSlopeDesignSystem()
+const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Business logic: Fetch inhabitants with assignments (ADR-009 compliant)
 const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
@@ -170,9 +171,9 @@ const sorting = ref([
   }
 ])
 
-// Toggle sort order
+// Toggle sort order (sorting always has exactly one element)
 const toggleSortOrder = () => {
-  sorting.value[0].desc = !sorting.value[0].desc
+  sorting.value[0]!.desc = !sorting.value[0]!.desc
 }
 
 // Pagination
@@ -201,8 +202,9 @@ const table = useTemplateRef('table')
           placeholder="Søg efter navn..."
           class="flex-1 md:max-w-md"
       />
-      <!-- Pagination -->
+      <!-- Pagination - only show when more than one page -->
       <UPagination
+          v-if="(table?.tableApi?.getFilteredRowModel().rows.length || 0) > pagination.pageSize"
           :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
           :items-per-page="table?.tableApi?.getState().pagination.pageSize"
           :total="table?.tableApi?.getFilteredRowModel().rows.length"
@@ -221,7 +223,7 @@ const table = useTemplateRef('table')
         :columns="columns"
         :data="filteredInhabitants"
         :loading="pending"
-        :ui="{ td: 'py-2' }"
+        :ui="COMPONENTS.table.ui"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"
@@ -237,7 +239,7 @@ const table = useTemplateRef('table')
         >
           <template #leading>
             <UIcon
-                :name="sorting[0].desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+                :name="sorting[0]!.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
                 :size="SIZES.standardIconSize"
             />
           </template>
@@ -249,7 +251,7 @@ const table = useTemplateRef('table')
       <template #name-cell="{ row }">
         <div class="flex items-center gap-3">
           <UAvatar
-              :src="row.original.pictureUrl"
+              :src="row.original.pictureUrl ?? undefined"
               :alt="`${row.original.name} ${row.original.lastName}`"
               icon="i-heroicons-user"
               size="sm"
@@ -283,32 +285,35 @@ const table = useTemplateRef('table')
       <!-- Actions column with role buttons or remove button -->
       <template #actions-cell="{ row }">
         <template v-for="(info, idx) in [getTeamInfo(row.original)]" :key="idx">
-          <div v-if="info.type === 'available'" class="flex gap-1">
+          <UFieldGroup v-if="info.type === 'available'" orientation="horizontal" class="gap-1">
             <UButton
                 color="primary"
                 size="xs"
-                icon="i-heroicons-plus"
                 @click="handleAddMember(row.original.id, Role.CHEF)"
             >
-              Chef
+              <template #leading>👨‍🍳</template>
+              Chefkok
+              <template #trailing><UIcon name="i-heroicons-plus" /></template>
             </UButton>
             <UButton
                 color="primary"
                 size="xs"
-                icon="i-heroicons-plus"
                 @click="handleAddMember(row.original.id, Role.COOK)"
             >
+              <template #leading>👥</template>
               Kok
+              <template #trailing><UIcon name="i-heroicons-plus" /></template>
             </UButton>
             <UButton
                 color="primary"
                 size="xs"
-                icon="i-heroicons-plus"
                 @click="handleAddMember(row.original.id, Role.JUNIORHELPER)"
             >
-              Spire
+              <template #leading>🌱</template>
+              Kokkespire
+              <template #trailing><UIcon name="i-heroicons-plus" /></template>
             </UButton>
-          </div>
+          </UFieldGroup>
           <UButton
               v-else-if="info.type === 'current'"
               color="error"

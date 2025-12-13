@@ -88,7 +88,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         if (existingAssignment) {
             // Update role to specified role
             // ADR-010: Repository handles domain types and serialization
-            await updateTeamAssignment(d1Client, existingAssignment.id, {
+            await updateTeamAssignment(d1Client, existingAssignment.id!, {
                 role: assignData.role
             })
             console.info(`${PREFIX} Updated existing assignment ${existingAssignment.id} to ${assignData.role} role`)

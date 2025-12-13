@@ -149,7 +149,7 @@ describe('useCookingTeam', () => {
       const annaResult = inhabitants.value?.find(i => i.id === 1)
       expect(annaResult).toBeDefined()
       expect(annaResult!.CookingTeamAssignment).toHaveLength(1)
-      expect(annaResult!.CookingTeamAssignment[0]).toMatchObject({
+      expect(annaResult!.CookingTeamAssignment![0]).toMatchObject({
         id: 101,
         role: 'CHEF',
         cookingTeamId: 1,
@@ -161,7 +161,7 @@ describe('useCookingTeam', () => {
       const bobResult = inhabitants.value?.find(i => i.id === 2)
       expect(bobResult).toBeDefined()
       expect(bobResult!.CookingTeamAssignment).toHaveLength(1)
-      expect(bobResult!.CookingTeamAssignment[0]).toMatchObject({
+      expect(bobResult!.CookingTeamAssignment![0]).toMatchObject({
         id: 102,
         role: 'COOK',
         cookingTeamId: 2,

@@ -73,7 +73,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 const testSalt = temporaryAndRandom()
 
                 // Create cooking team for the test season
-                const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id, salt('Team', testSalt))
+                const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('Team', testSalt))
                 expect(team.id).toBeDefined()
 
                 // Create inhabitant for role assignment
@@ -92,7 +92,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 // Create dinner event assigned to the team (no chef yet)
                 const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
                     context,
-                    testSeason.id,
+                    testSeason.id!,
                     { chefId: null, cookingTeamId: team.id }
                 )
                 expect(dinnerEvent.id).toBeDefined()
@@ -115,15 +115,16 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 }
 
                 // Verify CookingTeamAssignment was created with correct role
-                const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id)
-                expect(teamWithAssignments.assignments).toBeDefined()
+                const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id!)
+                expect(teamWithAssignments).not.toBeNull()
+                expect(teamWithAssignments!.assignments).toBeDefined()
 
-                const assignment = teamWithAssignments.assignments.find(
-                    (a: unknown) => a.inhabitantId === inhabitant.id
+                const assignment = teamWithAssignments!.assignments.find(
+                    (a) => a.inhabitantId === inhabitant.id
                 )
                 expect(assignment, `${role} assignment should exist`).toBeDefined()
-                expect(assignment.role, `Assignment role should be ${role}`).toBe(role)
-                expect(assignment.cookingTeamId, 'Assignment should reference correct team').toBe(team.id)
+                expect(assignment!.role, `Assignment role should be ${role}`).toBe(role)
+                expect(assignment!.cookingTeamId, 'Assignment should reference correct team').toBe(team.id)
             })
         })
 
@@ -132,7 +133,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
             const testSalt = temporaryAndRandom()
 
             // Create cooking team
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id, salt('Team', testSalt))
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('Team', testSalt))
 
             // Create inhabitant
             const household = await HouseholdFactory.createHousehold(context, {
@@ -149,16 +150,17 @@ test.describe('DinnerEvent API - Assign Role', () => {
             // Create existing assignment with COOK role
             const existingAssignment = await SeasonFactory.assignMemberToTeam(
                 context,
-                team.id,
+                team.id!,
                 inhabitant.id,
                 TeamRole.COOK
             )
-            expect(existingAssignment.role, 'Initial role should be COOK').toBe(TeamRole.COOK)
+            expect(existingAssignment).not.toBeNull()
+            expect(existingAssignment!.role, 'Initial role should be COOK').toBe(TeamRole.COOK)
 
             // Create dinner event
             const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
                 context,
-                testSeason.id,
+                testSeason.id!,
                 { chefId: null, cookingTeamId: team.id }
             )
 
@@ -171,12 +173,13 @@ test.describe('DinnerEvent API - Assign Role', () => {
             )
 
             // Verify role was updated to CHEF
-            const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id)
-            const chefAssignment = teamWithAssignments.assignments.find(
-                (a: unknown) => a.inhabitantId === inhabitant.id
+            const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id!)
+            expect(teamWithAssignments).not.toBeNull()
+            const chefAssignment = teamWithAssignments!.assignments.find(
+                (a) => a.inhabitantId === inhabitant.id
             )
             expect(chefAssignment, 'Assignment should exist').toBeDefined()
-            expect(chefAssignment.role, 'Role should be updated to CHEF').toBe(TeamRole.CHEF)
+            expect(chefAssignment!.role, 'Role should be updated to CHEF').toBe(TeamRole.CHEF)
         })
 
         test('GIVEN dinner event with no cooking team WHEN assigning role THEN returns 400 error', async ({ browser }) => {
@@ -198,7 +201,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
             // Create dinner event without cooking team
             const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
                 context,
-                testSeason.id,
+                testSeason.id!,
                 { chefId: null, cookingTeamId: null }
             )
 
@@ -244,11 +247,11 @@ test.describe('DinnerEvent API - Assign Role', () => {
             const testSalt = temporaryAndRandom()
 
             // Create cooking team and dinner event
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id, salt('Team', testSalt))
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('Team', testSalt))
 
             const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
                 context,
-                testSeason.id,
+                testSeason.id!,
                 { chefId: null, cookingTeamId: team.id }
             )
 

@@ -38,7 +38,7 @@ export const useSeasonValidation = () => {
     })
     const {DinnerEventDisplaySchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
-    const {deserializeCookingTeam, CookingTeamDisplaySchema} = useCookingTeamValidation()
+    const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema} = useCookingTeamValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -121,7 +121,7 @@ export const useSeasonValidation = () => {
                 // Parse dinner events to ensure dates are Date objects (not strings from JSON)
                 dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplaySchema.parse(event)),
                 // Deserialize nested CookingTeams (including affinity fields)
-                CookingTeams: CookingTeams?.map((team) => deserializeCookingTeam(team)),
+                CookingTeams: CookingTeams?.map((team) => deserializeCookingTeamDisplay(team)),
                 ticketPrices: serialized.ticketPrices as Season['ticketPrices']
             } as Season
         }

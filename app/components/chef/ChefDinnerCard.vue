@@ -54,19 +54,26 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { CALENDAR, CHEF_CALENDAR } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get color class based on temporal category (matches calendar view)
-const dateColorClass = computed(() =>
-  props.temporalCategory === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[props.temporalCategory]
-)
+// Use past styling for cancelled dinners
+const dateColorClass = computed(() => {
+  if (isCancelled.value) return CALENDAR.day.past
+  return props.temporalCategory === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[props.temporalCategory]
+})
 
 // Format dinner date with weekday (matches countdown timer style: "Lør 16/01")
 const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.date))
 
 // Menu title or placeholder
-const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Menu ikke annonceret')
-const isMenuAnnounced = computed(() => props.dinnerEvent.menuTitle && props.dinnerEvent.menuTitle !== 'TBD')
+const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Ingen menu endnu')
+const isMenuAnnounced = computed(() => !!props.dinnerEvent.menuTitle)
+
+// Check if dinner is cancelled
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
+const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Handle card click
 const handleClick = () => {
@@ -78,25 +85,33 @@ const handleClick = () => {
   <UCard
     :name="`chef-dinner-card-${dinnerEvent.id}`"
     :ui="{
-      root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
-      body: 'p-3'
+      root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
+      body: 'p-1.5 md:p-3 w-full'
     }"
     @click="handleClick"
   >
     <!-- Compact vertical layout (fits narrow sidebar) -->
-    <div class="text-center space-y-1">
+    <div class="space-y-0.5 md:space-y-1 w-full">
       <!-- Date with weekday (color matches temporal category) -->
-      <div :class="dateColorClass" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
-        {{ formattedDate }}
+      <div class="text-center">
+        <div :class="[dateColorClass, isCancelled ? 'line-through' : '']" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
+          {{ formattedDate }}
+        </div>
       </div>
 
       <!-- Menu title -->
-      <div :class="['text-sm truncate', isMenuAnnounced ? 'font-medium' : 'italic text-neutral-500']">
+      <div
+        :class="[
+          TYPOGRAPHY.bodyTextMedium,
+          'line-clamp-2 text-balance text-center',
+          isMenuAnnounced ? '' : 'italic text-neutral-500'
+        ]"
+      >
         {{ menuTitle }}
       </div>
 
-      <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events -->
-      <div v-if="temporalCategory !== 'past'" class="pt-1">
+      <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events and cancelled -->
+      <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1">
         <DinnerDeadlineBadges :dinner-event="dinnerEvent" mode="standalone" />
       </div>
     </div>
