@@ -254,7 +254,14 @@ describe('useHousehold', () => {
       { id: 1, name: 'Helle', lastName: 'Andersen' },
       // Unique first names (no other inhabitant shares these)
       { id: 42, name: 'Babyyoda', lastName: 'Skywalker' },
-      { id: 88, name: 'Skransen', lastName: 'Madsen' }
+      { id: 88, name: 'Skransen', lastName: 'Madsen' },
+      // Production patterns: composite names, lastName prefixes, whitespace
+      { id: 16, name: 'Luna', lastName: 'Sol Andersen-Berg' }, // lastName prefix pattern
+      { id: 21, name: 'Max', lastName: 'Sol Andersen-Berg' },  // same lastName prefix, different first name
+      { id: 28, name: 'Tommy Nielsen', lastName: 'Larsen' },   // composite first name
+      { id: 73, name: 'Kai ', lastName: 'Berg Hansen ' },      // trailing whitespace in DB
+      { id: 85, name: 'Zara Noor', lastName: 'Khan' },         // composite first name
+      { id: 122, name: 'Nova Star', lastName: 'Berg Hansen' }  // composite first name
     ]
 
     describe('exact match', () => {
@@ -300,7 +307,10 @@ describe('useHousehold', () => {
         { shortName: 'SKRANSEN', expectedId: 88, reason: 'case insensitive' },
         { shortName: 'Erik', expectedId: 3, reason: 'unique first name with multi-part last name' },
         { shortName: 'Clara', expectedId: 9, reason: 'unique first name' },
-        { shortName: 'Helle', expectedId: 1, reason: 'unique first name' }
+        { shortName: 'Helle', expectedId: 1, reason: 'unique first name' },
+        { shortName: 'Kai', expectedId: 73, reason: 'unique first name with trailing whitespace in DB' },
+        { shortName: 'Luna', expectedId: 16, reason: 'unique first name' },
+        { shortName: 'Max', expectedId: 21, reason: 'unique first name' }
       ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })
@@ -308,6 +318,34 @@ describe('useHousehold', () => {
       it('returns null for non-unique first name (Signe)', () => {
         // Signe appears twice (ids 4 and 12) - cannot disambiguate
         expect(matchInhabitantByNameWithInitials('Signe', testInhabitants)).toBeNull()
+      })
+    })
+
+    describe('first word of composite name match (Strategy 4)', () => {
+      it.each([
+        { shortName: 'Tommy', expectedId: 28, reason: 'first word of "Tommy Nielsen"' },
+        { shortName: 'Zara', expectedId: 85, reason: 'first word of "Zara Noor"' },
+        { shortName: 'Nova', expectedId: 122, reason: 'first word of "Nova Star"' },
+        { shortName: 'tommy', expectedId: 28, reason: 'case insensitive' }
+      ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+    })
+
+    describe('first name + lastName prefix match (Strategy 5)', () => {
+      it.each([
+        { shortName: 'Luna Sol', expectedId: 16, reason: 'lastName starts with "Sol"' },
+        { shortName: 'Max Sol', expectedId: 21, reason: 'lastName starts with "Sol"' },
+        { shortName: 'luna sol', expectedId: 16, reason: 'case insensitive' }
+      ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+
+      it('returns null when lastName prefix is ambiguous', () => {
+        // Both Luna and Max have lastName starting with "Sol" - but input has first name
+        // So "Luna Sol" matches Luna, "Max Sol" matches Max (no ambiguity)
+        expect(matchInhabitantByNameWithInitials('Luna Sol', testInhabitants)).toBe(16)
+        expect(matchInhabitantByNameWithInitials('Max Sol', testInhabitants)).toBe(21)
       })
     })
 

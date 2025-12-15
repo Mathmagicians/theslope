@@ -20,6 +20,12 @@ import type {
     OrderAuditAction
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBilling} from '~/composables/useBilling'
+import {
+    useBillingValidation,
+    type HouseholdBillingResponse,
+    type TransactionDisplay
+} from '~/composables/useBillingValidation'
 
 /**
  * Finances Repository
@@ -1028,13 +1034,6 @@ export async function createTransactionsBatch(
 }
 
 /*** HOUSEHOLD BILLING ***/
-
-import {useBilling} from '~/composables/useBilling'
-import {
-    useBillingValidation,
-    type HouseholdBillingResponse,
-    type TransactionDisplay
-} from '~/composables/useBillingValidation'
 
 /**
  * Fetch billing data for a household.

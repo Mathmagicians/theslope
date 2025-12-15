@@ -67,62 +67,93 @@ export const useHousehold = () => {
     }
 
     /**
+     * Normalize a name: lowercase, collapse whitespace, trim
+     */
+    const normalizeName = (name: string): string =>
+        name.toLowerCase().replace(/\s+/g, ' ').trim()
+
+    /**
      * Match a short name against inhabitants list
-     * Supports three formats:
-     * 1. Exact match: "Mads Bruun Hovgaard" matches inhabitant with name="Mads", lastName="Bruun Hovgaard"
-     * 2. Initials format: "Mads B.H." matches inhabitant with name="Mads", lastName="Bruun Hovgaard"
-     * 3. First name only: "Babyyoda" matches inhabitant with name="Babyyoda" (unique first name)
+     * Supports five strategies (tried in order):
+     * 1. Exact match: "Mads Bruun Hovgaard" matches {name: "Mads", lastName: "Bruun Hovgaard"}
+     * 2. Initials format: "Mads B.H." matches {name: "Mads", lastName: "Bruun Hovgaard"}
+     * 3. First name only (unique): "Babyyoda" matches {name: "Babyyoda", ...}
+     * 4. First word match (unique): "Jimmy" matches {name: "Jimmy Diksen", ...}
+     * 5. First name + lastName prefix: "Jeppe Eg" matches {name: "Jeppe", lastName: "Eg Bilslev"}
      *
      * @param shortName - Name to match (e.g., "Mads B.H." or "Mads Bruun Hovgaard" or "Babyyoda")
      * @param inhabitants - List of inhabitants to match against
      * @returns Matched inhabitant ID or null if no match
      */
     const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]): number | null => {
-        const normalizedName = shortName.toLowerCase().trim()
+        const normalizedInput = normalizeName(shortName)
+        if (!normalizedInput) return null
+
+        // Pre-normalize all inhabitants for consistent matching
+        const normalized = inhabitants.map(i => ({
+            id: i.id,
+            name: normalizeName(i.name),
+            lastName: normalizeName(i.lastName),
+            fullName: normalizeName(`${i.name} ${i.lastName}`)
+        }))
 
         // Strategy 1: Exact match on "firstName lastName"
-        const exactMatch = inhabitants.find(i =>
-            `${i.name} ${i.lastName}`.toLowerCase().trim() === normalizedName
-        )
+        const exactMatch = normalized.find(i => i.fullName === normalizedInput)
         if (exactMatch) return exactMatch.id
 
-        // Strategy 2: Match "FirstName X.Y." format against initials
-        const nameParts = normalizedName.split(/\s+/)
-        if (nameParts.length >= 2) {
-            const firstName = nameParts[0]
-            const lastNamePart = nameParts.slice(1).join(' ')
+        // Parse input into parts for subsequent strategies
+        const inputParts = normalizedInput.split(' ')
+        const inputFirstWord = inputParts[0]!
 
-            // Check if last name part contains initials (dots indicate abbreviation)
-            if (lastNamePart.includes('.')) {
+        // Strategy 2: Match "FirstName X.Y." format against initials
+        if (inputParts.length >= 2) {
+            const inputRest = inputParts.slice(1).join(' ')
+
+            if (inputRest.includes('.')) {
                 // Extract initials: "b.h." → ["b", "h"]
-                const initials = lastNamePart
+                const initials = inputRest
                     .split('.')
-                    .map(s => s.trim().toLowerCase())
+                    .map(s => s.trim())
                     .filter(s => s.length > 0)
 
                 if (initials.length > 0) {
-                    // Find inhabitant where first name matches and last name parts start with initials
-                    const initialsMatch = inhabitants.find(i => {
-                        if (i.name.toLowerCase() !== firstName) return false
-
-                        const lastNameParts = i.lastName.toLowerCase().split(/\s+/)
+                    const initialsMatch = normalized.find(i => {
+                        if (i.name !== inputFirstWord) return false
+                        const lastNameParts = i.lastName.split(' ')
                         if (lastNameParts.length !== initials.length) return false
-
                         return initials.every((initial, idx) =>
                             lastNameParts[idx]?.startsWith(initial)
                         )
                     })
-
                     if (initialsMatch) return initialsMatch.id
                 }
             }
         }
 
-        // Strategy 3: First name only match (must be unique)
-        const firstNameMatches = inhabitants.filter(i =>
-            i.name.toLowerCase() === normalizedName
-        )
-        if (firstNameMatches.length === 1) return firstNameMatches[0]!.id
+        // Strategy 3: First name exact match (must be unique)
+        if (inputParts.length === 1) {
+            const firstNameMatches = normalized.filter(i => i.name === normalizedInput)
+            if (firstNameMatches.length === 1) return firstNameMatches[0]!.id
+        }
+
+        // Strategy 4: First word of composite name match (must be unique)
+        // "Jimmy" matches {name: "Jimmy Diksen", ...}
+        if (inputParts.length === 1) {
+            const firstWordMatches = normalized.filter(i =>
+                i.name.split(' ')[0] === normalizedInput
+            )
+            if (firstWordMatches.length === 1) return firstWordMatches[0]!.id
+        }
+
+        // Strategy 5: First name + lastName prefix match (must be unique)
+        // "Jeppe Eg" matches {name: "Jeppe", lastName: "Eg Bilslev-Jensen"}
+        if (inputParts.length === 2) {
+            const inputLastName = inputParts[1]!
+            const prefixMatches = normalized.filter(i =>
+                i.name === inputFirstWord && i.lastName.startsWith(inputLastName)
+            )
+            if (prefixMatches.length === 1) return prefixMatches[0]!.id
+        }
 
         return null
     }
