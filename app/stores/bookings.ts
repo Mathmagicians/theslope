@@ -263,6 +263,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     const toast = useToast()
 
+    const authStore = useAuthStore()
+
     const {
         data: dailyMaintenanceResult,
         status: dailyMaintenanceStatus,
@@ -270,7 +272,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         execute: executeDailyMaintenance
     } = useAsyncData<DailyMaintenanceResult | null>(
         'bookings-store-daily-maintenance',
-        () => $fetch<DailyMaintenanceResult>('/api/admin/maintenance/daily', { method: 'POST' }),
+        () => $fetch<DailyMaintenanceResult>('/api/admin/maintenance/daily', {
+            method: 'POST',
+            query: { triggeredBy: `ADMIN:${authStore.email}` }
+        }),
         {
             immediate: false,
             transform: (data) => data ? DailyMaintenanceResultSchema.parse(data) : null

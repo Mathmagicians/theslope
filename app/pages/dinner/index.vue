@@ -60,19 +60,41 @@ const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 // Toast for user feedback
 const toast = useToast()
 
-// Booking handlers
-const handleBookingUpdate = (inhabitantId: number, dinnerMode: string, ticketPriceId: number) => {
-  // TODO: Implement booking update via bookings store
-  console.info('Booking update:', { inhabitantId, dinnerMode, ticketPriceId })
+// Booking handlers - update individual order
+const handleBookingUpdate = async (inhabitantId: number, dinnerMode: string, _ticketPriceId: number) => {
+  const order = dinnerEventDetail.value?.tickets.find(t => t.inhabitantId === inhabitantId)
+  if (!order?.id) {
+    console.warn('No order found for inhabitant', inhabitantId)
+    return
+  }
+
+  try {
+    await bookingsStore.updateOrder(order.id, { dinnerMode })
+    await _refreshDinnerEventDetail()
+    console.info('Booking updated:', { inhabitantId, dinnerMode, orderId: order.id })
+  } catch (e) {
+    console.error('Failed to update booking:', e)
+  }
 }
 
-const handleAllBookingsUpdate = (dinnerMode: string) => {
-  // TODO: Implement bulk booking update via bookings store
-  console.info('All bookings update:', { dinnerMode })
+// Bulk update all orders for current dinner
+const handleAllBookingsUpdate = async (dinnerMode: string) => {
+  const orders = dinnerEventDetail.value?.tickets ?? []
+  if (orders.length === 0) return
+
+  try {
+    await Promise.all(
+      orders.filter(o => o.id).map(order => bookingsStore.updateOrder(order.id!, { dinnerMode }))
+    )
+    await _refreshDinnerEventDetail()
+    console.info('All bookings updated:', { dinnerMode, count: orders.length })
+  } catch (e) {
+    console.error('Failed to update all bookings:', e)
+  }
 }
 
 const handleSaveBooking = () => {
-  // TODO: Commit pending booking changes
+  // Changes are saved immediately on selection - switch back to view mode
   bookingFormMode.value = FORM_MODES.VIEW
   toast.add({
     title: 'Booking gemt',

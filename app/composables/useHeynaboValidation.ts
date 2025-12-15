@@ -158,7 +158,8 @@ export const useHeynaboValidation = () => {
         householdsUnchanged: z.number(),
         inhabitantsCreated: z.number(),
         inhabitantsDeleted: z.number(),
-        usersCreated: z.number()
+        usersCreated: z.number(),
+        usersDeleted: z.number().default(0) // Default for backwards compatibility with old job runs
     })
 
     return {

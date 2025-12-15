@@ -95,16 +95,24 @@ export const useTicket = () => {
     }
 
     /**
+     * Convert price from øre to DKK (integer)
+     * @param dkkFraction - Price in øre (100 øre = 1 kr)
+     * @returns Price in DKK as integer
+     */
+    const convertPriceToDecimalFormat = (dkkFraction: number): number => Math.round(dkkFraction / 100)
+
+    /**
      * Format price from øre to DKK with locale formatting
-     * @param ore - Price in øre (100 øre = 1 kr)
+     * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Formatted price string (e.g., "1.500" for 150000 øre)
      */
-    const formatPrice = (ore: number): string => Math.round(ore / 100).toLocaleString('da-DK')
+    const formatPrice = (dkkFraction: number): string => convertPriceToDecimalFormat(dkkFraction).toLocaleString('da-DK')
 
     return {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        convertPriceToDecimalFormat,
         formatPrice
     }
 }

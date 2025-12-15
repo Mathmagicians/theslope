@@ -28,6 +28,8 @@ import type {
     CookingTeamAssignment
 } from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import type {BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import {useBillingValidation} from '~/composables/useBillingValidation'
 
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
@@ -313,6 +315,48 @@ export async function createInhabitantsBatch(
         return createdIds
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH CREATE]: Error creating ${inhabitants.length} inhabitants for household ${householdId}`, error)
+    }
+}
+
+/**
+ * Delete users associated with inhabitants by heynaboId.
+ * Used by Heynabo sync to clean up users when their inhabitants are removed.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of inhabitant Heynabo IDs
+ * @returns Number of deleted users
+ */
+export async function deleteUsersByInhabitantHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`🪪 > USER > [BATCH DELETE] Deleting users for ${heynaboIds.length} inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Find user IDs for these inhabitants
+        const inhabitants = await prisma.inhabitant.findMany({
+            where: { heynaboId: { in: heynaboIds } },
+            select: { userId: true }
+        })
+
+        const userIds = inhabitants
+            .map(i => i.userId)
+            .filter((id): id is number => id !== null)
+
+        if (userIds.length === 0) {
+            console.info(`🪪 > USER > [BATCH DELETE] No users to delete`)
+            return 0
+        }
+
+        const result = await prisma.user.deleteMany({
+            where: { id: { in: userIds } }
+        })
+
+        console.info(`🪪 > USER > [BATCH DELETE] Deleted ${result.count} users`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`🪪 > USER > [BATCH DELETE]: Error deleting users`, error)
     }
 }
 
@@ -901,7 +945,8 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
                                 dinners: true  // Aggregate count of dinners per team
                             }
                         }
-                    }
+                    },
+                    orderBy: {name: 'asc'}
                 },
                 ticketPrices: true
             }
@@ -933,7 +978,8 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                                 dinners: true  // Aggregate count of dinners per team
                             }
                         }
-                    }
+                    },
+                    orderBy: {name: 'asc'}
                 },
                 ticketPrices: true
             }
@@ -1215,7 +1261,6 @@ export async function findTeamAssignmentByTeamAndInhabitant(
 ): Promise<CookingTeamAssignment | null> {
     console.info(`👥🔗 > ASSIGNMENT > [FIND] Finding assignment for team ${cookingTeamId} and inhabitant ${inhabitantId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, deserializeWeekDayMap} = useCookingTeamValidation()
 
     try {
         const assignment = await prisma.cookingTeamAssignment.findFirst({
@@ -1233,13 +1278,8 @@ export async function findTeamAssignmentByTeamAndInhabitant(
             return null
         }
 
-        // ADR-010: Deserialize affinity if present
-        const deserializedAssignment = {
-            ...assignment,
-            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
-        }
-
-        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+        // ADR-010: Use deserializeCookingTeamAssignment to properly deserialize affinity AND inhabitant
+        return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         return throwH3Error(`👥🔗 > ASSIGNMENT > [FIND]: Error finding team assignment`, error)
     }
@@ -1258,7 +1298,7 @@ export async function updateTeamAssignment(
 ): Promise<CookingTeamAssignment> {
     console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Updating team assignment ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, serializeWeekDayMapNullable, deserializeWeekDayMap} = useCookingTeamValidation()
+    const {serializeWeekDayMapNullable} = useCookingTeamValidation()
 
     try {
         // Extract affinity for serialization if present
@@ -1276,14 +1316,9 @@ export async function updateTeamAssignment(
             }
         })
 
-        // ADR-010: Deserialize affinity if present
-        const deserializedAssignment = {
-            ...assignment,
-            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
-        }
-
+        // ADR-010: Use deserializeCookingTeamAssignment to properly deserialize affinity AND inhabitant
         console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Successfully updated assignment ${id}`)
-        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+        return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         return throwH3Error(`👥🔗 > ASSIGNMENT > [UPDATE]: Error updating team assignment ${id}`, error)
     }
@@ -1612,5 +1647,56 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         return deserializeCookingTeamDetail(teamWithEmptyRelations)
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] > Error deleting team with ID ${id}`, error)
+    }
+}
+
+// ============================================================================
+// BILLING PERIOD SUMMARY CRUD
+// ============================================================================
+
+const {BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+
+const billingPeriodDetailInclude = {
+    invoices: {
+        select: {id: true, amount: true, householdId: true, pbsId: true, address: true}
+    }
+} as const
+
+export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise<BillingPeriodSummaryDisplay[]> => {
+    console.info('💰 > BILLING > [GET] Fetching all billing period summaries')
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summaries = await prisma.billingPeriodSummary.findMany({orderBy: {cutoffDate: 'desc'}})
+        console.info(`💰 > BILLING > [GET] Returning ${summaries.length} billing period summaries`)
+        return summaries.map(s => BillingPeriodSummaryDisplaySchema.parse(s))
+    } catch (error) {
+        return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summaries', error)
+    }
+}
+
+export const fetchBillingPeriodSummary = async (d1Client: D1Database, id: number): Promise<BillingPeriodSummaryDetail | null> => {
+    console.info(`💰 > BILLING > [GET] Fetching billing period summary ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summary = await prisma.billingPeriodSummary.findUnique({where: {id}, include: billingPeriodDetailInclude})
+        if (!summary) return null
+        return BillingPeriodSummaryDetailSchema.parse(summary)
+    } catch (error) {
+        return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period summary ID ${id}`, error)
+    }
+}
+
+export const fetchBillingPeriodSummaryByToken = async (d1Client: D1Database, token: string): Promise<BillingPeriodSummaryDetail | null> => {
+    console.info('💰 > BILLING > [GET] Fetching billing period summary by token')
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summary = await prisma.billingPeriodSummary.findUnique({where: {shareToken: token}, include: billingPeriodDetailInclude})
+        if (!summary) return null
+        return BillingPeriodSummaryDetailSchema.parse(summary)
+    } catch (error) {
+        return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summary by token', error)
     }
 }

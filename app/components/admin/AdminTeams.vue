@@ -141,8 +141,7 @@ const {
   updateTeam,
   deleteTeam,
   addTeamMember,
-  removeTeamMember,
-  assignTeamAffinitiesAndEvents
+  removeTeamMember
 } = store
 
 // Get teams from selected season - ALWAYS show live data
@@ -251,24 +250,13 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // BUSINESS LOGIC
 
-// CREATE MODE: Batch create teams
+// CREATE MODE: Batch create teams (server auto-assigns affinities + events)
 const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // Step 1: Create all teams in batch
     await createTeam(createDraft.value)
-
-    // Step 2: Assign affinities and teams to events
-    try {
-      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-      showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet - ${result.eventCount} fællesspisninger tildelt`)
-    } catch (assignmentError) {
-      // Teams created but affinity/event assignment failed
-      showSuccessToast('Madhold oprettet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-      console.error(assignmentError)
-    }
-
+    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med automatisk tildeling`)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
@@ -276,7 +264,7 @@ const handleBatchCreateTeams = async () => {
   }
 }
 
-// EDIT MODE: Add new team (IMMEDIATE SAVE)
+// EDIT MODE: Add new team (IMMEDIATE SAVE, server auto-assigns affinities + events)
 const handleAddTeam = async () => {
   if (!selectedSeason.value?.id) return
 
@@ -286,20 +274,8 @@ const handleAddTeam = async () => {
         selectedSeason.value.shortName ?? '',
         teams.value.length + 1
     )
-
-    // Step 1: Create the team
     await createTeam(newTeam)
-
-    // Step 2: Assign affinities and teams to events (recalculates rotation)
-    try {
-      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-      showSuccessToast('Madhold tilføjet', `Madlavningsdage tildelt - ${result.eventCount} fællesspisninger opdateret`)
-    } catch (assignmentError) {
-      // Team created but affinity/event assignment failed
-      showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-      console.error(assignmentError)
-    }
-
+    showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger opdateret automatisk')
     // teams reactively updates from store refresh - no manual update needed
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [ADD] Error adding team:', error)

@@ -16,6 +16,10 @@ URL_prod  := https://skraaningen.dk
 CSV_TEST := .theslope/order-import/test_import_orders.csv
 CSV_PROD := .theslope/order-import/skraaningen_2025_december_framelding.csv
 
+CALENDAR_CSV := .theslope/team-import/calendar.csv
+TEAMS_CSV_TEST := .theslope/team-import/test_teams.csv
+TEAMS_CSV_PROD := .theslope/team-import/teams.csv
+
 # ============================================================================
 # MACROS
 # ============================================================================
@@ -234,6 +238,24 @@ theslope-import-orders-dev: ## Import orders CSV to dev
 
 theslope-import-orders-prod: ## Import orders CSV to production
 	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
+
+# ============================================================================
+# SEASON IMPORT (Calendar + Teams CSV)
+# ============================================================================
+.PHONY: theslope-import-season-local theslope-import-season-dev theslope-import-season-prod
+
+define theslope_import_season
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(3) | jq -Rs .), \"teamsCsv\": $$(cat $(4) | jq -Rs .)}")
+endef
+
+theslope-import-season-local: ## Import season CSV to localhost
+	$(call theslope_import_season,$(ENV_local),$(URL_local),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+
+theslope-import-season-dev: ## Import season CSV to dev
+	$(call theslope_import_season,$(ENV_dev),$(URL_dev),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+
+theslope-import-season-prod: ## Import season CSV to production
+	$(call theslope_import_season,$(ENV_prod),$(URL_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
 
 # ============================================================================
 # HEYNABO API

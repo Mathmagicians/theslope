@@ -267,6 +267,28 @@ export class OrderFactory {
     return null
   }
 
+  static readonly updateOrder = async (
+    context: BrowserContext,
+    orderId: number,
+    updateData: { dinnerMode: string },
+    expectedStatus: number = 200
+  ): Promise<OrderDetail | null> => {
+    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}`, {
+      headers,
+      data: updateData
+    })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      return await response.json()
+    }
+
+    return null
+  }
+
   static readonly deleteOrder = async (
     context: BrowserContext,
     orderId: number,

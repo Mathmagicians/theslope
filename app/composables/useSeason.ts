@@ -3,7 +3,7 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {type TicketPrice, useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {type HouseholdDisplay, type InhabitantDisplay, useCoreValidation} from '~/composables/useCoreValidation'
@@ -12,7 +12,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, dateToWeekDay} from "~/utils/season"
-import {getEachDayOfIntervalWithSelectedWeekdays, formatDate} from "~/utils/date"
+import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
@@ -453,6 +453,29 @@ export const useSeason = () => {
     }
 
     /**
+     * Get release action for order cancellation (after deadline)
+     *
+     * @param dinnerEventDate - Date of the dinner event
+     * @returns null if before deadline (caller should delete), or release updates/auditAction if after deadline
+     */
+    const getOrderCancellationAction = (dinnerEventDate: Date): {
+        updates: { dinnerMode: DinnerMode, state: typeof OrderState.RELEASED, releasedAt: Date }
+        auditAction: OrderAuditAction
+    } | null => {
+        if (canModifyOrders(dinnerEventDate)) {
+            return null
+        }
+        return {
+            updates: {
+                dinnerMode: DinnerMode.NONE,
+                state: OrderState.RELEASED,
+                releasedAt: new Date()
+            },
+            auditAction: OrderAuditActionEnum.USER_CANCELLED
+        }
+    }
+
+    /**
      * Check if dining mode can be edited for a dinner event
      * Configured with app config diningModeIsEditableMinutesBefore
      */
@@ -581,6 +604,7 @@ export const useSeason = () => {
         splitDinnerEvents,
         sortDinnerEventsByTemporal,
         canModifyOrders,
+        getOrderCancellationAction,
         canEditDiningMode,
         isAnnounceMenuPastDeadline,
         getTeamsForInhabitant,

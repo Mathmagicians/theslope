@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-12-03 (Admin Billing - CSV Import endpoint fully compliant)
+**Last Updated:** 2025-12-15 (Admin Season - CSV Import endpoint added)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`

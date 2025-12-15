@@ -58,19 +58,28 @@
   - `DELETE_BATCH_SIZE = 90` for `updateMany`/`deleteMany` (D1 100 param limit minus ~2 data params)
   - **Confirmed:** Prisma auto-chunks `createManyAndReturn` but NOT `updateMany`/`deleteMany`
 
-## Next: UI Integration & Cron Triggers
+- ✅ **UI Trigger Buttons:**
+  - `AdminSystem.vue` with job cards for all three scheduled tasks
+  - Daily Maintenance, Monthly Billing, Heynabo Import buttons
+  - Job history table showing past runs
+  - Connected to stores for real-time status and results
+- ✅ **Cron Trigger Configuration:**
+  - Nitro `experimental.tasks: true` enabled in `nuxt.config.ts`
+  - `scheduledTasks` configured: daily-maintenance (01:00 UTC), heynabo-import (02:00 UTC), monthly-billing (17th 03:00 UTC)
+  - Matching cron patterns in `wrangler.toml` for local, dev, and prod environments
+  - Task definitions in `server/tasks/`:
+    - `daily-maintenance.ts` - Calls `POST /api/admin/maintenance/daily`
+    - `heynabo-import.ts` - Calls `GET /api/admin/heynabo/import`
+    - `monthly-billing.ts` - Calls `POST /api/admin/billing/generate` (stub)
+  - Tasks use HTTP calls to endpoints (workaround for D1 binding access in scheduled tasks)
 
-### Remaining Tasks
+## Remaining Tasks
 
-1. **UI Trigger Button** - Add button in `AdminEconomy.vue` to manually trigger daily maintenance
-   - Button label: "Kør daglig vedligeholdelse" (Run daily maintenance)
-   - Calls `POST /api/admin/maintenance/daily`
-   - Shows toast with results (consumed, closed, transactions created, scaffolded)
-
-2. **Cron Trigger Configuration** - Wire up scheduled tasks
-   - Configure Nitro scheduled tasks in `nuxt.config.ts`
-   - Configure Cloudflare cron triggers in `wrangler.toml`
-   - Create `server/tasks/daily-maintenance.ts` task definition
+1. **Monthly Billing Implementation** - Implement invoice generation
+   - Create `POST /api/admin/billing/generate` endpoint (currently stub)
+   - Aggregate transactions from previous billing period
+   - Generate invoices per household
+   - Mark transactions as invoiced
 
 ---
 

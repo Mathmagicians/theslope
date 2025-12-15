@@ -109,10 +109,11 @@ export const useCookingTeamValidation = () => {
 
     /**
      * CookingTeamCreate - Input schema for creating teams (ADR-009)
-     * Omits id (auto-generated), includes optional assignments without ids
+     * Omits id (auto-generated), includes optional assignments without ids/inhabitant
+     * inhabitant is populated via Prisma include on response, not sent in request
      */
     const CookingTeamCreateSchema = CookingTeamSchema.extend({
-        assignments: CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true }).array().optional()
+        assignments: CookingTeamAssignmentSchema.omit({ id: true, cookingTeamId: true, inhabitant: true }).array().optional()
     }).omit({ id: true })
 
     /**

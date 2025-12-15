@@ -9,6 +9,7 @@ import {
     deleteHouseholdsByHeynaboId,
     createInhabitantsBatch,
     deleteInhabitantsByHeynaboId,
+    deleteUsersByInhabitantHeynaboId,
     saveUser
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
@@ -97,6 +98,7 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
         let inhabitantsCreated = 0
         let inhabitantsDeleted = 0
         let usersCreated = 0
+        let usersDeleted = 0
 
         // Refetch households to get updated IDs for newly created ones
         const updatedHouseholds = await fetchHouseholds(d1Client)
@@ -121,11 +123,11 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
 
             const inhabitantReconciliation = reconcileInhabitants(existingInhabitants)(incomingInhabitants)
 
-            // Delete inhabitants not in Heynabo
+            // Delete inhabitants not in Heynabo (delete their users first)
             if (inhabitantReconciliation.delete.length > 0) {
                 const heynaboIdsToDelete = inhabitantReconciliation.delete.map(i => i.heynaboId)
-                const deleted = await deleteInhabitantsByHeynaboId(d1Client, heynaboIdsToDelete)
-                inhabitantsDeleted += deleted
+                usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, heynaboIdsToDelete)
+                inhabitantsDeleted += await deleteInhabitantsByHeynaboId(d1Client, heynaboIdsToDelete)
             }
 
             // Create new inhabitants in chunks
@@ -148,7 +150,7 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
         }
 
         console.info(`🏠 > IMPORT > Inhabitants: created=${inhabitantsCreated}, deleted=${inhabitantsDeleted}`)
-        console.info(`🏠 > IMPORT > Users created: ${usersCreated}`)
+        console.info(`🏠 > IMPORT > Users: created=${usersCreated}, deleted=${usersDeleted}`)
 
         const result: HeynaboImportResponse = {
             jobRunId: jobRun.id,
@@ -157,7 +159,8 @@ export default defineEventHandler(async (event): Promise<HeynaboImportResponse> 
             householdsUnchanged: householdReconciliation.idempotent.length + householdReconciliation.update.length,
             inhabitantsCreated,
             inhabitantsDeleted,
-            usersCreated
+            usersCreated,
+            usersDeleted
         }
 
         // Complete job run with success (ADR-010: repository serializes)

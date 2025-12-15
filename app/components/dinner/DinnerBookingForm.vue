@@ -52,10 +52,11 @@ const household = computed(() => props.household ?? selectedHousehold.value)
 const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Ticket business logic
-const {getTicketTypeConfig} = useTicket()
+const {getTicketTypeConfig, formatPrice} = useTicket()
 
 // Validation
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const OrderState = OrderStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 
 // Power mode state

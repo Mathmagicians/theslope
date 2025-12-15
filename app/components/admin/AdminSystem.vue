@@ -37,7 +37,9 @@ const {
     getJobStatusIcon,
     formatDuration,
     formatTriggeredBy,
-    formatResultSummary
+    formatResultSummary,
+    formatHeynaboStats,
+    formatDailyMaintenanceStats
 } = useMaintenance()
 const {JobRunDisplaySchema} = useMaintenanceValidation()
 
@@ -59,14 +61,18 @@ const { runDailyMaintenance } = bookingsStore
 // JOB HISTORY - fetch from API (ADR-007: useAsyncData)
 // ============================================================================
 
-const { data: jobRuns, refresh: refreshJobRuns } = useAsyncData<JobRunDisplay[]>(
-    'admin-system-job-runs',
-    () => $fetch<JobRunDisplay[]>('/api/admin/maintenance/job-run', { query: { limit: 20 } }),
+const { data: jobRuns, status: jobRunsStatus, refresh: refreshJobRuns } = useFetch<JobRunDisplay[]>(
+    '/api/admin/maintenance/job-run',
     {
+        key: 'admin-system-job-runs',
+        query: { limit: 20 },
         default: () => [],
-        transform: (data) => data.map(jr => JobRunDisplaySchema.parse(jr))
+        transform: (data) => data.map(jr => JobRunDisplaySchema.parse(jr)),
+        immediate: true
     }
 )
+
+const isJobHistoryLoading = computed(() => jobRunsStatus.value === 'pending')
 
 // Refresh job runs after manual trigger
 const runDailyMaintenanceAndRefresh = async () => {
@@ -143,19 +149,13 @@ const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as R
 // DAILY MAINTENANCE JOB - uses bookings store (ADR-007)
 // ============================================================================
 
-// Format daily maintenance stats
+const dailyMaintenanceIcons = [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.calendar]
 const dailyMaintenanceStats = computed(() => {
   if (!hasDailyMaintenanceResult.value || !dailyMaintenanceResult.value) return []
-  const r = dailyMaintenanceResult.value
-  const stats: { icon: string; text: string }[] = [
-    { icon: ICONS.checkCircle, text: `Middage afholdt: ${r.consume.consumed}` },
-    { icon: ICONS.ticket, text: `Ordrer lukket: ${r.close.closed}` },
-    { icon: ICONS.shoppingCart, text: `Transaktioner: ${r.transact.created}` }
-  ]
-  if (r.scaffold) {
-    stats.push({ icon: ICONS.calendar, text: `Bookinger: +${r.scaffold.created}, -${r.scaffold.deleted}` })
-  }
-  return stats
+  return formatDailyMaintenanceStats(dailyMaintenanceResult.value).map((stat, i) => ({
+    icon: dailyMaintenanceIcons[i] ?? ICONS.info,
+    text: `${stat.label}: ${stat.value}`
+  }))
 })
 
 // ============================================================================
@@ -163,16 +163,13 @@ const dailyMaintenanceStats = computed(() => {
 // ============================================================================
 
 const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
-
-// Format heynabo import stats
+const heynaboImportIcons = [ICONS.household, ICONS.users, ICONS.user]
 const heynaboImportStats = computed(() => {
   if (!hasHeynaboImportResult.value || !heynaboImport.value) return []
-  const r = heynaboImport.value
-  return [
-    { icon: ICONS.household, text: `Husstande: +${r.householdsCreated}, -${r.householdsDeleted}` },
-    { icon: ICONS.users, text: `Beboere: +${r.inhabitantsCreated}, -${r.inhabitantsDeleted}` },
-    { icon: ICONS.user, text: `Brugere oprettet: ${r.usersCreated}` }
-  ]
+  return formatHeynaboStats(heynaboImport.value).map((stat, i) => ({
+    icon: heynaboImportIcons[i] ?? ICONS.info,
+    text: `${stat.label}: ${stat.value}`
+  }))
 })
 
 // ============================================================================
@@ -197,59 +194,66 @@ const getLatestJobStats = (jobType: string): { icon: string; text: string }[] =>
   ]
 }
 
-const jobDefinitions = computed(() => [
-  {
-    key: 'DAILY_MAINTENANCE',
-    title: 'Daglig Vedligeholdelse',
-    buttonLabel: 'Kør daglig vedligeholdelse',
-    description: 'Markér middage som afholdt, luk ordrer, opret transaktioner, opret automatiske bookinger',
-    schedule: systemJobs.dailyMaintenance.description,
-    color: COLOR.peach,
-    headerBg: BG.peach[50],
-    icon: ICONS.sync,
-    // Wired up via bookings store
-    isRunning: isDailyMaintenanceRunning.value,
-    hasResult: hasDailyMaintenanceResult.value,
-    hasError: hasDailyMaintenanceError.value,
-    stats: hasDailyMaintenanceResult.value ? dailyMaintenanceStats.value : getLatestJobStats('DAILY_MAINTENANCE'),
-    error: dailyMaintenanceError.value,
-    trigger: runDailyMaintenanceAndRefresh
-  },
-  {
-    key: 'MONTHLY_BILLING',
-    title: 'Månedlig Fakturering',
-    buttonLabel: 'Kør fakturering',
-    description: 'Generer fakturaer for foregående måned',
-    schedule: systemJobs.monthlyBilling.description,
-    color: COLOR.secondary,
-    headerBg: BG.pink[50],
-    icon: ICONS.ticket,
-    // Not yet implemented - show latest from history if available
-    isRunning: false,
-    hasResult: false,
-    hasError: false,
-    stats: getLatestJobStats('MONTHLY_BILLING'),
-    error: null,
-    trigger: null
-  },
-  {
-    key: 'HEYNABO_IMPORT',
-    title: 'Heynabo Import',
-    buttonLabel: 'Kør import',
-    description: 'Synkroniser husstande og beboere fra Heynabo',
-    schedule: systemJobs.heynaboImport.description,
-    color: COLOR.ocean,
-    headerBg: BG.ocean[50],
-    icon: ICONS.users,
-    // Wired up via users store
-    isRunning: isImportHeynaboLoading.value,
-    hasResult: hasHeynaboImportResult.value,
-    hasError: isImportHeynaboErrored.value,
-    stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
-    error: heynaboImportError.value,
-    trigger: importHeynaboDataAndRefresh
-  }
-])
+const jobDefinitions = computed(() => {
+  // Check for historical data from database for each job type
+  const hasHistoricalDailyMaintenance = getLatestJobRunByType('DAILY_MAINTENANCE') !== null
+  const hasHistoricalMonthlyBilling = getLatestJobRunByType('MONTHLY_BILLING') !== null
+  const hasHistoricalHeynaboImport = getLatestJobRunByType('HEYNABO_IMPORT') !== null
+
+  return [
+    {
+      key: 'DAILY_MAINTENANCE',
+      title: 'Daglig Vedligeholdelse',
+      buttonLabel: 'Kør daglig vedligeholdelse',
+      description: 'Markér middage som afholdt, luk ordrer, opret transaktioner, opret automatiske bookinger',
+      schedule: systemJobs.dailyMaintenance.description,
+      color: COLOR.peach,
+      headerBg: BG.peach[50],
+      icon: ICONS.sync,
+      // Wired up via bookings store
+      isRunning: isDailyMaintenanceRunning.value,
+      hasResult: hasDailyMaintenanceResult.value || hasHistoricalDailyMaintenance,
+      hasError: hasDailyMaintenanceError.value,
+      stats: hasDailyMaintenanceResult.value ? dailyMaintenanceStats.value : getLatestJobStats('DAILY_MAINTENANCE'),
+      error: dailyMaintenanceError.value,
+      trigger: runDailyMaintenanceAndRefresh
+    },
+    {
+      key: 'MONTHLY_BILLING',
+      title: 'Månedlig Fakturering',
+      buttonLabel: 'Kør fakturering',
+      description: 'Generer fakturaer for foregående måned',
+      schedule: systemJobs.monthlyBilling.description,
+      color: COLOR.secondary,
+      headerBg: BG.pink[50],
+      icon: ICONS.ticket,
+      // Not yet implemented - show latest from history if available
+      isRunning: false,
+      hasResult: hasHistoricalMonthlyBilling,
+      hasError: false,
+      stats: getLatestJobStats('MONTHLY_BILLING'),
+      error: null,
+      trigger: null
+    },
+    {
+      key: 'HEYNABO_IMPORT',
+      title: 'Heynabo Import',
+      buttonLabel: 'Kør import',
+      description: 'Synkroniser husstande og beboere fra Heynabo',
+      schedule: systemJobs.heynaboImport.description,
+      color: COLOR.ocean,
+      headerBg: BG.ocean[50],
+      icon: ICONS.users,
+      // Wired up via users store
+      isRunning: isImportHeynaboLoading.value,
+      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
+      hasError: isImportHeynaboErrored.value,
+      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
+      error: heynaboImportError.value,
+      trigger: importHeynaboDataAndRefresh
+    }
+  ]
+})
 </script>
 
 <template>
@@ -371,6 +375,7 @@ const jobDefinitions = computed(() => [
       <UTable
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
+        :loading="isJobHistoryLoading"
         :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
         class="w-full"

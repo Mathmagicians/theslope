@@ -2,9 +2,10 @@ import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/generated/zod'
 import {parse as parseDate} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 
 /**
- * Validation schemas for Billing domain (CSV Import/Export)
+ * Validation schemas for Billing domain (CSV Import/Export, BillingPeriodSummary)
  *
  * CSV Import Format (framelding pivot table):
  * - Row 0: Headers with dates (DD/MM/YYYY)
@@ -13,12 +14,62 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
  * - Row N+2: Børn (2-12 år) row (empty, empty, then counts per date)
  *
  * ADR-009 Compliance:
+ * - BillingPeriodSummaryDisplay: Index endpoints (lightweight)
+ * - BillingPeriodSummaryDetail: Detail endpoints + mutations (comprehensive)
  * - ImportResponseSchema: Response for import operation
  */
 export const useBillingValidation = () => {
     const TicketType = TicketTypeSchema.enum
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
+    const {convertPriceToDecimalFormat} = useTicket()
+
+    // ============================================================================
+    // BillingPeriodSummary Schemas (ADR-009: Display vs Detail)
+    // ============================================================================
+
+    /**
+     * BillingPeriodSummary Display - for index endpoints (lightweight)
+     * billingPeriod format: "dd/MM/yyyy-dd/MM/yyyy" (formatDateRange)
+     */
+    const BillingPeriodSummaryDisplaySchema = z.object({
+        id: z.number().int(),
+        billingPeriod: z.string(), // formatDateRange format
+        totalAmount: z.number().int(), // øre
+        householdCount: z.number().int(),
+        ticketCount: z.number().int(),
+        cutoffDate: z.coerce.date(),
+        paymentDate: z.coerce.date(),
+        createdAt: z.coerce.date()
+    })
+
+    /**
+     * Invoice within a billing period (for detail views)
+     * pbsId and address are denormalized (frozen at billing time for immutability)
+     */
+    const BillingInvoiceSchema = z.object({
+        id: z.number().int(),
+        amount: z.number().int(), // øre
+        householdId: z.number().int().nullable(),
+        // Frozen billing identity (immutable - for PBS export)
+        pbsId: z.number().int(),
+        address: z.string()
+    })
+
+    /**
+     * BillingPeriodSummary Detail - for detail endpoints (comprehensive)
+     * Includes invoices with household info
+     */
+    const BillingPeriodSummaryDetailSchema = BillingPeriodSummaryDisplaySchema.extend({
+        shareToken: z.string(), // UUID for magic link
+        invoices: z.array(BillingInvoiceSchema)
+    })
+
+    /**
+     * Public billing view (for magic link / accountant)
+     * Same as Detail but explicitly for public access
+     */
+    const PublicBillingViewSchema = BillingPeriodSummaryDetailSchema
 
     /**
      * Single order from CSV import
@@ -196,6 +247,117 @@ export const useBillingValidation = () => {
         childCount: z.number().int().min(0)
     })
 
+    // ============================================================================
+    // Household Billing Schemas (ADR-009)
+    // ============================================================================
+
+    /**
+     * Transaction Display - for household billing view
+     * Shows individual orders within a billing period
+     */
+    const TransactionDisplaySchema = z.object({
+        id: z.number().int(),
+        amount: z.number().int(),
+        createdAt: z.coerce.date(),
+        orderSnapshot: z.string(),
+        dinnerEvent: z.object({
+            id: z.number().int(),
+            date: z.coerce.date(),
+            menuTitle: z.string()
+        }),
+        inhabitant: z.object({
+            id: z.number().int(),
+            name: z.string()
+        }),
+        ticketType: TicketTypeSchema
+    })
+
+    /**
+     * Household Invoice - invoice with transactions for household view
+     */
+    const HouseholdInvoiceSchema = z.object({
+        id: z.number().int(),
+        billingPeriod: z.string(),
+        cutoffDate: z.coerce.date(),
+        paymentDate: z.coerce.date(),
+        amount: z.number().int(),
+        transactions: z.array(TransactionDisplaySchema)
+    })
+
+    /**
+     * Current period billing - unbilled transactions
+     */
+    const CurrentPeriodBillingSchema = z.object({
+        periodStart: z.coerce.date(),
+        periodEnd: z.coerce.date(),
+        totalAmount: z.number().int(),
+        transactions: z.array(TransactionDisplaySchema)
+    })
+
+    /**
+     * Household Billing Response - complete billing data for a household
+     */
+    const HouseholdBillingResponseSchema = z.object({
+        householdId: z.number().int(),
+        pbsId: z.number().int(),
+        address: z.string(),
+        currentPeriod: CurrentPeriodBillingSchema,
+        pastInvoices: z.array(HouseholdInvoiceSchema)
+    })
+
+    // ============================================================================
+    // CSV Export Functions
+    // ============================================================================
+
+    const CSV_HEADER = 'Kunde nr,Adresse,Total DKK/måned,Opkrævning periode start,Opkrævning periode slut,Opgørelsesdato,Måltider total,Evt ekstra,Note'
+
+    /**
+     * Format date for CSV export (DD/MM/YYYY)
+     */
+    const formatCsvDate = (date: Date): string => {
+        const day = date.getDate().toString().padStart(2, '0')
+        const month = (date.getMonth() + 1).toString().padStart(2, '0')
+        const year = date.getFullYear()
+        return `${day}/${month}/${year}`
+    }
+
+    /**
+     * Get last day of month for a given date
+     */
+    const getLastDayOfMonth = (date: Date): Date =>
+        new Date(date.getFullYear(), date.getMonth() + 1, 0)
+
+    /**
+     * Generate CSV row for a single invoice
+     * Uses denormalized pbsId/address (frozen at billing time)
+     */
+    const generateCsvRow = (
+        invoice: z.infer<typeof BillingInvoiceSchema>,
+        summary: z.infer<typeof BillingPeriodSummaryDetailSchema>
+    ): string => {
+        const totalDKK = convertPriceToDecimalFormat(invoice.amount)
+        const paymentStart = formatCsvDate(summary.paymentDate)
+        const paymentEnd = formatCsvDate(getLastDayOfMonth(summary.paymentDate))
+        const cutoff = formatCsvDate(summary.cutoffDate)
+
+        return `${invoice.pbsId},${invoice.address},${totalDKK},${paymentStart},${paymentEnd},${cutoff},${totalDKK},,`
+    }
+
+    /**
+     * Generate complete CSV export for a billing period
+     */
+    const generateBillingCsv = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string => {
+        const rows = summary.invoices.map(inv => generateCsvRow(inv, summary))
+        return [CSV_HEADER, ...rows].join('\n')
+    }
+
+    /**
+     * Generate filename for CSV export
+     * Format: PBS-Opgørelse-Skrååningen-{billingPeriod}.csv
+     */
+    const generateCsvFilename = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string =>
+        `PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`
+
     return {
         // Enums
         TicketTypeSchema,
@@ -205,16 +367,30 @@ export const useBillingValidation = () => {
         DinnerMode,
         OrderState,
 
-        // Schemas
+        // BillingPeriodSummary Schemas (ADR-009)
+        BillingPeriodSummaryDisplaySchema,
+        BillingPeriodSummaryDetailSchema,
+        BillingInvoiceSchema,
+        PublicBillingViewSchema,
+
+        // CSV Import Schemas
         ImportedOrderSchema,
         BillingImportRequestSchema,
         BillingImportResponseSchema,
         ParsedHouseholdOrderSchema,
 
-        // Functions
+        // CSV Import Functions
         parseCSV,
         parseCSVLine,
-        getOrderKey
+        getOrderKey,
+
+        // CSV Export Functions
+        CSV_HEADER,
+        formatCsvDate,
+        getLastDayOfMonth,
+        generateCsvRow,
+        generateBillingCsv,
+        generateCsvFilename
     }
 }
 
@@ -222,6 +398,13 @@ export const useBillingValidation = () => {
 // Type Exports
 // ============================================================================
 
+// BillingPeriodSummary types (ADR-009)
+export type BillingPeriodSummaryDisplay = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDisplaySchema']>
+export type BillingPeriodSummaryDetail = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDetailSchema']>
+export type BillingInvoice = z.infer<ReturnType<typeof useBillingValidation>['BillingInvoiceSchema']>
+export type PublicBillingView = z.infer<ReturnType<typeof useBillingValidation>['PublicBillingViewSchema']>
+
+// CSV Import types
 export type ImportedOrder = z.infer<ReturnType<typeof useBillingValidation>['ImportedOrderSchema']>
 export type BillingImportRequest = z.infer<ReturnType<typeof useBillingValidation>['BillingImportRequestSchema']>
 export type BillingImportResponse = z.infer<ReturnType<typeof useBillingValidation>['BillingImportResponseSchema']>

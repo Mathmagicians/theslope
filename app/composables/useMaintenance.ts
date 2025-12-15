@@ -63,8 +63,10 @@ export const useMaintenance = () => {
         switch (status) {
             case JobStatus.SUCCESS: return 'i-heroicons-check-circle'
             case JobStatus.PARTIAL: return 'i-heroicons-exclamation-triangle'
-            case JobStatus.FAILED: return 'i-heroicons-x-circle'
             case JobStatus.RUNNING: return 'i-heroicons-arrow-path'
+            case JobStatus.FAILED:
+            default:
+                return 'i-heroicons-x-circle'
         }
     }
 
@@ -81,8 +83,6 @@ export const useMaintenance = () => {
      * Format triggeredBy field for display
      */
     const formatTriggeredBy = (triggeredBy: string): string => {
-        if (triggeredBy === 'CRON') return 'Automatisk'
-        if (triggeredBy.startsWith('ADMIN:')) return 'Manuel'
         return triggeredBy
     }
 
@@ -109,7 +109,31 @@ export const useMaintenance = () => {
     }
 
     /**
-     * Format result summary for display based on job type
+     * Format heynabo import result as stats array for action cards
+     */
+    const formatHeynaboStats = (result: HeynaboImportResponse): { label: string; value: string }[] => [
+        { label: 'Husstande', value: `+${result.householdsCreated}, -${result.householdsDeleted}` },
+        { label: 'Beboere', value: `+${result.inhabitantsCreated}, -${result.inhabitantsDeleted}` },
+        { label: 'Brugere', value: `+${result.usersCreated}, -${result.usersDeleted}` }
+    ]
+
+    /**
+     * Format daily maintenance result as stats array for action cards
+     */
+    const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): { label: string; value: string }[] => {
+        const stats = [
+            { label: 'Middage afholdt', value: `${result.consume.consumed}` },
+            { label: 'Ordrer lukket', value: `${result.close.closed}` },
+            { label: 'Transaktioner', value: `${result.transact.created}` }
+        ]
+        if (result.scaffold) {
+            stats.push({ label: 'Bookinger', value: `+${result.scaffold.created}, -${result.scaffold.deleted}` })
+        }
+        return stats
+    }
+
+    /**
+     * Format result summary for table display (uses stats functions for DRY)
      */
     const formatResultSummary = (jobType: JobType, resultSummary: string | null): string => {
         const parsed = parseResultSummary(jobType, resultSummary)
@@ -118,24 +142,13 @@ export const useMaintenance = () => {
         switch (jobType) {
             case JobType.DAILY_MAINTENANCE: {
                 const result = parsed as DailyMaintenanceResult
-                const parts: string[] = []
-
-                if (result.consume.consumed) parts.push(`${result.consume.consumed} middage`)
-                if (result.close.closed) parts.push(`${result.close.closed} ordrer`)
-                if (result.transact.created) parts.push(`${result.transact.created} trans.`)
-                if (result.scaffold?.created) parts.push(`${result.scaffold.created} bookinger`)
-
-                return parts.length > 0 ? parts.join(', ') : 'Ingen ændringer'
+                const stats = formatDailyMaintenanceStats(result)
+                return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.HEYNABO_IMPORT: {
                 const result = parsed as HeynaboImportResponse
-                const parts: string[] = []
-
-                if (result.householdsCreated) parts.push(`+${result.householdsCreated} husstande`)
-                if (result.inhabitantsCreated) parts.push(`+${result.inhabitantsCreated} beboere`)
-                if (result.usersCreated) parts.push(`+${result.usersCreated} brugere`)
-
-                return parts.length > 0 ? parts.join(', ') : 'Ingen ændringer'
+                const stats = formatHeynaboStats(result)
+                return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MONTHLY_BILLING: {
                 const result = parsed as Record<string, unknown>
@@ -162,6 +175,8 @@ export const useMaintenance = () => {
         formatDuration,
         formatTriggeredBy,
         parseResultSummary,
-        formatResultSummary
+        formatResultSummary,
+        formatHeynaboStats,
+        formatDailyMaintenanceStats
     }
 }

@@ -1211,6 +1211,72 @@ describe('reconcileDinnerEvents', () => {
     })
 })
 
+describe('getOrderCancellationAction', () => {
+    const { getOrderCancellationAction } = useSeason()
+    const { DinnerModeSchema, OrderStateSchema, OrderAuditActionSchema } = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+    const OrderAuditAction = OrderAuditActionSchema.enum
+
+    // Get cancellation deadline from app config (ADR-015 compliance)
+    const appConfig = useAppConfig()
+    const cancellableDaysBefore = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore
+
+    // Helper to create dinner date relative to today
+    const createDinnerDate = (daysFromToday: number): Date => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const dinnerDate = new Date(today)
+        dinnerDate.setDate(today.getDate() + daysFromToday)
+        return dinnerDate
+    }
+
+    it.each([
+        {
+            description: `far future (${cancellableDaysBefore + 5} days) - before deadline`,
+            daysFromToday: cancellableDaysBefore + 5,  // Well before deadline
+            expectedNull: true
+        },
+        {
+            description: `at deadline boundary (${cancellableDaysBefore + 1} days)`,
+            daysFromToday: cancellableDaysBefore + 1,  // Just before deadline
+            expectedNull: true
+        },
+        {
+            description: 'tomorrow - after deadline',
+            daysFromToday: 1,  // Well past deadline
+            expectedNull: false
+        },
+        {
+            description: 'today - after deadline',
+            daysFromToday: 0,  // Day of dinner
+            expectedNull: false
+        },
+        {
+            description: 'yesterday - past dinner',
+            daysFromToday: -1,  // Past
+            expectedNull: false
+        }
+    ])('should return $expectedNull (null) for dinner $description', ({ daysFromToday, expectedNull }) => {
+        // GIVEN: Dinner at specified time relative to today
+        const dinnerDate = createDinnerDate(daysFromToday)
+
+        // WHEN: Getting cancellation action
+        const result = getOrderCancellationAction(dinnerDate)
+
+        // THEN: Returns null if before deadline (delete case), or release object if after
+        if (expectedNull) {
+            expect(result).toBeNull()
+        } else {
+            expect(result).not.toBeNull()
+            expect(result!.updates.dinnerMode).toBe(DinnerMode.NONE)
+            expect(result!.updates.state).toBe(OrderState.RELEASED)
+            expect(result!.updates.releasedAt).toBeInstanceOf(Date)
+            expect(result!.auditAction).toBe(OrderAuditAction.USER_CANCELLED)
+        }
+    })
+})
+
 describe('isChefFor', () => {
     const { isChefFor } = useSeason()
     const { TeamRoleSchema } = useCookingTeamValidation()

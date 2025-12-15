@@ -1,6 +1,7 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {isBeforeDeadline, getDinnerTimeRange} from '~/utils/season'
 
 import type {
     OrderCreate,
@@ -14,7 +15,10 @@ import type {
     DinnerEventDetail,
     OrderHistoryDetail,
     OrderHistoryCreate,
-    OrderForTransaction
+    OrderForTransaction,
+    DinnerMode,
+    OrderState,
+    OrderAuditAction
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
@@ -304,6 +308,124 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
+    }
+}
+
+/**
+ * Audit context for order mutations
+ */
+export type OrderAuditContext = {
+    action: OrderAuditAction
+    performedByUserId: number | null
+}
+
+/**
+ * Partial order update fields
+ */
+export type OrderUpdateFields = {
+    dinnerMode?: DinnerMode
+    state?: OrderState
+    releasedAt?: Date
+}
+
+/**
+ * Update an order with audit trail.
+ *
+ * Generic function that updates any order fields and creates audit entry.
+ * Business logic (which fields to update, which action) is determined by caller.
+ *
+ * ADR-011: All mutations create audit entries
+ * ADR-009: Returns OrderDetail
+ *
+ * @param d1Client - D1 database client
+ * @param id - Order ID to update
+ * @param updates - Fields to update
+ * @param audit - Audit context (action, performedByUserId)
+ * @returns Updated OrderDetail
+ */
+export async function updateOrder(
+    d1Client: D1Database,
+    id: number,
+    updates: OrderUpdateFields,
+    audit: OrderAuditContext
+): Promise<OrderDetail> {
+    const LOG = '🎟️ > ORDER > [UPDATE]'
+    console.info(`${LOG} Updating order ${id}`, updates, `action=${audit.action}`)
+    const {OrderDetailSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Validate audit action
+    const validatedAction = OrderAuditActionSchema.parse(audit.action)
+
+    try {
+        // Fetch existing order for audit data
+        const existingOrder = await prisma.order.findUnique({
+            where: {id},
+            include: {
+                ticketPrice: {select: {ticketType: true}},
+                dinnerEvent: {select: {seasonId: true}}
+            }
+        })
+
+        if (!existingOrder) {
+            throw createError({statusCode: 404, message: `Order ${id} not found`})
+        }
+
+        // Update order
+        const order = await prisma.order.update({
+            where: {id},
+            data: updates,
+            include: {
+                dinnerEvent: {
+                    select: {
+                        id: true, date: true, menuTitle: true, menuDescription: true,
+                        menuPictureUrl: true, state: true, totalCost: true,
+                        heynaboEventId: true, chefId: true, cookingTeamId: true,
+                        seasonId: true, createdAt: true, updatedAt: true
+                    }
+                },
+                inhabitant: {
+                    select: {
+                        id: true, heynaboId: true, householdId: true,
+                        name: true, lastName: true, pictureUrl: true
+                    }
+                },
+                bookedByUser: {select: {id: true, email: true}},
+                ticketPrice: {select: {id: true, ticketType: true, price: true, description: true}}
+            }
+        })
+
+        // Create audit entry (ADR-011)
+        // Construct snapshot with updated values for audit trail
+        const auditSnapshot = {
+            id: existingOrder.id,
+            inhabitantId: existingOrder.inhabitantId,
+            dinnerEventId: existingOrder.dinnerEventId,
+            ticketPriceId: existingOrder.ticketPriceId,
+            priceAtBooking: existingOrder.priceAtBooking,
+            dinnerMode: updates.dinnerMode ?? existingOrder.dinnerMode,
+            state: updates.state ?? existingOrder.state
+        }
+        await prisma.orderHistory.create({
+            data: {
+                orderId: id,
+                action: validatedAction,
+                performedByUserId: audit.performedByUserId,
+                inhabitantId: existingOrder.inhabitantId,
+                dinnerEventId: existingOrder.dinnerEventId,
+                seasonId: existingOrder.dinnerEvent?.seasonId ?? null,
+                auditData: createOrderAuditData(auditSnapshot)
+            }
+        })
+
+        console.info(`${LOG} Successfully updated order ${id}`)
+
+        return OrderDetailSchema.parse({
+            ...order,
+            ticketType: order.ticketPrice?.ticketType ?? null
+        })
+    } catch (error) {
+        return throwH3Error(`${LOG} Error updating order ${id}`, error)
     }
 }
 

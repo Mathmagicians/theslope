@@ -37,6 +37,8 @@ export const useUsersStore = defineStore("Users", () => {
         }
     )
 
+    const authStore = useAuthStore()
+
     const {
         data: heynaboImport,
         status: heynaboImportStatus,
@@ -44,7 +46,9 @@ export const useUsersStore = defineStore("Users", () => {
         refresh: refreshHeynaboImport
     } = useAsyncData<HeynaboImportResponse | null>(
         '/api/admin/heynabo/import',
-        () => $fetch<HeynaboImportResponse>('/api/admin/heynabo/import'),
+        () => $fetch<HeynaboImportResponse>('/api/admin/heynabo/import', {
+            query: { triggeredBy: `ADMIN:${authStore.email}` }
+        }),
         {
             default: () => null,
             immediate: false // only when triggered by admin, not on store creation
