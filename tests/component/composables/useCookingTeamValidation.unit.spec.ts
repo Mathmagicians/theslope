@@ -606,20 +606,80 @@ describe('useCookingTeamValidation', () => {
     })
 
     describe('toPrismaCreateData with CookingTeamCreate input', () => {
-      it('should accept CookingTeamCreate type (no id, no computed fields)', () => {
-        const createInput = {
-          name: 'New Team',
-          seasonId: 1,
-          affinity: createDefaultWeekdayMap([true, true, false, false, false, false, false])
+      it.each([
+        {
+          name: 'team without assignments',
+          team: SeasonFactory.defaultCookingTeamCreate(),
+          expectedAssignmentCount: undefined
+        },
+        {
+          name: 'team with empty assignments',
+          team: SeasonFactory.defaultCookingTeamCreate({ assignments: [] }),
+          expectedAssignmentCount: 0
+        },
+        {
+          name: 'team with single assignment',
+          team: SeasonFactory.defaultCookingTeamCreate({
+            assignments: [SeasonFactory.defaultCookingTeamCreateAssignment()]
+          }),
+          expectedAssignmentCount: 1
+        },
+        {
+          name: 'team with multiple assignments (import pattern)',
+          team: SeasonFactory.defaultCookingTeamCreate({
+            assignments: [
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 1, role: 'CHEF' }),
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 2, role: 'COOK', allocationPercentage: 50 }),
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 3, role: 'JUNIORHELPER' })
+            ]
+          }),
+          expectedAssignmentCount: 3
         }
-        const result = toPrismaCreateData(createInput)
+      ])('should serialize $name', ({ team, expectedAssignmentCount }) => {
+        const result = toPrismaCreateData(team)
 
-        expect(result).toHaveProperty('name', 'New Team')
-        expect(result).toHaveProperty('seasonId', 1)
-        expect(result).toHaveProperty('affinity')
+        expect(result).toHaveProperty('name', team.name)
+        expect(result).toHaveProperty('seasonId', team.seasonId)
         expect(result).not.toHaveProperty('id')
         expect(result).not.toHaveProperty('cookingDaysCount')
         expect(result).not.toHaveProperty('dinnerEvents')
+
+        if (expectedAssignmentCount === undefined) {
+          expect(result.assignments).toBeUndefined()
+        } else {
+          expect(result.assignments).toHaveLength(expectedAssignmentCount)
+        }
+      })
+
+      it.each([
+        {
+          name: 'assignment with affinity',
+          assignment: SeasonFactory.defaultCookingTeamCreateAssignment({
+            affinity: createDefaultWeekdayMap([true, false, true, false, false, false, false])
+          }),
+          expectAffinityString: true
+        },
+        {
+          name: 'assignment without affinity',
+          assignment: SeasonFactory.defaultCookingTeamCreateAssignment({ affinity: null }),
+          expectAffinityString: false
+        }
+      ])('should serialize $name correctly', ({ assignment, expectAffinityString }) => {
+        const team = SeasonFactory.defaultCookingTeamCreate({ assignments: [assignment] })
+        const result = toPrismaCreateData(team)
+
+        const serializedAssignment = result.assignments![0]!
+        expect(serializedAssignment).toHaveProperty('inhabitantId', assignment.inhabitantId)
+        expect(serializedAssignment).toHaveProperty('role', assignment.role)
+        expect(serializedAssignment).toHaveProperty('allocationPercentage', assignment.allocationPercentage)
+        expect(serializedAssignment).not.toHaveProperty('inhabitant')
+        expect(serializedAssignment).not.toHaveProperty('cookingTeamId')
+
+        if (expectAffinityString) {
+          expect(typeof serializedAssignment.affinity).toBe('string')
+        } else {
+          expect(serializedAssignment.affinity).toBeNull()
+        }
       })
     })
 

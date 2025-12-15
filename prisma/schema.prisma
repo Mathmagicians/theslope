@@ -227,7 +227,7 @@ model Transaction {
   amount          Int // price in DKK øre
   userEmailHandle String
   createdAt       DateTime @default(now())
-  invoiceId       Int?     @unique
+  invoiceId       Int? // Many transactions per invoice (1 invoice aggregates all household orders in billing period)
   invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([orderId])

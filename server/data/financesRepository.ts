@@ -1,7 +1,6 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
-import {isBeforeDeadline, getDinnerTimeRange} from '~/utils/season'
 
 import type {
     OrderCreate,
@@ -509,18 +508,24 @@ export async function deleteOrder(
 }
 
 /**
- * Fetch orders, optionally filtered by dinner event ID(s).
- * @param dinnerEventIds - Single ID, array of IDs, or undefined for all orders
+ * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
+ *
+ * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
+ * @param householdId - Optional household filter (required for user-facing endpoints)
  */
 export async function fetchOrders(
     d1Client: D1Database,
-    dinnerEventIds?: number | number[]
+    dinnerEventIds?: number | number[],
+    householdId?: number
 ): Promise<OrderDisplay[]> {
     // Normalize to array, return early for empty
     const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
     if (ids?.length === 0) return []
 
-    const filterDesc = ids ? `${ids.length} dinner event(s)` : 'all'
+    const filterDesc = [
+        ids ? `${ids.length} dinner event(s)` : 'all events',
+        householdId ? `household ${householdId}` : 'all households'
+    ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
     const {OrderDisplaySchema} = useBookingValidation()
@@ -528,7 +533,10 @@ export async function fetchOrders(
 
     try {
         const orders = await prisma.order.findMany({
-            where: ids ? { dinnerEventId: { in: ids } } : {},
+            where: {
+                ...(ids && { dinnerEventId: { in: ids } }),
+                ...(householdId && { inhabitant: { householdId } })
+            },
             include: { ticketPrice: { select: { ticketType: true } } },
             orderBy: { createdAt: 'asc' }
         })
@@ -1019,14 +1027,126 @@ export async function createTransactionsBatch(
     return transactions.length
 }
 
-/*** INVOICES ***/
-// TODO: Add invoice functions (fetchInvoices, createInvoice, etc.)
-// ADR-005: Invoice relationships:
-// - Strong to Household (invoice cannot exist without household)
-// - Weak to Transactions (transactions can exist without invoice)
+/*** HOUSEHOLD BILLING ***/
 
-/*** TRANSACTIONS ***/
-// TODO: Add transaction functions (fetchTransactions, createTransaction, etc.)
-// ADR-005: Transaction relationships:
-// - Weak to Order (transaction preserves snapshot even if order deleted)
-// - Weak to Invoice (transaction can exist without invoice)
+import {useBilling} from '~/composables/useBilling'
+import {
+    useBillingValidation,
+    type HouseholdBillingResponse,
+    type TransactionDisplay
+} from '~/composables/useBillingValidation'
+
+/**
+ * Fetch billing data for a household.
+ *
+ * ADR-009: Returns HouseholdBillingResponse
+ * ADR-010: Repository handles transformation to domain types
+ */
+export async function fetchHouseholdBilling(
+    d1Client: D1Database,
+    householdId: number
+): Promise<HouseholdBillingResponse | null> {
+    const LOG = '💰 > HOUSEHOLD_BILLING > [GET]'
+    console.info(`${LOG} Fetching billing for household ${householdId}`)
+
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {HouseholdBillingResponseSchema, TransactionDisplaySchema, HouseholdInvoiceSchema} = useBillingValidation()
+    const {calculateCurrentBillingPeriod} = useBilling()
+
+    const household = await prisma.household.findUnique({
+        where: {id: householdId},
+        select: {id: true, pbsId: true, address: true}
+    })
+
+    if (!household) {
+        console.info(`${LOG} Household ${householdId} not found`)
+        return null
+    }
+
+    const currentPeriod = calculateCurrentBillingPeriod()
+
+    // Fetch unbilled transactions (current period)
+    const unbilledTransactions = await prisma.transaction.findMany({
+        where: {
+            invoiceId: null,
+            order: {inhabitant: {householdId}}
+        },
+        include: {
+            order: {
+                include: {
+                    inhabitant: {select: {id: true, name: true}},
+                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+                    ticketPrice: {select: {ticketType: true}}
+                }
+            }
+        },
+        orderBy: {createdAt: 'desc'}
+    })
+
+    // Fetch past invoices with transactions
+    const pastInvoices = await prisma.invoice.findMany({
+        where: {householdId},
+        include: {
+            transactions: {
+                include: {
+                    order: {
+                        include: {
+                            inhabitant: {select: {id: true, name: true}},
+                            dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+                            ticketPrice: {select: {ticketType: true}}
+                        }
+                    }
+                },
+                orderBy: {createdAt: 'desc'}
+            }
+        },
+        orderBy: {cutoffDate: 'desc'}
+    })
+
+    // Transform transaction to domain type
+    const toTransactionDisplay = (tx: typeof unbilledTransactions[0]): TransactionDisplay => {
+        if (!tx.order) {
+            const snapshot = JSON.parse(tx.orderSnapshot)
+            return TransactionDisplaySchema.parse({
+                id: tx.id,
+                amount: tx.amount,
+                createdAt: tx.createdAt,
+                orderSnapshot: tx.orderSnapshot,
+                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: 'Unknown'},
+                inhabitant: snapshot.inhabitant ?? {id: 0, name: 'Unknown'},
+                ticketType: snapshot.ticketType ?? 'ADULT'
+            })
+        }
+        return TransactionDisplaySchema.parse({
+            id: tx.id,
+            amount: tx.amount,
+            createdAt: tx.createdAt,
+            orderSnapshot: tx.orderSnapshot,
+            dinnerEvent: tx.order.dinnerEvent!,
+            inhabitant: tx.order.inhabitant,
+            ticketType: tx.order.ticketPrice?.ticketType ?? 'ADULT'
+        })
+    }
+
+    console.info(`${LOG} Found ${unbilledTransactions.length} unbilled, ${pastInvoices.length} invoices for household ${householdId}`)
+
+    return HouseholdBillingResponseSchema.parse({
+        householdId: household.id,
+        pbsId: household.pbsId,
+        address: household.address,
+        currentPeriod: {
+            periodStart: currentPeriod.start,
+            periodEnd: currentPeriod.end,
+            totalAmount: unbilledTransactions.reduce((sum, tx) => sum + tx.amount, 0),
+            transactions: unbilledTransactions.map(toTransactionDisplay)
+        },
+        pastInvoices: pastInvoices.map(invoice => HouseholdInvoiceSchema.parse({
+            id: invoice.id,
+            billingPeriod: invoice.billingPeriod,
+            cutoffDate: invoice.cutoffDate,
+            paymentDate: invoice.paymentDate,
+            amount: invoice.amount,
+            transactions: invoice.transactions.map(toTransactionDisplay)
+        }))
+    })
+}

@@ -174,6 +174,25 @@ export const useCookingTeamValidation = () => {
         }
     }
 
+    // Serialized schema for CookingTeamCreate (Prisma nested create)
+    // Handles assignments without inhabitant/cookingTeamId (ADR-009)
+    const SerializedCookingTeamCreateSchema = CookingTeamCreateSchema.transform((team) => ({
+        seasonId: team.seasonId,
+        name: team.name,
+        affinity: team.affinity ? serializeWeekDayMap(team.affinity) : null,
+        assignments: team.assignments?.map(a => ({
+            inhabitantId: a.inhabitantId,
+            role: a.role,
+            allocationPercentage: a.allocationPercentage,
+            affinity: a.affinity ? serializeWeekDayMap(a.affinity) : null
+        }))
+    }))
+    type SerializedCookingTeamCreate = z.infer<typeof SerializedCookingTeamCreateSchema>
+
+    type CookingTeamCreateInput = z.infer<typeof CookingTeamCreateSchema>
+    const serializeCookingTeamCreate = (team: CookingTeamCreateInput): SerializedCookingTeamCreate =>
+        SerializedCookingTeamCreateSchema.parse(team)
+
     // Deserialize individual assignment
     const deserializeCookingTeamAssignment = (serialized: Record<string, unknown>): z.infer<typeof CookingTeamAssignmentSchema> => {
         const {deserializeInhabitantDisplay} = useCoreValidation()
@@ -228,20 +247,11 @@ export const useCookingTeamValidation = () => {
 
     /**
      * Transform team data for Prisma create operations
-     * Accepts: CookingTeamCreate (PUT input) or Partial<CookingTeamDetail> (generic)
-     * Excludes: id (auto-generated), cookingDaysCount (computed), dinnerEvents (read-only)
      * Serializes: affinity (WeekDayMap → JSON string)
      */
-    const toPrismaCreateData = (team: z.infer<typeof CookingTeamCreateSchema> | Partial<z.infer<typeof CookingTeamDetailSchema>>) => {
-        // Extract read-only fields first (they may not exist on CookingTeamCreate)
-        const { id: _id, dinnerEvents: _dinnerEvents, ...teamData } = team as Record<string, unknown>
-
-        // Serialize domain types (WeekDayMap → JSON string)
-        const serialized = serializeCookingTeam(teamData as CookingTeamDisplay)
-
-        // Exclude computed fields (schema adds defaults)
-        const { cookingDaysCount: _cookingDaysCount, ...prismaData } = serialized
-        return prismaData
+    type CookingTeamCreate = z.infer<typeof CookingTeamCreateSchema>
+    const toPrismaCreateData = (team: CookingTeamCreate): SerializedCookingTeamCreate => {
+        return serializeCookingTeamCreate(team)
     }
 
     /**
@@ -283,6 +293,8 @@ export const useCookingTeamValidation = () => {
         getTeamMemberCounts,
         getAssignmentIdsForRole,
         serializeCookingTeam,
+        serializeCookingTeamCreate,
+        SerializedCookingTeamCreateSchema,
         deserializeCookingTeamDisplay,
         deserializeCookingTeamDetail,
         serializeCookingTeamAssignment,

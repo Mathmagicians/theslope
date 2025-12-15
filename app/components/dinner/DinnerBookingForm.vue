@@ -14,7 +14,7 @@
  * - Responsive: Horizontal selectors (desktop), vertical (mobile)
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -34,8 +34,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  updateBooking: [inhabitantId: number, dinnerMode: string, ticketPriceId: number]
-  updateAllBookings: [dinnerMode: string]
+  updateBooking: [inhabitantId: number, dinnerMode: DinnerMode, ticketPriceId: number]
+  updateAllBookings: [dinnerMode: DinnerMode]
 }>()
 
 // Self-initialize household store for auxiliary data
@@ -52,16 +52,15 @@ const household = computed(() => props.household ?? selectedHousehold.value)
 const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Ticket business logic
-const {getTicketTypeConfig, formatPrice} = useTicket()
+const {getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
 
 // Validation
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
-const DinnerMode = DinnerModeSchema.enum
+const {DinnerModeSchema} = useBookingValidation()
+const DinnerModeEnum = DinnerModeSchema.enum
 
 // Power mode state
 const isPowerModeActive = ref(false)
-const draftDinnerMode = ref<typeof DinnerMode[keyof typeof DinnerMode]>(DinnerMode.DINEIN)
+const draftDinnerMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
 
 // Random fun empty state message from design system
 const emptyStateMessage = getRandomEmptyMessage('household')
@@ -80,13 +79,15 @@ const tableData = computed(() => {
   return household.value.inhabitants.map(inhabitant => {
     const order = props.orders?.find(o => o.inhabitantId === inhabitant.id && o.dinnerEventId === props.dinnerEvent.id)
     const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
+    const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, props.ticketPrices)
 
     return {
       ...inhabitant,
       ticketConfig,
       order,
-      dinnerMode: order?.dinnerMode ?? DinnerMode.NONE,
-      price: order?.priceAtBooking ?? 0
+      dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
+      price: ticketPrice?.price ?? 0,
+      ticketPriceId: ticketPrice?.id ?? 0
     }
   })
 })
@@ -225,9 +226,9 @@ const handlePowerModeUpdate = () => {
             :form-mode="FORM_MODES.EDIT"
             size="sm"
             :name="`inhabitant-${row.original.id}-mode-edit`"
-            @update:model-value="(mode) => emit('updateBooking', row.original.id, mode, row.original.order?.ticketPriceId ?? 0)"
+            @update:model-value="(mode) => emit('updateBooking', row.original.id, mode, row.original.ticketPriceId)"
           />
-          <span :class="[TYPOGRAPHY.bodyTextMedium, 'whitespace-nowrap']">{{ row.original.price }} kr</span>
+          <span :class="[TYPOGRAPHY.bodyTextMedium, 'whitespace-nowrap']">{{ formatPrice(row.original.price) }} kr</span>
         </div>
       </template>
     </UTable>

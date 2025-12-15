@@ -5,18 +5,20 @@ import type {
     JobRunDisplay,
     JobRunCreate,
     JobRunUpdate,
-    JobType
+    JobType,
+    SeasonImportResponse
 } from '~/composables/useMaintenanceValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
+import type {BillingGenerationResult} from '~~/server/utils/generateBilling'
 
 const LOG = '🔧 > JOB_RUN'
 
 /**
  * Result types that can be stored in JobRun.resultSummary
  */
-export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | Record<string, unknown>
+export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | SeasonImportResponse
 
 /**
  * Fetch recent job runs with optional filtering by job type

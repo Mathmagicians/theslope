@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { useHousehold } from '~/composables/useHousehold'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
-import type { InhabitantDetail } from '~/composables/useCoreValidation'
+import type { InhabitantDetail, InhabitantDisplay } from '~/composables/useCoreValidation'
 import { WEEKDAYS } from '~/types/dateTypes'
 
 describe('useHousehold', () => {
@@ -238,6 +238,98 @@ describe('useHousehold', () => {
           expect(result.fredag).toBe(DinnerMode.TAKEAWAY)
           expect(result.lørdag).toBe(DinnerMode.NONE)
         })
+      })
+    })
+  })
+
+  describe('matchInhabitantByNameWithInitials', () => {
+    const { matchInhabitantByNameWithInitials, createInhabitantMatcher } = useHousehold()
+
+    // Obfuscated test data based on production patterns
+    const testInhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[] = [
+      { id: 4, name: 'Signe', lastName: 'Dalby Madsen' },
+      { id: 12, name: 'Signe', lastName: 'Hansen' },
+      { id: 3, name: 'Erik', lastName: 'Anders Hansen' },
+      { id: 9, name: 'Clara', lastName: 'Urban Koch' },
+      { id: 1, name: 'Helle', lastName: 'Andersen' },
+      // Unique first names (no other inhabitant shares these)
+      { id: 42, name: 'Babyyoda', lastName: 'Skywalker' },
+      { id: 88, name: 'Skransen', lastName: 'Madsen' }
+    ]
+
+    describe('exact match', () => {
+      it.each([
+        { shortName: 'Signe Dalby Madsen', expectedId: 4 },
+        { shortName: 'Signe Hansen', expectedId: 12 },
+        { shortName: 'Erik Anders Hansen', expectedId: 3 },
+        { shortName: 'Helle Andersen', expectedId: 1 }
+      ])('matches "$shortName" exactly', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+
+      it('handles case insensitivity', () => {
+        expect(matchInhabitantByNameWithInitials('SIGNE HANSEN', testInhabitants)).toBe(12)
+        expect(matchInhabitantByNameWithInitials('signe hansen', testInhabitants)).toBe(12)
+      })
+    })
+
+    describe('initials format - multi-part last names', () => {
+      it.each([
+        { shortName: 'Signe D.M.', expectedId: 4, description: 'two-part last name' },
+        { shortName: 'Erik A.H.', expectedId: 3, description: 'two-part last name' },
+        { shortName: 'Clara U.K.', expectedId: 9, description: 'two-part last name' }
+      ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+    })
+
+    describe('initials format - single-part last names', () => {
+      it.each([
+        { shortName: 'Signe H.', expectedId: 12, description: 'disambiguates from Signe D.M.' },
+        { shortName: 'Helle A.', expectedId: 1, description: 'single initial' }
+      ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+    })
+
+    describe('first name only match (Strategy 3)', () => {
+      it.each([
+        { shortName: 'Babyyoda', expectedId: 42, reason: 'unique first name' },
+        { shortName: 'Skransen', expectedId: 88, reason: 'unique first name' },
+        { shortName: 'babyyoda', expectedId: 42, reason: 'case insensitive' },
+        { shortName: 'SKRANSEN', expectedId: 88, reason: 'case insensitive' },
+        { shortName: 'Erik', expectedId: 3, reason: 'unique first name with multi-part last name' },
+        { shortName: 'Clara', expectedId: 9, reason: 'unique first name' },
+        { shortName: 'Helle', expectedId: 1, reason: 'unique first name' }
+      ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+
+      it('returns null for non-unique first name (Signe)', () => {
+        // Signe appears twice (ids 4 and 12) - cannot disambiguate
+        expect(matchInhabitantByNameWithInitials('Signe', testInhabitants)).toBeNull()
+      })
+    })
+
+    describe('no match cases', () => {
+      it.each([
+        { shortName: 'Unknown Person', reason: 'no inhabitant with this name' },
+        { shortName: 'Signe', reason: 'non-unique first name (two Signes exist)' },
+        { shortName: 'Signe X.Y.', reason: 'wrong initials' },
+        { shortName: 'Signe D.', reason: 'incomplete initials for two-part last name' },
+        { shortName: 'Anna D.M.', reason: 'wrong first name' }
+      ])('returns null for "$shortName" ($reason)', ({ shortName }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBeNull()
+      })
+    })
+
+    describe('createInhabitantMatcher', () => {
+      it('creates a bound matcher function', () => {
+        const matcher = createInhabitantMatcher(testInhabitants)
+
+        expect(matcher('Signe D.M.')).toBe(4)
+        expect(matcher('Signe H.')).toBe(12)
+        expect(matcher('Unknown')).toBeNull()
       })
     })
   })

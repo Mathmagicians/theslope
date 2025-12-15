@@ -3,7 +3,7 @@ import {useTicket} from '~/composables/useTicket'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 
 describe('useTicket', () => {
-    const {ticketTypeConfig, determineTicketType, getTicketTypeConfig, formatPrice} = useTicket()
+    const {ticketTypeConfig, determineTicketType, getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
     const referenceDate = new Date('2025-01-15')
     const ticketPrices = TicketFactory.defaultTicketPrices()
 
@@ -82,6 +82,37 @@ describe('useTicket', () => {
                 expect(config.icon).toBe(expectedIcon)
             }
         )
+    })
+
+    describe('getTicketPriceForInhabitant', () => {
+        it.each([
+            ['1 year old (BABY)', '2024-01-01', 'BABY', 0],
+            ['8 years old (CHILD)', '2017-01-01', 'CHILD', 3000],
+            ['25 years old (ADULT)', '2000-01-01', 'ADULT', 5000]
+        ])('GIVEN %s WHEN getting ticket price THEN returns matching TicketPrice with price %i',
+            (_, birthDateStr, expectedType, expectedPrice) => {
+                const birthDate = new Date(birthDateStr)
+                const result = getTicketPriceForInhabitant(birthDate, ticketPrices, referenceDate)
+
+                expect(result).toBeDefined()
+                expect(result!.ticketType).toBe(expectedType)
+                expect(result!.price).toBe(expectedPrice)
+            }
+        )
+
+        it('GIVEN no birthDate WHEN getting ticket price THEN returns ADULT ticket price', () => {
+            const result = getTicketPriceForInhabitant(null, ticketPrices, referenceDate)
+
+            expect(result).toBeDefined()
+            expect(result!.ticketType).toBe('ADULT')
+            expect(result!.price).toBe(5000)
+        })
+
+        it('GIVEN no ticket prices WHEN getting ticket price THEN returns undefined', () => {
+            const result = getTicketPriceForInhabitant(new Date('2020-01-01'), undefined, referenceDate)
+
+            expect(result).toBeUndefined()
+        })
     })
 
     describe('formatPrice', () => {

@@ -1726,34 +1726,17 @@ export const TransactionWhereUniqueInputSchema: z.ZodType<Prisma.TransactionWher
   z.object({
     id: z.number().int(),
     orderId: z.number().int(),
-    invoiceId: z.number().int(),
-  }),
-  z.object({
-    id: z.number().int(),
-    orderId: z.number().int(),
-  }),
-  z.object({
-    id: z.number().int(),
-    invoiceId: z.number().int(),
   }),
   z.object({
     id: z.number().int(),
   }),
   z.object({
     orderId: z.number().int(),
-    invoiceId: z.number().int(),
-  }),
-  z.object({
-    orderId: z.number().int(),
-  }),
-  z.object({
-    invoiceId: z.number().int(),
   }),
 ])
 .and(z.object({
   id: z.number().int().optional(),
   orderId: z.number().int().optional(),
-  invoiceId: z.number().int().optional(),
   AND: z.union([ z.lazy(() => TransactionWhereInputSchema), z.lazy(() => TransactionWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => TransactionWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => TransactionWhereInputSchema), z.lazy(() => TransactionWhereInputSchema).array() ]).optional(),
@@ -1762,6 +1745,7 @@ export const TransactionWhereUniqueInputSchema: z.ZodType<Prisma.TransactionWher
   amount: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   userEmailHandle: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  invoiceId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   order: z.union([ z.lazy(() => OrderNullableScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional().nullable(),
   invoice: z.union([ z.lazy(() => InvoiceNullableScalarRelationFilterSchema), z.lazy(() => InvoiceWhereInputSchema) ]).optional().nullable(),
 }).strict());

@@ -2,17 +2,20 @@ import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {z} from 'zod'
 import {isSameDay} from 'date-fns'
 import {parseCalendarCSV, parseTeamsCSV} from '~~/server/utils/csvImport'
-import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam} from '~~/server/data/prismaRepository'
+import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, fetchTeams, createTeamAssignment} from '~~/server/data/prismaRepository'
+import {pruneAndCreate} from '~/utils/batchUtils'
 import {saveDinnerEvents, assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useSeason} from '~/composables/useSeason'
-import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {useHousehold} from '~/composables/useHousehold'
+import {useCookingTeam} from '~/composables/useCookingTeam'
+import {useMaintenanceValidation, type SeasonImportResponse} from '~/composables/useMaintenanceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
-import type {CookingTeamCreate, CookingTeamDetail} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamCreate, CookingTeamDisplay, CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
-const {JobType, JobStatus} = useMaintenanceValidation()
+const {JobType, JobStatus, SeasonImportResponseSchema} = useMaintenanceValidation()
 
 /**
  * Request schema for season import
@@ -21,19 +24,6 @@ const SeasonImportRequestSchema = z.object({
     calendarCsv: z.string().min(1, 'Calendar CSV content is required'),
     teamsCsv: z.string().min(1, 'Teams CSV content is required')
 })
-
-/**
- * Response type for season import
- */
-interface SeasonImportResponse {
-    seasonId: number
-    seasonShortName: string
-    isNew: boolean
-    teamsCreated: number
-    dinnerEventsCreated: number
-    teamAssignmentsCreated: number
-    unmatchedNames: string[]
-}
 
 /**
  * POST /api/admin/season/import
@@ -84,17 +74,9 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         console.info(`${LOG} Parsing teams CSV`)
         const allInhabitants = await fetchInhabitants(d1Client)
 
-        // Create name matcher: normalize and compare first name + last name
-        const normalizedInhabitants = allInhabitants.map(i => ({
-            id: i.id,
-            fullName: `${i.name} ${i.lastName}`.toLowerCase().trim()
-        }))
-
-        const matchInhabitant = (csvName: string): number | null => {
-            const normalizedCsvName = csvName.toLowerCase().trim()
-            const match = normalizedInhabitants.find(i => i.fullName === normalizedCsvName)
-            return match?.id ?? null
-        }
+        // Create name matcher using shared business logic
+        const {createInhabitantMatcher} = useHousehold()
+        const matchInhabitant = createInhabitantMatcher(allInhabitants)
 
         const parsedTeams = parseTeamsCSV(teamsCsv, matchInhabitant)
         console.info(`${LOG} Teams parsed: ${parsedTeams.teams.length} teams, ${parsedTeams.unmatched.length} unmatched names`)
@@ -149,64 +131,112 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
             }
         }
 
-        // Step 6: Create cooking teams with assignments
+        // Step 6: Create cooking teams with assignments (idempotent - ADR-015)
         const dinnerEvents = await fetchDinnerEvents(d1Client, savedSeason.id!)
-        const createdTeams: CookingTeamDetail[] = []
+        const existingTeams = await fetchTeams(d1Client, savedSeason.id!)
+        const {createDefaultTeamName, extractTeamNumber} = useCookingTeam()
 
-        // Build inhabitant lookup by ID for assignment creation
-        const inhabitantById = new Map(allInhabitants.map(i => [i.id, i]))
+        // Build desired teams from CALENDAR team numbers (not just teams CSV)
+        // Teams CSV provides member assignments; calendar provides team numbers
+        type DesiredTeam = { teamNumber: number, teamCreate: CookingTeamCreate }
 
-        // Count how many teams each inhabitant is assigned to (for allocation percentage)
-        const teamCountByInhabitant = new Map<number, number>()
-        for (const parsedTeam of parsedTeams.teams) {
-            for (const member of parsedTeam.members) {
-                if (member.inhabitantId !== null) {
-                    const count = teamCountByInhabitant.get(member.inhabitantId) ?? 0
-                    teamCountByInhabitant.set(member.inhabitantId, count + 1)
-                }
-            }
-        }
+        const calendarTeamNumbers = Array.from(parsedCalendar.teamDateMapping.keys()).sort((a, b) => a - b)
 
-        for (const parsedTeam of parsedTeams.teams) {
-            const assignments = parsedTeam.members
-                .filter(m => m.inhabitantId !== null)
-                .map(m => {
-                    const inhabitant = inhabitantById.get(m.inhabitantId!)!
-                    const teamCount = teamCountByInhabitant.get(m.inhabitantId!) ?? 1
-                    const allocationPercentage = Math.round(100 / teamCount)
-                    return {
+        // Map CSV team name → parsed team (for member lookup)
+        const csvTeamByNumber = new Map(
+            parsedTeams.teams.map(t => [extractTeamNumber(t.name), t] as const)
+                .filter((entry): entry is [number, typeof parsedTeams.teams[0]] => entry[0] !== null)
+        )
+
+        // Count team assignments per inhabitant for allocation percentage
+        const teamCountByInhabitant = parsedTeams.teams
+            .flatMap(t => t.members)
+            .filter(m => m.inhabitantId !== null)
+            .reduce((acc, m) => acc.set(m.inhabitantId!, (acc.get(m.inhabitantId!) ?? 0) + 1), new Map<number, number>())
+
+        // Build desired team for each calendar team number
+        const desiredTeams: DesiredTeam[] = calendarTeamNumbers.map(teamNumber => {
+            const csvTeam = csvTeamByNumber.get(teamNumber)
+            const assignments = csvTeam
+                ? csvTeam.members
+                    .filter(m => m.inhabitantId !== null)
+                    .map(m => ({
                         inhabitantId: m.inhabitantId!,
                         role: m.role,
-                        allocationPercentage,
-                        affinity: m.affinity,
-                        inhabitant
-                    }
-                })
+                        allocationPercentage: Math.round(100 / (teamCountByInhabitant.get(m.inhabitantId!) ?? 1)),
+                        affinity: m.affinity
+                    }))
+                : []
 
-            const teamCreate: CookingTeamCreate = {
-                seasonId: savedSeason.id!,
-                name: parsedTeam.name,
-                affinity: null,
-                assignments
-            }
-
-            const createdTeam = await createTeam(d1Client, teamCreate)
-            createdTeams.push(createdTeam)
-            console.info(`${LOG} Created team: ${createdTeam.name} (ID: ${createdTeam.id}) with ${assignments.length} members`)
-        }
-
-        // Step 7: Assign cooking teams to dinner events based on calendar mapping
-        // Map team number from CSV (1, 2, 3...) to created team (by index)
-        const teamNumberToId = new Map<number, number>()
-        const teamNumbers = Array.from(parsedCalendar.teamDateMapping.keys()).sort((a, b) => a - b)
-        teamNumbers.forEach((teamNum, index) => {
-            const team = createdTeams[index]
-            if (team && index < createdTeams.length) {
-                teamNumberToId.set(teamNum, team.id!)
+            return {
+                teamNumber,
+                teamCreate: {
+                    seasonId: savedSeason.id!,
+                    name: createDefaultTeamName(savedSeason.shortName!, teamNumber),
+                    affinity: null,
+                    assignments
+                }
             }
         })
 
-        let teamAssignmentsCreated = 0
+        // Reconcile teams using pruneAndCreate
+        const getTeamNumber = (item: CookingTeamDisplay | DesiredTeam): number | undefined =>
+            'teamNumber' in item ? item.teamNumber : extractTeamNumber(item.name) ?? undefined
+
+        const reconcileTeams = pruneAndCreate<CookingTeamDisplay, DesiredTeam, number>(
+            getTeamNumber,
+            () => true // Same team number = same team (don't update)
+        )
+        const teamReconciliation = reconcileTeams(existingTeams)(desiredTeams)
+
+        // Create new teams
+        const newTeams = await Promise.all(
+            teamReconciliation.create.map(t => createTeam(d1Client, t.teamCreate))
+        )
+        newTeams.forEach(t => console.info(`${LOG} Created team: ${t.name} (ID: ${t.id}) with ${t.assignments.length} members`))
+
+        // For existing teams, reconcile assignments
+        type DesiredAssignment = CookingTeamCreate['assignments'] extends (infer A)[] | undefined ? A : never
+
+        const reconcileAssignments = pruneAndCreate<CookingTeamAssignment, DesiredAssignment, number>(
+            a => a.inhabitantId,
+            (e, i) => e.role === i.role
+        )
+
+        let memberAssignmentsCreated = 0
+        for (const desired of teamReconciliation.idempotent) {
+            const existingTeam = existingTeams.find(e => extractTeamNumber(e.name) === desired.teamNumber)
+            if (!existingTeam?.id || !desired.teamCreate.assignments) continue
+
+            const assignmentReconciliation = reconcileAssignments(existingTeam.assignments)(desired.teamCreate.assignments)
+
+            const createdAssignments = await Promise.all(
+                assignmentReconciliation.create.map(a => createTeamAssignment(d1Client, {
+                    cookingTeamId: existingTeam.id!,
+                    inhabitantId: a.inhabitantId,
+                    role: a.role,
+                    allocationPercentage: a.allocationPercentage,
+                    affinity: a.affinity ?? null
+                }))
+            )
+            memberAssignmentsCreated += createdAssignments.length
+            if (createdAssignments.length > 0) {
+                console.info(`${LOG} Added ${createdAssignments.length} members to existing team: ${existingTeam.name}`)
+            }
+        }
+
+        const teamsCreated = newTeams.length
+        console.info(`${LOG} Teams: ${teamsCreated} created, ${teamReconciliation.idempotent.length} existing, ${memberAssignmentsCreated} member assignments added`)
+
+        // Step 7: Assign cooking teams to dinner events based on calendar mapping
+        const allTeams = [...existingTeams, ...newTeams]
+        const teamNumberToId = new Map(
+            allTeams
+                .map(t => [extractTeamNumber(t.name), t.id] as const)
+                .filter((entry): entry is [number, number] => entry[0] !== null && entry[1] !== undefined)
+        )
+
+        let dinnerTeamAssignments = 0
         for (const [teamNum, dates] of parsedCalendar.teamDateMapping) {
             const cookingTeamId = teamNumberToId.get(teamNum)
             if (!cookingTeamId) {
@@ -216,24 +246,26 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
 
             for (const date of dates) {
                 const dinnerEvent = dinnerEvents.find(de => isSameDay(de.date, date))
-                if (dinnerEvent) {
+                // Skip if already assigned to correct team (idempotent - ADR-015)
+                if (dinnerEvent && dinnerEvent.cookingTeamId !== cookingTeamId) {
                     await assignCookingTeamToDinnerEvent(d1Client, dinnerEvent.id!, cookingTeamId)
-                    teamAssignmentsCreated++
+                    dinnerTeamAssignments++
                 }
             }
         }
 
-        console.info(`${LOG} Assigned ${teamAssignmentsCreated} dinner events to teams`)
+        console.info(`${LOG} Assigned ${dinnerTeamAssignments} dinner events to teams`)
 
-        const response: SeasonImportResponse = {
+        // Build and validate response through schema (ADR-001)
+        const response = SeasonImportResponseSchema.parse({
             seasonId: savedSeason.id!,
             seasonShortName: savedSeason.shortName!,
             isNew,
-            teamsCreated: createdTeams.length,
+            teamsCreated,
             dinnerEventsCreated,
-            teamAssignmentsCreated,
+            teamAssignmentsCreated: dinnerTeamAssignments,
             unmatchedNames: parsedTeams.unmatched
-        }
+        })
 
         // Complete job run with success or partial (if unmatched names)
         const status = parsedTeams.unmatched.length > 0 ? JobStatus.PARTIAL : JobStatus.SUCCESS

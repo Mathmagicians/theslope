@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {JobTypeSchema, JobStatusSchema} from '~~/prisma/generated/zod'
 import {useBookingValidation, type DailyMaintenanceResult} from './useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from './useHeynaboValidation'
+import {useBillingValidation, type BillingGenerationResult} from './useBillingValidation'
 
 /**
  * Validation schemas for maintenance/job entities
@@ -17,6 +18,7 @@ export const useMaintenanceValidation = () => {
     // Import result schemas for deserialization
     const {DailyMaintenanceResultSchema} = useBookingValidation()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
+    const {BillingGenerationResultSchema} = useBillingValidation()
 
     /**
      * JobRun Display - for index endpoint (GET /api/admin/job-run)
@@ -73,9 +75,25 @@ export const useMaintenanceValidation = () => {
     // ============================================================================
 
     /**
+     * Season Import Response - result for MAINTENANCE_IMPORT job type
+     */
+    const SeasonImportResponseSchema = z.object({
+        seasonId: z.number().int().positive(),
+        seasonShortName: z.string(),
+        isNew: z.boolean(),
+        teamsCreated: z.number().int().min(0),
+        dinnerEventsCreated: z.number().int().min(0),
+        teamAssignmentsCreated: z.number().int().min(0),
+        unmatchedNames: z.array(z.string())
+    })
+
+    // Internal type alias for use within this composable
+    type _SeasonImportResponse = z.infer<typeof SeasonImportResponseSchema>
+
+    /**
      * Serialize result summary for storage in DB
      */
-    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | Record<string, unknown>): string =>
+    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | _SeasonImportResponse): string =>
         JSON.stringify(result)
 
     /**
@@ -84,7 +102,7 @@ export const useMaintenanceValidation = () => {
     const deserializeResultSummary = (
         jobType: z.infer<typeof JobTypeSchema>,
         resultSummary: string | null
-    ): DailyMaintenanceResult | HeynaboImportResponse | Record<string, unknown> | null => {
+    ): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | _SeasonImportResponse | null => {
         if (!resultSummary) return null
 
         const parsed = JSON.parse(resultSummary)
@@ -94,8 +112,12 @@ export const useMaintenanceValidation = () => {
                 return DailyMaintenanceResultSchema.parse(parsed)
             case JobType.HEYNABO_IMPORT:
                 return HeynaboImportResponseSchema.parse(parsed)
+            case JobType.MAINTENANCE_IMPORT:
+                return SeasonImportResponseSchema.parse(parsed)
+            case JobType.MONTHLY_BILLING:
+                return BillingGenerationResultSchema.parse(parsed)
             default:
-                return parsed as Record<string, unknown>
+                throw new Error(`Unknown job type: ${jobType}`)
         }
     }
 
@@ -115,6 +137,9 @@ export const useMaintenanceValidation = () => {
         TriggerJobRequestSchema,
         JobRunQuerySchema,
 
+        // Result schemas
+        SeasonImportResponseSchema,
+
         // Serialization (ADR-010)
         serializeResultSummary,
         deserializeResultSummary
@@ -128,3 +153,4 @@ export type JobRunUpdate = z.infer<ReturnType<typeof useMaintenanceValidation>['
 export type TriggerJobRequest = z.infer<ReturnType<typeof useMaintenanceValidation>['TriggerJobRequestSchema']>
 export type JobType = z.infer<ReturnType<typeof useMaintenanceValidation>['JobTypeSchema']>
 export type JobStatus = z.infer<ReturnType<typeof useMaintenanceValidation>['JobStatusSchema']>
+export type SeasonImportResponse = z.infer<ReturnType<typeof useMaintenanceValidation>['SeasonImportResponseSchema']>

@@ -5,6 +5,7 @@ import type {
     CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
+    CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
@@ -15,6 +16,9 @@ import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
 import {TicketFactory} from "./ticketFactory"
 import {DinnerEventFactory} from "./dinnerEventFactory"
+
+// Nested assignment type for CookingTeamCreate (omits id, cookingTeamId, inhabitant)
+type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>[number]
 
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
@@ -113,6 +117,27 @@ export class SeasonFactory {
                 updatedAt: new Date()
             } as DinnerEventDisplay
         ],
+        ...overrides
+    })
+
+    /**
+     * Default assignment for CREATE input (no inhabitant/cookingTeamId - ADR-009)
+     */
+    static readonly defaultCookingTeamCreateAssignment = (overrides: Partial<CookingTeamCreateAssignment> = {}): CookingTeamCreateAssignment => ({
+        inhabitantId: 42,
+        role: 'CHEF' as const,
+        allocationPercentage: 100,
+        affinity: null,
+        ...overrides
+    })
+
+    /**
+     * Default team for CREATE input (no id, no computed fields - ADR-009)
+     */
+    static readonly defaultCookingTeamCreate = (overrides: Partial<CookingTeamCreate> = {}): CookingTeamCreate => ({
+        seasonId: 1,
+        name: 'TestTeam',
+        affinity: null,
         ...overrides
     })
 

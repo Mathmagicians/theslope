@@ -306,6 +306,31 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
+    // Monthly Billing Generation Result (ADR-015: Idempotent jobs)
+    // ============================================================================
+
+    /**
+     * Inner result of monthly billing generation
+     * Returns null if billing period already exists (idempotent)
+     */
+    const BillingGenerationResultSchema = z.object({
+        billingPeriodSummaryId: z.number().int().positive(),
+        billingPeriod: z.string(),
+        invoiceCount: z.number().int().min(0),
+        transactionCount: z.number().int().min(0),
+        totalAmount: z.number().int().min(0)
+    }).nullable()
+
+    /**
+     * Response from POST /api/admin/maintenance/monthly
+     * Wraps result to ensure JSON response (null alone becomes 204)
+     */
+    const MonthlyBillingResponseSchema = z.object({
+        result: BillingGenerationResultSchema,
+        jobRunId: z.number().int().positive()
+    })
+
+    // ============================================================================
     // CSV Export Functions
     // ============================================================================
 
@@ -390,7 +415,17 @@ export const useBillingValidation = () => {
         getLastDayOfMonth,
         generateCsvRow,
         generateBillingCsv,
-        generateCsvFilename
+        generateCsvFilename,
+
+        // Monthly Billing Generation
+        BillingGenerationResultSchema,
+        MonthlyBillingResponseSchema,
+
+        // Household Billing
+        HouseholdBillingResponseSchema,
+        TransactionDisplaySchema,
+        HouseholdInvoiceSchema,
+        CurrentPeriodBillingSchema
     }
 }
 
@@ -409,3 +444,7 @@ export type ImportedOrder = z.infer<ReturnType<typeof useBillingValidation>['Imp
 export type BillingImportRequest = z.infer<ReturnType<typeof useBillingValidation>['BillingImportRequestSchema']>
 export type BillingImportResponse = z.infer<ReturnType<typeof useBillingValidation>['BillingImportResponseSchema']>
 export type ParsedHouseholdOrder = z.infer<ReturnType<typeof useBillingValidation>['ParsedHouseholdOrderSchema']>
+
+// Monthly Billing Generation types
+export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValidation>['BillingGenerationResultSchema']>
+export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>

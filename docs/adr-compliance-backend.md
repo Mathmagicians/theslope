@@ -24,12 +24,12 @@
 | `/api/admin/dinner-event/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
-| **Admin - Teams** | | | | | **✅ FULLY COMPLIANT (2025-11-11)**                                                               |
+| **Admin - Teams** | | | | | **✅ FULLY COMPLIANT (2025-12-15)** - Uses teamService for auto-assignment                       |
 | `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteTeam() → CookingTeamWithMembers                                                            |
 | `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → CookingTeamWithMembers[]                                                          |
-| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeam() → CookingTeamWithMembers                                                            |
+| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events                                     |
 | `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → CookingTeamWithMembers                                                             |
-| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeam() → CookingTeamWithMembers                                                            |
+| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events                                    |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → number                                                          |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
@@ -59,6 +59,7 @@
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | Returns active season ID (number \| null)                                                        |
 | `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignTeamsResponse                                                                      |
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignAffinitiesResponse                                                                 |
+| `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002/015 patterns, job tracking, uses teamService                             |
 | **Admin - Allergy Types** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyTypes() validates with AllergyTypDetailSchema                                        |
 | `/api/admin/allergy-type/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyType() validates with AllergyTypeDisplaySchema                                       |

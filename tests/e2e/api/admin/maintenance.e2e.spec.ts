@@ -5,6 +5,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {BrowserContext} from '@playwright/test'
@@ -202,5 +203,87 @@ test.describe('Daily Maintenance API', () => {
         expect(finalOrder?.state).toBe(OrderState.CLOSED)
         // Transaction creation is verified by the endpoint returning successfully
         // (createTransactions runs after closeOrders in the maintenance pipeline)
+    })
+
+    // =========================================================================
+    // Monthly Billing - generates Invoice + BillingPeriodSummary from Transactions
+    // =========================================================================
+
+    test.describe('Monthly Billing', () => {
+
+        test('generateBilling - creates BillingPeriodSummary from transactions', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id!)
+
+            // Setup: Create CONSUMED dinner → CLOSED order → Transaction
+            const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -5, {totalCost: 50000})
+            createdDinnerEventIds.push(dinner.id)
+            const {household} = await createTestOrder(context, fullSeason, dinner.id, testSalt)
+            createdHouseholdIds.push(household.id)
+            await SeasonFactory.runDailyMaintenance(context)
+
+            // Act: Generate billing (creates Invoice + BillingPeriodSummary)
+            const response = await BillingFactory.generateBilling(context)
+
+            // Assert: JobRun was created
+            expect(response.jobRunId).toBeGreaterThan(0)
+
+            // Assert: Result has billing data (or null if period already exists - idempotent)
+            if (response.result !== null) {
+                expect(response.result.billingPeriodSummaryId).toBeGreaterThan(0)
+                expect(response.result.invoiceCount).toBeGreaterThanOrEqual(1)
+                expect(response.result.transactionCount).toBeGreaterThanOrEqual(1)
+            }
+
+            // Assert: Billing period exists with correct data
+            const periods = await BillingFactory.getBillingPeriods(context)
+            expect(periods.length).toBeGreaterThan(0)
+        })
+
+        test('GET /api/admin/billing/periods/[id] - returns billing period with invoices', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Requires: billing generation to have run first
+            const periods = await BillingFactory.getBillingPeriods(context)
+            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
+
+            const period = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+            expect(period.invoices).toBeDefined()
+            expect(period.shareToken).toBeDefined()
+        })
+
+        test('GET /api/public/billing/[token] - returns billing data via magic link', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Requires: billing generation to have run first
+            const periods = await BillingFactory.getBillingPeriods(context)
+            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
+
+            const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+            const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)
+
+            expect(publicData.id).toBe(periodDetail.id)
+            expect(publicData.invoices.length).toBe(periodDetail.invoices.length)
+        })
+
+        test('GET /api/public/billing/[token]/csv - exports CSV with correct format', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // Requires: billing generation to have run first
+            const periods = await BillingFactory.getBillingPeriods(context)
+            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
+
+            const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+            const {csv, filename} = await BillingFactory.getBillingCsvByToken(context, periodDetail.shareToken)
+
+            // Verify CSV structure
+            expect(csv).toContain('Kunde nr,Adresse,Total DKK')
+            expect(filename).toContain(periodDetail.billingPeriod)
+
+            // Verify CSV has data rows (header + invoices)
+            const lines = csv.split('\n')
+            expect(lines.length).toBe(1 + periodDetail.invoices.length)
+        })
     })
 })

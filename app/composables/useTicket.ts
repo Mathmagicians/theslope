@@ -95,6 +95,24 @@ export const useTicket = () => {
     }
 
     /**
+     * Get the matching TicketPrice for an inhabitant based on their age
+     * Returns the full TicketPrice object including id and price
+     *
+     * @param birthDate - Date of birth
+     * @param ticketPrices - Season ticket prices with age limits
+     * @param referenceDate - Date to calculate age on (default: today)
+     * @returns TicketPrice object or undefined if not found
+     */
+    const getTicketPriceForInhabitant = (
+        birthDate: Date | null,
+        ticketPrices?: TicketPrice[],
+        referenceDate?: Date
+    ): TicketPrice | undefined => {
+        const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
+        return ticketPrices?.find(tp => tp.ticketType === ticketType)
+    }
+
+    /**
      * Convert price from øre to DKK (integer)
      * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Price in DKK as integer
@@ -112,6 +130,7 @@ export const useTicket = () => {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        getTicketPriceForInhabitant,
         convertPriceToDecimalFormat,
         formatPrice
     }

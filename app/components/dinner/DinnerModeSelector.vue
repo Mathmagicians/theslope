@@ -60,7 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: WeekDay | DinnerMode]
+  'update:modelValue': [value: DinnerMode]
 }>()
 
 // Design system

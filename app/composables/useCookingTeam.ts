@@ -19,6 +19,15 @@ export const useCookingTeam = () => {
         return `Madhold ${teamNumber} - ${seasonShortName}`
     }
 
+    /**
+     * Extract team number from team name (e.g., "Madhold 2" → 2, "Madhold 1 - 08/25-06/26" → 1)
+     * Returns null if no number found in the name
+     */
+    const extractTeamNumber = (teamName: string): number | null => {
+        const match = teamName.match(/(\d+)/)
+        return match ? parseInt(match[1]!, 10) : null
+    }
+
     const getDefaultCookingTeam = (
         seasonId: number,
         seasonShortName: string,
@@ -104,6 +113,7 @@ export const useCookingTeam = () => {
         CookingTeamSchema,
         getTeamColor,
         createDefaultTeamName,
+        extractTeamNumber,
         getDefaultCookingTeam,
         useInhabitantsWithAssignments,
         chunkTeamAffinities

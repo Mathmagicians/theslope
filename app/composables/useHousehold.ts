@@ -1,6 +1,7 @@
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import type {InhabitantDetail} from './useCoreValidation'
-import {useBookingValidation} from './useBookingValidation'
+import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 /**
  * Business logic for working with households and inhabitants
@@ -54,7 +55,89 @@ export const useHousehold = () => {
         return aggregated
     }
 
+    /**
+     * Format inhabitant name with last name initials (for display)
+     * Used when disambiguating inhabitants with same first name
+     * Example: "Mads Bruun Hovgaard" → "Mads B.H."
+     */
+    const formatNameWithInitials = (inhabitant: Pick<InhabitantDisplay, 'name' | 'lastName'>): string => {
+        const lastNameParts = inhabitant.lastName.split(/\s+/)
+        const initials = lastNameParts.map(part => `${part.charAt(0).toUpperCase()}.`).join('')
+        return `${inhabitant.name} ${initials}`
+    }
+
+    /**
+     * Match a short name against inhabitants list
+     * Supports three formats:
+     * 1. Exact match: "Mads Bruun Hovgaard" matches inhabitant with name="Mads", lastName="Bruun Hovgaard"
+     * 2. Initials format: "Mads B.H." matches inhabitant with name="Mads", lastName="Bruun Hovgaard"
+     * 3. First name only: "Babyyoda" matches inhabitant with name="Babyyoda" (unique first name)
+     *
+     * @param shortName - Name to match (e.g., "Mads B.H." or "Mads Bruun Hovgaard" or "Babyyoda")
+     * @param inhabitants - List of inhabitants to match against
+     * @returns Matched inhabitant ID or null if no match
+     */
+    const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]): number | null => {
+        const normalizedName = shortName.toLowerCase().trim()
+
+        // Strategy 1: Exact match on "firstName lastName"
+        const exactMatch = inhabitants.find(i =>
+            `${i.name} ${i.lastName}`.toLowerCase().trim() === normalizedName
+        )
+        if (exactMatch) return exactMatch.id
+
+        // Strategy 2: Match "FirstName X.Y." format against initials
+        const nameParts = normalizedName.split(/\s+/)
+        if (nameParts.length >= 2) {
+            const firstName = nameParts[0]
+            const lastNamePart = nameParts.slice(1).join(' ')
+
+            // Check if last name part contains initials (dots indicate abbreviation)
+            if (lastNamePart.includes('.')) {
+                // Extract initials: "b.h." → ["b", "h"]
+                const initials = lastNamePart
+                    .split('.')
+                    .map(s => s.trim().toLowerCase())
+                    .filter(s => s.length > 0)
+
+                if (initials.length > 0) {
+                    // Find inhabitant where first name matches and last name parts start with initials
+                    const initialsMatch = inhabitants.find(i => {
+                        if (i.name.toLowerCase() !== firstName) return false
+
+                        const lastNameParts = i.lastName.toLowerCase().split(/\s+/)
+                        if (lastNameParts.length !== initials.length) return false
+
+                        return initials.every((initial, idx) =>
+                            lastNameParts[idx]?.startsWith(initial)
+                        )
+                    })
+
+                    if (initialsMatch) return initialsMatch.id
+                }
+            }
+        }
+
+        // Strategy 3: First name only match (must be unique)
+        const firstNameMatches = inhabitants.filter(i =>
+            i.name.toLowerCase() === normalizedName
+        )
+        if (firstNameMatches.length === 1) return firstNameMatches[0]!.id
+
+        return null
+    }
+
+    /**
+     * Create a matcher function bound to a specific inhabitants list
+     */
+    const createInhabitantMatcher = (inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]) => {
+        return (shortName: string): number | null => matchInhabitantByNameWithInitials(shortName, inhabitants)
+    }
+
     return {
-        computeAggregatedPreferences
+        computeAggregatedPreferences,
+        formatNameWithInitials,
+        matchInhabitantByNameWithInitials,
+        createInhabitantMatcher
     }
 }

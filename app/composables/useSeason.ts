@@ -11,7 +11,7 @@ import {useTicket} from '~/composables/useTicket'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, dateToWeekDay} from "~/utils/season"
+    selectMostAppropriateActiveSeason, dateToWeekDay, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 

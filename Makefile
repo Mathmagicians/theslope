@@ -20,6 +20,9 @@ CALENDAR_CSV := .theslope/team-import/calendar.csv
 TEAMS_CSV_TEST := .theslope/team-import/test_teams.csv
 TEAMS_CSV_PROD := .theslope/team-import/teams.csv
 
+# Comma variable for use in $(call ...) where literal commas are separators
+COMMA := ,
+
 # ============================================================================
 # MACROS
 # ============================================================================
@@ -245,7 +248,7 @@ theslope-import-orders-prod: ## Import orders CSV to production
 .PHONY: theslope-import-season-local theslope-import-season-dev theslope-import-season-prod
 
 define theslope_import_season
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(3) | jq -Rs .), \"teamsCsv\": $$(cat $(4) | jq -Rs .)}")
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(3) | jq -Rs .)$(COMMA) \"teamsCsv\": $$(cat $(4) | jq -Rs .)}")
 endef
 
 theslope-import-season-local: ## Import season CSV to localhost

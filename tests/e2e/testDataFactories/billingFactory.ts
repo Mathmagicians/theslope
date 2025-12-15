@@ -8,15 +8,17 @@ import {
     type BillingImportResponse,
     type BillingPeriodSummaryDetail,
     type BillingPeriodSummaryDisplay,
-    type BillingInvoice
+    type BillingInvoice,
+    type MonthlyBillingResponse
 } from '~/composables/useBillingValidation'
 
 const {headers, salt} = testHelpers
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'
 const BILLING_PERIODS_ENDPOINT = '/api/admin/billing/periods'
 const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
+const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
 const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
-const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, parseCSV} = useBillingValidation()
+const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, MonthlyBillingResponseSchema, parseCSV} = useBillingValidation()
 
 export class BillingFactory {
 
@@ -164,7 +166,7 @@ Børn (2-12 år),,${childCounts}
 
         const contentDisposition = response.headers()['content-disposition'] || ''
         const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
-        const filename = filenameMatch ? filenameMatch[1] : ''
+        const filename = filenameMatch?.[1] ?? ''
 
         return {csv: await response.text(), filename}
     }
@@ -189,5 +191,24 @@ Børn (2-12 år),,${childCounts}
     ): Promise<{status: number, body: unknown}> => {
         const response = await context.request.get(`${BILLING_PERIODS_ENDPOINT}/${id}`, {headers})
         return {status: response.status(), body: await response.json().catch(() => null)}
+    }
+
+    // ============================================================================
+    // Monthly Billing Generation
+    // ============================================================================
+
+    /**
+     * Generate monthly billing (POST /api/admin/maintenance/monthly)
+     * Creates BillingPeriodSummary + Invoices from unbilled Transactions
+     * ADR-015: Idempotent - returns null if billing period already exists
+     */
+    static readonly generateBilling = async (
+        context: BrowserContext
+    ): Promise<MonthlyBillingResponse> => {
+        const response = await context.request.post(MONTHLY_BILLING_ENDPOINT, {headers})
+        const text = await response.text()
+        expect(response.status(), `Generate billing failed (status ${response.status()}): ${text}`).toBe(200)
+        const body = JSON.parse(text)
+        return MonthlyBillingResponseSchema.parse(body)
     }
 }

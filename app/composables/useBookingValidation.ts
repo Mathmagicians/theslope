@@ -450,8 +450,8 @@ export const useBookingValidation = () => {
                 const ticketPrice = ticket.ticketPrice as Record<string, unknown> | undefined
                 return {
                     ...ticket,
-                    // Flatten ticketType from ticketPrice relation
-                    ticketType: ticketPrice?.ticketType,
+                    // Flatten ticketType from ticketPrice relation (null when TicketPrice deleted)
+                    ticketType: ticketPrice?.ticketType ?? null,
                     // Add parent dinnerEvent reference
                     dinnerEvent: dinnerEventForTickets,
                     // Deserialize inhabitant's dinnerPreferences JSON string
