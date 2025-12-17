@@ -165,8 +165,9 @@ Børn (2-12 år),,${childCounts}
         expect(response.status(), 'Get billing CSV failed').toBe(200)
 
         const contentDisposition = response.headers()['content-disposition'] || ''
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/)
-        const filename = filenameMatch?.[1] ?? ''
+        // RFC 5987 encoded filename (filename*=UTF-8''...)
+        const filenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/)
+        const filename = filenameMatch?.[1] ? decodeURIComponent(filenameMatch[1]) : ''
 
         return {csv: await response.text(), filename}
     }

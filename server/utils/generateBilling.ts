@@ -5,9 +5,6 @@ import {chunkArray} from '~/utils/batchUtils'
 
 const LOG = '💰 > BILLING > [GENERATE]'
 
-// ADR-014: Batch sizes for D1 limits
-const UPDATE_BATCH_SIZE = 50
-
 export interface BillingGenerationResult {
     billingPeriodSummaryId: number
     billingPeriod: string
@@ -28,9 +25,9 @@ interface HouseholdBillingData {
  * Generate monthly billing - creates Invoice and BillingPeriodSummary from unbilled Transactions
  *
  * ADR-014 compliant: Uses createManyAndReturn for bulk inserts, batched updates
- * ADR-015 compliant: Idempotent - skips if billing period already exists
+ * ADR-015 compliant: Idempotent - returns existing period stats if already generated
  */
-export const generateBilling = async (d1Client: D1Database): Promise<BillingGenerationResult | null> => {
+export const generateBilling = async (d1Client: D1Database): Promise<BillingGenerationResult> => {
     const prisma = await getPrismaClientConnection(d1Client)
     const {calculateClosedBillingPeriod} = useBilling()
 
@@ -39,14 +36,20 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
 
     console.info(`${LOG} Starting billing generation for period ${billingPeriod}`)
 
-    // Idempotent check - skip if period already exists
+    // Idempotent check - return existing period stats if already generated
     const existingPeriod = await prisma.billingPeriodSummary.findUnique({
         where: {billingPeriod}
     })
 
     if (existingPeriod) {
-        console.info(`${LOG} Billing period ${billingPeriod} already exists (id=${existingPeriod.id}), skipping`)
-        return null
+        console.info(`${LOG} Billing period ${billingPeriod} already exists (id=${existingPeriod.id}), returning existing stats`)
+        return {
+            billingPeriodSummaryId: existingPeriod.id,
+            billingPeriod: existingPeriod.billingPeriod,
+            invoiceCount: existingPeriod.householdCount,
+            transactionCount: existingPeriod.ticketCount,
+            totalAmount: existingPeriod.totalAmount
+        }
     }
 
     // 1. Find all unbilled transactions with household info
@@ -127,7 +130,7 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
 
     console.info(`${LOG} Created ${createdInvoices.length} invoices`)
 
-    // 5. ADR-014: Batch update transactions to link to invoices
+    // 5. ADR-014: Batch update transactions to link to invoices using updateMany
     // Build invoice lookup by householdId
     const invoiceByHousehold = new Map<number, number>()
     for (const invoice of createdInvoices) {
@@ -136,33 +139,32 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
         }
     }
 
-    // Collect all transaction updates
-    const transactionUpdates: {txId: number, invoiceId: number}[] = []
+    // Group transaction IDs by invoiceId for bulk updates
+    const txIdsByInvoice = new Map<number, number[]>()
     for (const h of householdBillingData) {
         const invoiceId = invoiceByHousehold.get(h.householdId)
         if (invoiceId) {
-            for (const txId of h.transactionIds) {
-                transactionUpdates.push({txId, invoiceId})
-            }
+            txIdsByInvoice.set(invoiceId, h.transactionIds)
         }
     }
 
-    // ADR-014: Batch updates with Promise.all in chunks
-    const chunkUpdates = chunkArray<{txId: number, invoiceId: number}>(UPDATE_BATCH_SIZE)
-    const batches = chunkUpdates(transactionUpdates)
+    // ADR-014: Use updateMany with chunked ID arrays (90 IDs per query to stay under D1's 100 param limit)
+    const UPDATEM_BATCH_SIZE = 90
+    const chunkIds = chunkArray<number>(UPDATEM_BATCH_SIZE)
+    let linkedCount = 0
 
-    for (const batch of batches) {
-        await Promise.all(
-            batch.map(({txId, invoiceId}) =>
-                prisma.transaction.update({
-                    where: {id: txId},
-                    data: {invoiceId}
-                })
-            )
-        )
+    for (const [invoiceId, txIds] of txIdsByInvoice) {
+        const idBatches = chunkIds(txIds)
+        for (const idBatch of idBatches) {
+            await prisma.transaction.updateMany({
+                where: {id: {in: idBatch}},
+                data: {invoiceId}
+            })
+            linkedCount += idBatch.length
+        }
     }
 
-    console.info(`${LOG} Linked ${transactionUpdates.length} transactions to invoices`)
+    console.info(`${LOG} Linked ${linkedCount} transactions to invoices`)
 
     return {
         billingPeriodSummaryId: summary.id,

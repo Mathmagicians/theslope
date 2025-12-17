@@ -277,8 +277,12 @@ test.describe('Daily Maintenance API', () => {
             const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
             const {csv, filename} = await BillingFactory.getBillingCsvByToken(context, periodDetail.shareToken)
 
-            // Verify CSV structure
-            expect(csv).toContain('Kunde nr,Adresse,Total DKK')
+            // Verify CSV header contains expected columns
+            const header = csv.split('\n')[0]
+            expect(header).toContain('Kunde nr')
+            expect(header).toContain('Adresse')
+            expect(header).toContain('Total DKK')
+            expect(header).toContain('Opgørelsesdato')
             expect(filename).toContain(periodDetail.billingPeriod)
 
             // Verify CSV has data rows (header + invoices)

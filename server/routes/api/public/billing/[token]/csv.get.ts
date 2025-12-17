@@ -42,7 +42,9 @@ export default defineEventHandler(async (event): Promise<string> => {
         const filename = generateCsvFilename(summary)
 
         setResponseHeader(event, 'Content-Type', 'text/csv; charset=utf-8')
-        setResponseHeader(event, 'Content-Disposition', `attachment; filename="${filename}"`)
+        // RFC 5987 encoding for non-ASCII filename (Danish characters)
+        const encodedFilename = encodeURIComponent(filename)
+        setResponseHeader(event, 'Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}`)
 
         return csv
     } catch (error) {

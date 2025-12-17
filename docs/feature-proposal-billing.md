@@ -1,6 +1,6 @@
 # Feature Proposal: Billing & Economy Views
 
-**Status:** Draft | **Date:** 2025-12-14
+**Status:** Complete | **Date:** 2025-12-14 | **Completed:** 2025-12-16
 
 ## Business Context
 
@@ -61,32 +61,35 @@ Kunde nr,Adresse,Total DKK/måned,Opkrævning periode start,Opkrævning periode 
 
 ## API Endpoints
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/api/admin/billing/periods` | GET | Admin | List BillingPeriodSummary records |
-| `/api/admin/billing/periods/[period]` | GET | Admin | Invoices for specific period |
-| `/api/admin/billing/periods/[period]/csv` | GET | Admin | Download CSV |
-| `/api/admin/billing/generate` | POST | Admin/Cron | Generate invoices + summary |
-| `/api/public/billing/[token]` | GET | Public | Public billing view |
-| `/api/public/billing/[token]/csv` | GET | Public | Public CSV download |
-| `/api/household/[id]/billing` | GET | Household | Household's invoices |
+| Endpoint | Method | Auth | Description | Status |
+|----------|--------|------|-------------|--------|
+| `/api/admin/billing/periods` | GET | Admin | List BillingPeriodSummary records | ✅ |
+| `/api/admin/billing/periods/[id]` | GET | Admin | Detail with invoices | ✅ |
+| `/api/admin/maintenance/monthly` | POST | Admin/Cron | Generate invoices + summary | ✅ |
+| `/api/public/billing/[token]` | GET | Public | Public billing view | ✅ |
+| `/api/public/billing/[token]/csv` | GET | Public | Public CSV download | ✅ |
+| `/api/billing?householdId=X` | GET | Household | Household billing data | ✅ |
 
 ---
 
-## Stubs Created
+## Implementation Status
 
-- [x] `GET /api/public/billing/[token]/csv` - Public CSV export stub (headers only)
-- [x] `HouseholdEconomy.vue` - ASCII mockup added
-- [x] `AdminEconomy.vue` - ASCII mockup added
+### Completed
 
-## Implementation Tasks
+- [x] Add `BillingPeriodSummary` and `Invoice` to Prisma schema
+- [x] Create `useBillingValidation.ts` composable (schemas, types, CSV functions)
+- [x] Create `useBilling.ts` composable (billing period calculation logic)
+- [x] Unit tests for `useBilling.ts` (`useBilling.nuxt.spec.ts`)
+- [x] Implement `POST /api/admin/maintenance/monthly` (generates BillingPeriodSummary + Invoices)
+- [x] Implement `GET /api/admin/billing/periods` (list summaries)
+- [x] Implement `GET /api/admin/billing/periods/[id]` (detail with invoices)
+- [x] Implement `GET /api/public/billing/[token]` (public view via magic link)
+- [x] Implement `GET /api/public/billing/[token]/csv` (CSV download)
+- [x] Implement `GET /api/billing?householdId=X` (household billing view)
+- [x] E2E tests for monthly billing in `maintenance.e2e.spec.ts`
 
-- [ ] Add `BillingPeriodSummary` to Prisma schema
-- [ ] Create `useBillingValidation.ts` composable
-- [ ] Implement `POST /api/admin/billing/generate`
-- [ ] Implement `GET /api/admin/billing/periods`
-- [ ] Implement `GET /api/public/billing/[token]`
-- [ ] Implement `GET /api/public/billing/[token]/csv` (data)
-- [ ] Update `HouseholdEconomy.vue` (implementation)
-- [ ] Update `AdminEconomy.vue` (implementation)
-- [ ] Create `pages/public/billing/[token].vue`
+### Remaining
+
+- [ ] Update `HouseholdEconomy.vue` (display billing data from API)
+- [ ] Update `AdminEconomy.vue` (admin billing management UI)
+- [ ] Create `pages/public/billing/[token].vue` (magic link page for accountant)

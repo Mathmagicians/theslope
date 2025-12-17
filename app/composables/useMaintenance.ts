@@ -1,6 +1,7 @@
-import {useMaintenanceValidation, type JobType, type JobStatus} from './useMaintenanceValidation'
-import {useBookingValidation, type DailyMaintenanceResult} from './useBookingValidation'
-import {useHeynaboValidation, type HeynaboImportResponse} from './useHeynaboValidation'
+import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composables/useMaintenanceValidation'
+import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
+import {useBillingValidation, type BillingGenerationResult} from '~/composables/useBillingValidation'
 
 /**
  * Business logic for maintenance jobs
@@ -11,6 +12,7 @@ export const useMaintenance = () => {
     const {JobType, JobStatus} = useMaintenanceValidation()
     const {DailyMaintenanceResultSchema} = useBookingValidation()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
+    const {BillingGenerationResultSchema} = useBillingValidation()
 
     /**
      * Human-readable labels for job types (Danish)
@@ -89,7 +91,7 @@ export const useMaintenance = () => {
     /**
      * Parse and validate resultSummary JSON based on job type
      */
-    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | Record<string, unknown> | null => {
+    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | Record<string, unknown> | null => {
         if (!resultSummary) return null
 
         try {
@@ -100,6 +102,8 @@ export const useMaintenance = () => {
                     return DailyMaintenanceResultSchema.parse(parsed)
                 case JobType.HEYNABO_IMPORT:
                     return HeynaboImportResponseSchema.parse(parsed)
+                case JobType.MONTHLY_BILLING:
+                    return BillingGenerationResultSchema.parse(parsed)
                 default:
                     return parsed as Record<string, unknown>
             }
@@ -133,6 +137,16 @@ export const useMaintenance = () => {
     }
 
     /**
+     * Format monthly billing result as stats array for action cards
+     */
+    const {formatPrice} = useTicket()
+    const formatMonthlyBillingStats = (result: BillingGenerationResult): { label: string; value: string }[] => [
+        { label: 'PBS Fakturaer', value: `${result.invoiceCount}` },
+        { label: 'Gennemførte transaktioner', value: `${result.transactionCount}` },
+        { label: 'Total til opkrævning', value: `${formatPrice(result.totalAmount)} kr` }
+    ]
+
+    /**
      * Format result summary for table display (uses stats functions for DRY)
      */
     const formatResultSummary = (jobType: JobType, resultSummary: string | null): string => {
@@ -151,11 +165,9 @@ export const useMaintenance = () => {
                 return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MONTHLY_BILLING: {
-                const result = parsed as Record<string, unknown>
-                if (typeof result.invoicesGenerated === 'number') {
-                    return `${result.invoicesGenerated} fakturaer`
-                }
-                return '-'
+                const result = parsed as BillingGenerationResult
+                const stats = formatMonthlyBillingStats(result)
+                return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MAINTENANCE_IMPORT:
             case JobType.MAINTENANCE_EXPORT:
@@ -177,6 +189,7 @@ export const useMaintenance = () => {
         parseResultSummary,
         formatResultSummary,
         formatHeynaboStats,
-        formatDailyMaintenanceStats
+        formatDailyMaintenanceStats,
+        formatMonthlyBillingStats
     }
 }

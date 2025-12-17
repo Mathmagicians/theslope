@@ -46,8 +46,12 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     try {
         console.info(`👥 > TEAM > [POST] Updating team ${id} with auto-reassignment`)
         const result = await updateTeamWithAssignments(d1Client, id, teamData)
-        console.info(`👥 > TEAM > [POST] Updated team ${result.teams[0].name}, reassigned ${result.eventsAssigned} events`)
-        return result.teams[0]
+        const updatedTeam = result.teams[0]
+        if (!updatedTeam) {
+            return throwH3Error(`👥 > TEAM > [POST] Team ${id} not found after update`, new Error('Team not found'), 404)
+        }
+        console.info(`👥 > TEAM > [POST] Updated team ${updatedTeam.name}, reassigned ${result.eventsAssigned} events`)
+        return updatedTeam
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)
     }

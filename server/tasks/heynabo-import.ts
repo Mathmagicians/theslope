@@ -2,13 +2,9 @@
  * Nitro Scheduled Task: Heynabo Import
  *
  * Triggered by Cloudflare Cron at 02:00 UTC (03:00/04:00 Copenhagen).
- * Calls the existing HTTP endpoint which has D1 access.
- *
- * Steps performed by the endpoint:
- * 1. Fetch data from Heynabo API
- * 2. Reconcile households and inhabitants
- * 3. Create/delete as needed (Heynabo is source of truth)
+ * Uses D1 directly via context.cloudflare.env.DB.
  */
+import {runHeynaboImport} from '~~/server/utils/heynaboImportService'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [HEYNABO_IMPORT]'
@@ -19,16 +15,14 @@ export default defineTask({
         name: 'heynabo-import',
         description: 'Synchronize households and inhabitants from Heynabo'
     },
-    async run() {
-        console.info(`${LOG} Starting via cron trigger`)
+    async run({ context }) {
+        const d1Client = context?.cloudflare?.env?.DB
+        if (!d1Client) {
+            return throwH3Error(`${LOG} D1 not available - must be triggered via Cloudflare cron`, new Error('D1 not available'))
+        }
 
         try {
-            const result = await $fetch('/api/admin/heynabo/import', {
-                method: 'GET',
-                query: { triggeredBy: 'CRON' }
-            })
-
-            console.info(`${LOG} Completed`, result)
+            const result = await runHeynaboImport(d1Client, 'CRON')
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

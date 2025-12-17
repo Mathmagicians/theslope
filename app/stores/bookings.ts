@@ -1,4 +1,5 @@
 import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -302,6 +303,97 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
+    // ========================================
+    // MONTHLY BILLING JOB (ADR-007)
+    // ========================================
+
+    const {MonthlyBillingResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+
+    const {
+        data: monthlyBillingResult,
+        status: monthlyBillingStatus,
+        error: monthlyBillingError,
+        execute: executeMonthlyBilling
+    } = useAsyncData<MonthlyBillingResponse | null>(
+        'bookings-store-monthly-billing',
+        () => $fetch<MonthlyBillingResponse>('/api/admin/maintenance/monthly', {
+            method: 'POST',
+            query: { triggeredBy: `ADMIN:${authStore.email}` }
+        }),
+        {
+            immediate: false,
+            transform: (data) => data ? MonthlyBillingResponseSchema.parse(data) : null
+        }
+    )
+
+    const isMonthlyBillingRunning = computed(() => monthlyBillingStatus.value === 'pending')
+    const hasMonthlyBillingResult = computed(() => monthlyBillingStatus.value === 'success' && monthlyBillingResult.value !== null)
+    const hasMonthlyBillingError = computed(() => monthlyBillingStatus.value === 'error')
+
+    const runMonthlyBilling = async () => {
+        await executeMonthlyBilling()
+
+        if (hasMonthlyBillingError.value) {
+            handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
+        } else if (hasMonthlyBillingResult.value) {
+            const r = monthlyBillingResult.value!.result
+            console.info(CTX, `Monthly billing completed: Invoices: ${r.invoiceCount}, Transactions: ${r.transactionCount}`)
+            toast.add({
+                title: 'Månedlig fakturering afsluttet',
+                description: `Fakturaer: ${r.invoiceCount}, Transaktioner: ${r.transactionCount}`,
+                color: 'success'
+            })
+        }
+    }
+
+    // ========================================
+    // BILLING PERIODS (ADR-007)
+    // ========================================
+
+    const {
+        data: billingPeriods, status: billingPeriodsStatus,
+        error: billingPeriodsError, refresh: refreshBillingPeriods
+    } = useFetch<BillingPeriodSummaryDisplay[]>(
+        '/api/admin/billing/periods',
+        {
+            key: 'bookings-store-billing-periods',
+            default: () => [],
+            transform: (data: unknown[]) => {
+                return (data as Record<string, unknown>[]).map(p => BillingPeriodSummaryDisplaySchema.parse(p))
+            }
+        }
+    )
+
+    const isBillingPeriodsLoading = computed(() => billingPeriodsStatus.value === 'pending')
+    const isBillingPeriodsErrored = computed(() => billingPeriodsStatus.value === 'error')
+    const isBillingPeriodsInitialized = computed(() => billingPeriodsStatus.value === 'success')
+
+    // Fetch billing period detail (on-demand for expanded view)
+    const selectedBillingPeriodId = ref<number | null>(null)
+    const selectedBillingPeriodKey = computed(() => `billing-period-${selectedBillingPeriodId.value || 'null'}`)
+
+    const {
+        data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
+        error: selectedBillingPeriodError
+    } = useAsyncData<BillingPeriodSummaryDetail | null>(
+        selectedBillingPeriodKey,
+        () => {
+            if (!selectedBillingPeriodId.value) return Promise.resolve(null)
+            return $fetch<BillingPeriodSummaryDetail>(`/api/admin/billing/periods/${selectedBillingPeriodId.value}`)
+        },
+        {
+            default: () => null,
+            transform: (data: unknown) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
+        }
+    )
+
+    const isBillingPeriodDetailLoading = computed(() => selectedBillingPeriodStatus.value === 'pending')
+
+    const loadBillingPeriodDetail = (periodId: number) => {
+        selectedBillingPeriodId.value = periodId
+        console.info(CTX, `Loading billing period detail: ${periodId}`)
+    }
+
     return {
         // state
         orders,
@@ -346,6 +438,26 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isDailyMaintenanceRunning,
         hasDailyMaintenanceResult,
         hasDailyMaintenanceError,
-        runDailyMaintenance
+        runDailyMaintenance,
+
+        // monthly billing
+        monthlyBillingResult,
+        monthlyBillingError,
+        isMonthlyBillingRunning,
+        hasMonthlyBillingResult,
+        hasMonthlyBillingError,
+        runMonthlyBilling,
+
+        // billing periods
+        billingPeriods,
+        billingPeriodsError,
+        isBillingPeriodsLoading,
+        isBillingPeriodsErrored,
+        isBillingPeriodsInitialized,
+        refreshBillingPeriods,
+        selectedBillingPeriodDetail,
+        selectedBillingPeriodError,
+        isBillingPeriodDetailLoading,
+        loadBillingPeriodDetail
     }
 })

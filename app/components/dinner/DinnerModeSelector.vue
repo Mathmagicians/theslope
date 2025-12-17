@@ -45,6 +45,7 @@ interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
   formMode?: FormMode
   disabled?: boolean
+  disabledModes?: DinnerMode[] // Specific modes to disable (e.g., after deadline)
   name?: string
   showLabel?: boolean // Show mode label text in VIEW mode (when in selector mode)
   size?: ButtonSize
@@ -54,6 +55,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: DinnerMode.NONE, // Default when no order exists
   formMode: FORM_MODES.VIEW,
   disabled: false,
+  disabledModes: () => [],
   name: 'dinner-mode-selector',
   showLabel: false,
   size: 'md'
@@ -122,9 +124,14 @@ const dinnerModeConfig: Record<DinnerMode, {
   }
 }
 
+// Check if a specific mode is disabled
+const isModeDisabled = (mode: DinnerMode): boolean => {
+  return props.disabled || props.disabledModes.includes(mode)
+}
+
 // Update value (selector mode only)
 const updateMode = (value: DinnerMode) => {
-  if (props.disabled || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  if (props.disabled || isModeDisabled(value) || props.formMode === FORM_MODES.VIEW || isTitle.value) return
   emit('update:modelValue', value)
 }
 
@@ -209,7 +216,7 @@ const getModeLabel = (): string => {
         :icon="dinnerModeConfig[mode]!.icon"
         :color="getButtonColor(mode)"
         :variant="getButtonVariant(mode)"
-        :disabled="disabled"
+        :disabled="isModeDisabled(mode)"
         :size="size"
         :name="`${name}-${mode}`"
         class="rounded-none md:rounded-md"

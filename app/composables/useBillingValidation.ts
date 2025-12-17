@@ -35,6 +35,7 @@ export const useBillingValidation = () => {
     const BillingPeriodSummaryDisplaySchema = z.object({
         id: z.number().int(),
         billingPeriod: z.string(), // formatDateRange format
+        shareToken: z.string(), // UUID for magic link (included for share button)
         totalAmount: z.number().int(), // øre
         householdCount: z.number().int(),
         ticketCount: z.number().int(),
@@ -44,17 +45,23 @@ export const useBillingValidation = () => {
     })
 
     /**
-     * Invoice within a billing period (for detail views)
-     * pbsId and address are denormalized (frozen at billing time for immutability)
+     * Invoice Display - full invoice from Prisma schema
+     * pbsId and address are frozen at billing time for immutability
      */
-    const BillingInvoiceSchema = z.object({
+    const InvoiceDisplaySchema = z.object({
         id: z.number().int(),
-        amount: z.number().int(), // øre
+        cutoffDate: z.coerce.date(),
+        paymentDate: z.coerce.date(),
+        billingPeriod: z.string(),
+        amount: z.number().int(),
+        createdAt: z.coerce.date(),
         householdId: z.number().int().nullable(),
-        // Frozen billing identity (immutable - for PBS export)
+        billingPeriodSummaryId: z.number().int().nullable(),
         pbsId: z.number().int(),
         address: z.string()
     })
+
+    const InvoiceCreateSchema = InvoiceDisplaySchema.omit({id: true, createdAt: true})
 
     /**
      * BillingPeriodSummary Detail - for detail endpoints (comprehensive)
@@ -62,7 +69,7 @@ export const useBillingValidation = () => {
      */
     const BillingPeriodSummaryDetailSchema = BillingPeriodSummaryDisplaySchema.extend({
         shareToken: z.string(), // UUID for magic link
-        invoices: z.array(BillingInvoiceSchema)
+        invoices: z.array(InvoiceDisplaySchema)
     })
 
     /**
@@ -306,20 +313,20 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
-    // Monthly Billing Generation Result (ADR-015: Idempotent jobs)
+    // Monthly Billing Generation (ADR-015: Idempotent jobs)
     // ============================================================================
 
-    /**
-     * Inner result of monthly billing generation
-     * Returns null if billing period already exists (idempotent)
-     */
+    const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
+        id: true, createdAt: true, shareToken: true
+    })
+
     const BillingGenerationResultSchema = z.object({
         billingPeriodSummaryId: z.number().int().positive(),
         billingPeriod: z.string(),
         invoiceCount: z.number().int().min(0),
         transactionCount: z.number().int().min(0),
         totalAmount: z.number().int().min(0)
-    }).nullable()
+    })
 
     /**
      * Response from POST /api/admin/maintenance/monthly
@@ -334,7 +341,7 @@ export const useBillingValidation = () => {
     // CSV Export Functions
     // ============================================================================
 
-    const CSV_HEADER = 'Kunde nr,Adresse,Total DKK/måned,Opkrævning periode start,Opkrævning periode slut,Opgørelsesdato,Måltider total,Evt ekstra,Note'
+    const CSV_HEADER = '"Kunde nr",Adresse,"Total DKK/måned","Opkrævning periode start","Opkrævning periode slut",Opgørelsesdato,"Måltider total","Evt ekstra",Note'
 
     /**
      * Format date for CSV export (DD/MM/YYYY)
@@ -357,7 +364,7 @@ export const useBillingValidation = () => {
      * Uses denormalized pbsId/address (frozen at billing time)
      */
     const generateCsvRow = (
-        invoice: z.infer<typeof BillingInvoiceSchema>,
+        invoice: z.infer<typeof InvoiceDisplaySchema>,
         summary: z.infer<typeof BillingPeriodSummaryDetailSchema>
     ): string => {
         const totalDKK = convertPriceToDecimalFormat(invoice.amount)
@@ -395,7 +402,8 @@ export const useBillingValidation = () => {
         // BillingPeriodSummary Schemas (ADR-009)
         BillingPeriodSummaryDisplaySchema,
         BillingPeriodSummaryDetailSchema,
-        BillingInvoiceSchema,
+        InvoiceDisplaySchema,
+        InvoiceCreateSchema,
         PublicBillingViewSchema,
 
         // CSV Import Schemas
@@ -418,6 +426,7 @@ export const useBillingValidation = () => {
         generateCsvFilename,
 
         // Monthly Billing Generation
+        BillingPeriodSummaryCreateSchema,
         BillingGenerationResultSchema,
         MonthlyBillingResponseSchema,
 
@@ -436,7 +445,8 @@ export const useBillingValidation = () => {
 // BillingPeriodSummary types (ADR-009)
 export type BillingPeriodSummaryDisplay = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDisplaySchema']>
 export type BillingPeriodSummaryDetail = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDetailSchema']>
-export type BillingInvoice = z.infer<ReturnType<typeof useBillingValidation>['BillingInvoiceSchema']>
+export type InvoiceDisplay = z.infer<ReturnType<typeof useBillingValidation>['InvoiceDisplaySchema']>
+export type InvoiceCreate = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreateSchema']>
 export type PublicBillingView = z.infer<ReturnType<typeof useBillingValidation>['PublicBillingViewSchema']>
 
 // CSV Import types
@@ -446,6 +456,7 @@ export type BillingImportResponse = z.infer<ReturnType<typeof useBillingValidati
 export type ParsedHouseholdOrder = z.infer<ReturnType<typeof useBillingValidation>['ParsedHouseholdOrderSchema']>
 
 // Monthly Billing Generation types
+export type BillingPeriodSummaryCreate = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryCreateSchema']>
 export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValidation>['BillingGenerationResultSchema']>
 export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>
 

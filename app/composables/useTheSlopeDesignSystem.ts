@@ -493,6 +493,7 @@ export const ICONS = {
     chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     household: 'i-heroicons-home',
     allergy: 'i-mdi-food-allergy-off-outline',
+    economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
     logout: 'i-tdesign-wave-bye',
     admin: 'i-pajamas-admin',

@@ -499,6 +499,18 @@ export const useSeason = () => {
     }
 
     /**
+     * Check if a dinner event has started (is in the past)
+     * Uses dinner start time, not end time - once dinner starts, no more booking changes
+     * @param dinnerEventDate - Date of the dinner event
+     * @returns True if dinner has started (past)
+     */
+    const isDinnerPast = (dinnerEventDate: Date): boolean => {
+        const dinnerStartHour = getDefaultDinnerStartTime()
+        const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
+        return !isBeforeDeadline(0, 0)(dinnerStartTime)
+    }
+
+    /**
      * Helper: Check if an inhabitant has an assignment on a team (optionally with specific role)
      * @param inhabitantId - ID of the inhabitant
      * @param team - Team to check
@@ -607,6 +619,7 @@ export const useSeason = () => {
         getOrderCancellationAction,
         canEditDiningMode,
         isAnnounceMenuPastDeadline,
+        isDinnerPast,
         getTeamsForInhabitant,
         isOnTeam,
         isChefFor,

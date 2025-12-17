@@ -27,7 +27,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> =>
 
     // All teams must be for the same season
     const seasonIds = [...new Set(teams.map(t => t.seasonId))]
-    if (seasonIds.length !== 1) {
+    if (seasonIds.length !== 1 || seasonIds[0] === undefined) {
         return throwH3Error("👥 > TEAM > [PUT] All teams must be for the same season", new Error('Multiple season IDs'), 400)
     }
     const seasonId = seasonIds[0]
