@@ -10,7 +10,7 @@
  * Data: Uses bookings store for billing periods (ADR-007)
  */
 import {formatDate} from '~/utils/date'
-import type {BillingInvoice} from '~/composables/useBillingValidation'
+import type {InvoiceDisplay} from '~/composables/useBillingValidation'
 
 const {formatPrice} = useTicket()
 const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
@@ -176,7 +176,7 @@ const downloadCsv = (shareToken: string) => {
                   :ui="COMPONENTS.table.ui"
               >
                 <template #amount-cell="{ row }">
-                  {{ formatPrice((row.original as BillingInvoice).amount) }} kr
+                  {{ formatPrice((row.original as InvoiceDisplay).amount) }} kr
                 </template>
               </UTable>
 

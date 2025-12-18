@@ -9,3 +9,13 @@ declare module 'h3' {
     }
   }
 }
+
+declare module 'nitropack' {
+  interface TaskContext {
+    cloudflare?: {
+      env?: {
+        DB?: D1Database
+      }
+    }
+  }
+}

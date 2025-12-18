@@ -9,7 +9,7 @@
  * Data: GET /api/public/billing/[token]
  */
 import {formatDate} from '~/utils/date'
-import type {BillingPeriodSummaryDetail, BillingInvoice} from '~/composables/useBillingValidation'
+import type {BillingPeriodSummaryDetail, InvoiceDisplay} from '~/composables/useBillingValidation'
 
 // Page config - no auth required, no layout
 definePageMeta({
@@ -125,7 +125,7 @@ const downloadCsv = () => {
               :ui="COMPONENTS.table.ui"
           >
             <template #amount-cell="{ row }">
-              {{ formatPrice((row.original as BillingInvoice).amount) }} kr
+              {{ formatPrice((row.original as InvoiceDisplay).amount) }} kr
             </template>
           </UTable>
 

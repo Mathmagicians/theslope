@@ -25,9 +25,12 @@ import {
     useBillingValidation,
     type HouseholdBillingResponse,
     type TransactionDisplay,
+    type InvoiceDisplay,
     type InvoiceCreate,
+    type InvoiceCreated,
     type BillingPeriodSummaryCreate,
-    type BillingPeriodSummaryDisplay
+    type BillingPeriodSummaryDisplay,
+    type BillingPeriodSummaryId
 } from '~/composables/useBillingValidation'
 
 /**
@@ -1036,6 +1039,109 @@ export async function createTransactionsBatch(
     return transactions.length
 }
 
+/*** BILLING GENERATION ***/
+
+export async function fetchBillingPeriodSummary(
+    d1Client: D1Database,
+    billingPeriod: string
+): Promise<BillingPeriodSummaryDisplay | null> {
+    const {BillingPeriodSummaryDisplaySchema} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const summary = await prisma.billingPeriodSummary.findUnique({where: {billingPeriod}})
+    return summary ? BillingPeriodSummaryDisplaySchema.parse(summary) : null
+}
+
+export async function fetchUnbilledTransactions(d1Client: D1Database): Promise<TransactionDisplay[]> {
+    const {TransactionDisplaySchema, TicketType} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const transactions = await prisma.transaction.findMany({
+        where: {invoiceId: null},
+        include: {
+            order: {
+                include: {
+                    inhabitant: {
+                        select: {
+                            id: true, name: true,
+                            household: {select: {id: true, pbsId: true, address: true}}
+                        }
+                    },
+                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+                    ticketPrice: {select: {ticketType: true}}
+                }
+            }
+        }
+    })
+
+    return transactions.map(tx => TransactionDisplaySchema.parse({
+        id: tx.id,
+        amount: tx.amount,
+        createdAt: tx.createdAt,
+        orderSnapshot: tx.orderSnapshot,
+        dinnerEvent: tx.order?.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
+        inhabitant: tx.order?.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
+        ticketType: tx.order?.ticketPrice?.ticketType ?? TicketType.ADULT
+    }))
+}
+
+export async function createBillingPeriodSummary(
+    d1Client: D1Database,
+    data: BillingPeriodSummaryCreate
+): Promise<BillingPeriodSummaryId> {
+    const {BillingPeriodSummaryIdSchema} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const created = await prisma.billingPeriodSummary.create({
+        data: {...data, shareToken: crypto.randomUUID()}
+    })
+    return BillingPeriodSummaryIdSchema.parse(created)
+}
+
+export async function createInvoices(
+    d1Client: D1Database,
+    invoices: InvoiceCreate[]
+): Promise<InvoiceCreated[]> {
+    if (invoices.length === 0) return []
+    const {InvoiceCreatedSchema} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const created = await prisma.invoice.createManyAndReturn({data: invoices})
+    return created.map(inv => InvoiceCreatedSchema.parse(inv))
+}
+
+export async function linkTransactionsToInvoice(
+    d1Client: D1Database,
+    invoiceId: number,
+    transactionIds: number[]
+): Promise<number> {
+    if (transactionIds.length === 0) return 0
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const result = await prisma.transaction.updateMany({
+        where: {id: {in: transactionIds}},
+        data: {invoiceId}
+    })
+    return result.count
+}
+
+/**
+ * Fetch invoices for a billing period
+ */
+export async function fetchInvoicesForBillingPeriod(
+    d1Client: D1Database,
+    billingPeriodSummaryId: number
+): Promise<InvoiceDisplay[]> {
+    const {InvoiceDisplaySchema} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const invoices = await prisma.invoice.findMany({
+        where: {billingPeriodSummaryId}
+    })
+
+    return invoices.map(inv => InvoiceDisplaySchema.parse(inv))
+}
+
 /*** HOUSEHOLD BILLING ***/
 
 /**
@@ -1052,7 +1158,7 @@ export async function fetchHouseholdBilling(
     console.info(`${LOG} Fetching billing for household ${householdId}`)
 
     const prisma = await getPrismaClientConnection(d1Client)
-    const {HouseholdBillingResponseSchema, TransactionDisplaySchema, HouseholdInvoiceSchema} = useBillingValidation()
+    const {HouseholdBillingResponseSchema, TransactionDisplaySchema, HouseholdInvoiceSchema, TicketType} = useBillingValidation()
     const {calculateCurrentBillingPeriod} = useBilling()
 
     const household = await prisma.household.findUnique({
@@ -1067,6 +1173,11 @@ export async function fetchHouseholdBilling(
 
     const currentPeriod = calculateCurrentBillingPeriod()
 
+    const inhabitantSelect = {
+        id: true, name: true,
+        household: {select: {id: true, pbsId: true, address: true}}
+    }
+
     // Fetch unbilled transactions (current period)
     const unbilledTransactions = await prisma.transaction.findMany({
         where: {
@@ -1076,7 +1187,7 @@ export async function fetchHouseholdBilling(
         include: {
             order: {
                 include: {
-                    inhabitant: {select: {id: true, name: true}},
+                    inhabitant: {select: inhabitantSelect},
                     dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
                     ticketPrice: {select: {ticketType: true}}
                 }
@@ -1093,7 +1204,7 @@ export async function fetchHouseholdBilling(
                 include: {
                     order: {
                         include: {
-                            inhabitant: {select: {id: true, name: true}},
+                            inhabitant: {select: inhabitantSelect},
                             dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
                             ticketPrice: {select: {ticketType: true}}
                         }
@@ -1114,9 +1225,9 @@ export async function fetchHouseholdBilling(
                 amount: tx.amount,
                 createdAt: tx.createdAt,
                 orderSnapshot: tx.orderSnapshot,
-                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: 'Unknown'},
-                inhabitant: snapshot.inhabitant ?? {id: 0, name: 'Unknown'},
-                ticketType: snapshot.ticketType ?? 'ADULT'
+                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
+                inhabitant: snapshot.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
+                ticketType: snapshot.ticketType ?? TicketType.ADULT
             })
         }
         return TransactionDisplaySchema.parse({
@@ -1126,7 +1237,7 @@ export async function fetchHouseholdBilling(
             orderSnapshot: tx.orderSnapshot,
             dinnerEvent: tx.order.dinnerEvent!,
             inhabitant: tx.order.inhabitant,
-            ticketType: tx.order.ticketPrice?.ticketType ?? 'ADULT'
+            ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
         })
     }
 

@@ -8,7 +8,7 @@ import {
     type BillingImportResponse,
     type BillingPeriodSummaryDetail,
     type BillingPeriodSummaryDisplay,
-    type BillingInvoice,
+    type InvoiceDisplay,
     type MonthlyBillingResponse
 } from '~/composables/useBillingValidation'
 
@@ -30,10 +30,15 @@ export class BillingFactory {
      * Default invoice data for unit tests
      * pbsId and address are denormalized (frozen at billing time)
      */
-    static readonly defaultInvoiceData = (testSalt: string = 'default'): BillingInvoice => ({
+    static readonly defaultInvoiceData = (testSalt: string = 'default'): InvoiceDisplay => ({
         id: 1,
+        cutoffDate: new Date('2025-11-17'),
+        paymentDate: new Date('2025-12-01'),
+        billingPeriod: '18/10/2025-17/11/2025',
         amount: 116400, // 1164 DKK in øre
+        createdAt: new Date('2025-11-18'),
         householdId: 1,
+        billingPeriodSummaryId: 1,
         pbsId: 2053,
         address: salt('Smedekildevej 42', testSalt)
     })

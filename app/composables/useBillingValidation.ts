@@ -274,7 +274,12 @@ export const useBillingValidation = () => {
         }),
         inhabitant: z.object({
             id: z.number().int(),
-            name: z.string()
+            name: z.string(),
+            household: z.object({
+                id: z.number().int(),
+                pbsId: z.number().int(),
+                address: z.string()
+            })
         }),
         ticketType: TicketTypeSchema
     })
@@ -319,6 +324,10 @@ export const useBillingValidation = () => {
     const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
         id: true, createdAt: true, shareToken: true
     })
+
+    const BillingPeriodSummaryIdSchema = BillingPeriodSummaryDisplaySchema.pick({id: true})
+
+    const InvoiceCreatedSchema = InvoiceDisplaySchema.pick({id: true, householdId: true})
 
     const BillingGenerationResultSchema = z.object({
         billingPeriodSummaryId: z.number().int().positive(),
@@ -427,6 +436,8 @@ export const useBillingValidation = () => {
 
         // Monthly Billing Generation
         BillingPeriodSummaryCreateSchema,
+        BillingPeriodSummaryIdSchema,
+        InvoiceCreatedSchema,
         BillingGenerationResultSchema,
         MonthlyBillingResponseSchema,
 
@@ -457,6 +468,8 @@ export type ParsedHouseholdOrder = z.infer<ReturnType<typeof useBillingValidatio
 
 // Monthly Billing Generation types
 export type BillingPeriodSummaryCreate = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryCreateSchema']>
+export type BillingPeriodSummaryId = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryIdSchema']>
+export type InvoiceCreated = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreatedSchema']>
 export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValidation>['BillingGenerationResultSchema']>
 export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>
 

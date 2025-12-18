@@ -11,7 +11,7 @@ import type {
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
-import type {BillingGenerationResult} from '~~/server/utils/generateBilling'
+import type {BillingGenerationResult} from '~/composables/useBillingValidation'
 
 const LOG = '🔧 > JOB_RUN'
 
