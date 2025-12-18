@@ -533,7 +533,13 @@ export const useBookingValidation = () => {
             id: z.number().int().positive(),
             name: z.string(),
             lastName: z.string(),
-            householdId: z.number().int().positive()
+            householdId: z.number().int().positive(),
+            // Household billing data (frozen in snapshot for immutability)
+            household: z.object({
+                id: z.number().int().positive(),
+                pbsId: z.number().int(),
+                address: z.string()
+            })
         }),
         dinnerEvent: z.object({
             id: z.number().int().positive(),

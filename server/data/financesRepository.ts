@@ -997,7 +997,12 @@ export async function fetchClosedOrdersWithoutTransaction(
         },
         include: {
             bookedByUser: { select: { id: true, email: true } },
-            inhabitant: { select: { id: true, name: true, lastName: true, householdId: true } },
+            inhabitant: {
+                select: {
+                    id: true, name: true, lastName: true, householdId: true,
+                    household: { select: { id: true, pbsId: true, address: true } }
+                }
+            },
             dinnerEvent: { select: { id: true, date: true, menuTitle: true } },
             ticketPrice: { select: { ticketType: true } }
         }
@@ -1053,8 +1058,15 @@ export async function fetchBillingPeriodSummary(
 }
 
 export async function fetchUnbilledTransactions(d1Client: D1Database): Promise<TransactionDisplay[]> {
+    const LOG = '💰 > BILLING > [FETCH_UNBILLED]'
     const {TransactionDisplaySchema, TicketType} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+
+    const EMPTY_FALLBACK = {
+        dinnerEvent: {id: 0, date: new Date(), menuTitle: ''},
+        inhabitant: {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
+        ticketType: TicketType.ADULT
+    }
 
     const transactions = await prisma.transaction.findMany({
         where: {invoiceId: null},
@@ -1074,15 +1086,37 @@ export async function fetchUnbilledTransactions(d1Client: D1Database): Promise<T
         }
     })
 
-    return transactions.map(tx => TransactionDisplaySchema.parse({
-        id: tx.id,
-        amount: tx.amount,
-        createdAt: tx.createdAt,
-        orderSnapshot: tx.orderSnapshot,
-        dinnerEvent: tx.order?.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
-        inhabitant: tx.order?.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
-        ticketType: tx.order?.ticketPrice?.ticketType ?? TicketType.ADULT
-    }))
+    return transactions.map(tx => {
+        // Order deleted - use frozen data from snapshot (billing immutability)
+        let orderData = EMPTY_FALLBACK
+        if (tx.order) {
+            orderData = {
+                dinnerEvent: tx.order.dinnerEvent,
+                inhabitant: tx.order.inhabitant,
+                ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
+            }
+        } else {
+            try {
+                const snapshot = JSON.parse(tx.orderSnapshot)
+                console.info(`${LOG} Using snapshot for orphaned transaction ${tx.id}`)
+                orderData = {
+                    dinnerEvent: snapshot.dinnerEvent ?? EMPTY_FALLBACK.dinnerEvent,
+                    inhabitant: snapshot.inhabitant ?? EMPTY_FALLBACK.inhabitant,
+                    ticketType: snapshot.ticketType ?? EMPTY_FALLBACK.ticketType
+                }
+            } catch {
+                console.warn(`${LOG} Failed to parse snapshot for transaction ${tx.id}`)
+            }
+        }
+
+        return TransactionDisplaySchema.parse({
+            id: tx.id,
+            amount: tx.amount,
+            createdAt: tx.createdAt,
+            orderSnapshot: tx.orderSnapshot,
+            ...orderData
+        })
+    })
 }
 
 export async function createBillingPeriodSummary(

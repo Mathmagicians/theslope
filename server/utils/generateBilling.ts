@@ -58,12 +58,19 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
         }
     }
 
-    console.info(`${LOG} Found ${unbilledTransactions.length} unbilled transactions`)
+    // 3. Filter out orphaned transactions (where order was deleted but transaction remains)
+    // Orphaned transactions have fallback householdId: 0 which doesn't exist
+    const validTransactions = unbilledTransactions.filter(tx => tx.inhabitant.household.id > 0)
+    const orphanedCount = unbilledTransactions.length - validTransactions.length
+    if (orphanedCount > 0) {
+        console.warn(`${LOG} Skipping ${orphanedCount} orphaned transactions (household deleted)`)
+    }
+    console.info(`${LOG} Found ${validTransactions.length} valid unbilled transactions`)
 
-    // 3. Group transactions by household
+    // 4. Group transactions by household
     const householdMap = new Map<number, HouseholdBillingData>()
 
-    for (const tx of unbilledTransactions) {
+    for (const tx of validTransactions) {
         const household = tx.inhabitant.household
         if (!householdMap.has(household.id)) {
             householdMap.set(household.id, {
