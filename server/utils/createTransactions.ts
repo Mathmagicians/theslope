@@ -2,6 +2,7 @@ import type {D1Database} from "@cloudflare/workers-types"
 import {fetchClosedOrdersWithoutTransaction, createTransactionsBatch, type TransactionCreateData} from "~~/server/data/financesRepository"
 import type {CreateTransactionsResult} from "~/composables/useBookingValidation"
 import {useBooking} from "~/composables/useBooking"
+import {useBillingValidation} from "~/composables/useBillingValidation"
 
 const LOG = '💰 > DAILY > [CREATE_TRANSACTIONS]'
 
@@ -10,15 +11,16 @@ const LOG = '💰 > DAILY > [CREATE_TRANSACTIONS]'
  * Resilient to missed crons - processes ALL pending CLOSED orders.
  *
  * Transaction includes:
- * - orderSnapshot: JSON snapshot of order at transaction time
+ * - orderSnapshot: JSON snapshot with billing-relevant data (ADR-010)
  * - userSnapshot: JSON snapshot of bookedByUser at transaction time
- * - amount: priceAtBooking from order
+ * - amount: priceAtBooking from order (frozen price)
  * - userEmailHandle: email of bookedByUser
  *
  * @returns CreateTransactionsResult with count of created transactions
  */
 export async function createTransactions(d1Client: D1Database): Promise<CreateTransactionsResult> {
     const {chunkTransactions} = useBooking()
+    const {serializeTransaction} = useBillingValidation()
 
     // Fetch all CLOSED orders without transaction from repository
     const closedOrders = await fetchClosedOrdersWithoutTransaction(d1Client)
@@ -30,21 +32,13 @@ export async function createTransactions(d1Client: D1Database): Promise<CreateTr
 
     console.info(`${LOG} Found ${closedOrders.length} CLOSED orders without transactions`)
 
-    // Prepare all transaction data (uses flattened ticketType from lean schema)
+    // Prepare all transaction data using serializeTransaction (ADR-010)
     const transactionData: TransactionCreateData[] = closedOrders.map(order => ({
         orderId: order.id,
-        orderSnapshot: JSON.stringify({
-            id: order.id,
-            dinnerEventId: order.dinnerEventId,
-            inhabitantId: order.inhabitantId,
-            bookedByUserId: order.bookedByUserId,
-            ticketType: order.ticketType,
-            priceAtBooking: order.priceAtBooking,
-            dinnerMode: order.dinnerMode,
-            state: order.state,
-            closedAt: order.closedAt,
+        orderSnapshot: serializeTransaction({
             dinnerEvent: order.dinnerEvent,
-            inhabitant: order.inhabitant
+            inhabitant: order.inhabitant,
+            ticketType: order.ticketType
         }),
         userSnapshot: JSON.stringify(order.bookedByUser || { id: null, email: 'unknown' }),
         amount: order.priceAtBooking,

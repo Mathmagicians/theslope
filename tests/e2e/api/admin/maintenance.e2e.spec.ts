@@ -225,15 +225,17 @@ test.describe('Daily Maintenance API', () => {
 
             // Act: Generate billing (creates Invoice + BillingPeriodSummary)
             const response = await BillingFactory.generateBilling(context)
+            expect(response).not.toBeNull()
 
             // Assert: JobRun was created
-            expect(response.jobRunId).toBeGreaterThan(0)
+            expect(response!.jobRunId).toBeGreaterThan(0)
 
-            // Assert: Result has billing data (or null if period already exists - idempotent)
-            if (response.result !== null) {
-                expect(response.result.billingPeriodSummaryId).toBeGreaterThan(0)
-                expect(response.result.invoiceCount).toBeGreaterThanOrEqual(1)
-                expect(response.result.transactionCount).toBeGreaterThanOrEqual(1)
+            // Assert: Results array has billing data (may be empty if no transactions)
+            if (response!.results.length > 0) {
+                const result = response!.results[0]!
+                expect(result.billingPeriodSummaryId).toBeGreaterThan(0)
+                expect(result.invoiceCount).toBeGreaterThanOrEqual(1)
+                expect(result.transactionCount).toBeGreaterThanOrEqual(1)
             }
 
             // Assert: Billing period exists with correct data

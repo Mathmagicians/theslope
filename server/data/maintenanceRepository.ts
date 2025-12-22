@@ -17,8 +17,9 @@ const LOG = '🔧 > JOB_RUN'
 
 /**
  * Result types that can be stored in JobRun.resultSummary
+ * Monthly billing stores {results: BillingGenerationResult[]} for multi-period support
  */
-export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | SeasonImportResponse
+export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | {results: BillingGenerationResult[]} | SeasonImportResponse
 
 /**
  * Fetch recent job runs with optional filtering by job type

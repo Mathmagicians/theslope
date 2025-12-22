@@ -8,7 +8,9 @@ describe('useBillingValidation', () => {
         CSV_HEADER,
         generateCsvRow,
         generateBillingCsv,
-        generateCsvFilename
+        generateCsvFilename,
+        serializeTransaction,
+        deserializeTransaction
     } = useBillingValidation()
 
     const {convertPriceToDecimalFormat} = useTicket()
@@ -55,6 +57,86 @@ describe('useBillingValidation', () => {
         it('GIVEN summary WHEN generating filename THEN uses billingPeriod', () => {
             const summary = BillingFactory.defaultSummaryData('test')
             expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`)
+        })
+    })
+
+    // ============================================================================
+    // Transaction Serialization (ADR-010)
+    // ============================================================================
+
+    describe('serializeTransaction', () => {
+        it.each([
+            ['ADULT', 'ADULT'],
+            ['CHILD', 'CHILD'],
+            ['BABY', 'BABY'],
+            [null, null]
+        ])('GIVEN ticketType=%s WHEN serializing THEN snapshot contains ticketType=%s', (input, expected) => {
+            const order = BillingFactory.defaultSerializeInput('test', input)
+            const parsed = JSON.parse(serializeTransaction(order))
+            expect(parsed.ticketType).toBe(expected)
+        })
+
+        it('GIVEN order data WHEN serializing THEN snapshot contains all billing fields', () => {
+            const order = BillingFactory.defaultSerializeInput('ser-test')
+            const parsed = JSON.parse(serializeTransaction(order))
+
+            expect(parsed.dinnerEvent.id).toBe(order.dinnerEvent.id)
+            expect(parsed.dinnerEvent.menuTitle).toBe(order.dinnerEvent.menuTitle)
+            expect(parsed.inhabitant.id).toBe(order.inhabitant.id)
+            expect(parsed.inhabitant.name).toBe(order.inhabitant.name)
+            expect(parsed.inhabitant.household.pbsId).toBe(order.inhabitant.household.pbsId)
+            expect(parsed.inhabitant.household.address).toBe(order.inhabitant.household.address)
+        })
+    })
+
+    describe('deserializeTransaction', () => {
+        it.each<['full' | 'noHousehold' | 'noTicketPrice' | 'noOrder', 'live' | 'snapshot']>([
+            ['full', 'live'],
+            ['noHousehold', 'snapshot'],
+            ['noTicketPrice', 'snapshot'],
+            ['noOrder', 'snapshot']
+        ])('GIVEN liveData=%s WHEN deserializing THEN uses %s data', (liveData, expectedSource) => {
+            const tx = BillingFactory.defaultPrismaTransaction('de-test', liveData)
+            const result = deserializeTransaction(tx)
+
+            if (expectedSource === 'live') {
+                expect(result.inhabitant.household.pbsId).toBe(1111)
+                expect(result.ticketType).toBe('ADULT')
+            } else {
+                expect(result.inhabitant.household.pbsId).toBe(9999)
+                expect(result.ticketType).toBe('CHILD')
+            }
+        })
+
+        it('GIVEN transaction WHEN deserializing THEN base fields are always from transaction', () => {
+            const tx = BillingFactory.defaultPrismaTransaction('base-test', 'noOrder')
+            const result = deserializeTransaction(tx)
+
+            expect(result.id).toBe(tx.id)
+            expect(result.amount).toBe(tx.amount)
+            expect(result.orderSnapshot).toBe(tx.orderSnapshot)
+        })
+    })
+
+    describe('serialize/deserialize roundtrip', () => {
+        it.each([
+            ['ADULT'],
+            ['CHILD'],
+            ['BABY'],
+            [null]
+        ])('GIVEN ticketType=%s WHEN roundtrip THEN data preserved', (ticketType) => {
+            const order = BillingFactory.defaultSerializeInput('roundtrip', ticketType)
+            const serialized = serializeTransaction(order)
+            const tx = {id: 1, amount: 0, createdAt: new Date(), orderSnapshot: serialized, order: null}
+            const result = deserializeTransaction(tx)
+
+            expect(result.dinnerEvent.id).toBe(order.dinnerEvent.id)
+            expect(result.dinnerEvent.menuTitle).toBe(order.dinnerEvent.menuTitle)
+            expect(result.inhabitant.id).toBe(order.inhabitant.id)
+            expect(result.inhabitant.name).toBe(order.inhabitant.name)
+            expect(result.inhabitant.household.pbsId).toBe(order.inhabitant.household.pbsId)
+            expect(result.inhabitant.household.address).toBe(order.inhabitant.household.address)
+            expect(result.ticketType).toBe(ticketType)
         })
     })
 })

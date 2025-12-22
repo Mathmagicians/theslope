@@ -1057,19 +1057,30 @@ export async function fetchBillingPeriodSummary(
     return summary ? BillingPeriodSummaryDisplaySchema.parse(summary) : null
 }
 
-export async function fetchUnbilledTransactions(d1Client: D1Database): Promise<TransactionDisplay[]> {
-    const LOG = '💰 > BILLING > [FETCH_UNBILLED]'
-    const {TransactionDisplaySchema, TicketType} = useBillingValidation()
+/**
+ * Fetch unbilled transactions up to and including cutoff date.
+ * Only returns transactions for dinners on or before the cutoff.
+ *
+ * @param cutoffDate - Include transactions for dinners up to this date (inclusive)
+ */
+export async function fetchUnbilledTransactions(
+    d1Client: D1Database,
+    cutoffDate: Date
+): Promise<TransactionDisplay[]> {
+    const {deserializeTransaction} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const EMPTY_FALLBACK = {
-        dinnerEvent: {id: 0, date: new Date(), menuTitle: ''},
-        inhabitant: {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
-        ticketType: TicketType.ADULT
-    }
+    console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${cutoffDate.toISOString().split('T')[0]}`)
 
     const transactions = await prisma.transaction.findMany({
-        where: {invoiceId: null},
+        where: {
+            invoiceId: null,
+            order: {
+                dinnerEvent: {
+                    date: {lte: cutoffDate}
+                }
+            }
+        },
         include: {
             order: {
                 include: {
@@ -1086,37 +1097,15 @@ export async function fetchUnbilledTransactions(d1Client: D1Database): Promise<T
         }
     })
 
-    return transactions.map(tx => {
-        // Order deleted - use frozen data from snapshot (billing immutability)
-        let orderData = EMPTY_FALLBACK
-        if (tx.order) {
-            orderData = {
-                dinnerEvent: tx.order.dinnerEvent,
-                inhabitant: tx.order.inhabitant,
-                ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
-            }
-        } else {
-            try {
-                const snapshot = JSON.parse(tx.orderSnapshot)
-                console.info(`${LOG} Using snapshot for orphaned transaction ${tx.id}`)
-                orderData = {
-                    dinnerEvent: snapshot.dinnerEvent ?? EMPTY_FALLBACK.dinnerEvent,
-                    inhabitant: snapshot.inhabitant ?? EMPTY_FALLBACK.inhabitant,
-                    ticketType: snapshot.ticketType ?? EMPTY_FALLBACK.ticketType
-                }
-            } catch {
-                console.warn(`${LOG} Failed to parse snapshot for transaction ${tx.id}`)
-            }
+    const results: TransactionDisplay[] = []
+    for (const tx of transactions) {
+        try {
+            results.push(deserializeTransaction(tx))
+        } catch {
+            console.warn(`💰 > BILLING > Skipping transaction ${tx.id}: unparseable snapshot`)
         }
-
-        return TransactionDisplaySchema.parse({
-            id: tx.id,
-            amount: tx.amount,
-            createdAt: tx.createdAt,
-            orderSnapshot: tx.orderSnapshot,
-            ...orderData
-        })
-    })
+    }
+    return results
 }
 
 export async function createBillingPeriodSummary(

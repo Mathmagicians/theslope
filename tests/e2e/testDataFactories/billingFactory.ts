@@ -8,6 +8,7 @@ import {
     type BillingImportResponse,
     type BillingPeriodSummaryDetail,
     type BillingPeriodSummaryDisplay,
+    type HouseholdBillingResponse,
     type InvoiceDisplay,
     type MonthlyBillingResponse
 } from '~/composables/useBillingValidation'
@@ -18,7 +19,8 @@ const BILLING_PERIODS_ENDPOINT = '/api/admin/billing/periods'
 const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
 const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
-const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, MonthlyBillingResponseSchema, parseCSV} = useBillingValidation()
+const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
+const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, parseCSV} = useBillingValidation()
 
 export class BillingFactory {
 
@@ -58,6 +60,54 @@ export class BillingFactory {
         shareToken: salt('token', testSalt),
         invoices: [BillingFactory.defaultInvoiceData(testSalt)]
     })
+
+    // ============================================================================
+    // Transaction Serialization Test Data (ADR-010)
+    // ============================================================================
+
+    /**
+     * Input for serializeTransaction - order data with billing-relevant fields
+     */
+    static readonly defaultSerializeInput = (testSalt: string = 'default', ticketType: string | null = 'ADULT') => ({
+        dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},
+        inhabitant: {id: 2, name: salt('Anna', testSalt), household: {id: 3, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
+        ticketType
+    })
+
+    /**
+     * Simulated Prisma transaction result for deserializeTransaction
+     * @param liveData - 'full' = all relations, 'noHousehold' = household deleted, 'noTicketPrice' = ticketPrice deleted, 'noOrder' = order deleted
+     */
+    static readonly defaultPrismaTransaction = (
+        testSalt: string = 'default',
+        liveData: 'full' | 'noHousehold' | 'noTicketPrice' | 'noOrder' = 'full'
+    ) => {
+        const snapshot = {
+            dinnerEvent: {id: 1, date: '2025-01-15', menuTitle: salt('Snapshot Dinner', testSalt)},
+            inhabitant: {id: 2, name: salt('Snapshot Name', testSalt), household: {id: 3, pbsId: 9999, address: salt('Snapshot Street', testSalt)}},
+            ticketType: 'CHILD'
+        }
+
+        const base = {
+            id: 100,
+            amount: 4500,
+            createdAt: new Date('2025-01-16'),
+            orderSnapshot: JSON.stringify(snapshot)
+        }
+
+        const liveOrder = {
+            dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Live Dinner', testSalt)},
+            inhabitant: {id: 2, name: salt('Live Name', testSalt), household: {id: 3, pbsId: 1111, address: salt('Live Street', testSalt)}},
+            ticketPrice: {ticketType: 'ADULT'}
+        }
+
+        switch (liveData) {
+            case 'noOrder': return {...base, order: null}
+            case 'noHousehold': return {...base, order: {...liveOrder, inhabitant: {...liveOrder.inhabitant, household: null}}}
+            case 'noTicketPrice': return {...base, order: {...liveOrder, ticketPrice: null}}
+            default: return {...base, order: liveOrder}
+        }
+    }
 
     // ============================================================================
     // CSV Import Functions
@@ -209,12 +259,47 @@ Børn (2-12 år),,${childCounts}
      * ADR-015: Idempotent - returns null if billing period already exists
      */
     static readonly generateBilling = async (
-        context: BrowserContext
-    ): Promise<MonthlyBillingResponse> => {
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<MonthlyBillingResponse | null> => {
         const response = await context.request.post(MONTHLY_BILLING_ENDPOINT, {headers})
-        const text = await response.text()
-        expect(response.status(), `Generate billing failed (status ${response.status()}): ${text}`).toBe(200)
-        const body = JSON.parse(text)
-        return MonthlyBillingResponseSchema.parse(body)
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const body = await response.json()
+            return MonthlyBillingResponseSchema.parse(body)
+        }
+
+        return null
+    }
+
+    // ============================================================================
+    // Household Billing API Functions
+    // ============================================================================
+
+    /**
+     * Get billing data for a household (GET /api/billing?householdId=X)
+     * Returns current period transactions and past invoices
+     */
+    static readonly getHouseholdBilling = async (
+        context: BrowserContext,
+        householdId: number,
+        expectedStatus: number = 200
+    ): Promise<HouseholdBillingResponse | null> => {
+        const response = await context.request.get(`${HOUSEHOLD_BILLING_ENDPOINT}?householdId=${householdId}`, {headers})
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const body = await response.json()
+            return HouseholdBillingResponseSchema.parse(body)
+        }
+
+        return null
     }
 }

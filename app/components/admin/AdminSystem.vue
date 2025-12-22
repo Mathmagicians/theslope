@@ -174,10 +174,10 @@ const dailyMaintenanceStats = computed(() => {
 // MONTHLY BILLING JOB - uses bookings store (ADR-007)
 // ============================================================================
 
-const monthlyBillingIcons = [ICONS.ticket, ICONS.shoppingCart, ICONS.checkCircle]
+const monthlyBillingIcons = [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.checkCircle]
 const monthlyBillingStats = computed(() => {
-  if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.result) return []
-  const stats = formatMonthlyBillingStats(monthlyBillingResult.value.result)
+  if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.results) return []
+  const stats = formatMonthlyBillingStats(monthlyBillingResult.value.results)
   return [
     { icon: ICONS.clock, text: new Date().toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) },
     { icon: ICONS.checkCircle, text: 'Gennemført' },

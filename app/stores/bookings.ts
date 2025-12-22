@@ -304,10 +304,56 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     // ========================================
-    // MONTHLY BILLING JOB (ADR-007)
+    // BILLING PERIODS (ADR-007)
     // ========================================
 
-    const {MonthlyBillingResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+    const {MonthlyBillingResponseSchema, deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
+
+    const {
+        data: billingPeriods, status: billingPeriodsStatus,
+        error: billingPeriodsError, refresh: refreshBillingPeriods
+    } = useFetch<BillingPeriodSummaryDisplay[]>(
+        '/api/admin/billing/periods',
+        {
+            key: 'bookings-store-billing-periods',
+            default: () => [],
+            transform: (data: unknown[]) => (data as unknown[]).map(deserializeBillingPeriodDisplay)
+        }
+    )
+
+    const isBillingPeriodsLoading = computed(() => billingPeriodsStatus.value === 'pending')
+    const isBillingPeriodsErrored = computed(() => billingPeriodsStatus.value === 'error')
+    const isBillingPeriodsInitialized = computed(() => billingPeriodsStatus.value === 'success')
+
+    // Fetch billing period detail (on-demand for expanded view)
+    const selectedBillingPeriodId = ref<number | null>(null)
+    const selectedBillingPeriodKey = computed(() => `billing-period-${selectedBillingPeriodId.value || 'null'}`)
+
+    const {
+        data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
+        error: selectedBillingPeriodError
+    } = useAsyncData<BillingPeriodSummaryDetail | null>(
+        selectedBillingPeriodKey,
+        () => {
+            if (!selectedBillingPeriodId.value) return Promise.resolve(null)
+            return $fetch<BillingPeriodSummaryDetail>(`/api/admin/billing/periods/${selectedBillingPeriodId.value}`)
+        },
+        {
+            default: () => null,
+            transform: deserializeBillingPeriodDetail
+        }
+    )
+
+    const isBillingPeriodDetailLoading = computed(() => selectedBillingPeriodStatus.value === 'pending')
+
+    const loadBillingPeriodDetail = (periodId: number) => {
+        selectedBillingPeriodId.value = periodId
+        console.info(CTX, `Loading billing period detail: ${periodId}`)
+    }
+
+    // ========================================
+    // MONTHLY BILLING JOB (ADR-007)
+    // ========================================
 
     const {
         data: monthlyBillingResult,
@@ -336,62 +382,18 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (hasMonthlyBillingError.value) {
             handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
         } else if (hasMonthlyBillingResult.value) {
-            const r = monthlyBillingResult.value!.result
-            console.info(CTX, `Monthly billing completed: Invoices: ${r.invoiceCount}, Transactions: ${r.transactionCount}`)
+            const results = monthlyBillingResult.value!.results
+            const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
+            const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
+            console.info(CTX, `Monthly billing completed: ${results.length} periods, Invoices: ${totalInvoices}, Transactions: ${totalTransactions}`)
             toast.add({
                 title: 'Månedlig fakturering afsluttet',
-                description: `Fakturaer: ${r.invoiceCount}, Transaktioner: ${r.transactionCount}`,
+                description: `${results.length} periode(r), Fakturaer: ${totalInvoices}, Transaktioner: ${totalTransactions}`,
                 color: 'success'
             })
+            // Refresh billing periods to show new data
+            await refreshBillingPeriods()
         }
-    }
-
-    // ========================================
-    // BILLING PERIODS (ADR-007)
-    // ========================================
-
-    const {
-        data: billingPeriods, status: billingPeriodsStatus,
-        error: billingPeriodsError, refresh: refreshBillingPeriods
-    } = useFetch<BillingPeriodSummaryDisplay[]>(
-        '/api/admin/billing/periods',
-        {
-            key: 'bookings-store-billing-periods',
-            default: () => [],
-            transform: (data: unknown[]) => {
-                return (data as Record<string, unknown>[]).map(p => BillingPeriodSummaryDisplaySchema.parse(p))
-            }
-        }
-    )
-
-    const isBillingPeriodsLoading = computed(() => billingPeriodsStatus.value === 'pending')
-    const isBillingPeriodsErrored = computed(() => billingPeriodsStatus.value === 'error')
-    const isBillingPeriodsInitialized = computed(() => billingPeriodsStatus.value === 'success')
-
-    // Fetch billing period detail (on-demand for expanded view)
-    const selectedBillingPeriodId = ref<number | null>(null)
-    const selectedBillingPeriodKey = computed(() => `billing-period-${selectedBillingPeriodId.value || 'null'}`)
-
-    const {
-        data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
-        error: selectedBillingPeriodError
-    } = useAsyncData<BillingPeriodSummaryDetail | null>(
-        selectedBillingPeriodKey,
-        () => {
-            if (!selectedBillingPeriodId.value) return Promise.resolve(null)
-            return $fetch<BillingPeriodSummaryDetail>(`/api/admin/billing/periods/${selectedBillingPeriodId.value}`)
-        },
-        {
-            default: () => null,
-            transform: (data: unknown) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
-        }
-    )
-
-    const isBillingPeriodDetailLoading = computed(() => selectedBillingPeriodStatus.value === 'pending')
-
-    const loadBillingPeriodDetail = (periodId: number) => {
-        selectedBillingPeriodId.value = periodId
-        console.info(CTX, `Loading billing period detail: ${periodId}`)
     }
 
     return {

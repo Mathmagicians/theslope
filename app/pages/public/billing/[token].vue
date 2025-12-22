@@ -22,12 +22,12 @@ const token = computed(() => route.params.token as string)
 
 const {formatPrice} = useTicket()
 const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
+const {deserializeBillingPeriodDetail} = useBillingValidation()
 
 // Fetch billing data (no auth required)
-const {data: billing, status, error} = useAsyncData<BillingPeriodSummaryDetail | null>(
-    `public-billing-${token.value}`,
-    () => $fetch<BillingPeriodSummaryDetail>(`/api/public/billing/${token.value}`),
-    {default: () => null}
+const {data: billing, status, error} = useFetch<BillingPeriodSummaryDetail | null>(
+    `/api/public/billing/${token.value}`,
+    {key: `public-billing-${token.value}`, default: () => null, transform: deserializeBillingPeriodDetail}
 )
 
 const isLoading = computed(() => status.value === 'pending')

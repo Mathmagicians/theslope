@@ -73,7 +73,7 @@ householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
 // Design system
-const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, DEADLINE_BADGES, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Ticket business logic
 const {getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
@@ -136,7 +136,7 @@ const hasReleasedTickets = computed(() => releasedTicketCount.value > 0)
 
 const columns = [
   {id: 'name', header: 'Hvem'},
-  {id: 'mode', header: 'Tilmelding'}
+  {id: 'mode', header: 'Hvordan spiser I'}
 ]
 
 // Disabled modes based on deadline state
@@ -212,6 +212,12 @@ const powerModeHelperText = computed(() => {
 })
 
 const guestHelperText = computed(() => hasReleasedTickets.value ? `🎟️ ${releasedTicketCount.value} ledige` : '')
+
+// Deadline status badges
+const deadlineStatusBadges = computed(() => [
+  { label: 'Tilmelding', isOpen: canBook.value },
+  { label: 'Hvordan spiser I', isOpen: canChangeDiningMode.value }
+])
 </script>
 
 <template>
@@ -232,18 +238,14 @@ const guestHelperText = computed(() => hasReleasedTickets.value ? `🎟️ ${rel
     <!-- Deadline Status Badges -->
     <div class="flex flex-wrap gap-2 text-sm">
       <UBadge
-        :color="canBook ? DEADLINE_BADGES.DONE.color : DEADLINE_BADGES.ON_TRACK.color"
+        v-for="badge in deadlineStatusBadges"
+        :key="badge.label"
+        :color="badge.isOpen ? COLOR.success : COLOR.neutral"
         variant="soft"
         size="sm"
+        :icon="badge.isOpen ? 'i-heroicons-lock-open' : 'i-heroicons-lock-closed'"
       >
-        Tilmelding: {{ canBook ? `${DEADLINE_BADGES.DONE.emoji} Åben` : `${DEADLINE_BADGES.ON_TRACK.emoji} Lukket` }}
-      </UBadge>
-      <UBadge
-        :color="canChangeDiningMode ? DEADLINE_BADGES.DONE.color : DEADLINE_BADGES.ON_TRACK.color"
-        variant="soft"
-        size="sm"
-      >
-        Spisemodus: {{ canChangeDiningMode ? `${DEADLINE_BADGES.DONE.emoji} Kan ændres` : `${DEADLINE_BADGES.ON_TRACK.emoji} Låst` }}
+        {{ badge.label }}: {{ badge.isOpen ? 'Åben' : 'Lukket' }}
       </UBadge>
     </div>
 

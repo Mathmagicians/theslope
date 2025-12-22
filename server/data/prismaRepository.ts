@@ -1657,9 +1657,7 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 const {BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
 
 const billingPeriodDetailInclude = {
-    invoices: {
-        select: {id: true, amount: true, householdId: true, pbsId: true, address: true}
-    }
+    invoices: true
 } as const
 
 export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise<BillingPeriodSummaryDisplay[]> => {

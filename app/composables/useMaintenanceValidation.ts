@@ -92,17 +92,19 @@ export const useMaintenanceValidation = () => {
 
     /**
      * Serialize result summary for storage in DB
+     * Monthly billing stores {results: BillingGenerationResult[]}
      */
-    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | _SeasonImportResponse): string =>
+    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | {results: BillingGenerationResult[]} | _SeasonImportResponse): string =>
         JSON.stringify(result)
 
     /**
      * Deserialize and validate result summary from DB based on job type
+     * Monthly billing returns array of results
      */
     const deserializeResultSummary = (
         jobType: z.infer<typeof JobTypeSchema>,
         resultSummary: string | null
-    ): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | _SeasonImportResponse | null => {
+    ): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult[] | _SeasonImportResponse | null => {
         if (!resultSummary) return null
 
         const parsed = JSON.parse(resultSummary)
@@ -115,7 +117,7 @@ export const useMaintenanceValidation = () => {
             case JobType.MAINTENANCE_IMPORT:
                 return SeasonImportResponseSchema.parse(parsed)
             case JobType.MONTHLY_BILLING:
-                return BillingGenerationResultSchema.parse(parsed)
+                return parsed.results.map((r: unknown) => BillingGenerationResultSchema.parse(r))
             default:
                 throw new Error(`Unknown job type: ${jobType}`)
         }

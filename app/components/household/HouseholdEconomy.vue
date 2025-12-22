@@ -131,7 +131,7 @@ const columns = {
           <template #expanded>
             <div v-if="expandedCurrentGroup" class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-1">
               <div v-for="tx in expandedCurrentGroup.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.bodyTextSmall">
-                <span>{{ tx.inhabitant.name }} ({{ ticketTypeConfig[tx.ticketType]?.label }})</span>
+                <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                 <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
               </div>
             </div>
@@ -183,7 +183,7 @@ const columns = {
                 </div>
                 <div class="space-y-0.5 pl-2">
                   <div v-for="tx in group.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.finePrint">
-                    <span>{{ tx.inhabitant.name }} ({{ ticketTypeConfig[tx.ticketType]?.label }})</span>
+                    <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                     <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
                   </div>
                 </div>

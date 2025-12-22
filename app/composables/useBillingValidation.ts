@@ -281,7 +281,7 @@ export const useBillingValidation = () => {
                 address: z.string()
             })
         }),
-        ticketType: TicketTypeSchema
+        ticketType: TicketTypeSchema.nullable()
     })
 
     /**
@@ -327,7 +327,7 @@ export const useBillingValidation = () => {
 
     const BillingPeriodSummaryIdSchema = BillingPeriodSummaryDisplaySchema.pick({id: true})
 
-    const InvoiceCreatedSchema = InvoiceDisplaySchema.pick({id: true, householdId: true})
+    const InvoiceCreatedSchema = InvoiceDisplaySchema.pick({id: true, householdId: true, pbsId: true})
 
     const BillingGenerationResultSchema = z.object({
         billingPeriodSummaryId: z.number().int().positive(),
@@ -339,10 +339,11 @@ export const useBillingValidation = () => {
 
     /**
      * Response from POST /api/admin/maintenance/monthly
-     * Wraps result to ensure JSON response (null alone becomes 204)
+     * Returns array of results (one per billing period processed)
+     * Normal monthly run = 1 period, catch-up = multiple periods
      */
     const MonthlyBillingResponseSchema = z.object({
-        result: BillingGenerationResultSchema,
+        results: z.array(BillingGenerationResultSchema),
         jobRunId: z.number().int().positive()
     })
 
@@ -381,7 +382,7 @@ export const useBillingValidation = () => {
         const paymentEnd = formatCsvDate(getLastDayOfMonth(summary.paymentDate))
         const cutoff = formatCsvDate(summary.cutoffDate)
 
-        return `${invoice.pbsId},${invoice.address},${totalDKK},${paymentStart},${paymentEnd},${cutoff},${totalDKK},,`
+        return `${invoice.pbsId},"${invoice.address}",${totalDKK},${paymentStart},${paymentEnd},${cutoff},${totalDKK},,`
     }
 
     /**
@@ -398,6 +399,95 @@ export const useBillingValidation = () => {
      */
     const generateCsvFilename = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string =>
         `PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`
+
+    // ============================================================================
+    // Transaction Serialization (ADR-010)
+    // ============================================================================
+
+    /**
+     * Order snapshot schema - frozen billing data for immutability.
+     * Matches what createTransactions.ts stores. Strict - no defaults.
+     * Price is in Transaction.amount, not duplicated here.
+     */
+    const OrderSnapshotSchema = z.object({
+        dinnerEvent: z.object({
+            id: z.number().int(),
+            date: z.coerce.date(),
+            menuTitle: z.string()
+        }),
+        inhabitant: z.object({
+            id: z.number().int(),
+            name: z.string(),
+            household: z.object({
+                id: z.number().int(),
+                pbsId: z.number().int(),
+                address: z.string()
+            })
+        }),
+        ticketType: TicketTypeSchema.nullable()
+    })
+
+    /**
+     * Serialize order data for transaction snapshot.
+     * Freezes billing-relevant data at transaction creation time.
+     * ADR-010: Domain-driven serialization
+     */
+    const serializeTransaction = (order: {
+        dinnerEvent: {id: number, date: Date, menuTitle: string}
+        inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
+        ticketType: string | null
+    }): string => JSON.stringify({
+        dinnerEvent: order.dinnerEvent,
+        inhabitant: {
+            id: order.inhabitant.id,
+            name: order.inhabitant.name,
+            household: order.inhabitant.household
+        },
+        ticketType: order.ticketType
+    })
+
+    /**
+     * Deserialize transaction from Prisma to domain type.
+     * Uses live data if ALL relations exist, otherwise uses frozen snapshot.
+     * Throws if snapshot is unparseable - caller should handle.
+     * ADR-010: Repository-layer deserialization
+     */
+    const deserializeTransaction = (tx: {
+        id: number
+        amount: number
+        createdAt: Date
+        orderSnapshot: string
+        order: {
+            dinnerEvent: {id: number, date: Date, menuTitle: string}
+            inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
+            ticketPrice: {ticketType: string} | null
+        } | null
+    }): z.infer<typeof TransactionDisplaySchema> => {
+        const base = {id: tx.id, amount: tx.amount, createdAt: tx.createdAt, orderSnapshot: tx.orderSnapshot}
+
+        // Use live data only if ALL required relations exist
+        if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
+            return TransactionDisplaySchema.parse({
+                ...base,
+                dinnerEvent: tx.order.dinnerEvent,
+                inhabitant: tx.order.inhabitant,
+                ticketType: tx.order.ticketPrice.ticketType
+            })
+        }
+
+        // Any relation deleted - use frozen snapshot (strict parsing)
+        // Set household.id to 0 to indicate deleted (not valid as FK)
+        const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
+        return TransactionDisplaySchema.parse({
+            ...base,
+            dinnerEvent: snapshot.dinnerEvent,
+            inhabitant: {
+                ...snapshot.inhabitant,
+                household: {...snapshot.inhabitant.household, id: 0}
+            },
+            ticketType: snapshot.ticketType
+        })
+    }
 
     return {
         // Enums
@@ -445,7 +535,14 @@ export const useBillingValidation = () => {
         HouseholdBillingResponseSchema,
         TransactionDisplaySchema,
         HouseholdInvoiceSchema,
-        CurrentPeriodBillingSchema
+        CurrentPeriodBillingSchema,
+
+        // Serialization (ADR-010)
+        OrderSnapshotSchema,
+        serializeTransaction,
+        deserializeTransaction,
+        deserializeBillingPeriodDisplay: (data: unknown) => BillingPeriodSummaryDisplaySchema.parse(data),
+        deserializeBillingPeriodDetail: (data: unknown) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
     }
 }
 

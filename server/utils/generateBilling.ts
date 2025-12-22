@@ -8,16 +8,23 @@ import {
     linkTransactionsToInvoice
 } from '~~/server/data/financesRepository'
 import {useBilling} from '~/composables/useBilling'
-import type {BillingGenerationResult, InvoiceCreate} from '~/composables/useBillingValidation'
+import type {BillingGenerationResult, InvoiceCreate, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LOG = '💰 > BILLING > [GENERATE]'
 
 interface HouseholdBillingData {
-    householdId: number
-    pbsId: number
+    householdId: number | null  // null if household deleted (id=0 in snapshot)
+    pbsId: number               // unique billing identifier (always valid from snapshot)
     address: string
     transactionIds: number[]
     totalAmount: number
+}
+
+interface PeriodBillingData {
+    billingPeriod: string
+    paymentDate: Date
+    cutoffDate: Date
+    transactions: TransactionDisplay[]
 }
 
 /**
@@ -26,55 +33,89 @@ interface HouseholdBillingData {
  * ADR-014: Uses repository functions, chunker from composable
  * ADR-015: Idempotent - resilient to partial failures, safe to re-run
  *
+ * Multi-period support: Groups transactions by their actual billing period (based on dinner date)
+ * and processes each period separately. Returns array of results (one per period).
+ *
  * Reconciliation pattern (like daily maintenance):
- * 1. Get or create BillingPeriodSummary
- * 2. Fetch existing invoices to know which households are already billed
- * 3. Fetch unbilled transactions (naturally excludes already-linked)
- * 4. Create invoices only for households without one
- * 5. Link remaining unbilled transactions
+ * 1. Fetch unbilled transactions and group by billing period
+ * 2. For each period: get or create BillingPeriodSummary
+ * 3. Group transactions by household
+ * 4. Fetch existing invoices to know which households are already billed
+ * 5. Create invoices only for households without one
+ * 6. Link remaining unbilled transactions
  */
-export const generateBilling = async (d1Client: D1Database): Promise<BillingGenerationResult> => {
-    const {calculateClosedBillingPeriod, chunkTransactionIds} = useBilling()
+export const generateBilling = async (d1Client: D1Database): Promise<BillingGenerationResult[]> => {
+    const {getBillingPeriodForDate, calculateClosedBillingPeriod, chunkTransactionIds} = useBilling()
 
-    const {dateRange, paymentDate, billingPeriod} = calculateClosedBillingPeriod()
-    const periodEnd = dateRange.end
+    // Calculate cutoff date (end of last closed billing period)
+    const {dateRange: closedPeriod} = calculateClosedBillingPeriod()
+    const cutoffDate = closedPeriod.end
 
-    console.info(`${LOG} Starting billing generation for period ${billingPeriod}`)
+    // Fetch unbilled transactions up to cutoff (only closed periods)
+    const unbilledTransactions = await fetchUnbilledTransactions(d1Client, cutoffDate)
 
-    // 1. Check if BillingPeriodSummary exists
-    const existingSummary = await fetchBillingPeriodSummary(d1Client, billingPeriod)
+    if (unbilledTransactions.length === 0) {
+        console.info(`${LOG} No unbilled transactions up to ${cutoffDate.toISOString().split('T')[0]}`)
+        return []
+    }
 
-    // 2. Fetch unbilled transactions (only returns transactions where invoiceId IS NULL)
-    const unbilledTransactions = await fetchUnbilledTransactions(d1Client)
+    console.info(`${LOG} Found ${unbilledTransactions.length} unbilled transactions up to ${cutoffDate.toISOString().split('T')[0]}`)
 
-    if (unbilledTransactions.length === 0 && existingSummary) {
-        console.info(`${LOG} No unbilled transactions, billing period ${billingPeriod} complete`)
-        return {
-            billingPeriodSummaryId: existingSummary.id,
-            billingPeriod: existingSummary.billingPeriod,
-            invoiceCount: existingSummary.householdCount,
-            transactionCount: existingSummary.ticketCount,
-            totalAmount: existingSummary.totalAmount
+    // Group transactions by billing period (based on dinner date)
+    const periodMap = new Map<string, PeriodBillingData>()
+
+    for (const tx of unbilledTransactions) {
+        const dinnerDate = new Date(tx.dinnerEvent.date)
+        const {billingPeriod, paymentDate, dateRange} = getBillingPeriodForDate(dinnerDate)
+
+        if (!periodMap.has(billingPeriod)) {
+            periodMap.set(billingPeriod, {
+                billingPeriod,
+                paymentDate,
+                cutoffDate: dateRange.end,
+                transactions: []
+            })
         }
+
+        periodMap.get(billingPeriod)!.transactions.push(tx)
     }
 
-    // 3. Filter out orphaned transactions (where order was deleted but transaction remains)
-    // Orphaned transactions have fallback householdId: 0 which doesn't exist
-    const validTransactions = unbilledTransactions.filter(tx => tx.inhabitant.household.id > 0)
-    const orphanedCount = unbilledTransactions.length - validTransactions.length
-    if (orphanedCount > 0) {
-        console.warn(`${LOG} Skipping ${orphanedCount} orphaned transactions (household deleted)`)
-    }
-    console.info(`${LOG} Found ${validTransactions.length} valid unbilled transactions`)
+    const periods = Array.from(periodMap.values())
+        .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod)) // Process oldest first
 
-    // 4. Group transactions by household
+    console.info(`${LOG} Grouped into ${periods.length} billing period(s)`)
+
+    // Process each billing period
+    const results: BillingGenerationResult[] = []
+
+    for (const period of periods) {
+        const result = await processBillingPeriod(d1Client, period, chunkTransactionIds)
+        results.push(result)
+    }
+
+    return results
+}
+
+/**
+ * Process a single billing period - creates summary, invoices, and links transactions
+ */
+async function processBillingPeriod(
+    d1Client: D1Database,
+    period: PeriodBillingData,
+    chunkTransactionIds: (ids: number[]) => number[][]
+): Promise<BillingGenerationResult> {
+    const {billingPeriod, paymentDate, cutoffDate, transactions} = period
+
+    console.info(`${LOG} Processing period ${billingPeriod}: ${transactions.length} transactions`)
+
+    // Group transactions by pbsId (unique billing identifier, stable even if household deleted)
     const householdMap = new Map<number, HouseholdBillingData>()
 
-    for (const tx of validTransactions) {
+    for (const tx of transactions) {
         const household = tx.inhabitant.household
-        if (!householdMap.has(household.id)) {
-            householdMap.set(household.id, {
-                householdId: household.id,
+        if (!householdMap.has(household.pbsId)) {
+            householdMap.set(household.pbsId, {
+                householdId: household.id > 0 ? household.id : null,  // null if deleted
                 pbsId: household.pbsId,
                 address: household.address,
                 transactionIds: [],
@@ -82,19 +123,19 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
             })
         }
 
-        const data = householdMap.get(household.id)!
+        const data = householdMap.get(household.pbsId)!
         data.transactionIds.push(tx.id)
         data.totalAmount += tx.amount
     }
 
     const householdBillingData = Array.from(householdMap.values())
     const totalAmount = householdBillingData.reduce((sum, h) => sum + h.totalAmount, 0)
-    const ticketCount = unbilledTransactions.length
+    const ticketCount = transactions.length
 
-    console.info(`${LOG} Grouped into ${householdBillingData.length} households`)
-
-    // 4. Get or create summary ID
+    // Get or create BillingPeriodSummary
     let summaryId: number
+    const existingSummary = await fetchBillingPeriodSummary(d1Client, billingPeriod)
+
     if (existingSummary) {
         summaryId = existingSummary.id
         console.info(`${LOG} Using existing BillingPeriodSummary id=${summaryId}`)
@@ -104,33 +145,30 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
             totalAmount,
             householdCount: householdBillingData.length,
             ticketCount,
-            cutoffDate: periodEnd,
+            cutoffDate,
             paymentDate
         })
         summaryId = created.id
         console.info(`${LOG} Created BillingPeriodSummary id=${summaryId}`)
     }
 
-    // 5. Fetch existing invoices and build lookup by householdId
+    // Fetch existing invoices and build lookup by pbsId (stable even if household deleted)
     const existingInvoices = await fetchInvoicesForBillingPeriod(d1Client, summaryId)
-    const invoiceByHousehold = new Map<number, number>()
+    const invoiceByPbsId = new Map<number, number>()
     for (const inv of existingInvoices) {
-        if (inv.householdId) {
-            invoiceByHousehold.set(inv.householdId, inv.id)
-        }
+        invoiceByPbsId.set(inv.pbsId, inv.id)
     }
-    console.info(`${LOG} Found ${existingInvoices.length} existing invoices`)
 
-    // 6. Create invoices only for households that don't have one yet
-    const householdsNeedingInvoice = householdBillingData.filter(h => !invoiceByHousehold.has(h.householdId))
+    // Create invoices only for pbsIds that don't have one yet
+    const householdsNeedingInvoice = householdBillingData.filter(h => !invoiceByPbsId.has(h.pbsId))
 
     if (householdsNeedingInvoice.length > 0) {
         const invoiceData: InvoiceCreate[] = householdsNeedingInvoice.map(h => ({
-            householdId: h.householdId,
+            householdId: h.householdId,  // null if household deleted
             pbsId: h.pbsId,
             address: h.address,
             amount: h.totalAmount,
-            cutoffDate: periodEnd,
+            cutoffDate,
             paymentDate,
             billingPeriod,
             billingPeriodSummaryId: summaryId
@@ -139,18 +177,16 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
         const createdInvoices = await createInvoices(d1Client, invoiceData)
 
         for (const invoice of createdInvoices) {
-            if (invoice.householdId) {
-                invoiceByHousehold.set(invoice.householdId, invoice.id)
-            }
+            invoiceByPbsId.set(invoice.pbsId, invoice.id)
         }
-        console.info(`${LOG} Created ${createdInvoices.length} new invoices`)
+        console.info(`${LOG} Created ${createdInvoices.length} new invoices for period ${billingPeriod}`)
     }
 
-    // 7. Link unbilled transactions to their invoices (chunked for D1 limits)
+    // Link unbilled transactions to their invoices (chunked for D1 limits)
     let linkedCount = 0
 
     for (const h of householdBillingData) {
-        const invoiceId = invoiceByHousehold.get(h.householdId)
+        const invoiceId = invoiceByPbsId.get(h.pbsId)
         if (!invoiceId) continue
 
         const batches = chunkTransactionIds(h.transactionIds)
@@ -160,12 +196,12 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
         }
     }
 
-    console.info(`${LOG} Linked ${linkedCount} transactions to invoices`)
+    console.info(`${LOG} Period ${billingPeriod}: linked ${linkedCount} transactions, ${invoiceByPbsId.size} invoices`)
 
     return {
         billingPeriodSummaryId: summaryId,
         billingPeriod,
-        invoiceCount: invoiceByHousehold.size,
+        invoiceCount: invoiceByPbsId.size,
         transactionCount: ticketCount,
         totalAmount
     }

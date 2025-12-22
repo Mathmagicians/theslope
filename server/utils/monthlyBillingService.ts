@@ -7,6 +7,9 @@
  *
  * ADR-014 compliant: Uses createManyAndReturn for bulk inserts
  * ADR-015 compliant: Idempotent - skips if billing period already exists
+ *
+ * Multi-period support: Processes ALL unbilled transactions, grouping by
+ * actual billing period (based on dinner date). Handles catch-up scenarios.
  */
 import type {D1Database} from '@cloudflare/workers-types'
 import {generateBilling} from '~~/server/utils/generateBilling'
@@ -28,16 +31,23 @@ export async function runMonthlyBilling(d1Client: D1Database, triggeredBy: strin
     })
 
     try {
-        // Generate billing (ADR-014 + ADR-015 compliant)
-        const result = await generateBilling(d1Client)
+        // Generate billing for ALL unbilled transactions, grouped by period
+        const results = await generateBilling(d1Client)
 
-        console.info(`${LOG} Billing period ${result.billingPeriod}: ${result.invoiceCount} invoices, ${result.transactionCount} transactions, ${result.totalAmount} øre`)
+        if (results.length === 0) {
+            console.info(`${LOG} No transactions to bill`)
+        } else {
+            const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
+            const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
+            const totalAmount = results.reduce((sum, r) => sum + r.totalAmount, 0)
+            console.info(`${LOG} Processed ${results.length} period(s): ${totalInvoices} invoices, ${totalTransactions} transactions, ${totalAmount} øre`)
+        }
 
-        // Complete job run with success
-        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+        // Complete job run with success - store results array
+        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, {results})
 
         console.info(`${LOG} Monthly billing complete (jobRunId=${jobRun.id})`)
-        return {result, jobRunId: jobRun.id}
+        return {results, jobRunId: jobRun.id}
     } catch (error) {
         // Complete job run with failure
         await completeJobRun(

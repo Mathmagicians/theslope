@@ -90,8 +90,9 @@ export const useMaintenance = () => {
 
     /**
      * Parse and validate resultSummary JSON based on job type
+     * Monthly billing returns {results: BillingGenerationResult[]}
      */
-    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult | Record<string, unknown> | null => {
+    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult[] | Record<string, unknown> | null => {
         if (!resultSummary) return null
 
         try {
@@ -103,7 +104,7 @@ export const useMaintenance = () => {
                 case JobType.HEYNABO_IMPORT:
                     return HeynaboImportResponseSchema.parse(parsed)
                 case JobType.MONTHLY_BILLING:
-                    return BillingGenerationResultSchema.parse(parsed)
+                    return parsed.results.map((r: unknown) => BillingGenerationResultSchema.parse(r))
                 default:
                     return parsed as Record<string, unknown>
             }
@@ -137,14 +138,21 @@ export const useMaintenance = () => {
     }
 
     /**
-     * Format monthly billing result as stats array for action cards
+     * Format monthly billing results as stats array for action cards
+     * Aggregates totals across all billing periods
      */
     const {formatPrice} = useTicket()
-    const formatMonthlyBillingStats = (result: BillingGenerationResult): { label: string; value: string }[] => [
-        { label: 'PBS Fakturaer', value: `${result.invoiceCount}` },
-        { label: 'Gennemførte transaktioner', value: `${result.transactionCount}` },
-        { label: 'Total til opkrævning', value: `${formatPrice(result.totalAmount)} kr` }
-    ]
+    const formatMonthlyBillingStats = (results: BillingGenerationResult[]): { label: string; value: string }[] => {
+        const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
+        const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
+        const totalAmount = results.reduce((sum, r) => sum + r.totalAmount, 0)
+        return [
+            { label: 'Perioder', value: `${results.length}` },
+            { label: 'PBS Fakturaer', value: `${totalInvoices}` },
+            { label: 'Transaktioner', value: `${totalTransactions}` },
+            { label: 'Total', value: `${formatPrice(totalAmount)} kr` }
+        ]
+    }
 
     /**
      * Format result summary for table display (uses stats functions for DRY)
@@ -165,8 +173,8 @@ export const useMaintenance = () => {
                 return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MONTHLY_BILLING: {
-                const result = parsed as BillingGenerationResult
-                const stats = formatMonthlyBillingStats(result)
+                const results = parsed as BillingGenerationResult[]
+                const stats = formatMonthlyBillingStats(results)
                 return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MAINTENANCE_IMPORT:

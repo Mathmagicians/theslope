@@ -125,11 +125,55 @@ export const useBilling = () => {
     const calculateCurrentBillingPeriod = (referenceDate: Date = new Date()): DateRange =>
         calculateBillingPeriodRange(referenceDate, 0)
 
+    /**
+     * Get the billing period that a given dinner date belongs to.
+     *
+     * Billing periods run from cutoffDay+1 to cutoffDay of next month.
+     * E.g., with cutoff day 17: Oct 18 - Nov 17, Nov 18 - Dec 17, etc.
+     *
+     * @param dinnerDate - The date of the dinner event
+     * @returns The billing period containing this dinner date with payment date
+     */
+    const getBillingPeriodForDate = (dinnerDate: Date): {
+        dateRange: DateRange
+        billingPeriod: string
+        paymentDate: Date
+    } => {
+        const cutoffDay = getBillingCutoffDay()
+        const day = dinnerDate.getDate()
+
+        let periodStart: Date
+        let periodEnd: Date
+
+        if (day <= cutoffDay) {
+            // Dinner is in first half of month → period started previous month
+            // E.g., Oct 10 with cutoff 17 → Sep 18 - Oct 17
+            periodStart = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth() - 1, cutoffDay + 1)
+            periodEnd = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth(), cutoffDay)
+        } else {
+            // Dinner is in second half of month → period started this month
+            // E.g., Oct 25 with cutoff 17 → Oct 18 - Nov 17
+            periodStart = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth(), cutoffDay + 1)
+            periodEnd = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth() + 1, cutoffDay)
+        }
+
+        const dateRange = createDateRange(periodStart, periodEnd)
+        // Payment date is 1st of month after period ends
+        const paymentDate = new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 1)
+
+        return {
+            dateRange,
+            billingPeriod: formatDateRange(dateRange),
+            paymentDate
+        }
+    }
+
     const chunkTransactionIds = chunkArray<number>(LINK_TRANSACTION_BATCH_SIZE)
 
     return {
         calculateClosedBillingPeriod,
         calculateCurrentBillingPeriod,
+        getBillingPeriodForDate,
         groupTransactionsByDinner,
         formatTicketCounts,
         chunkTransactionIds
