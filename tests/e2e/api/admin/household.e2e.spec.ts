@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
-import testHelpers from '../../testHelpers'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
+import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
 const {validatedBrowserContext, salt} = testHelpers
 
@@ -11,7 +12,7 @@ const testHouseholdIds: number[] = []
  * Helper: Verify household response structure
  * Server validates against HouseholdDetail schema - we verify key fields
  */
-function verifyHouseholdStructure(household: unknown, context: string) {
+function verifyHouseholdStructure(household: HouseholdDisplay, context: string) {
     expect(household.id, `${context}: missing id`).toBeDefined()
     expect(household.name, `${context}: missing name`).toBeDefined()
     expect(household.address, `${context}: missing address`).toBeDefined()
@@ -24,7 +25,7 @@ function verifyHouseholdStructure(household: unknown, context: string) {
 /**
  * Helper: Verify lightweight inhabitant data (ADR-009 index endpoint)
  */
-function verifyLightweightInhabitant(inhabitant: unknown, context: string) {
+function verifyLightweightInhabitant(inhabitant: InhabitantDisplay, context: string) {
     // Required fields
     expect(inhabitant.id, `${context}: missing id`).toBeDefined()
     expect(inhabitant.heynaboId, `${context}: missing heynaboId`).toBeDefined()
@@ -40,9 +41,9 @@ function verifyLightweightInhabitant(inhabitant: unknown, context: string) {
         `${context}: dinnerPreferences wrong type`
     ).toBe(true)
 
-    // Heavy fields should NOT be included
-    expect(inhabitant.allergies, `${context}: allergies should be undefined`).toBeUndefined()
-    expect(inhabitant.orders, `${context}: orders should be undefined`).toBeUndefined()
+    // Heavy fields should NOT be included - use type assertion for checking absence
+    expect((inhabitant as Record<string, unknown>).allergies, `${context}: allergies should be undefined`).toBeUndefined()
+    expect((inhabitant as Record<string, unknown>).orders, `${context}: orders should be undefined`).toBeUndefined()
 }
 
 test.describe('Household /api/admin/household CRUD operations', () => {
@@ -97,12 +98,13 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const household = await HouseholdFactory.createHousehold(context)
 
         // Delete household
-        const deletedHousehold = await HouseholdFactory.deleteHousehold(context, household.id)
+        const [deletedHousehold] = await HouseholdFactory.deleteHousehold(context, household.id)
 
         // Verify response structure (server validates against HouseholdDetail schema)
-        verifyHouseholdStructure(deletedHousehold, 'DELETE household')
+        expect(deletedHousehold).toBeDefined()
+        verifyHouseholdStructure(deletedHousehold!, 'DELETE household')
 
-        expect(deletedHousehold.id).toBe(household.id)
+        expect(deletedHousehold!.id).toBe(household.id)
 
         // Verify household is deleted - should get 404
         const response = await context.request.get(`/api/admin/household/${household.id}`)
@@ -126,7 +128,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
 
         // Verify inhabitants array structure
         expect(household.inhabitants.length).toBe(2)
-        household.inhabitants.forEach((inhabitant: unknown) => {
+        household.inhabitants.forEach((inhabitant) => {
             expect(inhabitant.householdId).toBe(household.id)
         })
     })
@@ -152,15 +154,15 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         expect(Array.isArray(households)).toBe(true)
 
         // Find our test household
-        const fetchedHousehold = households.find((h: unknown) => h.id === household.id)
+        const fetchedHousehold = households.find((h: HouseholdDisplay) => h.id === household.id)
         expect(fetchedHousehold).toBeDefined()
 
         // Verify lightweight structure (ADR-009: index endpoints return lightweight data)
-        verifyHouseholdStructure(fetchedHousehold, 'GET /api/admin/household (index)')
-        expect(fetchedHousehold.inhabitants.length).toBe(2)
+        verifyHouseholdStructure(fetchedHousehold!, 'GET /api/admin/household (index)')
+        expect(fetchedHousehold!.inhabitants.length).toBe(2)
 
         // Verify each inhabitant has lightweight fields only
-        fetchedHousehold.inhabitants.forEach((inhabitant: unknown, index: number) => {
+        fetchedHousehold!.inhabitants.forEach((inhabitant: InhabitantDisplay, index: number) => {
             verifyLightweightInhabitant(inhabitant, `Inhabitant[${index}]`)
         })
     })

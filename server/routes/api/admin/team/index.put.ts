@@ -1,7 +1,7 @@
-// PUT /api/admin/teams - Create team(s) - accepts single team or array
+// PUT /api/admin/teams - Create team(s) and auto-assign affinities + dinner events
 
 import {defineEventHandler, readBody, setResponseStatus} from "h3"
-import {createTeam} from "~~/server/data/prismaRepository"
+import {createTeamsWithAssignments} from "~~/server/utils/teamService"
 import type {CookingTeamDetail, CookingTeamCreate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -25,18 +25,23 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> =>
         return throwH3Error("👥 > TEAM > [PUT] Input validation error", error)
     }
 
+    // All teams must be for the same season
+    const seasonIds = [...new Set(teams.map(t => t.seasonId))]
+    if (seasonIds.length !== 1 || seasonIds[0] === undefined) {
+        return throwH3Error("👥 > TEAM > [PUT] All teams must be for the same season", new Error('Multiple season IDs'), 400)
+    }
+    const seasonId = seasonIds[0]
+
     // Database operations try-catch - separate concerns
     try {
-        console.info(`👥 > TEAM > [PUT] Creating ${teams.length} team(s)`)
+        console.info(`👥 > TEAM > [PUT] Creating ${teams.length} team(s) with auto-assignment`)
 
-        const savedTeams = await Promise.all(
-            teams.map(team => createTeam(d1Client, team))
-        )
+        const result = await createTeamsWithAssignments(d1Client, seasonId, teams)
 
-        console.info(`👥 > TEAM > [PUT] Created ${savedTeams.length} team(s)`)
+        console.info(`👥 > TEAM > [PUT] Created ${result.teams.length} team(s), assigned ${result.eventsAssigned} events`)
         setResponseStatus(event, 201)
 
-        return savedTeams
+        return result.teams
     } catch (error) {
         return throwH3Error("👥 > TEAM > [PUT] Error creating team(s)", error)
     }

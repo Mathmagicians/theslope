@@ -56,6 +56,30 @@ enum OrderState {
   CLOSED
 }
 
+enum OrderAuditAction {
+  USER_BOOKED // User manually booked
+  USER_CANCELLED // User cancelled their booking (respect in scaffolding)
+  ADMIN_DELETED // Admin deleted (may recreate)
+  SYSTEM_SCAFFOLD // System auto-created from preferences
+  SYSTEM_PRUNED // System removed (preference changed to NONE)
+  BULK_IMPORT // Imported from billing CSV
+}
+
+enum JobType {
+  DAILY_MAINTENANCE
+  MONTHLY_BILLING
+  HEYNABO_IMPORT
+  MAINTENANCE_IMPORT
+  MAINTENANCE_EXPORT
+}
+
+enum JobStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
 model AllergyType {
   id                   Int                   @id @default(autoincrement())
   name                 String
@@ -177,8 +201,8 @@ model Order {
   inhabitant     Inhabitant     @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
   bookedByUserId Int?
   bookedByUser   User?          @relation("BookedByUser", fields: [bookedByUserId], references: [id], onDelete: SetNull)
-  ticketPriceId  Int
-  ticketPrice    TicketPrice    @relation(fields: [ticketPriceId], references: [id], onDelete: Restrict)
+  ticketPriceId  Int?
+  ticketPrice    TicketPrice?   @relation(fields: [ticketPriceId], references: [id], onDelete: SetNull)
   priceAtBooking Int
   dinnerMode     DinnerMode     @default(DINEIN)
   state          OrderState     @default(BOOKED)
@@ -203,7 +227,7 @@ model Transaction {
   amount          Int // price in DKK øre
   userEmailHandle String
   createdAt       DateTime @default(now())
-  invoiceId       Int?     @unique
+  invoiceId       Int? // Many transactions per invoice (1 invoice aggregates all household orders in billing period)
   invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
@@ -211,18 +235,39 @@ model Transaction {
 }
 
 model Invoice {
-  id            Int           @id @default(autoincrement())
-  transactions  Transaction[]
-  cutoffDate    DateTime
-  paymentDate   DateTime
-  billingPeriod String // stringified date range with formatDateRange function
-  amount        Int
-  createdAt     DateTime      @default(now())
-  householdId   Int?
-  houseHold     Household?    @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  id                     Int                   @id @default(autoincrement())
+  transactions           Transaction[]
+  cutoffDate             DateTime
+  paymentDate            DateTime
+  billingPeriod          String // formatDateRange format: "dd/MM/yyyy-dd/MM/yyyy"
+  amount                 Int
+  createdAt              DateTime              @default(now())
+  householdId            Int?
+  houseHold              Household?            @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  billingPeriodSummaryId Int?
+  billingPeriodSummary   BillingPeriodSummary? @relation(fields: [billingPeriodSummaryId], references: [id], onDelete: SetNull)
+
+  // Frozen billing identity (immutable after creation - for PBS export)
+  pbsId   Int // PBS customer number at billing time
+  address String // Billing address at billing time
 
   @@index([householdId])
   @@index([billingPeriod])
+  @@index([billingPeriodSummaryId])
+}
+
+// Community-wide billing period summary with magic link for accountant
+model BillingPeriodSummary {
+  id             Int       @id @default(autoincrement())
+  billingPeriod  String    @unique // formatDateRange format: "dd/MM/yyyy-dd/MM/yyyy"
+  shareToken     String    @unique // UUID for magic link access
+  totalAmount    Int // Sum in øre
+  householdCount Int
+  ticketCount    Int
+  cutoffDate     DateTime // 17th when billing period closes
+  paymentDate    DateTime // 1st of collection month
+  invoices       Invoice[]
+  createdAt      DateTime  @default(now())
 }
 
 // Cooking teams are seasonal, and created by the system administrator
@@ -279,16 +324,36 @@ model TicketPrice {
 }
 
 model OrderHistory {
-  id                Int      @id @default(autoincrement())
+  id                Int              @id @default(autoincrement())
   orderId           Int?
-  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  action            String
+  order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  action            OrderAuditAction
   performedByUserId Int?
-  performedByUser   User?    @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  performedByUser   User?            @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
   auditData         String
-  timestamp         DateTime @default(now())
+  timestamp         DateTime         @default(now())
+
+  // Denormalized for cancellation queries (orderId becomes NULL after deletion)
+  inhabitantId  Int?
+  dinnerEventId Int?
+  seasonId      Int?
 
   @@index([orderId])
   @@index([performedByUserId])
   @@index([timestamp])
+  @@index([seasonId, inhabitantId, dinnerEventId, action]) // For cancellation lookups by season
+}
+
+model JobRun {
+  id            Int       @id @default(autoincrement())
+  jobType       JobType
+  status        JobStatus
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  durationMs    Int?
+  resultSummary String? // JSON - flexible per job type
+  errorMessage  String?
+  triggeredBy   String    @default("CRON") // "CRON" | "ADMIN:<userId>"
+
+  @@index([jobType, startedAt])
 }

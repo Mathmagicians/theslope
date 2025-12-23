@@ -3,11 +3,13 @@ import { OrderFactory } from '../../testDataFactories/orderFactory'
 import { HouseholdFactory } from '../../testDataFactories/householdFactory'
 import { SeasonFactory } from '../../testDataFactories/seasonFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
 const { validatedBrowserContext, salt, headers } = testHelpers
-const { TicketTypeSchema } = useBookingValidation()
+const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
@@ -30,10 +32,10 @@ test.describe('Order API', () => {
       1
     )
     testHouseholdId = household.id
-    testInhabitantId = inhabitants[0].id
+    testInhabitantId = inhabitants[0]!.id
 
     const season = await SeasonFactory.createSeason(context)
-    testSeasonId = season.id
+    testSeasonId = season.id!
 
     const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
     const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
@@ -45,8 +47,8 @@ test.describe('Order API', () => {
     testAdultTicketPriceId = adultTicketPrice.id
     testChildTicketPriceId = childTicketPrice.id
 
-    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id)
-    testDinnerEventId = generatedEvents.events[0].id
+    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
+    testDinnerEventId = generatedEvents.events[0]!.id
   })
 
   test.afterAll(async ({ browser }) => {
@@ -74,59 +76,204 @@ test.describe('Order API', () => {
   test('PUT can create and GET can retrieve order with status 200/201', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const orders = await OrderFactory.createOrder(context, {
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })
 
-    expect(orders).toBeDefined()
-    expect(orders.length).toBeGreaterThan(0)
-    const order = orders[0]
-    expect(order).toBeDefined()
-    expect(order!.id).toBeDefined()
-    testOrderIds.push(order!.id)
+    expect(result.householdId).toBe(testHouseholdId)
+    expect(result.createdIds).toHaveLength(1)
+    const orderId = result.createdIds[0]!
+    testOrderIds.push(orderId)
 
-    expect(order!.dinnerEventId).toBe(testDinnerEventId)
-    expect(order!.inhabitantId).toBe(testInhabitantId)
-    expect(order!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
-    expect(order!.createdAt).toBeDefined()
-
-    const retrievedOrder = await OrderFactory.getOrder(context, order!.id)
+    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
 
     expect(retrievedOrder).toBeDefined()
-    expect(retrievedOrder!.id).toBe(order!.id)
+    expect(retrievedOrder!.id).toBe(orderId)
+    expect(retrievedOrder!.dinnerEventId).toBe(testDinnerEventId)
+    expect(retrievedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
+    expect(retrievedOrder!.createdAt).toBeDefined()
+  })
+
+  test('POST can update order dinnerMode with status 200', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create an order first
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        }
+      ]
+    })
+    const orderId = result.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    // Update to TAKEAWAY
+    const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
+      dinnerMode: DinnerModeSchema.enum.TAKEAWAY
+    })
+
+    expect(updatedOrder).toBeDefined()
+    expect(updatedOrder!.id).toBe(orderId)
+    expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
+
+    // Verify the change persisted
+    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
+    expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
+  })
+
+  test('POST cancellation AFTER deadline releases order (state=RELEASED, user pays)', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Default season events are within 7 days (< 10 day deadline) = AFTER deadline
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        }
+      ]
+    })
+    const orderId = result.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    // Cancel by setting dinnerMode to NONE
+    const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
+      dinnerMode: DinnerModeSchema.enum.NONE
+    })
+
+    // Order should be RELEASED (not deleted) - user still pays
+    expect(updatedOrder).toBeDefined()
+    expect(updatedOrder!.id).toBe(orderId)
+    expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+    expect(updatedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
+    expect(updatedOrder!.releasedAt).toBeDefined()
+
+    // Order should still exist in database
+    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
+    expect(retrievedOrder).toBeDefined()
+    expect(retrievedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
+  })
+
+  test('POST cancellation BEFORE deadline deletes order (user not charged)', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create season with events far in the future (15+ days = BEFORE 10-day deadline)
+    const futureStart = new Date()
+    futureStart.setDate(futureStart.getDate() + 15)
+    const futureEnd = new Date(futureStart)
+    futureEnd.setDate(futureEnd.getDate() + 7)
+
+    const futureSeason = await SeasonFactory.createSeason(context, {
+      shortName: salt('FutureCancelTest'),
+      seasonDates: { start: futureStart, end: futureEnd },
+      cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]) // Mon-Fri
+    })
+
+    try {
+      const futureDinnerEventId = futureSeason.dinnerEvents![0]!.id
+      const futureTicketPriceId = futureSeason.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+
+      // Create order for future dinner
+      const result = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId,
+        dinnerEventId: futureDinnerEventId,
+        orders: [
+          {
+            inhabitantId: testInhabitantId,
+            ticketPriceId: futureTicketPriceId,
+            bookedByUserId: 1,
+            dinnerMode: DinnerModeSchema.enum.DINEIN
+          }
+        ]
+      })
+      const orderId = result.createdIds[0]!
+
+      // Cancel by setting dinnerMode to NONE
+      const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
+        dinnerMode: DinnerModeSchema.enum.NONE
+      })
+
+      // Response should show NONE dinnerMode
+      expect(updatedOrder).toBeDefined()
+      expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+
+      // Order should be DELETED from database (not found)
+      await OrderFactory.getOrder(context, orderId, 404)
+    } finally {
+      // Cleanup future season
+      await SeasonFactory.deleteSeason(context, futureSeason.id!)
+    }
+  })
+
+  test('POST returns 400 for invalid dinnerMode', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create an order first
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        {
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        }
+      ]
+    })
+    const orderId = result.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    // Try to update with invalid dinnerMode
+    await OrderFactory.updateOrder(context, orderId, {
+      dinnerMode: 'INVALID_MODE'
+    }, 400)
   })
 
   test('DELETE can remove existing order with status 200', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const orders = await OrderFactory.createOrder(context, {
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
           inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId
+          ticketPriceId: testChildTicketPriceId,
+          bookedByUserId: 1,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
         }
       ]
     })
-    expect(orders).toBeDefined()
-    expect(orders.length).toBeGreaterThan(0)
-    const order = orders[0]
-    expect(order).toBeDefined()
-    expect(order!.id).toBeDefined()
+    expect(result.createdIds).toHaveLength(1)
+    const orderId = result.createdIds[0]!
 
-    const deletedOrder = await OrderFactory.deleteOrder(context, order!.id)
+    const deletedOrder = await OrderFactory.deleteOrder(context, orderId)
 
     expect(deletedOrder).toBeDefined()
-    expect(deletedOrder!.id).toBe(order!.id)
+    expect(deletedOrder!.id).toBe(orderId)
 
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${order!.id}`)
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`)
     expect(response.status()).toBe(404)
   })
 
@@ -173,6 +320,7 @@ test.describe('Order API', () => {
     const context = await validatedBrowserContext(browser)
 
     const invalidData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -207,6 +355,7 @@ test.describe('Order API', () => {
     const inhabitant2 = await HouseholdFactory.createInhabitantForHousehold(context, household2.id, 'TestPerson2')
 
     const invalidData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -240,6 +389,7 @@ test.describe('Order API', () => {
     const context = await validatedBrowserContext(browser)
 
     const validData = {
+      householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
         {
@@ -264,12 +414,14 @@ test.describe('Order API', () => {
 
     const errorBody = response.status() !== 201 ? await response.json() : null
     expect(response.status(), `Expected 201 but got ${response.status()}: ${JSON.stringify(errorBody)}`).toBe(201)
-    const createdOrders = await response.json()
-    expect(Array.isArray(createdOrders)).toBe(true)
-    expect(createdOrders.length).toBeGreaterThanOrEqual(2)
+    const result = await response.json()
 
-    for (const order of createdOrders) {
-      testOrderIds.push(order.id)
+    // CreateOrdersResult: { householdId, createdIds }
+    expect(result.householdId).toBe(testHouseholdId)
+    expect(result.createdIds).toHaveLength(2)
+
+    for (const id of result.createdIds) {
+      testOrderIds.push(id)
     }
   })
 })

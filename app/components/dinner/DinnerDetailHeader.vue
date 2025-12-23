@@ -38,7 +38,9 @@ const formattedDate = computed(() => formatDate(props.dinnerEvent.date))
 
 // State badge config
 const stateBadge = computed(() => {
-  return DINNER_STATE_BADGES[props.dinnerEvent.state] ?? DINNER_STATE_BADGES[DinnerState.SCHEDULED]
+  const state = props.dinnerEvent.state as keyof typeof DINNER_STATE_BADGES
+  const fallback = DinnerState.SCHEDULED as keyof typeof DINNER_STATE_BADGES
+  return DINNER_STATE_BADGES[state] ?? DINNER_STATE_BADGES[fallback]
 })
 </script>
 

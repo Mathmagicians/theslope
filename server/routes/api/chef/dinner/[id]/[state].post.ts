@@ -4,7 +4,7 @@ import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadHeynab
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
-import type {UserDetail} from '~/composables/useCoreValidation'
+import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {z} from 'zod'
 
@@ -24,7 +24,7 @@ const paramsSchema = z.object({
  *
  * Supported state transitions (ADR-013):
  * - ANNOUNCED: Create/update Heynabo event, requires NOT CANCELLED
- * - CANCELLED: Cancel Heynabo event, requires ANNOUNCED
+ * - CANCELLED: Cancel Heynabo event if SCHEDULED or ANNOUNCED
  */
 export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
@@ -36,13 +36,14 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     let targetState!: typeof DinnerState[keyof typeof DinnerState]
     try {
         ({id, state: targetState} = await getValidatedRouterParams(event, paramsSchema.parse))
+        console.info(PREFIX + `Called with dinner ID ${id}, target state: ${targetState}`)
     } catch (error) {
         return throwH3Error(PREFIX + 'Input validation error', error, 400)
     }
 
-    // Get user session and Heynabo token
+    // Get user session and Heynabo token (passwordHash stores Heynabo token in session)
     const session = await getUserSession(event)
-    const user = session?.user as UserDetail | undefined
+    const user = session?.user as UserSession | undefined
     const heynaboToken = user?.passwordHash
 
     if (!heynaboToken) {
@@ -56,8 +57,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
             throw createError({statusCode: 404, message: PREFIX + `Dinner event ${id} not found`})
         }
 
-        const {createHeynaboEventPayload} = useBooking()
-        const baseUrl = process.env.NUXT_PUBLIC_BASE_URL || 'https://skraaningen.dk'
+        const {createHeynaboEventPayload, canCancelDinner} = useBooking()
+        const baseUrl = getRequestURL(event).origin
 
         switch (targetState) {
             case DinnerState.ANNOUNCED: {
@@ -65,11 +66,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     throw createError({statusCode: 400, message: PREFIX + `Cannot announce cancelled dinner event ${id}`})
                 }
 
-                const heynaboPayload = createHeynaboEventPayload(
-                    {date: dinner.date, menuTitle: dinner.menuTitle, menuDescription: dinner.menuDescription},
-                    baseUrl,
-                    dinner.cookingTeam?.name
-                )
+                const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
 
                 let heynaboEventId = dinner.heynaboEventId
                 if (heynaboEventId) {
@@ -101,21 +98,23 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     state: DinnerState.ANNOUNCED
                 })
 
+                console.info(PREFIX + `✅ Successfully announced dinner ${id} (heynaboEventId: ${heynaboEventId})`)
                 setResponseStatus(event, 200)
                 return announcedDinner
             }
 
             case DinnerState.CANCELLED: {
-                if (dinner.state !== DinnerState.ANNOUNCED) {
-                    throw createError({statusCode: 400, message: PREFIX + `Can only cancel announced dinners. Current state: ${dinner.state}`})
+                // Validate using shared business logic
+                if (!canCancelDinner(dinner)) {
+                    const reason = dinner.state === DinnerState.CANCELLED
+                        ? 'already cancelled'
+                        : 'already consumed'
+                    throw createError({statusCode: 400, message: PREFIX + `Cannot cancel dinner ${id}: ${reason}`})
                 }
 
+                // Cancel in Heynabo if it was announced (has heynaboEventId)
                 if (dinner.heynaboEventId) {
-                    const heynaboPayload = createHeynaboEventPayload(
-                        {date: dinner.date, menuTitle: dinner.menuTitle, menuDescription: dinner.menuDescription},
-                        baseUrl,
-                        dinner.cookingTeam?.name
-                    )
+                    const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
                     await cancelHeynaboEvent(heynaboToken, dinner.heynaboEventId, heynaboPayload)
                 }
 
@@ -123,6 +122,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     state: DinnerState.CANCELLED
                 })
 
+                const heynaboMsg = dinner.heynaboEventId ? `(Heynabo event ${dinner.heynaboEventId} cancelled)` : '(no Heynabo event to cancel)'
+                console.info(PREFIX + `✅ Successfully cancelled dinner ${id} ${heynaboMsg}`)
                 setResponseStatus(event, 200)
                 return cancelledDinner
             }

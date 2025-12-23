@@ -1,91 +1,114 @@
 <!--
 ┌─────────────────────────────────────────────────────────────────┐
-│ UserListItem - Display inhabitants in 4 modes                  │
+│ UserListItem - Master component for displaying inhabitants      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│ MODE 1: SINGLE COMPACT (tables, inline)                        │
-│  [👤🔵] Lars                                                    │
-│         ↑ child badge (if under 18)                            │
-│  Display: Small avatar + first name only + optional badge      │
+│ SINGLE MODE:                                                    │
+│  [👤] Anna                    ← showNames=true, useFullName=false│
+│  [👤] Anna Hansen             ← showNames=true, useFullName=true │
+│  [👤]                         ← showNames=false                  │
+│       <slot #badge>           ← role badges, child badge, etc.  │
 │                                                                 │
-│ MODE 2: SINGLE NOT COMPACT (cards, detailed)                   │
-│  ┌───────────────────────────────────────────────┐             │
-│  │ [👤]🔵 Lars Jensen                           │             │
-│  └───────────────────────────────────────────────┘             │
-│  Display: Larger avatar + full name + badge (if child)         │
+│ GROUP MODE:                                                     │
+│  [👤][👤][👤] Anna · Henne · Lars    ← showNames=true           │
+│  [👤][👤][👤] 3 bofæller             ← showNames=false + label  │
+│  [👤][👤][👤] 3                      ← showNames=false, compact │
 │                                                                 │
-│ MODE 3: GROUP COMPACT (tables)                                 │
-│  [👤][👤][👤]+2  🔵5                                           │
-│                   ↑ badge with count only                      │
-│  Mobile: 3 avatars max, Desktop: 5 avatars max                 │
+│ PROPS:                                                          │
+│  inhabitants    - Single or array of InhabitantDisplay          │
+│  compact        - Smaller avatars (default: false)              │
+│  size           - Override avatar size                          │
+│  ringColor      - Avatar ring color                             │
+│  showNames      - Display names (default: true)                 │
+│  useFullName    - Full name vs first name (default: false)      │
+│  label          - Group mode label, e.g., "bofæller"            │
+│  linkToProfile  - Avatar links to Heynabo (default: true)       │
 │                                                                 │
-│ MODE 4: GROUP NOT COMPACT (prominent)                          │
-│  [👤 ][👤 ][👤 ][👤 ][👤 ]+2  🔵 7 bofæller                  │
-│                                 ↑ badge + count + label        │
-│  Mobile: 3 larger avatars, Desktop: 5 larger avatars, border           │
+│ SLOTS:                                                          │
+│  #badge({ inhabitant }) - Custom badges per inhabitant          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 -->
 <script setup lang="ts">
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   inhabitants: InhabitantDisplay | InhabitantDisplay[]
   compact?: boolean
-  size?: 'xs' | 'sm' | 'md' | 'lg'
+  size?: NuxtUISize
   ringColor?: string
+  showNames?: boolean
+  useFullName?: boolean
   label?: string
-  propertyCheck?: (inhabitant: InhabitantDisplay) => boolean
+  linkToProfile?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
   size: undefined,
   ringColor: undefined,
+  showNames: true,
+  useFullName: false,
   label: undefined,
-  propertyCheck: undefined
+  linkToProfile: true
 })
 
-// Child detection (under 18 years old)
-const isChild = (inhabitant: InhabitantDisplay): boolean => {
-  const age = calculateAge(inhabitant.birthDate)
-  return age !== null && age < 18
-}
-
-// Use provided propertyCheck or default to isChild
-const checkProperty = computed(() => props.propertyCheck ?? isChild)
+// Slot type definition
+defineSlots<{
+  badge?(props: { inhabitant: InhabitantDisplay }): unknown
+}>()
 
 // Mode detection
 const isGroup = computed(() => Array.isArray(props.inhabitants))
-const count = computed(() =>
-  isGroup.value ? props.inhabitants.length : (props.inhabitants ? 1 : 0)
+
+// Typed computed for group mode (array)
+const inhabitantsList = computed((): InhabitantDisplay[] =>
+  Array.isArray(props.inhabitants) ? props.inhabitants : [props.inhabitants]
 )
 
-// Duplicate first name detection
+// Typed computed for single mode (single inhabitant)
+const singleInhabitant = computed((): InhabitantDisplay | null =>
+  Array.isArray(props.inhabitants) ? null : props.inhabitants
+)
+
+const count = computed(() => inhabitantsList.value.length)
+
+// Duplicate first name detection for disambiguation
 const duplicateFirstNames = computed(() => {
-  const list = Array.isArray(props.inhabitants) ? props.inhabitants : [props.inhabitants]
+  const list = inhabitantsList.value
   const firstNameCounts = new Map<string, number>()
 
   list.forEach(inhabitant => {
-    const count = firstNameCounts.get(inhabitant.name) || 0
-    firstNameCounts.set(inhabitant.name, count + 1)
+    const c = firstNameCounts.get(inhabitant.name) || 0
+    firstNameCounts.set(inhabitant.name, c + 1)
   })
 
   return new Set(
     Array.from(firstNameCounts.entries())
-      .filter(([_, count]) => count > 1)
+      .filter(([_, c]) => c > 1)
       .map(([name, _]) => name)
   )
 })
 
-// Format display name: "FirstName L" if duplicate first name exists
-const formatDisplayName = (inhabitant: InhabitantDisplay): string => {
+// Format name based on props
+const formatName = (inhabitant: InhabitantDisplay): string => {
+  if (props.useFullName) {
+    return `${inhabitant.name} ${inhabitant.lastName}`
+  }
+  // First name with disambiguation if needed
   if (duplicateFirstNames.value.has(inhabitant.name)) {
     const lastNameInitial = inhabitant.lastName.charAt(0).toUpperCase()
-    return `${inhabitant.name} ${lastNameInitial}`
+    return `${inhabitant.name} ${lastNameInitial}.`
   }
   return inhabitant.name
 }
+
+// Group names as dot-separated string
+const groupNamesDisplay = computed(() => {
+  if (!props.showNames) return null
+  return inhabitantsList.value.map(formatName).join(' · ')
+})
 
 // Responsive breakpoint injection
 const isMd = inject<Ref<boolean>>('isMd')
@@ -106,82 +129,81 @@ const {getUserUrl} = useHeynabo()
 <template>
   <!-- GROUP MODE -->
   <div v-if="isGroup" class="flex items-center gap-2">
+    <!-- Avatar group -->
     <UAvatarGroup :max="maxAvatars" :size="avatarSize">
-      <template v-for="inhabitant in inhabitants" :key="inhabitant.heynaboId">
+      <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
         <ULink
+          v-if="linkToProfile"
           :to="getUserUrl(inhabitant.heynaboId)"
           target="_blank"
           class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
         >
           <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
             <UAvatar
-              :src="inhabitant.pictureUrl || undefined"
+              :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
               icon="i-heroicons-user"
               :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
             />
           </UTooltip>
         </ULink>
+        <UTooltip v-else :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
+          <UAvatar
+            :src="inhabitant.pictureUrl ?? undefined"
+            :alt="`${inhabitant.name} ${inhabitant.lastName}`"
+            icon="i-heroicons-user"
+            :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+          />
+        </UTooltip>
       </template>
     </UAvatarGroup>
 
-    <!-- Compact: Badge only | Not compact: Badge + count + label -->
-    <UBadge v-if="compact" size="xs" color="primary">
-      {{ count }}
-    </UBadge>
-    <div v-else class="flex items-center gap-1">
+    <!-- Names (when showNames=true) -->
+    <span v-if="showNames && groupNamesDisplay" class="text-sm font-medium">
+      {{ groupNamesDisplay }}
+    </span>
+
+    <!-- Count + label (when showNames=false) -->
+    <template v-else>
       <UBadge size="sm" color="primary">
         {{ count }}
       </UBadge>
-      <span v-if="label" class="text-sm">{{ label }}</span>
-    </div>
+      <span v-if="label && !compact" class="text-sm">{{ label }}</span>
+    </template>
   </div>
 
-  <!-- SINGLE MODE: COMPACT -->
-  <div v-else-if="compact" class="inline-flex items-center gap-2">
+  <!-- SINGLE MODE -->
+  <div v-else-if="singleInhabitant" class="flex items-start gap-3">
+    <!-- Avatar -->
     <ULink
-      :to="getUserUrl(inhabitants.heynaboId)"
+      v-if="linkToProfile"
+      :to="getUserUrl(singleInhabitant.heynaboId)"
       target="_blank"
-      class="hover:scale-110 hover:rotate-3 transition-transform duration-200"
+      class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block flex-shrink-0"
     >
       <UAvatar
-        :src="inhabitants.pictureUrl || undefined"
-        :alt="`${inhabitants.name} ${inhabitants.lastName}`"
+        :src="singleInhabitant.pictureUrl ?? undefined"
+        :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
         :size="avatarSize"
         icon="i-heroicons-user"
         :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
       />
     </ULink>
-    <div class="flex items-center gap-1">
-      <span class="text-xs md:text-md font-medium">{{ formatDisplayName(inhabitants) }}</span>
-      <UBadge v-if="checkProperty(inhabitants)" size="xs" color="blue">
-        Barn
-      </UBadge>
+    <UAvatar
+      v-else
+      :src="singleInhabitant.pictureUrl ?? undefined"
+      :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
+      :size="avatarSize"
+      icon="i-heroicons-user"
+      :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+    />
+
+    <!-- Name + badge slot -->
+    <div v-if="showNames" class="flex flex-col gap-1">
+      <span :class="compact ? 'text-sm font-medium' : 'font-semibold'">
+        {{ formatName(singleInhabitant) }}
+      </span>
+      <slot name="badge" :inhabitant="singleInhabitant" />
     </div>
   </div>
-
-  <!-- SINGLE MODE: NOT COMPACT -->
-  <UCard v-else>
-    <div class="flex items-center gap-3">
-      <ULink
-        :to="getUserUrl(inhabitants.heynaboId)"
-        target="_blank"
-        class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
-      >
-        <UAvatar
-          :src="inhabitants.pictureUrl || undefined"
-          :alt="`${inhabitants.name} ${inhabitants.lastName}`"
-          :size="avatarSize"
-          icon="i-heroicons-user"
-          :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
-        />
-      </ULink>
-      <div class="flex items-center gap-2">
-        <span class="font-semibold">{{ inhabitants.name }} {{ inhabitants.lastName }}</span>
-        <UBadge v-if="checkProperty(inhabitants)" size="sm" color="blue">
-          Barn
-        </UBadge>
-      </div>
-    </div>
-  </UCard>
 </template>

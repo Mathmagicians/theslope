@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type {HouseholdWithInhabitants, HouseholdSummary} from '~/server/data/prismaRepository'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
 interface Props {
-    household: HouseholdWithInhabitants | HouseholdSummary
+    household: HouseholdDisplay
     compact?: boolean
 }
 
@@ -18,7 +18,7 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
         <UAvatarGroup size="sm" :max="3">
             <UTooltip v-for="inhabitant in household.inhabitants" :key="inhabitant.id" :text="inhabitant.name">
                 <UAvatar
-                    :src="inhabitant.pictureUrl"
+                    :src="inhabitant.pictureUrl ?? undefined"
                     :alt="inhabitant.name"
                     icon="i-heroicons-user"
                 />

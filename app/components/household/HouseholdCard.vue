@@ -224,12 +224,12 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
         <!-- Ticket type column -->
         <template #ticketType-cell="{ row }">
           <UBadge
-              :color="row.original.ticketConfig.color"
+              :color="row.original.ticketConfig?.color ?? 'neutral'"
               variant="subtle"
               size="sm"
               :data-test-id="`ticket-type-${row.original.id}`"
           >
-            {{ row.original.ticketConfig.label }}
+            {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
           </UBadge>
         </template>
 
@@ -238,18 +238,17 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
           <!-- Power mode: show all family members in group -->
           <UserListItem
               v-if="row.original.isSynthetic"
-              :inhabitants="row.original.inhabitants"
+              :inhabitants="household.inhabitants"
               compact
-              :property-check="() => false"
+              :show-names="false"
               ring-color="warning"
               label="beboere"
           />
           <!-- Regular mode: show single inhabitant -->
           <UserListItem
               v-else
-              :inhabitants="row.original"
+              :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
               compact
-              :property-check="() => false"
               ring-color="primary"
           />
         </template>

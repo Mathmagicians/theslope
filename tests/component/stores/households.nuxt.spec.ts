@@ -3,8 +3,8 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import type {
-  HouseholdSummary,
-  HouseholdWithInhabitants
+  HouseholdDisplay,
+  HouseholdDetail
 } from '~/composables/useCoreValidation'
 
 import { useHouseholdsStore } from '~/stores/households'
@@ -23,7 +23,7 @@ registerEndpoint('/api/admin/household', householdIndexEndpoint)
 // Test Helpers
 // ========================================
 
-const createMockHouseholds = (): HouseholdSummary[] => [
+const createMockHouseholds = (): HouseholdDisplay[] => [
   {
     id: 1,
     heynaboId: 100,
@@ -48,7 +48,7 @@ const createMockHouseholds = (): HouseholdSummary[] => [
   }
 ]
 
-const createMockHouseholdDetail = (): HouseholdWithInhabitants => ({
+const createMockHouseholdDetail = (): HouseholdDetail => ({
   id: 1,
   shortName: 'AR_1_st',
   name: 'Household A',
@@ -66,7 +66,8 @@ const createMockHouseholdDetail = (): HouseholdWithInhabitants => ({
       lastName: 'Anderson',
       birthDate: new Date('1990-01-01'),
       pictureUrl: null,
-      userId: null
+      userId: null,
+      dinnerPreferences: null
     }
   ]
 })

@@ -3,7 +3,10 @@ import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
+import {getDinnerTimeRange} from '~/utils/season'
 import testHelpers from '../../testHelpers'
+
+const DEFAULT_DINNER_START_TIME = 18
 
 const {validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
@@ -24,7 +27,7 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         testSeasonId = testSeason.id as number
     })
 
-    test('GIVEN scheduled dinner WHEN announce THEN heynaboEventId stored', async ({browser}) => {
+    test('GIVEN scheduled dinner WHEN announce THEN heynaboEventId stored with correct time', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
@@ -41,7 +44,6 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         expect(scheduledDinner.state).toBe(DinnerState.SCHEDULED)
         expect(scheduledDinner.heynaboEventId).toBeNull()
 
-        // WHEN: Chef announces the dinner
         const announceResponse = await context.request.post(
             chefDinnerStateUrl(scheduledDinner.id, DinnerState.ANNOUNCED),
             {headers: {'Content-Type': 'application/json'}}
@@ -52,13 +54,20 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
 
         const announcedDinner = await announceResponse.json()
 
-        // THEN: Dinner state changed to ANNOUNCED
         expect(announcedDinner.state).toBe(DinnerState.ANNOUNCED)
-
-        // AND: heynaboEventId is stored
         expect(announcedDinner.heynaboEventId).toBeDefined()
-        expect(announcedDinner.heynaboEventId).not.toBeNull()
         expect(typeof announcedDinner.heynaboEventId).toBe('number')
+
+        // Verify Heynabo event has correct date and time
+        const heynaboEvent = await DinnerEventFactory.getHeynaboEvent(context, announcedDinner.heynaboEventId)
+        const dinnerDate = new Date(scheduledDinner.date)
+        const expectedStart = getDinnerTimeRange(dinnerDate, DEFAULT_DINNER_START_TIME, 0).start
+        const heynaboStart = new Date(heynaboEvent.start!)
+
+        expect(heynaboStart.getFullYear()).toBe(expectedStart.getFullYear())
+        expect(heynaboStart.getMonth()).toBe(expectedStart.getMonth())
+        expect(heynaboStart.getDate()).toBe(expectedStart.getDate())
+        expect(heynaboStart.getHours()).toBe(expectedStart.getHours())
     })
 
     test('GIVEN announced dinner WHEN update menu THEN Heynabo event updated', async ({browser}) => {

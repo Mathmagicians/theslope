@@ -47,37 +47,50 @@
 
 import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
-// Booking form state
+// Fun empty state for no team assigned
+const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
+
+// Booking form state - EDIT mode prevents accidental changes
 const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
-// Toast for user feedback
-const toast = useToast()
+// Booking handlers - update individual order (uses householdOrders, not dinnerEventDetail.tickets)
+const handleBookingUpdate = async (inhabitantId: number, dinnerMode: DinnerMode, _ticketPriceId: number) => {
+  const order = householdOrders.value?.find(o => o.inhabitantId === inhabitantId)
+  if (!order?.id) {
+    console.warn('No order found for inhabitant', inhabitantId)
+    return
+  }
 
-// Booking handlers
-const handleBookingUpdate = (inhabitantId: number, dinnerMode: string, ticketPriceId: number) => {
-  // TODO: Implement booking update via bookings store
-  console.info('Booking update:', { inhabitantId, dinnerMode, ticketPriceId })
+  try {
+    await bookingsStore.updateOrder(order.id, { dinnerMode })
+    await refreshBookingData()
+    console.info('Booking updated:', { inhabitantId, dinnerMode, orderId: order.id })
+  } catch (e) {
+    console.error('Failed to update booking:', e)
+  }
 }
 
-const handleAllBookingsUpdate = (dinnerMode: string) => {
-  // TODO: Implement bulk booking update via bookings store
-  console.info('All bookings update:', { dinnerMode })
+// Bulk update all orders for current household (security: only household orders via session-filtered endpoint)
+const handleAllBookingsUpdate = async (dinnerMode: DinnerMode) => {
+  const orders = householdOrders.value ?? []
+  if (orders.length === 0) return
+
+  try {
+    await Promise.all(
+      orders.filter(o => o.id).map(order => bookingsStore.updateOrder(order.id!, { dinnerMode }))
+    )
+    await refreshBookingData()
+    console.info('All household bookings updated:', { dinnerMode, count: orders.length })
+  } catch (e) {
+    console.error('Failed to update all bookings:', e)
+  }
 }
 
-const handleSaveBooking = () => {
-  // TODO: Commit pending booking changes
-  bookingFormMode.value = FORM_MODES.VIEW
-  toast.add({
-    title: 'Booking gemt',
-    description: 'Din booking er blevet opdateret',
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
-}
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -137,7 +150,7 @@ const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
 // Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
 const bookingsStore = useBookingsStore()
-const { DinnerEventDetailSchema } = useBookingValidation()
+const { DinnerEventDetailSchema, OrderDisplaySchema } = useBookingValidation()
 
 const {
   data: dinnerEventDetail,
@@ -163,6 +176,32 @@ const {
     }
   }
 )
+
+// Fetch household-specific orders via user-facing endpoint (security: session-filtered)
+// This is separate from dinnerEventDetail.tickets which includes ALL households for kitchen stats
+const {
+  data: householdOrders,
+  refresh: _refreshHouseholdOrders
+} = useAsyncData(
+  computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
+  () => selectedDinnerId.value
+    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventId=${selectedDinnerId.value}`)
+    : Promise.resolve([]),
+  {
+    default: () => [],
+    watch: [selectedDinnerId],
+    immediate: true,
+    transform: (data: unknown) => {
+      if (!Array.isArray(data)) return []
+      return data.map(order => OrderDisplaySchema.parse(order))
+    }
+  }
+)
+
+// Helper to refresh both data sources after booking changes
+const refreshBookingData = async () => {
+  await Promise.all([_refreshDinnerEventDetail(), _refreshHouseholdOrders()])
+}
 
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
 const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
@@ -249,10 +288,10 @@ useHead({
           :show-state-controls="false"
           :show-allergens="true"
         >
-          <!-- Household booking form in ChefMenuCard's slot -->
+          <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm
             :dinner-event="dinnerEventDetail"
-            :orders="dinnerEventDetail.tickets"
+            :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :form-mode="bookingFormMode"
             @update-booking="handleBookingUpdate"
@@ -263,40 +302,60 @@ useHead({
           <div class="mt-4">
             <UButton
               v-if="bookingFormMode === FORM_MODES.VIEW"
-              color="primary"
+              :color="COLOR.warning"
               variant="solid"
               size="lg"
               name="edit-booking"
               block
+              :icon="ICONS.edit"
               @click="bookingFormMode = FORM_MODES.EDIT"
             >
-              ÆNDRE BOOKING
+              Rediger booking
             </UButton>
 
-            <div v-else class="flex gap-2">
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="lg"
-                name="cancel-booking"
-                @click="bookingFormMode = FORM_MODES.VIEW"
-              >
-                Annuller
-              </UButton>
-              <UButton
-                color="primary"
-                variant="solid"
-                size="lg"
-                name="save-booking"
-                class="flex-1"
-                :icon="ICONS.check"
-                @click="handleSaveBooking"
-              >
-                Gem booking
-              </UButton>
-            </div>
+            <UButton
+              v-else
+              color="neutral"
+              variant="outline"
+              size="lg"
+              name="back-from-booking"
+              block
+              :icon="ICONS.arrowLeft"
+              @click="bookingFormMode = FORM_MODES.VIEW"
+            >
+              Tilbage
+            </UButton>
           </div>
         </ChefMenuCard>
+      </template>
+
+      <!-- #team: Cooking team info -->
+      <template #team>
+        <template v-if="dinnerEventDetail">
+          <CookingTeamCard
+            v-if="dinnerEventDetail.cookingTeamId"
+            :team-id="dinnerEventDetail.cookingTeamId"
+            :team-number="dinnerEventDetail.cookingTeamId"
+            mode="monitor"
+          />
+          <UAlert
+            v-else
+            variant="soft"
+            :color="COLOR.info"
+          >
+            <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
+          </UAlert>
+          <WorkAssignment :dinner-event="dinnerEventDetail"/>
+        </template>
+      </template>
+
+      <!-- #stats: Kitchen statistics -->
+      <template #stats>
+        <KitchenPreparation
+          v-if="dinnerEventDetail"
+          :orders="dinnerEventDetail.tickets ?? []"
+          :allergens="dinnerEventDetail.allergens"
+        />
       </template>
     </DinnerDetailPanel>
   </UPage>

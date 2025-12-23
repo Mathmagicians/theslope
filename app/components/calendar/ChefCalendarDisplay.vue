@@ -64,6 +64,7 @@ import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {toDate} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
+import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
   seasonDates: DateRange
@@ -84,7 +85,9 @@ const emit = defineEmits<{
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 // Focus date for calendar navigation (from selected dinner)
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
@@ -97,6 +100,7 @@ const viewTabs = [
   { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
 ]
 const viewMode = defineModel<'agenda' | 'calendar'>('viewMode', { required: true })
+const accordionOpen = defineModel<boolean>('accordionOpen', { default: true })
 
 // Temporal splitting using shared composable
 const {
@@ -172,6 +176,11 @@ const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
   )
 }
 
+const isCancelledDay = (day: DateValue): boolean => {
+  const dinner = getDinnerForDay(day)
+  return dinner?.state === DinnerState.CANCELLED
+}
+
 const isSelected = (day: DateValue): boolean => {
   if (!props.selectedDinnerId || !props.showSelection) return false
   const dinner = getDinnerForDay(day)
@@ -183,6 +192,20 @@ const isSelected = (day: DateValue): boolean => {
 const sortedDinnerEvents = computed(() =>
   sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
 )
+
+// Agenda table configuration (UTable + UPagination pattern from AdminHouseholds)
+const agendaTable = useTemplateRef('agendaTable')
+const agendaPagination = ref({
+  pageIndex: 0,
+  pageSize: SIZES.agendaPageSize
+})
+
+const agendaColumns = [
+  {
+    accessorKey: 'dinner',
+    header: 'Fællesspisning'
+  }
+]
 
 // Deadline urgency ring logic (shared across calendars)
 const URGENCY_TO_RING_CLASS = {
@@ -224,17 +247,33 @@ const legendItems = computed(() => [
   {
     label: 'Deadline snart (24-72t)',
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+  },
+  {
+    label: 'Aflyst madlavning',
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past} line-through`
   }
 ])
 
-const accordionItems = [{ label: 'Kalender', slot: 'calendar-content' }]
-const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefined)
+// Accordion item value: '0' = open (first item), undefined = closed
+const accordionItems = [{ slot: 'calendar-content', value: '0' }]
+const accordionValue = computed({
+  get: () => accordionOpen.value ? '0' : undefined,
+  set: (v) => { accordionOpen.value = v === '0' }
+})
+
 </script>
 
 <template>
   <div class="flex flex-col h-full">
     <!-- Countdown Timer (Train Station Style) -->
-    <div :class="[CALENDAR.countdown.container, CHEF_CALENDAR.countdown.border]">
+    <div
+      :class="[
+        CALENDAR.countdown.container,
+        CHEF_CALENDAR.countdown.border,
+        nextDinner ? 'cursor-pointer hover:ring-2 hover:ring-ocean-300 dark:hover:ring-ocean-700 transition-all' : ''
+      ]"
+      @click="nextDinner ? emit('select', nextDinner.id) : null"
+    >
       <!-- Active cooking event state -->
       <div v-if="nextDinner && countdown" class="text-center space-y-2">
         <!-- Title -->
@@ -277,28 +316,69 @@ const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefin
     </div>
 
     <!-- Accordion wraps both view toggle and content (collapsed on mobile, open on desktop) -->
-    <UAccordion :items="accordionItems" :default-value="accordionDefault" class="flex-1">
-      <template #calendar-content>
-        <!-- View Toggle -->
-        <div class="px-4 pt-2 md:pt-4">
-          <UTabs
-            v-model="viewMode"
-            :items="viewTabs"
-            orientation="horizontal"
-            variant="link"
-          />
-        </div>
+    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+      <!-- Custom leading slot: tabs instead of label -->
+      <template #leading>
+        <UTabs
+          v-model="viewMode"
+          :items="viewTabs"
+          orientation="horizontal"
+          variant="link"
+        />
+      </template>
 
-        <!-- Agenda View -->
-        <div v-if="viewMode === 'agenda'" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-          <ChefDinnerCard
-            v-for="dinner in sortedDinnerEvents"
-            :key="dinner.id"
-            :dinner-event="dinner"
-            :selected="dinner.id === selectedDinnerId"
-            :temporal-category="dinner.temporalCategory"
-            @select="emit('select', $event)"
-          />
+      <template #calendar-content>
+
+        <!-- Agenda View (UTable + UPagination) -->
+        <div v-if="viewMode === 'agenda'" class="flex-1 flex flex-col overflow-x-hidden">
+          <UTable
+            ref="agendaTable"
+            v-model:pagination="agendaPagination"
+            :columns="agendaColumns"
+            :data="sortedDinnerEvents"
+            :ui="{
+              ...COMPONENTS.table.ui,
+              th: 'border-b-0',
+              td: 'py-1 md:py-2 max-w-0 w-full',
+              base: 'table-fixed w-full'
+            }"
+            :pagination-options="{
+              getPaginationRowModel: getPaginationRowModel()
+            }"
+          >
+            <!-- Custom header: title + pagination -->
+            <template #dinner-header>
+              <div class="flex items-center justify-between w-full">
+                <span :class="TYPOGRAPHY.bodyTextSmall">Maddage</span>
+                <UPagination
+                  v-if="(agendaTable?.tableApi?.getFilteredRowModel().rows.length || 0) > agendaPagination.pageSize"
+                  :default-page="(agendaTable?.tableApi?.getState().pagination.pageIndex || 0) + 1"
+                  :items-per-page="agendaTable?.tableApi?.getState().pagination.pageSize"
+                  :total="agendaTable?.tableApi?.getFilteredRowModel().rows.length"
+                  :size="SIZES.small"
+                  :sibling-count="PAGINATION.siblingCount.value"
+                  @update:page="(p: number) => agendaTable?.tableApi?.setPageIndex(p - 1)"
+                />
+              </div>
+            </template>
+
+            <!-- Custom cell with ChefDinnerCard -->
+            <template #dinner-cell="{ row }">
+              <ChefDinnerCard
+                :dinner-event="row.original"
+                :selected="row.original.id === selectedDinnerId"
+                :temporal-category="row.original.temporalCategory"
+                @select="emit('select', $event)"
+              />
+            </template>
+
+            <template #empty-state>
+              <div class="flex flex-col items-center justify-center py-6 gap-3">
+                <UIcon name="i-heroicons-calendar" class="w-8 h-8 text-gray-400"/>
+                <p class="text-sm text-gray-500">Ingen fællesspisninger planlagt for dette hold</p>
+              </div>
+            </template>
+          </UTable>
         </div>
 
         <!-- Calendar View -->
@@ -311,8 +391,8 @@ const accordionDefault = computed(() => SIZES.calendarMonths > 1 ? '0' : undefin
                 :class="[
                   SIZES.calendarCircle,
                   CALENDAR.day.shape,
-                  getDayColorClass(getDayType(eventLists)!),
-                  getDayType(eventLists) !== 'past' ? getDeadlineRingClass(day) : '',
+                  isCancelledDay(day) ? `${CALENDAR.day.past} line-through` : getDayColorClass(getDayType(eventLists)!),
+                  getDayType(eventLists) !== 'past' && !isCancelledDay(day) ? getDeadlineRingClass(day) : '',
                   isSelected(day) ? CHEF_CALENDAR.selection : ''
                 ]"
                 @click="handleDateClick(day)"

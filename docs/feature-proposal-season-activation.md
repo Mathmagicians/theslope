@@ -1,12 +1,104 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Approved | **Date:** 2025-12-04 | **Strategy:** Shard by Household
+**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-13
+
+## Already Implemented
+
+- ✅ `maskWeekDayMap` - Generic pure function in `useWeekDayMapValidation.ts`
+- ✅ `createPreferenceClipper` - Curried function in `useSeason.ts` using `maskWeekDayMap`
+- ✅ `chunkPreferenceUpdates` - Uses `chunkArray` from `batchUtils.ts`
+- ✅ `updateInhabitantPreferencesBulk` - Bulk update in repository
+- ✅ Preference clipping on season activation (`POST /api/admin/season/active`)
+- ✅ Season deactivation (`POST /api/admin/season/deactivate`)
+- ✅ UI for activate/deactivate in `SeasonStatusDisplay.vue`
+- ✅ `createOrders` bulk function with audit trail in `financesRepository.ts`
+- ✅ `dateToWeekDay` - Exported utility in `utils/season.ts`
+- ✅ `reconcilePreBookings` - Curried function configured from `pruneAndCreate`
+- ✅ `createPreBookingGenerator` - Curried function with `excludedKeys` parameter
+- ✅ `determineTicketType` - Age-based ticket type lookup in `useTicket.ts`
+- ✅ Unit tests for `createPreBookingGenerator` and `reconcilePreBookings`
+- ✅ **User Cancellation Tracking:**
+  - `OrderAuditAction` enum in Prisma schema
+  - Denormalized columns (`inhabitantId`, `dinnerEventId`, `seasonId`) in `OrderHistory`
+  - `deleteOrder` tracks USER_CANCELLED vs ADMIN_DELETED based on `performedByUserId`
+  - `fetchUserCancellationKeys` - Returns Set of cancelled inhabitant-dinnerEvent keys
+  - `createPreBookingGenerator` accepts `excludedKeys` to skip cancelled bookings
+  - ADR-009 compliant OrderHistory schemas (Display/Detail/Create)
+- ✅ **Scaffold Pre-bookings:**
+  - `scaffoldPrebookings` utility in `server/utils/scaffoldPrebookings.ts`
+  - Integrated with season activation flow (`POST /api/admin/season/[id]/scaffold-prebookings`)
+  - `splitDinnerEvents` enhanced with `maxDaysAhead` parameter for rolling window
+  - `prebookingWindowDays` config (60 days) in `app.config.ts`
+  - `getPrebookingWindowDays()` getter in `useSeason.ts`
+  - Scaffolder only processes **future** dinner events within the prebooking window
+  - **Verified in dev:** Scaffolder creates orders ONLY for future events, not past
+- ✅ **Daily Maintenance Utilities:**
+  - `consumeDinners` - Marks past SCHEDULED/ANNOUNCED dinners → CONSUMED (resilient catch-up)
+  - `closeOrders` - Marks BOOKED/RELEASED orders on CONSUMED dinners → CLOSED
+  - `createTransactions` - Creates transaction records for CLOSED orders without one
+  - All utilities use chunking for D1 query limits (ADR-014)
+- ✅ **Daily Maintenance Endpoint:**
+  - `POST /api/admin/maintenance/daily` - Runs all 4 maintenance steps
+  - Returns `DailyMaintenanceResult` with counts (consume, close, transact, scaffold)
+  - Idempotent - safe to run multiple times or after missed crons
+  - **Tested in production:** Successfully ran with 2555 historical orders
+- ✅ **E2E Tests for Daily Maintenance:**
+  - Tests for `consumeDinners` (past ANNOUNCED/SCHEDULED → CONSUMED)
+  - Tests for `closeOrders` + `createTransactions` (BOOKED → CLOSED with transaction)
+  - Tests verify idempotent behavior and correct state transitions
+  - Tests run in parallel with proper isolation
+- ✅ **Season + Dinner Event Orchestration (ADR-015):**
+  - `PUT /api/admin/season` - Creates season AND generates dinner events in one call
+  - `POST /api/admin/season/[id]` - Updates season AND reconciles dinner events when schedule changes
+  - `getScheduleChangeDesiredEvents` - Efficient single computation for change detection + event generation
+  - `reconcileDinnerEvents` - Uses `pruneAndCreate` pattern for idempotent reconciliation
+  - Removed separate `generateDinnerEvents` call from plan.ts store
+- ✅ **Batch Size Optimization (ADR-014):**
+  - `ORDER_BATCH_SIZE = 200` for `createManyAndReturn` (Prisma auto-chunks, no manual limit needed)
+  - `DELETE_BATCH_SIZE = 90` for `updateMany`/`deleteMany` (D1 100 param limit minus ~2 data params)
+  - **Confirmed:** Prisma auto-chunks `createManyAndReturn` but NOT `updateMany`/`deleteMany`
+
+- ✅ **UI Trigger Buttons:**
+  - `AdminSystem.vue` with job cards for all three scheduled tasks
+  - Daily Maintenance, Monthly Billing, Heynabo Import buttons
+  - Job history table showing past runs
+  - Connected to stores for real-time status and results
+- ✅ **Cron Trigger Configuration:**
+  - Nitro `experimental.tasks: true` enabled in `nuxt.config.ts`
+  - `scheduledTasks` configured: daily-maintenance (01:00 UTC), heynabo-import (02:00 UTC), monthly-billing (17th 03:00 UTC)
+  - Matching cron patterns in `wrangler.toml` for local, dev, and prod environments
+  - Task definitions in `server/tasks/`:
+    - `daily-maintenance.ts` - Calls `POST /api/admin/maintenance/daily`
+    - `heynabo-import.ts` - Calls `GET /api/admin/heynabo/import`
+    - `monthly-billing.ts` - Calls `POST /api/admin/billing/generate` (stub)
+  - Tasks use HTTP calls to endpoints (workaround for D1 binding access in scheduled tasks)
+
+## Remaining Tasks
+
+1. **Monthly Billing Implementation** - Implement invoice generation
+   - Create `POST /api/admin/billing/generate` endpoint (currently stub)
+   - Aggregate transactions from previous billing period
+   - Generate invoices per household
+   - Mark transactions as invoiced
+
+---
 
 ## Summary
 
-When a season is activated, clip all inhabitants' preferences to the season's cooking days and sync orders accordingly. Maintain data integrity on every preference save. Use **household-level sharding** to stay within D1's 1,000 query limit.
+Automated order lifecycle management with a **rolling 60-day pre-booking window**. System creates preference-based orders for the next 60 days; users can manually book beyond that. Daily and monthly scheduled tasks handle order scaffolding, dinner consumption, and billing.
 
-## Core Concept: Preference Clipping
+## Key Concepts
+
+### Pre-Bookings vs User Bookings
+
+| Type | Created By | Window | Mutable |
+|------|-----------|--------|---------|
+| **Pre-booking** | System (based on preferences) | Rolling 60 days | Yes (BOOKED state) |
+| **User booking** | User (manual action) | Any future date | Follows normal rules |
+
+Pre-bookings are idempotent scaffolding - users can still manually book dinners beyond the 60-day window.
+
+### Preference Clipping
 
 ```
 Season cookingDays:     { mon: true,  tue: false, wed: true,  thu: false, fri: true  }
@@ -15,35 +107,194 @@ User preferences:       { mon: DINEIN, tue: DINEIN, wed: TAKEAWAY, thu: DINEIN, 
 Stored preferences:     { mon: DINEIN, tue: NONE,   wed: TAKEAWAY, thu: NONE,   fri: DINEIN }
 ```
 
-Same logic as `WeekDayMapDinnerModeDisplay` with `parentRestriction` prop - but persisted to database.
+Non-cooking days are clipped to NONE. Same logic as `WeekDayMapDinnerModeDisplay` with `parentRestriction` prop.
 
-## Data Flow
+---
+
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  TRIGGER: Season Activated                                      │
-│  1. For each household (sequential API calls):                  │
-│     a. Clip inhabitants' preferences to season.cookingDays      │
-│     b. Sync orders: create missing, update changed, delete NONE │
-│  2. Progress: "Syncing household 12/35..."                      │
-├─────────────────────────────────────────────────────────────────┤
-│  TRIGGER: Preference Saved                                      │
-│  1. Clip preference to active season.cookingDays before save    │
-│  2. Sync orders for that inhabitant                             │
-├─────────────────────────────────────────────────────────────────┤
-│  TRIGGER: New Inhabitant Added                                  │
-│  1. Clip default preferences to active season.cookingDays       │
-│  2. Scaffold orders for future dinner events                    │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ADMIN ACTION: Activate Season                                              │
+│  1. Clip all inhabitants' preferences to season.cookingDays                 │
+│  2. Scaffold pre-bookings for next 60 days                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  DAILY CRON: 02:00 Copenhagen (01:00 UTC)                                   │
+│  1. CONSUME: Mark yesterday's dinners → CONSUMED                            │
+│  2. CLOSE: Mark orders on consumed dinners → CLOSED                         │
+│  3. TRANSACT: Create transactions for closed orders                         │
+│  4. SCAFFOLD: Create pre-bookings for day +60 (rolling window edge)         │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MONTHLY CRON: 1st of month, 04:00 Copenhagen (03:00 UTC)                   │
+│  1. Aggregate transactions from previous month                              │
+│  2. Generate invoices per household                                         │
+│  3. Mark transactions as invoiced                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  USER ACTIONS (anytime)                                                     │
+│  • Save preferences → clip + sync pre-bookings within 60-day window         │
+│  • Manual booking → create order for any future dinner (beyond window OK)   │
+│  • Release order → BOOKED → RELEASED (available for others)                 │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Scheduled Tasks (Nitro)
+
+Using [Nitro Scheduled Tasks](https://nitro.build/guide/tasks) with [Cloudflare Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
+
+### Configuration
+
+```typescript
+// nuxt.config.ts
+export default defineNuxtConfig({
+  nitro: {
+    experimental: {
+      tasks: true
+    },
+    scheduledTasks: {
+      // Daily: 01:00 UTC = 02:00 Copenhagen
+      '0 1 * * *': ['daily-maintenance'],
+      // Monthly: 1st at 03:00 UTC = 04:00 Copenhagen
+      '0 3 1 * *': ['monthly-billing']
+    }
+  }
+})
+```
+
+```toml
+# wrangler.toml - must match scheduledTasks patterns
+[env.prod.triggers]
+crons = ["0 1 * * *", "0 3 1 * *"]
+
+[env.dev.triggers]
+crons = ["0 1 * * *", "0 3 1 * *"]
+```
+
+### Task Definitions
+
+```typescript
+// server/tasks/daily-maintenance.ts
+export default defineTask({
+  meta: {
+    name: 'daily-maintenance',
+    description: 'Consume dinners, close orders, create transactions, scaffold pre-bookings'
+  },
+  async run({ context }) {
+    const db = context.cloudflare.env.DB
+
+    const result = await dailyMaintenance(db)
+
+    console.info('Daily maintenance completed:', result)
+    return { result }
+  }
+})
+```
+
+```typescript
+// server/tasks/monthly-billing.ts
+export default defineTask({
+  meta: {
+    name: 'monthly-billing',
+    description: 'Generate invoices for previous month'
+  },
+  async run({ context }) {
+    const db = context.cloudflare.env.DB
+
+    const result = await monthlyBilling(db)
+
+    console.info('Monthly billing completed:', result)
+    return { result }
+  }
+})
+```
+
+---
+
+## Daily Maintenance Logic
+
+### Query Budget (Single Cron Invocation)
+
+| Step | Queries | Notes |
+|------|---------|-------|
+| Fetch yesterday's dinners | ~1 | Filter by date + state |
+| Update dinner states → CONSUMED | ~1 | Single update |
+| Fetch BOOKED orders for consumed dinners | ~1 | |
+| Close orders + create transactions | ~30 | ~120 orders ÷ 8 per batch |
+| Fetch day +60 dinner events | ~1 | |
+| Scaffold pre-bookings for day +60 | ~15 | ~120 inhabitants ÷ 8 |
+| **Total** | **~50** ✅ | Well within D1's 1,000 limit |
+
+### Implementation
+
+```typescript
+// server/utils/dailyMaintenance.ts
+export async function dailyMaintenance(db: D1Database): Promise<DailyMaintenanceResult> {
+  const prisma = await getPrismaClientConnection(db)
+  const yesterday = subDays(new Date(), 1)
+  const scaffoldDate = addDays(new Date(), 60)
+
+  // 1. CONSUME: Mark yesterday's dinners
+  const consumedDinners = await prisma.dinnerEvent.updateMany({
+    where: {
+      date: { gte: startOfDay(yesterday), lt: endOfDay(yesterday) },
+      state: 'ANNOUNCED'  // Only announced dinners get consumed
+    },
+    data: { state: 'CONSUMED' }
+  })
+
+  // 2. CLOSE: Mark orders on consumed dinners
+  const closedOrders = await prisma.order.updateMany({
+    where: {
+      dinnerEvent: { state: 'CONSUMED' },
+      state: 'BOOKED'
+    },
+    data: {
+      state: 'CLOSED',
+      closedAt: new Date()
+    }
+  })
+
+  // 3. TRANSACT: Create transactions for closed orders
+  const ordersToTransact = await prisma.order.findMany({
+    where: {
+      state: 'CLOSED',
+      Transaction: null  // No transaction yet
+    },
+    include: { inhabitant: { include: { user: true } } }
+  })
+
+  for (const order of ordersToTransact) {
+    await createTransactionForOrder(prisma, order)
+  }
+
+  // 4. SCAFFOLD: Create pre-bookings for day +60
+  const scaffoldResult = await scaffoldPreBookingsForDate(prisma, scaffoldDate)
+
+  return {
+    dinnersConsumed: consumedDinners.count,
+    ordersClosed: closedOrders.count,
+    transactionsCreated: ordersToTransact.length,
+    preBookingsCreated: scaffoldResult.created
+  }
+}
+```
+
+---
 
 ## Order Sync Rules
 
 | Preference | Existing Order | Action |
 |------------|----------------|--------|
-| `NONE` | `BOOKED` | Delete order |
+| `NONE` | `BOOKED` | Delete pre-booking |
 | `NONE` | `RELEASED`/`CLOSED` | No action (user/system decision) |
-| `DINEIN`/`TAKEAWAY` | None | Create order |
+| `DINEIN`/`TAKEAWAY` | None | Create pre-booking |
 | `DINEIN`/`TAKEAWAY` | `BOOKED` (different mode) | Update dinnerMode |
 | `DINEIN`/`TAKEAWAY` | `BOOKED` (same mode) | No action |
 | `DINEIN`/`TAKEAWAY` | `RELEASED`/`CLOSED` | No action (immutable) |
@@ -60,332 +311,183 @@ Same logic as `WeekDayMapDinnerModeDisplay` with `parentRestriction` prop - but 
 |------------|-------|--------|
 | Subrequests per Worker invocation | **1,000** (paid) / 50 (free) | Each Prisma query = 1 subrequest |
 | Bound parameters per query | **100** | Order (~12 fields) → max **8 rows per INSERT** |
-
-### Scale Analysis
-
-**Real numbers:** 120 inhabitants × 180 dinner events = **21,600 potential orders**
-
-Single-call approach: 21,600 ÷ 8 rows per INSERT = **2,700 queries ❌ EXCEEDS 1,000**
+| Worker memory | **128 MB** | Concurrent operations consume memory |
 
 ---
 
-## Sharding Strategy: By Household ✅
+## Bulk Order Creation Pattern
 
-**Process one household at a time via sequential API calls.**
+**Problem:** Original `createOrders` used `Promise.all` with N concurrent `prisma.order.create()` calls, exceeding Worker memory limits.
 
-| Per Household (~5 inhabitants) | Calculation | Queries |
-|--------------------------------|-------------|---------|
-| Fetch season + dinner events | | ~3 |
-| Fetch household + inhabitants | | ~2 |
-| Clip preferences | 5 updates | 5 |
-| Fetch existing orders | | ~1 |
-| Create orders | 5 × 180 ÷ 8 | ~113 |
-| Update/delete orders | | ~10 |
-| **Total per household** | | **~134** ✅ |
+**Solution:** Household sharding at caller level + simple bulk insert in `createOrders`.
 
-**Full activation:** ~35 households × 1 API call each = **35 sequential calls**
+### Responsibility Split
 
-### Why Household Sharding?
+| Layer | Responsibility |
+|-------|----------------|
+| **Zod Schema** | Structure validation (`OrderCreateWithPriceSchema`) |
+| **Caller** | Business validation (same household, valid prices), shard, chunk ≤8, `Promise.all` |
+| **`createOrders`** | `createManyAndReturn`, audit trail, return IDs (trusts caller) |
 
-1. **Aligns with existing powermode** - `HouseholdCard.vue` already updates all inhabitants at once
-2. **Reusable** - Same endpoint powers user-facing "sync my bookings" feature
-3. **Natural retry boundary** - If one household fails, others unaffected
-4. **Clear progress** - "Syncing household 12/35..."
-5. **Acceptable latency** - ~35 calls for admin operation run once per season
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `POST` | `/api/admin/season/[id]/activate` | Orchestrates activation (calls household sync) |
-| `POST` | `/api/admin/household/[id]/sync-orders` | Sync single household to season |
-
-### Activate Endpoint (Orchestrator)
+### Zod Schema (in `useBookingValidation`)
 
 ```typescript
-// POST /api/admin/season/[id]/activate
-// Orchestrates household-by-household sync
+const OrderCreateWithPriceSchema = OrderCreateSchema.extend({
+    priceAtBooking: z.number().int().positive()
+})
 
-interface ActivateSeasonRequest {
-  // Optional: resume from specific household on retry
-  startFromHouseholdId?: number
-}
-
-interface ActivateSeasonResponse {
-  season: SeasonDisplay
-  sync: {
-    householdsProcessed: number
-    householdsTotal: number
-    inhabitantsClipped: number
-    ordersCreated: number
-    ordersUpdated: number
-    ordersDeleted: number
-  }
-}
+type OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
 ```
 
-### Household Sync Endpoint (Worker)
+### `createOrders` Signature
 
 ```typescript
-// POST /api/admin/household/[id]/sync-orders
-// Syncs one household to active season
-
-interface HouseholdSyncRequest {
-  seasonId: number
+interface CreateOrdersResult {
+    householdId: number
+    createdIds: number[]
 }
 
-interface HouseholdSyncResponse {
-  householdId: number
-  inhabitantsClipped: number
-  ordersCreated: number
-  ordersUpdated: number
-  ordersDeleted: number
+interface AuditContext {
+    action: 'BULK_IMPORT' | 'SYSTEM_SCAFFOLD' | 'USER_BOOKED'
+    performedByUserId: number | null
+    source: string
 }
+
+type OrderCreateWithPrice = OrderCreate & { priceAtBooking: number }
+
+async function createOrders(
+    d1Client: D1Database,
+    ordersData: OrderCreateWithPrice[],  // ≤8 orders (caller chunks)
+    auditContext: AuditContext
+): Promise<CreateOrdersResult>
 ```
 
----
-
-## Implementation
-
-### Pure Functions (`composables/useSeasonActivation.ts`)
+### `createOrders` Implementation
 
 ```typescript
-import { WEEKDAYS, type WeekDay } from '~/composables/useWeekday'
-import { DinnerMode, type WeekDayMap } from '~/composables/useWeekDayMapValidation'
+async function createOrders(
+    d1Client: D1Database,
+    householdId: number,  // Caller validates, passes householdId
+    ordersData: OrderCreateWithPrice[],
+    auditContext: AuditContext
+): Promise<CreateOrdersResult> {
+    const prisma = await getPrismaClientConnection(d1Client)
 
-/**
- * Clip preferences to season's cooking days
- * Non-cooking days → NONE, cooking days → keep existing
- */
-export const clipPreferencesToSeason = (
-  preferences: WeekDayMap<DinnerMode> | null,
-  cookingDays: WeekDayMap<boolean>
-): WeekDayMap<DinnerMode> => {
-  const { createDefaultWeekdayMap } = useWeekDayMapValidation({
-    valueSchema: DinnerModeSchema,
-    defaultValue: DinnerMode.DINEIN
-  })
-
-  const clipped = createDefaultWeekdayMap(DinnerMode.DINEIN)
-
-  for (const day of WEEKDAYS) {
-    clipped[day] = cookingDays[day]
-      ? (preferences?.[day] ?? DinnerMode.DINEIN)
-      : DinnerMode.NONE
-  }
-
-  return clipped
-}
-
-/**
- * Get weekday from date (Danish weekday names)
- */
-export const getWeekdayFromDate = (date: Date): WeekDay => {
-  const dayIndex = date.getDay()
-  // Sunday = 0, Monday = 1, etc. Map to Danish weekday names
-  const mapping: Record<number, WeekDay> = {
-    0: 'søndag',
-    1: 'mandag',
-    2: 'tirsdag',
-    3: 'onsdag',
-    4: 'torsdag',
-    5: 'fredag',
-    6: 'lørdag'
-  }
-  return mapping[dayIndex]
-}
-```
-
-### Order Sync Logic (`composables/useOrderSync.ts`)
-
-```typescript
-import type { DinnerEventDisplay, OrderDisplay, InhabitantDetail, TicketPrice } from '~/types'
-
-interface OrderSyncResult {
-  toCreate: OrderCreate[]
-  toUpdate: Array<{ id: number; dinnerMode: DinnerMode }>
-  toDelete: number[]
-}
-
-/**
- * Compute order sync operations (pure function)
- * Compares preferences against existing orders for all dinner events
- */
-export const computeOrderSync = (
-  dinnerEvents: DinnerEventDisplay[],
-  preferences: WeekDayMap<DinnerMode>,
-  existingOrders: OrderDisplay[],
-  inhabitant: InhabitantDetail,
-  ticketPrices: TicketPrice[]
-): OrderSyncResult => {
-  const toCreate: OrderCreate[] = []
-  const toUpdate: Array<{ id: number; dinnerMode: DinnerMode }> = []
-  const toDelete: number[] = []
-
-  // Index existing orders by dinnerEventId for O(1) lookup
-  const ordersByEvent = new Map(
-    existingOrders.map(o => [o.dinnerEventId, o])
-  )
-
-  for (const event of dinnerEvents) {
-    const weekday = getWeekdayFromDate(new Date(event.date))
-    const preference = preferences[weekday]
-    const existingOrder = ordersByEvent.get(event.id)
-
-    if (preference === DinnerMode.NONE) {
-      // Should not have order
-      if (existingOrder?.state === 'BOOKED') {
-        toDelete.push(existingOrder.id)
-      }
-      // RELEASED/CLOSED: no action (immutable)
-    } else {
-      // Should have order with this dinnerMode
-      if (!existingOrder) {
-        toCreate.push({
-          dinnerEventId: event.id,
-          inhabitantId: inhabitant.id,
-          dinnerMode: preference,
-          ticketPriceId: getTicketPriceForInhabitant(inhabitant, ticketPrices),
-          priceAtBooking: getTicketPriceForInhabitant(inhabitant, ticketPrices, true),
-          state: 'BOOKED'
-        })
-      } else if (existingOrder.state === 'BOOKED' && existingOrder.dinnerMode !== preference) {
-        toUpdate.push({ id: existingOrder.id, dinnerMode: preference })
-      }
-      // Same mode or RELEASED/CLOSED: no action
-    }
-  }
-
-  return { toCreate, toUpdate, toDelete }
-}
-
-/**
- * Determine ticket price based on inhabitant age
- */
-const getTicketPriceForInhabitant = (
-  inhabitant: InhabitantDetail,
-  ticketPrices: TicketPrice[],
-  returnPrice = false
-): number => {
-  // Logic to determine ADULT/CHILD/BABY based on birthDate and maximumAgeLimit
-  const ticketPrice = ticketPrices.find(tp => {
-    if (!inhabitant.birthDate) return tp.ticketType === 'ADULT'
-    const age = calculateAge(inhabitant.birthDate)
-    if (tp.maximumAgeLimit && age <= tp.maximumAgeLimit) return true
-    return tp.ticketType === 'ADULT' && !tp.maximumAgeLimit
-  })
-
-  return returnPrice ? ticketPrice?.price ?? 0 : ticketPrice?.id ?? 0
-}
-```
-
-### Repository Functions (`server/data/seasonActivationRepository.ts`)
-
-```typescript
-/**
- * Sync orders for a single household to match season preferences
- * Called per-household to stay within D1's 1,000 query limit
- */
-export async function syncHouseholdOrders(
-  d1Client: D1Database,
-  householdId: number,
-  seasonId: number
-): Promise<HouseholdSyncResponse> {
-  const prisma = await getPrismaClientConnection(d1Client)
-
-  // 1. Fetch season with cooking days and dinner events (~2 queries)
-  const season = await prisma.season.findUnique({
-    where: { id: seasonId },
-    include: {
-      dinnerEvents: { select: { id: true, date: true, state: true } },
-      ticketPrices: true
-    }
-  })
-
-  // 2. Fetch household with inhabitants (~1 query)
-  const household = await prisma.household.findUnique({
-    where: { id: householdId },
-    include: {
-      inhabitants: {
-        select: { id: true, dinnerPreferences: true, birthDate: true }
-      }
-    }
-  })
-
-  const cookingDays = deserializeCookingDays(season.cookingDays)
-  const futureEvents = season.dinnerEvents.filter(e =>
-    new Date(e.date) > new Date() && e.state === 'SCHEDULED'
-  )
-
-  let totalClipped = 0
-  let totalCreated = 0
-  let totalUpdated = 0
-  let totalDeleted = 0
-
-  for (const inhabitant of household.inhabitants) {
-    // 3. Clip preferences (~1 query per inhabitant)
-    const currentPrefs = inhabitant.dinnerPreferences
-      ? deserializePreferences(inhabitant.dinnerPreferences)
-      : null
-    const clippedPrefs = clipPreferencesToSeason(currentPrefs, cookingDays)
-
-    await prisma.inhabitant.update({
-      where: { id: inhabitant.id },
-      data: { dinnerPreferences: serializePreferences(clippedPrefs) }
+    // 1. Bulk insert orders, get IDs (DB is source of truth)
+    const created = await prisma.order.createManyAndReturn({
+        data: ordersData,
+        select: { id: true }
     })
-    totalClipped++
+    const createdIds = created.map(o => o.id)
 
-    // 4. Fetch existing orders for this inhabitant (~1 query)
-    const existingOrders = await prisma.order.findMany({
-      where: {
-        inhabitantId: inhabitant.id,
-        dinnerEventId: { in: futureEvents.map(e => e.id) }
-      },
-      select: { id: true, dinnerEventId: true, dinnerMode: true, state: true }
+    // 2. Bulk insert audit trail
+    await prisma.orderHistory.createMany({
+        data: createdIds.map(orderId => ({
+            orderId,
+            action: auditContext.action,
+            performedByUserId: auditContext.performedByUserId,
+            auditData: JSON.stringify({ source: auditContext.source, householdId })
+        }))
     })
 
-    // 5. Compute sync operations (pure function, 0 queries)
-    const { toCreate, toUpdate, toDelete } = computeOrderSync(
-      futureEvents,
-      clippedPrefs,
-      existingOrders,
-      inhabitant,
-      season.ticketPrices
+    return { householdId, createdIds }
+}
+```
+
+### Caller Pattern (Billing Import)
+
+```typescript
+const chunk = <T>(arr: T[], size: number): T[][] =>
+    Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+        arr.slice(i * size, i * size + size)
     )
 
-    // 6. Execute sync (~N queries, chunked by Prisma)
-    if (toCreate.length > 0) {
-      await prisma.order.createMany({ data: toCreate })
-      totalCreated += toCreate.length
-    }
+const CHUNK_SIZE = 8
 
-    for (const update of toUpdate) {
-      await prisma.order.update({
-        where: { id: update.id },
-        data: { dinnerMode: update.dinnerMode }
-      })
-      totalUpdated++
-    }
+// Caller validates households once, then chunks
+// ordersByHousehold: Map<householdId, OrderCreateWithPrice[]>
 
-    if (toDelete.length > 0) {
-      await prisma.order.deleteMany({
-        where: { id: { in: toDelete } }
-      })
-      totalDeleted += toDelete.length
-    }
-  }
+const operations = [...ordersByHousehold.entries()]
+    .flatMap(([householdId, orders]) =>
+        chunk(orders, CHUNK_SIZE).map(orderChunk => ({ householdId, orderChunk }))
+    )
 
-  return {
-    householdId,
-    inhabitantsClipped: totalClipped,
-    ordersCreated: totalCreated,
-    ordersUpdated: totalUpdated,
-    ordersDeleted: totalDeleted
-  }
-}
+// Parallel execution
+const results = await Promise.all(
+    operations.map(({ householdId, orderChunk }) =>
+        createOrders(d1Client, householdId, orderChunk, {
+            action: 'BULK_IMPORT',
+            performedByUserId: adminUserId,
+            source: 'csv_billing'
+        })
+    )
+)
+
+// Aggregate
+const totalCreated = results.reduce((sum, r) => sum + r.createdIds.length, 0)
 ```
+
+### Query Budget
+
+| Per `createOrders` call | Queries |
+|-------------------------|---------|
+| `createManyAndReturn` | 1 |
+| `createMany` (audit) | 1 |
+| **Total** | **2** |
+
+| Caller validation (once) | Queries |
+|--------------------------|---------|
+| Fetch all households | 1 |
+| Fetch ticket prices | 1 |
+| **Total** | **2** |
+
+**Full import:** 2 + (50 households × ~7 chunks × 2 queries) = **~702 queries** ✅
+
+### Files to Update
+
+| File | Current | Update Required |
+|------|---------|-----------------|
+| `server/data/financesRepository.ts` | `createOrders` with `Promise.all` + internal validation | ✅ `createManyAndReturn` + audit, trusts caller |
+| `server/routes/api/order/index.put.ts` | Calls `createOrders`, returns `OrderDisplay[]` | ✅ Validate, chunk, pass `householdId`, return IDs (household powermode) |
+| `server/routes/api/admin/billing/import.post.ts` | Calls `createOrders` per household | ✅ Validate, chunk, `Promise.all`, pass `householdId` |
+| `composables/useBookingValidation.ts` | `OrderCreateSchema` | ✅ Add `OrderCreateWithPriceSchema` |
+| Season activation (new) | N/A | Follow caller pattern |
+| Daily scaffolding (new) | N/A | Follow caller pattern |
+
+---
+
+### Why Rolling Window Helps
+
+| Approach | Orders at Activation | Daily Scaffolding |
+|----------|---------------------|-------------------|
+| Full season (180 days) | 21,600 | 0 |
+| **Rolling 60 days** | ~7,200 | ~120/day ✅ |
+
+Rolling window keeps both activation AND daily maintenance well within limits.
+
+---
+
+## Season Activation (One-Time)
+
+When admin activates a season:
+
+1. **Clip preferences** for all inhabitants to match `cookingDays`
+2. **Scaffold pre-bookings** for next 60 days only
+
+### Query Budget (Activation)
+
+| Per Household (~5 inhabitants) | Queries |
+|--------------------------------|---------|
+| Fetch season + dinner events (60 days) | ~3 |
+| Fetch household + inhabitants | ~2 |
+| Clip preferences | 5 |
+| Fetch existing orders | ~1 |
+| Create pre-bookings (5 × 40 events ÷ 8) | ~25 |
+| **Total per household** | **~36** ✅ |
+
+**Full activation:** ~35 households × ~36 queries = ~1,260 queries
+
+Still needs household sharding (sequential calls), but much lighter than full-season scaffolding.
 
 ---
 
@@ -393,63 +495,21 @@ export async function syncHouseholdOrders(
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `composables/useSeasonActivation.ts` | Create | `clipPreferencesToSeason()`, `getWeekdayFromDate()` |
+| **Scheduled Tasks** |
+| `server/tasks/daily-maintenance.ts` | Create | Daily cron task definition |
+| `server/tasks/monthly-billing.ts` | Create | Monthly cron task definition |
+| **Business Logic** |
+| `server/utils/dailyMaintenance.ts` | Create | Consume, close, transact, scaffold |
+| `server/utils/monthlyBilling.ts` | Create | Invoice generation |
+| `server/utils/orderScaffolding.ts` | Create | Pre-booking creation logic |
+| **Composables** |
+| `composables/useSeasonActivation.ts` | Create | `clipPreferencesToSeason()` |
 | `composables/useOrderSync.ts` | Create | `computeOrderSync()` |
-| `server/data/seasonActivationRepository.ts` | Create | `syncHouseholdOrders()` |
+| **API Endpoints** |
 | `server/routes/api/admin/season/[id]/activate.post.ts` | Create | Activation orchestrator |
-| `server/routes/api/admin/household/[id]/sync-orders.post.ts` | Create | Per-household sync |
-| `server/routes/api/admin/household/inhabitants/[id].post.ts` | Modify | Clip + sync on preference save |
-| `stores/plan.ts` | Extend | `activateSeason()` action with progress |
-
----
-
-## Integration Points
-
-### Existing Powermode
-
-The existing `updateAllInhabitantPreferences()` in `households.ts` should trigger clip + sync:
-
-```typescript
-// After powermode updates all inhabitants in a household
-await $fetch(`/api/admin/household/${householdId}/sync-orders`, {
-  method: 'POST',
-  body: { seasonId: activeSeasonId }
-})
-```
-
-### Heynabo Import
-
-When importing inhabitants from Heynabo, sync the household:
-
-```typescript
-// After creating new inhabitant
-await $fetch(`/api/admin/household/${householdId}/sync-orders`, {
-  method: 'POST',
-  body: { seasonId: activeSeasonId }
-})
-```
-
-### UI Progress Feedback
-
-```typescript
-// stores/plan.ts
-const activateSeason = async (seasonId: number) => {
-  activationProgress.value = { current: 0, total: 0, status: 'loading' }
-
-  const households = await $fetch('/api/admin/household')
-  activationProgress.value.total = households.length
-
-  for (const household of households) {
-    await $fetch(`/api/admin/household/${household.id}/sync-orders`, {
-      method: 'POST',
-      body: { seasonId }
-    })
-    activationProgress.value.current++
-  }
-
-  activationProgress.value.status = 'complete'
-}
-```
+| **Configuration** |
+| `nuxt.config.ts` | Modify | Add `scheduledTasks` |
+| `wrangler.toml` | Modify | Add `[triggers] crons` |
 
 ---
 
@@ -457,22 +517,23 @@ const activateSeason = async (seasonId: number) => {
 
 | Test Type | Coverage |
 |-----------|----------|
-| Unit | `clipPreferencesToSeason()` - all weekday combinations |
-| Unit | `computeOrderSync()` - all preference/order state combinations |
-| Unit | `getWeekdayFromDate()` - date to Danish weekday mapping |
-| E2E | Season activation flow with progress |
-| E2E | Preference save triggers order sync |
-| E2E | New inhabitant gets clipped preferences + orders |
-| E2E | Idempotency (re-activation produces same result) |
-| E2E | Respects RELEASED/CLOSED orders (immutable) |
+| **Unit** | `clipPreferencesToSeason()` - all weekday combinations |
+| **Unit** | `computeOrderSync()` - all preference/order state combinations |
+| **Unit** | `scaffoldPreBookingsForDate()` - idempotency |
+| **E2E** | Season activation creates 60-day pre-bookings |
+| **E2E** | Daily maintenance consumes + scaffolds correctly |
+| **E2E** | Monthly billing generates invoices |
+| **E2E** | Preference save syncs pre-bookings within window |
+| **E2E** | User can book beyond 60-day window manually |
+| **E2E** | Idempotency (re-run produces same result) |
 
 ---
 
 ## ADR Compliance
 
 - **ADR-007:** Store handles activation with progress state, components show loading
-- **ADR-009:** Per-household calls stay within D1's 1,000 query limit
-- **ADR-010:** Clip/sync pure functions in composables, serialization in repository
+- **ADR-009:** Rolling window + daily scaffolding stays within D1's 1,000 query limit
+- **ADR-010:** Pure functions in composables, serialization in repository
 - **ADR-011:** Respects order states (only BOOKED orders modified)
 - **ADR-012:** Use `Prisma.skip` for optional fields in order creation
 
@@ -480,7 +541,10 @@ const activateSeason = async (seasonId: number) => {
 
 ## Design Decisions
 
-1. **`bookedByUserId`:** Set to `null` (SYSTEM) - orders are system-generated, not user-booked
-2. **Activation trigger:** Manual admin action - admin explicitly activates season via UI
-3. **Audit trail:** Yes - order creation logs first `OrderHistory` entry (action: `SYSTEM_CREATED`)
-4. **Retry handling:** Operation is idempotent - simply re-run activation if it fails
+1. **`bookedByUserId`:** Set to `null` (SYSTEM) - pre-bookings are system-generated
+2. **Activation trigger:** Manual admin action via UI
+3. **Audit trail:** Order creation logs `OrderHistory` entry (action: `SYSTEM_CREATED`)
+4. **Retry handling:** All operations are idempotent - re-run safely
+5. **Rolling window:** 60 days - balances UX (users see upcoming dinners) with efficiency
+6. **Cron timing:** Daily at 02:00, Monthly at 04:00 Copenhagen time
+7. **User bookings:** Users can manually book any future dinner, including beyond 60-day window

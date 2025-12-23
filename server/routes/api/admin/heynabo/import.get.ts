@@ -1,38 +1,31 @@
-import {defineEventHandler, setResponseStatus} from 'h3'
-import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
-import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
-import {saveHousehold} from '~~/server/data/prismaRepository'
+import {defineEventHandler, setResponseStatus, getQuery} from 'h3'
+import {runHeynaboImport} from '~~/server/utils/heynaboImportService'
+import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const {createHouseholdsFromImport} = useHeynaboValidation()
 
-// Returns imported locations and members from HeyNabo
-export default defineEventHandler(async (event): Promise<HouseholdDetail[]> => {
+/**
+ * GET /api/admin/heynabo/import
+ *
+ * Manual trigger for Heynabo synchronization (admin UI).
+ * Same logic as cron task, but triggered via HTTP.
+ *
+ * Query params:
+ * - triggeredBy: "ADMIN:<userId>" for manual triggers
+ */
+export default defineEventHandler(async (event): Promise<HeynaboImportResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    // Business logic - ADR-002 compliant
+    const query = getQuery(event)
+    const triggeredBy = (query.triggeredBy as string) || 'ADMIN'
+
     try {
-        // 1. Fetch data from Heynabo API
-        console.info("🏠 > IMPORT > Fetching data from Heynabo API")
-        const {locations, members} = await importFromHeynabo()
-        console.info(`🏠 > IMPORT > Fetched ${locations.length} locations and ${members.length} members`)
-
-        // 2. Transform to domain models
-        console.info("🏠 > IMPORT > Transforming to household domain models")
-        const households = createHouseholdsFromImport(locations, members)
-        console.info(`🏠 > IMPORT > Created ${households.length} households with ${households.reduce((sum, h) => sum + (h.inhabitants?.length || 0), 0)} inhabitants`)
-
-        // 3. Save to database
-        console.info(`🏠 > IMPORT > Saving ${households.length} households to database`)
-        const result = await Promise.all(households.map(household => saveHousehold(d1Client, household)))
-        console.info(`🏠 > IMPORT > Successfully saved ${result.length} households`)
-
+        const result = await runHeynaboImport(d1Client, triggeredBy)
         setResponseStatus(event, 200)
         return result
     } catch (error) {
-        return throwH3Error("🏠 > IMPORT > Import operation failed", error)
+        return throwH3Error('🏠 > IMPORT > Import operation failed', error)
     }
 })

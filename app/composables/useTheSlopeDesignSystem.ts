@@ -1,10 +1,9 @@
 import type {WeekDay} from '~/types/dateTypes'
 import type {AvatarProps, ButtonProps} from '@nuxt/ui'
-import heynaboLogo from '~/assets/heynabo.jpeg'
 
 // NuxtUI size types extracted from component props
-type NuxtUISize = NonNullable<ButtonProps['size']>
-type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUISize = NonNullable<ButtonProps['size']>
+export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
 
 /**
  * Color System - TheSlope Design System
@@ -42,34 +41,29 @@ type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
  * COLOR - For NuxtUI component `color` prop
  *
  * Use these string values directly in component color props.
- *
- * @example
- * ```vue
- * <UButton :color="COLOR.primary">Save</UButton>
- * <UBadge :color="COLOR.mocha">Mocha Mousse</UBadge>
  * <UAlert :color="COLOR.warning">Warning!</UAlert>
  * ```
  */
 export const COLOR = {
-  // Semantic colors (mapped in app.config.ts → ui.colors)
-  primary: 'primary',       // Amber (mocha/brown) - brand color, use for non-hero contexts
-  secondary: 'secondary',   // Pink - secondary actions
-  success: 'success',       // Green - success states, active
-  error: 'error',           // Red - errors, cancellations
-  warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
-  info: 'info',             // Violet - information messages
-  neutral: 'neutral',       // Sky - neutral/disabled
+    // Semantic colors (mapped in app.config.ts → ui.colors)
+    primary: 'primary',       // Amber (mocha/brown) - brand color, use for non-hero contexts
+    secondary: 'secondary',   // Pink - secondary actions
+    success: 'success',       // Green - success states, active
+    error: 'error',           // Red - errors, cancellations
+    warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
+    info: 'info',             // Violet - information messages
+    neutral: 'neutral',       // Sky - neutral/disabled
 
-  // Brand Pantone colors (custom palettes in app.config.ts)
-  mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
-  peach: 'peach',          // Warm, countdown timers
-  pink: 'pink',            // Pink Lemonade - vibrant
-  orange: 'orange',        // Mandarin Orange - energetic (same as warning)
-  party: 'party',          // Party Punch - deep burgundy
-  ocean: 'ocean',          // Ocean/Sky - cool blue
-  winery: 'winery',        // Winery - deep red
-  caramel: 'caramel',      // Caramel - warm brown
-  bonbon: 'bonbon'         // Bonbon - light purple
+    // Brand Pantone colors (custom palettes in app.config.ts)
+    mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
+    peach: 'peach',          // Warm, countdown timers
+    pink: 'pink',            // Pink Lemonade - vibrant
+    orange: 'orange',        // Mandarin Orange - energetic (same as warning)
+    party: 'party',          // Party Punch - deep burgundy
+    ocean: 'ocean',          // Ocean/Sky - cool blue
+    winery: 'winery',        // Winery - deep red
+    caramel: 'caramel',      // Caramel - warm brown
+    bonbon: 'bonbon'         // Bonbon - light purple
 } as const
 
 /** NuxtUI color type - derived from COLOR constant for type-safe component props */
@@ -83,78 +77,73 @@ export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
  * BG - Background color scale (50-950)
  *
  * Use for dynamic background colors.
- *
- * @example
- * ```ts
- * const bgClass = BG.mocha[500]  // 'bg-amber-500'
- * const lightBg = BG.peach[50]   // 'bg-peach-50'
  * ```
  */
 export const BG = {
-  mocha: {
-    50: 'bg-amber-50',
-    100: 'bg-amber-100',
-    200: 'bg-amber-200',
-    300: 'bg-amber-300',
-    400: 'bg-amber-400',
-    500: 'bg-amber-500',    // PRIMARY
-    600: 'bg-amber-600',
-    700: 'bg-amber-700',
-    800: 'bg-amber-800',
-    900: 'bg-amber-900',
-    950: 'bg-amber-950'
-  },
-  peach: {
-    50: 'bg-peach-50',
-    200: 'bg-peach-200',    // Calendar - regular dinner events
-    300: 'bg-peach-300',    // Countdown, calendar
-    400: 'bg-peach-400',    // Calendar - next dinner, countdown
-    500: 'bg-peach-500',
-    700: 'bg-peach-700',
-    950: 'bg-peach-950'
-  },
-  pink: {
-    50: 'bg-pink-50',
-    500: 'bg-pink-500',     // Landing section
-    800: 'bg-pink-800'
-  },
-  orange: {
-    50: 'bg-orange-50',
-    100: 'bg-orange-100',
-    500: 'bg-orange-500',   // Landing section
-    600: 'bg-orange-600'
-  },
-  party: {
-    50: 'bg-party-50',
-    500: 'bg-party-500',
-    700: 'bg-party-700',    // Landing section, vibrant kitchen
-    800: 'bg-party-800'
-  },
-  ocean: {
-    50: 'bg-ocean-50',
-    200: 'bg-ocean-200',    // Chef calendar - future cookings
-    300: 'bg-ocean-300',    // Chef calendar - countdown
-    400: 'bg-ocean-400',    // Chef calendar - next cooking
-    500: 'bg-ocean-500',    // Landing section
-    600: 'bg-ocean-600',
-    700: 'bg-ocean-700',
-    800: 'bg-ocean-800'
-  },
-  gray: {
-    50: 'bg-gray-50',
-    100: 'bg-gray-100',
-    200: 'bg-gray-200',
-    400: 'bg-gray-400',
-    500: 'bg-gray-500',
-    600: 'bg-gray-600',
-    700: 'bg-gray-700',
-    800: 'bg-gray-800',
-    900: 'bg-gray-900'
-  },
-  blue: {
-    100: 'bg-blue-100',     // Header
-    500: 'bg-blue-500'
-  }
+    mocha: {
+        50: 'bg-amber-50',
+        100: 'bg-amber-100',
+        200: 'bg-amber-200',
+        300: 'bg-amber-300',
+        400: 'bg-amber-400',
+        500: 'bg-amber-500',    // PRIMARY
+        600: 'bg-amber-600',
+        700: 'bg-amber-700',
+        800: 'bg-amber-800',
+        900: 'bg-amber-900',
+        950: 'bg-amber-950'
+    },
+    peach: {
+        50: 'bg-peach-50',
+        200: 'bg-peach-200',    // Calendar - regular dinner events
+        300: 'bg-peach-300',    // Countdown, calendar
+        400: 'bg-peach-400',    // Calendar - next dinner, countdown
+        500: 'bg-peach-500',
+        700: 'bg-peach-700',
+        950: 'bg-peach-950'
+    },
+    pink: {
+        50: 'bg-pink-50',
+        500: 'bg-pink-500',     // Landing section
+        800: 'bg-pink-800'
+    },
+    orange: {
+        50: 'bg-orange-50',
+        100: 'bg-orange-100',
+        500: 'bg-orange-500',   // Landing section
+        600: 'bg-orange-600'
+    },
+    party: {
+        50: 'bg-party-50',
+        500: 'bg-party-500',
+        700: 'bg-party-700',    // Landing section, vibrant kitchen
+        800: 'bg-party-800'
+    },
+    ocean: {
+        50: 'bg-ocean-50',
+        200: 'bg-ocean-200',    // Chef calendar - future cookings
+        300: 'bg-ocean-300',    // Chef calendar - countdown
+        400: 'bg-ocean-400',    // Chef calendar - next cooking
+        500: 'bg-ocean-500',    // Landing section
+        600: 'bg-ocean-600',
+        700: 'bg-ocean-700',
+        800: 'bg-ocean-800'
+    },
+    gray: {
+        50: 'bg-gray-50',
+        100: 'bg-gray-100',
+        200: 'bg-gray-200',
+        400: 'bg-gray-400',
+        500: 'bg-gray-500',
+        600: 'bg-gray-600',
+        700: 'bg-gray-700',
+        800: 'bg-gray-800',
+        900: 'bg-gray-900'
+    },
+    blue: {
+        100: 'bg-blue-100',     // Header
+        500: 'bg-blue-500'
+    }
 } as const
 
 /**
@@ -168,73 +157,73 @@ export const BG = {
  * ```
  */
 export const TEXT = {
-  mocha: {
-    50: 'text-amber-50',
-    900: 'text-amber-900',
-    950: 'text-amber-950'
-  },
-  peach: {
-    50: 'text-peach-50',
-    300: 'text-peach-300',    // Countdown timer
-    400: 'text-peach-400',    // Countdown timer
-    600: 'text-peach-600',    // Calendar - rings
-    800: 'text-peach-800',    // Calendar - regular dinner events
-    950: 'text-peach-950'
-  },
-  pink: {
-    50: 'text-pink-50'
-  },
-  orange: {
-    100: 'text-orange-100'
-  },
-  party: {
-    50: 'text-party-50'
-  },
-  ocean: {
-    50: 'text-ocean-50',
-    300: 'text-ocean-300',    // Chef calendar - countdown timer
-    400: 'text-ocean-400',    // Chef calendar - countdown timer
-    600: 'text-ocean-600',    // Chef calendar - rings
-    800: 'text-ocean-800'     // Chef calendar - future cookings
-  },
-  gray: {
-    600: 'text-gray-600',
-    700: 'text-gray-700',
-    900: 'text-gray-900'
-  },
-  blue: {
-    900: 'text-blue-900'
-  },
-  white: 'text-white'
+    mocha: {
+        50: 'text-amber-50',
+        900: 'text-amber-900',
+        950: 'text-amber-950'
+    },
+    peach: {
+        50: 'text-peach-50',
+        300: 'text-peach-300',    // Countdown timer
+        400: 'text-peach-400',    // Countdown timer
+        600: 'text-peach-600',    // Calendar - rings
+        800: 'text-peach-800',    // Calendar - regular dinner events
+        950: 'text-peach-950'
+    },
+    pink: {
+        50: 'text-pink-50'
+    },
+    orange: {
+        100: 'text-orange-100'
+    },
+    party: {
+        50: 'text-party-50'
+    },
+    ocean: {
+        50: 'text-ocean-50',
+        300: 'text-ocean-300',    // Chef calendar - countdown timer
+        400: 'text-ocean-400',    // Chef calendar - countdown timer
+        600: 'text-ocean-600',    // Chef calendar - rings
+        800: 'text-ocean-800'     // Chef calendar - future cookings
+    },
+    gray: {
+        600: 'text-gray-600',
+        700: 'text-gray-700',
+        900: 'text-gray-900'
+    },
+    blue: {
+        900: 'text-blue-900'
+    },
+    white: 'text-white'
 } as const
 
 /**
  * BORDER - Border color scale
  */
 export const BORDER = {
-  gray: {
-    200: 'border-gray-200',
-    500: 'border-gray-500',
-    600: 'border-gray-600',
-    700: 'border-gray-700',
-    800: 'border-gray-800'
-  },
-  peach: {
-    400: 'border-peach-400'    // Calendar - countdown, rings
-  },
-  ocean: {
-    400: 'border-ocean-400',   // Chef calendar - countdown, rings
-    700: 'border-ocean-700'    // Chef calendar - selected state
-  },
-  orange: {
-    500: 'border-orange-500'
-  },
-  red: {
-    500: 'border-red-500'      // Deadline - critical
-  },
-  amber: {
-    500: 'border-amber-500'    // Deadline - warning
-  }
+    gray: {
+        200: 'border-gray-200',
+        500: 'border-gray-500',
+        600: 'border-gray-600',
+        700: 'border-gray-700',
+        800: 'border-gray-800'
+    },
+    peach: {
+        400: 'border-peach-400'    // Calendar - countdown, rings
+    },
+    ocean: {
+        400: 'border-ocean-400',   // Chef calendar - countdown, rings
+        700: 'border-ocean-700'    // Chef calendar - selected state
+    },
+    orange: {
+        500: 'border-orange-500'
+    },
+    red: {
+        500: 'border-red-500'      // Deadline - critical
+    },
+    amber: {
+        500: 'border-amber-500'    // Deadline - warning
+    }
 } as const
 
 // ============================================================================
@@ -247,25 +236,27 @@ export const BORDER = {
  * Pre-defined text styles for consistent typography across the app.
  */
 export const TYPOGRAPHY = {
-  // Headers and titles
-  heroTitle: 'text-2xl md:text-4xl font-extrabold uppercase',
-  sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
-  cardTitle: 'text-lg font-semibold',
-  sectionSubheading: 'text-sm font-semibold text-gray-700 dark:text-gray-300',
+    // Headers and titles
+    heroTitle: 'text-2xl md:text-4xl font-extrabold uppercase',
+    sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
+    cardTitle: 'text-lg font-semibold',
+    sectionSubheading: 'text-sm font-semibold text-gray-700 dark:text-gray-300',
+    sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-amber-100',
+    sectionIconLight: 'text-2xl text-amber-50 dark:text-amber-100',
 
-  // Body text
-  bodyText: 'text-base',
-  bodyTextSmall: 'text-sm',
-  bodyTextMedium: 'text-sm font-medium',
-  bodyTextMuted: 'text-sm text-gray-600 dark:text-gray-400',
-  bodyTextPlaceholder: 'text-sm text-gray-500',
+    // Body text
+    bodyText: 'text-base',
+    bodyTextSmall: 'text-sm',
+    bodyTextMedium: 'text-sm font-medium',
+    bodyTextMuted: 'text-sm text-gray-600 dark:text-gray-400',
+    bodyTextPlaceholder: 'text-sm text-gray-500',
 
-  // Small text
-  finePrint: 'text-xs',
-  caption: 'text-xs font-medium',
+    // Small text
+    finePrint: 'text-xs',
+    caption: 'text-xs font-medium',
 
-  // Footer
-  footerText: 'text-xs text-white dark:text-amber-50'
+    // Footer
+    footerText: 'text-xs text-white dark:text-amber-50'
 } as const
 
 /**
@@ -274,28 +265,39 @@ export const TYPOGRAPHY = {
  * Pre-built layout classes for common UI structures.
  */
 export const LAYOUTS = {
-  // Footer
-  footer: 'flex flex-row items-start justify-between p-4',
-  footerStacked: 'flex flex-col items-center gap-2 p-4',
+    // Footer
+    footer: 'flex flex-row items-start justify-between p-4',
+    footerStacked: 'flex flex-col items-center gap-2 p-4',
 
-  // Hero sections
-  hero: 'relative min-h-[300px] md:min-h-[400px] flex flex-col justify-center items-center text-center p-6 md:p-12',
+    // Hero sections
+    hero: 'relative min-h-[300px] md:min-h-[400px] flex flex-col justify-center items-center text-center p-6 md:p-12',
 
-  // Cards
-  card: 'rounded-lg border p-4',
-  cardCompact: 'rounded-lg border p-2',
+    // Cards
+    card: 'rounded-lg border p-4',
+    cardCompact: 'rounded-lg border p-2',
 
-  // Grids
-  gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
-  gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
+    // Grids
+    gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
+    gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
 
-  // Section content (card body sections)
-  sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
-  sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
-  sectionContentCompact: 'px-4 py-3 space-y-3',                    // Compact variant
+    // Master-detail page layout (for UPage :ui prop)
+    // 1/4 master (left), 3/4 detail (center) on desktop, stacked on mobile
+    masterDetailPage: {
+        root: 'flex flex-col md:grid md:grid-cols-12 gap-2',
+        left: 'md:col-span-3',
+        center: 'md:col-span-9'
+    },
 
-  // Dividers
-  sectionDivider: 'border-t border-gray-200 dark:border-gray-800'
+    // Responsive card rounding: no rounding on mobile (full-bleed), rounded on desktop
+    cardResponsive: 'rounded-none md:rounded-lg',
+
+    // Section content (card body sections)
+    sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
+    sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
+    sectionContentCompact: 'px-4 py-3 space-y-3',                    // Compact variant
+
+    // Dividers
+    sectionDivider: 'border-t border-gray-200 dark:border-gray-800'
 } as const
 
 /**
@@ -304,31 +306,31 @@ export const LAYOUTS = {
  * Complete background styling for major page sections.
  */
 export const BACKGROUNDS = {
-  // Landing page sections
-  landing: {
-    titleBar: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
-    ticker: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
-    section1: `${BG.pink[500]} ${TEXT.pink[50]}`,
-    section2: `${BG.orange[500]} ${TEXT.orange[100]}`,
-    section3: `${BG.party[700]} ${TEXT.party[50]}`,
-    section4: `${BG.ocean[500]} ${TEXT.ocean[50]}`
-  },
+    // Landing page sections
+    landing: {
+        titleBar: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
+        ticker: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
+        section1: `${BG.pink[500]} ${TEXT.pink[50]}`,
+        section2: `${BG.orange[500]} ${TEXT.orange[100]}`,
+        section3: `${BG.party[700]} ${TEXT.party[50]}`,
+        section4: `${BG.ocean[500]} ${TEXT.ocean[50]}`
+    },
 
-  // Hero sections (family-facing)
-  hero: {
-    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,      // PRIMARY
-    peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown
-    pink: `${BG.pink[500]} ${TEXT.pink[50]}`,         // Accent
-    orange: `${BG.orange[500]} ${TEXT.orange[100]}`   // Accent
-  },
+    // Hero sections (family-facing)
+    hero: {
+        mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,      // PRIMARY
+        peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown
+        pink: `${BG.pink[500]} ${TEXT.pink[50]}`,         // Accent
+        orange: `${BG.orange[500]} ${TEXT.orange[100]}`   // Accent
+    },
 
-  // Navigation
-  header: `${BG.blue[100]} ${TEXT.blue[900]}`,
+    // Navigation
+    header: `${BG.blue[100]} ${TEXT.blue[900]}`,
 
-  // Cards
-  card: 'bg-white',
-  cardSubtle: `${BG.gray[50]}`,
-  cardDark: `${BG.gray[900]} ${TEXT.white}`
+    // Cards
+    card: 'bg-white',
+    cardSubtle: `${BG.gray[50]}`,
+    cardDark: `${BG.gray[900]} ${TEXT.white}`
 } as const
 
 /**
@@ -337,72 +339,99 @@ export const BACKGROUNDS = {
  * Ready-to-use complete styling for common components.
  */
 export const COMPONENTS = {
-  // Kitchen panels (functional data) - Vibrant Pantone colors
-  kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
+    // Kitchen panels (functional data) - Vibrant Pantone colors
+    kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
 
-  kitchenPanel: {
-    TAKEAWAY: `bg-warning-500 ${TEXT.white} border-warning-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-    DINEIN: `${BG.party[700]} ${TEXT.white} border-party-800 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-    DINEINLATE: `${BG.orange[500]} ${TEXT.white} border-orange-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-    RELEASED: `${BG.gray[500]} ${TEXT.white} ${BORDER.gray[600]} border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`
-  },
-
-  // Empty state alert - centered with large text and emoji
-  emptyStateAlert: {
-    root: 'text-center',
-    title: 'text-lg md:text-xl font-semibold',
-    description: 'text-sm md:text-base'
-  },
-
-  // Power mode - family-wide bulk editing pattern
-  powerMode: {
-    color: 'warning' as const,
-    icon: 'i-fluent-emoji-high-contrast-woman-superhero',
-    buttonIcon: 'i-heroicons-bolt',
-    alert: {
-      color: 'warning' as const,
-      variant: 'soft' as const,
-      icon: 'i-fluent-emoji-high-contrast-woman-superhero'
+    kitchenPanel: {
+        TAKEAWAY: `bg-warning-500 ${TEXT.white} border-warning-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
+        DINEIN: `${BG.party[700]} ${TEXT.white} border-party-800 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
+        DINEINLATE: `${BG.orange[500]} ${TEXT.white} border-orange-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
+        RELEASED: `${BG.gray[500]} ${TEXT.white} ${BORDER.gray[600]} border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`
     },
-    card: {
-      color: 'warning' as const,
-      variant: 'outline' as const
+
+    // Empty state alert - centered with large text and emoji
+    emptyStateAlert: {
+        root: 'text-center',
+        title: 'text-lg md:text-xl font-semibold',
+        description: 'text-sm md:text-base'
+    },
+
+    // Empty state alert compact - subtle inline empty state (mocha/past color)
+    emptyStateAlertCompact: {
+        root: `text-center py-2 ${BG.mocha[100]} ${TEXT.mocha[900]} rounded-lg`,
+        title: 'text-sm font-normal',
+        description: 'text-xs'
+    },
+
+    // Power mode - family-wide bulk editing pattern
+    powerMode: {
+        color: 'warning' as const,
+        icon: 'i-fluent-emoji-high-contrast-woman-superhero',
+        buttonIcon: 'i-heroicons-bolt',
+        alert: {
+            color: 'warning' as const,
+            variant: 'soft' as const,
+            icon: 'i-fluent-emoji-high-contrast-woman-superhero'
+        },
+        card: {
+            color: 'warning' as const,
+            variant: 'outline' as const
+        }
+    },
+
+    // Table interactions - row selection and click patterns
+    table: {
+        selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
+        clickableCell: 'cursor-pointer',
+        selectedCell: 'bg-secondary-50 dark:bg-secondary-950',
+        /**
+         * UTable :ui prop for consistent cell styling
+         * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2)
+         */
+        ui: {td: 'py-1 md:py-2'}
+    },
+
+    // Card action buttons - positioned in card corners or footers
+    cardAction: {
+        // Neutral action (logout, cancel, secondary actions)
+        neutral: {
+            color: 'primary' as const,
+            variant: 'soft' as const
+        },
+        // Destructive action (delete, remove)
+        destructive: {
+            color: 'error' as const,
+            variant: 'outline' as const
+        }
+    },
+
+    // Calendar UI configuration (UCalendar)
+    calendar: {
+        cellTrigger: 'data-[outside-view]:hidden'
+    },
+
+    // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
+    // Curated defaults for maximum readability on warm hero backgrounds
+    heroPanel: {
+        // High-contrast light panel (for CTAs, forms, important actions)
+        light: {
+            container: 'bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-white/50',
+            primaryButton: 'warning' as const,   // NuxtUI 'warning' → orange palette (warm Pantone accent)
+            secondaryButton: 'neutral' as const  // Neutral for cancel/secondary actions
+        },
+        // Subtle panel (for supplementary content, less prominent)
+        subtle: {
+            container: 'bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20',
+            primaryButton: 'primary' as const,   // NuxtUI 'primary' → amber palette (mocha color)
+            secondaryButton: 'neutral' as const
+        },
+        // Dark panel (for contrast variation on light heroes)
+        dark: {
+            container: 'bg-gray-900/80 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50',
+            primaryButton: 'peach' as const,     // Custom color mapped in app.config.ts → peach palette
+            secondaryButton: 'neutral' as const
+        }
     }
-  },
-
-  // Table interactions - row selection and click patterns
-  table: {
-    selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
-    clickableCell: 'cursor-pointer'
-  },
-
-  // Calendar UI configuration (UCalendar)
-  calendar: {
-    cellTrigger: 'data-[outside-view]:hidden'
-  },
-
-  // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
-  // Curated defaults for maximum readability on warm hero backgrounds
-  heroPanel: {
-    // High-contrast light panel (for CTAs, forms, important actions)
-    light: {
-      container: 'bg-white/60 backdrop-blur-sm rounded-lg p-4 border border-white/50',
-      primaryButton: 'warning' as const,   // NuxtUI 'warning' → orange palette (warm Pantone accent)
-      secondaryButton: 'neutral' as const  // Neutral for cancel/secondary actions
-    },
-    // Subtle panel (for supplementary content, less prominent)
-    subtle: {
-      container: 'bg-white/30 backdrop-blur-sm rounded-lg p-4 border border-white/20',
-      primaryButton: 'primary' as const,   // NuxtUI 'primary' → amber palette (mocha color)
-      secondaryButton: 'neutral' as const
-    },
-    // Dark panel (for contrast variation on light heroes)
-    dark: {
-      container: 'bg-gray-900/80 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50',
-      primaryButton: 'peach' as const,     // Custom color mapped in app.config.ts → peach palette
-      secondaryButton: 'neutral' as const
-    }
-  }
 } as const
 
 // ============================================================================
@@ -422,9 +451,9 @@ export const COMPONENTS = {
  * ```
  */
 export function getKitchenPanelClasses(
-  mode: 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED'
+    mode: 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED'
 ): string {
-  return COMPONENTS.kitchenPanel[mode]
+    return COMPONENTS.kitchenPanel[mode]
 }
 
 /**
@@ -433,9 +462,9 @@ export function getKitchenPanelClasses(
  * Maps ticket types to NuxtUI colors
  */
 export const TICKET_TYPE_COLORS = {
-  ADULT: COLOR.primary,
-  CHILD: COLOR.success,
-  BABY: COLOR.neutral
+    ADULT: COLOR.primary,
+    CHILD: COLOR.success,
+    BABY: COLOR.neutral
 } as const
 
 /**
@@ -450,35 +479,55 @@ export const TICKET_TYPE_COLORS = {
  * ```
  */
 export const ICONS = {
-  // Navigation & entities
-  team: 'i-fluent-mdl2-team-favorite',
-  calendar: 'i-heroicons-calendar',
-  calendarDays: 'i-heroicons-calendar-days',
-  user: 'i-heroicons-user',
-  users: 'i-heroicons-users',
-  userGroup: 'i-heroicons-user-group',
-  ticket: 'i-heroicons-ticket',
+    // Navigation & entities
+    team: 'i-fluent-mdl2-team-favorite',
+    calendar: 'i-heroicons-calendar',
+    calendarDays: 'i-heroicons-calendar-days',
+    user: 'i-heroicons-user',
+    users: 'i-heroicons-users',
+    userGroup: 'i-heroicons-user-group',
+    ticket: 'i-heroicons-ticket',
 
-  // Header navigation
-  dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
-  chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
-  login: 'i-guidance-entry',
-  admin: 'i-pajamas-admin',
-  menu: 'i-heroicons-bars-3',
-  help: 'i-heroicons-question-mark-circle',
+    // Header navigation
+    dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
+    chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    household: 'i-heroicons-home',
+    allergy: 'i-mdi-food-allergy-off-outline',
+    economy: 'i-heroicons-currency-dollar',
+    login: 'i-guidance-entry',
+    logout: 'i-tdesign-wave-bye',
+    admin: 'i-pajamas-admin',
+    menu: 'i-heroicons-bars-3',
+    help: 'i-heroicons-question-mark-circle',
 
-  // Actions & feedback
-  edit: 'i-heroicons-pencil',
-  check: 'i-heroicons-check',
-  checkCircle: 'i-heroicons-check-circle',
-  plusCircle: 'i-heroicons-plus-circle',
-  megaphone: 'i-heroicons-megaphone',
-  exclamationCircle: 'i-heroicons-exclamation-circle',
-  xMark: 'i-heroicons-x-mark',
-  arrowRight: 'i-heroicons-arrow-right',
+    // Actions & feedback
+    edit: 'i-heroicons-pencil',
+    chevronDown: 'i-heroicons-chevron-down',
+    chevronRight: 'i-heroicons-chevron-right',
+    check: 'i-heroicons-check',
+    checkCircle: 'i-heroicons-check-circle',
+    plusCircle: 'i-heroicons-plus-circle',
+    playCircle: 'i-heroicons-play-circle',
+    pauseCircle: 'i-heroicons-pause-circle',
+    megaphone: 'i-heroicons-megaphone',
+    exclamationCircle: 'i-heroicons-exclamation-circle',
+    xMark: 'i-heroicons-x-mark',
+    arrowRight: 'i-heroicons-arrow-right',
+    arrowLeft: 'i-heroicons-arrow-left',
+    arrowUp: 'i-heroicons-arrow-up',
+    sync: 'i-heroicons-arrow-path',
+    shoppingCart: 'i-heroicons-shopping-cart',
 
-  // Empty states
-  robotDead: 'i-mage-robot-dead'
+    // Empty states
+    robotDead: 'i-mage-robot-dead',
+
+    // Descriptive
+    mail: 'i-guidance-mail',
+    phone: 'i-guidance-phone',
+
+    // Time & info
+    clock: 'i-heroicons-clock',
+    info: 'i-heroicons-information-circle'
 } as const
 
 /**
@@ -493,12 +542,16 @@ export const ICONS = {
  * ```
  */
 export const IMG = {
-  heynabo: heynaboLogo,
-  /**
-   * Default dinner picture for heroes without custom menu pictures
-   * Located in public/ folder (ADR-013), accessible from root URL
-   */
-  defaultDinnerPicture: '/fællesspisning_0.jpeg'
+    /**
+     * Heynabo logo for external service links
+     * Located in public/ folder, accessible from root URL
+     */
+    heynabo: '/heynabo.jpeg',
+    /**
+     * Default dinner picture for heroes without custom menu pictures
+     * Located in public/ folder (ADR-013), accessible from root URL
+     */
+    defaultDinnerPicture: '/fællesspisning_0.jpeg'
 } as const
 
 /**
@@ -522,41 +575,83 @@ export const IMG = {
  * Uses getters to return plain values while maintaining reactivity through isMd dependency.
  */
 export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
-  // Standard responsive: md on mobile, lg on desktop
-  get standard(): NuxtUISize { return isMd.value ? 'lg' : 'md' },
-  get standardIconSize(): string { return isMd.value ? '20' : '16' },
+    // Standard responsive: md on mobile, lg on desktop
+    get standard(): NuxtUISize {
+        return isMd.value ? 'lg' : 'md'
+    },
+    get standardIconSize(): string {
+        return isMd.value ? '20' : '16'
+    },
 
-  // Small responsive: sm on mobile, md on desktop
-  get small(): NuxtUISize { return isMd.value ? 'md' : 'sm' },
-  get smallIconSize(): string { return isMd.value ? '16' : '12' },
+    // Small responsive: sm on mobile, md on desktop
+    get small(): NuxtUISize {
+        return isMd.value ? 'md' : 'sm'
+    },
+    get smallIconSize(): string {
+        return isMd.value ? '16' : '12'
+    },
 
-  // Large responsive: lg on mobile, xl on desktop
-  get large(): NuxtUISize { return isMd.value ? 'xl' : 'lg' },
-  get largeIconSize(): string { return isMd.value ? '24' : '20' },
+    // Large responsive: lg on mobile, xl on desktop
+    get large(): NuxtUISize {
+        return isMd.value ? 'xl' : 'lg'
+    },
+    get largeIconSize(): string {
+        return isMd.value ? '24' : '20'
+    },
 
-  // Calendar: xl on desktop, sm on mobile (UCalendar sizing)
-  get calendar(): NuxtUISize { return isMd.value ? 'xl' : 'sm' },
+    // Calendar: xl on desktop, sm on mobile (UCalendar sizing)
+    get calendar(): NuxtUISize {
+        return isMd.value ? 'xl' : 'sm'
+    },
 
-  // Calendar months: 3 on desktop, 1 on mobile
-  get calendarMonths(): number { return isMd.value ? 3 : 1 },
+    // Calendar months: 3 on desktop, 1 on mobile
+    get calendarMonths(): number {
+        return isMd.value ? 3 : 1
+    },
 
-  // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
-  get calendarCircle(): string { return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs' },
+    // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
+    get calendarCircle(): string {
+        return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'
+    },
 
-  // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
-  get calendarAccordionDefault(): string | undefined { return isMd.value ? '0' : undefined },
+    // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
+    get calendarAccordionDefault(): string | undefined {
+        return isMd.value ? '0' : undefined
+    },
 
-  // Empty state avatar: 2xl on mobile, 3xl on desktop
-  get emptyStateAvatar(): NuxtUIAvatarSize { return isMd.value ? '3xl' : '2xl' },
+    // Agenda page size: 3 on mobile, 5 on desktop
+    get agendaPageSize(): number {
+        return isMd.value ? 5 : 3
+    },
 
-  // Static sizes (for when you need non-responsive)
-  xs: 'xs' as const,
-  sm: 'sm' as const,
-  md: 'md' as const,
-  lg: 'lg' as const,
-  xl: 'xl' as const,
-  '2xl': '2xl' as const,
-  '3xl': '3xl' as const
+    // Empty state avatar: 2xl on mobile, 3xl on desktop
+    get emptyStateAvatar(): NuxtUIAvatarSize {
+        return isMd.value ? '3xl' : '2xl'
+    },
+
+    // Static sizes (for when you need non-responsive)
+    xs: 'xs' as const,
+    sm: 'sm' as const,
+    md: 'md' as const,
+    lg: 'lg' as const,
+    xl: 'xl' as const,
+    '2xl': '2xl' as const,
+    '3xl': '3xl' as const
+})
+
+/**
+ * createResponsiveIcons - Responsive icon patterns
+ *
+ * Provides icons that change based on layout direction (mobile stacked vs desktop side-by-side).
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Icon helpers
+ */
+const createResponsiveIcons = (isMd: Ref<boolean>) => ({
+    // Arrow pointing to master panel: up on mobile (stacked), left on desktop (side-by-side)
+    get arrowToMaster(): string {
+        return isMd.value ? ICONS.arrowLeft : ICONS.arrowUp
+    }
 })
 
 /**
@@ -568,21 +663,21 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
  * @returns Orientation helpers
  */
 const createOrientations = (isMd: Ref<boolean>) => ({
-  /**
-   * Responsive orientation: vertical on mobile, horizontal on desktop
-   * Common for button groups, weekday selectors showing multiple items
-   */
-  responsive: computed(() => isMd.value ? 'horizontal' : 'vertical'),
+    /**
+     * Responsive orientation: vertical on mobile, horizontal on desktop
+     * Common for button groups, weekday selectors showing multiple items
+     */
+    responsive: computed(() => isMd.value ? 'horizontal' : 'vertical'),
 
-  /**
-   * Always horizontal (desktop/mobile)
-   */
-  horizontal: 'horizontal' as const,
+    /**
+     * Always horizontal (desktop/mobile)
+     */
+    horizontal: 'horizontal' as const,
 
-  /**
-   * Always vertical (desktop/mobile)
-   */
-  vertical: 'vertical' as const
+    /**
+     * Always vertical (desktop/mobile)
+     */
+    vertical: 'vertical' as const
 })
 
 /**
@@ -595,29 +690,29 @@ const createOrientations = (isMd: Ref<boolean>) => ({
  * @returns Weekday display helpers
  */
 const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
-  /**
-   * Get formatted weekday label (responsive)
-   * Desktop: 3 letters (e.g., "Man")
-   * Mobile: 1 letter (e.g., "M")
-   */
-  getLabel: (day: WeekDay) => formatWeekdayCompact(day, !isMd.value),
+    /**
+     * Get formatted weekday label (responsive)
+     * Desktop: 3 letters (e.g., "Man")
+     * Mobile: 1 letter (e.g., "M")
+     */
+    getLabel: (day: WeekDay) => formatWeekdayCompact(day, !isMd.value),
 
-  /**
-   * Badge props for weekday title headers (table columns)
-   * Matches HouseholdCard preferences-header styling
-   */
-  titleBadgeProps: {
-    color: 'neutral' as const,
-    variant: 'outline' as const,
-    ui: { rounded: 'rounded-none md:rounded-md' }
-  },
+    /**
+     * Badge props for weekday title headers (table columns)
+     * Matches HouseholdCard preferences-header styling
+     */
+    titleBadgeProps: {
+        color: 'neutral' as const,
+        variant: 'outline' as const,
+        class: 'rounded-none md:rounded-md'
+    },
 
-  /**
-   * UFieldGroup classes for weekday preference displays
-   * Used in table headers and weekday selector rows
-   * Responsive padding, borders, background, and minimum widths
-   */
-  fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
+    /**
+     * UFieldGroup classes for weekday preference displays
+     * Used in table headers and weekday selector rows
+     * Responsive padding, borders, background, and minimum widths
+     */
+    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
 })
 
 /**
@@ -638,12 +733,12 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
  * ```
  */
 const createPagination = (isMd: Ref<boolean>) => ({
-  /**
-   * Responsive sibling count:
-   * - Desktop (isMd): 1 sibling (shows 3 pages: prev, current, next)
-   * - Mobile (!isMd): 0 siblings (shows 1 page: current only)
-   */
-  siblingCount: computed(() => isMd.value ? 1 : 0)
+    /**
+     * Responsive sibling count:
+     * - Desktop (isMd): 1 sibling (shows 3 pages: prev, current, next)
+     * - Mobile (!isMd): 0 siblings (shows 1 page: current only)
+     */
+    siblingCount: computed(() => isMd.value ? 1 : 0)
 })
 
 /**
@@ -656,19 +751,21 @@ const createPagination = (isMd: Ref<boolean>) => ({
  * @returns Navigation configuration
  */
 const createNavigation = (isMd: Ref<boolean>) => ({
-  // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
-  link: {
-    color: 'neutral' as const,
-    variant: 'link' as const,
-    activeColor: 'primary' as const,
-    activeVariant: 'soft' as const
-  },
-  /**
-   * Whether to swap drawer content with main nav
-   * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
-   * - Mobile (!isMd): false - drawer links stay in drawer
-   */
-  get shouldSwapDrawerWithMain(): boolean { return isMd.value }
+    // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
+    link: {
+        color: 'neutral' as const,
+        variant: 'link' as const,
+        activeColor: 'primary' as const,
+        activeVariant: 'soft' as const
+    },
+    /**
+     * Whether to swap drawer content with main nav
+     * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
+     * - Mobile (!isMd): false - drawer links stay in drawer
+     */
+    get shouldSwapDrawerWithMain(): boolean {
+        return isMd.value
+    }
 })
 
 /**
@@ -713,26 +810,26 @@ const createNavigation = (isMd: Ref<boolean>) => ({
  * - CANCELLED: neutral (black/dark - NOT red, red is for deadline warnings)
  */
 export const DINNER_STATE_BADGES = {
-  SCHEDULED: {
-    label: 'Planlagt',
-    color: COLOR.mocha,
-    icon: 'i-heroicons-calendar'
-  },
-  ANNOUNCED: {
-    label: 'Annonceret',
-    color: COLOR.success,
-    icon: 'i-heroicons-megaphone'
-  },
-  CANCELLED: {
-    label: 'Aflyst',
-    color: COLOR.neutral,
-    icon: 'i-heroicons-x-circle'
-  },
-  CONSUMED: {
-    label: 'Afholdt',
-    color: COLOR.neutral,
-    icon: 'i-heroicons-check-circle'
-  }
+    SCHEDULED: {
+        label: 'Planlagt',
+        color: COLOR.mocha,
+        icon: 'i-heroicons-calendar'
+    },
+    ANNOUNCED: {
+        label: 'Annonceret',
+        color: COLOR.success,
+        icon: 'i-heroicons-megaphone'
+    },
+    CANCELLED: {
+        label: 'Aflyst',
+        color: COLOR.neutral,
+        icon: 'i-heroicons-x-circle'
+    },
+    CONSUMED: {
+        label: 'Afholdt',
+        color: COLOR.neutral,
+        icon: 'i-heroicons-check-circle'
+    }
 } as const
 
 /**
@@ -742,73 +839,73 @@ export const DINNER_STATE_BADGES = {
  * Use with palette-specific constants (CHEF_CALENDAR, DINNER_CALENDAR).
  */
 export const CALENDAR = {
-  day: {
-    shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
-    past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
-  },
-  countdown: {
-    container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
-    title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
-    date: 'text-sm font-medium uppercase',
-    number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight',
-    numberPrefix: 'opacity-75 text-amber-50',
-    timeLabel: 'text-xs md:text-sm',
-    timeValue: 'text-xl md:text-2xl font-medium',
-    dot: 'w-3 h-3 rounded-full animate-pulse'
-  },
-  deadline: {
-    critical: 'ring-2 ring-red-500',
-    warning: 'ring-2 ring-amber-500',
-    onTrack: ''
-  },
-  // Base selection behavior - combine with palette-specific color
-  selection: {
-    base: 'ring-2 md:ring-4',
-    // Card behaviors for selectable items (agenda, list views)
-    card: {
-      base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
-      // Helper to generate selected state with color
-      selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+    day: {
+        shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
+        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
+    },
+    countdown: {
+        container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
+        title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
+        date: 'text-sm font-medium uppercase',
+        number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight',
+        numberPrefix: 'opacity-75 text-amber-50',
+        timeLabel: 'text-xs md:text-sm',
+        timeValue: 'text-xl md:text-2xl font-medium',
+        dot: 'w-3 h-3 rounded-full animate-pulse'
+    },
+    deadline: {
+        critical: 'ring-2 ring-red-500',
+        warning: 'ring-2 ring-amber-500',
+        onTrack: ''
+    },
+    // Base selection behavior - combine with palette-specific color
+    selection: {
+        base: 'ring-2 md:ring-4',
+        // Card behaviors for selectable items (agenda, list views)
+        card: {
+            base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
+            // Helper to generate selected state with color
+            selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+        }
     }
-  }
 } as const
 
 /**
  * CHEF_CALENDAR - Ocean palette accent colors
  */
 export const CHEF_CALENDAR = {
-  day: {
-    next: `text-white font-bold ${BG.ocean[400]}`,
-    future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
-  },
-  countdown: {
-    border: 'border-ocean-400',
-    accent: TEXT.ocean[400],
-    accentLight: TEXT.ocean[50],
-    accentMedium: TEXT.ocean[300],
-    dot: BG.ocean[400]
-  },
-  // Selection uses outline (outer) so deadline ring (inner) remains visible
-  selection: 'outline outline-2 md:outline-4 outline-ocean-700 outline-offset-2'
+    day: {
+        next: `text-white font-bold ${BG.ocean[400]}`,
+        future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
+    },
+    countdown: {
+        border: 'border-ocean-400',
+        accent: TEXT.ocean[400],
+        accentLight: TEXT.ocean[50],
+        accentMedium: TEXT.ocean[300],
+        dot: BG.ocean[400]
+    },
+    // Selection uses outline (outer) so deadline ring (inner) remains visible
+    selection: 'outline outline-2 md:outline-4 outline-ocean-700 outline-offset-2'
 } as const
 
 /**
  * DINNER_CALENDAR - Peach palette accent colors
  */
 export const DINNER_CALENDAR = {
-  day: {
-    next: `text-white font-bold ${BG.peach[400]}`,
-    future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
-  },
-  countdown: {
-    border: BORDER.peach[400],
-    accent: TEXT.peach[400],
-    accentLight: TEXT.peach[50],
-    accentMedium: TEXT.peach[300],
-    dot: BG.peach[400]
-  },
-  // Selection uses outline (outer) so deadline ring (inner) remains visible
-  selection: 'outline outline-2 md:outline-4 outline-peach-700 outline-offset-2'
+    day: {
+        next: `text-white font-bold ${BG.peach[400]}`,
+        future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
+    },
+    countdown: {
+        border: BORDER.peach[400],
+        accent: TEXT.peach[400],
+        accentLight: TEXT.peach[50],
+        accentMedium: TEXT.peach[300],
+        dot: BG.peach[400]
+    },
+    // Selection uses outline (outer) so deadline ring (inner) remains visible
+    selection: 'outline outline-2 md:outline-4 outline-peach-700 outline-offset-2'
 } as const
 
 /**
@@ -818,30 +915,30 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
-  DONE: {
-    color: COLOR.success,
-    label: 'Færdig',
-    icon: 'i-heroicons-check-circle',
-    emoji: '🟢'
-  },
-  CRITICAL: {
-    color: COLOR.error,
-    label: 'Kritisk',
-    icon: 'i-heroicons-exclamation-circle',
-    emoji: '🔴'
-  },
-  WARNING: {
-    color: COLOR.warning,
-    label: 'Snart',
-    icon: 'i-heroicons-clock',
-    emoji: '🟡'
-  },
-  ON_TRACK: {
-    color: COLOR.neutral,
-    label: 'OK',
-    icon: 'i-heroicons-clock',
-    emoji: '⚪'
-  }
+    DONE: {
+        color: COLOR.success,
+        label: 'Færdig',
+        icon: 'i-heroicons-check-circle',
+        emoji: '🟢'
+    },
+    CRITICAL: {
+        color: COLOR.error,
+        label: 'Kritisk',
+        icon: 'i-heroicons-exclamation-circle',
+        emoji: '🔴'
+    },
+    WARNING: {
+        color: COLOR.warning,
+        label: 'Snart',
+        icon: 'i-heroicons-clock',
+        emoji: '🟡'
+    },
+    ON_TRACK: {
+        color: COLOR.neutral,
+        label: 'OK',
+        icon: 'i-heroicons-clock',
+        emoji: '⚪'
+    }
 } as const
 
 /**
@@ -849,57 +946,117 @@ export const DEADLINE_BADGES = {
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export const URGENCY_TO_BADGE = {
-  0: DEADLINE_BADGES.ON_TRACK,
-  1: DEADLINE_BADGES.WARNING,
-  2: DEADLINE_BADGES.CRITICAL
+    0: DEADLINE_BADGES.ON_TRACK,
+    1: DEADLINE_BADGES.WARNING,
+    2: DEADLINE_BADGES.CRITICAL
 } as const
 
+// ============================================================================
+// PART 7: Empty State Messages (fun placeholders)
+// ============================================================================
+
+/**
+ * EMPTY_STATE_MESSAGES - Fun empty state messages by context
+ */
+export const EMPTY_STATE_MESSAGES = {
+    cookingTeam: [
+        { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
+        { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
+        { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
+        { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
+        { emoji: '🏃‍♀️🏃‍♂️', text: 'Køkkenholdet er løbet ud at lege' }
+    ],
+    household: [
+        { emoji: '👻', text: 'Husstanden er forsvundet i tågen' },
+        { emoji: '🏝️', text: 'Alle på ferie - ingen hjemme!' },
+        { emoji: '🎪', text: 'Familien er stukket af med cirkus' },
+        { emoji: '🧘', text: 'Familien mediterer i bjergene' },
+        { emoji: '🚀', text: 'Husstanden tog til månen... uden WiFi' }
+    ],
+    allergy: [
+        { emoji: '🤷', text: 'Ingen beboere har denne allergi... endnu' },
+        { emoji: '✨', text: 'Kan spises af alle - så er køkkenlivet lidt lettere!' },
+        { emoji: '🎉', text: 'Hurra! Ingen allergiske reaktioner her' },
+        { emoji: '👍', text: 'Alle har sagt god for denne ingrediens' },
+        { emoji: '😌', text: 'Ingen bekymringer med denne ingrediens' }
+    ],
+    noTeamAssigned: [
+        { emoji: '🤔', text: 'Hvem laver maden? Det finder vi ud af!' },
+        { emoji: '🎲', text: 'Madholdet er stadig i puljen' },
+        { emoji: '🔮', text: 'Krystalkuglen ved ikke hvem der laver mad endnu' },
+        { emoji: '🎯', text: 'Administratoren sigter efter et madhold' },
+        { emoji: '🧩', text: 'Puslespillet mangler et madhold' }
+    ],
+    jobHistory: [
+        { emoji: '😴', text: 'Bytenisserne sover endnu' },
+        { emoji: '🐱', text: 'Katten har ædt kildekoden til systemjobbet' },
+        { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
+        { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
+        { emoji: '🔧', text: 'Tandhjulene er ved at blive poleret' }
+    ]
+} as const
+
+/** Pick a random message from a context - uses date-based seed for SSR consistency */
+export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
+    const messages = EMPTY_STATE_MESSAGES[context]
+    // Use current date as seed so server and client get the same "random" message
+    const today = new Date()
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
+    const index = seed % messages.length
+    return messages[index]!
+}
+
 export const useTheSlopeDesignSystem = () => {
-  // Inject responsive breakpoint from layout
-  const isMd = inject<Ref<boolean>>('isMd', ref(false))
+    // Inject responsive breakpoint from layout
+    const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
-  return {
-    // For NuxtUI components
-    COLOR,
-    TICKET_TYPE_COLORS,
-    DINNER_STATE_BADGES,
-    CALENDAR,
-    CHEF_CALENDAR,
-    DINNER_CALENDAR,
-    DEADLINE_BADGES,
-    URGENCY_TO_BADGE,
-    ICONS,
-    IMG,
+    return {
+        // For NuxtUI components
+        COLOR,
+        TICKET_TYPE_COLORS,
+        DINNER_STATE_BADGES,
+        CALENDAR,
+        CHEF_CALENDAR,
+        DINNER_CALENDAR,
+        DEADLINE_BADGES,
+        URGENCY_TO_BADGE,
+        ICONS,
+        IMG,
 
-    // Semantic design patterns (USE THESE!)
-    TYPOGRAPHY,
-    LAYOUTS,
-    BACKGROUNDS,
-    COMPONENTS,
+        // Semantic design patterns (USE THESE!)
+        TYPOGRAPHY,
+        LAYOUTS,
+        BACKGROUNDS,
+        COMPONENTS,
 
-    // Responsive sizes
-    SIZES: createResponsiveSizes(isMd),
+        // Responsive sizes
+        SIZES: createResponsiveSizes(isMd),
 
-    // Responsive orientations
-    ORIENTATIONS: createOrientations(isMd),
+        // Responsive orientations
+        ORIENTATIONS: createOrientations(isMd),
 
-    // Weekday display helpers
-    WEEKDAY: createWeekdayDisplay(isMd),
+        // Weekday display helpers
+        WEEKDAY: createWeekdayDisplay(isMd),
 
-    // Pagination configuration
-    PAGINATION: createPagination(isMd),
+        // Pagination configuration
+        PAGINATION: createPagination(isMd),
 
-    // Navigation configuration
-    NAVIGATION: createNavigation(isMd),
+        // Navigation configuration
+        NAVIGATION: createNavigation(isMd),
 
-    // Low-level builders (only if you need custom combinations)
-    BG,
-    TEXT,
-    BORDER,
+        // Responsive icons
+        RESPONSIVE_ICONS: createResponsiveIcons(isMd),
 
-    // Helpers
-    getKitchenPanelClasses
-  }
+        // Low-level builders (only if you need custom combinations)
+        BG,
+        TEXT,
+        BORDER,
+
+        // Helpers
+        getKitchenPanelClasses,
+        getRandomEmptyMessage,
+        EMPTY_STATE_MESSAGES
+    }
 }
 
 // Backwards compatibility alias (deprecated - use useTheSlopeDesignSystem)

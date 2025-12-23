@@ -44,7 +44,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         selectedHouseholdKey,
         () => {
             if (!selectedHouseholdId.value) return Promise.resolve(null)
-            return $fetch(`/api/admin/household/${selectedHouseholdId.value}`)
+            return $fetch<HouseholdDetail>(`/api/admin/household/${selectedHouseholdId.value}`)
         },
         {
             default: () => null,

@@ -36,12 +36,14 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
   <div
       class="min-h-screen w-full
   font-sans flex flex-col bg-amber-500 dark:bg-amber-800 space-y-1 ">
-    <PageHeader class="my-2"/>
-    <slot/>
+    <PageHeader class="my-2 flex-shrink-0"/>
+    <div class="flex-grow">
+      <slot/>
+    </div>
     <ClientOnly>
       <UToaster />
     </ClientOnly>
-    <PageFooter/>
+    <PageFooter class="flex-shrink-0"/>
     <div id="breakpoint-md" class="hidden md:block w-0 h-0"/>
   </div>
 </template>

@@ -31,10 +31,11 @@
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {calculateAge} from '~/utils/date'
-import type {HouseholdWithInhabitants} from '~/composables/useCoreValidation'
+import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 
 interface Props {
-  household: HouseholdWithInhabitants
+  household: HouseholdDetail
 }
 
 const props = defineProps<Props>()
@@ -104,15 +105,28 @@ const handleDeleteAllergy = async (allergyId: number) => {
   showSuccessToast('Allergi fjernet')
 }
 
+// Table row type definition
+interface TableDataRow {
+  id: number
+  heynaboId: number
+  householdId: number
+  name: string
+  lastName: string
+  pictureUrl: string | null | undefined
+  birthDate: Date | null | undefined
+  isChild: boolean
+  allergies: AllergyDisplay[]
+}
+
 // Get current allergies for editing inhabitant (reactive - updates from allergy store)
 const currentAllergies = computed(() => {
-  const inhabitant = tableData.value.find(i => i.id === editingInhabitantId.value)
+  const inhabitant = tableData.value.find((i: TableDataRow) => i.id === editingInhabitantId.value)
   return inhabitant?.allergies || []
 })
 
 // Get available allergy types (not already assigned to this inhabitant)
 const availableAllergyTypes = computed(() => {
-  const assignedTypeIds = currentAllergies.value.map(a => a.allergyType.id)
+  const assignedTypeIds = currentAllergies.value.map((a: AllergyDisplay) => a.allergyType.id)
   return allergyTypes.value.filter(type => !assignedTypeIds.includes(type.id))
 })
 
@@ -120,10 +134,10 @@ const availableAllergyTypes = computed(() => {
 const handleCommentUpdate = async (allergyTypeId: number) => {
   if (!editingInhabitantId.value) return
 
-  const inhabitant = tableData.value.find(i => i.id === editingInhabitantId.value)
+  const inhabitant = tableData.value.find((i: TableDataRow) => i.id === editingInhabitantId.value)
   if (!inhabitant) return
 
-  const allergy = inhabitant.allergies.find(a => a.allergyType.id === allergyTypeId)
+  const allergy = inhabitant.allergies.find((a: AllergyDisplay) => a.allergyType.id === allergyTypeId)
   if (!allergy) return
 
   const comment = allergyComments.value[allergyTypeId] || ''
@@ -137,19 +151,20 @@ const handleCommentUpdate = async (allergyTypeId: number) => {
 }
 
 // Prepare table data - join inhabitants with allergies from allergy store
-const tableData = computed(() => {
+const tableData = computed((): TableDataRow[] => {
   if (!props.household?.inhabitants) return []
 
-  return props.household.inhabitants.map(inhabitant => {
-    const age = calculateAge(inhabitant.birthDate)
+  return props.household.inhabitants.map((inhabitant: InhabitantDisplay) => {
+    const age = calculateAge(inhabitant.birthDate ?? null)
     const isChild = age !== null && age < 18
 
     // Get allergies for this inhabitant from allergy store
-    const inhabitantAllergies = allergies.value.filter(a => a.inhabitantId === inhabitant.id)
+    const inhabitantAllergies = allergies.value.filter((a: AllergyDisplay) => a.inhabitantId === inhabitant.id)
 
     return {
       id: inhabitant.id,
       heynaboId: inhabitant.heynaboId,
+      householdId: inhabitant.householdId,
       name: inhabitant.name,
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
@@ -286,19 +301,19 @@ const columns = [
                   description="Vælg en allergi fra listen"
               >
                 <USelectMenu
-                    :model-value="null"
-                    :items="availableAllergyTypes"
+                    :model-value="undefined"
+                    :items="availableAllergyTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
                     placeholder="🥛🥐🥚🥜 vælg en allergi..."
                     value-key="id"
-                    @update:model-value="handleAddAllergy"
+                    @update:model-value="(val: unknown) => val && handleAddAllergy((val as {id: number}).id)"
                 >
                   <template #item="{ item }">
                     <span class="flex items-center gap-2">
-                      <span>{{ item.icon }}</span>
-                      <span>{{ item.name }}</span>
+                      <span>{{ (item as AllergyTypeDisplay).icon }}</span>
+                      <span>{{ (item as AllergyTypeDisplay).name }}</span>
                     </span>
                   </template>
-                  <template #item-empty>
+                  <template #empty>
                     <span class="text-muted">Ingen allergier tilgængelige</span>
                   </template>
                 </USelectMenu>

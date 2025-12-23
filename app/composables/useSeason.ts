@@ -1,21 +1,30 @@
-import type {DateRange} from '~/types/dateTypes'
+import type {DateRange, WeekDayMap} from '~/types/dateTypes'
+import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {type TicketPrice, useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {type HouseholdDisplay, type InhabitantDisplay, useCoreValidation} from '~/composables/useCoreValidation'
+import {useTicket} from '~/composables/useTicket'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason} from "~/utils/season"
-import {getEachDayOfIntervalWithSelectedWeekdays} from "~/utils/date"
+    selectMostAppropriateActiveSeason, dateToWeekDay, isBeforeDeadline} from "~/utils/season"
+import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
+import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
  * Deadline urgency levels for dinner events
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export type DeadlineUrgency = 0 | 1 | 2
+
+/**
+ * Preference update for batch inhabitant preference clipping
+ */
+export type PreferenceUpdate = { inhabitantId: number, dinnerPreferences: WeekDayMap<DinnerMode> }
 
 /**
  * Temporal category for dinner events relative to current time
@@ -141,7 +150,7 @@ export const useSeason = () => {
         const now = new Date()
         return cookingDates.map(date => ({
             date,
-            menuTitle: 'TBD',
+            menuTitle: '',
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,
@@ -190,15 +199,232 @@ export const useSeason = () => {
         return computeTeamAssignmentsForEvents(teams, cookingDays, consecutiveCookingDays, dinnerEvents, holidays)
     }
 
+    // Team assignment batching (D1 rate limit safe)
+    // Update is lightweight: 2 params (dinnerEventId, cookingTeamId), batch of 50 is safe
+    const TEAM_ASSIGNMENT_BATCH_SIZE = 50
+    const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(TEAM_ASSIGNMENT_BATCH_SIZE)
+
+    // ========================================================================
+    // PREFERENCE CLIPPING - Align inhabitant preferences to season cooking days
+    // ========================================================================
+
+    const {maskWeekDayMap} = useCoreValidation()
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    /**
+     * Curried preference clipper factory.
+     *
+     * Given season cooking days, returns a function that:
+     * - Takes inhabitants with optional preferences
+     * - Returns PreferenceUpdate[] for only those needing updates
+     *
+     * Business rules:
+     * - Cooking days: keep existing value or default to DINEIN
+     * - Non-cooking days: always NONE
+     *
+     * @example
+     * const clipper = createPreferenceClipper(season.cookingDays)
+     * const updates = clipper(inhabitants)
+     * const batches = chunkPreferenceUpdates(updates)
+     */
+    const createPreferenceClipper = (cookingDays: WeekDayMap<boolean>) => {
+        const needsClipping = (prefs: WeekDayMap<DinnerMode> | null): boolean => {
+            if (!prefs) return true
+            return WEEKDAYS.some(day => !cookingDays[day] && prefs[day] !== DinnerMode.NONE)
+        }
+
+        // Return the curried function that processes inhabitants
+        return <T extends { id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null }>(
+            inhabitants: T[]
+        ): PreferenceUpdate[] =>
+            inhabitants
+                .filter(i => needsClipping(i.dinnerPreferences))
+                .map(i => ({
+                    inhabitantId: i.id,
+                    dinnerPreferences: maskWeekDayMap(i.dinnerPreferences, cookingDays, DinnerMode.DINEIN, DinnerMode.NONE)
+                }))
+    }
+
+    // Preference update batching (D1 rate limit safe)
+    const PREFERENCE_BATCH_SIZE = 50
+    const chunkPreferenceUpdates = chunkArray<PreferenceUpdate>(PREFERENCE_BATCH_SIZE)
+
+    // ========================================================================
+    // PRE-BOOKING SCAFFOLDING - Create/prune orders based on preferences
+    // ========================================================================
+
+    const {OrderStateSchema, OrderCreateWithPriceSchema, chunkOrderBatch} = useBookingValidation()
+    const OrderState = OrderStateSchema.enum
+    const {determineTicketType} = useTicket()
+
+    /**
+     * Configure pruneAndCreate for pre-bookings.
+     * E = OrderDisplay (existing orders from DB, has id for deletion)
+     * I = OrderCreateWithPrice (incoming orders from generator, no id)
+     * Key: composite inhabitantId-dinnerEventId
+     * Equal: same dinnerMode (no update needed if preference matches)
+     */
+    const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
+        (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
+        (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
+    )
+
+    /**
+     * Curried pre-booking generator factory.
+     *
+     * Given season config, returns function that generates desired pre-bookings
+     * for a household's inhabitants based on their preferences.
+     *
+     * @param householdId - Household ID for order tracking
+     * @param ticketPrices - Available ticket prices (with ids)
+     * @param dinnerEvents - Dinner events to generate orders for
+     * @param excludedKeys - Optional set of "inhabitantId-dinnerEventId" keys to exclude
+     *                       (typically user cancellations that should not be recreated)
+     *
+     * Note: Inhabitants without dinnerPreferences are skipped (no orders created)
+     * @throws Error if no matching ticket price for inhabitant
+     *
+     * @example
+     * const cancellations = await fetchUserCancellationKeys(d1, seasonId)
+     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents, cancellations)
+     * const desired = generateDesired(inhabitants)
+     * const result = reconcilePreBookings(existingOrders)(desired)
+     */
+    const createPreBookingGenerator = (
+        householdId: number,
+        ticketPrices: TicketPrice[],
+        dinnerEvents: DinnerEventDisplay[],
+        excludedKeys: Set<string> = new Set()
+    ) => {
+        // Build lookup: ticketType -> ticketPrice (with id)
+        const ticketPriceByType = new Map(
+            ticketPrices.filter(tp => tp.id).map(tp => [tp.ticketType, tp])
+        )
+
+        return (inhabitants: InhabitantDisplay[]): OrderCreateWithPrice[] =>
+            inhabitants.flatMap(inhabitant => {
+                // Skip inhabitants without preferences (no orders created)
+                if (!inhabitant.dinnerPreferences) {
+                    return []
+                }
+                const prefs = inhabitant.dinnerPreferences
+
+                return dinnerEvents
+                    .map(de => {
+                        const weekDay = dateToWeekDay(de.date)
+                        const preference = prefs[weekDay]
+                        if (preference === DinnerMode.NONE) return null
+
+                        // Skip if user previously cancelled this booking
+                        const key = `${inhabitant.id}-${de.id}`
+                        if (excludedKeys.has(key)) return null
+
+                        // Determine ticket type based on age at dinner date
+                        const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
+                        const ticketPrice = ticketPriceByType.get(ticketType)
+                        if (!ticketPrice?.id) {
+                            throw new Error(`No ticket price for type ${ticketType} - inhabitant ${inhabitant.name}`)
+                        }
+
+                        return OrderCreateWithPriceSchema.parse({
+                            dinnerEventId: de.id,
+                            inhabitantId: inhabitant.id,
+                            householdId,
+                            bookedByUserId: null,
+                            ticketPriceId: ticketPrice.id,
+                            priceAtBooking: ticketPrice.price,
+                            dinnerMode: preference,
+                            state: OrderState.BOOKED
+                        })
+                    })
+                    .filter((o): o is OrderCreateWithPrice => o !== null)
+            })
+    }
+
+    /**
+     * Curried household order scaffolder factory.
+     *
+     * Given season config (ticket prices, dinner events), returns a function that
+     * generates the reconciliation result for a household - what orders to create,
+     * update, delete, or leave unchanged.
+     *
+     * @param ticketPrices - Available ticket prices (with ids) for the season
+     * @param dinnerEvents - Dinner events to scaffold orders for
+     *
+     * @returns Function that takes household data and returns reconciliation result
+     *
+     * @example
+     * const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+     * const result = scaffolder(household, existingOrders, cancelledKeys)
+     * // result.create = orders to insert
+     * // result.delete = orders to remove (existing orders with id)
+     * // result.idempotent = orders unchanged
+     */
+    const createHouseholdOrderScaffold = (
+        ticketPrices: TicketPrice[],
+        dinnerEvents: DinnerEventDisplay[]
+    ) => (
+        household: HouseholdDisplay,
+        existingOrders: OrderDisplay[],
+        cancelledKeys: Set<string> = new Set()
+    ) => {
+        const generator = createPreBookingGenerator(
+            household.id,
+            ticketPrices,
+            dinnerEvents,
+            cancelledKeys
+        )
+        const desiredOrders = generator(household.inhabitants)
+        return reconcilePreBookings(existingOrders)(desiredOrders)
+    }
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
+
+    // ========================================================================
+    // DINNER EVENT RECONCILIATION - ADR-015 idempotent pruneAndCreate
+    // ========================================================================
+
+    const toDateKey = (date: Date): string => formatDate(date, 'yyyy-MM-dd')
+
+    const getDinnerEventDateKey = (event: DinnerEventDisplay | DinnerEventCreate): string =>
+        toDateKey(event.date)
+
+    const reconcileDinnerEvents = pruneAndCreate<DinnerEventDisplay, DinnerEventCreate, string>(
+        getDinnerEventDateKey,
+        (existing, incoming) => getDinnerEventDateKey(existing) === getDinnerEventDateKey(incoming)
+    )
+
+    /**
+     * Compare schedule and return desired events if changed.
+     * Computes cooking dates once and reuses for both check and generation.
+     *
+     * @returns null if no change, or desired DinnerEventCreate[] if schedule changed
+     */
+    const getScheduleChangeDesiredEvents = (
+        oldSeason: Season,
+        newSeason: Season
+    ): DinnerEventCreate[] | null => {
+        const oldKeys = computeCookingDates(oldSeason.cookingDays, oldSeason.seasonDates, oldSeason.holidays).map(toDateKey)
+        const desiredEvents = generateDinnerEventDataForSeason(newSeason)
+        const newKeys = desiredEvents.map(e => toDateKey(e.date))
+
+        if (oldKeys.join(',') === newKeys.join(',')) return null
+        return desiredEvents
+    }
 
     /**
      * Get the default dinner start time (hour) from app configuration
      * @returns Hour (0-23) for dinner start time
      */
     const getDefaultDinnerStartTime = (): number => theslope.defaultDinnerStartTime
+
+    /**
+     * Get the prebooking window in days from app configuration
+     * @returns Number of days for the rolling prebooking window
+     */
+    const getPrebookingWindowDays = (): number => theslope.prebookingWindowDays
 
     /**
      * Check if a calendar day is the next upcoming dinner event
@@ -227,6 +453,29 @@ export const useSeason = () => {
     }
 
     /**
+     * Get release action for order cancellation (after deadline)
+     *
+     * @param dinnerEventDate - Date of the dinner event
+     * @returns null if before deadline (caller should delete), or release updates/auditAction if after deadline
+     */
+    const getOrderCancellationAction = (dinnerEventDate: Date): {
+        updates: { dinnerMode: DinnerMode, state: typeof OrderState.RELEASED, releasedAt: Date }
+        auditAction: OrderAuditAction
+    } | null => {
+        if (canModifyOrders(dinnerEventDate)) {
+            return null
+        }
+        return {
+            updates: {
+                dinnerMode: DinnerMode.NONE,
+                state: OrderState.RELEASED,
+                releasedAt: new Date()
+            },
+            auditAction: OrderAuditActionEnum.USER_CANCELLED
+        }
+    }
+
+    /**
      * Check if dining mode can be edited for a dinner event
      * Configured with app config diningModeIsEditableMinutesBefore
      */
@@ -247,6 +496,18 @@ export const useSeason = () => {
         const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
         // Menu deadline is same as booking deadline (ticketIsCancellableDaysBefore before dinner)
         return !isBeforeDeadline(theslope.defaultSeason.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
+    }
+
+    /**
+     * Check if a dinner event has started (is in the past)
+     * Uses dinner start time, not end time - once dinner starts, no more booking changes
+     * @param dinnerEventDate - Date of the dinner event
+     * @returns True if dinner has started (past)
+     */
+    const isDinnerPast = (dinnerEventDate: Date): boolean => {
+        const dinnerStartHour = getDefaultDinnerStartTime()
+        const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
+        return !isBeforeDeadline(0, 0)(dinnerStartTime)
     }
 
     /**
@@ -332,18 +593,33 @@ export const useSeason = () => {
         generateDinnerEventDataForSeason,
         assignAffinitiesToTeams,
         assignTeamsToEvents,
+        chunkTeamAssignments,
+
+        // Preference clipping (season activation)
+        createPreferenceClipper,
+        chunkPreferenceUpdates,
+
+        // Pre-booking scaffolding (season activation)
+        reconcilePreBookings,
+        createPreBookingGenerator,
+        createHouseholdOrderScaffold,
+        chunkOrderBatch,
+
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
         getDefaultDinnerStartTime,
+        getPrebookingWindowDays,
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
         splitDinnerEvents,
         sortDinnerEventsByTemporal,
         canModifyOrders,
+        getOrderCancellationAction,
         canEditDiningMode,
         isAnnounceMenuPastDeadline,
+        isDinnerPast,
         getTeamsForInhabitant,
         isOnTeam,
         isChefFor,
@@ -357,7 +633,11 @@ export const useSeason = () => {
         canSeasonBeActive,
         getSeasonStatus,
         sortSeasonsByActivePriority,
-        selectMostAppropriateActiveSeason
+        selectMostAppropriateActiveSeason,
+
+        // Dinner event reconciliation (ADR-015)
+        reconcileDinnerEvents,
+        getScheduleChangeDesiredEvents
     }
 }
 

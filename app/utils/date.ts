@@ -6,7 +6,7 @@ import {
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
-import {CalendarDate, type DateValue} from '@internationalized/date'
+import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@internationalized/date'
 
 export const DATE_SETTINGS =
     {
@@ -273,7 +273,7 @@ export function calculateCountdown(
     currentDate: Date = new Date()
 ): { hours: number; minutes: number; formatted: string } {
     if (targetDate <= currentDate) {
-        return { hours: 0, minutes: 0, formatted: 'NU' }
+        return { hours: 0, minutes: 0, formatted: 'Overskredet' }
     }
 
     const totalHours = differenceInHours(targetDate, currentDate)
@@ -299,4 +299,26 @@ export function calculateCountdown(
     const formatted = hours > 0 ? `${hours}T ${minutes}M` : `${minutes}M`
 
     return { hours, minutes, formatted }
+}
+
+/**
+ * Create a Date representing a specific local time in Copenhagen timezone.
+ * Uses @internationalized/date for timezone-correct conversion.
+ *
+ * Essential for Cloudflare Workers (UTC runtime) where setHours() would set UTC hours.
+ *
+ * @param date - Date representing the day (only year/month/day used)
+ * @param hour - Hour in 24h format (0-23) in Copenhagen local time
+ * @param minute - Minute (0-59), defaults to 0
+ * @returns Date where toISOString() gives correct UTC representation
+ */
+export function createDateInTimezone(
+    date: Date,
+    hour: number,
+    minute: number = 0,
+    timezone: string = DATE_SETTINGS.timezone
+): Date {
+    const calendarDate = toCalendarDate(date)!
+    const calendarDateTime = toCalendarDateTime(calendarDate, new Time(hour, minute, 0, 0))
+    return toZoned(calendarDateTime, timezone).toDate()
 }

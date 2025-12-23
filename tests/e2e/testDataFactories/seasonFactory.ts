@@ -2,16 +2,23 @@ import {useSeasonValidation, type Season} from "~/composables/useSeasonValidatio
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
+    CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
+    CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
-import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
+import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
+import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
+import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
 import {TicketFactory} from "./ticketFactory"
 import {DinnerEventFactory} from "./dinnerEventFactory"
+
+// Nested assignment type for CookingTeamCreate (omits id, cookingTeamId, inhabitant)
+type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>[number]
 
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
@@ -113,13 +120,54 @@ export class SeasonFactory {
         ...overrides
     })
 
-    static readonly defaultCookingTeamAssignment = (overrides = {}): CookingTeamAssignment => ({
-        cookingTeamId: 1,
+    /**
+     * Default assignment for CREATE input (no inhabitant/cookingTeamId - ADR-009)
+     */
+    static readonly defaultCookingTeamCreateAssignment = (overrides: Partial<CookingTeamCreateAssignment> = {}): CookingTeamCreateAssignment => ({
         inhabitantId: 42,
         role: 'CHEF' as const,
         allocationPercentage: 100,
+        affinity: null,
         ...overrides
     })
+
+    /**
+     * Default team for CREATE input (no id, no computed fields - ADR-009)
+     */
+    static readonly defaultCookingTeamCreate = (overrides: Partial<CookingTeamCreate> = {}): CookingTeamCreate => ({
+        seasonId: 1,
+        name: 'TestTeam',
+        affinity: null,
+        ...overrides
+    })
+
+    /**
+     * Default cooking team assignment with inhabitant for OUTPUT schema testing
+     * inhabitant is required in CookingTeamAssignmentSchema (ADR-009: output always includes relations)
+     * Validates against schema for fast failure on invalid test data
+     */
+    static readonly defaultCookingTeamAssignment = (overrides: Partial<CookingTeamAssignment> = {}): CookingTeamAssignment => {
+        const inhabitantId = overrides.inhabitantId ?? 42
+        const data = {
+            cookingTeamId: 1,
+            inhabitantId,
+            role: 'CHEF' as const,
+            allocationPercentage: 100,
+            inhabitant: {
+                id: inhabitantId,
+                heynaboId: 900000 + inhabitantId,
+                householdId: 1,
+                name: 'Test',
+                lastName: 'Inhabitant',
+                pictureUrl: null,
+                birthDate: null,
+                dinnerPreferences: null
+            },
+            ...overrides
+        }
+        // Validate against schema for fast failure
+        return CookingTeamAssignmentSchema.parse(data)
+    }
 
     static readonly defaultSeason = (testSalt: string = temporaryAndRandom()): Season => {
         return {
@@ -165,10 +213,29 @@ export class SeasonFactory {
             const result = SeasonSchema.safeParse(responseBody)
             expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
 
-            return result.data!
+            const season = result.data!
+
+            // Verify dinner events auto-generated with correct count (PUT orchestration)
+            const expectedEventCount = this.calculateExpectedEventCount(season)
+            expect(season.dinnerEvents?.length, `Expected ${expectedEventCount} dinner events`).toBe(expectedEventCount)
+
+            return season
         }
 
         return responseBody
+    }
+
+    /**
+     * Calculate expected dinner event count for a season
+     * Based on cooking days, season dates, and holidays
+     */
+    static readonly calculateExpectedEventCount = (season: Season): number => {
+        const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
+            season.seasonDates.start,
+            season.seasonDates.end,
+            season.cookingDays
+        )
+        return excludeDatesFromInterval(allCookingDates, season.holidays).length
     }
 
     /**
@@ -349,9 +416,9 @@ export class SeasonFactory {
             })
         }
 
-        // Verify all dinner events were created successfully
+        // Verify all default dinner events were created (may have more from parallel test runs)
         const createdEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
-        expect(createdEvents.length, `Singleton season should have ${cookingDates.length} dinner events (one per cooking day)`).toBe(cookingDates.length)
+        expect(createdEvents.length, `Singleton season should have at least ${cookingDates.length} dinner events`).toBeGreaterThanOrEqual(cookingDates.length)
     }
 
     /**
@@ -433,38 +500,6 @@ export class SeasonFactory {
         id: number,
         expectedStatus: number = 200
     ): Promise<Season | null> => {
-        // Delete all orders first (Order -> TicketPrice has onDelete: Restrict)
-        try {
-            const season = await this.getSeason(context, id)
-            if (season?.dinnerEvents) {
-                const {OrderFactory} = await import('./orderFactory')
-                for (const dinnerEvent of season.dinnerEvents) {
-                    try {
-                        const ordersResponse = await context.request.get(`/api/order?dinnerEventId=${dinnerEvent.id}`, { headers })
-                        if (ordersResponse.ok()) {
-                            const orders = await ordersResponse.json()
-                            for (const order of orders) {
-                                try {
-                                    await OrderFactory.deleteOrder(context, order.id)
-                                } catch (orderError) {
-                                    console.warn(`❌ Cleanup failed: Could not delete order ${order.id} for season ${id}:`, orderError)
-                                }
-                            }
-                        }
-                    } catch (fetchError) {
-                        console.warn(`❌ Cleanup failed: Could not fetch orders for dinner event ${dinnerEvent.id} (season ${id}):`, fetchError)
-                    }
-                }
-            }
-        } catch (error: unknown) {
-            // Only log if not a 404 (season already deleted is expected)
-            const matcherError = error as { matcherResult?: { actual?: number } }
-            if (matcherError?.matcherResult?.actual !== 404) {
-                console.warn(`❌ Cleanup failed: Could not fetch season ${id} for order cleanup:`, error)
-            }
-        }
-
-        // Try to delete season - be resilient in cleanup (expectedStatus === 200)
         try {
             const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
 
@@ -474,7 +509,6 @@ export class SeasonFactory {
                 }
                 return null
             } else if (deleteResponse.status() === 404 && expectedStatus === 200) {
-                // Already deleted - silent success for cleanup
                 return null
             } else {
                 const errorBody = await deleteResponse.text()
@@ -537,6 +571,35 @@ export class SeasonFactory {
         return {season, teams}
     }
 
+    /**
+     * Create a short season with dinner events for isolated testing
+     * Uses unique salted shortName to avoid conflicts with parallel tests
+     * Season spans 3 days with all days as cooking days for fast test execution
+     *
+     * IMPORTANT: Dates are within the 60-day prebooking window (today + 1-3 days)
+     * so that scaffold-prebookings and other date-filtered operations work correctly.
+     *
+     * @param context - Browser context for API requests
+     * @param testSalt - Unique salt for test isolation
+     * @param seasonData - Optional season data overrides
+     * @returns Season with generated dinner events (typically 3 events)
+     */
+    static readonly createSeasonWithDinnerEvents = async (
+        context: BrowserContext,
+        testSalt: string,
+        seasonData: Partial<Season> = {}
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        // Uses defaultSeason which has today-to-oneWeekLater dates and Mon/Wed/Fri cooking days
+        // This aligns with singleton season, avoiding preference clipping issues in parallel tests
+        const season = await this.createSeason(context, {
+            ...this.defaultSeason(testSalt),
+            ...seasonData
+        })
+
+        // Dinner events are auto-generated - return them from created season
+        return { season, dinnerEvents: season.dinnerEvents ?? [] }
+    }
+
     static readonly generateDinnerEventsForSeason = async (
         context: BrowserContext,
         seasonId: number,
@@ -559,6 +622,36 @@ export class SeasonFactory {
         }
 
         return await response.json()
+    }
+
+    /**
+     * Scaffold pre-bookings for a season
+     * Creates orders for all inhabitants based on their dinner preferences
+     * @param context - Browser context for API requests
+     * @param seasonId - Season ID to scaffold pre-bookings for
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns ScaffoldResult with counts of created, deleted, unchanged orders
+     */
+    static readonly scaffoldPrebookingsForSeason = async (
+        context: BrowserContext,
+        seasonId: number,
+        expectedStatus: number = 200
+    ): Promise<ScaffoldResult> => {
+        const {ScaffoldResultSchema} = useBookingValidation()
+        const response = await context.request.post(`/api/admin/season/${seasonId}/scaffold-prebookings`, {
+            headers: headers
+        })
+
+        const status = response.status()
+        const responseBody = await response.json()
+
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return ScaffoldResultSchema.parse(responseBody)
+        }
+
+        return responseBody
     }
 
     /**
@@ -649,8 +742,9 @@ export class SeasonFactory {
 
         // Return team with member assignments and household for cleanup
         const teamWithAssignments = await this.getCookingTeamById(context, team.id!)
+        expect(teamWithAssignments, `Team ${team.id} should exist after creation`).not.toBeNull()
         return {
-            ...teamWithAssignments,
+            ...teamWithAssignments!,
             householdId: householdWithInhabitants.household.id
         }
     }
@@ -790,6 +884,87 @@ export class SeasonFactory {
         const response = await context.request.post(`/api/admin/season/${seasonId}/assign-cooking-teams`)
         expect(response.status()).toBe(200)
         return response.json()
+    }
+
+    // === DAILY MAINTENANCE METHODS ===
+
+    /**
+     * Run daily maintenance endpoint
+     * Executes: consumeDinners → closeOrders → createTransactions → scaffoldPrebookings
+     * All operations are idempotent - safe to run multiple times
+     *
+     * @param context - Browser context for API requests
+     * @param expectedStatus - Expected HTTP status (default 200)
+     * @returns DailyMaintenanceResult with counts from each step
+     */
+    static readonly runDailyMaintenance = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<DailyMaintenanceResult> => {
+        const {DailyMaintenanceResultSchema} = useBookingValidation()
+        const response = await context.request.post('/api/admin/maintenance/daily', {
+            headers: headers
+        })
+
+        const status = response.status()
+        const responseBody = await response.json()
+
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return DailyMaintenanceResultSchema.parse(responseBody)
+        }
+
+        return responseBody
+    }
+
+    // === JOB RUN METHODS ===
+
+    /**
+     * Get job runs with optional filtering by job type
+     * @param context - Browser context for API requests
+     * @param jobType - Optional job type filter
+     * @param limit - Max results (default 10)
+     * @returns JobRunDisplay[] ordered by startedAt descending
+     */
+    static readonly getJobRuns = async (
+        context: BrowserContext,
+        jobType?: string,
+        limit: number = 10
+    ): Promise<JobRunDisplay[]> => {
+        const {JobRunDisplaySchema} = useMaintenanceValidation()
+        const params = new URLSearchParams()
+        if (jobType) params.set('jobType', jobType)
+        if (limit) params.set('limit', limit.toString())
+
+        const url = `/api/admin/maintenance/job-run${params.toString() ? `?${params}` : ''}`
+        const response = await context.request.get(url, { headers })
+
+        expect(response.status()).toBe(200)
+        const responseBody = await response.json()
+
+        return responseBody.map((jr: unknown) => JobRunDisplaySchema.parse(jr))
+    }
+
+    /**
+     * Get a single job run by ID
+     * @param context - Browser context for API requests
+     * @param id - Job run ID
+     * @returns JobRunDisplay or null if not found
+     */
+    static readonly getJobRun = async (
+        context: BrowserContext,
+        id: number
+    ): Promise<JobRunDisplay | null> => {
+        const {JobRunDisplaySchema} = useMaintenanceValidation()
+        const response = await context.request.get(`/api/admin/maintenance/job-run/${id}`, { headers })
+
+        if (response.status() === 404) {
+            return null
+        }
+
+        expect(response.status()).toBe(200)
+        return JobRunDisplaySchema.parse(await response.json())
     }
 
 }

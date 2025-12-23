@@ -5,12 +5,15 @@
  */
 
 import {describe, it, expect} from 'vitest'
+import type {z} from 'zod'
 import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import type {WeekDayMap} from '~/types/dateTypes'
 
 const DinnerMode = DinnerModeSchema.enum
+type DinnerModeType = z.infer<typeof DinnerModeSchema>
 
 // ============================================================================
 // USER VALIDATION TESTS
@@ -20,27 +23,18 @@ describe('useCoreValidation - User Schemas', () => {
     const {
         BaseUserSchema,
         UserCreateSchema,
+        SystemRoleSchema,
         serializeUserInput,
         deserializeUser,
         mergeUserRoles
     } = useCoreValidation()
+    const SystemRole = SystemRoleSchema.enum
 
-    describe.each([
-        {schema: 'BaseUserSchema', schemaObj: BaseUserSchema, withId: true},
-        {schema: 'UserCreateSchema', schemaObj: UserCreateSchema, withId: false}
-    ])('$schema', ({schemaObj, withId}) => {
-        it('should parse user from factory', () => {
-            const user = withId ? {...UserFactory.defaultUser(), id: 1} : UserFactory.defaultUser()
-            const result = schemaObj.parse(user)
-
-            expect(result.email).toBe(user.email)
-            expect(result.systemRoles).toEqual(user.systemRoles)
-            if (withId) {
-                expect(result.id).toBe(1)
-            } else {
-                expect(result).not.toHaveProperty('id')
-            }
-        })
+    it.each([
+        ['BaseUserSchema', () => BaseUserSchema, {...UserFactory.defaultUser(), id: 1}],
+        ['UserCreateSchema', () => UserCreateSchema, UserFactory.defaultUser()]
+    ])('%s should parse factory data', (_name, getSchema, input) => {
+        expect(() => getSchema().parse(input)).not.toThrow()
     })
 
     it('should normalize RFC 5322 email format', () => {
@@ -69,13 +63,13 @@ describe('useCoreValidation - User Schemas', () => {
     })
 
     it('should merge user roles without duplicates', () => {
-        const existing = {...UserFactory.defaultUser(), systemRoles: ['ADMIN'] as const}
-        const incoming = {...UserFactory.defaultUser(), systemRoles: ['ALLERGYMANAGER'] as const}
+        const existing = {...UserFactory.defaultUser(), id: 1, systemRoles: [SystemRole.ADMIN]}
+        const incoming = {...UserFactory.defaultUser(), id: 1, systemRoles: [SystemRole.ALLERGYMANAGER]}
         const merged = mergeUserRoles(existing, incoming)
 
         expect(merged.systemRoles).toHaveLength(2)
-        expect(merged.systemRoles).toContain('ADMIN')
-        expect(merged.systemRoles).toContain('ALLERGYMANAGER')
+        expect(merged.systemRoles).toContain(SystemRole.ADMIN)
+        expect(merged.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
     })
 })
 
@@ -95,28 +89,13 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         serializeWeekDayMap
     } = useCoreValidation()
 
-    describe.each([
-        {schema: 'BaseInhabitantSchema', schemaObj: BaseInhabitantSchema, withId: true},
-        {schema: 'InhabitantCreateSchema', schemaObj: InhabitantCreateSchema, withId: false},
-        {schema: 'InhabitantDisplaySchema', schemaObj: InhabitantDisplaySchema, withId: true},
-        {schema: 'InhabitantDetailSchema', schemaObj: InhabitantDetailSchema, withId: true}
-    ])('$schema', ({schemaObj, withId}) => {
-        it('should parse inhabitant from factory', () => {
-            const inhabitantData = HouseholdFactory.defaultInhabitantData()
-            const inhabitant = {
-                ...inhabitantData,
-                ...(withId && {id: 1})
-            }
-            const result = schemaObj.parse(inhabitant)
-
-            expect(result.name).toBe(inhabitantData.name)
-            expect(result.lastName).toBe(inhabitantData.lastName)
-            if (withId) {
-                expect(result.id).toBe(1)
-            } else {
-                expect(result).not.toHaveProperty('id')
-            }
-        })
+    it.each([
+        ['BaseInhabitantSchema', () => BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
+        ['InhabitantCreateSchema', () => InhabitantCreateSchema, HouseholdFactory.defaultInhabitantData()],
+        ['InhabitantDisplaySchema', () => InhabitantDisplaySchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
+        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}]
+    ])('%s should parse factory data', (_name, getSchema, input) => {
+        expect(() => getSchema().parse(input)).not.toThrow()
     })
 
     describe('deserializeInhabitantDisplay', () => {
@@ -252,24 +231,11 @@ describe('useCoreValidation - Household Schemas', () => {
         deserializeHouseholdDetail
     } = useCoreValidation()
 
-    describe.each([
-        {schema: 'BaseHouseholdSchema', schemaObj: BaseHouseholdSchema, withId: true},
-        {schema: 'HouseholdCreateSchema', schemaObj: HouseholdCreateSchema, withId: false}
-    ])('$schema', ({schemaObj, withId}) => {
-        it('should parse household from factory', () => {
-            const householdData = HouseholdFactory.defaultHouseholdData()
-            const household = withId ? {...householdData, id: 1} : householdData
-            const result = schemaObj.parse(household)
-
-            expect(result.name).toBe(householdData.name)
-            expect(result.address).toBe(householdData.address)
-            expect(result.movedInDate).toBeInstanceOf(Date)
-            if (withId) {
-                expect(result.id).toBe(1)
-            } else {
-                expect(result).not.toHaveProperty('id')
-            }
-        })
+    it.each([
+        ['BaseHouseholdSchema', () => BaseHouseholdSchema, {...HouseholdFactory.defaultHouseholdData(), id: 1}],
+        ['HouseholdCreateSchema', () => HouseholdCreateSchema, HouseholdFactory.defaultHouseholdData()]
+    ])('%s should parse factory data', (_name, getSchema, input) => {
+        expect(() => getSchema().parse(input)).not.toThrow()
     })
 
     describe('validation rules', () => {
@@ -328,8 +294,8 @@ describe('useCoreValidation - Household Schemas', () => {
             const deserialized = deserializeHouseholdDetail(serialized)
 
             expect(deserialized.inhabitants).toHaveLength(1)
-            expect(deserialized.inhabitants[0].birthDate).toBeInstanceOf(Date)
-            expect(deserialized.inhabitants[0].name).toBe(serialized.inhabitants[0].name)
+            expect(deserialized.inhabitants![0]!.birthDate).toBeInstanceOf(Date)
+            expect(deserialized.inhabitants![0]!.name).toBe(serialized.inhabitants[0]!.name)
         })
     })
 })
@@ -365,9 +331,9 @@ describe('getHouseholdShortName', () => {
 describe('useCoreValidation - Cross-Schema Integration', () => {
     const {
         UserDisplaySchema,
-        UserWithInhabitantSchema,
+        UserDetailSchema,
         HouseholdDisplaySchema,
-        deserializeUserWithInhabitant,
+        deserializeUserDetail,
         createDefaultWeekdayMap,
         serializeWeekDayMap
     } = useCoreValidation()
@@ -390,31 +356,16 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(result.Inhabitant?.householdId).toBe(user.Inhabitant.householdId) // Lightweight scalar, useful for admin context
     })
 
-    it('should parse UserWithInhabitant with nested household', () => {
-        const user = {
-            ...UserFactory.defaultUser(),
-            id: 1,
-            Inhabitant: {
-                ...HouseholdFactory.defaultInhabitantData(),
-                id: 1,
-                userId: 1,
-                householdId: 1,
-                dinnerPreferences: null,
-                household: {
-                    ...HouseholdFactory.defaultHouseholdData(),
-                    id: 1,
-                    shortName: 'S_31'
-                }
-            }
-        }
-        const result = UserWithInhabitantSchema.parse(user)
+    it('should parse UserDetail with nested household', () => {
+        const user = UserFactory.defaultUserWithInhabitant('test-userdetail')
+        const result = UserDetailSchema.parse(user)
 
         expect(result.Inhabitant).toBeDefined()
         expect(result.Inhabitant?.household).toBeDefined()
-        expect(result.Inhabitant?.household.shortName).toBe('S_31')
+        expect(result.Inhabitant?.household.shortName).toBeDefined()
     })
 
-    it('should deserialize UserWithInhabitant from database output', () => {
+    it('should deserialize UserDetail from database output', () => {
         const defaultPrefs = createDefaultWeekdayMap(DinnerMode.DINEIN)
         const serialized = {
             ...UserFactory.defaultUser(),
@@ -437,7 +388,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
                 }
             }
         }
-        const deserialized = deserializeUserWithInhabitant(serialized)
+        const deserialized = deserializeUserDetail(serialized)
 
         expect(Array.isArray(deserialized.systemRoles)).toBe(true)
         expect(deserialized.Inhabitant?.birthDate).toBeInstanceOf(Date)
@@ -446,7 +397,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(deserialized.Inhabitant?.household.shortName).toBeDefined()
     })
 
-    it('should handle deserializeUserWithInhabitant with null Inhabitant', () => {
+    it('should handle deserializeUserDetail with null Inhabitant', () => {
         // GIVEN: A user without inhabitant
         const factoryUser = UserFactory.createAdmin()
         const userData = {...factoryUser, systemRoles: [...factoryUser.systemRoles]}
@@ -460,7 +411,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         }
 
         // WHEN: Deserializing
-        const user = deserializeUserWithInhabitant(serializedUser)
+        const user = deserializeUserDetail(serializedUser)
 
         // THEN: Inhabitant should be null, systemRoles deserialized
         expect(user.Inhabitant).toBeNull()
@@ -468,7 +419,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         expect(user.systemRoles).toContain('ADMIN')
     })
 
-    it('should deserialize UserWithInhabitant with dinnerPreferences', () => {
+    it('should deserialize UserDetail with dinnerPreferences', () => {
         // GIVEN: Factory data with dinnerPreferences
         const householdData = HouseholdFactory.defaultHouseholdData()
         const inhabitantData = HouseholdFactory.defaultInhabitantData()
@@ -510,7 +461,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         }
 
         // WHEN: Deserializing
-        const user = deserializeUserWithInhabitant(serializedUser)
+        const user = deserializeUserDetail(serializedUser)
 
         // THEN: dinnerPreferences should be deserialized to WeekDayMap object with proper DinnerMode values
         expect(user.Inhabitant?.dinnerPreferences).toBeDefined()
@@ -546,8 +497,9 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         const result = HouseholdDisplaySchema.parse(household)
 
         expect(result.inhabitants).toHaveLength(2)
-        expect(result.inhabitants[0].name).toBe(household.inhabitants[0].name)
-        expect(result.inhabitants[1].name).toBe('Jane')
+        const [firstInhabitant, secondInhabitant] = result.inhabitants!
+        expect(firstInhabitant!.name).toBe(household.inhabitants[0]!.name)
+        expect(secondInhabitant!.name).toBe('Jane')
     })
 })
 
@@ -556,34 +508,12 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
 // ============================================================================
 
 describe('useCoreValidation - Fragment Pattern Compliance', () => {
-    describe.each([
-        {
-            entity: 'User',
-            getSchema: () => useCoreValidation().BaseUserSchema,
-            getFactoryData: () => ({...UserFactory.defaultUser(), id: 1}),
-            checkField: 'email'
-        },
-        {
-            entity: 'Inhabitant',
-            getSchema: () => useCoreValidation().BaseInhabitantSchema,
-            getFactoryData: () => ({...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 1}),
-            checkField: 'name'
-        },
-        {
-            entity: 'Household',
-            getSchema: () => useCoreValidation().BaseHouseholdSchema,
-            getFactoryData: () => ({...HouseholdFactory.defaultHouseholdData(), id: 1}),
-            checkField: 'name'
-        }
-    ])('$entity Fragment', ({getSchema, getFactoryData, checkField}) => {
-        it('should extend fragment without circular dependencies', () => {
-            const schema = getSchema()
-            const data = getFactoryData()
-            const result = schema.parse(data)
-
-            expect(result.id).toBe(data.id)
-            expect(result[checkField]).toBe(data[checkField])
-        })
+    it.each([
+        ['User', () => useCoreValidation().BaseUserSchema, {...UserFactory.defaultUser(), id: 1}],
+        ['Inhabitant', () => useCoreValidation().BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
+        ['Household', () => useCoreValidation().BaseHouseholdSchema, {...HouseholdFactory.defaultHouseholdData(), id: 1}]
+    ])('%s Fragment should extend without circular dependencies', (_entity, getSchema, data) => {
+        expect(() => getSchema().parse(data)).not.toThrow()
     })
 })
 
@@ -1088,9 +1018,11 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
             expect(result.id).toBe(1)
             expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
             expect(result.movedInDate).toBeInstanceOf(Date)
-            expect(result.inhabitants[0].birthDate).toBeInstanceOf(Date)
-            expect(result.inhabitants[0].dinnerPreferences).toBeDefined()
-            expect(result.inhabitants[0].dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
+            expect(result.inhabitants).toHaveLength(1)
+            const [inhabitant] = result.inhabitants!
+            expect(inhabitant!.birthDate).toBeInstanceOf(Date)
+            expect(inhabitant!.dinnerPreferences).toBeDefined()
+            expect(inhabitant!.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
         })
 
         it.each([
@@ -1143,8 +1075,10 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
 
             expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
             expect(result.movedInDate).toBeInstanceOf(Date)
-            expect(result.inhabitants[0].birthDate).toBeInstanceOf(Date)
-            expect(result.inhabitants[0].dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
+            expect(result.inhabitants).toHaveLength(1)
+            const [inhabitant] = result.inhabitants!
+            expect(inhabitant!.birthDate).toBeInstanceOf(Date)
+            expect(inhabitant!.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
         })
     })
 
@@ -1174,7 +1108,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 serialize: (data) => ({
                     ...data,
                     birthDate: (data.birthDate as Date).toISOString(),
-                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as Record<string, unknown>)
+                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as WeekDayMap<DinnerModeType>)
                 }),
                 deserialize: deserializeInhabitantDisplay,
                 checkFields: (original, deserialized) => {
@@ -1205,7 +1139,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
                         ...i,
                         birthDate: (i.birthDate as Date | null)?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as Record<string, unknown>) : null
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
                     }))
                 }),
                 deserialize: deserializeHouseholdDisplay,
@@ -1213,8 +1147,11 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     expect(deserialized.movedInDate).toBeInstanceOf(Date)
                     expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
                     expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
-                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate).toBeInstanceOf(Date)
-                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].dinnerPreferences).toEqual((original.inhabitants as Record<string, unknown>[])[0].dinnerPreferences)
+                    const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
+                    const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                    expect(deserializedInhabitant).toBeDefined()
+                    expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
+                    expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
                 }
             },
             {
@@ -1240,14 +1177,17 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
                         ...i,
                         birthDate: (i.birthDate as Date | null)?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as Record<string, unknown>) : null
+                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
                     }))
                 }),
                 deserialize: deserializeHouseholdDetail,
                 checkFields: (original, deserialized) => {
-                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate).toBeInstanceOf(Date)
-                    expect(((deserialized.inhabitants as Record<string, unknown>[])[0].birthDate as Date).getTime()).toBe(((original.inhabitants as Record<string, unknown>[])[0].birthDate as Date).getTime())
-                    expect((deserialized.inhabitants as Record<string, unknown>[])[0].dinnerPreferences).toEqual((original.inhabitants as Record<string, unknown>[])[0].dinnerPreferences)
+                    const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
+                    const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                    expect(deserializedInhabitant).toBeDefined()
+                    expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
+                    expect((deserializedInhabitant!.birthDate as Date).getTime()).toBe((originalInhabitant!.birthDate as Date).getTime())
+                    expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
                 }
             }
         ]

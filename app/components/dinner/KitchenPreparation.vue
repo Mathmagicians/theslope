@@ -77,8 +77,8 @@ const diningModeStats = computed(() => {
   const total = props.orders.length || 1 // Avoid division by zero, use 1 as divisor for empty
 
   // Active dining modes (people eating)
-  const modes = [DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.DINEINLATE]
-  const labels = {
+  const modes = [DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.DINEINLATE] as const
+  const labels: Record<typeof modes[number], string> = {
     [DinnerMode.TAKEAWAY]: 'TAKEAWAY',
     [DinnerMode.DINEIN]: 'SPIS HER',
     [DinnerMode.DINEINLATE]: 'SPIS SENT'
@@ -90,8 +90,9 @@ const diningModeStats = computed(() => {
     const portions = calculateTotalPortionsFromPrices(modeOrders)
 
     // For dine-in modes, calculate chairs (ADULT + CHILD, no BABY)
-    const chairs = [DinnerMode.DINEIN, DinnerMode.DINEINLATE].includes(mode)
-      ? modeOrders.filter(o => requiresChair(o.ticketPrice.ticketType)).length
+    const isDineIn = mode === DinnerMode.DINEIN || mode === DinnerMode.DINEINLATE
+    const chairs = isDineIn
+      ? modeOrders.filter(o => o.ticketType && requiresChair(o.ticketType)).length
       : null
 
     // Plates = portions rounded
@@ -106,7 +107,7 @@ const diningModeStats = computed(() => {
 
     return {
       key: mode,
-      label: labels[mode],
+      label: labels[mode]!,
       percentage,
       count,
       portions: Math.round(portions),
@@ -178,13 +179,13 @@ const normalizedWidths = computed(() => {
       </div>
     </div>
 
-    <!-- Bottom bar: Dining mode distribution - Proportional widths (min 10%, sum 100%) -->
-    <div class="flex overflow-hidden">
+    <!-- Bottom bar: Dining mode distribution - Proportional heights on mobile, widths on desktop -->
+    <div class="flex flex-col md:flex-row overflow-hidden">
       <div
         v-for="mode in diningModeStats"
         :key="mode.key"
-        :style="{ width: `${normalizedWidths[mode.key]}%` }"
-        class="border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border"
+        :style="{ flex: `${normalizedWidths[mode.key]} 0 0` }"
+        class="border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 p-3 md:p-4 text-center min-w-0 box-border"
         :class="getModeClasses(mode.key)"
       >
         <!-- Header with label and percentage -->
@@ -215,16 +216,16 @@ const normalizedWidths = computed(() => {
           {{ mode.plates }} tallerk.
         </div>
 
-        <!-- Allergies -->
-        <div v-if="mode.allergies && mode.allergies.length > 0" class="text-xs border-t pt-2">
+        <!-- Affected Diners (allergies matching menu) -->
+        <div v-if="mode.affectedDiners && mode.affectedDiners.length > 0" class="text-xs border-t pt-2">
           <div
-            v-for="allergy in mode.allergies"
-            :key="allergy.name"
+            v-for="diner in mode.affectedDiners"
+            :key="diner.inhabitant.id"
             class="flex items-center justify-center gap-1 truncate"
           >
-            <span>{{ allergy.icon }}</span>
-            <span class="truncate">{{ allergy.name }}</span>
-            <span v-if="allergy.count">({{ allergy.count }})</span>
+            <span v-if="diner.matchingAllergens[0]?.icon">{{ diner.matchingAllergens[0].icon }}</span>
+            <span class="truncate">{{ diner.inhabitant.name }}</span>
+            <span v-if="diner.matchingAllergens.length > 1">({{ diner.matchingAllergens.length }})</span>
           </div>
         </div>
       </div>

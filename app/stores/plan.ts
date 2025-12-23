@@ -1,5 +1,5 @@
 import type {Season} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -59,7 +59,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonKey,
             () => {
                 if (!selectedSeasonId.value) return Promise.resolve(null)
-                return $fetch(`/api/admin/season/${selectedSeasonId.value}`)
+                return $fetch<Season>(`/api/admin/season/${selectedSeasonId.value}`)
             },
             {
                 default: () => null,
@@ -92,6 +92,60 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         )
 
+        // Save season operation - useAsyncData pattern for loading state
+        const saveSeasonParams = ref<{ season: Season | null, isCreate: boolean }>({ season: null, isCreate: false })
+        const {
+            status: saveSeasonStatus,
+            error: saveSeasonError,
+            execute: executeSaveSeason
+        } = useAsyncData(
+            'plan-store-save-season',
+            async () => {
+                const { season, isCreate } = saveSeasonParams.value
+                if (!season) return null
+                if (isCreate) {
+                    return await $fetch<Season>('/api/admin/season', {
+                        method: 'PUT',
+                        body: season,
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                } else {
+                    return await $fetch<Season>(`/api/admin/season/${season.id}`, {
+                        method: 'POST',
+                        body: season,
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                }
+            },
+            { immediate: false }
+        )
+
+        // Activate/Deactivate season operation - useAsyncData pattern for loading state
+        const activateSeasonParams = ref<{ seasonId: number | null, action: 'activate' | 'deactivate' }>({ seasonId: null, action: 'activate' })
+        const {
+            status: activateSeasonStatus,
+            error: activateSeasonError,
+            execute: executeActivateSeason
+        } = useAsyncData(
+            'plan-store-activate-season',
+            async () => {
+                const { seasonId, action } = activateSeasonParams.value
+                if (action === 'activate' && seasonId) {
+                    return await $fetch<Season>('/api/admin/season/active', {
+                        method: 'POST',
+                        body: { seasonId },
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                } else if (action === 'deactivate') {
+                    return await $fetch<Season | null>('/api/admin/season/deactivate', {
+                        method: 'POST'
+                    })
+                }
+                return null
+            },
+            { immediate: false }
+        )
+
 
         // ========================================
         // Computed - Public API (derived from status)
@@ -99,6 +153,20 @@ export const usePlanStore = defineStore("Plan", () => {
         const isActiveSeasonIdLoading = computed(() => activeSeasonIdStatus.value === 'pending')
         const isActiveSeasonIdErrored = computed(() => activeSeasonIdStatus.value === 'error')
         const isActiveSeasonIdInitialized = computed(() => activeSeasonIdStatus.value === 'success')
+
+        // Save season loading states
+        const isSavingSeason = computed(() => saveSeasonStatus.value === 'pending')
+        // Compound state: true while API call OR subsequent refreshes are in progress
+        const isSavingSeasonFlowInProgress = computed(() =>
+            isSavingSeason.value || isSeasonsLoading.value
+        )
+
+        // Activate season loading states
+        const isActivatingSeason = computed(() => activateSeasonStatus.value === 'pending')
+        // Compound state: true while API call OR subsequent refreshes are in progress
+        const isActivatingSeasonFlowInProgress = computed(() =>
+            isActivatingSeason.value || isSeasonsLoading.value || isActiveSeasonIdLoading.value
+        )
 
         const isSeasonsLoading = computed(() => seasonsStatus.value === 'pending')
         const isSeasonsErrored = computed(() => seasonsStatus.value === 'error')
@@ -213,37 +281,17 @@ export const usePlanStore = defineStore("Plan", () => {
             loadSeason(id)
         }
 
-        const createSeason = async (season: Season): Promise<Season> => {
-            try {
-                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
-                const createdSeason = await $fetch<Season>('/api/admin/season', {
-                    method: 'PUT',
-                    body: season,
-                    headers: {'Content-Type': 'application/json'}
-                })
-                await loadSeasons()
-                return createdSeason
-            } catch (e: unknown) {
-                handleApiError(e, 'createSeason')
-                throw e
-            }
-        }
+        const createSeason = async (season: Season): Promise<Season | null> => {
+            saveSeasonParams.value = { season, isCreate: true }
+            await executeSaveSeason()
 
-        const generateDinnerEvents = async (seasonId: number) => {
-            try {
-                const result = await $fetch<{
-                    seasonId: number,
-                    eventCount: number,
-                    events: unknown[]
-                }>(`/api/admin/season/${seasonId}/generate-dinner-events`, {
-                    method: 'POST'
-                })
-                console.info(`🗓️ > PLAN_STORE > Generated ${result.eventCount} dinner events for season ${seasonId}`)
-                return result
-            } catch (e: unknown) {
-                handleApiError(e, 'generateDinnerEvents')
-                throw e
+            if (saveSeasonError.value) {
+                handleApiError(saveSeasonError.value, 'createSeason')
+                return null
             }
+
+            await loadSeasons()
+            return season
         }
 
         const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
@@ -282,47 +330,53 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const updateSeason = async (season: Season) => {
-            try {
-                // API accepts domain objects (JSON.stringify converts Date to ISO strings)
-                await $fetch(`/api/admin/season/${season.id}`, {
-                    method: 'POST',
-                    body: season,
-                    headers: {'Content-Type': 'application/json'}
-                })
-                await loadSeasons()
-                // Refresh the selected season to get updated data
-                if (selectedSeasonId.value) {
-                    await refreshSelectedSeason()
-                }
-            } catch (e: unknown) {
-                handleApiError(e, 'updateSeason')
-                throw e
+        const updateSeason = async (season: Season): Promise<Season | null> => {
+            saveSeasonParams.value = { season, isCreate: false }
+            await executeSaveSeason()
+
+            if (saveSeasonError.value) {
+                handleApiError(saveSeasonError.value, 'updateSeason')
+                return null
             }
+
+            await loadSeasons()
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
+            }
+            return season
+        }
+
+        // Shared implementation for activate/deactivate
+        const executeSeasonActivation = async (seasonId: number | null) => {
+            activateSeasonParams.value = { seasonId, action: seasonId ? 'activate' : 'deactivate' }
+            await executeActivateSeason()
+
+            if (activateSeasonError.value) {
+                return handleApiError(activateSeasonError.value, 'seasonActivation')
+            }
+
+            await loadActiveSeason()
+            await loadSeasons()
         }
 
         const activateSeason = async (seasonId: number) => {
-            try {
-                console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
-                await $fetch<Season>('/api/admin/season/active', {
-                    method: 'POST',
-                    body: {seasonId},
-                    headers: {'Content-Type': 'application/json'}
-                })
-                // Refresh
-                await loadActiveSeason()
-                await loadSeasons()
-                // Switch to the newly activated season
-                loadSeason(seasonId)
-                console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
-            } catch (e: unknown) {
-                handleApiError(e, 'activateSeason')
-                throw e
+            console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
+            await executeSeasonActivation(seasonId)
+            loadSeason(seasonId)
+            console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
+        }
+
+        const deactivateSeason = async () => {
+            console.info(`🌞 > PLAN_STORE > Deactivating season`)
+            await executeSeasonActivation(null)
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
             }
+            console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamDetail | CookingTeamDetail[]): Promise<CookingTeamDetail[]> => {
+        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CookingTeamDetail[]> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
@@ -347,14 +401,14 @@ export const usePlanStore = defineStore("Plan", () => {
             return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
         }
 
-        const updateTeam = async (team: CookingTeamDetail) => {
+        const updateTeam = async (team: CookingTeamUpdate) => {
             try {
                 await $fetch(`/api/admin/team/${team.id}`, {
                     method: 'post',
                     body: team,
                     headers: {'Content-Type': 'application/json'}
                 })
-                console.info(`👥 > PLAN_STORE > Updated team "${team.name}"`)
+                console.info(`👥 > PLAN_STORE > Updated team "${team.name ?? team.id}"`)
                 // Refresh selected season to get updated teams
                 if (selectedSeasonId.value) {
                     await refreshSelectedSeason()
@@ -382,7 +436,7 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
-        const addTeamMember = async (assignment: CookingTeamAssignment): Promise<CookingTeamAssignment> => {
+        const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
             try {
                 const created = await $fetch<CookingTeamAssignment>('/api/admin/team/assignment', {
                     method: 'PUT',
@@ -469,6 +523,8 @@ export const usePlanStore = defineStore("Plan", () => {
             isActiveSeasonIdLoading,
             isActiveSeasonIdErrored,
             isActiveSeasonIdInitialized,
+            isSavingSeasonFlowInProgress,
+            isActivatingSeasonFlowInProgress,
             activeSeasonIdError,
             isSeasonsLoading,
             isNoSeasons,
@@ -493,7 +549,7 @@ export const usePlanStore = defineStore("Plan", () => {
             createSeason,
             updateSeason,
             activateSeason,
-            generateDinnerEvents,
+            deactivateSeason,
             assignTeamAffinitiesAndEvents,
             createTeam,
             updateTeam,

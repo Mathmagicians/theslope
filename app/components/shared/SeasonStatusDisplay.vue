@@ -58,10 +58,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   activate: []
+  deactivate: []
 }>()
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
+const {ICONS} = useTheSlopeDesignSystem()
 
 // Inject responsive breakpoint
 const isMd = inject<Ref<boolean>>('isMd')
@@ -73,8 +75,8 @@ const season = computed(() => {
   return planStore.seasons.find(s => s.id === props.seasonId) ?? null
 })
 
-// Get loading state from store
-const isActiveSeasonIdLoading = computed(() => planStore.isActiveSeasonIdLoading)
+// Get loading state from store for activation operations (compound state tracks API + refreshes)
+const isActivatingSeason = computed(() => planStore.isActivatingSeasonFlowInProgress)
 
 // Compute season status
 const status = computed(() => {
@@ -140,21 +142,41 @@ const alertConfig = computed(() => {
   }
 })
 
-// Show button only if season is eligible (can be activated or already active)
+// Button configuration based on active state
+const buttonConfig = computed(() => ({
+  activate: {
+    name: 'activate-season',
+    color: 'success' as const,
+    leadingIcon: ICONS.playCircle,
+    trailingIcon: ICONS.arrowRight,
+    label: 'Aktiver Sæson',
+    action: () => emit('activate')
+  },
+  deactivate: {
+    name: 'deactivate-season',
+    color: 'warning' as const,
+    leadingIcon: ICONS.pauseCircle,
+    trailingIcon: ICONS.arrowRight,
+    label: 'Deaktiver Sæson',
+    action: () => emit('deactivate')
+  }
+}))
+
+const currentButton = computed(() =>
+  season.value?.isActive ? buttonConfig.value.deactivate : buttonConfig.value.activate
+)
+
+// Button text - shows "Arbejder..." when loading
+const buttonText = computed(() => {
+  if (isActivatingSeason.value) return 'Arbejder...'
+  return currentButton.value.label
+})
+
+// Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
   if (!props.showActivationButton || !season.value) return false
-  // Show if already active (will be disabled) or if can be activated
   return season.value.isActive || canSeasonBeActive(season.value)
 })
-
-// Disable button if already active
-const isActivateButtonDisabled = computed(() => {
-  return season.value?.isActive ?? false
-})
-
-const handleActivate = () => {
-  emit('activate')
-}
 </script>
 
 <template>
@@ -167,20 +189,20 @@ const handleActivate = () => {
     :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
-      <UButton
-        name="activate-season"
-        color="success"
-        icon="i-heroicons-check-circle"
-        :size="getIsMd ? 'md' : 'sm'"
-        :disabled="isActivateButtonDisabled"
-        :square="!getIsMd"
-        :loading="isActiveSeasonIdLoading"
-        @click="handleActivate"
-      >
-        <template v-if="getIsMd">
-          {{ isActivateButtonDisabled ? 'Fællesspisnings sæson er i gang 🟢' : 'Aktiver Sæson' }}
-        </template>
-      </UButton>
+      <UFormField :hint="getIsMd ? (season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv') : undefined">
+        <UButton
+          :name="currentButton.name"
+          :color="currentButton.color"
+          :leading-icon="currentButton.leadingIcon"
+          :trailing-icon="currentButton.trailingIcon"
+          :size="getIsMd ? 'md' : 'sm'"
+          :loading="isActivatingSeason"
+          :disabled="isActivatingSeason"
+          @click="currentButton.action"
+        >
+          {{ buttonText }}
+        </UButton>
+      </UFormField>
     </template>
   </UAlert>
 </template>

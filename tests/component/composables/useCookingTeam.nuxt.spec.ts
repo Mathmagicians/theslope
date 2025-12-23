@@ -22,6 +22,32 @@ describe('useCookingTeam', () => {
     })
   })
 
+  describe('extractTeamNumber', () => {
+    const { extractTeamNumber } = useCookingTeam()
+
+    describe('valid team names', () => {
+      it.each([
+        { teamName: 'Madhold 1', expected: 1, description: 'CSV format' },
+        { teamName: 'Madhold 1 - 08/25-06/26', expected: 1, description: 'full format extracts first number' },
+        { teamName: 'Madhold 10 - Winter 2025', expected: 10, description: 'double digit' },
+        { teamName: '0', expected: 0, description: 'zero boundary' },
+        { teamName: '99Team', expected: 99, description: 'number at start' },
+        { teamName: 'Team99End', expected: 99, description: 'number in middle' }
+      ])('extracts $expected from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(extractTeamNumber(teamName)).toBe(expected)
+      })
+    })
+
+    describe('invalid team names', () => {
+      it.each([
+        { teamName: 'Madhold', description: 'no digits' },
+        { teamName: '', description: 'empty string' }
+      ])('returns null for "$teamName" ($description)', ({ teamName }) => {
+        expect(extractTeamNumber(teamName)).toBeNull()
+      })
+    })
+  })
+
   describe('getDefaultCookingTeam', () => {
     it('creates default team with generated name', () => {
       const { getDefaultCookingTeam } = useCookingTeam()
@@ -149,7 +175,7 @@ describe('useCookingTeam', () => {
       const annaResult = inhabitants.value?.find(i => i.id === 1)
       expect(annaResult).toBeDefined()
       expect(annaResult!.CookingTeamAssignment).toHaveLength(1)
-      expect(annaResult!.CookingTeamAssignment[0]).toMatchObject({
+      expect(annaResult!.CookingTeamAssignment![0]).toMatchObject({
         id: 101,
         role: 'CHEF',
         cookingTeamId: 1,
@@ -161,7 +187,7 @@ describe('useCookingTeam', () => {
       const bobResult = inhabitants.value?.find(i => i.id === 2)
       expect(bobResult).toBeDefined()
       expect(bobResult!.CookingTeamAssignment).toHaveLength(1)
-      expect(bobResult!.CookingTeamAssignment[0]).toMatchObject({
+      expect(bobResult!.CookingTeamAssignment![0]).toMatchObject({
         id: 102,
         role: 'COOK',
         cookingTeamId: 2,

@@ -141,8 +141,7 @@ const {
   updateTeam,
   deleteTeam,
   addTeamMember,
-  removeTeamMember,
-  assignTeamAffinitiesAndEvents
+  removeTeamMember
 } = store
 
 // Get teams from selected season - ALWAYS show live data
@@ -177,13 +176,14 @@ const createDraft = ref<CookingTeamDisplay[]>([])
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
-  if (!selectedSeason.value) return
-  if (formMode.value === FORM_MODES.CREATE && selectedSeason.value) {
+  const season = selectedSeason.value
+  if (!season) return
+  if (formMode.value === FORM_MODES.CREATE) {
     const existingTeamCount = teams.value.length
     createDraft.value = Array.from({length: teamCount.value}, (_, index) =>
         getDefaultCookingTeam(
-            selectedSeason.value.id!,
-            selectedSeason.value.shortName ?? '',
+            season.id!,
+            season.shortName ?? '',
             existingTeamCount + index + 1  // Start numbering from N+1
         )
     )
@@ -250,24 +250,13 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // BUSINESS LOGIC
 
-// CREATE MODE: Batch create teams
+// CREATE MODE: Batch create teams (server auto-assigns affinities + events)
 const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // Step 1: Create all teams in batch
     await createTeam(createDraft.value)
-
-    // Step 2: Assign affinities and teams to events
-    try {
-      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-      showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet - ${result.eventCount} fællesspisninger tildelt`)
-    } catch (assignmentError) {
-      // Teams created but affinity/event assignment failed
-      showSuccessToast('Madhold oprettet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-      console.error(assignmentError)
-    }
-
+    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med automatisk tildeling`)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
@@ -275,7 +264,7 @@ const handleBatchCreateTeams = async () => {
   }
 }
 
-// EDIT MODE: Add new team (IMMEDIATE SAVE)
+// EDIT MODE: Add new team (IMMEDIATE SAVE, server auto-assigns affinities + events)
 const handleAddTeam = async () => {
   if (!selectedSeason.value?.id) return
 
@@ -285,20 +274,8 @@ const handleAddTeam = async () => {
         selectedSeason.value.shortName ?? '',
         teams.value.length + 1
     )
-
-    // Step 1: Create the team
     await createTeam(newTeam)
-
-    // Step 2: Assign affinities and teams to events (recalculates rotation)
-    try {
-      const result = await assignTeamAffinitiesAndEvents(selectedSeason.value.id)
-      showSuccessToast('Madhold tilføjet', `Madlavningsdage tildelt - ${result.eventCount} fællesspisninger opdateret`)
-    } catch (assignmentError) {
-      // Team created but affinity/event assignment failed
-      showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger kunne ikke tildeles automatisk')
-      console.error(assignmentError)
-    }
-
+    showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger opdateret automatisk')
     // teams reactively updates from store refresh - no manual update needed
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [ADD] Error adding team:', error)
@@ -311,23 +288,24 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
   const team = teams.value.find(t => t.id === teamId)
   if (!team) return
 
-  await updateTeam({...team, name: newName}) // Immediate save to DB
+  await updateTeam({id: teamId, name: newName}) // Immediate save to DB
   // No toast for individual name updates (too noisy)
   // teams reactively updates from store refresh - no manual update needed
 }
 
 // EDIT MODE: Update team affinity (IMMEDIATE SAVE)
-const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boolean>) => {
+const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boolean> | null) => {
   const team = teams.value.find(t => t.id === teamId)
-  if (!team) return
+  if (!team || !affinity) return
 
-  await updateTeam({...team, affinity}) // Immediate save to DB
+  await updateTeam({id: teamId, affinity}) // Immediate save to DB
   showSuccessToast('Madlavningsdage for teams opdateret')
   // teams reactively updates from store refresh - no manual update needed
 }
 
 // EDIT MODE: Delete team (IMMEDIATE DELETE)
-const handleDeleteTeam = async (teamId: number) => {
+const handleDeleteTeam = async (teamId: number | undefined) => {
+  if (!teamId) return
   await deleteTeam(teamId) // Immediate delete from DB
   showSuccessToast('Madhold slettet')
   // teams reactively updates from store refresh - no manual update needed
@@ -469,7 +447,7 @@ const columns = [
                   variant="link"
                   size="xl"
               >
-                <template #item="{ item }">
+                <template #default="{ item }">
                   <CookingTeamBadges
                       :team-number="item.value + 1"
                       :team-name="item.label"
@@ -483,19 +461,19 @@ const columns = [
 
             <!-- RIGHT PANEL: Edit Selected Team -->
             <div class="w-full md:w-4/5 space-y-4">
-              <div v-if="selectedTeam" class="space-y-4">
+              <div v-if="selectedTeam?.id" class="space-y-4">
                 <CookingTeamCard
                     ref="cookingTeamCardRef"
                     :team-id="selectedTeam.id"
-                    :team-number="displayedTeams.findIndex(t => t.id === selectedTeam.id) + 1"
+                    :team-number="displayedTeams.findIndex(t => t.id === selectedTeam!.id) + 1"
                     :season-id="selectedSeason?.id"
                     :season-cooking-days="selectedSeason?.cookingDays"
                     :season-dates="selectedSeason?.seasonDates"
                     :holidays="selectedSeason?.holidays"
                     :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
                     :mode="FORM_MODES.EDIT"
-                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam.id!, newName)"
-                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam.id!, affinity)"
+                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam!.id!, newName)"
+                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam!.id!, affinity)"
                     @delete="handleDeleteTeam"
                     @add:member="handleAddMember"
                     @remove:member="handleRemoveMember"
@@ -586,7 +564,7 @@ v-else
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
         <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
-          Opret madhold
+          {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
         <UButton color="neutral" variant="ghost" @click="handleCancel">
           Annuller
@@ -602,7 +580,7 @@ v-else
             :disabled="isActionLoading"
             @click="handleAddTeam"
         >
-          Tilføj madhold
+          {{ isActionLoading ? 'Arbejder...' : 'Tilføj madhold' }}
         </UButton>
         <UButton color="secondary" variant="ghost" @click="handleCancel">
           Annuller

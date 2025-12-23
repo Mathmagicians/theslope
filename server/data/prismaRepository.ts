@@ -2,6 +2,7 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import type {PreferenceUpdate} from '~/composables/useSeason'
 
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
@@ -27,6 +28,8 @@ import type {
     CookingTeamAssignment
 } from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import type {BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import {useBillingValidation} from '~/composables/useBillingValidation'
 
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
@@ -187,7 +190,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
 export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
     console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeUserWithInhabitant} = useCoreValidation()
+    const {deserializeUserDetail} = useCoreValidation()
 
     try {
         const user = await prisma.user.findUnique({
@@ -209,7 +212,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
             console.info(`🪪 > USER > [GET] Inhabitant: ${inhabitantInfo}`)
 
             // Use composable deserialization function (ADR-010)
-            return deserializeUserWithInhabitant(user)
+            return deserializeUserDetail(user)
         } else {
             console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
@@ -267,6 +270,120 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
         return deserializeInhabitantDetail(newInhabitant)
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [SAVE]: Error saving inhabitant ${inhabitant.name} to household ${householdId}`, error)
+    }
+}
+
+/**
+ * Batch create inhabitants using createManyAndReturn (ADR-009).
+ * Returns created inhabitant IDs only - caller refetches if details needed.
+ *
+ * @param d1Client - D1 database client
+ * @param inhabitants - Array of inhabitants without householdId (max 8 per call due to D1 limits)
+ * @param householdId - Household ID to assign to all inhabitants
+ * @returns Array of created inhabitant IDs
+ */
+export async function createInhabitantsBatch(
+    d1Client: D1Database,
+    inhabitants: Omit<InhabitantCreate, 'householdId'>[],
+    householdId: number
+): Promise<number[]> {
+    console.info(`👩‍🏠 > INHABITANT > [BATCH CREATE] Creating ${inhabitants.length} inhabitants for household ${householdId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const { InhabitantCreateSchema } = useCoreValidation()
+
+    try {
+        // ADR-010: Validate input with schema (add householdId for validation)
+        const validatedInhabitants = inhabitants.map(i =>
+            InhabitantCreateSchema.parse({ ...i, householdId })
+        )
+
+        const created = await prisma.inhabitant.createManyAndReturn({
+            data: validatedInhabitants.map(i => ({
+                heynaboId: i.heynaboId,
+                householdId: householdId,
+                pictureUrl: i.pictureUrl ?? Prisma.skip,
+                name: i.name,
+                lastName: i.lastName,
+                birthDate: i.birthDate ?? Prisma.skip
+            })),
+            select: { id: true, heynaboId: true }
+        })
+
+        const createdIds = created.map(i => i.id)
+        console.info(`👩‍🏠 > INHABITANT > [BATCH CREATE] Created ${createdIds.length} inhabitants: ${createdIds.join(', ')}`)
+
+        return createdIds
+    } catch (error) {
+        return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH CREATE]: Error creating ${inhabitants.length} inhabitants for household ${householdId}`, error)
+    }
+}
+
+/**
+ * Delete users associated with inhabitants by heynaboId.
+ * Used by Heynabo sync to clean up users when their inhabitants are removed.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of inhabitant Heynabo IDs
+ * @returns Number of deleted users
+ */
+export async function deleteUsersByInhabitantHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`🪪 > USER > [BATCH DELETE] Deleting users for ${heynaboIds.length} inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Find user IDs for these inhabitants
+        const inhabitants = await prisma.inhabitant.findMany({
+            where: { heynaboId: { in: heynaboIds } },
+            select: { userId: true }
+        })
+
+        const userIds = inhabitants
+            .map(i => i.userId)
+            .filter((id): id is number => id !== null)
+
+        if (userIds.length === 0) {
+            console.info(`🪪 > USER > [BATCH DELETE] No users to delete`)
+            return 0
+        }
+
+        const result = await prisma.user.deleteMany({
+            where: { id: { in: userIds } }
+        })
+
+        console.info(`🪪 > USER > [BATCH DELETE] Deleted ${result.count} users`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`🪪 > USER > [BATCH DELETE]: Error deleting users`, error)
+    }
+}
+
+/**
+ * Batch delete inhabitants by heynaboId (ADR-005: Prisma handles CASCADE).
+ * Used by Heynabo sync when inhabitants are removed from source system.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of Heynabo IDs to delete
+ * @returns Number of deleted inhabitants
+ */
+export async function deleteInhabitantsByHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleting ${heynaboIds.length} inhabitants by heynaboId`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const result = await prisma.inhabitant.deleteMany({
+            where: { heynaboId: { in: heynaboIds } }
+        })
+
+        console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleted ${result.count} inhabitants`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH DELETE]: Error deleting inhabitants`, error)
     }
 }
 
@@ -380,6 +497,39 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
     }
 }
 
+/**
+ * Bulk update inhabitant dinner preferences.
+ * ADR-009: Batch operations return count (Display-weight) to avoid D1 rate limits.
+ *
+ * @param updates - Array of {inhabitantId, dinnerPreferences} to update
+ * @returns Number of successfully updated inhabitants
+ */
+export async function updateInhabitantPreferencesBulk(
+    d1Client: D1Database,
+    updates: PreferenceUpdate[]
+): Promise<number> {
+    console.info(`👩‍🏠 > INHABITANT > [BULK_PREFS] Updating preferences for ${updates.length} inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {serializeWeekDayMap} = useCoreValidation()
+
+    try {
+        const results = await Promise.all(
+            updates.map(({inhabitantId, dinnerPreferences}) =>
+                prisma.inhabitant.update({
+                    where: {id: inhabitantId},
+                    data: {dinnerPreferences: serializeWeekDayMap(dinnerPreferences)},
+                    select: {id: true} // Minimal select for performance
+                })
+            )
+        )
+
+        console.info(`👩‍🏠 > INHABITANT > [BULK_PREFS] Successfully updated ${results.length} inhabitants`)
+        return results.length
+    } catch (error) {
+        return throwH3Error('👩‍🏠 > INHABITANT > [BULK_PREFS]: Error updating inhabitant preferences', error)
+    }
+}
+
 /*** HOUSEHOLDS ***/
 
 export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<HouseholdDetail> {
@@ -423,6 +573,74 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
         return householdDetail
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLD > [SAVE]: Error saving household at ${household?.address}`, error)
+    }
+}
+
+/**
+ * Batch create households using createManyAndReturn (ADR-009).
+ * Returns created household IDs only - caller refetches if details needed.
+ *
+ * @param d1Client - D1 database client
+ * @param households - Array of HouseholdCreate (max 8 per call due to D1 limits)
+ * @returns Array of created household IDs
+ */
+export async function createHouseholdsBatch(
+    d1Client: D1Database,
+    households: HouseholdCreate[]
+): Promise<number[]> {
+    console.info(`🏠 > HOUSEHOLD > [BATCH CREATE] Creating ${households.length} households`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const { HouseholdCreateSchema } = useCoreValidation()
+
+    try {
+        // ADR-010: Validate input with schema
+        const validatedHouseholds = households.map(h => HouseholdCreateSchema.parse(h))
+
+        const created = await prisma.household.createManyAndReturn({
+            data: validatedHouseholds.map(h => ({
+                heynaboId: h.heynaboId,
+                pbsId: h.pbsId,
+                movedInDate: h.movedInDate,
+                moveOutDate: h.moveOutDate ?? Prisma.skip,
+                name: h.name,
+                address: h.address
+            })),
+            select: { id: true, heynaboId: true }
+        })
+
+        const createdIds = created.map(h => h.id)
+        console.info(`🏠 > HOUSEHOLD > [BATCH CREATE] Created ${createdIds.length} households: ${createdIds.join(', ')}`)
+
+        return createdIds
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLD > [BATCH CREATE]: Error creating ${households.length} households`, error)
+    }
+}
+
+/**
+ * Batch delete households by heynaboId (ADR-005: Prisma handles CASCADE).
+ * Used by Heynabo sync when households are removed from source system.
+ *
+ * @param d1Client - D1 database client
+ * @param heynaboIds - Array of Heynabo IDs to delete
+ * @returns Number of deleted households
+ */
+export async function deleteHouseholdsByHeynaboId(
+    d1Client: D1Database,
+    heynaboIds: number[]
+): Promise<number> {
+    console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleting ${heynaboIds.length} households by heynaboId`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const result = await prisma.household.deleteMany({
+            where: { heynaboId: { in: heynaboIds } }
+        })
+
+        console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleted ${result.count} households`)
+        return result.count
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLD > [BATCH DELETE]: Error deleting households`, error)
     }
 }
 
@@ -596,6 +814,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
+// Returns active season or null if none active
 export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
     console.info(`🌞 > SEASON > [GET] Fetching current active season`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -655,12 +874,34 @@ export async function fetchActiveSeasonId(d1Client: D1Database): Promise<number 
 }
 
 /**
- * Activate a season - ensures only one season is active at a time
- * Validates that season exists before deactivating other seasons
+ * Deactivate the current active season (idempotent - returns null if none active)
  * @param d1Client - D1 database client
- * @param seasonId - ID of season to activate
- * @returns Activated season
+ * @returns Deactivated season or null if none was active
  */
+export async function deactivateSeason(d1Client: D1Database): Promise<Season | null> {
+    console.info(`🌞 > SEASON > [DEACTIVATE] Deactivating active season`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        if (!activeSeason) {
+            console.info(`🌞 > SEASON > [DEACTIVATE] No active season to deactivate`)
+            return null
+        }
+
+        await prisma.season.update({
+            where: {id: activeSeason.id!},
+            data: {isActive: false}
+        })
+
+        const season = await fetchSeason(d1Client, activeSeason.id!)
+        console.info(`🌞 > SEASON > [DEACTIVATE] Deactivated season ${season?.shortName}`)
+        return season
+    } catch (error) {
+        return throwH3Error('🌞 > SEASON > [DEACTIVATE] Error deactivating season', error)
+    }
+}
+
 export async function activateSeason(d1Client: D1Database, seasonId: number): Promise<Season> {
     console.info(`🌞 > SEASON > [POST] Activating season ID ${seasonId}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -704,7 +945,8 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
                                 dinners: true  // Aggregate count of dinners per team
                             }
                         }
-                    }
+                    },
+                    orderBy: {name: 'asc'}
                 },
                 ticketPrices: true
             }
@@ -736,7 +978,8 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                                 dinners: true  // Aggregate count of dinners per team
                             }
                         }
-                    }
+                    },
+                    orderBy: {name: 'asc'}
                 },
                 ticketPrices: true
             }
@@ -862,6 +1105,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     console.info(`🌞 > SEASON > [UPDATE] Updating season with ID ${seasonData.id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {SeasonSchema} = useSeasonValidation()
+    const {reconcileTicketPrices} = useTicketPriceValidation()
 
     // ADR-010: Validate input BEFORE writing to database
     const validatedSeasonData = SeasonSchema.parse(seasonData)
@@ -872,18 +1116,46 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     // Exclude id and read-only relation fields from update
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
+        // Handle ticket prices using reconcileTicketPrices to respect FK constraint (Order.ticketPriceId onDelete: Restrict)
+        if (ticketPrices && ticketPrices.length > 0) {
+            const existingPrices = await prisma.ticketPrice.findMany({
+                where: { seasonId: validatedSeasonData.id! }
+            })
+
+            const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
+
+            for (const tp of create) {
+                await prisma.ticketPrice.create({
+                    data: {
+                        seasonId: validatedSeasonData.id!,
+                        ticketType: tp.ticketType,
+                        price: tp.price,
+                        // ADR-012: Use Prisma.skip for optional fields that may be undefined
+                        description: tp.description === undefined ? Prisma.skip : tp.description,
+                        maximumAgeLimit: tp.maximumAgeLimit === undefined ? Prisma.skip : tp.maximumAgeLimit
+                    }
+                })
+            }
+
+            for (const tp of update) {
+                const { id: tpId, seasonId: _seasonId, ...priceData } = tp
+                if (tpId) await prisma.ticketPrice.update({ where: { id: tpId }, data: priceData })
+            }
+
+            for (const tp of toDelete) {
+                if (tp.id) {
+                    try {
+                        await prisma.ticketPrice.delete({ where: { id: tp.id } })
+                    } catch {
+                        console.warn(`🌞 > SEASON > [UPDATE] Cannot delete ticket price ${tp.id} - referenced by orders`)
+                    }
+                }
+            }
+        }
 
         const updatedSeason = await prisma.season.update({
             where: {id: validatedSeasonData.id},
-            data: {
-                ...updateData,
-                // Replace all ticket prices (delete existing, create new)
-                ticketPrices: ticketPrices ? {
-                    deleteMany: {},  // Delete all existing ticket prices for this season
-                    // Strip id and seasonId - Prisma auto-generates id and sets seasonId from relation
-                    create: ticketPrices.map(({id, seasonId, ...price}) => price)
-                } : Prisma.skip
-            },
+            data: updateData,
             include: {
                 ticketPrices: true
             }
@@ -908,23 +1180,23 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 // Get serialization utilities for CookingTeam
 const {
     serializeCookingTeam: _serializeCookingTeam,
-    deserializeCookingTeam,
+    deserializeCookingTeamDisplay,
     deserializeCookingTeamAssignment
 } = useCookingTeamValidation()
 
 /**
  * Create team assignment (ADR-009)
- * Accepts: CookingTeamAssignment without id (cookingTeamId required in body)
- * Returns: CookingTeamAssignment (with all relations)
+ * Accepts: CookingTeamAssignment without id and inhabitant (inhabitant populated via Prisma include)
+ * Returns: CookingTeamAssignment (with all relations including inhabitant)
  */
-export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id'>): Promise<CookingTeamAssignment> {
+export async function createTeamAssignment(d1Client: D1Database, assignmentData: Omit<CookingTeamAssignment, 'id' | 'inhabitant'>): Promise<CookingTeamAssignment> {
     console
         .info(`👥🔗 > ASSIGNMENT > [CREATE] Creating team assignment for inhabitant ${assignmentData.inhabitantId} in team ${assignmentData.cookingTeamId} with role ${assignmentData.role}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {serializeWeekDayMap} = useCookingTeamValidation()
 
-    // Extract affinity and inhabitant (relation field) for conditional handling
-    const {affinity, inhabitant, ...createData} = assignmentData
+    // Extract affinity for conditional handling
+    const {affinity, ...createData} = assignmentData
 
     try {
         const assignment = await prisma.cookingTeamAssignment.create({
@@ -989,7 +1261,6 @@ export async function findTeamAssignmentByTeamAndInhabitant(
 ): Promise<CookingTeamAssignment | null> {
     console.info(`👥🔗 > ASSIGNMENT > [FIND] Finding assignment for team ${cookingTeamId} and inhabitant ${inhabitantId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, deserializeWeekDayMap} = useCookingTeamValidation()
 
     try {
         const assignment = await prisma.cookingTeamAssignment.findFirst({
@@ -1007,13 +1278,8 @@ export async function findTeamAssignmentByTeamAndInhabitant(
             return null
         }
 
-        // ADR-010: Deserialize affinity if present
-        const deserializedAssignment = {
-            ...assignment,
-            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
-        }
-
-        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+        // ADR-010: Use deserializeCookingTeamAssignment to properly deserialize affinity AND inhabitant
+        return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         return throwH3Error(`👥🔗 > ASSIGNMENT > [FIND]: Error finding team assignment`, error)
     }
@@ -1032,7 +1298,7 @@ export async function updateTeamAssignment(
 ): Promise<CookingTeamAssignment> {
     console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Updating team assignment ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {CookingTeamAssignmentSchema, serializeWeekDayMapNullable, deserializeWeekDayMap} = useCookingTeamValidation()
+    const {serializeWeekDayMapNullable} = useCookingTeamValidation()
 
     try {
         // Extract affinity for serialization if present
@@ -1050,14 +1316,9 @@ export async function updateTeamAssignment(
             }
         })
 
-        // ADR-010: Deserialize affinity if present
-        const deserializedAssignment = {
-            ...assignment,
-            affinity: assignment.affinity ? deserializeWeekDayMap(assignment.affinity) : null
-        }
-
+        // ADR-010: Use deserializeCookingTeamAssignment to properly deserialize affinity AND inhabitant
         console.info(`👥🔗 > ASSIGNMENT > [UPDATE] Successfully updated assignment ${id}`)
-        return CookingTeamAssignmentSchema.parse(deserializedAssignment)
+        return deserializeCookingTeamAssignment(assignment)
     } catch (error) {
         return throwH3Error(`👥🔗 > ASSIGNMENT > [UPDATE]: Error updating team assignment ${id}`, error)
     }
@@ -1123,7 +1384,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
         }))
 
         // Deserialize from database format
-        const deserializedTeams = teamsWithCount.map(team => deserializeCookingTeam(team))
+        const deserializedTeams = teamsWithCount.map(team => deserializeCookingTeamDisplay(team))
 
         console.info(`👥 > TEAM > [GET] Successfully fetched ${teams.length} teams`, 'Season: ', seasonId ? ` for season ${seasonId}` : '')
         return deserializedTeams
@@ -1301,7 +1562,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
 export async function updateTeam(d1Client: D1Database, id: number, teamData: CookingTeamUpdate): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [UPDATE] Updating team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {toPrismaUpdateData, deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {toPrismaUpdateData, deserializeCookingTeamDetail, serializeCookingTeamAssignment} = useCookingTeamValidation()
 
     // Transform domain object to Prisma update format (excludes computed fields, serializes WeekDayMap)
     const {assignments, affinity, ...updateData} = toPrismaUpdateData(teamData)
@@ -1317,15 +1578,8 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                 // Replace all assignments (delete existing, create new)
                 assignments: assignments?.length ? {
                     deleteMany: {},  // Delete all existing assignments for this team
-                    // Strip id and cookingTeamId - Prisma auto-generates id and sets cookingTeamId from relation
-                    // Handle affinity: null using Prisma.skip to omit field entirely
-                    create: assignments.map((item: CookingTeamAssignment) => {
-                        const {id, cookingTeamId, affinity, ...assignment} = item
-                        return {
-                            ...assignment,
-                            affinity: affinity ?? PrismaFromClient.skip
-                        }
-                    })
+                    // ADR-010: Use composable's serialize function for assignment data
+                    create: assignments.map((item: CookingTeamAssignment) => serializeCookingTeamAssignment(item))
                 } : PrismaFromClient.skip
             },
             include: {
@@ -1393,5 +1647,54 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         return deserializeCookingTeamDetail(teamWithEmptyRelations)
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] > Error deleting team with ID ${id}`, error)
+    }
+}
+
+// ============================================================================
+// BILLING PERIOD SUMMARY CRUD
+// ============================================================================
+
+const {BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+
+const billingPeriodDetailInclude = {
+    invoices: true
+} as const
+
+export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise<BillingPeriodSummaryDisplay[]> => {
+    console.info('💰 > BILLING > [GET] Fetching all billing period summaries')
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summaries = await prisma.billingPeriodSummary.findMany({orderBy: {cutoffDate: 'desc'}})
+        console.info(`💰 > BILLING > [GET] Returning ${summaries.length} billing period summaries`)
+        return summaries.map(s => BillingPeriodSummaryDisplaySchema.parse(s))
+    } catch (error) {
+        return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summaries', error)
+    }
+}
+
+export const fetchBillingPeriodSummary = async (d1Client: D1Database, id: number): Promise<BillingPeriodSummaryDetail | null> => {
+    console.info(`💰 > BILLING > [GET] Fetching billing period summary ID ${id}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summary = await prisma.billingPeriodSummary.findUnique({where: {id}, include: billingPeriodDetailInclude})
+        if (!summary) return null
+        return BillingPeriodSummaryDetailSchema.parse(summary)
+    } catch (error) {
+        return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period summary ID ${id}`, error)
+    }
+}
+
+export const fetchBillingPeriodSummaryByToken = async (d1Client: D1Database, token: string): Promise<BillingPeriodSummaryDetail | null> => {
+    console.info('💰 > BILLING > [GET] Fetching billing period summary by token')
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        const summary = await prisma.billingPeriodSummary.findUnique({where: {shareToken: token}, include: billingPeriodDetailInclude})
+        if (!summary) return null
+        return BillingPeriodSummaryDetailSchema.parse(summary)
+    } catch (error) {
+        return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summary by token', error)
     }
 }

@@ -1,7 +1,7 @@
-// POST /api/admin/teams/[id] - Update team, only if season is not in the past
+// POST /api/admin/teams/[id] - Update team and auto-reassign affinities + dinner events
 
 import {defineEventHandler, createError, getValidatedRouterParams, readValidatedBody} from "h3"
-import {updateTeam} from "~~/server/data/prismaRepository"
+import {updateTeamWithAssignments} from "~~/server/utils/teamService"
 import type {CookingTeamDetail, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -44,9 +44,13 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👥 > TEAM > [POST] Updating team with id ${id}`)
-        const updatedTeam = await updateTeam(d1Client, id, teamData)
-        console.info(`👥 > TEAM > [POST] Successfully updated team ${updatedTeam.name}`)
+        console.info(`👥 > TEAM > [POST] Updating team ${id} with auto-reassignment`)
+        const result = await updateTeamWithAssignments(d1Client, id, teamData)
+        const updatedTeam = result.teams[0]
+        if (!updatedTeam) {
+            return throwH3Error(`👥 > TEAM > [POST] Team ${id} not found after update`, new Error('Team not found'), 404)
+        }
+        console.info(`👥 > TEAM > [POST] Updated team ${updatedTeam.name}, reassigned ${result.eventsAssigned} events`)
         return updatedTeam
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [POST] Error updating team with id ${id}`, error)

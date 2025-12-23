@@ -169,42 +169,40 @@ const columns = computed(() => {
 <template>
   <!-- VIEW MODE: Compact display -->
   <div v-if="mode === 'view'" class="space-y-2">
-    <!-- Selected allergens as badges -->
-    <div v-if="selectedAllergies.length > 0" class="flex flex-wrap gap-2">
-      <UBadge
-          v-for="allergy in selectedAllergies"
-          :key="allergy.id"
-          :color="COLOR.error"
-          variant="subtle"
-          :size="SIZES.standard"
-      >
-        <span class="mr-1">{{ allergy.icon || '🏷️' }}</span>
-        {{ allergy.name }}
-      </UBadge>
-    </div>
+    <!-- Has allergens: show title + badges -->
+    <template v-if="selectedAllergies.length > 0">
+      <h4 :class="TYPOGRAPHY.sectionSubheading">Allergener i menuen</h4>
+      <div class="flex flex-wrap gap-2">
+        <UBadge
+            v-for="allergy in selectedAllergies"
+            :key="allergy.id"
+            :color="COLOR.error"
+            variant="subtle"
+            :size="SIZES.standard"
+        >
+          <span class="mr-1">{{ allergy.icon || '🏷️' }}</span>
+          {{ allergy.name }}
+        </UBadge>
+      </div>
 
-    <!-- Compact statistics -->
-    <div v-if="allergyStatistics && showStatistics" class="flex items-center gap-2" :class="TYPOGRAPHY.bodyTextMuted">
-      <UserListItem
-          :inhabitants="allergyStatistics.uniqueInhabitantsList"
-          compact
-          label="beboer"
-      />
-      <span>berørt af allergener</span>
-    </div>
+      <!-- Compact statistics -->
+      <div v-if="allergyStatistics && showStatistics" class="flex items-center gap-2" :class="TYPOGRAPHY.bodyTextMuted">
+        <UserListItem
+            :inhabitants="allergyStatistics.uniqueInhabitantsList"
+            compact
+            label="beboer"
+        />
+        <span>berørt af allergener</span>
+      </div>
+    </template>
 
-    <!-- Empty state -->
+    <!-- Empty state - subtle, no title -->
     <UAlert
-        v-if="selectedAllergies.length === 0"
+        v-else
         icon="i-mdi-food-allergy-off-outline"
-        :color="COLOR.neutral"
-        variant="soft"
-        :ui="COMPONENTS.emptyStateAlert"
-    >
-      <template #title>
-        Ingen allergener valgt
-      </template>
-    </UAlert>
+        :ui="COMPONENTS.emptyStateAlertCompact"
+        description="Ingen allergener i menuen"
+    />
   </div>
 
   <!-- EDIT MODE: Master-Detail Layout (responsive) -->
@@ -347,9 +345,7 @@ v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
       <UAlert
           v-else
           icon="i-mdi-food-allergy-off-outline"
-          :color="COLOR.neutral"
-          variant="soft"
-          :ui="COMPONENTS.emptyStateAlert"
+          :ui="COMPONENTS.emptyStateAlertCompact"
       >
         <template #title>
           Vælg allergier for at se statistik

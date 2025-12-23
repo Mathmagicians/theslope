@@ -7,7 +7,7 @@ main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
 
 [vars]
-HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
 [limits]
@@ -24,6 +24,11 @@ database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
 
+# Cron Triggers - must match scheduledTasks in nuxt.config.ts
+# These patterns invoke Nitro scheduled tasks
+[triggers]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]
+
 # Development deployment: Remote dev.skraaningen.dk
 [env.dev]
 name = "theslope-dev"
@@ -32,7 +37,7 @@ routes = [
 ]
 
 [env.dev.vars]
-HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
 [[env.dev.d1_databases]]
@@ -40,6 +45,9 @@ binding = "DB"
 database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
+
+[env.dev.triggers]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]
 
 # Production deployment: Remote www.skraaningen.dk (overrides name, routes, vars, and database)
 [env.prod]
@@ -51,7 +59,7 @@ routes = [
 ]
 
 [env.prod.vars]
-HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
+NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope-prod"
 
 [[env.prod.d1_databases]]
@@ -59,3 +67,6 @@ binding = "DB"
 database_name = "theslope-prod"
 database_id = "495e319b-3b88-4cc8-949a-64a96ba2c019"
 migrations_dir = "migrations"
+
+[env.prod.triggers]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]

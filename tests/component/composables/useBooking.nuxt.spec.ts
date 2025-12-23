@@ -1,5 +1,9 @@
 import {describe, it, expect} from 'vitest'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState} from '~/composables/useBooking'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES} from '~/composables/useBooking'
+import {useBillingValidation} from '~/composables/useBillingValidation'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 describe('useBooking', () => {
     const {
@@ -44,10 +48,10 @@ describe('useBooking', () => {
 
     describe('HEYNABO_EVENT_TEMPLATE', () => {
         it('contains required template parts', () => {
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_HEADER).toContain('synkroniseres fra skraaningen.dk')
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_HEADER).toContain('ændringer overskrives')
-            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_LINK_PREFIX).toContain('Book din billet')
-            expect(HEYNABO_EVENT_TEMPLATE.COOKING_TEAM_PREFIX).toContain('Madhold')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('synkroniseres fra skraaningen.dk')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toContain('ændringer overskrives')
+            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI).toBe('📅')
+            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toContain('hilsner')
         })
     })
 
@@ -55,14 +59,16 @@ describe('useBooking', () => {
         const baseUrl = 'https://skraaningen.dk'
 
         // Use future date to ensure getNextDinnerDate returns a valid range
-        const futureDinnerEvent = () => {
+        const futureDinnerEvent = (overrides: Partial<ReturnType<typeof DinnerEventFactory.defaultDinnerEventDetail>> = {}) => {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 7) // 1 week from now
             futureDate.setHours(0, 0, 0, 0)
             return {
+                ...DinnerEventFactory.defaultDinnerEventDetail(),
                 date: futureDate,
                 menuTitle: 'Pasta Carbonara',
-                menuDescription: 'Creamy Italian pasta with bacon'
+                menuDescription: 'Creamy Italian pasta with bacon',
+                ...overrides
             }
         }
 
@@ -148,20 +154,18 @@ describe('useBooking', () => {
                     shouldContain: 'Pasta Carbonara'
                 }
             ])('$name', ({menuDescription, shouldContain}) => {
-                const event = {...futureDinnerEvent(), menuDescription}
-                const payload = createHeynaboEventPayload(event, baseUrl)
+                const payload = createHeynaboEventPayload(futureDinnerEvent({menuDescription}), baseUrl)
                 expect(payload.description).toContain(shouldContain)
             })
 
             it.each([
-                {name: 'includes cooking team when provided', cookingTeam: 'Team Alpha', shouldContain: 'Madhold: Team Alpha'},
-                {name: 'excludes cooking team when null', cookingTeam: null, shouldNotContain: 'Madhold:'},
-                {name: 'excludes cooking team when undefined', cookingTeam: undefined, shouldNotContain: 'Madhold:'}
-            ])('$name', ({cookingTeam, shouldContain, shouldNotContain}) => {
-                const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl, cookingTeam)
+                {name: 'includes cooking team when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: '// Team Alpha'},
+                {name: 'uses default when null', cookingTeam: null, shouldContain: '// Køkkenholdet'},
+                {name: 'uses default when undefined', cookingTeam: undefined, shouldContain: '// Køkkenholdet'}
+            ])('$name', ({cookingTeam, shouldContain}) => {
+                const payload = createHeynaboEventPayload(futureDinnerEvent({cookingTeam}), baseUrl)
 
-                if (shouldContain) expect(payload.description).toContain(shouldContain)
-                if (shouldNotContain) expect(payload.description).not.toContain(shouldNotContain)
+                expect(payload.description).toContain(shouldContain)
             })
         })
     })
@@ -250,6 +254,56 @@ describe('useBooking', () => {
 
             const dinnerEvent = {state: 'SCHEDULED' as const, date: futureDate, totalCost: 0}
             expect(getStepConfig(dinnerEvent).step).toBe(0)
+        })
+    })
+
+    describe('State Constants', () => {
+        it.each([
+            {constant: CONSUMABLE_DINNER_STATES, included: ['SCHEDULED', 'ANNOUNCED'], excluded: ['CANCELLED', 'CONSUMED']},
+            {constant: CLOSABLE_ORDER_STATES, included: ['BOOKED', 'RELEASED'], excluded: ['CANCELLED', 'CLOSED']}
+        ])('$constant includes correct states and excludes others', ({constant, included, excluded}) => {
+            expect(constant).toHaveLength(2)
+            included.forEach(s => expect(constant).toContain(s))
+            excluded.forEach(s => expect(constant).not.toContain(s))
+        })
+    })
+
+    describe('getPastDinnerIds', () => {
+        const {getPastDinnerIds} = useBooking()
+        const daysFromNow = (days: number) => {
+            const d = new Date()
+            d.setDate(d.getDate() + days)
+            d.setHours(12, 0, 0, 0)
+            return d
+        }
+
+        it.each([
+            {desc: 'empty input', dinners: [], expectedIds: []},
+            {desc: 'all future', dinners: [{id: 1, date: daysFromNow(1)}, {id: 2, date: daysFromNow(2)}], expectedIds: []},
+            {desc: 'all past', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(-2)}], expectedIds: [1, 2]},
+            {desc: 'mixed', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(1)}, {id: 3, date: daysFromNow(-2)}], expectedIds: [1, 3]}
+        ])('$desc → returns $expectedIds', ({dinners, expectedIds}) => {
+            const result = getPastDinnerIds(dinners)
+            expect(result.sort()).toEqual(expectedIds.sort())
+        })
+    })
+
+    describe('prepareTransactionData', () => {
+        const {prepareTransactionData} = useBooking()
+        const {OrderSnapshotSchema} = useBillingValidation()
+
+        it.each([
+            {desc: 'with user', order: OrderFactory.defaultOrderForTransaction('test'), expectedEmail: 'test@example.com-test'},
+            {desc: 'without user', order: {...OrderFactory.defaultOrderForTransaction('test'), bookedByUser: null}, expectedEmail: ''}
+        ])('$desc → snapshot roundtrips, email is $expectedEmail', ({order, expectedEmail}) => {
+            const results = prepareTransactionData([order])
+            expect(results).toHaveLength(1)
+            const result = results[0]!
+
+            const snapshot = OrderSnapshotSchema.parse(JSON.parse(result.orderSnapshot))
+            expect(snapshot.dinnerEvent.id).toBe(order.dinnerEvent.id)
+            expect(snapshot.inhabitant.id).toBe(order.inhabitant.id)
+            expect(result.userEmailHandle).toBe(expectedEmail)
         })
     })
 })

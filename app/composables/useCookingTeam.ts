@@ -1,4 +1,5 @@
 import {useCookingTeamValidation, type CookingTeamDisplay} from './useCookingTeamValidation'
+import {chunkArray} from '~/utils/batchUtils'
 
 const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
 export type TeamColor = typeof TEAM_COLORS[number]
@@ -16,6 +17,15 @@ export const useCookingTeam = () => {
 
     const createDefaultTeamName = (seasonShortName: string, teamNumber: number): string => {
         return `Madhold ${teamNumber} - ${seasonShortName}`
+    }
+
+    /**
+     * Extract team number from team name (e.g., "Madhold 2" → 2, "Madhold 1 - 08/25-06/26" → 1)
+     * Returns null if no number found in the name
+     */
+    const extractTeamNumber = (teamName: string): number | null => {
+        const match = teamName.match(/(\d+)/)
+        return match ? parseInt(match[1]!, 10) : null
     }
 
     const getDefaultCookingTeam = (
@@ -95,11 +105,17 @@ export const useCookingTeam = () => {
         }
     }
 
+    // Team affinity batching (D1 rate limit safe, though typically only 3-8 teams)
+    const TEAM_AFFINITY_BATCH_SIZE = 50
+    const chunkTeamAffinities = chunkArray<CookingTeamDisplay>(TEAM_AFFINITY_BATCH_SIZE)
+
     return {
         CookingTeamSchema,
         getTeamColor,
         createDefaultTeamName,
+        extractTeamNumber,
         getDefaultCookingTeam,
-        useInhabitantsWithAssignments
+        useInhabitantsWithAssignments,
+        chunkTeamAffinities
     }
 }

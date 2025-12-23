@@ -1,6 +1,8 @@
 import {Prisma} from "@prisma/client"
 import {ZodError} from "zod"
 import {H3Error} from "h3"
+import type {H3Event} from 'h3'
+import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 
@@ -131,11 +133,18 @@ const h3eFromPrismaError = (prepend: string = 'uh oh, a prisma error', error: Pr
  * @param h3e - The H3Error to log
  * @param originalError - Optional original error for additional context
  */
-const logH3Error = (h3e: H3Error, _originalError?: unknown): void => {
+const logH3Error = (h3e: H3Error, originalError?: unknown): void => {
     if (h3e.statusCode >= 400 && h3e.statusCode < 500) {
         console.warn(h3e.message)
     } else {
         console.error(h3e.message)
+        // For 500 errors, log original error details for debugging
+        if (originalError instanceof Error) {
+            console.error(`  ↳ Original error: ${originalError.name}: ${originalError.message}`)
+            if (originalError.cause) {
+                console.error(`  ↳ Cause: ${JSON.stringify(originalError.cause, null, 2)}`)
+            }
+        }
     }
 }
 
@@ -160,11 +169,38 @@ const throwH3Error = (prepend: string, error: unknown, statusCode: number = 500)
     throw h3e
 }
 
+/**
+ * Get authenticated user from session
+ * Returns null if no session or user not found
+ *
+ * @param event - H3 event with session context
+ * @returns UserDetail or null
+ */
+const getSessionUser = async (event: H3Event): Promise<UserDetail | null> => {
+    const session = await getUserSession(event)
+    return (session?.user as UserDetail) ?? null
+}
+
+/**
+ * Get authenticated user ID from session
+ * Returns null if no session or user not found
+ * Useful for audit trails where userId is optional
+ *
+ * @param event - H3 event with session context
+ * @returns User ID or null
+ */
+const getSessionUserId = async (event: H3Event): Promise<number | null> => {
+    const user = await getSessionUser(event)
+    return user?.id ?? null
+}
+
 const eventHandlerHelper = {
     h3eFromCatch,
     h3eFromPrismaError,
     logH3Error,
-    throwH3Error
+    throwH3Error,
+    getSessionUser,
+    getSessionUserId
 }
 
 export default eventHandlerHelper

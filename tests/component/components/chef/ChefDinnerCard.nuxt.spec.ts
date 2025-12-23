@@ -54,7 +54,7 @@ describe('ChefDinnerCard', () => {
                 props: { dinnerEvent }
             })
 
-            expect(wrapper.text()).toContain('Menu ikke annonceret')
+            expect(wrapper.text()).toContain('Ingen menu endnu')
         })
 
         it('should show formatted date with weekday', async () => {

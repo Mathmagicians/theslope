@@ -83,6 +83,9 @@ const {initHouseholdsStore} = householdStore
 
 initHouseholdsStore(shortname.value)
 
+// Type-safe household name for template (guaranteed non-null when isHouseholdsStoreReady)
+const householdName = computed(() => selectedHousehold.value?.name ?? '')
+
 useHead({
   title: `🏠 ${shortname.value}`,
   meta: [
@@ -107,7 +110,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
       <template #header>
         <div class="flex items-center gap-1 md:gap-2">
           <UIcon name="i-heroicons-home" class="text-2xl"/>
-          <h2 class="text-xl font-semibold">{{ selectedHousehold.name }}</h2>
+          <h2 class="text-xl font-semibold">{{ householdName }}</h2>
         </div>
       </template>
       <UTabs

@@ -84,7 +84,7 @@ describe('dateTypes - WeekDayMap factory functions', () => {
 
         defaultMapTestCases.forEach(({ description, input, expected }) => {
             it(`should create map with ${description}`, () => {
-                const result = input === undefined ? createDefaultWeekdayMap() : createDefaultWeekdayMap(input)
+                const result = input === undefined ? createDefaultWeekdayMap() : createDefaultWeekdayMap(input as boolean | boolean[])
                 expect(result).toEqual(expected)
             })
         })

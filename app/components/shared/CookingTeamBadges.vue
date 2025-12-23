@@ -21,13 +21,17 @@ const { getTeamColor } = useCookingTeam()
 interface Props {
   teamNumber: number        // Logical number 1..N in season (for color)
   teamName: string         // Team name to display
-  memberCount: number      // Number of team members
-  cookingDaysCount: number // Number of cooking days assigned
+  memberCount?: number      // Number of team members
+  cookingDaysCount?: number // Number of cooking days assigned
   compact?: boolean        // If true, uses smaller size
+  showCounts?: boolean     // If true, shows member and cooking days counts
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  compact: false
+  compact: false,
+  showCounts: true,
+  memberCount: 0,
+  cookingDaysCount: 0
 })
 
 const teamColor = computed(() => getTeamColor(props.teamNumber - 1))
@@ -43,19 +47,21 @@ const badgeSize = computed(() => props.compact ? SIZES.small : SIZES.standard)
     >
       {{ teamName }}
     </UBadge>
-    <UBadge
-      :color="teamColor"
-      variant="soft"
-      :size="badgeSize"
-    >
-      👥 {{ memberCount }}
-    </UBadge>
-    <UBadge
-      :color="teamColor"
-      variant="soft"
-      :size="badgeSize"
-    >
-      📅 {{ cookingDaysCount }}
-    </UBadge>
+    <template v-if="showCounts">
+      <UBadge
+        :color="teamColor"
+        variant="soft"
+        :size="badgeSize"
+      >
+        👥 {{ memberCount }}
+      </UBadge>
+      <UBadge
+        :color="teamColor"
+        variant="soft"
+        :size="badgeSize"
+      >
+        📅 {{ cookingDaysCount }}
+      </UBadge>
+    </template>
   </div>
 </template>

@@ -66,7 +66,7 @@ describe('useTabNavigation.ts', () => {
 
   const expectNavigationToPath = (expectedPath: string) => {
     expect(mockNavigateTo).toHaveBeenCalled()
-    expect(mockNavigateTo.mock.calls[0][0].path).toBe(expectedPath)
+    expect(mockNavigateTo.mock.calls[0]![0].path).toBe(expectedPath)
   }
 
   const createNavigationInstance = (config: typeof simpleRouteConfig | typeof nestedRouteConfig) => {
@@ -112,7 +112,7 @@ describe('useTabNavigation.ts', () => {
         await setActiveTab(activeTab, 'tab2')
 
         expect(mockNavigateTo).toHaveBeenCalled()
-        expect(mockNavigateTo.mock.calls[0][0].path).toBe('/simple/tab2')
+        expect(mockNavigateTo.mock.calls[0]![0].path).toBe('/simple/tab2')
       })
 
       it('should not call navigateTo when setting to current tab', async () => {
@@ -192,7 +192,7 @@ describe('useTabNavigation.ts', () => {
         await setActiveTab(activeTab, 'tab2')
 
         expect(mockNavigateTo).toHaveBeenCalled()
-        expect(mockNavigateTo.mock.calls[0][0].path).toBe('/nested/value1/tab2')
+        expect(mockNavigateTo.mock.calls[0]![0].path).toBe('/nested/value1/tab2')
       })
     })
 

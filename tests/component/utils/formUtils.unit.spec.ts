@@ -16,6 +16,6 @@ describe('toFormMode', () => {
     })
 
     it('should return undefined for undefined mode', () => {
-        expect(toFormMode(undefined)).toBeUndefined()
+        expect(toFormMode(undefined as unknown as string)).toBeUndefined()
     })
 })

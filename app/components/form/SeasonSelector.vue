@@ -26,7 +26,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 interface Props {
-  modelValue: number | undefined
+  modelValue: number | null | undefined
   seasons: Season[]
   loading?: boolean
   disabled?: boolean
@@ -96,7 +96,7 @@ const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
 })
 
 const selectedSeasonId = computed({
-  get: () => props.modelValue,
+  get: () => props.modelValue ?? undefined,  // USelect doesn't accept null, convert to undefined
   set: (value: number) => emit('update:modelValue', value)
 })
 </script>
