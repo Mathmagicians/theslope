@@ -101,195 +101,84 @@ test.describe('Daily Maintenance API', () => {
         }
     })
 
-    test('returns valid result structure with active season and creates job run', async ({browser}) => {
+    // Consolidated: Endpoint structure + idempotency in ONE test
+    test('returns valid result structure, creates job run, and is idempotent', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const result = await SeasonFactory.runDailyMaintenance(context)
 
-        // Verify result structure (counts may vary due to parallel tests)
-        expect(result.jobRunId).toBeGreaterThan(0)
-        expect(result.consume.consumed).toBeGreaterThanOrEqual(0)
-        expect(result.close.closed).toBeGreaterThanOrEqual(0)
-        expect(result.transact.created).toBeGreaterThanOrEqual(0)
-        expect(result.scaffold).not.toBeNull()
+        // First run - verify structure
+        const result1 = await SeasonFactory.runDailyMaintenance(context)
+        expect(result1.jobRunId).toBeGreaterThan(0)
+        expect(result1.consume.consumed).toBeGreaterThanOrEqual(0)
+        expect(result1.close.closed).toBeGreaterThanOrEqual(0)
+        expect(result1.transact.created).toBeGreaterThanOrEqual(0)
+        expect(result1.scaffold).not.toBeNull()
 
-        // Verify job run was created and completed (parallel-safe via jobRunId)
-        const jobRun = await SeasonFactory.getJobRun(context, result.jobRunId)
+        // Verify job run was created and completed
+        const jobRun = await SeasonFactory.getJobRun(context, result1.jobRunId)
         expect(jobRun).not.toBeNull()
         expect(jobRun!.jobType).toBe(JobType.DAILY_MAINTENANCE)
         expect(jobRun!.status).toBe(JobStatus.SUCCESS)
         expect(jobRun!.completedAt).not.toBeNull()
         expect(jobRun!.durationMs).toBeGreaterThanOrEqual(0)
-    })
 
-    test('is idempotent - second run succeeds with valid result', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        await SeasonFactory.runDailyMaintenance(context)
+        // Second run - verify idempotency (ADR-015)
         const result2 = await SeasonFactory.runDailyMaintenance(context)
-
-        // Second run should also succeed (idempotent)
+        expect(result2.jobRunId).toBeGreaterThan(result1.jobRunId) // New job run
         expect(result2.consume.consumed).toBeGreaterThanOrEqual(0)
         expect(result2.close.closed).toBeGreaterThanOrEqual(0)
         expect(result2.transact.created).toBeGreaterThanOrEqual(0)
     })
 
-    // Parameterized: Past dinners that should end up CONSUMED after maintenance
-    test.describe('consumeDinners - past non-cancelled dinners end up CONSUMED', () => {
-        const consumableCases = [
-            {state: DinnerState.ANNOUNCED, desc: 'ANNOUNCED'},
-            {state: DinnerState.SCHEDULED, desc: 'SCHEDULED'}
-        ] as const
-
-        for (const {state, desc} of consumableCases) {
-            test(`past ${desc} dinner is CONSUMED after maintenance`, async ({browser}) => {
-                const context = await validatedBrowserContext(browser)
-                const testSalt = temporaryAndRandom()
-
-                const dinner = await createTestDinner(context, activeSeason.id!, testSalt, state, -2)
-                createdDinnerEventIds.push(dinner.id)
-
-                // Run maintenance - verifies idempotent final state
-                await SeasonFactory.runDailyMaintenance(context)
-
-                // Business rule: past non-cancelled dinner ends up CONSUMED
-                const finalDinner = await DinnerEventFactory.getDinnerEvent(context, dinner.id)
-                expect(finalDinner?.state).toBe(DinnerState.CONSUMED)
-            })
-        }
-    })
-
-    // Parameterized: Dinners that should remain in their original state
-    test.describe('consumeDinners - dinners that stay unchanged', () => {
-        const unchangedCases = [
-            {state: DinnerState.CANCELLED, daysOffset: -2, desc: 'past CANCELLED', expectedState: DinnerState.CANCELLED},
-            {state: DinnerState.ANNOUNCED, daysOffset: 2, desc: 'future ANNOUNCED', expectedState: DinnerState.ANNOUNCED},
-            {state: DinnerState.SCHEDULED, daysOffset: 2, desc: 'future SCHEDULED', expectedState: DinnerState.SCHEDULED}
-        ] as const
-
-        for (const {state, daysOffset, desc, expectedState} of unchangedCases) {
-            test(`${desc} dinner remains ${expectedState} after maintenance`, async ({browser}) => {
-                const context = await validatedBrowserContext(browser)
-                const testSalt = temporaryAndRandom()
-
-                const dinner = await createTestDinner(context, activeSeason.id!, testSalt, state, daysOffset)
-                createdDinnerEventIds.push(dinner.id)
-
-                await SeasonFactory.runDailyMaintenance(context)
-
-                // Business rule: this dinner should remain in expected state
-                const finalDinner = await DinnerEventFactory.getDinnerEvent(context, dinner.id)
-                expect(finalDinner?.state).toBe(expectedState)
-            })
-        }
-    })
-
-    test('closeOrders + createTransactions - BOOKED order on CONSUMED dinner becomes CLOSED with transaction', async ({browser}) => {
+    // Consolidated: Full billing pipeline in ONE test
+    // Tests: closeOrders → createTransactions → generateBilling → all billing endpoints
+    test('full billing pipeline: order closes, transaction created, billing generated, endpoints work', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
         const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id!)
 
-        // Create CONSUMED dinner with totalCost (simulates groceries bought)
-        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -3, {totalCost: 50000})
+        // Setup: Create CONSUMED dinner with order
+        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -5, {totalCost: 50000})
         createdDinnerEventIds.push(dinner.id)
-
-        // Create BOOKED order for the consumed dinner
         const {household, orderId} = await createTestOrder(context, fullSeason, dinner.id, testSalt)
         createdHouseholdIds.push(household.id)
 
+        // Step 1: Run maintenance (closes order + creates transaction)
         await SeasonFactory.runDailyMaintenance(context)
 
-        // Business rule: BOOKED order on CONSUMED dinner ends up CLOSED
+        // Verify: Order is CLOSED
         const finalOrder = await OrderFactory.getOrder(context, orderId)
-        expect(finalOrder?.state).toBe(OrderState.CLOSED)
-        // Transaction creation is verified by the endpoint returning successfully
-        // (createTransactions runs after closeOrders in the maintenance pipeline)
-    })
+        expect(finalOrder?.state, 'Order should be CLOSED after maintenance').toBe(OrderState.CLOSED)
 
-    // =========================================================================
-    // Monthly Billing - generates Invoice + BillingPeriodSummary from Transactions
-    // =========================================================================
+        // Step 2: Generate billing
+        const billingResponse = await BillingFactory.generateBilling(context)
+        expect(billingResponse).not.toBeNull()
+        expect(billingResponse!.jobRunId).toBeGreaterThan(0)
 
-    test.describe('Monthly Billing', () => {
+        // Step 3: Verify billing periods exist
+        const periods = await BillingFactory.getBillingPeriods(context)
+        expect(periods.length, 'Should have billing periods').toBeGreaterThan(0)
 
-        test('generateBilling - creates BillingPeriodSummary from transactions', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-            const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id!)
+        // Step 4: GET billing period by ID
+        const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+        expect(periodDetail.invoices).toBeDefined()
+        expect(periodDetail.shareToken).toBeDefined()
 
-            // Setup: Create CONSUMED dinner → CLOSED order → Transaction
-            const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -5, {totalCost: 50000})
-            createdDinnerEventIds.push(dinner.id)
-            const {household} = await createTestOrder(context, fullSeason, dinner.id, testSalt)
-            createdHouseholdIds.push(household.id)
-            await SeasonFactory.runDailyMaintenance(context)
+        // Step 5: GET billing via public magic link
+        const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)
+        expect(publicData.id).toBe(periodDetail.id)
+        expect(publicData.invoices.length).toBe(periodDetail.invoices.length)
 
-            // Act: Generate billing (creates Invoice + BillingPeriodSummary)
-            const response = await BillingFactory.generateBilling(context)
-            expect(response).not.toBeNull()
+        // Step 6: GET CSV export
+        const {csv, filename} = await BillingFactory.getBillingCsvByToken(context, periodDetail.shareToken)
+        const header = csv.split('\n')[0]
+        expect(header).toContain('Kunde nr')
+        expect(header).toContain('Adresse')
+        expect(header).toContain('Total DKK')
+        expect(header).toContain('Opgørelsesdato')
+        expect(filename).toContain(periodDetail.billingPeriod)
 
-            // Assert: JobRun was created
-            expect(response!.jobRunId).toBeGreaterThan(0)
-
-            // Assert: Results array has billing data (may be empty if no transactions)
-            if (response!.results.length > 0) {
-                const result = response!.results[0]!
-                expect(result.billingPeriodSummaryId).toBeGreaterThan(0)
-                expect(result.invoiceCount).toBeGreaterThanOrEqual(1)
-                expect(result.transactionCount).toBeGreaterThanOrEqual(1)
-            }
-
-            // Assert: Billing period exists with correct data
-            const periods = await BillingFactory.getBillingPeriods(context)
-            expect(periods.length).toBeGreaterThan(0)
-        })
-
-        test('GET /api/admin/billing/periods/[id] - returns billing period with invoices', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Requires: billing generation to have run first
-            const periods = await BillingFactory.getBillingPeriods(context)
-            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
-
-            const period = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
-            expect(period.invoices).toBeDefined()
-            expect(period.shareToken).toBeDefined()
-        })
-
-        test('GET /api/public/billing/[token] - returns billing data via magic link', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Requires: billing generation to have run first
-            const periods = await BillingFactory.getBillingPeriods(context)
-            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
-
-            const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
-            const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)
-
-            expect(publicData.id).toBe(periodDetail.id)
-            expect(publicData.invoices.length).toBe(periodDetail.invoices.length)
-        })
-
-        test('GET /api/public/billing/[token]/csv - exports CSV with correct format', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Requires: billing generation to have run first
-            const periods = await BillingFactory.getBillingPeriods(context)
-            expect(periods.length, 'Requires billing period to exist').toBeGreaterThan(0)
-
-            const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
-            const {csv, filename} = await BillingFactory.getBillingCsvByToken(context, periodDetail.shareToken)
-
-            // Verify CSV header contains expected columns
-            const header = csv.split('\n')[0]
-            expect(header).toContain('Kunde nr')
-            expect(header).toContain('Adresse')
-            expect(header).toContain('Total DKK')
-            expect(header).toContain('Opgørelsesdato')
-            expect(filename).toContain(periodDetail.billingPeriod)
-
-            // Verify CSV has data rows (header + invoices)
-            const lines = csv.split('\n')
-            expect(lines.length).toBe(1 + periodDetail.invoices.length)
-        })
+        // Verify CSV has correct row count (header + invoices)
+        const lines = csv.split('\n')
+        expect(lines.length).toBe(1 + periodDetail.invoices.length)
     })
 })

@@ -1,9 +1,28 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction} from '~/composables/useBookingValidation'
+import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
 import type {TransactionCreateData} from '~~/server/data/financesRepository'
+
+// ============================================================================
+// Daily Maintenance - State Constants (ADR-015: Idempotent operations)
+// ============================================================================
+
+/**
+ * Dinner states eligible for consumption by daily maintenance.
+ * Business rule: Only SCHEDULED and ANNOUNCED dinners can be consumed.
+ * CANCELLED dinners are excluded (refunded), CONSUMED is already processed.
+ */
+export const CONSUMABLE_DINNER_STATES = ['SCHEDULED', 'ANNOUNCED'] as const
+
+/**
+ * Order states eligible for closing by daily maintenance.
+ * Business rule: BOOKED and RELEASED orders on CONSUMED dinners become CLOSED.
+ * CANCELLED orders are excluded (dinner was cancelled, already refunded).
+ */
+export const CLOSABLE_ORDER_STATES = ['BOOKED', 'RELEASED'] as const
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -271,19 +290,60 @@ export const useBooking = () => {
     // Curried chunk function for transaction create data (used for bulk inserts)
     const chunkTransactions = chunkArray<TransactionCreateData>(TRANSACTION_BATCH_SIZE)
 
+    // ============================================================================
+    // Daily Maintenance - Pure Functions
+    // ============================================================================
+
+    /**
+     * Extract IDs of past dinners from a list of pending dinners.
+     * Uses splitDinnerEvents to determine "past" based on dinner time.
+     */
+    const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[]): number[] => {
+        if (pendingDinners.length === 0) return []
+
+        const {splitDinnerEvents} = useSeason()
+        const dinnerDates = pendingDinners.map(d => d.date)
+        const nextDinnerRange = getNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
+        const {pastDinnerDates} = splitDinnerEvents(pendingDinners, nextDinnerRange)
+
+        return pendingDinners
+            .filter(d => pastDinnerDates.some(pd => pd.getTime() === d.date.getTime()))
+            .map(d => d.id)
+    }
+
+    /**
+     * Prepare transaction data from closed orders.
+     */
+    const prepareTransactionData = (closedOrders: OrderForTransaction[]): TransactionCreateData[] => {
+        const {serializeTransaction} = useBillingValidation()
+
+        return closedOrders.map(order => ({
+            orderId: order.id,
+            orderSnapshot: serializeTransaction({
+                dinnerEvent: order.dinnerEvent,
+                inhabitant: order.inhabitant,
+                ticketType: order.ticketType
+            }),
+            userSnapshot: JSON.stringify(order.bookedByUser || {id: null, email: ''}),
+            amount: order.priceAtBooking,
+            userEmailHandle: order.bookedByUser?.email || ''
+        }))
+    }
+
     return {
-        // Dinner step workflow
         getDinnerStepState,
         getStepConfig,
         getStepDeadline,
         canAnnounceDinner,
         canCancelDinner,
-        // Heynabo sync
         buildDinnerUrl,
         createHeynaboEventPayload,
         HEYNABO_EVENT_TEMPLATE,
-        // Daily Maintenance - chunk functions for batch operations
         chunkDinnerIds,
-        chunkTransactions
+        chunkTransactions,
+        getPastDinnerIds,
+        prepareTransactionData,
+        CONSUMABLE_DINNER_STATES,
+        CLOSABLE_ORDER_STATES
     }
 }

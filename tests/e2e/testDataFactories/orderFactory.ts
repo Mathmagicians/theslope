@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -7,6 +7,7 @@ import testHelpers from '../testHelpers'
 
 // Re-export SeasonFactory for date generation
 import { SeasonFactory } from './seasonFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const { headers, salt, temporaryAndRandom } = testHelpers
 
@@ -127,6 +128,16 @@ export class OrderFactory {
     inhabitantId: 10,
     ...overrides
   })
+
+  static readonly defaultOrderForTransaction = (testSalt: string = temporaryAndRandom()): OrderForTransaction => {
+    const detail = OrderFactory.defaultOrderDetail(testSalt, {state: OrderStateSchema.enum.CLOSED, closedAt: new Date()})
+    const {address, pbsId} = HouseholdFactory.defaultHouseholdData(testSalt)
+    return {
+      ...detail,
+      inhabitant: {...detail.inhabitant, household: {id: detail.inhabitant.householdId, pbsId, address}},
+      dinnerEvent: {id: detail.dinnerEvent.id, date: detail.dinnerEvent.date, menuTitle: detail.dinnerEvent.menuTitle}
+    }
+  }
 
   /**
    * OrderHistoryDisplay - lightweight for lists (ADR-009)
