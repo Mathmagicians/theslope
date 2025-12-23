@@ -706,7 +706,8 @@ test.describe('Season API Tests', () => {
             expect(result.seasonId).toBe(season.id)
             expect(result.created).toBeGreaterThan(0)
 
-            const orders = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const householdOrders = orders.filter(o => inhabitants.some(i => i.id === o.inhabitantId))
             expect(householdOrders.length).toBeGreaterThan(0)
         })
@@ -735,14 +736,15 @@ test.describe('Season API Tests', () => {
             const scaffoldResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
             expect(scaffoldResult.seasonId, 'Scaffold should return correct seasonId').toBe(season.id)
 
-            const ordersAfterFirst = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
+            const ordersAfterFirst = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
             expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
 
             // Second scaffold should be idempotent - same orders, no duplicates
             const scaffoldResult2 = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
             expect(scaffoldResult2.created, 'Second scaffold should create 0 (idempotent)').toBe(0)
-            const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
 
             expect(inhabitantOrdersAfterSecond.length, `Second scaffold: expected ${dinnerEvents.length} orders`).toBe(dinnerEvents.length)
@@ -771,7 +773,8 @@ test.describe('Season API Tests', () => {
 
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-            const orders = await OrderFactory.getOrdersForDinnerEvents(context, dinnerEvents.map(e => e.id))
+            // Use admin endpoint - user-facing /api/order filters by session household
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrders.length).toBe(0)
         })
@@ -795,7 +798,8 @@ test.describe('Season API Tests', () => {
 
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-            const ordersBeforeCancel = await OrderFactory.getOrdersForDinnerEvent(context, firstEvent.id)
+            // Use admin endpoint - user-facing /api/order filters by session household
+            const ordersBeforeCancel = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
             const orderToCancel = ordersBeforeCancel.find(o => o.inhabitantId === inhabitant.id)
             expect(orderToCancel).toBeDefined()
 
@@ -806,7 +810,7 @@ test.describe('Season API Tests', () => {
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
             // User-cancelled order should NOT be recreated
-            const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEvent(context, firstEvent.id)
+            const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
             const recreatedOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
             expect(recreatedOrder).toBeUndefined()
         })

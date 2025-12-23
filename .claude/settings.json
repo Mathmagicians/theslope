@@ -13,16 +13,18 @@
       "WebFetch(domain:nuxt.com)",
       "WebFetch(domain:ui4.nuxt.com)",
       "WebFetch(domain:ui.nuxt.com)",
-      "Bash(wrangler d1 execute*--remote*--command *SELECT*)"
+      "Bash(npx wrangler d1 execute=:* --remote=:* --command :*SELECT:*)"
     ],
     "deny": [
       "Read(./.cookies.txt)",
       "Read(./.env)",
       "Read(./.env.dev)",
       "Read(./.env.prod)",
-      "Bash(wrangler*--remote*)"
+      "Bash(npx wrangler :* --remote :*DELETE:*)"
     ],
-    "ask": [],
+    "ask": [
+      "Bash(npx wrangler :* --remote :*)"
+    ],
     "includeCoAuthoredBy": false
   }
 }

@@ -6,8 +6,9 @@ import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
 
 // Re-export SeasonFactory for date generation
-import { SeasonFactory } from './seasonFactory'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 const { headers, salt, temporaryAndRandom } = testHelpers
 
@@ -419,6 +420,30 @@ export class OrderFactory {
     for (const dinnerEventId of dinnerEventIds) {
       const orders = await OrderFactory.getOrdersForDinnerEvent(context, dinnerEventId)
       allOrders.push(...orders)
+    }
+    return allOrders
+  }
+
+  /**
+   * Get orders for dinner events via admin dinner event detail endpoint.
+   * Use this in E2E tests that run as admin - the user-facing /api/order endpoint
+   * filters by session user's household, which won't work for admin users.
+   *
+   * @param context - Browser context for API requests (admin auth)
+   * @param dinnerEventIds - Single ID or array of dinner event IDs
+   * @returns Array of OrderDetail for all events (from tickets field)
+   */
+  static readonly getOrdersForDinnerEventsViaAdmin = async (
+    context: BrowserContext,
+    dinnerEventIds: number | number[]
+  ): Promise<OrderDetail[]> => {
+    const ids = Array.isArray(dinnerEventIds) ? dinnerEventIds : [dinnerEventIds]
+    const allOrders: OrderDetail[] = []
+    for (const dinnerEventId of ids) {
+      const dinnerEvent = await DinnerEventFactory.getDinnerEvent(context, dinnerEventId)
+      if (dinnerEvent?.tickets) {
+        allOrders.push(...dinnerEvent.tickets)
+      }
     }
     return allOrders
   }

@@ -82,6 +82,8 @@ const createTestOrder = async (
 // - CLOSED orders → get transaction created (if missing)
 
 test.describe('Daily Maintenance API', () => {
+    test.describe.configure({mode: 'default'})
+
     const createdHouseholdIds: number[] = []
     const createdDinnerEventIds: number[] = []
     let activeSeason: Season
@@ -136,39 +138,37 @@ test.describe('Daily Maintenance API', () => {
         const testSalt = temporaryAndRandom()
         const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id!)
 
-        // Setup: Create CONSUMED dinner with order
-        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -5, {totalCost: 50000})
+        // Setup: Create CONSUMED dinner with order in PREVIOUS billing period (must be closed for billing)
+        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35, {totalCost: 50000})
         createdDinnerEventIds.push(dinner.id)
         const {household, orderId} = await createTestOrder(context, fullSeason, dinner.id, testSalt)
         createdHouseholdIds.push(household.id)
 
-        // Step 1: Run maintenance (closes order + creates transaction)
+        // Run maintenance (closes order + creates transaction)
         await SeasonFactory.runDailyMaintenance(context)
 
-        // Verify: Order is CLOSED
+        // Verify order is CLOSED
         const finalOrder = await OrderFactory.getOrder(context, orderId)
         expect(finalOrder?.state, 'Order should be CLOSED after maintenance').toBe(OrderState.CLOSED)
 
-        // Step 2: Generate billing
+        // Generate billing - use result directly (not global getBillingPeriods which is flaky in parallel)
         const billingResponse = await BillingFactory.generateBilling(context)
         expect(billingResponse).not.toBeNull()
         expect(billingResponse!.jobRunId).toBeGreaterThan(0)
+        expect(billingResponse!.results.length, 'Billing period should exist').toBeGreaterThan(0)
 
-        // Step 3: Verify billing periods exist
-        const periods = await BillingFactory.getBillingPeriods(context)
-        expect(periods.length, 'Should have billing periods').toBeGreaterThan(0)
-
-        // Step 4: GET billing period by ID
-        const periodDetail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+        // GET billing period by ID from generate response
+        const createdPeriodId = billingResponse!.results[0]!.billingPeriodSummaryId
+        const periodDetail = await BillingFactory.getBillingPeriodById(context, createdPeriodId)
         expect(periodDetail.invoices).toBeDefined()
         expect(periodDetail.shareToken).toBeDefined()
 
-        // Step 5: GET billing via public magic link
+        // GET billing via public magic link
         const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)
         expect(publicData.id).toBe(periodDetail.id)
         expect(publicData.invoices.length).toBe(periodDetail.invoices.length)
 
-        // Step 6: GET CSV export
+        // GET CSV export
         const {csv, filename} = await BillingFactory.getBillingCsvByToken(context, periodDetail.shareToken)
         const header = csv.split('\n')[0]
         expect(header).toContain('Kunde nr')
