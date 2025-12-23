@@ -10,6 +10,8 @@ jobs:
   CICD:
     runs-on: ubuntu-latest
     environment: CLOUDFLARE_THESLOPE
+    outputs:
+      deployed_env: ${{ steps.deploy-info.outputs.env }}
 
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -26,7 +28,7 @@ jobs:
       - run: ls -la
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: 'package.json'
       - run: npm ci
       - name: Linting
         run: npm run lint
@@ -58,6 +60,7 @@ jobs:
           path: playwright-report/
           retention-days: 30
       - name: Deploy to dev server on Cloudflare 😎
+        id: deploy-dev
         if: github.ref != 'refs/heads/main'
         run: npm run deploy
       - name: Summary - Dev deployment
@@ -72,6 +75,7 @@ jobs:
           echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit Message** | ${{ github.event.head_commit.message }} |" >> $GITHUB_STEP_SUMMARY
       - name: Deploy to production server on Cloudflare 🚀
+        id: deploy-prod
         if: github.ref == 'refs/heads/main'
         run: npm run deploy:prod
       - name: Summary - Production deployment
