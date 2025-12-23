@@ -20,7 +20,8 @@
       "Read(./.env)",
       "Read(./.env.dev)",
       "Read(./.env.prod)",
-      "Bash(npx wrangler :* --remote :*DELETE:*)"
+      "Bash(npx wrangler :* --remote :*DELETE:*)",
+      "Bash(npm run dev:*)"
     ],
     "ask": [
       "Bash(npx wrangler :* --remote :*)"

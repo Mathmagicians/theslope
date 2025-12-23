@@ -2,22 +2,17 @@ import type {UserDetail} from '~/composables/useCoreValidation'
 
 export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
+    const permissions = usePermissions()
 
-    // Cast user to UserDetail for type-safe access (see types/auth.d.ts)
     const user = computed(() => _user.value as UserDetail | null)
-
-    // Get SystemRole enum from validation composable
-    const {SystemRoleSchema} = useCoreValidation()
-    const SystemRole = SystemRoleSchema.enum
 
     const signIn = async (email: string, password: string) => {
         await $fetch("/api/auth/login", {
             method: "POST",
             body: {email: email, password: password},
             headers: {ContentType: 'application/json'}
-        }) //talks with the api and performs a login
-        await fetch(); //fetches the user session from the secure browser storage
-
+        })
+        await fetch()
     }
 
     const greeting = computed(() => user.value?.Inhabitant?.name || 'Ukendt bruger')
@@ -28,20 +23,9 @@ export const useAuthStore = defineStore("Auth", () => {
     const email = computed(() => user.value?.email)
     const phone = computed(() => user.value?.phone)
     const birthDate = computed(() => user.value?.Inhabitant?.birthDate)
-    const systemRoles = computed(() => {
-        const roles = user.value?.systemRoles
-        // Parse JSON string from database to array
-        if (typeof roles === 'string') {
-            try {
-                return JSON.parse(roles)
-            } catch {
-                return []
-            }
-        }
-        return roles || []
-    })
-    const isAdmin = computed(() => systemRoles.value.includes(SystemRole.ADMIN))
-    const isAllergyManager = computed(() => systemRoles.value.includes(SystemRole.ALLERGYMANAGER))
+    const systemRoles = computed(() => user.value?.systemRoles ?? [])
+    const isAdmin = computed(() => user.value ? permissions.isAdmin(user.value) : false)
+    const isAllergyManager = computed(() => user.value ? permissions.isAllergyManager(user.value) : false)
     const address = computed(() => user.value?.Inhabitant?.household?.address)
 
     return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, address, loggedIn, user, session, clear, fetch}

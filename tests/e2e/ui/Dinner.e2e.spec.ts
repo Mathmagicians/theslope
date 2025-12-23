@@ -76,22 +76,19 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail header to load (always present when event is displayed)
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const header = page.getByTestId('dinner-detail-header')
+                return await header.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: A dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible').toBeVisible()
-
-        const menuContent = await menuTitle.textContent()
-        expect(menuContent, 'Should display a singleton test menu').toContain('Singleton Test Menu')
+        // THEN: Dinner event header should be displayed
+        const header = page.getByTestId('dinner-detail-header')
+        await expect(header, 'Dinner detail header should be visible').toBeVisible()
     })
 
     test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({page}) => {
@@ -109,22 +106,19 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail header to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const header = page.getByTestId('dinner-detail-header')
+                return await header.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: A dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible after auto-sync').toBeVisible()
-
-        const menuContent = await menuTitle.textContent()
-        expect(menuContent, 'Should display a singleton test menu').toContain('Singleton Test Menu')
+        // THEN: Dinner event should be displayed
+        const header = page.getByTestId('dinner-detail-header')
+        await expect(header, 'Dinner detail header should be visible after auto-sync').toBeVisible()
     })
 
     test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({page}) => {

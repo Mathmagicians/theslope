@@ -37,7 +37,7 @@ test.describe('Season API Tests', () => {
     test.describe('Season CRUD operations', () => {
 
 // Test for creating and retrieving a season
-        test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
+        test("@smoke PUT should create a new season and GET should retrieve it", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)

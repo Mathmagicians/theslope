@@ -1,4 +1,5 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import type { CreateOrdersRequest, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { createOrders } from "~~/server/data/financesRepository"
@@ -26,6 +27,9 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
     } catch (error) {
         return throwH3Error('🎟️ > ORDER > [PUT] Input validation error', error)
     }
+
+    // Ownership check
+    await requireHouseholdAccess(event, requestData.householdId)
 
     // Graceful handling of empty orders array
     if (requestData.orders.length === 0) {
