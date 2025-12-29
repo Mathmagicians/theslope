@@ -11,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
+const isLocalhost = process.env.BASE_URL?.includes('localhost') ?? true
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -87,10 +89,10 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
+  /* Run your local dev server before starting the tests (only for localhost) */
+  webServer: isLocalhost ? {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: process.env.BASE_URL || 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-  },
+  } : undefined,
 });
