@@ -37,10 +37,13 @@ test.describe('Chef Page - Happy Day', () => {
         const {inhabitantId} = await getSessionUserInfo(context)
         await SeasonFactory.assignMemberToTeam(context, testTeamId, inhabitantId, TeamRole.CHEF)
 
-        // Assign the team to an existing dinner event from the singleton season
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
-        expect(dinnerEvents.length, 'Singleton season should have dinner events').toBeGreaterThan(0)
-        await DinnerEventFactory.updateDinnerEvent(context, dinnerEvents[0]!.id, {
+        // Create a dedicated dinner event for this test (avoids race condition with dinnerEvents[0])
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        await DinnerEventFactory.createDinnerEvent(context, {
+            date: tomorrow,
+            menuTitle: `ChefTestDinner-${testSalt}`,
+            seasonId: activeSeason.id!,
             cookingTeamId: testTeamId,
             chefId: inhabitantId
         })

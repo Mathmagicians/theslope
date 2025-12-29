@@ -21,19 +21,22 @@ const feedbackOptions: Array<{ label: string, value: FeedbackType }> = [
     { label: '❓ Spørgsmål', value: 'question' }
 ]
 
-const { execute: submitFeedback, status, data: feedbackResult } = useFetch<GitHubIssueResponse>('/api/feedback', {
-    method: 'POST',
-    body: computed(() => ({
-        type: feedbackType.value,
-        description: feedbackDescription.value,
-        currentUrl: requestUrl.href
-    })),
-    immediate: false,
-    watch: false
-})
+const { execute: submitFeedback, status, data: feedbackResult, error: feedbackError } = useAsyncData<GitHubIssueResponse>(
+    'feedback-submit',
+    () => $fetch<GitHubIssueResponse>('/api/feedback', {
+        method: 'POST',
+        body: {
+            type: feedbackType.value,
+            description: feedbackDescription.value,
+            currentUrl: requestUrl.href
+        }
+    }),
+    { immediate: false }
+)
 
 const isSubmitting = computed(() => status.value === 'pending')
 const isSuccess = computed(() => status.value === 'success' && feedbackResult.value !== null)
+const isError = computed(() => status.value === 'error')
 
 const cancelFeedback = () => {
     showFeedbackForm.value = false
@@ -107,6 +110,14 @@ watch(() => route.path, () => {
         <template #footer>
           <div class="flex flex-col gap-1 md:gap-2">
             <UButton
+                to="https://github.com/Mathmagicians/theslope/blob/main/docs/user-guide.md"
+                target="_blank"
+                :icon="ICONS.book"
+                label="Læs manualen"
+                :size="SIZES.small"
+                variant="ghost"
+            />
+            <UButton
                 :icon="ICONS.github"
                 label="Rapporter fejl"
                 :size="SIZES.small"
@@ -114,14 +125,6 @@ watch(() => route.path, () => {
                 trailing-icon="i-heroicons-chevron-down"
                 :ui="{ trailingIcon: showFeedbackForm ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
                 @click="showFeedbackForm = !showFeedbackForm"
-            />
-            <UButton
-                to="https://github.com/Mathmagicians/theslope/blob/main/docs/user-guide.md"
-                target="_blank"
-                :icon="ICONS.book"
-                label="Læs manualen"
-                :size="SIZES.small"
-                variant="ghost"
             />
 
             <!-- Expandable feedback form -->
@@ -131,18 +134,23 @@ watch(() => route.path, () => {
                   <div v-if="isSuccess" class="text-center py-2 md:py-3">
                     <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
                   </div>
+                  <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
+                    <UBadge color="error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
+                    <p :class="[TYPOGRAPHY.finePrint, 'text-muted']">{{ feedbackError?.message || 'Ukendt fejl' }}</p>
+                  </div>
                   <template v-else>
-                    <USelectMenu
+                    <URadioGroup
                         v-model="feedbackType"
                         :items="feedbackOptions"
                         value-key="value"
-                        :size="SIZES.small"
+                        :ui="{ fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4' }"
                     />
                     <UTextarea
                         v-model="feedbackDescription"
                         placeholder="Beskriv din feedback..."
-                        :rows="2"
                         :size="SIZES.small"
+                        class="flex-1"
+                        autoresize
                     />
                     <div class="flex gap-2 md:gap-3">
                       <UButton
