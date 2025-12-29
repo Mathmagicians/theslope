@@ -5,7 +5,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -149,6 +149,9 @@ test.describe('Household tab navigation', () => {
 
             expect(page.url()).toContain(buildUrl(tab.path))
             await waitForTabVisible(page, tab)
+
+            // Documentation screenshot for each household tab
+            await doScreenshot(page, `household/household-${tab.path}`, true)
         })
     }
 

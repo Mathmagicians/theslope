@@ -1,7 +1,9 @@
-import type {Browser, Page, BrowserContextOptions} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 const { adminFile } = authFiles
+
+const headers = {'Content-Type': 'application/json'}
 
 const temporaryAndRandom = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
@@ -27,8 +29,6 @@ const saltedId = (base: number = 0, testSalt?: string): number => {
     const saltHash = salt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
     return (base + saltHash) % 100000 // Modulo to keep numbers reasonable
 }
-
-const headers = {'Content-Type': 'application/json'}
 const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
     const options: BrowserContextOptions = { storageState: adminFile }
     if (baseURL) {
@@ -138,6 +138,26 @@ async function selectDropdownOption(
     await option.click()
 }
 
+/**
+ * Fetch current user's session info from nuxt-auth-utils
+ * Use this to get the authenticated user's householdId and inhabitantId
+ *
+ * @param context - Authenticated browser context
+ * @returns Object with householdId and inhabitantId from session
+ *
+ * @example
+ * const { householdId, inhabitantId } = await getSessionUserInfo(context)
+ */
+async function getSessionUserInfo(context: BrowserContext): Promise<{ householdId: number, inhabitantId: number }> {
+    const response = await context.request.get('/api/_auth/session', { headers })
+    expect(response.status()).toBe(200)
+    const session = await response.json()
+    const householdId = session.user?.Inhabitant?.householdId
+    const inhabitantId = session.user?.Inhabitant?.id
+    expect(householdId, 'Session user must have householdId').toBeDefined()
+    expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
+    return { householdId, inhabitantId }
+}
 
 const testHelpers = {
     salt,
@@ -147,7 +167,8 @@ const testHelpers = {
     validatedBrowserContext,
     pollUntil,
     doScreenshot,
-    selectDropdownOption
+    selectDropdownOption,
+    getSessionUserInfo
 }
 
 export default testHelpers

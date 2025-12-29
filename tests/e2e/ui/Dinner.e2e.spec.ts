@@ -89,6 +89,9 @@ test.describe('Dinner Page URL Navigation', () => {
         // THEN: Dinner event header should be displayed
         const header = page.getByTestId('dinner-detail-header')
         await expect(header, 'Dinner detail header should be visible').toBeVisible()
+
+        // Documentation screenshot: Dinner calendar overview
+        await doScreenshot(page, 'dinner/dinner-calendar', true)
     })
 
     test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({page}) => {
@@ -122,17 +125,16 @@ test.describe('Dinner Page URL Navigation', () => {
     })
 
     test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({page}) => {
-        const secondEvent = testData.events[1]!
         const secondEventDate = testData.dates.second
 
         // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
         await page.goto(`${dinnerPageUrl}?date=${secondEventDate}`)
 
-        // Wait for dinner data to load - check for menu title to become visible
+        // Wait for dinner detail header to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const header = page.getByTestId('dinner-detail-header')
+                return await header.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
@@ -146,20 +148,13 @@ test.describe('Dinner Page URL Navigation', () => {
         const dateParam = urlObj.searchParams.get('date')
         expect(dateParam, `URL should stay on explicitly requested date ${secondEventDate}`).toBe(secondEventDate)
 
-        // THEN: Second event should be displayed (the one we navigated to)
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, `Menu title should be visible for ${secondEventDate}`).toBeVisible()
+        // THEN: Dinner event header should be displayed with correct date
+        const header = page.getByTestId('dinner-detail-header')
+        await expect(header, `Dinner detail header should be visible for ${secondEventDate}`).toBeVisible()
 
-        const titleText = await menuTitle.textContent()
-        expect(titleText, `Should display second event "${secondEvent.menuTitle}" when navigating to ${secondEventDate}`).toContain(secondEvent.menuTitle)
-
-        // THEN: Menu description should be visible (if event has a description)
-        const menuDescription = page.getByTestId('dinner-menu-description')
-        // Menu description is conditional (v-if), so we check if it exists for this event
-        const descriptionVisible = await menuDescription.isVisible().catch(() => false)
-        if (descriptionVisible) {
-            await expect(menuDescription, 'Menu description should be visible when present').toBeVisible()
-        }
+        // Verify the header contains the expected date
+        const headerText = await header.textContent()
+        expect(headerText, `Header should contain the date ${secondEventDate}`).toContain(secondEventDate)
     })
 
     test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({page}) => {
@@ -180,39 +175,40 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail header to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const header = page.getByTestId('dinner-detail-header')
+                return await header.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Synced dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible after sync to nearest event').toBeVisible()
+        const header = page.getByTestId('dinner-detail-header')
+        await expect(header, 'Dinner detail header should be visible after sync to nearest event').toBeVisible()
     })
 
     test('GIVEN dinner page loaded WHEN clicking calendar date THEN displays selected dinner event', async ({page}) => {
-        const event1 = testData.events[0]!
         const event2 = testData.events[1]!
 
         // GIVEN: Load page with first event's date
         await page.goto(`${dinnerPageUrl}?date=${testData.dates.first}`)
 
-        // Wait for calendar to be visible
+        // Wait for dinner detail header to be visible (confirms first event is loaded)
         await pollUntil(
-            async () => page.locator('h3:text("Fællesspisningens kalender")').isVisible(),
+            async () => {
+                const header = page.getByTestId('dinner-detail-header')
+                return await header.isVisible().catch(() => false)
+            },
             (isVisible) => isVisible,
             10
         )
 
-        // Verify first event is displayed
-        let menuTitle = page.getByTestId('dinner-menu-title')
-        let titleText = await menuTitle.textContent()
-        expect(titleText, "Should initially show first event").toContain(event1.menuTitle)
+        // Verify first event's date is in URL
+        const currentUrl = page.url()
+        expect(new URL(currentUrl).searchParams.get('date'), "Should initially show first date").toBe(testData.dates.first)
 
         // WHEN: Click on second event's date in the calendar (calculate day from date)
         const event2Day = event2.date.getDate()
@@ -226,15 +222,15 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // THEN: Second event should be displayed
-        menuTitle = page.getByTestId('dinner-menu-title')
+        // THEN: Header should update to show second event's date
+        const header = page.getByTestId('dinner-detail-header')
         await pollUntil(
-            async () => await menuTitle.textContent(),
-            (text) => text?.includes(event2.menuTitle) || false,
+            async () => await header.textContent(),
+            (text) => text?.includes(testData.dates.second) || false,
             10
         )
 
-        titleText = await menuTitle.textContent()
-        expect(titleText, "Should now show second event").toContain(event2.menuTitle)
+        const headerText = await header.textContent()
+        expect(headerText, "Header should now show second event date").toContain(testData.dates.second)
     })
 })

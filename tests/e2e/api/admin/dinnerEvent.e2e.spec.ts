@@ -2,13 +2,12 @@ import {test, expect} from '@playwright/test'
 import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {OrderFactory} from '../../testDataFactories/orderFactory'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '../../testHelpers'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo} = testHelpers
 const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -60,16 +59,15 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(adultPrice!.id).toBeDefined()
 
         // AND: Create tickets for the dinner event using database ticket price
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
-        expect(inhabitants).toHaveLength(1)
-        const inhabitant = inhabitants[0]!
+        // Get session user's household (not a test household) for authorization
+        const { householdId, inhabitantId } = await getSessionUserInfo(context)
 
         // Verify ticket price ID is from database
         expect(adultPrice!.id).toBeGreaterThan(0)
         expect(adultPrice!.id).not.toBe(1) // Should not be factory default
 
         const orderData = {
-            inhabitantId: inhabitant.id,
+            inhabitantId,
             ticketPriceId: adultPrice!.id!,
             bookedByUserId: 1, // Factory default user ID
             dinnerMode: DinnerModeSchema.enum.DINEIN
@@ -77,19 +75,21 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         const [result1, result2] = await Promise.all([
             OrderFactory.createOrder(context, {
-                householdId: household.id,
+                householdId,
                 dinnerEventId: createdDinnerEvent.id!,
                 orders: [orderData]
             }),
             OrderFactory.createOrder(context, {
-                householdId: household.id,
+                householdId,
                 dinnerEventId: createdDinnerEvent.id!,
                 orders: [orderData]
             })
         ])
 
-        expect(result1.createdIds).toHaveLength(1)
-        expect(result2.createdIds).toHaveLength(1)
+        expect(result1, 'First order creation should succeed').not.toBeNull()
+        expect(result2, 'Second order creation should succeed').not.toBeNull()
+        expect(result1?.createdIds).toHaveLength(1)
+        expect(result2?.createdIds).toHaveLength(1)
 
         // AND: Retrieve dinner event detail again with tickets
         const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
@@ -108,7 +108,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(detailWithTickets!.tickets!.length).toBe(2)
         const ticket = detailWithTickets!.tickets![0]
         expect(ticket).toBeDefined()
-        expect(ticket!.inhabitant.id).toBe(inhabitant.id)
+        expect(ticket!.inhabitant.id).toBe(inhabitantId)
         expect(ticket!.inhabitant.name).toBeDefined()
         expect(ticket!.ticketPrice?.id).toBe(adultPrice!.id)
         expect(ticket!.ticketPrice?.ticketType).toBe(TicketType.ADULT)

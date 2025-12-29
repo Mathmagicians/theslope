@@ -2,7 +2,6 @@ import {test, expect} from '@playwright/test'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
 import {useMaintenanceValidation} from '~~/app/composables/useMaintenanceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
@@ -15,7 +14,7 @@ const {JobType, JobStatus} = useMaintenanceValidation()
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-const {validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
 
 // === HELPERS ===
 
@@ -45,30 +44,29 @@ const createTestDinner = async (
     })
 }
 
-/** Create household with inhabitant and a BOOKED order for a dinner */
+/** Create a BOOKED order for a dinner using session user's household */
 const createTestOrder = async (
     context: BrowserContext,
     season: Season,
     dinnerId: number,
-    testSalt: string
+    householdId: number,
+    inhabitantId: number
 ) => {
-    const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-        context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-    )
     const ticketPrice = season.ticketPrices[0]!
 
     const orderResult = await OrderFactory.createOrder(context, {
-        householdId: household.id,
+        householdId,
         dinnerEventId: dinnerId,
         orders: [{
-            inhabitantId: inhabitants[0]!.id,
-            bookedByUserId: inhabitants[0]!.userId!,
+            inhabitantId,
+            bookedByUserId: 1, // Factory default
             ticketPriceId: ticketPrice.id!,
             dinnerMode: DinnerMode.DINEIN
         }]
     })
 
-    return {household, orderId: orderResult.createdIds[0]!}
+    expect(orderResult, 'Order creation should succeed').not.toBeNull()
+    return {orderId: orderResult!.createdIds[0]!}
 }
 
 // === TESTS ===
@@ -84,7 +82,6 @@ const createTestOrder = async (
 test.describe('Daily Maintenance API', () => {
     test.describe.configure({mode: 'default'})
 
-    const createdHouseholdIds: number[] = []
     const createdDinnerEventIds: number[] = []
     let activeSeason: Season
 
@@ -97,9 +94,6 @@ test.describe('Daily Maintenance API', () => {
         const context = await validatedBrowserContext(browser)
         for (const id of createdDinnerEventIds) {
             await DinnerEventFactory.deleteDinnerEvent(context, id)
-        }
-        for (const id of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, id)
         }
     })
 
@@ -138,11 +132,13 @@ test.describe('Daily Maintenance API', () => {
         const testSalt = temporaryAndRandom()
         const fullSeason = await SeasonFactory.getSeason(context, activeSeason.id!)
 
+        // Get session user's household (not a test household) for authorization
+        const { householdId, inhabitantId } = await getSessionUserInfo(context)
+
         // Setup: Create CONSUMED dinner with order in PREVIOUS billing period (must be closed for billing)
         const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35, {totalCost: 50000})
         createdDinnerEventIds.push(dinner.id)
-        const {household, orderId} = await createTestOrder(context, fullSeason, dinner.id, testSalt)
-        createdHouseholdIds.push(household.id)
+        const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 
         // Run maintenance (closes order + creates transaction)
         await SeasonFactory.runDailyMaintenance(context)

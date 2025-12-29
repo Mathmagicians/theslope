@@ -7,7 +7,7 @@ import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '../../testHelpers'
 
-const { validatedBrowserContext, salt, headers } = testHelpers
+const { validatedBrowserContext, salt, headers, getSessionUserInfo } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 
@@ -26,13 +26,10 @@ test.describe('Order API', () => {
   test.beforeAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(
-      context,
-      { name: salt('Order Test Household') },
-      1
-    )
-    testHouseholdId = household.id
-    testInhabitantId = inhabitants[0]!.id
+    // Get user's actual household from session (not a created test household)
+    const { householdId, inhabitantId } = await getSessionUserInfo(context)
+    testHouseholdId = householdId
+    testInhabitantId = inhabitantId
 
     const season = await SeasonFactory.createSeason(context)
     testSeasonId = season.id!
@@ -65,12 +62,7 @@ test.describe('Order API', () => {
         console.warn(`Failed to cleanup season ${testSeasonId}`)
       })
     }
-
-    if (testHouseholdId) {
-      await HouseholdFactory.deleteHousehold(context, testHouseholdId).catch(() => {
-        console.warn(`Failed to cleanup household ${testHouseholdId}`)
-      })
-    }
+    // Don't delete testHouseholdId - it's the user's real household, not a test one
   })
 
   test('PUT can create and GET can retrieve order with status 200/201', async ({ browser }) => {

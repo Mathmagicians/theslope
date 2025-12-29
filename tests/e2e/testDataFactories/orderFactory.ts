@@ -244,7 +244,7 @@ export class OrderFactory {
     context: BrowserContext,
     orderData?: Partial<CreateOrdersRequest>,
     expectedStatus: number = 201
-  ): Promise<CreateOrdersResult> => {
+  ): Promise<CreateOrdersResult | null> => {
     const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
 
@@ -257,8 +257,12 @@ export class OrderFactory {
     const errorBody = status !== expectedStatus ? await response.text() : ''
     expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-    const responseBody = await response.json()
-    return CreateOrdersResultSchema.parse(responseBody)
+    if (expectedStatus === 201) {
+      const responseBody = await response.json()
+      return CreateOrdersResultSchema.parse(responseBody)
+    }
+
+    return null
   }
 
   static readonly getOrder = async (

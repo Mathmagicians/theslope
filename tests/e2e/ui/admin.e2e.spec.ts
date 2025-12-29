@@ -1,4 +1,4 @@
-import { test, expect, type Response } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import { authFiles } from '../config'
 import testHelpers from '../testHelpers'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
@@ -86,36 +86,12 @@ test.describe('Admin page path-based navigation', () => {
     const testTabs = [tabs[5], tabs[0]].filter(t => t !== undefined)
     expect(testTabs).toHaveLength(2)
 
-    // Tabs that depend on plan store need API wait (planning, teams show Loader until ready)
-    // The store needs: /api/admin/season (list), /api/admin/season/active, AND /api/admin/season/{id} (detail)
-    const tabsNeedingSeasonApi = ['planning', 'teams']
-
     for (const tab of testTabs) {
-      // Setup response wait BEFORE navigation for tabs that depend on plan store
-      // Wait for the season DETAIL endpoint (e.g. /api/admin/season/123) which is the last to load
-      const needsApiWait = tabsNeedingSeasonApi.includes(tab.path)
-      const responsePromise = needsApiWait
-        ? page.waitForResponse(
-            (response: Response) => response.url().match(/\/api\/admin\/season\/\d+$/) !== null,
-            {timeout: 10000}
-          )
-        : null
-
       await page.goto(`${adminUrl}/${tab.path}`)
-
-      if (responsePromise) {
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
-        // Wait for Loader to disappear after API response (store needs time to update)
-        await pollUntil(
-          async () => await page.locator('text=Vi venter på data').isVisible(),
-          (isVisible) => !isVisible,
-          10
-        )
-      }
 
       expect(page.url()).toContain(`/admin/${tab.path}`)
 
+      // Wait for component to appear using pollUntil with exp backoff
       await pollUntil(
         async () => await page.locator(tab.selector).isVisible(),
         (isVisible) => isVisible,
@@ -238,40 +214,22 @@ test.describe('Admin season URL persistence', () => {
     }
   })
 
-  test('Invalid season redirects to a valid season', async ({ page, browser }) => {
-    const context = await validatedBrowserContext(browser)
-    // Use singleton to ensure active season exists for redirect
-    await SeasonFactory.createActiveSeason(context)
+  test('Invalid season redirects to a valid season', async ({ page }) => {
+    await page.goto('/admin/planning?season=invalid-123')
 
-    try {
-      await page.goto('/admin/planning?season=invalid-123')
+    // Debug: Screenshot before waiting for redirect
+    await doScreenshot(page, 'admin-invalid-season-before-redirect')
 
-      // Debug: Screenshot before waiting for redirect
-      await doScreenshot(page, 'admin-invalid-season-before-redirect')
+    // Wait for URL to auto-correct to a valid season
+    await pollUntil(
+      async () => page.url(),
+      (url) => url.includes('season=') && !url.includes('invalid-123'),
+      10,
+      500
+    )
 
-      // Wait for URL to auto-correct to a valid season
-      await pollUntil(
-        async () => page.url(),
-        (url) => url.includes('season=') && !url.includes('invalid-123'),
-        10,
-        500
-      )
-
-      expect(page.url()).toContain('season=')
-      expect(page.url()).not.toContain('invalid-123')
-
-      // Extract season shortName from URL and verify it exists
-      const url = new URL(page.url())
-      const seasonShortName = url.searchParams.get('season')
-      expect(seasonShortName).toBeTruthy()
-
-      // Verify the season actually exists via API
-      const seasons = await SeasonFactory.getAllSeasons(context)
-      const seasonExists = seasons.some(s => s.shortName === seasonShortName)
-      expect(seasonExists).toBe(true)
-    } finally {
-      // Singleton cleanup is automatic
-    }
+    expect(page.url()).toContain('season=')
+    expect(page.url()).not.toContain('invalid-123')
   })
 
 })

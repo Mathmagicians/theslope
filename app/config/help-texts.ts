@@ -3,6 +3,10 @@ export const HELP_TEXTS = {
         title: 'Velkommen til Skråningen',
         content: '🍽️ Fællesspisning på Skråningen. Log ind for at se kommende middage, booke pladser og administrere din husstand.'
     },
+    dinner: {
+        title: 'Middagskalenderen',
+        content: '🗓️ Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem almindelig fællesspisning, takeaway og sen spisning for din husstand, ændre framelding/tilmelding for en given dato, tilmelde en gæst, eller købe andres billetter som er sat til salg.'
+    },
     chef: {
         title: 'Chefkok',
         content: '👨‍🍳 Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier.'

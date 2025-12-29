@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-12-15 (Admin Season - CSV Import endpoint added)
+**Last Updated:** 2025-12-23 (Order endpoints - Authorization middleware added)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -12,10 +12,10 @@
 
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
-| **Order Management** | | | | | **✅ FULLY COMPLIANT** (4/5 endpoints implemented)                                                |
-| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() validates with OrderSchema                                                         |
+| **Order Management** | | | | | **✅ FULLY COMPLIANT** (4/5 endpoints implemented) + Authorization middleware                     |
+| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() validates with OrderSchema                                                         |
-| `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() validates with OrderSchema                                                          |
+| `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
 | `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
 | `/api/order/swap-order.post.ts` | N/A | N/A | N/A | N/A | Stub - not yet implemented                                                                       |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
@@ -86,6 +86,9 @@
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
+| **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
+| `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |
+| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()` helpers with ADR-004 logging              |
 
 ## Compliance Checklist
 
