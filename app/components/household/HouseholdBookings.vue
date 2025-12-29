@@ -7,7 +7,7 @@
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
 import {WEEKDAYS} from '~/types/dateTypes'
-import {formatDate, formatWeekdayCompact, calculateAgeOnDate} from '~/utils/date'
+import {formatDate, formatWeekdayCompact} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
 import type {WeekDayMap} from '~/types/dateTypes'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
@@ -33,9 +33,8 @@ interface Props {
 
 const _props = defineProps<Props>()
 
-// Extract ticket type enum constants from Zod schema
-const {TicketTypeSchema} = useBookingValidation()
-const TicketType = TicketTypeSchema.enum
+// Use ticket composable for ticket type determination (DRY - respects maximumAgeLimit)
+const {determineTicketType, ticketTypeConfig} = useTicket()
 
 // Component needs to handle its own data needs for non core data elements
 const planStore = usePlanStore()
@@ -53,29 +52,6 @@ const orders = computed((): OrderDisplay[] => [])
 // UI state
 // Selected day for detail panel (null = show today or next event)
 const selectedDate = ref<Date | null>(null)
-
-// Determine ticket type based on age and season ticket prices
-const determineTicketType = (birthDate: Date | null | undefined) => {
-  if (!birthDate) return TicketType.ADULT
-  if (!activeSeason.value?.ticketPrices) return TicketType.ADULT
-
-  const age = calculateAgeOnDate(birthDate, new Date())
-  const sorted = [...activeSeason.value.ticketPrices]
-    .filter(tp => tp.maximumAgeLimit !== null)
-    .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
-
-  for (const price of sorted) {
-    if (age <= price.maximumAgeLimit!) return price.ticketType
-  }
-  return TicketType.ADULT
-}
-
-// Ticket type display config
-const ticketTypeConfig = {
-  [TicketType.ADULT]: {label: 'Voksen', color: 'primary'},
-  [TicketType.CHILD]: {label: 'Barn', color: 'success'},
-  [TicketType.BABY]: {label: 'Baby', color: 'neutral'}
-} as const
 
 // Visible cooking days based on season config
 const visibleCookingDays = computed(() => {

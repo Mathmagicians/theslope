@@ -30,9 +30,12 @@
 
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
-import {calculateAge} from '~/utils/date'
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {TicketType} from '~/composables/useBookingValidation'
+
+// Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
+const {determineTicketType} = useTicket()
 
 interface Props {
   household: HouseholdDetail
@@ -114,7 +117,7 @@ interface TableDataRow {
   lastName: string
   pictureUrl: string | null | undefined
   birthDate: Date | null | undefined
-  isChild: boolean
+  ticketType: TicketType
   allergies: AllergyDisplay[]
 }
 
@@ -155,8 +158,8 @@ const tableData = computed((): TableDataRow[] => {
   if (!props.household?.inhabitants) return []
 
   return props.household.inhabitants.map((inhabitant: InhabitantDisplay) => {
-    const age = calculateAge(inhabitant.birthDate ?? null)
-    const isChild = age !== null && age < 18
+    // Use ticket composable to determine type (respects maximumAgeLimit from ticket prices)
+    const ticketType = determineTicketType(inhabitant.birthDate ?? null)
 
     // Get allergies for this inhabitant from allergy store
     const inhabitantAllergies = allergies.value.filter((a: AllergyDisplay) => a.inhabitantId === inhabitant.id)
@@ -169,7 +172,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      isChild,
+      ticketType,
       allergies: inhabitantAllergies
     }
   })
