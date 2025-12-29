@@ -338,13 +338,13 @@ export class SeasonFactory {
             }
 
             // Poll until the season is active (another worker might be activating simultaneously)
-            const activeSeason = await pollUntil(
+            const activeSeason = await testHelpers.pollUntil(
                 async () => {
                     const response = await context.request.get(`/api/admin/season/${existingSingleton.id}`, { headers })
                     const season = await response.json()
                     return season as Season
                 },
-                (season) => season.isActive === true,
+                (season: Season) => season.isActive === true,
                 10 // Max attempts with exponential backoff
             )
 
@@ -360,13 +360,13 @@ export class SeasonFactory {
         })
 
         // Poll until the season is active (handle race with other workers who might also be activating)
-        const activatedSeason = await pollUntil(
+        const activatedSeason = await testHelpers.pollUntil(
             async () => {
                 const response = await context.request.get(`/api/admin/season/${createdSeason.id}`, { headers })
                 const season = await response.json()
                 return season as Season
             },
-            (season) => season.isActive === true,
+            (season: Season) => season.isActive === true,
             10 // Max attempts with exponential backoff
         )
 
