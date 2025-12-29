@@ -1,11 +1,83 @@
+<!--
+HelpButton - Context-sensitive help with inline feedback form
+
+┌─ Popover (default) ──────────────────┐
+│ Sidetitel                        [✕] │
+│ ─────────────────────────────────────│
+│ Hjælpetekst for den aktuelle side... │
+│ ─────────────────────────────────────│
+│ [📖 Læs manualen]                    │
+│ [🐙 Rapporter fejl              ▼]   │  ◄─── Expands form
+└──────────────────────────────────────┘
+
+┌─ Feedback Form (expanded) ───────────┐
+│ ○ 🐛 Fejl  ○ 💡 Forslag  ○ ❓ Spørg. │
+│ ┌──────────────────────────────────┐ │
+│ │ Beskriv din feedback...          │ │
+│ └──────────────────────────────────┘ │
+│ [✕ Annuller]         [🐙 Send →]     │
+└──────────────────────────────────────┘
+
+┌─ Success ────────────────────────────┐
+│      ✅ Tak for din feedback!        │
+│         🐙 Se issue #42              │  ◄─── Links to GitHub issue
+└──────────────────────────────────────┘
+
+┌─ Error ──────────────────────────────┐
+│   ❌ Kunne ikke sende feedback       │
+│          Fejlbesked her              │
+└──────────────────────────────────────┘
+
+Features:
+- Route-based help text lookup from config/help-texts.ts
+- Inline collapsible feedback form (UCollapsible)
+- Creates GitHub issue via /api/feedback (requires auth)
+- Success state links directly to created issue
+-->
 <script setup lang="ts">
 import { HELP_TEXTS } from '~/config/help-texts'
+import type { FeedbackPayload, GitHubIssueResponse } from '~~/server/integration/github/githubClient'
 
 const route = useRoute()
+const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY } = useTheSlopeDesignSystem()
+
+// Feedback form
+type FeedbackType = FeedbackPayload['type']
+const feedbackType = ref<FeedbackType>('bug')
+const feedbackDescription = ref('')
+const showFeedbackForm = ref(false)
+
+const feedbackOptions: Array<{ label: string, value: FeedbackType }> = [
+    { label: '🐛 Fejl', value: 'bug' },
+    { label: '💡 Forslag', value: 'idea' },
+    { label: '❓ Spørgsmål', value: 'question' }
+]
+
+const { execute: submitFeedback, status, data: feedbackResult, error: feedbackError } = useAsyncData<GitHubIssueResponse>(
+    'feedback-submit',
+    () => $fetch<GitHubIssueResponse>('/api/feedback', {
+        method: 'POST',
+        body: {
+            type: feedbackType.value,
+            description: feedbackDescription.value,
+            currentUrl: requestUrl.href
+        }
+    }),
+    { immediate: false }
+)
+
+const isSubmitting = computed(() => status.value === 'pending')
+const isSuccess = computed(() => status.value === 'success' && feedbackResult.value !== null)
+const isError = computed(() => status.value === 'error')
+
+const cancelFeedback = () => {
+    showFeedbackForm.value = false
+    feedbackDescription.value = ''
+}
 // Dynamically lookup help content based on current route
 const helpContent = computed(() => {
   const pathSegments = route.path.split('/').filter(Boolean)
@@ -55,20 +127,106 @@ watch(() => route.path, () => {
     />
 
     <template #content>
-      <UCard class="cursor-pointer max-w-xs sm:max-w-sm mx-2" variant="outline" @click="doClose()">
+      <UCard class="max-w-xs sm:max-w-sm mx-2" variant="outline">
         <template #header>
           <div class="flex justify-between items-center gap-2">
-            <span class="text-sm font-semibold">{{ helpContent.title }}</span>
+            <span :class="TYPOGRAPHY.cardTitle">{{ helpContent.title }}</span>
             <UButton
                 :icon="ICONS.xMark"
                 variant="ghost"
-                size="xs"
+                :size="SIZES.small"
                 class="flex-shrink-0"
                 @click="doClose()"
             />
           </div>
         </template>
-        <p class="text-sm text-pretty break-words">{{ helpContent.content }}</p>
+
+        <p :class="[TYPOGRAPHY.bodyTextSmall, 'text-pretty break-words']">{{ helpContent.content }}</p>
+
+        <template #footer>
+          <div class="flex flex-col gap-1 md:gap-2">
+            <UButton
+                to="https://github.com/Mathmagicians/theslope/blob/main/docs/user-guide.md"
+                target="_blank"
+                :icon="ICONS.book"
+                label="Læs manualen"
+                :size="SIZES.small"
+                variant="ghost"
+            />
+            <UButton
+                :icon="ICONS.github"
+                label="Rapporter fejl"
+                :size="SIZES.small"
+                variant="ghost"
+                trailing-icon="i-heroicons-chevron-down"
+                :ui="{ trailingIcon: showFeedbackForm ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
+                @click="showFeedbackForm = !showFeedbackForm"
+            />
+
+            <!-- Expandable feedback form -->
+            <UCollapsible v-model:open="showFeedbackForm" :unmount-on-hide="false">
+              <template #content>
+                <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
+                  <div v-if="isSuccess" class="text-center py-2 md:py-3 space-y-2">
+                    <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
+                    <UButton
+                        v-if="feedbackResult?.html_url"
+                        :to="feedbackResult.html_url"
+                        target="_blank"
+                        :icon="ICONS.github"
+                        :label="`Se issue #${feedbackResult.number}`"
+                        :size="SIZES.small"
+                        variant="link"
+                        class="block mx-auto"
+                    />
+                  </div>
+                  <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
+                    <UBadge color="error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
+                    <p :class="[TYPOGRAPHY.finePrint, 'text-muted']">{{ feedbackError?.message || 'Ukendt fejl' }}</p>
+                  </div>
+                  <template v-else>
+                    <URadioGroup
+                        v-model="feedbackType"
+                        :items="feedbackOptions"
+                        value-key="value"
+                        :ui="{ fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4' }"
+                    />
+                    <UTextarea
+                        v-model="feedbackDescription"
+                        placeholder="Beskriv din feedback..."
+                        :size="SIZES.small"
+                        :rows="3"
+                        class="w-full"
+                    />
+                    <UFieldGroup orientation="horizontal" class="gap-2 md:gap-3">
+                      <UButton
+                          :color="COLOR.neutral"
+                          variant="ghost"
+                          :icon="ICONS.xMark"
+                          :size="SIZES.small"
+                          @click="cancelFeedback"
+                      >
+                        Annuller
+                      </UButton>
+                      <UButton
+                          :color="COLOR.primary"
+                          variant="solid"
+                          :icon="ICONS.github"
+                          :trailing-icon="ICONS.arrowRight"
+                          :size="SIZES.small"
+                          :loading="isSubmitting"
+                          :disabled="isSubmitting"
+                          @click="() => submitFeedback()"
+                      >
+                        {{ isSubmitting ? 'Sender...' : 'Send' }}
+                      </UButton>
+                    </UFieldGroup>
+                  </template>
+                </div>
+              </template>
+            </UCollapsible>
+          </div>
+        </template>
       </UCard>
     </template>
   </UPopover>

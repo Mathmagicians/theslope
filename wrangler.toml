@@ -37,6 +37,7 @@ routes = [
 ]
 
 [env.dev.vars]
+DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
 
@@ -59,6 +60,7 @@ routes = [
 ]
 
 [env.prod.vars]
+DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope-prod"
 

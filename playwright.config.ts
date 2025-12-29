@@ -11,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
+const isLocalhost = process.env.BASE_URL?.includes('localhost') ?? true
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -31,7 +33,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.baseURL || 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -87,10 +89,10 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
+  /* Run your local dev server before starting the tests (only for localhost) */
+  webServer: isLocalhost ? {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: process.env.BASE_URL || 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-  },
+  } : undefined,
 });

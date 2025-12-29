@@ -11,8 +11,8 @@ async function performLogin(request: APIRequestContext) {
         headers: headers,
         data: { email: userName, password: password }
     })
-    expect(response.status()).toBe(200)
-    const responseBody = await response.json()
+    const responseBody = await response.json().catch(() => ({}))
+    expect(response.status(), `Login failed: ${JSON.stringify(responseBody)}`).toBe(200)
     expect(responseBody).toHaveProperty('email', userName)
 
     const responseHeaders = response.headers()

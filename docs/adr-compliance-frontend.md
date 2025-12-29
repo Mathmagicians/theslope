@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-12-23 (Added usePermissions composable, updated auth.ts store)
 
 ## Legend
 
@@ -132,7 +132,7 @@
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
-| `auth.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
+| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `tickets.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `bookings.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
@@ -155,6 +155,7 @@
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useApiHandler()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
+| `usePermissions()` | N/A | ✅ `SystemRoleSchema` | N/A | ✅ Full | **✅ COMPLIANT** - Permission predicates for auth (imports from generated layer, re-exports enum) |
 
 ## ADR Compliance Summary
 
@@ -204,10 +205,11 @@ All admin and household pages use:
 - ✅ `users.ts` - Full compliance (not tested)
 
 **Needs audit:**
-- ❓ `auth.ts` - Not audited
 - ❓ `event.ts` - Not audited
 - ❓ `tickets.ts` - Not audited
 - ❓ `bookings.ts` - Not audited
+
+**Note:** `auth.ts` uses `useUserSession()` from nuxt-auth-utils (not `useAsyncData`), so ADR-007 patterns don't fully apply. It's compliant for its use case.
 
 ### ADR-008: useEntityFormManager Pattern
 **Status:** ⚠️ **Partially Compliant**

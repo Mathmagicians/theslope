@@ -25,7 +25,8 @@ const BOT_PATTERNS = [
   'wp-admin',
   'wp-json',
 
-  // PHP admin panels
+  // PHP (not a PHP app)
+  '.php',
   'phpmyadmin',
   'pma',
   'admin.php',
@@ -47,8 +48,9 @@ const BOT_PATTERNS = [
   'typo3',
 
   // Common bot paths
-  'robots.txt.php', // Trying to exploit robots.txt
-  'sitemap.xml.php'
+  'robots.txt.php',
+  'sitemap.xml.php',
+  '/apps'
 ]
 
 export default defineEventHandler((event) => {

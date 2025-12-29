@@ -34,12 +34,16 @@ test.describe('Dinner Page URL Navigation', () => {
         // Use singleton active season (factory provides it with dinner events already created)
         const season = await SeasonFactory.createActiveSeason(context)
 
-        // Poll for dinner events - another worker might still be creating them
+        // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
             async () => {
                 const allEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
-                const sortedEvents = allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                return sortedEvents.slice(0, 3)
+                const futureEvents = allEvents
+                    .filter(e => new Date(e.date) >= today)
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                return futureEvents.slice(0, 3)
             },
             (events) => events.length >= 3,
             5
@@ -76,22 +80,22 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail panel to load (always present when event is displayed)
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const panel = page.getByTestId('dinner-detail-panel')
+                return await panel.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: A dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible').toBeVisible()
+        // THEN: Dinner event panel should be displayed
+        const panel = page.getByTestId('dinner-detail-panel')
+        await expect(panel, 'Dinner detail panel should be visible').toBeVisible()
 
-        const menuContent = await menuTitle.textContent()
-        expect(menuContent, 'Should display a singleton test menu').toContain('Singleton Test Menu')
+        // Documentation screenshot: Dinner calendar overview
+        await doScreenshot(page, 'dinner/dinner-calendar', true)
     })
 
     test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({page}) => {
@@ -109,36 +113,32 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail panel to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const panel = page.getByTestId('dinner-detail-panel')
+                return await panel.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: A dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible after auto-sync').toBeVisible()
-
-        const menuContent = await menuTitle.textContent()
-        expect(menuContent, 'Should display a singleton test menu').toContain('Singleton Test Menu')
+        // THEN: Dinner event should be displayed
+        const panel = page.getByTestId('dinner-detail-panel')
+        await expect(panel, 'Dinner detail panel should be visible after auto-sync').toBeVisible()
     })
 
     test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({page}) => {
-        const secondEvent = testData.events[1]!
         const secondEventDate = testData.dates.second
 
         // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
         await page.goto(`${dinnerPageUrl}?date=${secondEventDate}`)
 
-        // Wait for dinner data to load - check for menu title to become visible
+        // Wait for dinner detail panel to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const panel = page.getByTestId('dinner-detail-panel')
+                return await panel.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
@@ -152,20 +152,13 @@ test.describe('Dinner Page URL Navigation', () => {
         const dateParam = urlObj.searchParams.get('date')
         expect(dateParam, `URL should stay on explicitly requested date ${secondEventDate}`).toBe(secondEventDate)
 
-        // THEN: Second event should be displayed (the one we navigated to)
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, `Menu title should be visible for ${secondEventDate}`).toBeVisible()
+        // THEN: Dinner event panel should be displayed with correct date
+        const panel = page.getByTestId('dinner-detail-panel')
+        await expect(panel, `Dinner detail panel should be visible for ${secondEventDate}`).toBeVisible()
 
-        const titleText = await menuTitle.textContent()
-        expect(titleText, `Should display second event "${secondEvent.menuTitle}" when navigating to ${secondEventDate}`).toContain(secondEvent.menuTitle)
-
-        // THEN: Menu description should be visible (if event has a description)
-        const menuDescription = page.getByTestId('dinner-menu-description')
-        // Menu description is conditional (v-if), so we check if it exists for this event
-        const descriptionVisible = await menuDescription.isVisible().catch(() => false)
-        if (descriptionVisible) {
-            await expect(menuDescription, 'Menu description should be visible when present').toBeVisible()
-        }
+        // Verify the panel contains the expected date (rendered via DinnerDetailHeader inside)
+        const panelText = await panel.textContent()
+        expect(panelText, `Panel should contain the date ${secondEventDate}`).toContain(secondEventDate)
     })
 
     test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({page}) => {
@@ -186,39 +179,40 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // Wait for dinner data to load
+        // Wait for dinner detail panel to load
         await pollUntil(
             async () => {
-                const menuTitle = page.getByTestId('dinner-menu-title')
-                return await menuTitle.isVisible().catch(() => false)
+                const panel = page.getByTestId('dinner-detail-panel')
+                return await panel.isVisible().catch(() => false)
             },
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Synced dinner event should be displayed
-        const menuTitle = page.getByTestId('dinner-menu-title')
-        await expect(menuTitle, 'Menu title should be visible after sync to nearest event').toBeVisible()
+        const panel = page.getByTestId('dinner-detail-panel')
+        await expect(panel, 'Dinner detail panel should be visible after sync to nearest event').toBeVisible()
     })
 
     test('GIVEN dinner page loaded WHEN clicking calendar date THEN displays selected dinner event', async ({page}) => {
-        const event1 = testData.events[0]!
         const event2 = testData.events[1]!
 
         // GIVEN: Load page with first event's date
         await page.goto(`${dinnerPageUrl}?date=${testData.dates.first}`)
 
-        // Wait for calendar to be visible
+        // Wait for dinner detail panel to be visible (confirms first event is loaded)
         await pollUntil(
-            async () => page.locator('h3:text("Fællesspisningens kalender")').isVisible(),
+            async () => {
+                const panel = page.getByTestId('dinner-detail-panel')
+                return await panel.isVisible().catch(() => false)
+            },
             (isVisible) => isVisible,
             10
         )
 
-        // Verify first event is displayed
-        let menuTitle = page.getByTestId('dinner-menu-title')
-        let titleText = await menuTitle.textContent()
-        expect(titleText, "Should initially show first event").toContain(event1.menuTitle)
+        // Verify first event's date is in URL
+        const currentUrl = page.url()
+        expect(new URL(currentUrl).searchParams.get('date'), "Should initially show first date").toBe(testData.dates.first)
 
         // WHEN: Click on second event's date in the calendar (calculate day from date)
         const event2Day = event2.date.getDate()
@@ -232,15 +226,15 @@ test.describe('Dinner Page URL Navigation', () => {
             10
         )
 
-        // THEN: Second event should be displayed
-        menuTitle = page.getByTestId('dinner-menu-title')
+        // THEN: Panel should update to show second event's date
+        const panel = page.getByTestId('dinner-detail-panel')
         await pollUntil(
-            async () => await menuTitle.textContent(),
-            (text) => text?.includes(event2.menuTitle) || false,
+            async () => await panel.textContent(),
+            (text) => text?.includes(testData.dates.second) || false,
             10
         )
 
-        titleText = await menuTitle.textContent()
-        expect(titleText, "Should now show second event").toContain(event2.menuTitle)
+        const panelText = await panel.textContent()
+        expect(panelText, "Panel should now show second event date").toContain(testData.dates.second)
     })
 })

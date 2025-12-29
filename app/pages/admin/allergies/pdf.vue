@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
-import {formatDate, calculateAge} from '~/utils/date'
+import {formatDate} from '~/utils/date'
 
 // Inhabitant type from AllergyTypeDetail for local grouping
 type AllergyInhabitant = NonNullable<AllergyTypeDetail['inhabitants']>[number]
+
+// Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
+const {determineTicketType} = useTicket()
+const {TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
 
 // No layout for printing
 definePageMeta({
@@ -30,17 +35,20 @@ const qrCodeDataUrl = computed(() => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl.value)}`
 })
 
-// Format inhabitants by allergy with adult/child counts
+// Format inhabitants by allergy with adult/child/baby counts
 const allergyData = computed(() => {
   return allergyTypes.value
       .filter(at => at.inhabitants && at.inhabitants.length > 0)
       .map(allergyType => {
         const adults: AllergyInhabitant[] = []
         const children: AllergyInhabitant[] = []
+        const babies: AllergyInhabitant[] = []
 
         allergyType.inhabitants?.forEach(inhabitant => {
-          const age = calculateAge(inhabitant.birthDate ?? null)
-          if (age !== null && age < 18) {
+          const ticketType = determineTicketType(inhabitant.birthDate ?? null)
+          if (ticketType === TicketType.BABY) {
+            babies.push(inhabitant)
+          } else if (ticketType === TicketType.CHILD) {
             children.push(inhabitant)
           } else {
             adults.push(inhabitant)
@@ -51,11 +59,13 @@ const allergyData = computed(() => {
           ...allergyType,
           adults,
           children,
+          babies,
           adultCount: adults.length,
-          childCount: children.length
+          childCount: children.length,
+          babyCount: babies.length
         }
       })
-      .sort((a, b) => (b.adults.length + b.children.length) - (a.adults.length + a.children.length))
+      .sort((a, b) => (b.adults.length + b.children.length + b.babies.length) - (a.adults.length + a.children.length + a.babies.length))
 })
 
 // Print function
@@ -131,9 +141,10 @@ const printPage = () => {
                 <td>
                   <div class="space-y-2">
                     <!-- List inhabitants -->
-                    <div v-if="allergy.adults.length > 0 || allergy.children.length > 0">
-                      <span v-for="(inhabitant, idx) in [...allergy.adults, ...allergy.children]" :key="inhabitant.id">
+                    <div v-if="allergy.adults.length > 0 || allergy.children.length > 0 || allergy.babies.length > 0">
+                      <span v-for="(inhabitant, idx) in [...allergy.adults, ...allergy.children, ...allergy.babies]" :key="inhabitant.id">
                         {{ inhabitant.name }}
+                        <span v-if="allergy.babies.includes(inhabitant)">(ba)</span>
                         <span v-if="allergy.children.includes(inhabitant)">(b)</span>
                         <span v-if="allergy.adults.includes(inhabitant)">(v)</span>
                         <span
@@ -141,13 +152,13 @@ const printPage = () => {
                             class="text-xs text-gray-600">
                           - {{ inhabitant.inhabitantComment }}
                         </span>
-                        <span v-if="idx < allergy.adults.length + allergy.children.length - 1">, </span>
+                        <span v-if="idx < allergy.adults.length + allergy.children.length + allergy.babies.length - 1">, </span>
                       </span>
                     </div>
 
                     <!-- Count summary -->
                     <div class="font-bold mt-2">
-                      [{{ allergy.adultCount }} voksne & {{ allergy.childCount }} barn]
+                      [{{ allergy.adultCount }} voksne, {{ allergy.childCount }} børn & {{ allergy.babyCount }} babyer]
                     </div>
                   </div>
                 </td>

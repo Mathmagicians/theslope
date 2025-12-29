@@ -14,10 +14,9 @@ const DinnerState = DinnerStateSchema.enum
 
 const chefDinnerStateUrl = (dinnerId: number, state: string) => `/api/chef/dinner/${dinnerId}/${state}`
 
-// Variables to store for cleanup
+// Variables to store for cleanup (dinner events cascade-deleted with season per ADR-005)
 let testSeasonId: number
 let testSeason: Season
-const createdDinnerEventIds: number[] = []
 
 test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
 
@@ -39,7 +38,6 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         }
 
         const scheduledDinner = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        createdDinnerEventIds.push(scheduledDinner.id)
 
         expect(scheduledDinner.state).toBe(DinnerState.SCHEDULED)
         expect(scheduledDinner.heynaboEventId).toBeNull()
@@ -82,7 +80,6 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         }
 
         const scheduledDinner = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        createdDinnerEventIds.push(scheduledDinner.id)
 
         // Announce it first
         const announceResponse = await context.request.post(
@@ -129,7 +126,6 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         }
 
         const scheduledDinner = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        createdDinnerEventIds.push(scheduledDinner.id)
 
         // Announce it first
         const announceResponse = await context.request.post(
@@ -166,7 +162,6 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
         }
 
         const scheduledDinner = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        createdDinnerEventIds.push(scheduledDinner.id)
 
         // Announce it
         const announceResponse = await context.request.post(
@@ -186,14 +181,7 @@ test.describe('Chef Dinner Announce - Heynabo Event Synchronization', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Delete dinner events via API (this also cleans up Heynabo events)
-        for (const dinnerId of createdDinnerEventIds) {
-            await DinnerEventFactory.deleteDinnerEvent(context, dinnerId)
-        }
-
-        if (testSeasonId) {
-            await SeasonFactory.deleteSeason(context, testSeasonId)
-        }
+        // Season deletion cascades to dinner events (ADR-005)
+        await SeasonFactory.cleanupSeasons(context, [testSeasonId])
     })
 })

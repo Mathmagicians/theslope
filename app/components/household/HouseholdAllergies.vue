@@ -30,9 +30,12 @@
 
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
-import {calculateAge} from '~/utils/date'
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {TicketType} from '~/composables/useBookingValidation'
+
+// Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
+const {determineTicketType} = useTicket()
 
 interface Props {
   household: HouseholdDetail
@@ -114,7 +117,7 @@ interface TableDataRow {
   lastName: string
   pictureUrl: string | null | undefined
   birthDate: Date | null | undefined
-  isChild: boolean
+  ticketType: TicketType
   allergies: AllergyDisplay[]
 }
 
@@ -155,8 +158,8 @@ const tableData = computed((): TableDataRow[] => {
   if (!props.household?.inhabitants) return []
 
   return props.household.inhabitants.map((inhabitant: InhabitantDisplay) => {
-    const age = calculateAge(inhabitant.birthDate ?? null)
-    const isChild = age !== null && age < 18
+    // Use ticket composable to determine type (respects maximumAgeLimit from ticket prices)
+    const ticketType = determineTicketType(inhabitant.birthDate ?? null)
 
     // Get allergies for this inhabitant from allergy store
     const inhabitantAllergies = allergies.value.filter((a: AllergyDisplay) => a.inhabitantId === inhabitant.id)
@@ -169,7 +172,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      isChild,
+      ticketType,
       allergies: inhabitantAllergies
     }
   })
@@ -378,65 +381,6 @@ const columns = [
 
         <!-- Contact allergi ansvarlig (always shown) -->
         <AllergyManagersList/>
-
-        <!-- MOCKUP: AllergyTypeDisplay Component Variations -->
-        <UCard class="rounded-none md:rounded-lg border-t-0 md:border-t">
-          <template #header>
-            <h4 class="text-base font-semibold">🎨 AllergyTypeDisplay Component Mockup</h4>
-          </template>
-          <div class="space-y-6">
-            <!-- Sample allergy types for testing -->
-            <div class="space-y-4">
-              <div class="space-y-2">
-                <h5 class="text-sm font-semibold text-muted">1. Compact without name (compact)</h5>
-                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" compact />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" compact />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" compact />
-                  <AllergyTypeDisplay compact />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <h5 class="text-sm font-semibold text-muted">2. Compact with name (compact + show-name)</h5>
-                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" compact show-name />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" compact show-name />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" compact show-name />
-                  <AllergyTypeDisplay compact show-name />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <h5 class="text-sm font-semibold text-muted">3. Regular without name</h5>
-                <div class="flex flex-col gap-2 p-2 bg-elevated rounded">
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" />
-                  <AllergyTypeDisplay />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <h5 class="text-sm font-semibold text-muted">4. Regular with name (show-name)</h5>
-                <div class="flex flex-col gap-2 p-2 bg-elevated rounded">
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Gluten', icon: '🌾' }" show-name />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Mælk', icon: '🥛' }" show-name />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Nødder', icon: '🥜' }" show-name />
-                  <AllergyTypeDisplay show-name />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <h5 class="text-sm font-semibold text-muted">5. With iconify class (i-mdi-food-allergy-off-outline)</h5>
-                <div class="flex gap-2 items-center p-2 bg-elevated rounded">
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Allergi', icon: 'i-mdi-food-allergy-off-outline' }" compact show-name />
-                  <AllergyTypeDisplay :allergy-type="{ name: 'Allergi', icon: 'i-mdi-food-allergy-off-outline' }" show-name />
-                </div>
-              </div>
-            </div>
-          </div>
-        </UCard>
       </template>
     </div>
   </UCard>

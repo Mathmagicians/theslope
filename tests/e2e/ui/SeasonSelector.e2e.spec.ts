@@ -167,6 +167,9 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Navigate directly to future season in VIEW mode
         await navigateToPlanning(page, futureSeason.shortName, 'view')
 
+        // Debug: screenshot before waiting for button
+        await doScreenshot(page, 'season-status-before-button-wait')
+
         // Wait for activation button to load
         await pollUntil(
             async () => await page.locator('button[name="activate-season"]').isVisible(),
@@ -187,22 +190,22 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await doScreenshot(page, 'admin/season-status-display-future-season', true)
     })
 
-    test('GIVEN active season WHEN viewing status display THEN shows disabled activation controls', async ({page}) => {
+    test('GIVEN active season WHEN viewing status display THEN shows deactivation controls', async ({page}) => {
         // Navigate directly to active season in VIEW mode
         await navigateToPlanning(page, activeSeason.shortName, 'view')
 
-        // Wait for activation button to load
+        // Wait for deactivation button to load (active seasons show deactivate, not activate)
         await pollUntil(
-            async () => await page.locator('button[name="activate-season"]').isVisible(),
+            async () => await page.locator('button[name="deactivate-season"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
-        // THEN: Should show disabled activation button
-        const activateButton = page.locator('button[name="activate-season"]')
-        await expect(activateButton).toBeVisible()
-        await expect(activateButton).toBeDisabled()
-        await expect(activateButton).toContainText('Fællesspisnings sæson er i gang')
+        // THEN: Should show enabled deactivation button
+        const deactivateButton = page.locator('button[name="deactivate-season"]')
+        await expect(deactivateButton).toBeVisible()
+        await expect(deactivateButton).not.toBeDisabled()
+        await expect(deactivateButton).toContainText('Deaktiver Sæson')
 
         // Verify status text
         await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()

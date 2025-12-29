@@ -6,7 +6,7 @@ const adminFile = 'playwright/.auth/admin.json'
 const publicPages = ['', 'login']
 const protectedPages = ['admin', 'household', 'chef']
 
-test('/ has title', async ({page}) => {
+test('@smoke / has title', async ({page}) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Theslope/);
 });

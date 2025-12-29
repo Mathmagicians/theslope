@@ -1,4 +1,5 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {fetchOrder} from "~~/server/data/financesRepository"
 import {z} from "zod"
 import type { OrderDetail } from '~/composables/useBookingValidation'
@@ -34,6 +35,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
         })
     }
 
+    await requireHouseholdAccess(event, order.inhabitant.householdId)
     console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id}`)
     setResponseStatus(event, 200)
     return order

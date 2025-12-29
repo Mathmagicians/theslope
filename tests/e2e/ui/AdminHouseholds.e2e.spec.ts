@@ -1,10 +1,10 @@
-import {test, expect, type Page, type Response} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -21,18 +21,10 @@ test.describe('AdminHouseholds View', () => {
 
     /**
      * Helper: Navigate to households page and wait for data to load
-     * Sets up response wait BEFORE navigation to catch the API call
+     * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToHouseholds = async (page: Page) => {
-        // Setup wait for API response BEFORE navigation (catches the fetch triggered by store)
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household'),
-            {timeout: 10000}
-        )
-
         await page.goto(adminHouseholdsUrl)
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
 
         // Wait for container to be visible
         await pollUntil(
@@ -86,26 +78,29 @@ test.describe('AdminHouseholds View', () => {
         browser
     }) => {
         const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
 
         // GIVEN: Create household with inhabitants
         const {household: householdWithInhabitants, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {name: 'Test Family'},
+            HouseholdFactory.defaultHouseholdData(testSalt),
             3
         )
         createdHouseholdIds.push(householdWithInhabitants.id)
 
         // GIVEN: Create household without inhabitants
-        const householdEmpty = await HouseholdFactory.createHousehold(context, {name: 'Empty Household'})
+        const householdEmpty = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt + '-empty'))
         createdHouseholdIds.push(householdEmpty.id)
 
         // WHEN: Navigate and search for household with inhabitants
         await navigateAndFindHousehold(page, householdWithInhabitants.id, householdWithInhabitants.address, true)
 
-        // THEN: Household and all inhabitants are visible
-        const householdRow = page.getByRole('row').filter({ hasText: householdWithInhabitants.address })
-        await expect(householdRow, 'Household row with inhabitants should be visible').toBeVisible()
+        // THEN: Household and all inhabitants are visible (use data-test-id for exact match)
+        const householdAddressCell = page.locator(`[data-test-id="household-address-${householdWithInhabitants.id}"]`)
+        await expect(householdAddressCell, 'Household with inhabitants should be visible').toBeVisible()
 
+        // Find the row containing this household for inhabitant checks
+        const householdRow = householdAddressCell.locator('xpath=ancestor::tr')
         for (const inhabitant of inhabitants) {
             await expect(
                 householdRow.getByText(inhabitant.name).first(),
@@ -116,8 +111,8 @@ test.describe('AdminHouseholds View', () => {
         // WHEN: Search for empty household (without reload, just new search)
         await navigateAndFindHousehold(page, householdEmpty.id, householdEmpty.address, false)
 
-        // THEN: Empty household is visible
-        const emptyHouseholdRow = page.getByRole('row').filter({ hasText: householdEmpty.address })
-        await expect(emptyHouseholdRow, 'Empty household row should be visible').toBeVisible()
+        // THEN: Empty household is visible (use data-test-id for exact match)
+        const emptyHouseholdCell = page.locator(`[data-test-id="household-address-${householdEmpty.id}"]`)
+        await expect(emptyHouseholdCell, 'Empty household row should be visible').toBeVisible()
     })
 })

@@ -9,7 +9,7 @@ import type {
     AllergyDetail
 } from '~/composables/useAllergyValidation'
 
-const {salt, headers} = testHelpers
+const {salt, headers, temporaryAndRandom} = testHelpers
 const ALLERGY_TYPE_ENDPOINT = '/api/admin/allergy-type'
 const ALLERGY_ENDPOINT = '/api/household/allergy'
 
@@ -128,7 +128,7 @@ export class AllergyFactory {
 
     // === ALLERGY TYPE METHODS (for E2E tests) ===
 
-    static readonly defaultAllergyTypeData = (testSalt: string = Date.now().toString()) => ({
+    static readonly defaultAllergyTypeData = (testSalt: string = temporaryAndRandom()) => ({
         name: salt('Peanuts', testSalt),
         description: salt('Alvorlig allergi mod jordnødder. Kan forårsage anafylaktisk shock.', testSalt),
         icon: '🥜'
@@ -251,7 +251,7 @@ export class AllergyFactory {
     static readonly defaultAllergyData = (
         inhabitantId: number,
         allergyTypeId: number,
-        testSalt: string = Date.now().toString()
+        testSalt: string = temporaryAndRandom()
     ) => ({
         inhabitantId,
         allergyTypeId,

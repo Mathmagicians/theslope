@@ -28,18 +28,21 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
     // Pure dates (midnight) for serialization roundtrip stability
-    static readonly today = (() => {
+    // ADR-015: Start from TOMORROW to ensure all dinner events are in the future
+    // (today's dinner may be excluded if test runs after dinner time)
+    static readonly tomorrow = (() => {
         const date = new Date()
+        date.setDate(date.getDate() + 1)
         date.setHours(0, 0, 0, 0)
         return date
-    })() // Current date at midnight for realistic deadline testing
+    })() // Tomorrow at midnight - ensures scaffolding includes all events
 
-    static readonly oneWeekLater = (() => {
+    static readonly oneWeekFromTomorrow = (() => {
         const date = new Date()
-        date.setDate(date.getDate() + 7)
+        date.setDate(date.getDate() + 8) // tomorrow + 7 days
         date.setHours(0, 0, 0, 0)
         return date
-    })() // 7 days from today at midnight - short season for fast tests
+    })() // 7 days from tomorrow at midnight - short season for fast tests
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
@@ -61,12 +64,13 @@ export class SeasonFactory {
     }
 
     // Default season data for tests
-    // 7-day season starting from current date with Mon/Wed/Fri cooking days for fast, realistic testing
+    // 7-day season starting from TOMORROW with Mon/Wed/Fri cooking days for fast, realistic testing
+    // ADR-015: Tomorrow ensures all events are scaffoldable regardless of test execution time
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
-            start: this.today,
-            end: this.oneWeekLater
+            start: this.tomorrow,
+            end: this.oneWeekFromTomorrow
         },
         holidays: [],
         isActive: false,
@@ -328,47 +332,47 @@ export class SeasonFactory {
                 throw new Error('Failed to create singleton and could not find existing singleton season')
             }
 
-            // Activate it if not already active
+            // Activate it if not already active, or poll until active (handle race with other workers)
             if (!existingSingleton.isActive) {
                 console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-                const response = await context.request.post('/api/admin/season/active', {
+                await context.request.post('/api/admin/season/active', {
                     headers: headers,
                     data: { seasonId: existingSingleton.id }
                 })
-                expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-                const rawSeason = await response.json()
-
-                // Validate response
-                const {SeasonSchema} = useSeasonValidation()
-                const result = SeasonSchema.safeParse(rawSeason)
-                expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-                const activatedSeason = result.data!
-
-                this.activeSeason = activatedSeason
-                return activatedSeason
-            } else {
-                console.info('🌞 > SEASON_FACTORY > Using existing active singleton season')
-                this.activeSeason = existingSingleton
-                return existingSingleton
             }
+
+            // Poll until the season is active (another worker might be activating simultaneously)
+            const activeSeason = await testHelpers.pollUntil(
+                async () => {
+                    const response = await context.request.get(`/api/admin/season/${existingSingleton.id}`, { headers })
+                    const season = await response.json()
+                    return season as Season
+                },
+                (season: Season) => season.isActive === true,
+                10 // Max attempts with exponential backoff
+            )
+
+            console.info('🌞 > SEASON_FACTORY > Singleton season is already active')
+            this.activeSeason = activeSeason
+            return activeSeason
         }
 
         // We successfully created the singleton - activate it
-        const response = await context.request.post('/api/admin/season/active', {
+        await context.request.post('/api/admin/season/active', {
             headers: headers,
             data: { seasonId: createdSeason.id }
         })
 
-        expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-        const rawSeason = await response.json()
-
-        // Validate response
-        const {SeasonSchema} = useSeasonValidation()
-        const result = SeasonSchema.safeParse(rawSeason)
-        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-        const activatedSeason = result.data!
-
-        expect(activatedSeason.isActive, 'Season should be active').toBe(true)
+        // Poll until the season is active (handle race with other workers who might also be activating)
+        const activatedSeason = await testHelpers.pollUntil(
+            async () => {
+                const response = await context.request.get(`/api/admin/season/${createdSeason.id}`, { headers })
+                const season = await response.json()
+                return season as Season
+            },
+            (season: Season) => season.isActive === true,
+            10 // Max attempts with exponential backoff
+        )
 
         // Cache the active season
         this.activeSeason = activatedSeason
@@ -729,8 +733,13 @@ export class SeasonFactory {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
-        // Create household with inhabitants
-        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: `House-of-${teamName}`}, memberCount)
+        // Create household with inhabitants (use consistent salt for all fields)
+        const householdSalt = temporaryAndRandom()
+        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            {...HouseholdFactory.defaultHouseholdData(householdSalt), name: `House-of-${teamName}`},
+            memberCount
+        )
 
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']

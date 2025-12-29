@@ -9,7 +9,7 @@ import type { TeamRole } from "~/composables/useCookingTeamValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
-const {salt, headers, pollUntil} = testHelpers
+const {salt, headers, pollUntil, temporaryAndRandom} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
 const { DinnerStateSchema } = useBookingValidation()
 
@@ -32,7 +32,7 @@ export class DinnerEventFactory {
         updatedAt: this.today
     }
 
-    static readonly defaultDinnerEvent = (testSalt: string = Date.now().toString()) => {
+    static readonly defaultDinnerEvent = (testSalt: string = temporaryAndRandom()) => {
         return {
             ...this.defaultDinnerEventData,
             menuTitle: salt(this.defaultDinnerEventData.menuTitle, testSalt)

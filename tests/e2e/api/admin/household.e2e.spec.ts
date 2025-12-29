@@ -3,7 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext, salt} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
@@ -48,7 +48,7 @@ function verifyLightweightInhabitant(inhabitant: InhabitantDisplay, context: str
 
 test.describe('Household /api/admin/household CRUD operations', () => {
 
-    test('PUT can create household with valid structure', async ({browser}) => {
+    test('@smoke PUT can create household with valid structure', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // Create household (factory validates 201 and id exists)
@@ -115,10 +115,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const context = await validatedBrowserContext(browser)
 
         // Create household with inhabitants (with unique data for parallel execution)
-        const testSalt = Date.now().toString()
+        const testSalt = temporaryAndRandom()
         const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {name: salt('Household With Inhabitants', testSalt)},
+            HouseholdFactory.defaultHouseholdData(testSalt),
             2
         )
         testHouseholdIds.push(household.id)
@@ -137,7 +137,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create household with inhabitants (with unique data for parallel execution)
-        const testSalt = Date.now().toString()
+        const testSalt = temporaryAndRandom()
         const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
             HouseholdFactory.defaultHouseholdData(testSalt),
@@ -171,10 +171,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create household with inhabitants (with unique data for parallel execution)
-        const testSalt = Date.now().toString()
+        const testSalt = temporaryAndRandom()
         const {household} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {name: salt('Household For Detail Test', testSalt)},
+            HouseholdFactory.defaultHouseholdData(testSalt),
             2
         )
         testHouseholdIds.push(household.id)
@@ -197,10 +197,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     test('DELETE cascades to inhabitants (strong relation - ADR-005)', async ({browser}) => {
         // GIVEN: A household with inhabitants (with unique data for parallel execution)
         const context = await validatedBrowserContext(browser)
-        const testSalt = Date.now().toString()
+        const testSalt = temporaryAndRandom()
         const result = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {name: salt('Household For Cascade Delete', testSalt)},
+            HouseholdFactory.defaultHouseholdData(testSalt),
             2
         )
         // Don't add to cleanup - we're testing deletion

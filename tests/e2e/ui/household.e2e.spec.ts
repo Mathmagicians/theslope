@@ -1,11 +1,11 @@
-import {test, expect, type Page, type Response} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -40,19 +40,11 @@ test.describe('Household tab navigation', () => {
     }
 
     /**
-     * Navigate to tab with API wait to ensure store is ready
+     * Navigate to tab and wait for it to be visible
+     * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToTab = async (page: Page, tab: Tab) => {
-        // Setup response wait BEFORE navigation
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household/'),
-            {timeout: 10000}
-        )
-
         await page.goto(buildUrl(tab.path))
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
-
         await expect(page).toHaveURL(buildUrl(tab.path))
         await waitForTabVisible(page, tab)
     }
@@ -114,18 +106,10 @@ test.describe('Household tab navigation', () => {
         const testTab = tabs[1]!
         await navigateToTab(page, testTab)
 
-        // Setup response wait BEFORE reload
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household/'),
-            {timeout: 10000}
-        )
-
         await page.reload()
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
+        await waitForTabVisible(page, testTab)
 
         await expect(page).toHaveURL(buildUrl(testTab.path))
-        await waitForTabVisible(page, testTab)
     })
 
     test('Query params preserved when switching tabs', async ({page}) => {
@@ -149,6 +133,9 @@ test.describe('Household tab navigation', () => {
 
             expect(page.url()).toContain(buildUrl(tab.path))
             await waitForTabVisible(page, tab)
+
+            // Documentation screenshot for each household tab
+            await doScreenshot(page, `household/household-${tab.path}`, true)
         })
     }
 

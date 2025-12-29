@@ -7,6 +7,23 @@
 | Unit | `*.unit.spec.ts` | Vitest | Parametrization |
 | Component | `*.nuxt.spec.ts` | Nuxt Test Utils | Parametrization / factories |
 | E2E | `*.e2e.spec.ts` | Playwright | **Factories REQUIRED** |
+| Smoke | `@smoke` tag in title | Playwright | Post-deployment verification |
+
+## Smoke Tests
+
+Smoke tests run after CI/CD deployment to verify the deployed environment works.
+
+**Tag a test:** Add `@smoke` to the test title:
+```typescript
+test('@smoke / has title', async ({page}) => { ... })
+```
+
+**Run locally:**
+```bash
+npm run test:e2e:smoke
+```
+
+**CI/CD:** Runs automatically after deployment using GitHub Environment credentials (`dev` or `prod`).
 
 ## NON-NEGOTIABLE RULES
 

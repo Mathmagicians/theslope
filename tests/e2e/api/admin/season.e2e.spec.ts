@@ -37,7 +37,7 @@ test.describe('Season API Tests', () => {
     test.describe('Season CRUD operations', () => {
 
 // Test for creating and retrieving a season
-        test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
+        test("@smoke PUT should create a new season and GET should retrieve it", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
@@ -719,8 +719,9 @@ test.describe('Season API Tests', () => {
             const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
             createdSeasonIds.push(season.id!)
 
-            // Season uses default Mon/Wed/Fri cooking days, should have 3 events in a 7-day window
-            expect(dinnerEvents.length, 'Season should have 3 dinner events').toBe(3)
+            // Season uses default Mon/Wed/Fri cooking days, 7-day window has 3-4 events depending on start day
+            expect(dinnerEvents.length, 'Season should have 3-4 dinner events').toBeGreaterThanOrEqual(3)
+            expect(dinnerEvents.length, 'Season should have 3-4 dinner events').toBeLessThanOrEqual(4)
 
             const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
                 context, HouseholdFactory.defaultHouseholdData(testSalt), 1
@@ -741,12 +742,13 @@ test.describe('Season API Tests', () => {
             const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
             expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
 
-            // Second scaffold should be idempotent - same orders, no duplicates
-            const scaffoldResult2 = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-            expect(scaffoldResult2.created, 'Second scaffold should create 0 (idempotent)').toBe(0)
+            // Second scaffold should be idempotent for THIS test's inhabitant
+            // Note: Other parallel tests may create households, so we check our inhabitant's orders, not global created count
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
             const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
 
+            // Verify idempotency: same orders, same count, no duplicates
             expect(inhabitantOrdersAfterSecond.length, `Second scaffold: expected ${dinnerEvents.length} orders`).toBe(dinnerEvents.length)
             expect(inhabitantOrdersAfterSecond.map(o => o.id).sort()).toEqual(inhabitantOrdersAfterFirst.map(o => o.id).sort())
         })

@@ -1,19 +1,23 @@
-import type {Browser, Page, BrowserContextOptions} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
+import {randomUUID} from 'crypto'
 const { adminFile } = authFiles
 
-const temporaryAndRandom = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+const headers = {'Content-Type': 'application/json'}
+
+// Use crypto.randomUUID() for globally unique salts across parallel workers/processes
+const temporaryAndRandom = () => randomUUID()
 
 const salt = (base: string, testSalt: string = temporaryAndRandom()):string => base === '' ? testSalt : `${base}-${testSalt}`
 
 /**
  * Generate a unique numeric ID from a test salt
- * Combines base number with a hash of the salt string to ensure uniqueness across parallel tests
+ * Uses cyrb53 hash for better distribution and uniqueness across parallel tests
  *
  * @param base - Base number to add to the hash (e.g., 1000, 2000, 3000)
  * @param testSalt - Optional salt string. If not provided, generates a new random one
- * @returns A unique numeric ID
+ * @returns A unique numeric ID (safe for SQLite INT range)
  *
  * @example
  * // Generate IDs for same test entity using same salt (prevents collisions)
@@ -23,12 +27,22 @@ const salt = (base: string, testSalt: string = temporaryAndRandom()):string => b
  */
 const saltedId = (base: number = 0, testSalt?: string): number => {
     const salt = testSalt || temporaryAndRandom()
-    // Hash the salt string to create a numeric offset
-    const saltHash = salt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    return (base + saltHash) % 100000 // Modulo to keep numbers reasonable
+    // cyrb53 hash - good distribution, fast, simple
+    // Produces 53-bit hash (safe for JS number precision)
+    let h1 = 0xdeadbeef ^ base
+    let h2 = 0x41c6ce57 ^ base
+    for (let i = 0; i < salt.length; i++) {
+        const ch = salt.charCodeAt(i)
+        h1 = Math.imul(h1 ^ ch, 2654435761)
+        h2 = Math.imul(h2 ^ ch, 1597334677)
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507)
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507)
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+    // Combine into 32-bit result (SQLite INT is 64-bit, this is plenty)
+    return Math.abs((h2 >>> 0) + (h1 >>> 0) * 0x100) % 2147483647
 }
-
-const headers = {'Content-Type': 'application/json'}
 const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
     const options: BrowserContextOptions = { storageState: adminFile }
     if (baseURL) {
@@ -138,6 +152,26 @@ async function selectDropdownOption(
     await option.click()
 }
 
+/**
+ * Fetch current user's session info from nuxt-auth-utils
+ * Use this to get the authenticated user's householdId and inhabitantId
+ *
+ * @param context - Authenticated browser context
+ * @returns Object with householdId and inhabitantId from session
+ *
+ * @example
+ * const { householdId, inhabitantId } = await getSessionUserInfo(context)
+ */
+async function getSessionUserInfo(context: BrowserContext): Promise<{ householdId: number, inhabitantId: number }> {
+    const response = await context.request.get('/api/_auth/session', { headers })
+    expect(response.status()).toBe(200)
+    const session = await response.json()
+    const householdId = session.user?.Inhabitant?.householdId
+    const inhabitantId = session.user?.Inhabitant?.id
+    expect(householdId, 'Session user must have householdId').toBeDefined()
+    expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
+    return { householdId, inhabitantId }
+}
 
 const testHelpers = {
     salt,
@@ -147,7 +181,8 @@ const testHelpers = {
     validatedBrowserContext,
     pollUntil,
     doScreenshot,
-    selectDropdownOption
+    selectDropdownOption,
+    getSessionUserInfo
 }
 
 export default testHelpers
