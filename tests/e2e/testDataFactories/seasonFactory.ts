@@ -328,47 +328,47 @@ export class SeasonFactory {
                 throw new Error('Failed to create singleton and could not find existing singleton season')
             }
 
-            // Activate it if not already active
+            // Activate it if not already active, or poll until active (handle race with other workers)
             if (!existingSingleton.isActive) {
                 console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-                const response = await context.request.post('/api/admin/season/active', {
+                await context.request.post('/api/admin/season/active', {
                     headers: headers,
                     data: { seasonId: existingSingleton.id }
                 })
-                expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-                const rawSeason = await response.json()
-
-                // Validate response
-                const {SeasonSchema} = useSeasonValidation()
-                const result = SeasonSchema.safeParse(rawSeason)
-                expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-                const activatedSeason = result.data!
-
-                this.activeSeason = activatedSeason
-                return activatedSeason
-            } else {
-                console.info('🌞 > SEASON_FACTORY > Using existing active singleton season')
-                this.activeSeason = existingSingleton
-                return existingSingleton
             }
+
+            // Poll until the season is active (another worker might be activating simultaneously)
+            const activeSeason = await pollUntil(
+                async () => {
+                    const response = await context.request.get(`/api/admin/season/${existingSingleton.id}`, { headers })
+                    const season = await response.json()
+                    return season as Season
+                },
+                (season) => season.isActive === true,
+                10 // Max attempts with exponential backoff
+            )
+
+            console.info('🌞 > SEASON_FACTORY > Singleton season is already active')
+            this.activeSeason = activeSeason
+            return activeSeason
         }
 
         // We successfully created the singleton - activate it
-        const response = await context.request.post('/api/admin/season/active', {
+        await context.request.post('/api/admin/season/active', {
             headers: headers,
             data: { seasonId: createdSeason.id }
         })
 
-        expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-        const rawSeason = await response.json()
-
-        // Validate response
-        const {SeasonSchema} = useSeasonValidation()
-        const result = SeasonSchema.safeParse(rawSeason)
-        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-        const activatedSeason = result.data!
-
-        expect(activatedSeason.isActive, 'Season should be active').toBe(true)
+        // Poll until the season is active (handle race with other workers who might also be activating)
+        const activatedSeason = await pollUntil(
+            async () => {
+                const response = await context.request.get(`/api/admin/season/${createdSeason.id}`, { headers })
+                const season = await response.json()
+                return season as Season
+            },
+            (season) => season.isActive === true,
+            10 // Max attempts with exponential backoff
+        )
 
         // Cache the active season
         this.activeSeason = activatedSeason

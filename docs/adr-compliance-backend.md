@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-12-23 (Order endpoints - Authorization middleware added)
+**Last Updated:** 2025-12-29 (Feedback endpoint added)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -89,6 +89,9 @@
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |
 | `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()` helpers with ADR-004 logging              |
+| **User Feedback** | | | | | **✅ FULLY COMPLIANT (2025-12-29)**                                                               |
+| `/api/feedback.post.ts` | ✅ | ✅ | N/A | ❌ | Creates GitHub issue via PAT, requires auth (Inhabitant), ADR-002 separate try-catch            |
+| `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | GitHub API client with Zod validation, uses `useRuntimeConfig()`                                 |
 
 ## Compliance Checklist
 

@@ -34,12 +34,16 @@ test.describe('Dinner Page URL Navigation', () => {
         // Use singleton active season (factory provides it with dinner events already created)
         const season = await SeasonFactory.createActiveSeason(context)
 
-        // Poll for dinner events - another worker might still be creating them
+        // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
             async () => {
                 const allEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
-                const sortedEvents = allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                return sortedEvents.slice(0, 3)
+                const futureEvents = allEvents
+                    .filter(e => new Date(e.date) >= today)
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                return futureEvents.slice(0, 3)
             },
             (events) => events.length >= 3,
             5

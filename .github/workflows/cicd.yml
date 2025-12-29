@@ -106,7 +106,7 @@ jobs:
         run: npx playwright install chromium
       - name: Run smoke tests
         env:
-          PLAYWRIGHT_BASE_URL: ${{ needs.CICD.outputs.deployed_url }}
+          BASE_URL: ${{ vars.BASE_URL }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
           HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
         run: npm run test:e2e:smoke
