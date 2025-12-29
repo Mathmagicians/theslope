@@ -742,12 +742,13 @@ test.describe('Season API Tests', () => {
             const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
             expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
 
-            // Second scaffold should be idempotent - same orders, no duplicates
-            const scaffoldResult2 = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-            expect(scaffoldResult2.created, 'Second scaffold should create 0 (idempotent)').toBe(0)
+            // Second scaffold should be idempotent for THIS test's inhabitant
+            // Note: Other parallel tests may create households, so we check our inhabitant's orders, not global created count
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
             const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
 
+            // Verify idempotency: same orders, same count, no duplicates
             expect(inhabitantOrdersAfterSecond.length, `Second scaffold: expected ${dinnerEvents.length} orders`).toBe(dinnerEvents.length)
             expect(inhabitantOrdersAfterSecond.map(o => o.id).sort()).toEqual(inhabitantOrdersAfterFirst.map(o => o.id).sort())
         })

@@ -9,11 +9,21 @@ import {calculateAgeOnDate} from '~/utils/date'
  * - Ticket type determination based on age and season pricing
  * - Ticket type display configuration (labels, colors, icons)
  * - Ticket-related domain operations
+ * - Default ticket prices from app config
  */
 export const useTicket = () => {
     // Get ticket type enum from validation composable
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
+
+    /**
+     * Get default ticket prices from app config
+     * Used as fallback when no season ticket prices are available
+     */
+    const getDefaultTicketPrices = (): TicketPrice[] => {
+        const appConfig = useAppConfig()
+        return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
+    }
 
     /**
      * UI configuration for ticket type display
@@ -47,7 +57,7 @@ export const useTicket = () => {
      * 4. Default to ADULT if no match or no birthDate
      *
      * @param birthDate - Date of birth (null/undefined → ADULT)
-     * @param ticketPrices - Season ticket prices with age limits
+     * @param ticketPrices - Season ticket prices with age limits (falls back to defaults if not provided)
      * @param referenceDate - Date to calculate age on (default: today)
      * @returns Ticket type enum value
      */
@@ -56,14 +66,18 @@ export const useTicket = () => {
         ticketPrices?: TicketPrice[],
         referenceDate: Date = new Date()
     ): typeof TicketType[keyof typeof TicketType] => {
-        // Default to ADULT if no birthDate or no ticket prices
-        if (!birthDate || !ticketPrices) return TicketType.ADULT
+        // Default to ADULT if no birthDate
+        if (!birthDate) return TicketType.ADULT
+
+        // Use provided ticket prices or fall back to defaults
+        const prices = ticketPrices?.length ? ticketPrices : getDefaultTicketPrices()
+        if (!prices.length) return TicketType.ADULT
 
         const age = calculateAgeOnDate(birthDate, referenceDate)
 
         // Sort by age limit (ascending) and find first match
-        const sorted = [...ticketPrices]
-            .filter(tp => tp.maximumAgeLimit !== null)
+        const sorted = [...prices]
+            .filter(tp => tp.maximumAgeLimit !== null && tp.maximumAgeLimit !== undefined)
             .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
 
         for (const price of sorted) {

@@ -1,16 +1,18 @@
-import {describe, it, expect} from 'vitest'
-import {useTicket} from '~/composables/useTicket'
+import {describe, it, expect, beforeEach} from 'vitest'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 
 describe('useTicket', () => {
-    const {ticketTypeConfig, determineTicketType, getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
     const referenceDate = new Date('2025-01-15')
     const ticketPrices = TicketFactory.defaultTicketPrices()
+
+    // Get composable inside tests (requires Nuxt context)
+    const getComposable = () => useTicket()
 
     describe('ticketTypeConfig', () => {
         it.each(['ADULT', 'CHILD', 'BABY'] as const)(
             'GIVEN ticketTypeConfig WHEN checking %s THEN has all required properties',
             (type) => {
+                const {ticketTypeConfig} = getComposable()
                 const config = ticketTypeConfig[type]
                 expect(config).toBeDefined()
                 expect(config.label).toBeDefined()

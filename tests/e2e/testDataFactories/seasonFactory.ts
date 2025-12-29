@@ -28,18 +28,21 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
     // Pure dates (midnight) for serialization roundtrip stability
-    static readonly today = (() => {
+    // ADR-015: Start from TOMORROW to ensure all dinner events are in the future
+    // (today's dinner may be excluded if test runs after dinner time)
+    static readonly tomorrow = (() => {
         const date = new Date()
+        date.setDate(date.getDate() + 1)
         date.setHours(0, 0, 0, 0)
         return date
-    })() // Current date at midnight for realistic deadline testing
+    })() // Tomorrow at midnight - ensures scaffolding includes all events
 
-    static readonly oneWeekLater = (() => {
+    static readonly oneWeekFromTomorrow = (() => {
         const date = new Date()
-        date.setDate(date.getDate() + 7)
+        date.setDate(date.getDate() + 8) // tomorrow + 7 days
         date.setHours(0, 0, 0, 0)
         return date
-    })() // 7 days from today at midnight - short season for fast tests
+    })() // 7 days from tomorrow at midnight - short season for fast tests
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
@@ -61,12 +64,13 @@ export class SeasonFactory {
     }
 
     // Default season data for tests
-    // 7-day season starting from current date with Mon/Wed/Fri cooking days for fast, realistic testing
+    // 7-day season starting from TOMORROW with Mon/Wed/Fri cooking days for fast, realistic testing
+    // ADR-015: Tomorrow ensures all events are scaffoldable regardless of test execution time
     static readonly defaultSeasonData: Season = {
         shortName: 'TestSeason',
         seasonDates: {
-            start: this.today,
-            end: this.oneWeekLater
+            start: this.tomorrow,
+            end: this.oneWeekFromTomorrow
         },
         holidays: [],
         isActive: false,
