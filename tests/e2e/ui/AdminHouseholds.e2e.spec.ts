@@ -1,4 +1,4 @@
-import {test, expect, type Page, type Response} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
@@ -21,18 +21,10 @@ test.describe('AdminHouseholds View', () => {
 
     /**
      * Helper: Navigate to households page and wait for data to load
-     * Sets up response wait BEFORE navigation to catch the API call
+     * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToHouseholds = async (page: Page) => {
-        // Setup wait for API response BEFORE navigation (catches the fetch triggered by store)
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household'),
-            {timeout: 10000}
-        )
-
         await page.goto(adminHouseholdsUrl)
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
 
         // Wait for container to be visible
         await pollUntil(

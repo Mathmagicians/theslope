@@ -1,3 +1,39 @@
+<!--
+HelpButton - Context-sensitive help with inline feedback form
+
+┌─ Popover (default) ──────────────────┐
+│ Sidetitel                        [✕] │
+│ ─────────────────────────────────────│
+│ Hjælpetekst for den aktuelle side... │
+│ ─────────────────────────────────────│
+│ [📖 Læs manualen]                    │
+│ [🐙 Rapporter fejl              ▼]   │  ◄─── Expands form
+└──────────────────────────────────────┘
+
+┌─ Feedback Form (expanded) ───────────┐
+│ ○ 🐛 Fejl  ○ 💡 Forslag  ○ ❓ Spørg. │
+│ ┌──────────────────────────────────┐ │
+│ │ Beskriv din feedback...          │ │
+│ └──────────────────────────────────┘ │
+│ [✕ Annuller]         [🐙 Send →]     │
+└──────────────────────────────────────┘
+
+┌─ Success ────────────────────────────┐
+│      ✅ Tak for din feedback!        │
+│         🐙 Se issue #42              │  ◄─── Links to GitHub issue
+└──────────────────────────────────────┘
+
+┌─ Error ──────────────────────────────┐
+│   ❌ Kunne ikke sende feedback       │
+│          Fejlbesked her              │
+└──────────────────────────────────────┘
+
+Features:
+- Route-based help text lookup from config/help-texts.ts
+- Inline collapsible feedback form (UCollapsible)
+- Creates GitHub issue via /api/feedback (requires auth)
+- Success state links directly to created issue
+-->
 <script setup lang="ts">
 import { HELP_TEXTS } from '~/config/help-texts'
 import type { FeedbackPayload, GitHubIssueResponse } from '~~/server/integration/github/githubClient'
@@ -131,8 +167,18 @@ watch(() => route.path, () => {
             <UCollapsible v-model:open="showFeedbackForm" :unmount-on-hide="false">
               <template #content>
                 <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
-                  <div v-if="isSuccess" class="text-center py-2 md:py-3">
+                  <div v-if="isSuccess" class="text-center py-2 md:py-3 space-y-2">
                     <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
+                    <UButton
+                        v-if="feedbackResult?.html_url"
+                        :to="feedbackResult.html_url"
+                        target="_blank"
+                        :icon="ICONS.github"
+                        :label="`Se issue #${feedbackResult.number}`"
+                        :size="SIZES.small"
+                        variant="link"
+                        class="block mx-auto"
+                    />
                   </div>
                   <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
                     <UBadge color="error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
@@ -149,28 +195,32 @@ watch(() => route.path, () => {
                         v-model="feedbackDescription"
                         placeholder="Beskriv din feedback..."
                         :size="SIZES.small"
-                        class="flex-1"
-                        autoresize
+                        :rows="3"
+                        class="w-full"
                     />
-                    <div class="flex gap-2 md:gap-3">
+                    <UFieldGroup orientation="horizontal" class="gap-2 md:gap-3">
                       <UButton
-                          :size="SIZES.small"
+                          :color="COLOR.neutral"
                           variant="ghost"
+                          :icon="ICONS.xMark"
+                          :size="SIZES.small"
                           @click="cancelFeedback"
                       >
                         Annuller
                       </UButton>
                       <UButton
-                          class="flex-1"
-                          :size="SIZES.small"
                           :color="COLOR.primary"
+                          variant="solid"
+                          :icon="ICONS.github"
+                          :trailing-icon="ICONS.arrowRight"
+                          :size="SIZES.small"
                           :loading="isSubmitting"
                           :disabled="isSubmitting"
                           @click="() => submitFeedback()"
                       >
                         {{ isSubmitting ? 'Sender...' : 'Send' }}
                       </UButton>
-                    </div>
+                    </UFieldGroup>
                   </template>
                 </div>
               </template>
