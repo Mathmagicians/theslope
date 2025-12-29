@@ -37,8 +37,8 @@ export default defineEventHandler(async (event) => {
     if (!session?.user) {
         // Handle API routes differently from page routes
         if (pathname.startsWith("/api/")) {
-            // For API routes, return 401 Unauthorized
-            return createError({
+            // For API routes, throw 401 Unauthorized
+            throw createError({
                 statusCode: 401,
                 statusMessage: "Unauthorized - Please login"
             })
@@ -50,5 +50,5 @@ export default defineEventHandler(async (event) => {
 
     // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
     const user = session.user as UserDetail & {passwordHash: string}
-    console.info(`🔒 > [GUARD] > Available User session data: token - ${maskPassword(user.passwordHash)}, mail - ${user.email}, roles - ${user.systemRoles}`)
+    console.info(`🔒 > [GUARD] > User session: mail=${maskPassword(user.email)}, token=${maskPassword(user.passwordHash)}, roles=${JSON.stringify(user.systemRoles)}`)
 })

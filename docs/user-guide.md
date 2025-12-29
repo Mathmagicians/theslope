@@ -29,7 +29,7 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 3. Brug dit Heynabo brugernavn og password
 4. Du bliver automatisk sendt til en dashboard-side
 
-<!-- TODO: Screenshot af dashboard -->
+![Dashboard](screenshots/dinner/dinner-calendar.png)
 
 > **Bemærk:** Login-oplysninger synkroniseres fra Heynabo. Hvis du har glemt dit password, nulstil det på Heynabo.
 
@@ -86,7 +86,8 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 3. Klik på datoen for at se detaljer
 4. Klik **Tilmeld** eller **Afmeld** for at ændre
 
-<!-- TODO: Screenshot af bookings-kalenderen -->
+![Tilmeldingskalender](screenshots/household/household-bookings.png)
+*Kalenderen viser dine tilmeldinger - klik på en dato for at ændre*
 
 ### Sådan framelder du dig fællesspisning
 
@@ -108,7 +109,7 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 
 > **Tip:** Du kan også sætte takeaway som standard i dine ugentlige præferencer.
 
-<!-- TODO: Screenshot af takeaway-valg -->
+![Takeaway valg](screenshots/household/household-bookings.png)
 
 ### Sådan ser du din PBS-faktura
 
@@ -116,7 +117,7 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 2. Se oversigt over udgifter for denne og forrige periode
 3. Fakturaen trækkes automatisk via PBS omkring den 1. i måneden
 
-<!-- TODO: Screenshot af økonomi-fanen -->
+![Økonomi fanen](screenshots/household/household-economy.png)
 
 ### Sådan tilføjer du allergier
 
@@ -127,7 +128,7 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 5. Tilføj evt. en kommentar (f.eks. "mild" eller "alvorlig")
 6. Gem
 
-<!-- TODO: Screenshot af allergi-tilføjelse -->
+![Allergi administration](screenshots/household/household-allergies.png)
 
 > **Vigtigt:** Kokkene ser allergierne når de planlægger menuen. Sørg for at holde dem opdateret!
 

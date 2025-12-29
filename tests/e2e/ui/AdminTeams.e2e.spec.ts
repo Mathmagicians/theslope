@@ -58,15 +58,12 @@ test.describe('AdminTeams Form UI', () => {
                 await page.locator('input#team-count').fill('2')
                 await page.getByRole('button', {name: /Opret madhold/i}).click()
 
-                const affinityResponse = await page.waitForResponse(
-                    (response) => response.url().includes('/assign-team-affinities') && response.status() === 200,
-                    {timeout: 10000}
+                // THEN: Poll until teams are created
+                const teams = await pollUntil(
+                    () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
+                    (teams) => teams.length === 2,
+                    10
                 )
-                const affinityResult = await affinityResponse.json()
-                expect(affinityResult.teamCount).toBe(2)
-
-                // THEN: Verify teams created
-                const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
                 expect(teams.length).toBe(2)
                 expect(teams[0]!.name).toContain('Madhold 1')
                 expect(teams[0]!.name).toContain(season.shortName)

@@ -19,6 +19,15 @@ const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema,
 const ORDER_ENDPOINT = '/api/order'
 
 export class OrderFactory {
+
+  /** Default order item - pass inhabitantId & ticketPriceId, rest uses defaults */
+  static readonly defaultOrderItem = (overrides: Partial<CreateOrdersRequest['orders'][number]>) => ({
+    inhabitantId: 1,
+    ticketPriceId: 1,
+    bookedByUserId: 1,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    ...overrides
+  })
   // === DEFAULT DATA ===
 
   /**
@@ -103,26 +112,7 @@ export class OrderFactory {
       ]
     }
 
-    // Deep merge orders array to preserve default fields
-    if (overrides?.orders) {
-      return {
-        ...defaults,
-        ...overrides,
-        orders: overrides.orders.map(order => {
-          const defaultOrder = defaults.orders[0]
-          return {
-            ...order,
-            bookedByUserId: order.bookedByUserId ?? defaultOrder?.bookedByUserId,
-            dinnerMode: order.dinnerMode ?? defaultOrder?.dinnerMode
-          }
-        })
-      }
-    }
-
-    return {
-      ...defaults,
-      ...overrides
-    }
+    return { ...defaults, ...overrides }
   }
 
   static readonly defaultSwapOrderRequest = (overrides?: Partial<SwapOrderRequest>): SwapOrderRequest => ({

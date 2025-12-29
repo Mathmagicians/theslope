@@ -527,7 +527,11 @@ export const ICONS = {
 
     // Time & info
     clock: 'i-heroicons-clock',
-    info: 'i-heroicons-information-circle'
+    info: 'i-heroicons-information-circle',
+
+    // External links
+    github: 'i-simple-icons-github',
+    book: 'i-heroicons-book-open'
 } as const
 
 /**

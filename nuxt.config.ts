@@ -99,6 +99,10 @@ export default defineNuxtConfig({
     runtimeConfig: {
         HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable
         HEY_NABO_PASSWORD: process.env.NUXT_HEY_NABO_PASSWORD, //Set in NUXT_HEYNABO_PASSWORD env variable
+        // GitHub integration for user feedback
+        GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
+        GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed
+        GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
         // Public keys that are exposed to the client
         public: {
             apiBase: '/api',

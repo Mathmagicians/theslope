@@ -71,19 +71,16 @@ test.describe('Order API', () => {
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          bookedByUserId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
     })
 
-    expect(result.householdId).toBe(testHouseholdId)
-    expect(result.createdIds).toHaveLength(1)
-    const orderId = result.createdIds[0]!
+    expect(result).not.toBeNull()
+    expect(result!.householdId).toBe(testHouseholdId)
+    expect(result!.createdIds).toHaveLength(1)
+    const orderId = result!.createdIds[0]!
     testOrderIds.push(orderId)
 
     const retrievedOrder = await OrderFactory.getOrder(context, orderId)
@@ -103,16 +100,12 @@ test.describe('Order API', () => {
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          bookedByUserId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
     })
-    const orderId = result.createdIds[0]!
+    const orderId = result!.createdIds[0]!
     testOrderIds.push(orderId)
 
     // Update to TAKEAWAY
@@ -136,16 +129,12 @@ test.describe('Order API', () => {
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          bookedByUserId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
     })
-    const orderId = result.createdIds[0]!
+    const orderId = result!.createdIds[0]!
     testOrderIds.push(orderId)
 
     // Cancel by setting dinnerMode to NONE
@@ -189,16 +178,12 @@ test.describe('Order API', () => {
       const result = await OrderFactory.createOrder(context, {
         householdId: testHouseholdId,
         dinnerEventId: futureDinnerEventId,
-        orders: [
-          {
-            inhabitantId: testInhabitantId,
-            ticketPriceId: futureTicketPriceId,
-            bookedByUserId: 1,
-            dinnerMode: DinnerModeSchema.enum.DINEIN
-          }
-        ]
+        orders: [OrderFactory.defaultOrderItem({
+          inhabitantId: testInhabitantId,
+          ticketPriceId: futureTicketPriceId
+        })]
       })
-      const orderId = result.createdIds[0]!
+      const orderId = result!.createdIds[0]!
 
       // Cancel by setting dinnerMode to NONE
       const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
@@ -224,16 +209,12 @@ test.describe('Order API', () => {
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          bookedByUserId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
     })
-    const orderId = result.createdIds[0]!
+    const orderId = result!.createdIds[0]!
     testOrderIds.push(orderId)
 
     // Try to update with invalid dinnerMode
@@ -248,17 +229,13 @@ test.describe('Order API', () => {
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId,
-          bookedByUserId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testChildTicketPriceId
+      })]
     })
-    expect(result.createdIds).toHaveLength(1)
-    const orderId = result.createdIds[0]!
+    expect(result!.createdIds).toHaveLength(1)
+    const orderId = result!.createdIds[0]!
 
     const deletedOrder = await OrderFactory.deleteOrder(context, orderId)
 

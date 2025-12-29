@@ -15,7 +15,7 @@ import {
     usePermissions
 } from '~/composables/usePermissions'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import type { UserDetail, SystemRole as SystemRoleType } from '~/composables/useCoreValidation'
+import type { UserDetail } from '~/composables/useCoreValidation'
 
 const { SystemRoleSchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
@@ -78,7 +78,6 @@ describe('usePermissions - Base Predicates', () => {
         })
 
         it('should handle undefined systemRoles gracefully', () => {
-            // @ts-expect-error - testing defensive coding against invalid input
             const user = createUser({ systemRoles: undefined })
             expect(isAdmin(user)).toBe(false)
         })
@@ -96,7 +95,6 @@ describe('usePermissions - Base Predicates', () => {
         })
 
         it('should handle undefined systemRoles gracefully', () => {
-            // @ts-expect-error - testing defensive coding against invalid input
             const user = createUser({ systemRoles: undefined })
             expect(isAllergyManager(user)).toBe(false)
         })

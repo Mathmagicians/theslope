@@ -16,7 +16,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
 
 // Use design system for consistent styling
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
 </script>
 
@@ -46,7 +46,7 @@ const { TYPOGRAPHY } = useTheSlopeDesignSystem()
             variant="ghost"
             to="https://github.com/Mathmagicians/theslope"
             target="_blank"
-            icon="i-simple-icons-github"
+            :icon="ICONS.github"
             aria-label="GitHub"
             :ui="{ leadingIcon: TYPOGRAPHY.footerText }"
         />

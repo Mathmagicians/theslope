@@ -49,7 +49,7 @@ test.describe('Authorization Middleware', () => {
         const result = await OrderFactory.createOrder(context, {
             householdId,
             dinnerEventId: dinnerEvent.id,
-            orders: [{ inhabitantId, ticketPriceId }]
+            orders: [OrderFactory.defaultOrderItem({ inhabitantId, ticketPriceId })]
         }, 201)
 
         expect(result).not.toBeNull()
@@ -81,7 +81,7 @@ test.describe('Authorization Middleware', () => {
         await OrderFactory.createOrder(context, {
             householdId: otherHousehold.id,
             dinnerEventId: dinnerEvent.id,
-            orders: [{ inhabitantId: otherInhabitant.id, ticketPriceId }]
+            orders: [OrderFactory.defaultOrderItem({ inhabitantId: otherInhabitant.id, ticketPriceId })]
         }, 403)
     })
 })

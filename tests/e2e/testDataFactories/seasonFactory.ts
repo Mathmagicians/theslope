@@ -729,8 +729,13 @@ export class SeasonFactory {
         // First create the team
         const team = await this.createCookingTeamForSeason(context, seasonId, teamName)
 
-        // Create household with inhabitants
-        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: `House-of-${teamName}`}, memberCount)
+        // Create household with inhabitants (use consistent salt for all fields)
+        const householdSalt = temporaryAndRandom()
+        const householdWithInhabitants = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            {...HouseholdFactory.defaultHouseholdData(householdSalt), name: `House-of-${teamName}`},
+            memberCount
+        )
 
         // Assign members to team with different roles
         const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
