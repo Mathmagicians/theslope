@@ -25,6 +25,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         error: householdsError,
         refresh: refreshHouseholds
     } = useFetch<HouseholdDisplay[]>('/api/admin/household', {
+        key: 'households-store-households',
         immediate: true,
         watch: false,
         default: () => []
