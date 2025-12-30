@@ -186,7 +186,7 @@ const handleDeactivateSeason = async () => {
 <template>
 
   <UCard
-      data-test-id="admin-planning"
+      data-testid="admin-planning"
       class="w-full px-0"
   >
     <template #header>

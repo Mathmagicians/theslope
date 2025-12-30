@@ -8,7 +8,7 @@ const getCalendarFeedForUser = async (userName: string) => {
 </script>
 
 <template>
-  <div data-test-id="household-settings" class="space-y-6">
+  <div data-testid="household-settings" class="space-y-6">
     <div>
       <h3 class="text-lg font-semibold mb-4">Kalenderabonnement</h3>
       <p class="text-muted mb-4">

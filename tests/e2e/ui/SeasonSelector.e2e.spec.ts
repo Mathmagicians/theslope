@@ -172,13 +172,13 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         // Wait for activation button to load
         await pollUntil(
-            async () => await page.locator('button[name="activate-season"]').isVisible(),
+            async () => await page.getByTestId('activate-season').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Should show enabled activation button
-        const activateButton = page.locator('button[name="activate-season"]')
+        const activateButton = page.getByTestId('activate-season')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).not.toBeDisabled()
         await expect(activateButton).toContainText('Aktiver Sæson')
@@ -196,13 +196,13 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         // Wait for deactivation button to load (active seasons show deactivate, not activate)
         await pollUntil(
-            async () => await page.locator('button[name="deactivate-season"]').isVisible(),
+            async () => await page.getByTestId('deactivate-season').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Should show enabled deactivation button
-        const deactivateButton = page.locator('button[name="deactivate-season"]')
+        const deactivateButton = page.getByTestId('deactivate-season')
         await expect(deactivateButton).toBeVisible()
         await expect(deactivateButton).not.toBeDisabled()
         await expect(deactivateButton).toContainText('Deaktiver Sæson')

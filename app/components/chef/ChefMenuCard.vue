@@ -542,8 +542,8 @@ const handleCardClick = () => {
           </div>
         </UFormField>
         <div class="flex gap-2 justify-end">
-          <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" name="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" name="save-menu-edit">Gem</UButton>
+          <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
+          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" data-testid="save-menu-edit">Gem</UButton>
         </div>
       </UForm>
 

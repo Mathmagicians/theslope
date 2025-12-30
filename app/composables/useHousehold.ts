@@ -128,15 +128,19 @@ export const useHousehold = () => {
                     })
                     if (initialsMatch) return initialsMatch.id
 
-                    // Strategy 2b: Single initial matches ANY word of multi-part lastName
-                    // "Jacob L." matches "Jacob Krog Larsen" (L matches Larsen)
-                    // "Jacob K." also matches "Jacob Krog Larsen" (K matches Krog)
+                    // Strategy 2b: Single initial matches ANY word of remaining name + lastName
+                    // "Anna L." matches {name: "Anna", lastName: "Berg Larsen"} (L matches Larsen)
+                    // "Anna B." matches {name: "Anna Berg", lastName: "Larsen"} (B matches Berg in name)
                     if (initials.length === 1) {
                         const singleInitial = initials[0]!
                         const singleInitialMatches = normalized.filter(i => {
-                            if (i.name !== inputFirstWord) return false
+                            const nameWords = i.name.split(' ')
+                            // First word of name must match input first word
+                            if (nameWords[0] !== inputFirstWord) return false
+                            // Initial can match remaining name words OR lastName words
+                            const remainingNameWords = nameWords.slice(1)
                             const lastNameWords = i.lastName.split(' ')
-                            return lastNameWords.some(word => word.startsWith(singleInitial))
+                            return [...remainingNameWords, ...lastNameWords].some(word => word.startsWith(singleInitial))
                         })
                         if (singleInitialMatches.length === 1) return singleInitialMatches[0]!.id
                     }

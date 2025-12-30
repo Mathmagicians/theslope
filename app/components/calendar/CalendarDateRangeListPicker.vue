@@ -70,7 +70,7 @@ const onAddHolidayRange = () => {
       </UFormField>
       <UButton
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
-          name="holidayRangeAddToList"
+          data-testid="holiday-range-add"
           color="info"
           size="lg"
           icon="i-heroicons-sun"

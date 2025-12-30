@@ -306,7 +306,9 @@ describe('useHousehold', () => {
       it.each([
         { shortName: 'Signe D.', expectedId: 4, description: 'matches first lastName word' },
         { shortName: 'Signe M.', expectedId: 4, description: 'matches second lastName word' },
-        { shortName: 'signe d.', expectedId: 4, description: 'case insensitive' }
+        { shortName: 'signe d.', expectedId: 4, description: 'case insensitive' },
+        { shortName: 'Tommy N.', expectedId: 28, description: 'composite name: initial matches second word of name' },
+        { shortName: 'Tommy L.', expectedId: 28, description: 'composite name: initial matches lastName' }
       ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })

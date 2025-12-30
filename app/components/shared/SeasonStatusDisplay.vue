@@ -191,7 +191,7 @@ const showButton = computed(() => {
     <template v-if="showButton" #actions>
       <UFormField :hint="getIsMd ? (season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv') : undefined">
         <UButton
-          :name="currentButton.name"
+          :data-testid="currentButton.name"
           :color="currentButton.color"
           :leading-icon="currentButton.leadingIcon"
           :trailing-icon="currentButton.trailingIcon"

@@ -252,7 +252,7 @@ const columns = [
 </script>
 
 <template>
-  <UCard data-test-id="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
+  <UCard data-testid="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <!-- HEADER -->
     <template #header>
       <h3 class="text-lg font-semibold">Familiens allergier og diætkrav</h3>

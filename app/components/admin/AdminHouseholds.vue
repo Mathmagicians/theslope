@@ -75,7 +75,7 @@ v-if="isHouseholdsErrored"
 
   <UCard
 class="w-full px-0"
-         data-test-id="admin-households">
+         data-testid="admin-households">
     <template #header>
       <div>Husstande på Skråningen</div>
     </template>
@@ -87,7 +87,7 @@ class="w-full px-0"
           v-model="searchQuery"
           trailing-icon="i-heroicons-magnifying-glass"
           placeholder="Søg efter adresse, navn eller person..."
-          data-test-id="household-search"
+          data-testid="household-search"
           class="flex-1 md:max-w-md"
       />
       <!-- Pagination - controlled via table API (same pattern as InhabitantSelector) -->
@@ -125,7 +125,7 @@ class="w-full px-0"
 
       <!-- Custom address cell with test-id for easier test selection -->
       <template #address-cell="{ row }">
-        <span :data-test-id="`household-address-${row.original.id}`">
+        <span :data-testid="`household-address-${row.original.id}`">
           {{ row.original.address }}
         </span>
       </template>

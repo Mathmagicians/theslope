@@ -354,7 +354,7 @@ const columns = [
 
 <template>
   <UCard
-      data-test-id="admin-teams"
+      data-testid="admin-teams"
       class="w-full px-0"
   >
     <template #header>

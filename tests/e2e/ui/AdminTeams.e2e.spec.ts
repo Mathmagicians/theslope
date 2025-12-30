@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -112,6 +112,9 @@ test.describe('AdminTeams Form UI', () => {
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
             await expect(teamTabs.first()).toBeVisible()
             await expect(teamTabs).toHaveCount(2)
+
+            // Documentation screenshot: Admin Teams management view
+            await doScreenshot(page, 'admin/admin-teams-edit', true)
         })
 
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {

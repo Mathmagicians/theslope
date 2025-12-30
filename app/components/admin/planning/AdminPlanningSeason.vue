@@ -188,10 +188,10 @@ class="mx-auto"
               </ul>
             </div>
             <div class="flex gap-4 ml-auto">
-              <UButton name="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
+              <UButton data-testid="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
                 Annuller
               </UButton>
-              <UButton name="submit-season" type="submit" color="info" icon="i-heroicons-check-circle" :loading="isSavingSeason" :disabled="isSavingSeason">
+              <UButton data-testid="submit-season" type="submit" color="info" icon="i-heroicons-check-circle" :loading="isSavingSeason" :disabled="isSavingSeason">
                 {{ buttonText }}
               </UButton>
             </div>

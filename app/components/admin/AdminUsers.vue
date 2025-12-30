@@ -102,7 +102,7 @@ const userColumns = [
 
 <template>
   <UCard
-      id="admin-users" data-test-id="admin-users"
+      id="admin-users" data-testid="admin-users"
       class="flex flex-col items-center text-secondary">
     <template #header>
       <UAlert

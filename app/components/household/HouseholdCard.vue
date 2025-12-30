@@ -191,7 +191,7 @@ const columns = [
 <template>
   <!-- Weekly Preferences Section -->
   <UCard
-data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
+data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
          :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <template #header>
       <h3 class="text-lg font-semibold">Husstandens ugentlige booking præferencer</h3>
@@ -227,7 +227,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
               :color="row.original.ticketConfig?.color ?? 'neutral'"
               variant="subtle"
               size="sm"
-              :data-test-id="`ticket-type-${row.original.id}`"
+              :data-testid="`ticket-type-${row.original.id}`"
           >
             {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
           </UBadge>

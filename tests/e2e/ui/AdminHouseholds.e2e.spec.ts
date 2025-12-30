@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, doScreenshot} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -107,6 +107,9 @@ test.describe('AdminHouseholds View', () => {
                 `Inhabitant ${inhabitant.name} should be visible in household row`
             ).toBeVisible()
         }
+
+        // Documentation screenshot: Admin Households list with inhabitants
+        await doScreenshot(page, 'admin/admin-households-list', true)
 
         // WHEN: Search for empty household (without reload, just new search)
         await navigateAndFindHousehold(page, householdEmpty.id, householdEmpty.address, false)
