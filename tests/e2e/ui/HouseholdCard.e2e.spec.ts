@@ -75,7 +75,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         )
 
         await pollUntil(
-            async () => await page.locator('[data-test-id="household-members"]').isVisible(),
+            async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
@@ -100,7 +100,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
 
         await pollUntil(
             async () => {
-                const button = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY"]`)
+                const button = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
                 return await button.count() > 0
             },
             (count) => count,
@@ -108,22 +108,22 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         )
 
         // WHEN: Change Monday to TAKEAWAY
-        const mondayTakeawayButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY"]`)
+        const mondayTakeawayButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
         await mondayTakeawayButton.click()
 
         // WHEN: Change Wednesday to DINEINLATE
-        const wednesdayLateButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-onsdag-DINEINLATE"]`)
+        const wednesdayLateButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-onsdag-DINEINLATE`)
         await wednesdayLateButton.click()
 
         // WHEN: Change Friday to NONE
-        const fridayNoneButton = page.locator(`button[name="inhabitant-${scroogeId}-preferences-edit-fredag-NONE"]`)
+        const fridayNoneButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-fredag-NONE`)
         await fridayNoneButton.click()
 
         // Documentation screenshot showing edit mode with changes
         await doScreenshot(page, 'household/household-card-preferences-editing', true)
 
         // WHEN: Save preferences
-        const saveButton = page.locator('button[name="save-preferences"]')
+        const saveButton = page.getByTestId('save-preferences')
         await saveButton.click()
 
         // THEN: Poll until preferences are updated in database

@@ -162,17 +162,41 @@ make heynabo-import-local  # Lokal
 
 ---
 
+## Økonomi
+
+### Faktureringsperioder
+
+Fakturering kører automatisk den 17. hver måned:
+- **Forbrugsperiode**: 18. forrige måned → 17. denne måned
+- **PBS-opkrævning**: 1. i efterfølgende måned
+
+### Sådan deler du fakturaoplysninger med revisor
+
+1. Gå til `/admin/economy`
+2. Vælg en faktureringsperiode
+3. Klik **Del** for at generere et magic link
+4. Send linket til revisor (kræver ikke login)
+
+---
+
 ## Systemvedligeholdelse
 
-### Dagligt vedligeholdelsesjob
+### Systemjobs (`/admin/system`)
 
-Kører automatisk kl. 02:00 og håndterer:
-- Afslutning af tidligere middage
-- Lukning af ordrer
-- Oprettelse af transaktioner
-- Nye tilmeldinger for de næste 60 dage
+| Job | Kørsel | Beskrivelse |
+|-----|--------|-------------|
+| Daglig vedligeholdelse | Kl. 02:00 | Afslut middage, luk ordrer, opret transaktioner, tilmeldinger (rolling window 60 dage) |
+| Månedlig fakturering | 17. kl. 04:00 | Generer fakturaer for perioden |
+| Heynabo import | Kl. 03:00 | Synkroniser husstande fra Heynabo |
 
-Jobbet er idempotent - det er sikkert at køre igen.
+### Sådan kører du et job manuelt
+
+1. Gå til `/admin/system`
+2. Find jobbet i oversigten
+3. Klik **Kør nu**
+4. Se resultat i jobhistorikken nedenfor
+
+Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 

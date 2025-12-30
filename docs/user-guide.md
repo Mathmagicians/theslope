@@ -2,6 +2,8 @@
 
 Velkommen til TheSlope - Skråningens system til fællesspisning! Denne guide hjælper dig med de mest almindelige opgaver.
 
+> **Se også:** [Chefkokguide](chef-guide.md) | [Administratorguide](admin-guide.md) | [Systemoversigt](features.md)
+
 > **Tip:** Klik på hjælp-ikonet (?) i øverste højre hjørne for kontekstafhængig hjælp på hver side.
 
 ---
@@ -27,9 +29,9 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 1. Gå til [theslope.dk](https://theslope.dk) (eller din lokale adresse)
 2. Klik på **Log ind** i øverste højre hjørne
 3. Brug dit Heynabo brugernavn og password
-4. Du bliver automatisk sendt til en dashboard-side
+4. Du bliver sendt til din dashboard-side
 
-![Dashboard](screenshots/dinner/dinner-calendar.png)
+![Dashboard](screenshots/user/dashboard.png)
 
 > **Bemærk:** Login-oplysninger synkroniseres fra Heynabo. Hvis du har glemt dit password, nulstil det på Heynabo.
 
@@ -136,22 +138,27 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 
 ## Chefkok-opgaver
 
-Er du chefkok for et madhold? Se [features.md](features.md#chef) for detaljeret vejledning til:
+Er du chefkok for et madhold? Se [Chefkokguiden](chef-guide.md) for vejledning til:
 
-- Sådan annoncerer du en menu
+- Sådan planlægger og annoncerer du en menu
 - Sådan ser du tilmeldinger og allergier
-- Sådan håndterer du aflysninger
+- Sådan koordinerer du med dit hold
 
 ---
 
 ## Administrator-opgaver
 
-Er du administrator? Se [features.md](features.md#admin) for vejledning til:
+Er du administrator? Se [Administratorguiden](admin-guide.md) for vejledning til:
 
 - Sæsonplanlægning og oprettelse af middage
 - Madhold og teamfordeling
-- Import fra Heynabo
-- Økonomi og PBS-rapporter
+- Import fra Heynabo og CSV
+
+---
+
+## FAQ
+
+*Spørgsmål tilføjes løbende baseret på brugerhenvendelser.*
 
 ---
 

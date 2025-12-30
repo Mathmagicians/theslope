@@ -45,7 +45,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
+const { SIZES, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Business logic: Fetch inhabitants with assignments (ADR-009 compliant)
 const {useInhabitantsWithAssignments, getTeamColor} = useCookingTeam()
@@ -193,26 +193,13 @@ const table = useTemplateRef('table')
 
   <!-- Main content (UTable handles loading state) -->
   <div v-else class="space-y-3">
-    <!-- Search and Pagination Row -->
-    <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-      <!-- Search -->
-      <UInput
-          v-model="searchQuery"
-          trailing-icon="i-heroicons-magnifying-glass"
-          placeholder="Søg efter navn..."
-          class="flex-1 md:max-w-md"
-      />
-      <!-- Pagination - only show when more than one page -->
-      <UPagination
-          v-if="(table?.tableApi?.getFilteredRowModel().rows.length || 0) > pagination.pageSize"
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-          :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          :size="SIZES.standard"
-          :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p) => table?.tableApi?.setPageIndex(p - 1)"
-      />
-    </div>
+    <!-- Search and Pagination Row (no sort-label = uses column header sort instead) -->
+    <TableSearchPagination
+        v-model:search-query="searchQuery"
+        :table="table"
+        :pagination="pagination"
+        placeholder="Søg efter navn..."
+    />
 
     <!-- Table -->
     <UTable

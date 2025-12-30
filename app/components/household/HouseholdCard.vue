@@ -321,7 +321,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                     variant="ghost"
                     icon="i-heroicons-x-mark"
                     :size="getIsMd ? 'md' : 'sm'"
-                    name="cancel-preferences"
+                    data-testid="cancel-preferences"
                     @click="handleToggleRow(row)"
                 >
                   Annuller
@@ -331,7 +331,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                     variant="solid"
                     :icon="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : 'i-heroicons-check'"
                     :size="getIsMd ? 'md' : 'sm'"
-                    name="save-preferences"
+                    data-testid="save-preferences"
                     @click="savePreferences"
                 >
                   {{ row.original.isSynthetic ? 'Gem for alle' : 'Gem' }}

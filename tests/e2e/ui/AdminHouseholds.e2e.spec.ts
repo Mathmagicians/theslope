@@ -28,7 +28,7 @@ test.describe('AdminHouseholds View', () => {
 
         // Wait for container to be visible
         await pollUntil(
-            async () => await page.locator('[data-test-id="admin-households"]').isVisible(),
+            async () => await page.locator('[data-testid="admin-households"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
@@ -37,7 +37,7 @@ test.describe('AdminHouseholds View', () => {
         await pollUntil(
             async () => {
                 const hasEmptyState = await page.getByText('Ingen er flyttet ind i appen endnu').count() > 0
-                const hasDataRows = await page.locator('[data-test-id="admin-households"] tbody tr td').count() > 1
+                const hasDataRows = await page.locator('[data-testid="admin-households"] tbody tr td').count() > 1
                 return hasEmptyState || hasDataRows
             },
             (ready) => ready,
@@ -54,10 +54,10 @@ test.describe('AdminHouseholds View', () => {
             await navigateToHouseholds(page)
         }
 
-        await page.locator('[data-test-id="household-search"]').fill(searchTerm)
+        await page.locator('[data-testid="household-search"]').fill(searchTerm)
 
         await pollUntil(
-            async () => await page.locator(`[data-test-id="household-address-${householdId}"]`).isVisible(),
+            async () => await page.locator(`[data-testid="household-address-${householdId}"]`).isVisible(),
             (isVisible) => isVisible,
             10
         )
@@ -70,7 +70,7 @@ test.describe('AdminHouseholds View', () => {
 
     test('Can load admin households page', async ({page}) => {
         await navigateToHouseholds(page)
-        await expect(page.locator('[data-test-id="admin-households"]')).toBeVisible()
+        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
     })
 
     test('GIVEN households with/without inhabitants WHEN searching THEN correct households are displayed', async ({

@@ -9,25 +9,36 @@ const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = s
 householdsStore.initHouseholdsStore()
 
 // Design system
-const { SIZES, PAGINATION, COMPONENTS } = useTheSlopeDesignSystem()
+const { COMPONENTS } = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
+const sortDescending = ref(false)
 
-// Filter households by search query (same pattern as InhabitantSelector)
+// Filter and sort households
 const filteredHouseholds = computed(() => {
-  if (!searchQuery.value) return households.value
+  let result = households.value
 
-  const query = searchQuery.value.toLowerCase()
-  return households.value.filter(household =>
-    household.address?.toLowerCase().includes(query) ||
-    household.shortName?.toLowerCase().includes(query) ||
-    household.name?.toLowerCase().includes(query) ||
-    household.inhabitants?.some((inhabitant) =>
-      inhabitant.name?.toLowerCase().includes(query) ||
-      inhabitant.lastName?.toLowerCase().includes(query)
+  // Filter by search query
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(household =>
+      household.address?.toLowerCase().includes(query) ||
+      household.shortName?.toLowerCase().includes(query) ||
+      household.name?.toLowerCase().includes(query) ||
+      household.inhabitants?.some((inhabitant) =>
+        inhabitant.name?.toLowerCase().includes(query) ||
+        inhabitant.lastName?.toLowerCase().includes(query)
+      )
     )
-  )
+  }
+
+  // Sort by address (data is already sorted from DB, just reverse if needed)
+  if (sortDescending.value) {
+    result = [...result].reverse()
+  }
+
+  return result
 })
 
 const columns = [
@@ -80,25 +91,16 @@ class="w-full px-0"
       <div>Husstande på Skråningen</div>
     </template>
 
-    <!-- Search and Pagination Row -->
-    <div class="flex flex-col md:flex-row gap-4 md:items-center md:justify-between px-6 py-3">
-      <!-- Search -->
-      <UInput
-          v-model="searchQuery"
-          trailing-icon="i-heroicons-magnifying-glass"
+    <!-- Search, Sort, and Pagination Row -->
+    <div class="px-6 py-3">
+      <TableSearchPagination
+          v-model:search-query="searchQuery"
+          v-model:sort-descending="sortDescending"
+          :table="table"
+          :pagination="pagination"
           placeholder="Søg efter adresse, navn eller person..."
-          data-testid="household-search"
-          class="flex-1 md:max-w-md"
-      />
-      <!-- Pagination - controlled via table API (same pattern as InhabitantSelector) -->
-      <UPagination
-          v-if="(table?.tableApi?.getFilteredRowModel().rows.length || 0) > pagination.pageSize"
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-          :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          :size="SIZES.standard"
-          :sibling-count="PAGINATION.siblingCount.value"
-          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+          sort-label="Adresse"
+          test-id="household-search"
       />
     </div>
 

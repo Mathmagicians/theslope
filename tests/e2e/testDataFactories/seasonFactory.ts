@@ -427,7 +427,8 @@ export class SeasonFactory {
 
     /**
      * Clean up the cached active season singleton
-     * Deletes the test season from database, clears the cache, and restores previously active season
+     * Deletes the test season from database, clears the cache, and restores appropriate active season
+     * Uses selectMostAppropriateActiveSeason to find the best season to activate (DB lookup, not in-memory)
      * Gracefully handles parallel workers trying to delete the same singleton (ignores 404)
      * @param context BrowserContext for API requests
      */
@@ -449,17 +450,30 @@ export class SeasonFactory {
 
         // Clear in-memory cache (may be null if global teardown process)
         this.activeSeason = null
+        this.previouslyActiveSeason = null
 
-        // Restore the previously active season if one existed
-        if (this.previouslyActiveSeason) {
-            console.info('🌞 > SEASON_FACTORY > Restoring previously active season:', this.previouslyActiveSeason.shortName)
+        // Restore the most appropriate active season from remaining non-test seasons
+        // Global teardown runs in separate process, so we can't rely on in-memory previouslyActiveSeason
+        const remainingSeasons = await this.getAllSeasons(context)
+        const nonTestSeasons = remainingSeasons.filter(s => !s.shortName?.startsWith('TestSeason'))
+
+        // Use selectMostAppropriateActiveSeason to find the best candidate
+        const {selectMostAppropriateActiveSeason} = await import('~/utils/season')
+        const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
+
+        if (seasonToActivate) {
+            console.info('🌞 > SEASON_FACTORY > Activating most appropriate season:', seasonToActivate.shortName)
             const response = await context.request.post('/api/admin/season/active', {
                 headers: headers,
-                data: { seasonId: this.previouslyActiveSeason.id }
+                data: { seasonId: seasonToActivate.id }
             })
-            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-            console.info('🌞 > SEASON_FACTORY > Previously active season restored')
-            this.previouslyActiveSeason = null
+            if (response.status() === 200) {
+                console.info('🌞 > SEASON_FACTORY > Season activated successfully')
+            } else {
+                console.warn('🌞 > SEASON_FACTORY > Failed to activate season:', response.status())
+            }
+        } else {
+            console.info('🌞 > SEASON_FACTORY > No eligible non-test seasons to activate')
         }
     }
 

@@ -504,6 +504,8 @@ export const ICONS = {
     edit: 'i-heroicons-pencil',
     chevronDown: 'i-heroicons-chevron-down',
     chevronRight: 'i-heroicons-chevron-right',
+    sortAscending: 'i-lucide-arrow-up-narrow-wide',
+    sortDescending: 'i-lucide-arrow-down-wide-narrow',
     check: 'i-heroicons-check',
     checkCircle: 'i-heroicons-check-circle',
     plusCircle: 'i-heroicons-plus-circle',

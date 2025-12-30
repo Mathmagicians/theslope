@@ -82,13 +82,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
         // Wait for form mode buttons to be visible (poll for store init)
         await pollUntil(
-            async () => await page.locator('button[name="form-mode-view"]').isVisible(),
+            async () => await page.getByTestId('form-mode-view').isVisible(),
             (isVisible) => isVisible === true,
             10
         )
-        await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
-        await expect(page.locator('button[name="form-mode-edit"]')).toBeVisible()
-        await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
+        await expect(page.getByTestId('form-mode-view')).toBeVisible()
+        await expect(page.getByTestId('form-mode-edit')).toBeVisible()
+        await expect(page.getByTestId('form-mode-create')).toBeVisible()
     })
 
     test('GIVEN user in create mode WHEN filling and submitting form THEN season is created AND dinner events are generated',
@@ -98,21 +98,21 @@ test.describe('AdminPlanningSeason Form UI', () => {
             // GIVEN: Navigate to create mode
             await page.goto(`${adminPlanningUrl}?mode=create`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-create"]').isVisible(),
+                async () => await page.getByTestId('form-mode-create').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await expect(page.locator('button[name="form-mode-create"]')).toHaveClass(/ring-2/)
+            await expect(page.getByTestId('form-mode-create')).toHaveClass(/ring-2/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
             // WHEN: Fill and submit form
             const {startDate, endDate, searchPattern} = generateUniqueSeasonDates()
             await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
             await page.locator('[name="seasonDates"] input[name="end"]').fill(endDate)
-            await page.locator('button[name="submit-season"]').click()
+            await page.getByTestId('submit-season').click()
 
             // THEN: Switches to view mode
-            await expect(page.locator('button[name="form-mode-view"]')).toHaveClass(/ring-2/)
+            await expect(page.getByTestId('form-mode-view')).toHaveClass(/ring-2/)
 
             // Verify season created via API
             const createdSeason = await pollUntil(
@@ -150,14 +150,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // WHEN/THEN: Form in edit mode with season data
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await expect(page.locator('button[name="form-mode-edit"]')).toHaveClass(/ring-2/)
+            await expect(page.getByTestId('form-mode-edit')).toHaveClass(/ring-2/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
             await expect(page.getByTestId('season-selector')).toContainText(season!.shortName)
-            await expect(page.locator('button[name="submit-season"]')).toBeVisible()
+            await expect(page.getByTestId('submit-season')).toBeVisible()
         })
 
     test('GIVEN user in create mode WHEN adding holiday period THEN holiday is added to list',
@@ -180,7 +180,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             // WHEN: Add holiday period
             await page.locator('[name="holidayRangeList"] input[name="start"]').fill(holidayStart)
             await page.locator('[name="holidayRangeList"] input[name="end"]').fill(holidayEnd)
-            await page.locator('button[name="holidayRangeAddToList"]').click()
+            await page.getByTestId('holiday-range-add').click()
 
             // THEN: Holiday appears in list (use pollUntil for reliable visibility check)
             await pollUntil(
@@ -189,10 +189,10 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 10
             )
             await expect(page.locator('[name^="holidayRangeList-0"]')).toBeVisible()
-            await expect(page.locator('button[name="holidayRangeRemoveFromList-0"]')).toBeVisible()
+            await expect(page.getByTestId('holiday-range-remove-0')).toBeVisible()
 
             // Submit and verify via API
-            await page.locator('button[name="submit-season"]').click()
+            await page.getByTestId('submit-season').click()
 
             const createdSeason = await pollUntil(
                 () => SeasonFactory.getAllSeasons(context).then(seasons =>
@@ -239,7 +239,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 10
             )
 
-            const removeButton = page.locator('button[name="holidayRangeRemoveFromList-0"]')
+            const removeButton = page.getByTestId('holiday-range-remove-0')
             await removeButton.click()
 
             // THEN: Holiday removed from UI
@@ -251,7 +251,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(holidayItem).not.toBeVisible()
 
             // Submit and verify via API
-            await page.locator('button[name="submit-season"]').click()
+            await page.getByTestId('submit-season').click()
             await expect(page).toHaveURL(/.*mode=view/)
 
             const updatedSeason = await pollUntil(

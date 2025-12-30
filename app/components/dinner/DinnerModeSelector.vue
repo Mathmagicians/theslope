@@ -218,7 +218,7 @@ const getModeLabel = (): string => {
         :variant="getButtonVariant(mode)"
         :disabled="isModeDisabled(mode)"
         :size="size"
-        :name="`${name}-${mode}`"
+        :data-testid="`${name}-${mode}`"
         class="rounded-none md:rounded-md"
         @click="updateMode(mode)"
       />

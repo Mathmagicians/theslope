@@ -7,14 +7,14 @@ const { adminUIFile } = authFiles
 const { validatedBrowserContext, pollUntil, doScreenshot } = testHelpers
 
 const tabs = [
-  { name: 'Planlægning', path: 'planning', selector: '[data-test-id="admin-planning"]', hasFormModes: true },
-  { name: 'Madhold', path: 'teams', selector: '[data-test-id="admin-teams"]', hasFormModes: true },
-  { name: 'Chefkokke', path: 'chefs', selector: '[data-test-id="admin-chefs"]', hasFormModes: false },
-  { name: 'Husstande', path: 'households', selector: '[data-test-id="admin-households"]', hasFormModes: false },
-  { name: 'Allergier', path: 'allergies', selector: '[data-test-id="admin-allergies"]', hasFormModes: false },
-  { name: 'Brugere', path: 'users', selector: '[data-test-id="admin-users"]', hasFormModes: false },
-  { name: 'Økonomi', path: 'economy', selector: '[data-test-id="admin-economy"]', hasFormModes: false },
-  { name: 'Indstillinger', path: 'settings', selector: '[data-test-id="admin-settings"]', hasFormModes: false }
+  { name: 'Planlægning', path: 'planning', selector: '[data-testid="admin-planning"]', hasFormModes: true },
+  { name: 'Madhold', path: 'teams', selector: '[data-testid="admin-teams"]', hasFormModes: true },
+  { name: 'Chefkokke', path: 'chefs', selector: '[data-testid="admin-chefs"]', hasFormModes: false },
+  { name: 'Husstande', path: 'households', selector: '[data-testid="admin-households"]', hasFormModes: false },
+  { name: 'Allergier', path: 'allergies', selector: '[data-testid="admin-allergies"]', hasFormModes: false },
+  { name: 'Brugere', path: 'users', selector: '[data-testid="admin-users"]', hasFormModes: false },
+  { name: 'Økonomi', path: 'economy', selector: '[data-testid="admin-economy"]', hasFormModes: false },
+  { name: 'System', path: 'settings', selector: '[data-testid="admin-system"]', hasFormModes: false }
 ]
 
 test.describe('Admin page path-based navigation', () => {
@@ -59,7 +59,7 @@ test.describe('Admin page path-based navigation', () => {
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-url-check`)
 
       await pollUntil(
-        async () => await page.locator('[data-test-id="admin-planning"]').isVisible(),
+        async () => await page.locator('[data-testid="admin-planning"]').isVisible(),
         (isVisible) => isVisible,
         10
       )
@@ -200,7 +200,7 @@ test.describe('Admin season URL persistence', () => {
       expect(page.url()).toContain('mode=edit')
 
       await pollUntil(
-        async () => await page.locator('[data-test-id="admin-planning"]').isVisible(),
+        async () => await page.locator('[data-testid="admin-planning"]').isVisible(),
         (isVisible) => isVisible,
         10
       )

@@ -59,15 +59,15 @@ User (Bruger)
 | **Season Import** | Import calendar and teams from CSV | [Admin Guide](admin-guide.md#data-importexport) |
 | **Billing Import** | Import orders from legacy CSV format | [Admin Guide](admin-guide.md#billing--economy) |
 | **Daily Maintenance** | Auto-consume dinners, close orders, create transactions | [Admin Guide](admin-guide.md#system-maintenance) |
+| **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](admin-guide.md#økonomi) |
+| **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
 
 ### Partially Implemented
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **Chef Menu Editing** | 90% | UI complete, minor polish needed |
-| **Job History Panel** | Schema done | UI in progress |
-| **Monthly Billing UI** | Backend complete | UI pending |
+| Feature | Remaining Work |
+|---------|----------------|
+| **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel, ChefCalendarDisplay, AllergenMultiSelector |
 
 ### Planned
 

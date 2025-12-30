@@ -126,8 +126,14 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
 
     try {
         // ADR-009: Include lightweight Inhabitant relation for display
+        // Sort by Inhabitant name/lastName (users without inhabitants will be at the end)
         const users = await prisma.user.findMany({
-            select: USER_DISPLAY_SELECT
+            select: USER_DISPLAY_SELECT,
+            orderBy: [
+                { Inhabitant: { name: 'asc' } },
+                { Inhabitant: { lastName: 'asc' } },
+                { email: 'asc' }
+            ]
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
@@ -146,13 +152,19 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
 
     try {
         // Query users where systemRoles JSON array contains the specified role
+        // Sort by Inhabitant name/lastName (users without inhabitants will be at the end)
         const users = await prisma.user.findMany({
             where: {
                 systemRoles: {
                     contains: systemRole
                 }
             },
-            select: USER_DISPLAY_SELECT
+            select: USER_DISPLAY_SELECT,
+            orderBy: [
+                { Inhabitant: { name: 'asc' } },
+                { Inhabitant: { lastName: 'asc' } },
+                { email: 'asc' }
+            ]
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
