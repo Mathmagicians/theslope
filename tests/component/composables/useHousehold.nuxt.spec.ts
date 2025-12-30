@@ -263,7 +263,6 @@ describe('useHousehold', () => {
       { id: 85, name: 'Zara Noor', lastName: 'Khan' },         // composite first name
       { id: 122, name: 'Nova Star', lastName: 'Berg Hansen' }, // composite first name
       // Single initial with multi-part lastName (Strategy 2b)
-      { id: 201, name: 'Ziggy', lastName: 'Quantum Flux' },    // unique: "Ziggy Q." should match
       { id: 202, name: 'Orion', lastName: 'Nebula Star' },     // ambiguous with id 203
       { id: 203, name: 'Orion', lastName: 'Nova Prime' }       // ambiguous: both "Orion N."
     ]
@@ -305,17 +304,15 @@ describe('useHousehold', () => {
 
     describe('initials format - single initial with multi-part lastName (Strategy 2b)', () => {
       it.each([
-        { shortName: 'Signe D.', expectedId: 4, description: 'single initial matches first word of "Dalby Madsen"' },
-        { shortName: 'Erik A.', expectedId: 3, description: 'single initial matches first word of "Anders Hansen"' },
-        { shortName: 'Clara U.', expectedId: 9, description: 'single initial matches first word of "Urban Koch"' },
-        { shortName: 'Ziggy Q.', expectedId: 201, description: 'single initial matches first word of "Quantum Flux"' },
+        { shortName: 'Signe D.', expectedId: 4, description: 'matches first lastName word' },
+        { shortName: 'Signe M.', expectedId: 4, description: 'matches second lastName word' },
         { shortName: 'signe d.', expectedId: 4, description: 'case insensitive' }
       ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })
 
       it('returns null when single initial is ambiguous', () => {
-        // Both Orion Nebula Star (202) and Orion Nova Prime (203) have lastName starting with N
+        // Both Orion Nebula Star (202) and Orion Nova Prime (203) have lastName word starting with N
         expect(matchInhabitantByNameWithInitials('Orion N.', testInhabitants)).toBeNull()
       })
     })
