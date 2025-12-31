@@ -80,14 +80,14 @@ export class OrderFactory {
       id: 10,
       heynaboId: 1001,
       householdId: 1,
-      name: 'Test',
-      lastName: 'User',
+      name: 'Daisy',
+      lastName: 'Duck',
       pictureUrl: null,
       allergies: []
     },
     bookedByUser: {
       id: 1,
-      email: salt('test@example.com', testSalt)
+      email: salt('daisy', testSalt) + '@andeby.dk'
     },
     ticketPrice: {
       id: 1,

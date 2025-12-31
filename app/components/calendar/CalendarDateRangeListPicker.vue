@@ -84,8 +84,8 @@ const onAddHolidayRange = () => {
     <ul v-if="model?.length > 0" class="mt-4 space-y-2">
       <li
           v-for="(dates, index) in model"
-          :data-testid="`holidayRangeList-${index}`"
-          :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`">
+          :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`"
+          :data-testid="`holidayRangeList-${index}`">
         <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <div class="flex items-center gap-2">
             <UInput

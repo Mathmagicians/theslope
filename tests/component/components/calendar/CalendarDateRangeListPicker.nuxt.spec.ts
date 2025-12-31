@@ -70,7 +70,7 @@ describe('CalendarDateRangeListPicker', () => {
             }
         ])
 
-        const holidayInput = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`)
+        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`)
         expect(holidayInput.exists()).toBe(true)
     })
 
@@ -114,10 +114,10 @@ describe('CalendarDateRangeListPicker', () => {
         });
 
         // Verify the holiday input exists before removal
-        expect(wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`).exists()).toBe(true)
-        
+        expect(wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`).exists()).toBe(true)
+
         // Click the remove button
-        const removeButton = wrapper.find(`[name="${ELEMENT_NAMES.removeButton(0)}"]`)
+        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`)
         await removeButton.trigger('click')
         await nextTick()
         
@@ -146,15 +146,15 @@ describe('CalendarDateRangeListPicker', () => {
         expect(wrapper.exists()).toBe(true);
         
         // Verify the holiday input exists
-        const holidayInput = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`);
+        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
         expect(holidayInput.exists()).toBe(true);
-        
+
         // In disabled mode, the add button and datepicker should not be visible
-        const addButton = wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`);
+        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`);
         expect(addButton.exists()).toBe(false);
-        
+
         // In disabled mode, the delete button should not be visible
-        const removeButton = wrapper.find(`[name="${ELEMENT_NAMES.removeButton(0)}"]`);
+        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`);
         expect(removeButton.exists()).toBe(false);
         
         // In disabled mode, we should have an icon instead of the remove button

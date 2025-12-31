@@ -95,8 +95,8 @@ test.describe('AdminHouseholds View', () => {
         // WHEN: Navigate and search for household with inhabitants
         await navigateAndFindHousehold(page, householdWithInhabitants.id, householdWithInhabitants.address, true)
 
-        // THEN: Household and all inhabitants are visible (use data-test-id for exact match)
-        const householdAddressCell = page.locator(`[data-test-id="household-address-${householdWithInhabitants.id}"]`)
+        // THEN: Household and all inhabitants are visible (use data-testid for exact match)
+        const householdAddressCell = page.locator(`[data-testid="household-address-${householdWithInhabitants.id}"]`)
         await expect(householdAddressCell, 'Household with inhabitants should be visible').toBeVisible()
 
         // Find the row containing this household for inhabitant checks
@@ -114,8 +114,8 @@ test.describe('AdminHouseholds View', () => {
         // WHEN: Search for empty household (without reload, just new search)
         await navigateAndFindHousehold(page, householdEmpty.id, householdEmpty.address, false)
 
-        // THEN: Empty household is visible (use data-test-id for exact match)
-        const emptyHouseholdCell = page.locator(`[data-test-id="household-address-${householdEmpty.id}"]`)
+        // THEN: Empty household is visible (use data-testid for exact match)
+        const emptyHouseholdCell = page.locator(`[data-testid="household-address-${householdEmpty.id}"]`)
         await expect(emptyHouseholdCell, 'Empty household row should be visible').toBeVisible()
     })
 })

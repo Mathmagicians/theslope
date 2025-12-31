@@ -164,8 +164,8 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     })
 
     test('GIVEN future season WHEN viewing status display THEN shows activation controls', async ({page}) => {
-        // Navigate directly to future season in VIEW mode
-        await navigateToPlanning(page, futureSeason.shortName, 'view')
+        // Navigate directly to future season in EDIT mode (activation button only visible in edit mode)
+        await navigateToPlanning(page, futureSeason.shortName, 'edit')
 
         // Debug: screenshot before waiting for button
         await doScreenshot(page, 'season-status-before-button-wait')
@@ -191,8 +191,8 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     })
 
     test('GIVEN active season WHEN viewing status display THEN shows deactivation controls', async ({page}) => {
-        // Navigate directly to active season in VIEW mode
-        await navigateToPlanning(page, activeSeason.shortName, 'view')
+        // Navigate directly to active season in EDIT mode (deactivation button only visible in edit mode)
+        await navigateToPlanning(page, activeSeason.shortName, 'edit')
 
         // Wait for deactivation button to load (active seasons show deactivate, not activate)
         await pollUntil(

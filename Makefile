@@ -142,7 +142,7 @@ d1-seed-master-data-prod: ## Load master data to prod
 # ============================================================================
 # DATABASE QUERIES
 # ============================================================================
-.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households
+.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-all
 
 d1-list-users-local:
 	$(call d1_exec,theslope,SELECT * FROM User,--local)
@@ -166,7 +166,12 @@ d1-nuke-households: ## Delete test households (local)
 	$(call d1_exec,theslope,DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%',--local)
 	@echo "✅ Cleanup complete!"
 
-d1-nuke-all: d1-nuke-seasons d1-nuke-households
+d1-nuke-users: ## Delete test users (local) - emails ending in @andeby.dk
+	@echo "🧹 Cleaning up test users..."
+	$(call d1_exec,theslope,DELETE FROM User WHERE email LIKE '%@andeby.dk',--local)
+	@echo "✅ Test users cleaned up!"
+
+d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
 
 # ============================================================================

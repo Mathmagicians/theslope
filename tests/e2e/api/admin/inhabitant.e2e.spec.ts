@@ -1,16 +1,19 @@
 import {test, expect} from '@playwright/test'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import testHelpers from '../../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
 // Only track household - CASCADE will delete all inhabitants (ADR-005)
+// BUT users have SET NULL relationship - must track and cleanup separately
 let testHouseholdId: number
 const createdSeasonIds: number[] = []
+const createdUserIds: number[] = []
 
 test.describe('Admin Inhabitant API', () => {
 
@@ -88,22 +91,28 @@ test.describe('Admin Inhabitant API', () => {
         test('PUT /api/admin/inhabitant should create inhabitant with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
-            const testEmail = salt('usertest', testSalt) + '@example.com'
+            const testEmail = UserFactory.defaultUser(testSalt).email
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', testEmail)
             expect(testInhabitant.id).toBeDefined()
 
             // Verify inhabitant has user association
             expect(testInhabitant.userId).toBeDefined()
+
+            // Track user for cleanup (SET NULL means user survives inhabitant deletion)
+            createdUserIds.push(testInhabitant.userId!)
         })
 
         test('DELETE inhabitant should clear weak association with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
-            const testEmail = salt('userdelete', testSalt) + '@example.com'
+            const testEmail = UserFactory.defaultUser(testSalt).email
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Delete-Test-Inhabitant', testEmail)
 
             const userId = testInhabitant.userId
             expect(userId).toBeDefined()
+
+            // Track user for cleanup (SET NULL means user survives inhabitant deletion)
+            createdUserIds.push(userId!)
 
             // Delete the inhabitant
             await HouseholdFactory.deleteInhabitant(context, testInhabitant.id)
@@ -250,6 +259,12 @@ test.describe('Admin Inhabitant API', () => {
             } catch (error) {
                 console.warn(`Failed to cleanup test household ${testHouseholdId}:`, error)
             }
+        }
+
+        // Clean up users created via createInhabitantWithUser (SET NULL means they survive inhabitant deletion)
+        if (createdUserIds.length > 0) {
+            await UserFactory.cleanupUsers(context, createdUserIds)
+            console.info(`Cleaned up ${createdUserIds.length} test user(s)`)
         }
     })
 })

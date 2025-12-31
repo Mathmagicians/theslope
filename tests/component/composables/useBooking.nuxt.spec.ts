@@ -293,7 +293,7 @@ describe('useBooking', () => {
         const {OrderSnapshotSchema} = useBillingValidation()
 
         it.each([
-            {desc: 'with user', order: OrderFactory.defaultOrderForTransaction('test'), expectedEmail: 'test@example.com-test'},
+            {desc: 'with user', order: OrderFactory.defaultOrderForTransaction('test'), expectedEmail: 'daisy-test@andeby.dk'},
             {desc: 'without user', order: {...OrderFactory.defaultOrderForTransaction('test'), bookedByUser: null}, expectedEmail: ''}
         ])('$desc → snapshot roundtrips, email is $expectedEmail', ({order, expectedEmail}) => {
             const results = prepareTransactionData([order])

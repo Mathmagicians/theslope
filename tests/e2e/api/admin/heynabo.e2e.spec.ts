@@ -1,6 +1,8 @@
 import {test, expect} from '@playwright/test'
 import testHelpers from '../../testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
+import {isAdmin} from '~/composables/usePermissions'
+import type {UserDisplay} from '~/composables/useCoreValidation'
 
 const {validatedBrowserContext} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
@@ -41,5 +43,15 @@ test.describe('Heynabo Integration API', () => {
         expect(firstHousehold).toHaveProperty('heynaboId')
         expect(firstHousehold).toHaveProperty('address')
         expect(firstHousehold).toHaveProperty('inhabitants')
+
+        // Verify imported users are linked to their Inhabitants
+        // System admins are excluded - they may exist without Inhabitants
+        const usersResponse = await context.request.get('/api/admin/users')
+        expect(usersResponse.status()).toBe(200)
+
+        const users: UserDisplay[] = await usersResponse.json()
+        const orphanUsers = users.filter((u: UserDisplay) => u.Inhabitant === null && !isAdmin(u))
+
+        expect(orphanUsers.length, `Orphan users: ${JSON.stringify(orphanUsers)}`).toBe(0)
     })
 })
