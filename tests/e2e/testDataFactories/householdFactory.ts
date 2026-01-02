@@ -3,16 +3,19 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
+import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
-const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema} = useCoreValidation()
-const {DinnerModeSchema} = useBookingValidation()
+const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
+const {DinnerModeSchema, InhabitantUpdateResponseSchema} = useBookingValidation()
+const {HeynaboImportResponseSchema} = useHeynaboValidation()
 const DinnerMode = DinnerModeSchema.enum
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
 const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
+const HEYNABO_IMPORT_ENDPOINT = '/api/admin/heynabo/import'
 
 // Use high base ID to avoid conflicts with real Heynabo data (which uses low IDs)
 const TEST_DATA_ID_BASE = 900000
@@ -96,6 +99,43 @@ export class HouseholdFactory {
     ): Promise<HouseholdDetail | null> => {
         const {HouseholdDetailSchema} = useCoreValidation()
         const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
+
+        const status = response.status()
+        expect(status, 'Unexpected status').toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const rawData = await response.json()
+            return HouseholdDetailSchema.parse(rawData)
+        }
+        return null
+    }
+
+    /**
+     * Get all households (Display type per ADR-009)
+     */
+    static readonly getAllHouseholds = async (context: BrowserContext): Promise<HouseholdDisplay[]> => {
+        const response = await context.request.get(HOUSEHOLD_ENDPOINT)
+        expect(response.status()).toBe(200)
+
+        const responseBody = await response.json()
+        expect(Array.isArray(responseBody)).toBe(true)
+        return HouseholdDisplaySchema.array().parse(responseBody)
+    }
+
+    /**
+     * Update household (for setting TheSlope-owned fields like pbsId, movedInDate, moveOutDate)
+     */
+    static readonly updateHousehold = async (
+        context: BrowserContext,
+        householdId: number,
+        updates: Partial<HouseholdDetail>,
+        expectedStatus: number = 200
+    ): Promise<HouseholdDetail | null> => {
+        const {HouseholdDetailSchema} = useCoreValidation()
+        const response = await context.request.post(`${HOUSEHOLD_ENDPOINT}/${householdId}`, {
+            headers: headers,
+            data: updates
+        })
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -318,14 +358,27 @@ export class HouseholdFactory {
 
     /**
      * Update inhabitant (for preference updates, etc.)
+     * When dinnerPreferences updated, triggers re-scaffolding.
+     * If seasonId not provided, endpoint uses active season.
+     *
+     * Returns InhabitantUpdateResponse: { inhabitant, scaffoldResult }
+     * ADR-009: Operation result type wrapping entity + side effect
+     *
+     * @param seasonId - Optional seasonId query param for parallel-safe testing
      */
     static readonly updateInhabitant = async (
         context: BrowserContext,
         inhabitantId: number,
         updates: Partial<InhabitantDetail>,
-        expectedStatus: number = 200
-    ): Promise<InhabitantDetail | null> => {
-        const response = await context.request.post(`${INHABITANT_ENDPOINT}/${inhabitantId}`, {
+        expectedStatus: number = 200,
+        seasonId?: number,
+        assertResponse?: (response: InhabitantUpdateResponse) => void
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const url = seasonId !== undefined
+            ? `${INHABITANT_ENDPOINT}/${inhabitantId}?seasonId=${seasonId}`
+            : `${INHABITANT_ENDPOINT}/${inhabitantId}`
+
+        const response = await context.request.post(url, {
             headers: headers,
             data: updates
         })
@@ -333,11 +386,18 @@ export class HouseholdFactory {
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
-            return InhabitantDetailSchema.parse(await response.json())
+        if (expectedStatus !== 200) {
+            return null
         }
 
-        return null
+        const raw = await response.json()
+        const parsed = InhabitantUpdateResponseSchema.parse(raw)
+
+        if (assertResponse) {
+            assertResponse(parsed)
+        }
+
+        return parsed
     }
 
     /**
@@ -360,5 +420,24 @@ export class HouseholdFactory {
             console.warn(`❌ Inhabitant ${inhabitantId} deletion returned ${status} (expected ${expectedStatus}):`, body)
             return null
         }
+    }
+
+    // === HEYNABO IMPORT METHODS ===
+
+    /**
+     * Run Heynabo import - syncs households/inhabitants/users from Heynabo
+     * ADR-013: Heynabo is source of truth for its data
+     */
+    static readonly runHeynaboImport = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<HeynaboImportResponse> => {
+        const response = await context.request.get(HEYNABO_IMPORT_ENDPOINT)
+        const responseBody = await response.text()
+        const status = response.status()
+
+        expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
+
+        return HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
     }
 }

@@ -557,11 +557,21 @@ export const useBookingValidation = () => {
      * Used to validate API response structure
      */
     const ScaffoldResultSchema = z.object({
-        seasonId: z.number().int().positive(),
+        seasonId: z.number().int().positive().nullable(),
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative()
+    })
+
+    /**
+     * Operation result for inhabitant update with preference re-scaffolding
+     * ADR-009: Operation result type (not entity type)
+     */
+    const {InhabitantDetailSchema} = useCoreValidation()
+    const InhabitantUpdateResponseSchema = z.object({
+        inhabitant: InhabitantDetailSchema,
+        scaffoldResult: ScaffoldResultSchema
     })
 
     // ============================================================================
@@ -681,6 +691,7 @@ export const useBookingValidation = () => {
 
         // Scaffold Pre-bookings
         ScaffoldResultSchema,
+        InhabitantUpdateResponseSchema,
 
         // Daily Maintenance
         ConsumeResultSchema,
@@ -739,6 +750,7 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
+export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
 
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>

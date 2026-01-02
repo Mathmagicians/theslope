@@ -1,57 +1,268 @@
 import {test, expect} from '@playwright/test'
 import testHelpers from '../../testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
-import {isAdmin} from '~/composables/usePermissions'
-import type {UserDisplay} from '~/composables/useCoreValidation'
+import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
+import type {UserDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
+import {HouseholdFactory} from '../../testDataFactories/householdFactory'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, saltedId, headers} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
 
+/**
+ * Heynabo Import E2E Tests
+ *
+ * Tests the 3-layer reconciliation (Household → Inhabitant → User) with 4 outcomes each:
+ * - CREATE: Skip - can't control Heynabo data to have entities we don't have
+ * - UPDATE: Mutate TheSlope data to differ from Heynabo → verify Heynabo overwrites
+ * - IDEMPOTENT: TheSlope-owned fields preserved when Heynabo data unchanged
+ * - DELETE: Add entities not in Heynabo → verify deleted
+ *
+ * Coverage Matrix:
+ * | Entity      | IDEMPOTENT              | UPDATE               | DELETE        | CREATE |
+ * |-------------|-------------------------|----------------------|---------------|--------|
+ * | Household   | pbsId, movedInDate      | name restored        | (n/a)         | skip   |
+ * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted  | skip   |
+ * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted| skip   |
+ *
+ * Test household: heynaboId=2 ("Heynabo!") from seed.sql
+ * Inhabitants:
+ * - heynaboId=153 (Skraaningen API) - has User with ADMIN+ALLERGYMANAGER
+ * - heynaboId=154 (Babyyoda Yoda) - limited role, no user in Heynabo
+ */
+
+const TEST_HOUSEHOLD_HEYNABO_ID = 2
+const SEED_USER_EMAIL = 'agata@mathmagicians.dk'
+
+// Inhabitants in test household (from Heynabo API)
+const INHABITANTS = {
+    SKRAANINGEN: {heynaboId: 153, hasUser: true, name: 'Skraaningen API'},
+    BABYYODA: {heynaboId: 154, hasUser: false, name: 'Babyyoda'}
+}
+
+// Test data containers - populated in beforeAll, verified in test
+const testData = {
+    householdId: 0,
+
+    // ========================================================================
+    // HOUSEHOLD TEST DATA
+    // ========================================================================
+    household: {
+        // IDEMPOTENT: TheSlope-owned fields preserved
+        uniquePbsId: 0,
+        uniqueMovedInDate: new Date(),
+        // UPDATE: Heynabo-owned field mutated, should be restored
+        originalName: '',
+        mutatedName: ''
+    },
+
+    // ========================================================================
+    // INHABITANT TEST DATA
+    // ========================================================================
+    inhabitant: {
+        // IDEMPOTENT: Skraaningen should remain unchanged
+        skraaningenId: 0,
+        // UPDATE: Babyyoda name mutated, should be restored
+        babyyodaId: 0,
+        babyyodaMutatedName: '',
+        // DELETE: Fake inhabitant not in Heynabo
+        fakeId: 0
+    },
+
+    // ========================================================================
+    // USER TEST DATA
+    // ========================================================================
+    user: {
+        // IDEMPOTENT: ALLERGYMANAGER role preserved (TheSlope-owned)
+        seedUserEmail: SEED_USER_EMAIL,
+        // UPDATE: Heynabo-owned field (phone) mutated, should be restored
+        seedUserOriginalPhone: '',
+        seedUserMutatedPhone: '+4599999999',
+        // DELETE: User on limited-role inhabitant
+        orphanId: 0,
+        orphanEmail: ''
+    }
+}
+
 test.describe('Heynabo Integration API', () => {
-    test('GET /api/admin/heynabo/import should sync households from Heynabo', async ({browser}) => {
+
+    test.beforeAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = Date.now().toString()
+
+        // Find test household
+        const households = await HouseholdFactory.getAllHouseholds(context)
+        const household = households.find(h => h.heynaboId === TEST_HOUSEHOLD_HEYNABO_ID)
+        expect(household, `Test household heynaboId=${TEST_HOUSEHOLD_HEYNABO_ID} must exist`).toBeDefined()
+        testData.householdId = household!.id
+
+        const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
+        expect(householdDetail).not.toBeNull()
+
+        // ========================================================================
+        // HOUSEHOLD SETUP
+        // ========================================================================
+
+        // IDEMPOTENT: Set unique TheSlope-owned fields
+        testData.household.uniquePbsId = saltedId(999000, testSalt)
+        testData.household.uniqueMovedInDate = new Date('2010-05-15')
+
+        // UPDATE: Mutate Heynabo-owned field (name)
+        testData.household.originalName = household!.name
+        testData.household.mutatedName = `Mutated-Household-${testSalt}`
+
+        await HouseholdFactory.updateHousehold(context, testData.householdId, {
+            pbsId: testData.household.uniquePbsId,
+            movedInDate: testData.household.uniqueMovedInDate,
+            name: testData.household.mutatedName
+        })
+
+        // ========================================================================
+        // INHABITANT SETUP
+        // ========================================================================
+
+        // IDEMPOTENT: Record Skraaningen's ID
+        const skraaningen = householdDetail!.inhabitants.find(i => i.heynaboId === INHABITANTS.SKRAANINGEN.heynaboId)
+        expect(skraaningen, 'Skraaningen must exist').toBeDefined()
+        testData.inhabitant.skraaningenId = skraaningen!.id
+
+        // UPDATE: Mutate Babyyoda's name
+        const babyyoda = householdDetail!.inhabitants.find(i => i.heynaboId === INHABITANTS.BABYYODA.heynaboId)
+        expect(babyyoda, 'Babyyoda must exist').toBeDefined()
+        testData.inhabitant.babyyodaId = babyyoda!.id
+        testData.inhabitant.babyyodaMutatedName = `Mutated-Babyyoda-${testSalt}`
+        await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {
+            name: testData.inhabitant.babyyodaMutatedName
+        })
+
+        // DELETE: Create fake inhabitant not in Heynabo
+        const fakeInhabitant = await HouseholdFactory.createInhabitantForHousehold(
+            context, testData.householdId, `FakeInhabitant-${testSalt}`
+        )
+        testData.inhabitant.fakeId = fakeInhabitant.id
+
+        // ========================================================================
+        // USER SETUP
+        // ========================================================================
+
+        // IDEMPOTENT + UPDATE: Get seed user and mutate phone
+        const usersResponse = await context.request.get('/api/admin/users')
+        const users: UserDisplay[] = await usersResponse.json()
+        const seedUser = users.find(u => u.email === SEED_USER_EMAIL)
+        expect(seedUser, 'Seed user must exist').toBeDefined()
+        testData.user.seedUserOriginalPhone = seedUser!.phone || ''
+
+        // Mutate phone (Heynabo-owned field)
+        await context.request.post(`/api/admin/users/${seedUser!.id}`, {
+            headers,
+            data: {phone: testData.user.seedUserMutatedPhone}
+        })
+
+        // DELETE: Create orphan user on limited-role inhabitant
+        testData.user.orphanEmail = `orphan-${testSalt}@test.dk`
+        const userResponse = await context.request.put('/api/admin/users', {
+            headers,
+            data: {
+                email: testData.user.orphanEmail,
+                phone: '+4512345678',
+                passwordHash: 'test',
+                systemRoles: []
+            }
+        })
+        expect(userResponse.status()).toBe(201)
+        const orphanUser = await userResponse.json()
+        testData.user.orphanId = orphanUser.id
+
+        // Link orphan user to Babyyoda (limited role in Heynabo = no user)
+        await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {userId: orphanUser.id})
+    })
+
+    test('should sync households from Heynabo', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Call the import endpoint
+        // Run import
         const response = await context.request.get('/api/admin/heynabo/import')
         const responseBody = await response.text()
-        const status = response.status()
+        expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
 
-        expect(status, `Expected 200 but got ${status}: ${responseBody}`).toBe(200)
+        const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
 
-        const result = JSON.parse(responseBody)
+        // Verify import ran operations
+        expect(result.inhabitantsDeleted).toBeGreaterThanOrEqual(1)
+        expect(result.usersDeleted).toBeGreaterThanOrEqual(1)
+        expect(result.sanityCheck.passed).toBe(true)
 
-        // Verify response parses correctly with schema (ADR-009: batch ops use lightweight types)
-        const parsed = HeynaboImportResponseSchema.parse(result)
-        expect(parsed.householdsCreated).toBeGreaterThanOrEqual(0)
-        expect(parsed.householdsDeleted).toBeGreaterThanOrEqual(0)
-        expect(parsed.householdsUnchanged).toBeGreaterThanOrEqual(0)
-        expect(parsed.inhabitantsCreated).toBeGreaterThanOrEqual(0)
-        expect(parsed.inhabitantsDeleted).toBeGreaterThanOrEqual(0)
-        expect(parsed.usersCreated).toBeGreaterThanOrEqual(0)
+        // Fetch post-import data
+        const households = await HouseholdFactory.getAllHouseholds(context)
+        const household = households.find(h => h.id === testData.householdId)
+        expect(household).toBeDefined()
 
-        // Verify households were synced to database
-        const householdsResponse = await context.request.get('/api/admin/household')
-        expect(householdsResponse.status()).toBe(200)
+        const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
 
-        const households = await householdsResponse.json()
-        expect(Array.isArray(households)).toBe(true)
-        expect(households.length).toBeGreaterThan(0)
-
-        // Verify first household has expected properties
-        const firstHousehold = households[0]
-        expect(firstHousehold).toHaveProperty('id')
-        expect(firstHousehold).toHaveProperty('heynaboId')
-        expect(firstHousehold).toHaveProperty('address')
-        expect(firstHousehold).toHaveProperty('inhabitants')
-
-        // Verify imported users are linked to their Inhabitants
-        // System admins are excluded - they may exist without Inhabitants
         const usersResponse = await context.request.get('/api/admin/users')
-        expect(usersResponse.status()).toBe(200)
-
         const users: UserDisplay[] = await usersResponse.json()
-        const orphanUsers = users.filter((u: UserDisplay) => u.Inhabitant === null && !isAdmin(u))
 
-        expect(orphanUsers.length, `Orphan users: ${JSON.stringify(orphanUsers)}`).toBe(0)
+        // ========================================================================
+        // HOUSEHOLD ASSERTIONS
+        // ========================================================================
+
+        // IDEMPOTENT: TheSlope-owned fields preserved
+        expect(household!.pbsId, 'Household: pbsId preserved (TheSlope-owned)').toBe(testData.household.uniquePbsId)
+        expect(
+            new Date(household!.movedInDate).toISOString().slice(0, 10),
+            'Household: movedInDate preserved (TheSlope-owned)'
+        ).toBe(testData.household.uniqueMovedInDate.toISOString().slice(0, 10))
+
+        // UPDATE: Heynabo-owned field restored
+        expect(household!.name, 'Household: name restored from Heynabo').not.toBe(testData.household.mutatedName)
+        expect(household!.name, 'Household: name matches original').toBe(testData.household.originalName)
+
+        // ========================================================================
+        // INHABITANT ASSERTIONS
+        // ========================================================================
+
+        // IDEMPOTENT: Skraaningen unchanged
+        const skraaningen = householdDetail!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.SKRAANINGEN.heynaboId
+        )
+        expect(skraaningen, 'Inhabitant: Skraaningen exists').toBeDefined()
+        expect(skraaningen!.name, 'Inhabitant: Skraaningen name unchanged').toBe(INHABITANTS.SKRAANINGEN.name)
+
+        // UPDATE: Babyyoda name restored
+        const babyyoda = householdDetail!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyoda, 'Inhabitant: Babyyoda exists').toBeDefined()
+        expect(babyyoda!.name, 'Inhabitant: Babyyoda name restored').not.toBe(testData.inhabitant.babyyodaMutatedName)
+        expect(babyyoda!.name, 'Inhabitant: Babyyoda name matches Heynabo').toBe(INHABITANTS.BABYYODA.name)
+
+        // DELETE: Fake inhabitant removed
+        const fakeExists = householdDetail!.inhabitants.some(
+            (i: InhabitantDisplay) => i.id === testData.inhabitant.fakeId
+        )
+        expect(fakeExists, 'Inhabitant: Fake inhabitant deleted').toBe(false)
+
+        // ========================================================================
+        // USER ASSERTIONS
+        // ========================================================================
+
+        // IDEMPOTENT: ALLERGYMANAGER role preserved (TheSlope-owned)
+        const seedUser = users.find(u => u.email === testData.user.seedUserEmail)
+        expect(seedUser, 'User: Seed user exists').toBeDefined()
+        expect(isAdmin(seedUser!), 'User: Seed user has ADMIN').toBe(true)
+        expect(isAllergyManager(seedUser!), 'User: ALLERGYMANAGER preserved (TheSlope-owned)').toBe(true)
+
+        // UPDATE: Heynabo-owned field (phone) restored
+        expect(seedUser!.phone, 'User: phone restored from Heynabo').not.toBe(testData.user.seedUserMutatedPhone)
+        expect(seedUser!.phone, 'User: phone matches original').toBe(testData.user.seedUserOriginalPhone)
+
+        // DELETE: Orphan user removed
+        const orphanUser = users.find(u => u.email === testData.user.orphanEmail)
+        expect(orphanUser, 'User: Orphan user deleted').toBeUndefined()
+
+        // Verify Babyyoda has no user (limited role in Heynabo)
+        expect(babyyoda!.userId, 'User: Babyyoda has no user (limited role)').toBeNull()
+
+        // Sanity check passed
+        expect(result.sanityCheck.passed, `Orphans found: ${JSON.stringify(result.sanityCheck.orphanUsers)}`).toBe(true)
     })
 })

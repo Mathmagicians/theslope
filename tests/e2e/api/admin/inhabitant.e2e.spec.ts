@@ -2,6 +2,7 @@ import {test, expect} from '@playwright/test'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -206,10 +207,182 @@ test.describe('Admin Inhabitant API', () => {
             expect(response.status()).toBe(200)
             const updated = await response.json()
 
-            expect(updated.dinnerPreferences).toEqual(newPreferences)
-            expect(updated.name).toBe(createdInhabitant.name)
-            expect(updated.birthDate).toBe(createdInhabitant.birthDate)
-            expect(updated.householdId).toBe(createdInhabitant.householdId)
+            // Response is InhabitantUpdateResponse: { inhabitant, scaffoldResult }
+            expect(updated.inhabitant.dinnerPreferences).toEqual(newPreferences)
+            expect(updated.inhabitant.name).toBe(createdInhabitant.name)
+            expect(updated.inhabitant.birthDate).toBe(createdInhabitant.birthDate)
+            expect(updated.inhabitant.householdId).toBe(createdInhabitant.householdId)
+            expect(updated.scaffoldResult).toBeDefined()
+        })
+    })
+
+    test.describe('Preference Re-scaffolding', () => {
+        // Each test creates its own season with explicit seasonId for parallel-safe execution
+        // Cleanup tracked via scaffoldTestHouseholdIds array, deleted in afterAll
+
+        const scaffoldTestHouseholdIds: number[] = []
+        const scaffoldTestSeasonIds: number[] = []
+
+        // Shared setup helpers
+        const {DinnerModeSchema} = useBookingValidation()
+        const DinnerMode = DinnerModeSchema.enum
+        const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+            valueSchema: DinnerModeSchema,
+            defaultValue: DinnerMode.NONE
+        })
+        const ALL_DINEIN = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN])
+        const ALL_NONE = createDefaultWeekdayMap([DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE])
+
+        test.afterAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            await HouseholdFactory.deleteHousehold(context, scaffoldTestHouseholdIds)
+            await SeasonFactory.cleanupSeasons(context, scaffoldTestSeasonIds)
+        })
+
+        // Parametrized test for create/delete preference changes
+        const preferenceChangeTests = [
+            {name: 'NONE→DINEIN creates orders', from: ALL_NONE, to: ALL_DINEIN, expectCreated: true},
+            {name: 'DINEIN→NONE deletes orders', from: ALL_DINEIN, to: ALL_NONE, expectCreated: false}
+        ] as const
+
+        preferenceChangeTests.forEach(({name, from, to, expectCreated}) => {
+            test(`GIVEN season WHEN preference changes ${name}`, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+
+                // GIVEN: Season with dinner events + household with initial preferences
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+                scaffoldTestSeasonIds.push(season.id as number)
+
+                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                    context, {name: salt('Pref-Change-Test', testSalt)}, 1
+                )
+                scaffoldTestHouseholdIds.push(household.id)
+                const inhabitant = inhabitants[0]!
+
+                // Set initial preferences
+                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: from}, 200, season.id)
+
+                const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
+
+                // WHEN: Change preferences
+                await HouseholdFactory.updateInhabitant(
+                    context, inhabitant.id, {dinnerPreferences: to}, 200, season.id,
+                    ({scaffoldResult}) => {
+                        expect(scaffoldResult.seasonId).toBe(season.id)
+                        if (expectCreated) {
+                            expect(scaffoldResult.created).toBeGreaterThan(0)
+                        } else {
+                            expect(scaffoldResult.deleted).toBe(inhabitantOrdersBefore.length)
+                        }
+                    }
+                )
+
+                // THEN: Verify orders state
+                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
+
+                if (expectCreated) {
+                    expect(inhabitantOrdersAfter.length).toBeGreaterThan(0)
+                } else {
+                    expect(inhabitantOrdersAfter.length).toBe(0)
+                }
+            })
+        })
+
+        test('GIVEN USER_CANCELLED order WHEN preferences re-saved THEN cancelled order NOT recreated', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season + household + scaffolded orders
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Cancel-Respect-Test', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // Scaffold initial orders
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrders.length).toBeGreaterThan(0)
+
+            // User cancels one specific order (creates USER_CANCELLED audit)
+            const orderToCancel = inhabitantOrders[0]!
+            await OrderFactory.deleteOrder(context, orderToCancel.id)
+
+            // WHEN: Re-save same preferences
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            // THEN: Cancelled order NOT recreated
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrdersAfter.length).toBe(inhabitantOrders.length - 1)
+
+            const cancelledDinnerOrders = ordersAfter.filter(
+                o => o.dinnerEventId === orderToCancel.dinnerEventId && o.inhabitantId === inhabitant.id
+            )
+            expect(cancelledDinnerOrders.length).toBe(0)
+        })
+
+        test('GIVEN two households WHEN household A updates preferences THEN only household A gets orders (householdId filter works)', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season + two households (both with DINEIN preferences set at creation)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const households = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('HouseholdA', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('HouseholdB', testSalt)}, 1)
+            ])
+            households.forEach(h => scaffoldTestHouseholdIds.push(h.household.id))
+
+            const [inhabitantA, inhabitantB] = households.map(h => h.inhabitants[0]!)
+
+            // Verify no orders exist yet
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantA.id).length).toBe(0)
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantB.id).length).toBe(0)
+
+            // WHEN: A updates preferences (scaffolds only for A, householdId filter applied)
+            await HouseholdFactory.updateInhabitant(context, inhabitantA.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
+                ({scaffoldResult}) => expect(scaffoldResult.households).toBe(1)
+            )
+
+            // THEN: Only A has orders - B should still have 0 (householdId filter worked)
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantA.id).length).toBeGreaterThan(0)
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantB.id).length).toBe(0)
+        })
+
+        test('GIVEN no seasonId provided WHEN preferences updated THEN active season used', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // Ensure active season exists
+            const activeSeason = await SeasonFactory.createActiveSeason(context)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Active-Season-Test', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // WHEN: Update preferences WITHOUT seasonId - endpoint uses active season
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, undefined,
+                ({inhabitant, scaffoldResult}) => {
+                    expect(inhabitant).toBeDefined()
+                    expect(scaffoldResult.seasonId).toBe(activeSeason.id)
+                }
+            )
         })
     })
 

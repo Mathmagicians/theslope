@@ -82,10 +82,11 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         console.info(`${LOG} Teams parsed: ${parsedTeams.teams.length} teams, ${parsedTeams.unmatched.length} unmatched names`)
 
         // Step 3: Build season data from defaults + CSV
-        const {getDefaultSeason, generateDinnerEventDataForSeason} = useSeason()
+        const {getDefaultSeason, generateDinnerEventDataForSeason, createSeasonName} = useSeason()
 
         const defaultSeason = getDefaultSeason()
         const seasonFromCsv: Partial<Season> = {
+            shortName: createSeasonName(parsedCalendar.seasonDates),
             seasonDates: parsedCalendar.seasonDates,
             cookingDays: parsedCalendar.cookingDays,
             holidays: parsedCalendar.holidays.map(h => ({start: h.start, end: h.end}))

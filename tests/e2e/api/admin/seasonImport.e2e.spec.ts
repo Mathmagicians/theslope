@@ -22,6 +22,7 @@ test.describe('Season Import API', () => {
 
         const firstBody = await firstResponse.json()
         expect(firstBody.seasonId).toBeDefined()
+        expect(firstBody.isNew, `Expected first import to update existing season, got isNew=${firstBody.isNew}`).toBe(false)
         expect(firstBody.teamsCreated).toBeGreaterThanOrEqual(0) // May be 0 if teams already exist
 
         // Verify season exists

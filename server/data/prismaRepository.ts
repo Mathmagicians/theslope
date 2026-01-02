@@ -199,6 +199,57 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
     }
 }
 
+/**
+ * Create users via createManyAndReturn (ADR-014: Prisma auto-chunks for D1)
+ * Returns minimal fields needed for linking (id, email) - createManyAndReturn doesn't support relations.
+ * Caller responsible for chunking. No lookup here.
+ */
+export async function createUsers(d1Client: D1Database, users: UserCreate[]): Promise<{id: number, email: string}[]> {
+    if (users.length === 0) return []
+
+    console.info(`🪪 > USER > [BATCH CREATE] Creating ${users.length} users`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const created = await prisma.user.createManyAndReturn({
+        data: users.map(u => serializeUserInput(u)),
+        select: { id: true, email: true }
+    })
+
+    console.info(`🪪 > USER > [BATCH CREATE] Created ${created.length} users`)
+    return created
+}
+
+/**
+ * Batch link users to inhabitants by setting Inhabitant.userId (ADR-014)
+ * Uses Promise.all for parallelism within caller's chunk.
+ * Returns count of successful links.
+ */
+export async function linkUsersToInhabitants(
+    d1Client: D1Database,
+    links: { userId: number; inhabitantHeynaboId: number }[]
+): Promise<number> {
+    if (links.length === 0) return 0
+
+    console.info(`🔗 > LINK > Linking ${links.length} users to inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const results = await Promise.all(
+        links.map(({ userId, inhabitantHeynaboId }) =>
+            prisma.inhabitant.update({
+                where: { heynaboId: inhabitantHeynaboId },
+                data: { userId }
+            }).then(() => true).catch(() => {
+                console.warn(`🔗 > LINK > Failed: inhabitant ${inhabitantHeynaboId} not found`)
+                return false
+            })
+        )
+    )
+
+    const linked = results.filter(Boolean).length
+    console.info(`🔗 > LINK > Linked ${linked}/${links.length} users`)
+    return linked
+}
+
 export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
     console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -294,7 +345,7 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
  * @param householdId - Household ID to assign to all inhabitants
  * @returns Array of created inhabitant IDs
  */
-export async function createInhabitantsBatch(
+export async function createInhabitants(
     d1Client: D1Database,
     inhabitants: Omit<InhabitantCreate, 'householdId'>[],
     householdId: number
@@ -596,7 +647,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
  * @param households - Array of HouseholdCreate (max 8 per call due to D1 limits)
  * @returns Array of created household IDs
  */
-export async function createHouseholdsBatch(
+export async function createHouseholds(
     d1Client: D1Database,
     households: HouseholdCreate[]
 ): Promise<number[]> {
@@ -657,13 +708,14 @@ export async function deleteHouseholdsByHeynaboId(
 }
 
 // ADR-009 & ADR-010: Returns HouseholdDisplay (all scalar fields + lightweight inhabitant relation)
-export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDisplay[]> {
-    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
+export async function fetchHouseholds(d1Client: D1Database, householdId?: number): Promise<HouseholdDisplay[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households${householdId ? ` for id ${householdId}` : ''} with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeHouseholdDisplay} = useCoreValidation()
 
     try {
         const households = await prisma.household.findMany({
+            where: householdId !== undefined ? {id: householdId} : {},
             include: {
                 inhabitants: {
                     select: {

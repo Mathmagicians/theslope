@@ -29,8 +29,9 @@ export interface PruneAndCreateResult<E, I = E> {
  * @template I - Type of incoming items (used in create/update/idempotent arrays)
  * @template K - Type of the key used for comparison
  *
- * @param getKey - Extract unique key from item (works on both E and I, undefined = new item)
+ * @param getKey - Extract unique key from existing item (E), also used for incoming if getIncomingKey not provided
  * @param isEqual - Compare existing item (E) with incoming item (I) for equality
+ * @param getIncomingKey - Optional: Extract key from incoming item (I) when key location differs from E
  * @returns Curried function that takes existing (E[]) and incoming (I[]) arrays
  *
  * @example
@@ -49,15 +50,26 @@ export interface PruneAndCreateResult<E, I = E> {
  * const result = reconcilePreBookings(existingOrders)(desiredOrders)
  * // result.delete is OrderDisplay[] (with id!)
  * // result.create is OrderCreateWithPrice[]
+ *
+ * // Different types with key in different locations - provide getIncomingKey
+ * const reconcile = pruneAndCreate<Wrapper, Inner, number>(
+ *     e => e.nested.externalId,
+ *     (existing, incoming) => existing.name === incoming.name,
+ *     i => i.externalId
+ * )
  * ```
  */
 export const pruneAndCreate = <E, I = E, K = number | string>(
-    getKey: (item: E | I) => K | undefined,
-    isEqual: (existing: E, incoming: I) => boolean = () => false
+    getKey: (item: E) => K | undefined,
+    isEqual: (existing: E, incoming: I) => boolean = () => false,
+    getIncomingKey?: (item: I) => K | undefined
 ) => (existing: E[]) => (incoming: I[]): PruneAndCreateResult<E, I> => {
+    const getExistingKey = getKey
+    const incomingKeyFn = getIncomingKey ?? (getKey as unknown as (item: I) => K | undefined)
+
     const existingByKey = existing.reduce(
         (map, item) => {
-            const key = getKey(item)
+            const key = getExistingKey(item)
             return key !== undefined ? map.set(key, item) : map
         },
         new Map<K, E>()
@@ -65,7 +77,7 @@ export const pruneAndCreate = <E, I = E, K = number | string>(
 
     const { result, seenKeys } = incoming.reduce(
         (acc, item) => {
-            const key = getKey(item)
+            const key = incomingKeyFn(item)
             if (key === undefined) {
                 return { ...acc, result: { ...acc.result, create: [...acc.result.create, item] } }
             }
@@ -85,7 +97,7 @@ export const pruneAndCreate = <E, I = E, K = number | string>(
     return {
         ...result,
         delete: existing.filter(item => {
-            const key = getKey(item)
+            const key = getExistingKey(item)
             return key !== undefined && !seenKeys.has(key)
         })
     }

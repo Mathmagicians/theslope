@@ -298,170 +298,74 @@ Total: ~370 queries (within D1 1000 limit)
 
 ## 5. Implementation Plan
 
-### 5.1 Architecture: Reconciliation Result to Operations
+### 5.1 Architecture Principles
 
-For each entity (Household, Inhabitant, User), the reconciliation result maps to operations:
+**Repository "Does as Told":**
+- Repository functions execute what they're given - no chunking, no orchestration
+- Service layer handles: chunking, batching, parallelism decisions, orchestration
+- Repository returns results; service decides what to do with them
 
+**Reconciliation Result to Operations:**
 ```
 RECONCILIATION RESULT (pruneAndCreate):
-├── create[]    → createManyAndReturn (TRUE BATCH - Prisma handles D1 chunking)
-├── update[]    → individual update by heynaboId (no Prisma batch update by non-PK)
+├── create[]    → SERVICE chunks → repo.createManyAndReturn per chunk
+├── update[]    → SERVICE iterates → repo.updateEntity per item (can't batch different values)
 ├── idempotent[] → SKIP (no operation)
-└── delete[]    → deleteMany (TRUE BATCH)
+└── delete[]    → repo.deleteMany (single batch, Prisma handles internally)
 ```
 
-### 5.2 DRY Principle: saveUsers is the Workhorse
+### 5.2 Repository Has Only TRUE Batch Operations
 
-**Problem:** Current `saveUser` handles single user. Batch operations need a single code path.
+**Decision:** Repository only exposes TRUE Prisma batch operations. Fake batches (Promise.all wrappers) are handled by service.
 
-**Solution:** `saveUsers` (plural) is the implementation, `saveUser` (singular) wraps it.
+| Operation | Prisma Method | TRUE Batch? | Where |
+|-----------|---------------|-------------|-------|
+| Create users | `createManyAndReturn` | ✅ Yes | Repository: `createUsers()` |
+| Update users | Individual `update` | ❌ No | Service: `Promise.all(saveUser(...))` |
+| Delete users | `deleteMany` | ✅ Yes | Repository: existing |
+| Link users | Individual `update` | ❌ No | Repository: `linkUsersToInhabitants()` (exception for encapsulation) |
+
+**Rationale:**
+- ADR-014 says "repository does as told" - parallelism is orchestration, belongs in service
+- No fake batch functions that just wrap Promise.all
+- Service controls chunking and parallelism strategy
 
 ```typescript
-// prismaRepository.ts - NEW: saveUsers (batch workhorse)
+// prismaRepository.ts - TRUE batch for creates only
+export async function createUsers(d1Client: D1Database, users: UserCreate[]): Promise<UserDisplay[]>
 
-/**
- * Batch upsert users with role merging (ADR-010)
- * - Fetches existing users by email in batch
- * - Creates new users via createManyAndReturn (Prisma auto-chunks)
- * - Updates existing users individually (merge roles, can't batch update)
- * - Returns UserDisplay[] for all processed users
- */
-export async function saveUsers(d1Client: D1Database, users: UserCreate[]): Promise<UserDisplay[]> {
-    if (users.length === 0) return []
-
-    console.info(`🪪 > USER > [BATCH SAVE] Saving ${users.length} users`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {serializeUserInput, deserializeUser, mergeUserRoles} = useCoreValidation()
-
-    // 1. Fetch ALL existing users by email in single query
-    const emails = users.map(u => u.email)
-    const existingUsers = await prisma.user.findMany({
-        where: { email: { in: emails } }
-    })
-    const existingByEmail = new Map(existingUsers.map(u => [u.email, u]))
-
-    // 2. Partition into create vs update
-    const toCreate: UserCreate[] = []
-    const toUpdate: { existing: SerializedUser; incoming: UserCreate }[] = []
-
-    for (const user of users) {
-        const existing = existingByEmail.get(user.email)
-        if (existing) {
-            toUpdate.push({ existing: existing, incoming: user })
-        } else {
-            toCreate.push(user)
-        }
-    }
-
-    const results: UserDisplay[] = []
-
-    // 3. CREATE: Use createManyAndReturn (Prisma auto-chunks for D1)
-    if (toCreate.length > 0) {
-        console.info(`🪪 > USER > [BATCH SAVE] Creating ${toCreate.length} new users`)
-        const created = await prisma.user.createManyAndReturn({
-            data: toCreate.map(u => serializeUserInput(u)),
-            select: USER_DISPLAY_SELECT
-        })
-        results.push(...created.map(deserializeToUserDisplay))
-    }
-
-    // 4. UPDATE: Individual upserts (merge roles - no batch possible)
-    for (const { existing, incoming } of toUpdate) {
-        const existingDomain = deserializeUser(existing)
-        const merged = mergeUserRoles(existingDomain, incoming)
-        console.info(`🪪 > USER > [BATCH SAVE] Merging roles for ${incoming.email}: [${existingDomain.systemRoles}] + [${incoming.systemRoles}] = [${merged.systemRoles}]`)
-
-        const updated = await prisma.user.update({
-            where: { email: incoming.email },
-            data: serializeUserInput(merged),
-            select: USER_DISPLAY_SELECT
-        })
-        results.push(deserializeToUserDisplay(updated))
-    }
-
-    console.info(`🪪 > USER > [BATCH SAVE] Saved ${results.length} users (${toCreate.length} created, ${toUpdate.length} updated)`)
-    return results
-}
-
-// EXISTING saveUser becomes a thin wrapper
-export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserDetail> {
-    console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
-    const [display] = await saveUsers(d1Client, [user])
-
-    // saveUsers returns UserDisplay, but saveUser contract is UserDetail
-    // Refetch with full relations for backward compatibility
-    const detail = await fetchUser(display.email, d1Client)
-    if (!detail) {
-        throw createError({ statusCode: 500, message: `User ${user.email} not found after save` })
-    }
-    return detail
-}
+// Service handles updates with parallelism
+await Promise.all(usersToUpdate.map(u => saveUser(d1Client, u)))
 ```
 
-### 5.3 New Repository Functions
+### 5.3 Repository Functions Summary
 
-#### 5.3.1 updateHouseholdsBatch
+**TRUE batch operations (in repository):**
+- `createHouseholds()` - uses `createManyAndReturn`
+- `createInhabitants()` - uses `createManyAndReturn`
+- `createUsers()` - uses `createManyAndReturn`
+- `deleteHouseholdsByHeynaboId()` - uses `deleteMany`
+- `deleteInhabitantsByHeynaboId()` - uses `deleteMany`
+- `linkUsersToInhabitants()` - Promise.all wrapper (exception for encapsulation)
 
+**Existing single-entity functions (used by service with Promise.all for updates):**
+- `saveHousehold()` - upsert with nested inhabitant handling
+- `saveInhabitant()` - upsert with user linking
+- `saveUser()` - upsert with role merging
+
+**Service handles update parallelism:**
 ```typescript
-// prismaRepository.ts
+// Household updates
+await Promise.all(householdReconciliation.update.map(h => saveHousehold(d1Client, h)))
 
-/**
- * Batch update households by heynaboId (ADR-009)
- * Updates only HN-owned fields: name, address
- * Local fields (pbsId, movedInDate, moveOutDate) are PRESERVED
- */
-export async function updateHouseholdsBatch(
-    d1Client: D1Database,
-    households: { heynaboId: number; name: string; address: string }[]
-): Promise<number> {
-    if (households.length === 0) return 0
+// Inhabitant updates
+await Promise.all(inhabitantReconciliation.update.map(i => saveInhabitant(d1Client, i, householdId)))
 
-    console.info(`🏠 > HOUSEHOLD > [BATCH UPDATE] Updating ${households.length} households`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    // Individual updates (no Prisma batch update by heynaboId)
-    let updated = 0
-    for (const h of households) {
-        await prisma.household.update({
-            where: { heynaboId: h.heynaboId },
-            data: {
-                name: h.name,
-                address: h.address
-                // pbsId, movedInDate, moveOutDate NOT updated - local data
-            }
-        })
-        updated++
-    }
-
-    console.info(`🏠 > HOUSEHOLD > [BATCH UPDATE] Updated ${updated} households`)
-    return updated
-}
+// User updates (for existing users that need role merge)
+await Promise.all(existingUsersToUpdate.map(u => saveUser(d1Client, u)))
 ```
 
-#### 5.3.2 updateInhabitantsBatch
-
-```typescript
-// prismaRepository.ts
-
-/**
- * Batch update inhabitants by heynaboId (ADR-009)
- * Updates only HN-owned fields: name, lastName, pictureUrl, birthDate
- */
-export async function updateInhabitantsBatch(
-    d1Client: D1Database,
-    inhabitants: { heynaboId: number; name: string; lastName: string; pictureUrl: string | null; birthDate: Date | null }[]
-): Promise<number> {
-    if (inhabitants.length === 0) return 0
-
-    console.info(`👩‍🏠 > INHABITANT > [BATCH UPDATE] Updating ${inhabitants.length} inhabitants`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    // Individual updates (no Prisma batch update by heynaboId)
-    let updated = 0
-    for (const i of inhabitants) {
-        await prisma.inhabitant.update({
-            where: { heynaboId: i.heynaboId },
-            data: {
+#### 5.3.1 linkUsersToInhabitants (Exception)
                 name: i.name,
                 lastName: i.lastName,
                 pictureUrl: i.pictureUrl ?? Prisma.skip,
@@ -476,53 +380,73 @@ export async function updateInhabitantsBatch(
 }
 ```
 
-#### 5.3.3 linkUsersToInhabitants
+#### 5.3.3 linkUserToInhabitant (Single Operation)
+
+**Principle:** Repository does ONE link. Service handles batching/parallelism.
 
 ```typescript
 // prismaRepository.ts
 
 /**
- * Link users to inhabitants by email -> heynaboId mapping
- * Called AFTER saveUsers() to establish the FK relationship
+ * Link a single user to an inhabitant by setting Inhabitant.userId
+ * Repository does as told - single operation, no loops
  *
- * @param userInhabitantMap - Map of user email to inhabitant heynaboId
- * @returns Number of inhabitants linked
+ * @param userId - User ID to link
+ * @param inhabitantHeynaboId - Inhabitant's heynaboId (unique key)
+ * @returns true if linked, false if inhabitant not found
  */
-export async function linkUsersToInhabitants(
+export async function linkUserToInhabitant(
     d1Client: D1Database,
-    userInhabitantMap: Map<string, number>  // email -> inhabitantHeynaboId
-): Promise<number> {
-    if (userInhabitantMap.size === 0) return 0
-
-    console.info(`🔗 > LINK > [USER-INHABITANT] Linking ${userInhabitantMap.size} users to inhabitants`)
+    userId: number,
+    inhabitantHeynaboId: number
+): Promise<boolean> {
+    console.info(`🔗 > LINK > [USER-INHABITANT] Linking user ${userId} to inhabitant heynaboId ${inhabitantHeynaboId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
-    // Fetch users by email
-    const emails = Array.from(userInhabitantMap.keys())
-    const users = await prisma.user.findMany({
-        where: { email: { in: emails } },
-        select: { id: true, email: true }
-    })
-    const userByEmail = new Map(users.map(u => [u.email, u.id]))
-
-    // Link each inhabitant to their user
-    let linked = 0
-    for (const [email, inhabitantHeynaboId] of userInhabitantMap) {
-        const userId = userByEmail.get(email)
-        if (!userId) {
-            console.warn(`🔗 > LINK > [USER-INHABITANT] User ${email} not found, skipping link`)
-            continue
-        }
-
+    try {
         await prisma.inhabitant.update({
             where: { heynaboId: inhabitantHeynaboId },
             data: { userId }
         })
-        linked++
+        return true
+    } catch (error) {
+        // Inhabitant not found - log warning, don't throw
+        console.warn(`🔗 > LINK > [USER-INHABITANT] Failed to link: inhabitant ${inhabitantHeynaboId} not found`)
+        return false
     }
+}
+```
 
-    console.info(`🔗 > LINK > [USER-INHABITANT] Linked ${linked} users to inhabitants`)
-    return linked
+**Service handles orchestration:**
+
+```typescript
+// heynaboImportService.ts - SERVICE does the batching
+
+// Build link pairs from saved users
+const linkPairs: { userId: number; inhabitantHeynaboId: number }[] = []
+for (const [email, inhabitantHeynaboId] of userInhabitantMap) {
+    const user = savedUsersByEmail.get(email)
+    if (user) {
+        linkPairs.push({ userId: user.id, inhabitantHeynaboId })
+    }
+}
+
+// Service decides parallelism strategy (sequential, Promise.all, or chunked)
+// Option 1: Sequential (safe, predictable)
+for (const { userId, inhabitantHeynaboId } of linkPairs) {
+    await linkUserToInhabitant(d1Client, userId, inhabitantHeynaboId)
+    usersLinked++
+}
+
+// Option 2: Chunked Promise.all (faster, respects D1 limits)
+const LINK_CHUNK_SIZE = 50
+for (const chunk of chunkArray(LINK_CHUNK_SIZE)(linkPairs)) {
+    const results = await Promise.all(
+        chunk.map(({ userId, inhabitantHeynaboId }) =>
+            linkUserToInhabitant(d1Client, userId, inhabitantHeynaboId)
+        )
+    )
+    usersLinked += results.filter(Boolean).length
 }
 ```
 
@@ -853,8 +777,8 @@ const HeynaboImportResponseSchema = z.object({
 
 | File | Changes |
 |------|---------|
-| `server/data/prismaRepository.ts` | Add `saveUsers()`, `updateHouseholdsBatch()`, `updateInhabitantsBatch()`, `linkUsersToInhabitants()`. Refactor `saveUser()` to wrap `saveUsers()`. |
-| `server/utils/heynaboImportService.ts` | Add UPDATE handling, batch user collection, link step, sanity check |
+| `server/data/prismaRepository.ts` | Add `saveUsers()`, `updateHouseholdsBatch()`, `updateInhabitantsBatch()`, `linkUserToInhabitant()` (single op). Refactor `saveUser()` to wrap `saveUsers()`. |
+| `server/utils/heynaboImportService.ts` | Add UPDATE handling, batch user collection, link orchestration (service handles batching/parallelism), sanity check |
 | `app/composables/useHeynabo.ts` | Fix `isHouseholdEqual` (remove pbsId), fix `isInhabitantEqual` (add birthDate, user fields) |
 | `app/composables/useHeynaboValidation.ts` | Add update/link metrics to response schema |
 
@@ -876,9 +800,9 @@ describe('updateHouseholdsBatch', () => {
     it('preserves pbsId and movedInDate (local data)', async () => { })
 })
 
-describe('linkUsersToInhabitants', () => {
+describe('linkUserToInhabitant (single operation)', () => {
     it('sets userId on inhabitant by heynaboId', async () => { })
-    it('handles missing users gracefully', async () => { })
+    it('returns false if inhabitant not found', async () => { })
 })
 ```
 
@@ -903,45 +827,39 @@ test('should report accurate metrics in response', async () => {
 
 ## 6. Testing Strategy
 
-### 6.1 Unit Tests (New)
+**Philosophy:** No repository unit tests. Pure functions + E2E integration.
+
+### 6.1 Pure Function Unit Tests
 
 ```typescript
-// tests/component/server/prismaRepository.nuxt.spec.ts
-
-describe('updateHouseholdsBatch', () => {
-    it('updates address when changed in Heynabo', async () => { ... })
-    it('updates name when changed in Heynabo', async () => { ... })
-    it('handles empty array (idempotent)', async () => { ... })
-})
-
-describe('updateInhabitantsBatch', () => {
-    it('updates name when changed', async () => { ... })
-    it('updates pictureUrl when changed', async () => { ... })
-    it('handles null values correctly', async () => { ... })
-})
-
-describe('upsertUsersWithInhabitantLink', () => {
-    it('creates user and links to inhabitant', async () => { ... })
-    it('updates existing user and preserves link', async () => { ... })
-    it('merges systemRoles (does not overwrite)', async () => { ... })
-})
+// tests/component/composables/useHeynabo.unit.spec.ts
+describe('reconcileHouseholds/reconcileInhabitants', () => { /* CREATE/UPDATE/DELETE/IDEMPOTENT cases */ })
+describe('isHouseholdEqual', () => { /* ignores pbsId, compares name/address */ })
+describe('isInhabitantEqual', () => { /* birthDate, user.email, user.phone */ })
 ```
 
-### 6.2 E2E Test Enhancements
+### 6.2 E2E Integration Tests
 
 ```typescript
 // tests/e2e/api/admin/heynabo.e2e.spec.ts
 
-test('should update household when address changes in Heynabo', async ({browser}) => {
-    // This requires mock data or Heynabo sandbox
+test('idempotency: second import has zero changes', async ({ browser }) => {
+    // Import 1: sync
+    // Import 2: all counts = 0
 })
 
-test('should link users to inhabitants (no orphans)', async ({browser}) => {
-    // Already exists - validates fix worked
-})
+test('reconciles drift in single import', async ({ browser }) => {
+    // SCAFFOLD BEFORE IMPORT (use existing endpoints):
+    // - DELETE inhabitant → tests CREATE
+    // - MUTATE birthday → tests UPDATE
+    // - CREATE fake household → tests DELETE
 
-test('should report accurate update counts', async ({browser}) => {
-    // Verify response metrics match actual DB state
+    // ONE IMPORT
+
+    // VERIFY via GET endpoints:
+    // - Deleted inhabitant restored
+    // - Fake household removed
+    // - Sanity check passed (service logs, no orphans)
 })
 ```
 

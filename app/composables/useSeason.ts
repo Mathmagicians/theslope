@@ -379,6 +379,30 @@ export const useSeason = () => {
         return reconcilePreBookings(existingOrders)(desiredOrders)
     }
 
+    /**
+     * Filter dinner events to those within the prebooking window (today → today + N days).
+     * Pure function extracted for testability and reuse by scaffoldPrebookings.
+     *
+     * @param allDinnerEvents - All dinner events for a season
+     * @returns Dinner events within the scaffoldable window (next dinner + future within window)
+     */
+    const getScaffoldableDinnerEvents = (allDinnerEvents: DinnerEventDisplay[]): DinnerEventDisplay[] => {
+        if (allDinnerEvents.length === 0) return []
+
+        const dinnerDates = allDinnerEvents.map(d => d.date)
+        const nextDinnerRange = configuredGetNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
+        const prebookingWindow = getPrebookingWindowDays()
+        const {nextDinner, futureDinnerDates} = splitDinnerEvents(allDinnerEvents, nextDinnerRange, prebookingWindow)
+
+        // Build set of all scaffoldable dates: nextDinner + futureDinnerDates
+        const scaffoldableDates = [...futureDinnerDates]
+        if (nextDinner) {
+            scaffoldableDates.push(nextDinner.date)
+        }
+        const scaffoldableDateSet = new Set(scaffoldableDates.map(d => d.getTime()))
+        return allDinnerEvents.filter(de => scaffoldableDateSet.has(de.date.getTime()))
+    }
+
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
@@ -603,6 +627,7 @@ export const useSeason = () => {
         reconcilePreBookings,
         createPreBookingGenerator,
         createHouseholdOrderScaffold,
+        getScaffoldableDinnerEvents,
         chunkOrderBatch,
 
         getHolidaysForSeason,

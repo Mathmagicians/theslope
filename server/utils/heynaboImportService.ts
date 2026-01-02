@@ -1,29 +1,43 @@
 /**
  * Heynabo Import Service
  *
- * Core logic for Heynabo synchronization, called by both:
- * - Nitro scheduled task (context.cloudflare.env.DB)
- * - HTTP endpoint (event.context.cloudflare.env.DB)
+ * Flatten-then-execute pattern for 3-layer reconciliation:
+ * - Household → Inhabitant → User (each with create/update/delete)
  *
- * Uses reconciliation pattern (ADR-013) with batch operations (ADR-009).
+ * Phases:
+ * 1. Flatten: Reconcile all layers, collect operations
+ * 2. Deletes (bottom-up): users → inhabitants → households
+ * 3. Creates (top-down): households → inhabitants → users → link
+ * 4. Updates (chunked): households, inhabitants, users in parallel
+ *
+ * Data ownership:
+ * - Heynabo: source of truth for name, address, inhabitants, users
+ * - TheSlope: enriches with pbsId, movedInDate, ALLERGYMANAGER role
+ *
+ * ADR-014: TRUE batch for creates and deletes, chunked Promise.all for updates
  */
 import type {D1Database} from '@cloudflare/workers-types'
 import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
-import {reconcileHouseholds, reconcileInhabitants} from '~/composables/useHeynabo'
+import {reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate} from '~/composables/useHeynabo'
 import {
     fetchHouseholds,
-    createHouseholdsBatch,
+    fetchUsers,
+    createHouseholds,
     deleteHouseholdsByHeynaboId,
-    createInhabitantsBatch,
+    createInhabitants,
     deleteInhabitantsByHeynaboId,
     deleteUsersByInhabitantHeynaboId,
-    saveUser
+    saveHousehold,
+    saveInhabitant,
+    saveUser,
+    createUsers,
+    linkUsersToInhabitants
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {chunkArray} from '~/utils/batchUtils'
-import type {HouseholdCreate, HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {HouseholdCreate, HouseholdDisplay, UserCreate} from '~/composables/useCoreValidation'
 
 const LOG = '🏠 > IMPORT > [HEYNABO]'
 const {createHouseholdsFromImport} = useHeynaboValidation()
@@ -60,6 +74,7 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
 
         // 4. Reconcile households (Heynabo is source of truth - ADR-013)
         const existingAsCreate = existingHouseholds.map(householdDisplayToCreate)
+        const existingByHeynaboId = new Map(existingHouseholds.map(h => [h.heynaboId, h]))
         const householdReconciliation = reconcileHouseholds(existingAsCreate)(incomingHouseholds)
         console.info(`${LOG} Reconciliation: create=${householdReconciliation.create.length}, delete=${householdReconciliation.delete.length}, unchanged=${householdReconciliation.idempotent.length + householdReconciliation.update.length}`)
 
@@ -71,19 +86,25 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             console.info(`${LOG} Deleted ${householdsDeleted} households (moved out in Heynabo)`)
         }
 
-        // 6. Execute household creates in chunks (ADR-009: max 8 per batch)
-        let householdsCreated = 0
-        const householdChunks = chunkHouseholds(householdReconciliation.create)
-        for (const chunk of householdChunks) {
-            const createdIds = await createHouseholdsBatch(d1Client, chunk)
-            householdsCreated += createdIds.length
-        }
-        console.info(`${LOG} Created ${householdsCreated} new households`)
+        // Execute household creates (Prisma auto-chunks per ADR-014)
+        const createdHouseholds = await createHouseholds(d1Client, householdReconciliation.create)
+        console.info(`${LOG} Created ${createdHouseholds.length} new households`)
 
-        // 7. Process inhabitants for each household (including existing ones that may have new inhabitants)
+        // Execute household updates in chunks - preserve TheSlope-owned fields
+        if (householdReconciliation.update.length > 0) {
+            const mergedHouseholds = householdReconciliation.update.map(incoming =>
+                mergeHouseholdForUpdate(incoming, existingByHeynaboId.get(incoming.heynaboId)!)
+            )
+            const updateChunks = chunkHouseholds(mergedHouseholds)
+            for (const chunk of updateChunks) {
+                await Promise.all(chunk.map(h => saveHousehold(d1Client, h)))
+            }
+            console.info(`${LOG} Updated ${householdReconciliation.update.length} households`)
+        }
+
+        // Process inhabitants for each household
         let inhabitantsCreated = 0
         let inhabitantsDeleted = 0
-        let usersCreated = 0
         let usersDeleted = 0
 
         // Refetch households to get updated IDs for newly created ones
@@ -116,37 +137,85 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
                 inhabitantsDeleted += await deleteInhabitantsByHeynaboId(d1Client, heynaboIdsToDelete)
             }
 
-            // Create new inhabitants in chunks
+            // Create new inhabitants (Prisma auto-chunks)
             if (inhabitantReconciliation.create.length > 0) {
-                const chunkInhabitants = chunkArray<typeof inhabitantReconciliation.create[0]>(CHUNK_SIZE)
-                const inhabitantChunks = chunkInhabitants(inhabitantReconciliation.create)
-                for (const chunk of inhabitantChunks) {
-                    const createdIds = await createInhabitantsBatch(d1Client, chunk, existingHousehold.id)
-                    inhabitantsCreated += createdIds.length
+                const createdIds = await createInhabitants(d1Client, inhabitantReconciliation.create, existingHousehold.id)
+                inhabitantsCreated += createdIds.length
+            }
 
-                    // Create users for inhabitants with email (after inhabitant creation)
-                    for (const inhabitant of chunk) {
-                        if (inhabitant.user) {
-                            await saveUser(d1Client, inhabitant.user)
-                            usersCreated++
-                        }
-                    }
+            // Update existing inhabitants in chunks
+            if (inhabitantReconciliation.update.length > 0) {
+                const chunkInhabitants = chunkArray<typeof inhabitantReconciliation.update[0]>(CHUNK_SIZE)
+                const inhabitantChunks = chunkInhabitants(inhabitantReconciliation.update)
+                for (const chunk of inhabitantChunks) {
+                    await Promise.all(chunk.map(i => saveInhabitant(d1Client, i, existingHousehold.id)))
                 }
             }
         }
 
+        // Reconcile users: existing UserDisplay (from DB) vs incoming InhabitantData (from Heynabo)
+        const existingUsers = (await fetchUsers(d1Client)).filter(u => u.Inhabitant !== null)
+        const incomingWithUsers = incomingHouseholds.flatMap(h => h.inhabitants || []).filter(i => i.user)
+
+        const userReconciliation = reconcileUsers(existingUsers)(incomingWithUsers)
+        console.info(`${LOG} User reconciliation: create=${userReconciliation.create.length}, update=${userReconciliation.update.length}, delete=${userReconciliation.delete.length}, idempotent=${userReconciliation.idempotent.length}`)
+
+        let usersCreated = 0
+        let usersUpdated = 0
+        let usersLinked = 0
+
+        // CREATE new users and link to inhabitants
+        if (userReconciliation.create.length > 0) {
+            const createdUsers = await createUsers(d1Client, userReconciliation.create.map(i => i.user!))
+            usersCreated = createdUsers.length
+            console.info(`${LOG} Created ${usersCreated} new users`)
+
+            const userIdByEmail = new Map(createdUsers.map(u => [u.email, u.id]))
+            const linkPairs = userReconciliation.create.map(i => ({
+                userId: userIdByEmail.get(i.user!.email)!,
+                inhabitantHeynaboId: i.heynaboId
+            }))
+
+            usersLinked = await linkUsersToInhabitants(d1Client, linkPairs)
+            console.info(`${LOG} Linked ${usersLinked} users to inhabitants`)
+        }
+
+        // UPDATE existing users (saveUser merges roles - preserves ALLERGYMANAGER)
+        if (userReconciliation.update.length > 0) {
+            const usersToUpdate = userReconciliation.update.map(i => i.user!)
+            const chunkUsers = chunkArray<UserCreate>(CHUNK_SIZE)
+            for (const chunk of chunkUsers(usersToUpdate)) {
+                await Promise.all(chunk.map(u => saveUser(d1Client, u)))
+            }
+            usersUpdated = userReconciliation.update.length
+            console.info(`${LOG} Updated ${usersUpdated} users (ALLERGYMANAGER preserved)`)
+        }
+
         console.info(`${LOG} Inhabitants: created=${inhabitantsCreated}, deleted=${inhabitantsDeleted}`)
-        console.info(`${LOG} Users: created=${usersCreated}, deleted=${usersDeleted}`)
+        console.info(`${LOG} Users: created=${usersCreated}, deleted=${usersDeleted}, linked=${usersLinked}`)
+
+        // 9. Run sanity check to verify no orphan users
+        const allUsers = await fetchUsers(d1Client)
+        const { sanityCheck } = useHeynaboValidation()
+        const sanityCheckResult = sanityCheck(allUsers, incomingHouseholds)
+
+        if (!sanityCheckResult.passed) {
+            console.warn(`${LOG} Sanity check FAILED: ${sanityCheckResult.orphanUsers.length} orphan users found`)
+        } else {
+            console.info(`${LOG} Sanity check passed: no orphan users`)
+        }
 
         const result: HeynaboImportResponse = {
             jobRunId: jobRun.id,
-            householdsCreated,
+            householdsCreated: createdHouseholds.length,
             householdsDeleted,
-            householdsUnchanged: householdReconciliation.idempotent.length + householdReconciliation.update.length,
+            householdsUnchanged: householdReconciliation.idempotent.length,
             inhabitantsCreated,
             inhabitantsDeleted,
             usersCreated,
-            usersDeleted
+            usersDeleted,
+            usersLinked,
+            sanityCheck: sanityCheckResult
         }
 
         // Complete job run with success

@@ -656,7 +656,7 @@ test.describe('Season API Tests', () => {
             const inhabitantId = inhabitants[0]!.id
 
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn})
+            await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, activeSeason.id)
 
             // WHEN: Season is re-activated (idempotent, triggers clipping)
             const response = await context.request.post('/api/admin/season/active', {headers, data: {seasonId: activeSeason.id}})
@@ -698,7 +698,7 @@ test.describe('Season API Tests', () => {
 
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
             for (const inhabitant of inhabitants) {
-                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn})
+                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
             }
 
             const result = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
@@ -732,7 +732,7 @@ test.describe('Season API Tests', () => {
             // Set DINEIN for all days - even if clipped to Mon/Wed/Fri by parallel tests,
             // the cooking days will still have DINEIN which is what matters for scaffolding
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn})
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
 
             const scaffoldResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
             expect(scaffoldResult.seasonId, 'Scaffold should return correct seasonId').toBe(season.id)
@@ -771,7 +771,7 @@ test.describe('Season API Tests', () => {
             createdHouseholdIds.push(household.id)
 
             const allDaysNone = createDefaultDinnerModeMap(DinnerMode.NONE)
-            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysNone})
+            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysNone}, 200, season.id!)
 
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
@@ -796,7 +796,7 @@ test.describe('Season API Tests', () => {
             const inhabitant = inhabitants[0]!
 
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn})
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
 
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 

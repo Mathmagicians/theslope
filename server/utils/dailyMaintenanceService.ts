@@ -47,7 +47,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let scaffoldResult = null
         if (activeSeasonId) {
-            scaffoldResult = await scaffoldPrebookings(d1Client, activeSeasonId)
+            scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
             console.info(`${LOG} Step 4 complete: scaffolded ${scaffoldResult?.created ?? 0} orders`)
         } else {
             console.info(`${LOG} Step 4 skipped: no active season`)

@@ -1,5 +1,5 @@
 import {z} from "zod";
-import type { HouseholdCreate, InhabitantCreate, UserCreate } from './useCoreValidation'
+import type { HouseholdCreate, InhabitantCreate, UserCreate, UserDisplay } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
 
 export const useHeynaboValidation = () => {
@@ -134,8 +134,8 @@ export const useHeynaboValidation = () => {
         const households = locations.map(location => {
             const newHousehold: HouseholdCreate = {
                 heynaboId: location.id,
-                movedInDate: new Date('2019-06-25'),
-                pbsId: location.id, // FIXME - import pbs from csv file
+                movedInDate: new Date(), // Date of first import (preserved on subsequent imports)
+                pbsId: location.id, // Default initial value (preserved on subsequent imports)
                 name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0, 1)),
                 address: location.address,
                 inhabitants: findInhabitantsByLocation(location.id, members)
@@ -145,6 +145,48 @@ export const useHeynaboValidation = () => {
         })
 
         return households
+    }
+
+    // ========================================================================
+    // SANITY CHECK SCHEMA - Validates import result
+    // ========================================================================
+
+    const { UserDisplaySchema } = useCoreValidation()
+
+    const SanityCheckResultSchema = z.object({
+        passed: z.boolean(),
+        orphanUsers: z.array(UserDisplaySchema)
+    })
+
+    /**
+     * Sanity check: Verify HN import integrity
+     * Pure function - checks users whose emails came from HN data
+     *
+     * @param users - Array of UserDisplay to check (from DB)
+     * @param incomingHouseholds - HN import data with expected users
+     * @returns Parsed SanityCheckResult with passed boolean and orphan details
+     */
+    const sanityCheck = (users: UserDisplay[], incomingHouseholds: HouseholdCreate[]): z.infer<typeof SanityCheckResultSchema> => {
+        // Build set of emails that SHOULD have inhabitant (from HN data)
+        const expectedUserEmails = new Set<string>()
+        for (const household of incomingHouseholds) {
+            for (const inhabitant of household.inhabitants || []) {
+                if (inhabitant.user?.email) {
+                    expectedUserEmails.add(inhabitant.user.email)
+                }
+            }
+        }
+
+        // Find orphans: users from HN (in expectedUserEmails) that don't have Inhabitant
+        const orphanUsers = users.filter(u =>
+            expectedUserEmails.has(u.email) &&
+            u.Inhabitant === null
+        )
+
+        return SanityCheckResultSchema.parse({
+            passed: orphanUsers.length === 0,
+            orphanUsers
+        })
     }
 
     // ========================================================================
@@ -159,7 +201,9 @@ export const useHeynaboValidation = () => {
         inhabitantsCreated: z.number(),
         inhabitantsDeleted: z.number(),
         usersCreated: z.number(),
-        usersDeleted: z.number().default(0) // Default for backwards compatibility with old job runs
+        usersDeleted: z.number().default(0), // Default for backwards compatibility with old job runs
+        usersLinked: z.number().default(0), // Users linked to existing inhabitants
+        sanityCheck: SanityCheckResultSchema.default({ passed: true, orphanUsers: [] })
     })
 
     return {
@@ -168,11 +212,13 @@ export const useHeynaboValidation = () => {
         LoggedInHeynaboUserSchema,
         HeynaboLocationSchema,
         HeynaboImportResponseSchema,
+        SanityCheckResultSchema,
         // Transformation functions
         mapHeynaboRoleToSystemRole,
         inhabitantFromMember,
         findInhabitantsByLocation,
-        createHouseholdsFromImport
+        createHouseholdsFromImport,
+        sanityCheck
     }
 }
 
@@ -182,3 +228,4 @@ export type HeynaboUser = z.infer<ReturnType<typeof useHeynaboValidation>['Heyna
 export type LoggedInHeynaboUser = z.infer<ReturnType<typeof useHeynaboValidation>['LoggedInHeynaboUserSchema']>
 export type HeynaboLocation = z.infer<ReturnType<typeof useHeynaboValidation>['HeynaboLocationSchema']>
 export type HeynaboImportResponse = z.infer<ReturnType<typeof useHeynaboValidation>['HeynaboImportResponseSchema']>
+export type SanityCheckResult = z.infer<ReturnType<typeof useHeynaboValidation>['SanityCheckResultSchema']>

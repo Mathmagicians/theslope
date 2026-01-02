@@ -1,7 +1,8 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {z} from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {scaffoldPrebookings, type ScaffoldResult} from "~~/server/utils/scaffoldPrebookings"
+import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import type {ScaffoldResult} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -31,8 +32,8 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
 
     // Business logic
     try {
-        const result = await scaffoldPrebookings(d1Client, seasonId)
-        if (!result) {
+        const result = await scaffoldPrebookings(d1Client, {seasonId})
+        if (result.seasonId === null) {
             return throwH3Error(`${LOG} Season ${seasonId} not found`, new Error('Not found'), 404)
         }
         setResponseStatus(event, 200)
