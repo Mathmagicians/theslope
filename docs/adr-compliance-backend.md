@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-12-29 (Feedback endpoint added)
+**Last Updated:** 2026-01-02 (Inhabitant POST returns InhabitantUpdateResponse with scaffoldResult)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -47,7 +47,7 @@
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                              |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteInhabitant() → Inhabitant with deserializeInhabitant()                                     |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitant() → Inhabitant with deserialization                                              |
-| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → Inhabitant with deserialization                                             |
+| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference change) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveInhabitant() → Inhabitant with deserializeInhabitant()                                       |
 | **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT**                                                                            |

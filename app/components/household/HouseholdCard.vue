@@ -215,6 +215,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
               square
               :size="getIsMd ? 'md' : 'xs'"
               :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
+              :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="row.getIsExpanded() ? 'rotate-180' : ''"
               class="transition-transform duration-200"
               @click="handleToggleRow(row)"

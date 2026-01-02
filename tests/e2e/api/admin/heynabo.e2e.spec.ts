@@ -18,11 +18,11 @@ const {HeynaboImportResponseSchema} = useHeynaboValidation()
  * - DELETE: Add entities not in Heynabo → verify deleted
  *
  * Coverage Matrix:
- * | Entity      | IDEMPOTENT              | UPDATE               | DELETE        | CREATE |
- * |-------------|-------------------------|----------------------|---------------|--------|
- * | Household   | pbsId, movedInDate      | name restored        | (n/a)         | skip   |
- * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted  | skip   |
- * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted| skip   |
+ * | Entity      | IDEMPOTENT              | UPDATE               | DELETE         | CREATE |
+ * |-------------|-------------------------|----------------------|----------------|--------|
+ * | Household   | pbsId, movedInDate      | name restored        | Fake deleted   | skip   |
+ * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted   | skip   |
+ * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted | skip   |
  *
  * Test household: heynaboId=2 ("Heynabo!") from seed.sql
  * Inhabitants:
@@ -34,8 +34,9 @@ const TEST_HOUSEHOLD_HEYNABO_ID = 2
 const SEED_USER_EMAIL = 'agata@mathmagicians.dk'
 
 // Inhabitants in test household (from Heynabo API)
+// Note: name = firstName from Heynabo (lastName is separate field)
 const INHABITANTS = {
-    SKRAANINGEN: {heynaboId: 153, hasUser: true, name: 'Skraaningen API'},
+    SKRAANINGEN: {heynaboId: 153, hasUser: true, name: 'Skraaningen'},
     BABYYODA: {heynaboId: 154, hasUser: false, name: 'Babyyoda'}
 }
 
@@ -52,7 +53,9 @@ const testData = {
         uniqueMovedInDate: new Date(),
         // UPDATE: Heynabo-owned field mutated, should be restored
         originalName: '',
-        mutatedName: ''
+        mutatedName: '',
+        // DELETE: Fake household not in Heynabo
+        fakeId: 0
     },
 
     // ========================================================================
@@ -83,7 +86,8 @@ const testData = {
     }
 }
 
-test.describe('Heynabo Integration API', () => {
+// Serial: Heynabo import reconciles and DELETES all data not in Heynabo - would break parallel tests
+test.describe.serial('Heynabo Integration API', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
@@ -115,6 +119,16 @@ test.describe('Heynabo Integration API', () => {
             movedInDate: testData.household.uniqueMovedInDate,
             name: testData.household.mutatedName
         })
+
+        // DELETE: Create fake household not in Heynabo
+        const fakeHousehold = await HouseholdFactory.createHousehold(context, {
+            heynaboId: saltedId(888000, testSalt),
+            pbsId: saltedId(888001, testSalt),
+            name: `FakeHousehold-${testSalt}`,
+            address: `Fake Address ${testSalt}`,
+            movedInDate: new Date('2020-01-01')
+        })
+        testData.household.fakeId = fakeHousehold.id
 
         // ========================================================================
         // INHABITANT SETUP
@@ -186,10 +200,21 @@ test.describe('Heynabo Integration API', () => {
 
         const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
 
-        // Verify import ran operations
-        expect(result.inhabitantsDeleted).toBeGreaterThanOrEqual(1)
-        expect(result.usersDeleted).toBeGreaterThanOrEqual(1)
+        // Verify import ran delete operations
+        expect(result.householdsDeleted, 'DELETE: At least fake household deleted').toBeGreaterThanOrEqual(1)
+        expect(result.inhabitantsDeleted, 'DELETE: At least fake inhabitant deleted').toBeGreaterThanOrEqual(1)
+        expect(result.usersDeleted, 'DELETE: At least orphan user deleted').toBeGreaterThanOrEqual(1)
         expect(result.sanityCheck.passed).toBe(true)
+
+        // Verify our specific test items were deleted via direct API checks
+        const fakeHouseholdResponse = await context.request.get(`/api/admin/household/${testData.household.fakeId}`)
+        expect(fakeHouseholdResponse.status(), 'DELETE: Fake household deleted (404)').toBe(404)
+
+        const fakeInhabitantResponse = await context.request.get(`/api/admin/household/inhabitants/${testData.inhabitant.fakeId}`)
+        expect(fakeInhabitantResponse.status(), 'DELETE: Fake inhabitant deleted (404)').toBe(404)
+
+        const orphanUserResponse = await context.request.get(`/api/admin/users/${testData.user.orphanId}`)
+        expect(orphanUserResponse.status(), 'DELETE: Orphan user deleted (404)').toBe(404)
 
         // Fetch post-import data
         const households = await HouseholdFactory.getAllHouseholds(context)
@@ -215,6 +240,10 @@ test.describe('Heynabo Integration API', () => {
         // UPDATE: Heynabo-owned field restored
         expect(household!.name, 'Household: name restored from Heynabo').not.toBe(testData.household.mutatedName)
         expect(household!.name, 'Household: name matches original').toBe(testData.household.originalName)
+
+        // DELETE: Fake household removed
+        const fakeHouseholdExists = households.some(h => h.id === testData.household.fakeId)
+        expect(fakeHouseholdExists, 'Household: Fake household deleted').toBe(false)
 
         // ========================================================================
         // INHABITANT ASSERTIONS

@@ -164,6 +164,13 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         let usersUpdated = 0
         let usersLinked = 0
 
+        // DELETE users whose inhabitants no longer have user role in Heynabo
+        if (userReconciliation.delete.length > 0) {
+            const heynaboIdsToDelete = userReconciliation.delete.map(u => u.Inhabitant!.heynaboId)
+            usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, heynaboIdsToDelete)
+            console.info(`${LOG} Deleted ${usersDeleted} orphan users (limited role in Heynabo)`)
+        }
+
         // CREATE new users and link to inhabitants
         if (userReconciliation.create.length > 0) {
             const createdUsers = await createUsers(d1Client, userReconciliation.create.map(i => i.user!))

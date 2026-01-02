@@ -219,27 +219,19 @@ export class HouseholdFactory {
     }
 
     /**
-     * Create inhabitant for existing household
+     * Create inhabitant with config object pattern (ADR-003)
+     * Preferred method - allows setting any inhabitant field including dinnerPreferences
      */
-    static readonly createInhabitantForHousehold = async (
+    static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
         householdId: number,
-        inhabitantName: string = "Pluto Hund",
-        birthDate?: Date | null,
+        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> = {},
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
-        // Split name into first and last
-        const nameParts = inhabitantName.split(' ')
-        // Only use defaults for success cases (201) - validation tests need exact invalid data
-        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
-        const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
-
-        // Generate unique testSalt for each inhabitant to avoid heynaboId collisions
-        const inhabitantData = {
+        // Merge partial with defaults, householdId always from parameter
+        const inhabitantData: InhabitantCreate = {
             ...this.defaultInhabitantData(temporaryAndRandom()),
-            name: firstName,
-            lastName: lastName,
-            birthDate: birthDate !== undefined ? birthDate : null,
+            ...partialInhabitant,
             householdId: householdId
         }
 
@@ -259,6 +251,30 @@ export class HouseholdFactory {
         }
 
         return responseBody
+    }
+
+    /**
+     * Create inhabitant for existing household (legacy signature)
+     * Calls createInhabitantWithConfig internally
+     */
+    static readonly createInhabitantForHousehold = async (
+        context: BrowserContext,
+        householdId: number,
+        inhabitantName: string = "Pluto Hund",
+        birthDate?: Date | null,
+        expectedStatus: number = 201
+    ): Promise<InhabitantDetail> => {
+        // Split name into first and last
+        const nameParts = inhabitantName.split(' ')
+        // Only use defaults for success cases (201) - validation tests need exact invalid data
+        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
+        const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
+
+        return this.createInhabitantWithConfig(context, householdId, {
+            name: firstName,
+            lastName: lastName,
+            birthDate: birthDate !== undefined ? birthDate : null
+        }, expectedStatus)
     }
 
 

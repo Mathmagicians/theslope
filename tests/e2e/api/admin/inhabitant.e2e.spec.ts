@@ -345,21 +345,23 @@ test.describe('Admin Inhabitant API', () => {
             households.forEach(h => scaffoldTestHouseholdIds.push(h.household.id))
 
             const [inhabitantA, inhabitantB] = households.map(h => h.inhabitants[0]!)
+            expect(inhabitantA).toBeDefined()
+            expect(inhabitantB).toBeDefined()
 
             // Verify no orders exist yet
             const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantA.id).length).toBe(0)
-            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantB.id).length).toBe(0)
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantA!.id).length).toBe(0)
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantB!.id).length).toBe(0)
 
             // WHEN: A updates preferences (scaffolds only for A, householdId filter applied)
-            await HouseholdFactory.updateInhabitant(context, inhabitantA.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
+            await HouseholdFactory.updateInhabitant(context, inhabitantA!.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
                 ({scaffoldResult}) => expect(scaffoldResult.households).toBe(1)
             )
 
             // THEN: Only A has orders - B should still have 0 (householdId filter worked)
             const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantA.id).length).toBeGreaterThan(0)
-            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantB.id).length).toBe(0)
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantA!.id).length).toBeGreaterThan(0)
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantB!.id).length).toBe(0)
         })
 
         test('GIVEN no seasonId provided WHEN preferences updated THEN active season used', async ({browser}) => {

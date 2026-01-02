@@ -7,19 +7,17 @@ import {
     userReconciliationTestData
 } from '~~/tests/e2e/testDataFactories/reconciliationTestData'
 
-// Extract heynaboId from either InhabitantData (heynaboId) or UserDisplay (Inhabitant.heynaboId)
-const getHeynaboId = (item: { heynaboId?: number, Inhabitant?: { heynaboId: number } | null }): number =>
-    item.heynaboId ?? item.Inhabitant?.heynaboId ?? 0
-
+// Matches PruneAndCreateResult<E, I>: delete is E[], everything else is I[]
 const verifyReconciliation = <E, I>(
-    result: { idempotent: E[], update: E[], delete: E[], create: I[] },
-    expected: { idempotent: { heynaboIds: number[] }, update: { heynaboIds: number[] }, delete: { heynaboIds: number[] }, create: { heynaboIds: number[] } }
+    result: { idempotent: I[], update: I[], delete: E[], create: I[] },
+    expected: { idempotent: number[], update: number[], delete: number[], create: number[] },
+    getDeleteKey: (e: E) => number,
+    getKey: (i: I) => number = getDeleteKey as unknown as (i: I) => number
 ) => {
-    const sorted = (arr: number[]) => [...arr].sort((a, b) => a - b)
-    expect(sorted(result.idempotent.map(getHeynaboId))).toEqual(sorted(expected.idempotent.heynaboIds))
-    expect(sorted(result.update.map(getHeynaboId))).toEqual(sorted(expected.update.heynaboIds))
-    expect(sorted(result.delete.map(getHeynaboId))).toEqual(sorted(expected.delete.heynaboIds))
-    expect(sorted(result.create.map(getHeynaboId))).toEqual(sorted(expected.create.heynaboIds))
+    expect(result.idempotent.map(getKey).sort()).toEqual(expected.idempotent.sort())
+    expect(result.update.map(getKey).sort()).toEqual(expected.update.sort())
+    expect(result.delete.map(getDeleteKey).sort()).toEqual(expected.delete.sort())
+    expect(result.create.map(getKey).sort()).toEqual(expected.create.sort())
 }
 
 describe('useHeynabo', () => {
@@ -28,7 +26,13 @@ describe('useHeynabo', () => {
         it('reconciles all 4 outcomes: idempotent, update, delete, create', () => {
             const { existing, incoming, expected } = householdReconciliationTestData
             const result = reconcileHouseholds(existing)(incoming)
-            verifyReconciliation(result, expected)
+            const expectedKeys = {
+                idempotent: expected.idempotent.heynaboIds,
+                update: expected.update.heynaboIds,
+                delete: expected.delete.heynaboIds,
+                create: expected.create.heynaboIds
+            }
+            verifyReconciliation(result, expectedKeys, h => h.heynaboId)
         })
     })
 
@@ -36,7 +40,13 @@ describe('useHeynabo', () => {
         it('reconciles all 4 outcomes: idempotent, update, delete, create', () => {
             const { existing, incoming, expected } = inhabitantReconciliationTestData
             const result = reconcileInhabitants(existing)(incoming)
-            verifyReconciliation(result, expected)
+            const expectedKeys = {
+                idempotent: expected.idempotent.heynaboIds,
+                update: expected.update.heynaboIds,
+                delete: expected.delete.heynaboIds,
+                create: expected.create.heynaboIds
+            }
+            verifyReconciliation(result, expectedKeys, i => i.heynaboId)
         })
     })
 
@@ -44,7 +54,13 @@ describe('useHeynabo', () => {
         it('reconciles all 4 outcomes: idempotent, update, delete, create', () => {
             const { existing, incoming, expected } = userReconciliationTestData
             const result = reconcileUsers(existing)(incoming)
-            verifyReconciliation(result, expected)
+            const expectedKeys = {
+                idempotent: expected.idempotent.heynaboIds,
+                update: expected.update.heynaboIds,
+                delete: expected.delete.heynaboIds,
+                create: expected.create.heynaboIds
+            }
+            verifyReconciliation(result, expectedKeys, u => u.Inhabitant?.heynaboId ?? 0, i => i.heynaboId)
         })
     })
 
@@ -55,8 +71,8 @@ describe('useHeynabo', () => {
     describe('mergeHouseholdForUpdate', () => {
         it('preserves TheSlope-owned fields (pbsId, movedInDate, moveOutDate) from existing', () => {
             const { existing, incoming } = householdReconciliationTestData
-            const existingHousehold = { ...existing[1], id: 1, shortName: 'ON' } as HouseholdDisplay
-            const incomingHousehold = incoming[1]
+            const existingHousehold = { ...existing[1]!, id: 1, shortName: 'ON' } as HouseholdDisplay
+            const incomingHousehold = incoming[1]!
 
             const result = mergeHouseholdForUpdate(incomingHousehold, existingHousehold)
 

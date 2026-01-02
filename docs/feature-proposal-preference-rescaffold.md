@@ -1,6 +1,15 @@
 # Feature Proposal: Preference-Triggered Re-Scaffolding
 
-**Status:** Proposed | **Date:** 2025-12-31
+**Status:** ✅ Complete | **Date:** 2025-12-31 | **Completed:** 2026-01-02
+
+## ✅ WORK DONE
+
+- `POST /api/admin/household/inhabitants/[id]` → returns `InhabitantUpdateResponse` with `scaffoldResult`
+- `scaffoldPrebookings` refactored: accepts `{seasonId?, householdId?}` options object
+- `InhabitantUpdateResponseSchema` added to `useBookingValidation.ts`
+- `getScaffoldableDinnerEvents` extracted to `useSeason.ts`
+- E2E tests: preference→DINEIN creates orders, →NONE deletes, USER_CANCELLED respected, householdId filter works
+- Fixed year-rollover bug in `seasonImport` (shortName from CSV dates, not current year)
 
 ## Summary
 
