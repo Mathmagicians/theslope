@@ -194,7 +194,9 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         })
 
         // GIVEN: Get dinner events for the singleton active season
+        // Default season has Mon/Wed/Fri cooking days over 7 days = 3 dinner events
         const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
+        expect(dinnerEvents.length, 'Season should have 3 dinner events (Mon/Wed/Fri over 7 days)').toBe(3)
 
         // Verify no orders exist for Donald initially
         const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id!))
@@ -215,7 +217,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         )
         await page.locator(`[data-testid="inhabitant-${donald.id}-edit-preferences"]`).click()
 
-        // WHEN: Wait for edit mode buttons to appear
+        // WHEN: Wait for edit mode buttons to appear (Mon/Wed/Fri buttons visible)
         await pollUntil(
             async () => {
                 const button = page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`)
@@ -225,23 +227,23 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
             10
         )
 
-        // WHEN: Change Monday to DINEIN
+        // WHEN: Change all cooking days to DINEIN (Mon, Wed, Fri)
         await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`).click()
+        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-onsdag-DINEIN`).click()
+        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-fredag-DINEIN`).click()
 
         // WHEN: Save preferences (triggers scaffolding)
         await page.getByTestId('save-preferences').click()
 
-        // THEN: Wait for save to complete and verify via API that orders were created
+        // THEN: Wait for save to complete and verify 3 orders were scaffolded (one per cooking day)
         const ordersAfter = await pollUntil(
             async () => {
                 const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id!))
                 return orders.filter(o => o.inhabitantId === donald.id)
             },
-            (orders) => orders.length > 0,
-            15,
-            500
+            (orders) => orders.length === 3
         )
 
-        expect(ordersAfter.length, 'Donald should have scaffolded orders after preference change').toBeGreaterThan(0)
+        expect(ordersAfter.length, 'Donald should have 3 scaffolded orders (Mon/Wed/Fri)').toBe(3)
     })
 })

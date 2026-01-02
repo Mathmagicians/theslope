@@ -51,6 +51,7 @@ User (Bruger)
 | **Season Activation** | Activate seasons, auto-scaffold pre-bookings | [Admin Guide](admin-guide.md#activate-a-season) |
 | **Cooking Teams** | Create teams, assign members, set affinities | [Admin Guide](admin-guide.md#cooking-teams) |
 | **Weekly Preferences** | Set DINEIN/TAKEAWAY/NONE per weekday per person | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
+| **Preference Auto-Scaffolding** | Bookings auto-update when preferences change (ADR-015) | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
 | **Meal Booking** | Book/cancel dinners, view calendar | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
 | **Allergy Management** | Track allergies per inhabitant | [User Guide](user-guide.md#sådan-tilføjer-du-allergier) |
 | **Chef Dashboard** | View team, menu planning, allergen tracking | [Chef Guide](chef-guide.md) |

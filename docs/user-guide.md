@@ -55,6 +55,8 @@ Efter login har du adgang til:
 
 Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fællesspisning.
 
+> **Automatisk opdatering:** Når du ændrer præferencer, opdateres dine fremtidige bookinger automatisk. Ændrer du f.eks. mandag fra "Ingen" til "Spisesal" eller "Takeaway", bliver du automatisk tilmeldt alle kommende mandagsmiddage. Ligeså kan du være fast frameldt på bestemte ugedage, takeaway alle tirsdage, og sen spisning onsdag efter den lange dag på arbejde.
+
 1. Gå til **Husstanden** (fanen med hus-ikon)
 2. Find den person du vil redigere
 3. Klik på **blyant-ikonet** (✏️) ud for personen
@@ -63,7 +65,7 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
    - 🕐 **Sen** - Spis sent (efter kl. 18:30)
    - 🛍️ **Take** - Hent mad og spis hjemme
    - ❌ **Ingen** - Ikke tilmeldt
-5. Klik **Gem** for at gemme
+5. Klik **Gem** - dine bookinger opdateres automatisk
 
 ![Præferencer i redigeringstilstand](screenshots/household/household-card-preferences-editing.png)
 *Redigér præferencer for et enkelt medlem*
