@@ -677,12 +677,7 @@ test.describe('Season API Tests', () => {
     })
 
     test.describe('Scaffold Pre-bookings', () => {
-        const createdSeasonIds: number[] = []
-
-        test.afterAll(async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        })
+        // Uses outer createdSeasonIds - cleaned by outer afterAll
 
         test('POST /api/admin/season/[id]/scaffold-prebookings should create orders for inhabitants with preferences', async ({browser}) => {
             const context = await validatedBrowserContext(browser)

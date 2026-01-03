@@ -9,6 +9,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
@@ -777,8 +778,12 @@ describe('createPreferenceClipper', () => {
 
 describe('createPreBookingGenerator', () => {
     const {createPreBookingGenerator, reconcilePreBookings} = useSeason()
-    const {DinnerModeSchema} = useBookingValidation()
+    const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
+    const TicketType = TicketTypeSchema.enum
+
+    // Reference date for age calculations (first dinner in test season)
+    const firstDinnerDate = testSeasonWithFutureDinners.dinnerEvents![0].date
 
     // Helper to create preferences
     const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
@@ -819,44 +824,46 @@ describe('createPreBookingGenerator', () => {
             expect(() => generator(inhabitants)).toThrow('No ticket price for type')
         })
 
-        // Factory default prices: BABY=0, CHILD=3000, ADULT=5000 (from TicketFactory)
+        // Factory default prices: BABY=1500 (hungry baby), CHILD=3000, ADULT=5000 (from TicketFactory)
+        // Uses TicketFactory.birthDateForTicketType() for dynamic age calculation at dinner date
         it.each([
             {
                 description: 'adult with DINEIN on all cooking days',
-                birthDate: new Date(1990, 0, 1),  // Adult
+                ticketType: TicketType.ADULT,
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
                 expectedPrice: 5000
             },
             {
-                description: 'child (age 8) with TAKEAWAY on cooking days',
-                birthDate: new Date(2017, 0, 1),  // ~8 years old in 2025
+                description: 'child with TAKEAWAY on cooking days',
+                ticketType: TicketType.CHILD,
                 preferences: [DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
                 expectedPrice: 3000
             },
             {
-                description: 'baby (age 1) with DINEIN on cooking days',
-                birthDate: new Date(2024, 0, 1),  // ~1 year old in 2025
+                description: 'baby with DINEIN on cooking days',
+                ticketType: TicketType.BABY,
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 3,
                 expectedPrice: 1500  // Factory has 2 BABY prices - Map uses last one (Hungry Baby @ 1500)
             },
             {
                 description: 'adult with NONE on some cooking days',
-                birthDate: new Date(1990, 0, 1),
+                ticketType: TicketType.ADULT,
                 preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 2,  // Only Mon and Fri
                 expectedPrice: 5000
             },
             {
                 description: 'inhabitant with NONE on all days',
-                birthDate: new Date(1990, 0, 1),
+                ticketType: TicketType.ADULT,
                 preferences: [DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE],
                 expectedCount: 0,
                 expectedPrice: 5000
             }
-        ])('should generate $expectedCount orders for $description', ({birthDate, preferences, expectedCount, expectedPrice}) => {
+        ])('should generate $expectedCount orders for $description', ({ticketType, preferences, expectedCount, expectedPrice}) => {
+            const birthDate = TicketFactory.birthDateForTicketType(ticketType, firstDinnerDate)
             // GIVEN: Generator and inhabitant (using factory helper)
             const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
             const prefs = createPreferences(preferences)

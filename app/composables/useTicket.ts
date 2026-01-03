@@ -53,8 +53,13 @@ export const useTicket = () => {
      * Algorithm:
      * 1. Calculate age on reference date (default: today)
      * 2. Sort ticket prices by maximumAgeLimit (ascending)
-     * 3. Return first ticket type where age <= maximumAgeLimit
+     * 3. Return first ticket type where age < maximumAgeLimit (UNDER the limit)
      * 4. Default to ADULT if no match or no birthDate
+     *
+     * Example with maximumAgeLimit=2 for BABY, 12 for CHILD:
+     * - Age 0, 1 → BABY (under 2)
+     * - Age 2-11 → CHILD (under 12)
+     * - Age 12+  → ADULT
      *
      * @param birthDate - Date of birth (null/undefined → ADULT)
      * @param ticketPrices - Season ticket prices with age limits (falls back to defaults if not provided)
@@ -81,7 +86,7 @@ export const useTicket = () => {
             .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
 
         for (const price of sorted) {
-            if (age <= price.maximumAgeLimit!) {
+            if (age < price.maximumAgeLimit!) {
                 return price.ticketType
             }
         }

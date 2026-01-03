@@ -26,9 +26,10 @@ Set in `updateOrdersToState()` when transitioning to RELEASED. Enables:
 
 ### Provenance via OrderSnapshotSchema
 Extend auditData JSON (no schema migration) with:
-- `inhabitantName` - "Anna"
+- `inhabitantName` - "Anna B.H." (colloquial, via `formatNameWithInitials` from useHousehold)
 - `householdShortname` - "AR_1"
 - `householdId` - for filtering
+- `allergies` - `["Peanuts", "Gluten"]` (just allergy type names, lightweight)
 
 ## Remaining Work
 
