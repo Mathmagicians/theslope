@@ -224,14 +224,20 @@ test.describe('Admin Inhabitant API', () => {
         const scaffoldTestSeasonIds: number[] = []
 
         // Shared setup helpers
-        const {DinnerModeSchema} = useBookingValidation()
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
         const DinnerMode = DinnerModeSchema.enum
+        const OrderState = OrderStateSchema.enum
         const {createDefaultWeekdayMap} = useWeekDayMapValidation({
             valueSchema: DinnerModeSchema,
             defaultValue: DinnerMode.NONE
         })
         const ALL_DINEIN = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN])
         const ALL_NONE = createDefaultWeekdayMap([DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE])
+
+        // Cancel period longer than season span so dinners are past deadline → RELEASED
+        // ADR-015: Before deadline → DELETE (user not charged), After deadline → RELEASE (user charged)
+        // Season spans 7 days from tomorrow, so 8-day deadline ensures all dinners are past deadline
+        const LONG_CANCEL_PERIOD = 8
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -242,7 +248,7 @@ test.describe('Admin Inhabitant API', () => {
         // Parametrized test for create/delete preference changes
         const preferenceChangeTests = [
             {name: 'NONE→DINEIN creates orders', from: ALL_NONE, to: ALL_DINEIN, expectCreated: true},
-            {name: 'DINEIN→NONE deletes orders', from: ALL_DINEIN, to: ALL_NONE, expectCreated: false}
+            {name: 'DINEIN→NONE removes orders (deleted or released)', from: ALL_DINEIN, to: ALL_NONE, expectCreated: false}
         ] as const
 
         preferenceChangeTests.forEach(({name, from, to, expectCreated}) => {
@@ -250,8 +256,11 @@ test.describe('Admin Inhabitant API', () => {
                 const context = await validatedBrowserContext(browser)
                 const testSalt = temporaryAndRandom()
 
-                // GIVEN: Season with dinner events + household with initial preferences
-                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+                // GIVEN: Season with LONG_CANCEL_PERIOD to observe RELEASE behavior
+                // ADR-015: Before deadline → DELETE, After deadline → RELEASE
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                    ticketIsCancellableDaysBefore: LONG_CANCEL_PERIOD
+                })
                 scaffoldTestSeasonIds.push(season.id as number)
 
                 const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
@@ -274,7 +283,9 @@ test.describe('Admin Inhabitant API', () => {
                         if (expectCreated) {
                             expect(scaffoldResult.created).toBeGreaterThan(0)
                         } else {
-                            expect(scaffoldResult.deleted).toBe(inhabitantOrdersBefore.length)
+                            // ADR-015: With LONG_CANCEL_PERIOD all dinners are past deadline → all RELEASED
+                            expect(scaffoldResult.released, `Expected ${inhabitantOrdersBefore.length} orders released`).toBe(inhabitantOrdersBefore.length)
+                            expect(scaffoldResult.deleted, 'No orders should be deleted (all past deadline)').toBe(0)
                         }
                     }
                 )
@@ -286,7 +297,11 @@ test.describe('Admin Inhabitant API', () => {
                 if (expectCreated) {
                     expect(inhabitantOrdersAfter.length).toBeGreaterThan(0)
                 } else {
-                    expect(inhabitantOrdersAfter.length).toBe(0)
+                    // ADR-015: RELEASED orders remain in DB (user charged), no BOOKED orders remain
+                    const releasedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.RELEASED)
+                    expect(releasedOrdersAfter.length, 'All orders should be released').toBe(inhabitantOrdersBefore.length)
+                    const bookedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.BOOKED)
+                    expect(bookedOrdersAfter.length, 'No BOOKED orders should remain').toBe(0)
                 }
             })
         })

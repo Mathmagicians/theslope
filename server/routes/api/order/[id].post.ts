@@ -1,5 +1,6 @@
 import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {fetchOrder, updateOrder, deleteOrder} from "~~/server/data/financesRepository"
+import {fetchSeason} from "~~/server/data/prismaRepository"
 import type {OrderDetail} from "~/composables/useBookingValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
     const {DinnerModeSchema, OrderAuditActionSchema} = useBookingValidation()
-    const {getOrderCancellationAction} = useSeason()
+    const {deadlinesForSeason} = useSeason()
     const DinnerMode = DinnerModeSchema.enum
     const OrderAuditAction = OrderAuditActionSchema.enum
     const LOG = '🎟️ > ORDER > [POST]'
@@ -67,6 +68,13 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         if (!existingOrder) {
             throw createError({statusCode: 404, message: `Order ${id} not found`})
         }
+
+        // Get season for deadline calculation
+        const season = await fetchSeason(d1Client, existingOrder.dinnerEvent.seasonId!)
+        if (!season) {
+            throw createError({statusCode: 404, message: `Season not found for order ${id}`})
+        }
+        const {getOrderCancellationAction} = deadlinesForSeason(season)
 
         const isCancellation = body.dinnerMode === DinnerMode.NONE
 

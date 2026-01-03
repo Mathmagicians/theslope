@@ -73,13 +73,13 @@ describe('ChefDinnerCard', () => {
     })
 
     describe('Deadline badges via DinnerDeadlineBadges', () => {
-        it('should show Menu and Tilmelding labels', async () => {
+        it('should show Menu and Framelding labels', async () => {
             const dinnerEvent = createDinnerEvent()
             const wrapper = await mountCard({ dinnerEvent })
 
             // DinnerDeadlineBadges always shows these labels in standalone mode
             expect(wrapper.text()).toContain('Menu')
-            expect(wrapper.text()).toContain('Tilmelding')
+            expect(wrapper.text()).toContain('Framelding')
         })
 
         it('should show on-track badge for far future dinner', async () => {

@@ -1,37 +1,76 @@
-# Ticket Swap Feature - Remaining Work
+# Ticket Claim Feature - Remaining Work
 
-Core booking is complete (Order CRUD, audit trail, scaffolding). This documents the **swap/marketplace** feature.
+Core booking is complete (Order CRUD, audit trail, scaffolding). This documents the **claim** feature for released tickets.
 
 ## What's Done
 
-- Order model with states: BOOKED, RELEASED, CLOSED
-- OrderHistory with actions: USER_BOOKED, USER_CANCELLED, ADMIN_DELETED, SYSTEM_SCAFFOLD, SYSTEM_PRUNED, BULK_IMPORT
-- Order CRUD endpoints, audit entries, denormalized fields for cancellation tracking
-- RELEASED state used in scaffolding and closeOrders
+- Order states: BOOKED, RELEASED, CLOSED, CANCELLED
+- Order timestamps: `releasedAt` set atomically on RELEASE transition (enables FIFO claim queue)
+- `[id].post.ts` handles release: dinnerMode → NONE after deadline → state RELEASED, USER_CANCELLED audit
+- OrderHistory denormalized: inhabitantId, dinnerEventId, seasonId
+- DEADLINE_LABELS centralized in useBooking()
+
+## Analysis Summary
+
+### Release Already Works
+`[id].post.ts` + `getOrderCancellationAction()` already handles release correctly:
+- Before deadline: DELETE order (USER_CANCELLED)
+- After deadline: UPDATE state → RELEASED (USER_CANCELLED)
+
+USER_CANCELLED covers both cases - same user intent. Distinguish by `orderId` null check in history.
+
+### `releasedAt` Sufficient for Timing
+Set in `updateOrdersToState()` when transitioning to RELEASED. Enables:
+- FIFO ordering: `ORDER BY releasedAt ASC`
+- No OrderHistory extension needed for timing
+
+### Provenance via OrderSnapshotSchema
+Extend auditData JSON (no schema migration) with:
+- `inhabitantName` - "Anna"
+- `householdShortname` - "AR_1"
+- `householdId` - for filtering
 
 ## Remaining Work
 
-### 1. Schema Changes
+### 1. Authorization Fix
+`[id].post.ts` missing `requireHouseholdAccess` - add it.
 
-Add to `OrderAuditAction` enum:
+### 2. Extend OrderSnapshotSchema
+```typescript
+OrderSnapshotSchema.extend({
+    inhabitantName: z.string(),
+    householdShortname: z.string(),
+    householdId: z.number()
+})
+```
+Update `createOrderAuditData` to include these from fetched order relations.
+
+### 3. Add USER_CLAIMED Audit Action
 ```prisma
-USER_RELEASED   // User released ticket to marketplace
-USER_CLAIMED    // User claimed released ticket
+USER_CLAIMED  // User claimed released ticket from another household
 ```
 
-### 2. Endpoints
+### 4. Query Endpoint Enhancement
+Extend existing `/api/order` with state filter:
+```
+GET /api/order?state=RELEASED&dinnerEventId=X
+```
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/order/[id]/release` | Owner releases ticket → RELEASED state, audit USER_RELEASED |
-| POST | `/api/order/swap-order` | Claim released ticket → new owner, audit USER_CLAIMED |
-| GET | `/api/order/available?dinnerEventId=X` | List RELEASED tickets for event |
+### 5. Claim Endpoint
+```
+POST /api/order/[id]/claim
+Body: { inhabitantId: number }
+```
+- Validate: order state = RELEASED, inhabitant belongs to user's household
+- Update: inhabitantId, bookedByUserId, state → BOOKED
+- Audit: USER_CLAIMED with original household in snapshot
 
-### 3. Business Rules
+## Business Rules
 
-**Release:** Only original owner, only after cancellation deadline, state → RELEASED
-**Claim:** Any user, assigns to their household inhabitant, price unchanged, bookedByUserId changes
-**Liability:** Unclaimed RELEASED tickets → original owner still pays
+**Release:** Anyone from household, only after framelding deadline
+**Claim:** Anyone, assigns to their household inhabitant, original price preserved
+**Liability:** Unclaimed RELEASED → original household pays
+**FIFO:** First released = first in claim queue (`ORDER BY releasedAt ASC`)
 
 ---
 

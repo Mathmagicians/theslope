@@ -63,11 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
-const {ICONS} = useTheSlopeDesignSystem()
-
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
+const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
 const season = computed(() => {
@@ -189,13 +185,13 @@ const showButton = computed(() => {
     :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
-      <UFormField :hint="getIsMd ? (season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv') : undefined">
+      <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
         <UButton
           :data-testid="currentButton.name"
           :color="currentButton.color"
           :leading-icon="currentButton.leadingIcon"
           :trailing-icon="currentButton.trailingIcon"
-          :size="getIsMd ? 'md' : 'sm'"
+          :size="SIZES.small"
           :loading="isActivatingSeason"
           :disabled="isActivatingSeason"
           @click="currentButton.action"

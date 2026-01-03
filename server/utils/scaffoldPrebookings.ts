@@ -42,7 +42,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch} = useSeason()
-    const {OrderAuditActionSchema, chunkIds} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderStateSchema, chunkIds} = useBookingValidation()
 
     // Resolve season ID - use provided or fall back to active season
     const effectiveSeasonId = options.seasonId ?? await fetchActiveSeasonId(d1Client)
@@ -59,8 +59,7 @@ export async function scaffoldPrebookings(
     }
 
     // Filter to scaffoldable dinner events (within prebooking window)
-    const allDinnerEvents = season.dinnerEvents ?? []
-    const dinnerEvents = getScaffoldableDinnerEvents(allDinnerEvents)
+    const dinnerEvents = getScaffoldableDinnerEvents(season.dinnerEvents ?? [])
     const dinnerEventIds = dinnerEvents.map(e => e.id)
 
     // Fetch households - optionally filtered to single household
@@ -74,8 +73,8 @@ export async function scaffoldPrebookings(
 
     console.info(`${LOG} Processing ${households.length} household(s) for ${dinnerEvents.length} events`)
 
-    // Create scaffolder configured for this season
-    const scaffolder = createHouseholdOrderScaffold(season.ticketPrices, dinnerEvents)
+    // Create scaffolder configured for this season (with filtered dinner events)
+    const scaffolder = createHouseholdOrderScaffold({ ...season, dinnerEvents })
 
     // Process each household and accumulate results
     let totalCreated = 0

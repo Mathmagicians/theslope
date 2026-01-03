@@ -53,12 +53,21 @@ export default defineConfig({
       grep: /Authenticate admin for UI/,
       dependencies: ['setup-api']
     },
-    // API tests only need API auth
+    // API tests - parallel (excludes serial tests like heynabo)
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/.*\.spec\.ts/,
+      testIgnore: /heynabo\.e2e\.spec\.ts/,
       dependencies: ['setup-api'],
+    },
+    // API serial tests (heynabo imports/deletes data) - runs after parallel API tests
+    {
+      name: 'chromium-api-serial',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /heynabo\.e2e\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ['chromium-api'],
     },
     // UI tests need full UI auth
     {

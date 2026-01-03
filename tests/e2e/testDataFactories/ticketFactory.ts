@@ -83,4 +83,11 @@ export class TicketFactory {
             )
         ]
     }
+
+    /**
+     * Get default ticket prices without IDs (for create scenarios in reconciliation tests)
+     */
+    static readonly defaultTicketPricesWithoutIds = (overrides?: Parameters<typeof TicketFactory.defaultTicketPrices>[0]) => {
+        return TicketFactory.defaultTicketPrices(overrides).map(({ id: _, ...rest }) => rest)
+    }
 }
