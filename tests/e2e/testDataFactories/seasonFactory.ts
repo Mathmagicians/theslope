@@ -63,6 +63,35 @@ export class SeasonFactory {
         return new Date(year, randomMonth, 1)
     }
 
+    /**
+     * Get the next occurrence of a specific weekday from today
+     * @param targetDay - Day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+     * @returns Date of next occurrence at midnight (may be today if today is the target day)
+     */
+    static readonly nextWeekday = (targetDay: number): Date => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const currentDay = today.getDay()
+        // Days until target (0 if today is target, otherwise calculate forward)
+        const daysUntil = (targetDay - currentDay + 7) % 7
+        // If today is the target day, we still want "next" occurrence, so add 7 if daysUntil is 0
+        const daysToAdd = daysUntil === 0 ? 7 : daysUntil
+        today.setDate(today.getDate() + daysToAdd)
+        return today
+    }
+
+    /**
+     * Get a Mon-Fri date range starting from the next Monday
+     * Useful for tests needing exactly 3 Mon/Wed/Fri cooking days
+     * @returns { start: nextMonday, end: nextFriday } - 5-day window
+     */
+    static readonly nextMondayToFriday = (): { start: Date, end: Date } => {
+        const monday = this.nextWeekday(1) // Monday = 1
+        const friday = new Date(monday)
+        friday.setDate(monday.getDate() + 4) // Friday is 4 days after Monday
+        return { start: monday, end: friday }
+    }
+
     // Default season data for tests
     // 7-day season starting from TOMORROW with Mon/Wed/Fri cooking days for fast, realistic testing
     // ADR-015: Tomorrow ensures all events are scaffoldable regardless of test execution time

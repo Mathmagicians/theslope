@@ -157,10 +157,12 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         }
 
         // Reconcile users: existing UserDisplay (from DB) vs incoming InhabitantData (from Heynabo)
-        const existingUsers = (await fetchUsers(d1Client)).filter(u => u.Inhabitant !== null)
+        const allUsers = await fetchUsers(d1Client)
+        const linkedUsers = allUsers.filter(u => u.Inhabitant !== null)
+        const allEmails = new Set(allUsers.map(u => u.email))
         const incomingWithUsers = incomingHouseholds.flatMap(h => h.inhabitants || []).filter(i => i.user)
 
-        const userReconciliation = reconcileUsers(existingUsers)(incomingWithUsers)
+        const userReconciliation = reconcileUsers(linkedUsers)(incomingWithUsers)
         console.info(`${LOG} User reconciliation: create=${userReconciliation.create.length}, update=${userReconciliation.update.length}, delete=${userReconciliation.delete.length}, idempotent=${userReconciliation.idempotent.length}`)
 
         let usersCreated = 0
@@ -175,12 +177,25 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         }
 
         // CREATE new users and link to inhabitants
-        if (userReconciliation.create.length > 0) {
-            const createdUsers = await createUsers(d1Client, userReconciliation.create.map(i => i.user!))
+        // Split: truly new (batch create) vs unlinked existing (just re-link)
+        const trulyNewUsers = userReconciliation.create.filter(i => !allEmails.has(i.user!.email))
+        const unlinkedExisting = userReconciliation.create.filter(i => allEmails.has(i.user!.email))
+        console.info(`${LOG} Create split: ${trulyNewUsers.length} new, ${unlinkedExisting.length} unlinked existing`)
+
+        if (trulyNewUsers.length > 0) {
+            const createdUsers = await createUsers(d1Client, trulyNewUsers.map(i => i.user!))
             usersCreated = createdUsers.length
             console.info(`${LOG} Created ${usersCreated} new users`)
+        }
 
-            const userIdByEmail = new Map(createdUsers.map(u => [u.email, u.id]))
+        // Link ALL "create" users (new + unlinked) to their inhabitants
+        if (userReconciliation.create.length > 0) {
+            const userIdByEmail = new Map(allUsers.map(u => [u.email, u.id]))
+            // For newly created, we need to refetch to get their IDs
+            if (trulyNewUsers.length > 0) {
+                const refreshedUsers = await fetchUsers(d1Client)
+                refreshedUsers.forEach(u => userIdByEmail.set(u.email, u.id))
+            }
             const linkPairs = userReconciliation.create.map(i => ({
                 userId: userIdByEmail.get(i.user!.email)!,
                 inhabitantHeynaboId: i.heynaboId
@@ -205,9 +220,9 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         console.info(`${LOG} Users: created=${usersCreated}, deleted=${usersDeleted}, linked=${usersLinked}`)
 
         // 9. Run sanity check to verify no orphan users
-        const allUsers = await fetchUsers(d1Client)
+        const usersForSanityCheck = await fetchUsers(d1Client)
         const { sanityCheck } = useHeynaboValidation()
-        const sanityCheckResult = sanityCheck(allUsers, incomingHouseholds)
+        const sanityCheckResult = sanityCheck(usersForSanityCheck, incomingHouseholds)
 
         if (!sanityCheckResult.passed) {
             console.warn(`${LOG} Sanity check FAILED: ${sanityCheckResult.orphanUsers.length} orphan users found`)

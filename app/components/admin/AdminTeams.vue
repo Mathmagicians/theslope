@@ -583,15 +583,15 @@ v-else
               />
             </template>
 
-            <!-- Expanded row content: Full team card (single expansion) -->
+            <!-- Expanded row content: Full team card (single expansion, selectedSeason guaranteed by showAdminTeams) -->
             <template #expanded>
               <div v-if="expandedTeam?.id" class="p-4 bg-neutral-50 dark:bg-neutral-900">
                 <CookingTeamCard
                     :team-id="expandedTeam.id"
                     :team-number="displayedTeams.findIndex(t => t.id === expandedTeam!.id) + 1"
-                    :season-cooking-days="selectedSeason?.cookingDays"
-                    :season-dates="selectedSeason?.seasonDates"
-                    :holidays="selectedSeason?.holidays"
+                    :season-cooking-days="selectedSeason!.cookingDays"
+                    :season-dates="selectedSeason!.seasonDates"
+                    :holidays="selectedSeason!.holidays"
                     mode="regular"
                 />
               </div>

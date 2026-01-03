@@ -413,13 +413,14 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
 
       <!-- ROW 2: Weekday assignments (left) + Calendar (right) -->
       <div class="flex flex-col md:flex-row gap-2 md:gap-4">
-        <!-- LEFT: Team Affinity (read-only in regular mode) -->
+        <!-- LEFT: Team Affinity (compact in VIEW mode, editable checkboxes in EDIT mode) -->
         <div class="w-full md:w-1/4">
           <WeekDayMapDisplay
             :model-value="affinity"
             :parent-restriction="seasonCookingDays"
             :disabled="!isEditable"
-            label="Holdets madlavningsdage"
+            :compact="!isEditable"
+            :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
             :color="teamColor"
             @update:model-value="(value) => emit('update:affinity', value)"
           />

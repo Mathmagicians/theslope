@@ -535,9 +535,10 @@ test.describe('Season API Tests', () => {
                 })
             }
 
+            // Use nextMondayToFriday() to get exactly 3 Mon/Wed/Fri cooking days within prebooking window
             const seasonData = {
                 ...SeasonFactory.defaultSeason(),
-                seasonDates: {start: new Date(2025, 0, 6), end: new Date(2025, 0, 10)},
+                seasonDates: SeasonFactory.nextMondayToFriday(),
                 cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
                 consecutiveCookingDays: 1
             }
@@ -585,9 +586,10 @@ test.describe('Season API Tests', () => {
         test("POST /season/[id]/assign-team-affinities should work when NO dinner events exist", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
+            // Use nextMondayToFriday() to get exactly 3 Mon/Wed/Fri cooking days within prebooking window
             const seasonData = {
                 ...SeasonFactory.defaultSeason(),
-                seasonDates: {start: new Date(2025, 0, 13), end: new Date(2025, 0, 17)},
+                seasonDates: SeasonFactory.nextMondayToFriday(),
                 cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
                 consecutiveCookingDays: 1
             }
