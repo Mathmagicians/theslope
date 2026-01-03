@@ -7,6 +7,34 @@ import {chunkArray} from '~/utils/batchUtils'
 import type {TransactionCreateData} from '~~/server/data/financesRepository'
 
 // ============================================================================
+// Deadline Labels - Consistent wording across chef and household views
+// ============================================================================
+
+/**
+ * Centralized deadline badge labels for UI consistency.
+ *
+ * Note: "Framelding" (not "Tilmelding") because system auto-signs up via
+ * preferences (ADR-015 scaffolding). Deadline is for CANCELLING, not signing up.
+ */
+export const DEADLINE_LABELS = {
+    MENU: {
+        label: 'Menu',
+        openText: 'Venter på chefkokken',
+        closedText: 'Annonceret'
+    },
+    FRAMELDING: {
+        label: 'Framelding',
+        openText: 'Åben',
+        closedText: 'Lukket'
+    },
+    INDKOB: {
+        label: 'Indkøb',
+        openText: 'Beløb mangler',
+        closedText: 'Bestilt'
+    }
+} as const
+
+// ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)
 // ============================================================================
 

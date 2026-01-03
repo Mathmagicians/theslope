@@ -12,19 +12,25 @@ const {HeynaboImportResponseSchema} = useHeynaboValidation()
  * Heynabo Import E2E Tests
  *
  * Tests the 3-layer reconciliation (Household → Inhabitant → User) with 4 outcomes each:
- * - CREATE: Skip - can't control Heynabo data to have entities we don't have
+ * - CREATE: Tested via initial import (populates DB from Heynabo)
  * - UPDATE: Mutate TheSlope data to differ from Heynabo → verify Heynabo overwrites
  * - IDEMPOTENT: TheSlope-owned fields preserved when Heynabo data unchanged
  * - DELETE: Add entities not in Heynabo → verify deleted
  *
  * Coverage Matrix:
- * | Entity      | IDEMPOTENT              | UPDATE               | DELETE         | CREATE |
- * |-------------|-------------------------|----------------------|----------------|--------|
- * | Household   | pbsId, movedInDate      | name restored        | Fake deleted   | skip   |
- * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted   | skip   |
- * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted | skip   |
+ * | Entity      | IDEMPOTENT              | UPDATE               | DELETE         | CREATE       |
+ * |-------------|-------------------------|----------------------|----------------|--------------|
+ * | Household   | pbsId, movedInDate      | name restored        | Fake deleted   | Initial sync |
+ * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted   | Initial sync |
+ * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted | Initial sync |
  *
- * Test household: heynaboId=2 ("Heynabo!") from seed.sql
+ * Test Flow:
+ * 1. beforeAll: Run initial Heynabo import (CREATE - populates DB from clean state)
+ * 2. beforeAll: Mutate data to test UPDATE/DELETE/IDEMPOTENT
+ * 3. Test 1: Run second import → verify reconciliation works
+ * 4. Test 2: Run third import → verify idempotency (no changes)
+ *
+ * Test household: heynaboId=2 ("Heynabo!") from Heynabo API
  * Inhabitants:
  * - heynaboId=153 (Skraaningen API) - has User with ADMIN+ALLERGYMANAGER
  * - heynaboId=154 (Babyyoda Yoda) - limited role, no user in Heynabo
@@ -40,7 +46,7 @@ const INHABITANTS = {
     BABYYODA: {heynaboId: 154, hasUser: false, name: 'Babyyoda'}
 }
 
-// Test data containers - populated in beforeAll, verified in test
+// Test data containers - populated in beforeAll, verified in tests
 const testData = {
     householdId: 0,
 
@@ -93,17 +99,26 @@ test.describe.serial('Heynabo Integration API', () => {
         const context = await validatedBrowserContext(browser)
         const testSalt = Date.now().toString()
 
-        // Find test household
+        // ========================================================================
+        // STEP 1: Run initial Heynabo import (CREATE - populates DB from Heynabo)
+        // In CI the DB is clean, so we need to import first to get all entities
+        // ========================================================================
+        const initialImport = await context.request.get('/api/admin/heynabo/import')
+        expect(initialImport.status(), 'Initial Heynabo import must succeed').toBe(200)
+
+        // ========================================================================
+        // STEP 2: Find test household (now exists after import)
+        // ========================================================================
         const households = await HouseholdFactory.getAllHouseholds(context)
         const household = households.find(h => h.heynaboId === TEST_HOUSEHOLD_HEYNABO_ID)
-        expect(household, `Test household heynaboId=${TEST_HOUSEHOLD_HEYNABO_ID} must exist`).toBeDefined()
+        expect(household, `Test household heynaboId=${TEST_HOUSEHOLD_HEYNABO_ID} must exist after import`).toBeDefined()
         testData.householdId = household!.id
 
         const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
-        expect(householdDetail).not.toBeNull()
+        expect(householdDetail, 'Household detail must exist').not.toBeNull()
 
         // ========================================================================
-        // HOUSEHOLD SETUP
+        // STEP 3: HOUSEHOLD MUTATIONS (for UPDATE/DELETE/IDEMPOTENT tests)
         // ========================================================================
 
         // IDEMPOTENT: Set unique TheSlope-owned fields
@@ -131,17 +146,17 @@ test.describe.serial('Heynabo Integration API', () => {
         testData.household.fakeId = fakeHousehold.id
 
         // ========================================================================
-        // INHABITANT SETUP
+        // STEP 4: INHABITANT MUTATIONS
         // ========================================================================
 
         // IDEMPOTENT: Record Skraaningen's ID
         const skraaningen = householdDetail!.inhabitants.find(i => i.heynaboId === INHABITANTS.SKRAANINGEN.heynaboId)
-        expect(skraaningen, 'Skraaningen must exist').toBeDefined()
+        expect(skraaningen, 'Skraaningen must exist after import').toBeDefined()
         testData.inhabitant.skraaningenId = skraaningen!.id
 
-        // UPDATE: Mutate Babyyoda's name
+        // UPDATE: Mutate Babyyoda's name (Babyyoda now exists after import)
         const babyyoda = householdDetail!.inhabitants.find(i => i.heynaboId === INHABITANTS.BABYYODA.heynaboId)
-        expect(babyyoda, 'Babyyoda must exist').toBeDefined()
+        expect(babyyoda, 'Babyyoda must exist after import').toBeDefined()
         testData.inhabitant.babyyodaId = babyyoda!.id
         testData.inhabitant.babyyodaMutatedName = `Mutated-Babyyoda-${testSalt}`
         await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {
@@ -155,14 +170,14 @@ test.describe.serial('Heynabo Integration API', () => {
         testData.inhabitant.fakeId = fakeInhabitant.id
 
         // ========================================================================
-        // USER SETUP
+        // STEP 5: USER MUTATIONS
         // ========================================================================
 
         // IDEMPOTENT + UPDATE: Get seed user and mutate phone
         const usersResponse = await context.request.get('/api/admin/users')
         const users: UserDisplay[] = await usersResponse.json()
         const seedUser = users.find(u => u.email === SEED_USER_EMAIL)
-        expect(seedUser, 'Seed user must exist').toBeDefined()
+        expect(seedUser, 'Seed user must exist after import').toBeDefined()
         testData.user.seedUserOriginalPhone = seedUser!.phone || ''
 
         // Mutate phone (Heynabo-owned field)
@@ -190,10 +205,10 @@ test.describe.serial('Heynabo Integration API', () => {
         await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {userId: orphanUser.id})
     })
 
-    test('should sync households from Heynabo', async ({browser}) => {
+    test('should reconcile mutations from Heynabo (UPDATE/DELETE/IDEMPOTENT)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Run import
+        // Run reconciliation import (second import - after mutations)
         const response = await context.request.get('/api/admin/heynabo/import')
         const responseBody = await response.text()
         expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
@@ -293,5 +308,25 @@ test.describe.serial('Heynabo Integration API', () => {
 
         // Sanity check passed
         expect(result.sanityCheck.passed, `Orphans found: ${JSON.stringify(result.sanityCheck.orphanUsers)}`).toBe(true)
+    })
+
+    test('should be idempotent (third import has no changes)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Run idempotency import (third import - no mutations since last import)
+        const response = await context.request.get('/api/admin/heynabo/import')
+        const responseBody = await response.text()
+        expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
+
+        const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
+
+        // IDEMPOTENCY: No changes should occur
+        expect(result.householdsDeleted, 'IDEMPOTENT: No households deleted').toBe(0)
+        expect(result.householdsCreated, 'IDEMPOTENT: No households created').toBe(0)
+        expect(result.inhabitantsDeleted, 'IDEMPOTENT: No inhabitants deleted').toBe(0)
+        expect(result.inhabitantsCreated, 'IDEMPOTENT: No inhabitants created').toBe(0)
+        expect(result.usersDeleted, 'IDEMPOTENT: No users deleted').toBe(0)
+        expect(result.usersCreated, 'IDEMPOTENT: No users created').toBe(0)
+        expect(result.sanityCheck.passed, 'IDEMPOTENT: Sanity check passed').toBe(true)
     })
 })

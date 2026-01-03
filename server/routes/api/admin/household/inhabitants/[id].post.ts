@@ -22,6 +22,7 @@ const noScaffoldResult = (): ScaffoldResult => ({
     seasonId: null,
     created: 0,
     deleted: 0,
+    released: 0,
     unchanged: 0,
     households: 0
 })

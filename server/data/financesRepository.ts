@@ -939,23 +939,32 @@ export async function fetchPendingOrdersOnConsumedDinners(
 }
 
 /**
- * Update orders to CLOSED state with timestamp in batch
+ * Update orders to a target state with appropriate timestamp in batch.
+ * - CLOSED: sets closedAt
+ * - RELEASED: sets releasedAt
  */
-export async function updateOrdersToClosed(
+export async function updateOrdersToState(
     d1Client: D1Database,
-    orderIds: number[]
+    orderIds: number[],
+    targetState: OrderState
 ): Promise<number> {
     if (orderIds.length === 0) return 0
 
     const {OrderStateSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+    const now = new Date()
+
+    // Set appropriate timestamp based on target state
+    const data: { state: OrderState, closedAt?: Date, releasedAt?: Date } = { state: targetState }
+    if (targetState === OrderStateSchema.enum.CLOSED) {
+        data.closedAt = now
+    } else if (targetState === OrderStateSchema.enum.RELEASED) {
+        data.releasedAt = now
+    }
 
     const result = await prisma.order.updateMany({
         where: { id: { in: orderIds } },
-        data: {
-            state: OrderStateSchema.enum.CLOSED,
-            closedAt: new Date()
-        }
+        data
     })
 
     return result.count

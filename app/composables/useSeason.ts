@@ -279,7 +279,9 @@ export const useSeason = () => {
      * @param householdId - Household ID for order tracking
      * @param ticketPrices - Available ticket prices (with ids)
      * @param dinnerEvents - Dinner events to generate orders for
-     * @param excludedKeys - Optional set of "inhabitantId-dinnerEventId" keys to exclude
+     * @param existingOrderKeys - Set of "inhabitantId-dinnerEventId" keys for existing orders
+     *                            (used to generate RELEASED orders only when order exists)
+     * @param excludedKeys - Set of "inhabitantId-dinnerEventId" keys to exclude
      *                       (typically user cancellations that should not be recreated)
      *
      * Note: Inhabitants without dinnerPreferences are skipped (no orders created)
@@ -287,7 +289,8 @@ export const useSeason = () => {
      *
      * @example
      * const cancellations = await fetchUserCancellationKeys(d1, seasonId)
-     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents, cancellations)
+     * const existingKeys = new Set(existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`))
+     * const generateDesired = createPreBookingGenerator(householdId, ticketPrices, dinnerEvents, existingKeys, cancellations)
      * const desired = generateDesired(inhabitants)
      * const result = reconcilePreBookings(existingOrders)(desired)
      */
@@ -295,6 +298,7 @@ export const useSeason = () => {
         householdId: number,
         ticketPrices: TicketPrice[],
         dinnerEvents: DinnerEventDisplay[],
+        existingOrderKeys: Set<string>,
         excludedKeys: Set<string> = new Set()
     ) => {
         // Build lookup: ticketType -> ticketPrice (with id)
@@ -314,11 +318,34 @@ export const useSeason = () => {
                     .map(de => {
                         const weekDay = dateToWeekDay(de.date)
                         const preference = prefs[weekDay]
-                        if (preference === DinnerMode.NONE) return null
 
                         // Skip if user previously cancelled this booking
                         const key = `${inhabitant.id}-${de.id}`
                         if (excludedKeys.has(key)) return null
+
+                        // NONE preference handling based on deadline and existing order
+                        if (preference === DinnerMode.NONE) {
+                            // Before deadline: no order needed (will delete if exists)
+                            if (canModifyOrders(de.date)) return null
+                            // After deadline: release only if order exists (can't charge for non-existent order)
+                            if (!existingOrderKeys.has(key)) return null
+                            // Generate RELEASED order (price for schema validation - existing order has frozen price)
+                            const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
+                            const ticketPrice = ticketPriceByType.get(ticketType)
+                            if (!ticketPrice?.id) {
+                                throw new Error(`No ticket price for type ${ticketType} - cannot release order for ${inhabitant.name}`)
+                            }
+                            return OrderCreateWithPriceSchema.parse({
+                                dinnerEventId: de.id,
+                                inhabitantId: inhabitant.id,
+                                householdId,
+                                bookedByUserId: null,
+                                ticketPriceId: ticketPrice.id,
+                                priceAtBooking: ticketPrice.price,
+                                dinnerMode: DinnerMode.NONE,
+                                state: OrderState.RELEASED
+                            })
+                        }
 
                         // Determine ticket type based on age at dinner date
                         const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
@@ -369,10 +396,14 @@ export const useSeason = () => {
         existingOrders: OrderDisplay[],
         cancelledKeys: Set<string> = new Set()
     ) => {
+        const existingOrderKeys = new Set(
+            existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`)
+        )
         const generator = createPreBookingGenerator(
             household.id,
             ticketPrices,
             dinnerEvents,
+            existingOrderKeys,
             cancelledKeys
         )
         const desiredOrders = generator(household.inhabitants)

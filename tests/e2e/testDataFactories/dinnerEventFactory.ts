@@ -60,6 +60,17 @@ export class DinnerEventFactory {
         updatedAt: this.today
     })
 
+    /**
+     * Create dinner event display at specific days from today
+     * Useful for testing deadline-based logic (before/after cancellation deadline)
+     */
+    static readonly dinnerEventAt = (id: number, daysFromToday: number): DinnerEventDisplay => {
+        const date = new Date()
+        date.setHours(0, 0, 0, 0)
+        date.setDate(date.getDate() + daysFromToday)
+        return { ...this.defaultDinnerEventDisplay(), id, date }
+    }
+
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
         ...this.defaultDinnerEventDisplay(testSalt),
         menuDescription: 'A delicious test menu',

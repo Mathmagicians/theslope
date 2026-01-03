@@ -14,6 +14,9 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
 
+// Shared test constant: days offset for dinners before cancellation deadline
+const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
         const {SeasonSchema, getDefaultSeason} = useSeason()
@@ -752,15 +755,12 @@ describe('createPreBookingGenerator', () => {
     // Standard ticket prices with IDs (using factory)
     const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
 
-    // Dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025) - using factory
-    const eventDates = [new Date(2025, 0, 6), new Date(2025, 0, 8), new Date(2025, 0, 10)]
-    const dinnerEvents = eventDates.map((date, i) => ({
-        ...DinnerEventFactory.defaultDinnerEventDisplay(),
-        id: 101 + i,
-        date,
-        seasonId: 1,
-        cookingTeamId: null
-    }))
+    // Dinner events - far future (before cancellation deadline) so NONE = skip
+    const dinnerEvents = [
+        DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
+        DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
+        DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
+    ]
 
     describe('generator function', () => {
         it('should skip inhabitants with no dinnerPreferences', () => {
@@ -851,8 +851,8 @@ describe('createPreBookingGenerator', () => {
             // User previously cancelled order for inhabitant 1, dinner event 102
             const excludedKeys = new Set(['1-102'])
 
-            // WHEN: Generator with exclusion
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, excludedKeys)
+            // WHEN: Generator with exclusion (no existing orders)
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 2 orders (dinner 101 and 103), not 3
@@ -865,8 +865,8 @@ describe('createPreBookingGenerator', () => {
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
             const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
-            // WHEN: Generator with empty exclusion set
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set())
+            // WHEN: Generator with empty exclusion set (no existing orders)
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), new Set())
             const orders = generator(inhabitants)
 
             // THEN: Should generate all 3 orders
@@ -885,8 +885,8 @@ describe('createPreBookingGenerator', () => {
             // Anna cancelled dinner 101, Bob cancelled dinner 102
             const excludedKeys = new Set(['1-101', '2-102'])
 
-            // WHEN: Generator with exclusions
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, excludedKeys)
+            // WHEN: Generator with exclusions (no existing orders)
+            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 4 orders (Anna: 102,103 + Bob: 101,103)
@@ -960,13 +960,12 @@ describe('createHouseholdOrderScaffold', () => {
     // Use factory for ticket prices with IDs
     const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
 
-    // Use factory for dinner events (Mon Jan 6, Wed Jan 8, Fri Jan 10 2025)
-    const eventDates = [new Date(2025, 0, 6), new Date(2025, 0, 8), new Date(2025, 0, 10)]
-    const dinnerEvents = eventDates.map((date, i) => ({
-        ...DinnerEventFactory.defaultDinnerEventDisplay(),
-        id: 101 + i,
-        date
-    }))
+    // Dinner events - far future (before cancellation deadline) so NONE = skip
+    const dinnerEvents = [
+        DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
+        DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
+        DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
+    ]
 
     // Helper to create test inhabitant with all required fields (using factory pattern)
     const createInhabitant = (id: number, prefs: (typeof DinnerMode)[keyof typeof DinnerMode][]) => ({
@@ -1054,6 +1053,63 @@ describe('createHouseholdOrderScaffold', () => {
 
         expect(result1.create).toHaveLength(3)
         expect(result2.create).toHaveLength(2)
+    })
+
+    // Deadline-based delete vs release behavior
+    const cancellableDaysBefore = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore
+
+    it.each([
+        {
+            desc: 'far future dinner (before deadline) → delete',
+            daysFromToday: cancellableDaysBefore + 10,
+            expected: {delete: 1, update: 0}
+        },
+        {
+            desc: 'tomorrow dinner (after deadline) → update (release)',
+            daysFromToday: 1,
+            expected: {delete: 0, update: 1}
+        },
+        {
+            desc: 'today dinner (after deadline) → update (release)',
+            daysFromToday: 0,
+            expected: {delete: 0, update: 1}
+        }
+    ])('$desc', ({daysFromToday, expected}) => {
+        const dinner = [DinnerEventFactory.dinnerEventAt(201, daysFromToday)]
+        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinner)
+
+        const result = scaffolder(
+            createHousehold(1, [createInhabitant(1, allNone)]),
+            [createOrder(1, 201)],
+            new Set()
+        )
+
+        expect(result.delete).toHaveLength(expected.delete)
+        expect(result.update).toHaveLength(expected.update)
+
+        // Verify release-intent orders have correct state
+        if (expected.update > 0) {
+            result.update.forEach(order => {
+                expect(order.state).toBe('RELEASED')
+                expect(order.dinnerMode).toBe(DinnerMode.NONE)
+            })
+        }
+    })
+
+    it('no RELEASED in create when no existing order (past deadline NONE)', () => {
+        // GIVEN: Past dinner (after deadline) with NONE preference and NO existing order
+        const pastDinner = [DinnerEventFactory.dinnerEventAt(301, -5)]
+        const scaffolder = createHouseholdOrderScaffold(ticketPrices, pastDinner)
+
+        // WHEN: Scaffolding with no existing orders
+        const result = scaffolder(
+            createHousehold(1, [createInhabitant(1, allNone)]),
+            [], // No existing orders
+            new Set()
+        )
+
+        // THEN: Create bucket should be empty - generator skips RELEASED when no existing order
+        expect(result.create).toHaveLength(0)
     })
 })
 

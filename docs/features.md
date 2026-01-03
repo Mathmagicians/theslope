@@ -206,4 +206,4 @@ Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Tak
 
 ---
 
-*Last Updated: December 2025*
+*Last Updated: January 2026*

@@ -400,13 +400,14 @@ export class HouseholdFactory {
         })
 
         const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        const responseBody = await response.text()
+        expect(status, `updateInhabitant failed: ${responseBody}`).toBe(expectedStatus)
 
         if (expectedStatus !== 200) {
             return null
         }
 
-        const raw = await response.json()
+        const raw = JSON.parse(responseBody)
         const parsed = InhabitantUpdateResponseSchema.parse(raw)
 
         if (assertResponse) {

@@ -2,6 +2,7 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
+import type {ScaffoldResult, InhabitantUpdateResponse} from '~/composables/useBookingValidation'
 
 /**
  * Household store - manages household data and API operations

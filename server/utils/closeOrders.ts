@@ -1,5 +1,5 @@
 import type {D1Database} from "@cloudflare/workers-types"
-import {fetchPendingOrdersOnConsumedDinners, updateOrdersToClosed} from "~~/server/data/financesRepository"
+import {fetchPendingOrdersOnConsumedDinners, updateOrdersToState} from "~~/server/data/financesRepository"
 import {useBookingValidation, type CloseOrdersResult} from "~/composables/useBookingValidation"
 
 const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
@@ -15,7 +15,7 @@ const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
  * @returns CloseOrdersResult with count of closed orders
  */
 export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResult> {
-    const {chunkIds} = useBookingValidation()
+    const {chunkIds, OrderStateSchema} = useBookingValidation()
 
     // Fetch all pending orders from repository
     const pendingOrders = await fetchPendingOrdersOnConsumedDinners(d1Client)
@@ -33,7 +33,7 @@ export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResu
     let totalClosed = 0
 
     for (const batch of batches) {
-        const count = await updateOrdersToClosed(d1Client, batch)
+        const count = await updateOrdersToState(d1Client, batch, OrderStateSchema.enum.CLOSED)
         totalClosed += count
     }
 

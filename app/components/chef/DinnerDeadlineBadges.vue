@@ -68,7 +68,7 @@ const { SIZES, URGENCY_TO_BADGE, DEADLINE_BADGES } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
 const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
-const { getDinnerStepState } = useBooking()
+const { getDinnerStepState, DEADLINE_LABELS } = useBooking()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
 // Current step state for this dinner

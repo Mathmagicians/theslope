@@ -57,6 +57,10 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 > **Automatisk opdatering:** Når du ændrer præferencer, opdateres dine fremtidige bookinger automatisk. Ændrer du f.eks. mandag fra "Ingen" til "Spisesal" eller "Takeaway", bliver du automatisk tilmeldt alle kommende mandagsmiddage. Ligeså kan du være fast frameldt på bestemte ugedage, takeaway alle tirsdage, og sen spisning onsdag efter den lange dag på arbejde.
 
+> **Afmeldinger respekteres:** Har du afmeldt en specifik middag (f.eks. mandag den 15.), vil den IKKE blive genskabt når du ændrer præferencer. Dine manuelle afmeldinger bevares altid.
+
+> **Sletning af bookinger:** Ændrer du en dag til "Ingen", slettes dine fremtidige bookinger på den dag automatisk.
+
 1. Gå til **Husstanden** (fanen med hus-ikon)
 2. Find den person du vil redigere
 3. Klik på **blyant-ikonet** (✏️) ud for personen
