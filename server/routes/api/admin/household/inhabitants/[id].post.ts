@@ -24,7 +24,8 @@ const noScaffoldResult = (): ScaffoldResult => ({
     deleted: 0,
     released: 0,
     unchanged: 0,
-    households: 0
+    households: 0,
+    errored: 0
 })
 
 export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (event) => {

@@ -23,6 +23,9 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     try {
         console.info(`🏠 > HOUSEHOLD > [PUT] Creating household ${householdData.name}`)
         const savedHousehold = await saveHousehold(d1Client, householdData)
+        if (!savedHousehold) {
+            return throwH3Error('🏠 > HOUSEHOLD > [PUT] Failed to fetch household after save', new Error('Unexpected null'))
+        }
         console.info(`🏠 > HOUSEHOLD > [PUT] Successfully created household ${savedHousehold.name}`)
         setResponseStatus(event, 201)
         return savedHousehold

@@ -287,7 +287,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number): Promise<InhabitantDetail> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number, skipRefetch?: boolean): Promise<InhabitantDetail | null> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeInhabitantDetail} = useCoreValidation()
@@ -323,10 +323,19 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
                 }
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
+            // skipRefetch: return null for batch operations (ADR-014)
+            if (skipRefetch) {
+                return null
+            }
             // ADR-010: Deserialize to domain type before returning
             return deserializeInhabitantDetail(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
+        }
+
+        // skipRefetch: return null for batch operations (ADR-014)
+        if (skipRefetch) {
+            return null
         }
 
         // ADR-010: Deserialize to domain type before returning
@@ -595,7 +604,7 @@ export async function updateInhabitantPreferencesBulk(
 
 /*** HOUSEHOLDS ***/
 
-export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<HouseholdDetail> {
+export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate, skipRefetch?: boolean): Promise<HouseholdDetail | null> {
     console.info(`🏠 > HOUSEHOLD > [SAVE] Saving household at ${household.address} (Heynabo ID: ${household.heynaboId})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -621,6 +630,11 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
                 household.inhabitants.map((inhabitant) => saveInhabitant(d1Client, inhabitant, newHousehold.id))
             )
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
+        }
+
+        // skipRefetch: return null for batch operations (ADR-014)
+        if (skipRefetch) {
+            return null
         }
 
         // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations

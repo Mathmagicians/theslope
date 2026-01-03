@@ -26,7 +26,8 @@ const skippedResult = (): ScaffoldResult => ({
     deleted: 0,
     released: 0,
     unchanged: 0,
-    households: 0
+    households: 0,
+    errored: 0
 })
 
 /**
@@ -82,6 +83,7 @@ export async function scaffoldPrebookings(
     let totalReleased = 0
     let totalUnchanged = 0
     let processedHouseholds = 0
+    let erroredHouseholds = 0
 
     for (const household of households) {
         try {
@@ -126,6 +128,7 @@ export async function scaffoldPrebookings(
         } catch (error) {
             // Household may have been deleted during scaffolding (FK constraint error)
             // Log and continue with remaining households - don't fail entire operation
+            erroredHouseholds++
             const h3e = eventHandlerHelper.h3eFromCatch(
                 `${LOG} Skipping household ${household.id} (${household.name})`,
                 error
@@ -134,7 +137,7 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, unchanged=${totalUnchanged}, households=${processedHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, unchanged=${totalUnchanged}, households=${processedHouseholds}, errored=${erroredHouseholds}`)
 
     return {
         seasonId: effectiveSeasonId,
@@ -142,6 +145,7 @@ export async function scaffoldPrebookings(
         deleted: totalDeleted,
         released: totalReleased,
         unchanged: totalUnchanged,
-        households: processedHouseholds
+        households: processedHouseholds,
+        errored: erroredHouseholds
     }
 }

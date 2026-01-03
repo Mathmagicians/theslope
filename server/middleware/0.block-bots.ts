@@ -50,7 +50,10 @@ const BOT_PATTERNS = [
   // Common bot paths
   'robots.txt.php',
   'sitemap.xml.php',
-  '/apps'
+  '/apps',
+
+  // iOS icon probes
+  'apple-touch'
 ]
 
 export default defineEventHandler((event) => {

@@ -17,7 +17,7 @@ mockNuxtImport('usePlanStore', () => () => ({
 
 describe('SeasonStatusDisplay', () => {
 
-    const mount = (props: Record<string, unknown>) => mountSuspended(SeasonStatusDisplay, {props})
+    const mount = (props: {seasonId: number | null, showActivationButton?: boolean}) => mountSuspended(SeasonStatusDisplay, {props})
 
     describe('status display', () => {
         it.each([

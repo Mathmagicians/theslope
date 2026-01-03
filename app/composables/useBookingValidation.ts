@@ -574,9 +574,10 @@ export const useBookingValidation = () => {
         seasonId: z.number().int().positive().nullable(),
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
-        released: z.number().int().nonnegative(),
+        released: z.number().int().nonnegative().default(0),
         unchanged: z.number().int().nonnegative(),
-        households: z.number().int().nonnegative()
+        households: z.number().int().nonnegative(),
+        errored: z.number().int().nonnegative().default(0)
     })
 
     /**

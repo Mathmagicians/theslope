@@ -157,11 +157,16 @@ export const useBooking = () => {
      * Build OrderSnapshot from OrderDetail + household shortName.
      * Used by repository to create audit data with provenance fields.
      *
-     * @param order - OrderDetail with inhabitant (name, lastName, householdId, allergies)
+     * @param order - Order with inhabitant (name, lastName, householdId, optional allergies)
      * @param householdShortname - Household shortName (fetched separately, not on OrderDetail)
      */
+    type OrderForSnapshot = Pick<OrderDetail, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state'> & {
+        inhabitant: Pick<OrderDetail['inhabitant'], 'name' | 'lastName' | 'householdId'> & {
+            allergies?: OrderDetail['inhabitant']['allergies']  // Optional - captured at CREATE, omitted at UPDATE/DELETE
+        }
+    }
     const buildOrderSnapshot = (
-        order: Pick<OrderDetail, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state' | 'inhabitant'>,
+        order: OrderForSnapshot,
         householdShortname: string
     ): OrderSnapshot => OrderSnapshotSchema.parse({
         // From OrderDisplaySchema

@@ -21,6 +21,8 @@ import type {
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
+import {useHousehold} from '~/composables/useHousehold'
+import {getHouseholdShortName} from '~/composables/useCoreValidation'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
 import {
@@ -365,18 +367,25 @@ export async function updateOrder(
     const LOG = '🎟️ > ORDER > [UPDATE]'
     console.info(`${LOG} Updating order ${id}`, updates, `action=${audit.action}`)
     const {OrderDetailSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
     const prisma = await getPrismaClientConnection(d1Client)
 
     // Validate audit action
     const validatedAction = OrderAuditActionSchema.parse(audit.action)
 
     try {
-        // Fetch existing order for audit data
+        // Fetch existing order for audit data (includes household for provenance)
         const existingOrder = await prisma.order.findUnique({
             where: {id},
             include: {
                 ticketPrice: {select: {ticketType: true}},
-                dinnerEvent: {select: {seasonId: true}}
+                dinnerEvent: {select: {seasonId: true}},
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: {select: {address: true}}
+                    }
+                }
             }
         })
 
@@ -408,8 +417,7 @@ export async function updateOrder(
             }
         })
 
-        // Create audit entry (ADR-011)
-        // Construct snapshot with updated values for audit trail
+        // Create audit entry (ADR-011) with provenance fields (allergies omitted - captured at CREATE)
         const auditSnapshot = {
             id: existingOrder.id,
             inhabitantId: existingOrder.inhabitantId,
@@ -417,7 +425,11 @@ export async function updateOrder(
             ticketPriceId: existingOrder.ticketPriceId,
             priceAtBooking: existingOrder.priceAtBooking,
             dinnerMode: updates.dinnerMode ?? existingOrder.dinnerMode,
-            state: updates.state ?? existingOrder.state
+            state: updates.state ?? existingOrder.state,
+            // Provenance fields
+            inhabitantNameWithInitials: formatNameWithInitials(existingOrder.inhabitant),
+            householdShortname: getHouseholdShortName(existingOrder.inhabitant.household.address),
+            householdId: existingOrder.inhabitant.householdId
         }
         await prisma.orderHistory.create({
             data: {
@@ -470,6 +482,7 @@ export async function deleteOrder(
     if (ids.length === 0) return []
 
     const {OrderDisplaySchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
     const action = performedByUserId
         ? OrderAuditActionSchema.enum.USER_CANCELLED
         : OrderAuditActionSchema.enum.SYSTEM_DELETED
@@ -477,12 +490,18 @@ export async function deleteOrder(
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // 1. Fetch orders with relations to get denormalized fields and seasonId
+        // 1. Fetch orders with relations for audit data (includes inhabitant/household for provenance)
         const ordersToDelete = await prisma.order.findMany({
             where: { id: { in: ids } },
             include: {
                 ticketPrice: { select: { ticketType: true } },
-                dinnerEvent: { select: { seasonId: true } }
+                dinnerEvent: { select: { seasonId: true } },
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: { select: { address: true } }
+                    }
+                }
             }
         })
 
@@ -491,7 +510,7 @@ export async function deleteOrder(
             return []
         }
 
-        // 2. Create audit entries with denormalized fields BEFORE deletion
+        // 2. Create audit entries with provenance fields BEFORE deletion (allergies omitted - captured at CREATE)
         await prisma.orderHistory.createMany({
             data: ordersToDelete.map(order => ({
                 orderId: order.id,
@@ -500,7 +519,19 @@ export async function deleteOrder(
                 inhabitantId: order.inhabitantId,
                 dinnerEventId: order.dinnerEventId,
                 seasonId: order.dinnerEvent?.seasonId ?? null,
-                auditData: createOrderAuditData(order)
+                auditData: createOrderAuditData({
+                    id: order.id,
+                    inhabitantId: order.inhabitantId,
+                    dinnerEventId: order.dinnerEventId,
+                    ticketPriceId: order.ticketPriceId,
+                    priceAtBooking: order.priceAtBooking,
+                    dinnerMode: order.dinnerMode,
+                    state: order.state,
+                    // Provenance fields
+                    inhabitantNameWithInitials: formatNameWithInitials(order.inhabitant),
+                    householdShortname: getHouseholdShortName(order.inhabitant.household.address),
+                    householdId: order.inhabitant.householdId
+                })
             }))
         })
 
@@ -513,7 +544,7 @@ export async function deleteOrder(
 
         // Transform Prisma types to domain types and validate (ADR-010)
         return ordersToDelete.map(order => {
-            const {ticketPrice, ...rest} = order
+            const {ticketPrice, inhabitant, ...rest} = order
             return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
         })
     } catch (error) {

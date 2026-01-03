@@ -18,6 +18,7 @@
  */
 import type {D1Database} from '@cloudflare/workers-types'
 import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate} from '~/composables/useHeynabo'
@@ -97,7 +98,8 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             )
             const updateChunks = chunkHouseholds(mergedHouseholds)
             for (const chunk of updateChunks) {
-                await Promise.all(chunk.map(h => saveHousehold(d1Client, h)))
+                // Strip inhabitants to avoid cascade, skipRefetch for batch (ADR-014)
+                await Promise.all(chunk.map(h => saveHousehold(d1Client, { ...h, inhabitants: undefined }, true)))
             }
             console.info(`${LOG} Updated ${householdReconciliation.update.length} households`)
         }
@@ -148,7 +150,8 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
                 const chunkInhabitants = chunkArray<typeof inhabitantReconciliation.update[0]>(CHUNK_SIZE)
                 const inhabitantChunks = chunkInhabitants(inhabitantReconciliation.update)
                 for (const chunk of inhabitantChunks) {
-                    await Promise.all(chunk.map(i => saveInhabitant(d1Client, i, existingHousehold.id)))
+                    // Strip user to avoid cascade, skipRefetch for batch (ADR-014)
+                    await Promise.all(chunk.map(i => saveInhabitant(d1Client, { ...i, user: undefined }, existingHousehold.id, true)))
                 }
             }
         }
@@ -231,15 +234,12 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         console.info(`${LOG} Heynabo import complete (jobRunId=${jobRun.id})`)
         return result
     } catch (error) {
-        // Complete job run with failure
-        await completeJobRun(
-            d1Client,
-            jobRun.id,
-            JobStatus.FAILED,
-            undefined,
-            error instanceof Error ? error.message : 'Unknown error'
-        )
-        throw error
+        // Try to record failure, fallback to logging if DB is exhausted
+        const h3e = eventHandlerHelper.h3eFromCatch(`${LOG} Import failed`, error)
+        await completeJobRun(d1Client, jobRun.id, JobStatus.FAILED, undefined, h3e.message)
+            .catch(() => console.error(`${LOG} Could not record failure for job ${jobRun.id}: ${h3e.message}`))
+        eventHandlerHelper.logH3Error(h3e, error)
+        throw h3e
     }
 }
 

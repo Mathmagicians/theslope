@@ -27,7 +27,10 @@ Selvom du er på et madhold, skal du aktivt **melde dig som chefkok** for de mid
 
 1. Gå til [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner)
 2. Find en middag hvor dit hold er tildelt
-3. Klik på **Bliv chefkok**
+3. Klik på **Chef** under "Hvem laver maden?"
+
+![Bliv chefkok fra kalenderen](screenshots/dinner/dinner-calendar.png)
+*Klik på Chef-knappen for at tage tjansen som chefkok*
 
 ### Fra chefsiden
 

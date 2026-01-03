@@ -783,7 +783,7 @@ describe('createPreBookingGenerator', () => {
     const TicketType = TicketTypeSchema.enum
 
     // Reference date for age calculations (first dinner in test season)
-    const firstDinnerDate = testSeasonWithFutureDinners.dinnerEvents![0].date
+    const firstDinnerDate = testSeasonWithFutureDinners.dinnerEvents![0]!.date
 
     // Helper to create preferences
     const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>

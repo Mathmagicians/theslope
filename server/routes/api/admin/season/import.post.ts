@@ -2,7 +2,9 @@ import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {z} from 'zod'
 import {isSameDay} from 'date-fns'
 import {parseCalendarCSV, parseTeamsCSV} from '~~/server/utils/csvImport'
-import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, fetchTeams, createTeamAssignment} from '~~/server/data/prismaRepository'
+import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, fetchTeams, createTeamAssignment, updateTeam} from '~~/server/data/prismaRepository'
+import {dateToWeekDay} from '~/utils/season'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {pruneAndCreate} from '~/utils/batchUtils'
 import {saveDinnerEvents, assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
@@ -256,6 +258,24 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         }
 
         console.info(`${LOG} Assigned ${dinnerTeamAssignments} dinner events to teams`)
+
+        // Step 8: Derive team affinities from calendar mapping (which weekdays each team cooks)
+        const {createDefaultWeekdayMap} = useWeekDayMapValidation()
+        let affinitiesUpdated = 0
+
+        for (const [teamNum, dates] of parsedCalendar.teamDateMapping) {
+            const teamId = teamNumberToId.get(teamNum)
+            if (!teamId) continue
+
+            const affinity = createDefaultWeekdayMap(false)
+            for (const date of dates) {
+                affinity[dateToWeekDay(date)] = true
+            }
+
+            await updateTeam(d1Client, teamId, {id: teamId, affinity})
+            affinitiesUpdated++
+        }
+        console.info(`${LOG} Derived affinities for ${affinitiesUpdated} teams from calendar`)
 
         // Build and validate response through schema (ADR-001)
         const response = SeasonImportResponseSchema.parse({
