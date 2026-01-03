@@ -14,9 +14,9 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 
 1. **Du har en Heynabo-konto** - Login bruger din Heynabo email og password
 2. **Dine børn er tilføjet med fødselsdato** - Vigtigt! Billetprisen beregnes ud fra alder:
-   - 👶 **Baby** (0-2 år) - gratis
-   - 🧒 **Barn** (3-12 år) - reduceret pris
-   - 🧑 **Voksen** (13+ år) - fuld pris
+   - 👶 **Baby** (0-1 år) - gratis
+   - 🧒 **Barn** (2-11 år) - reduceret pris
+   - 🧑 **Voksen** (12+ år) - fuld pris
 
 > **Mangler dine børn i Heynabo?** Tilføj dem der først - så synkroniseres de automatisk til Skrånerappen.
 
@@ -26,7 +26,7 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 
 ### Sådan logger du ind
 
-1. Gå til [theslope.dk](https://theslope.dk) (eller din lokale adresse)
+1. Gå til [skraaningen.dk](https://www.skraaningen.dk)
 2. Klik på **Log ind** i øverste højre hjørne
 3. Brug dit Heynabo brugernavn og password
 4. Du bliver sendt til din dashboard-side
@@ -181,4 +181,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: December 2025*
+*Sidst opdateret: Januar 2026*

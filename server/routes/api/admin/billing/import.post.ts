@@ -130,7 +130,7 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
 
         // Audit context for batch import
         const auditContext: AuditContext = {
-            action: 'BULK_IMPORT',
+            action: 'SYSTEM_CREATED',
             performedByUserId: null,
             source: 'csv_billing'
         }

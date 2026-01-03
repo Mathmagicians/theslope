@@ -181,10 +181,11 @@ export class OrderFactory {
   })
 
   /**
-   * OrderSnapshot - for audit data (derived from OrderDisplaySchema)
-   * No salting needed - all fields are numeric IDs or enums
+   * OrderSnapshot - for audit data (derived from OrderDisplaySchema + provenance)
+   * Provenance fields enable "🔄 fra AR_1" display on claimed tickets
    */
   static readonly defaultOrderSnapshot = (overrides?: Partial<OrderSnapshot>): OrderSnapshot => ({
+    // From OrderDisplaySchema
     id: 1,
     inhabitantId: 10,
     dinnerEventId: 5,
@@ -192,6 +193,11 @@ export class OrderFactory {
     priceAtBooking: 4500,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    // Provenance fields (pre-formatted for immutable audit trail)
+    inhabitantNameWithInitials: 'Daisy D.',
+    householdShortname: 'AR_1',
+    householdId: 1,
+    allergies: [],
     ...overrides
   })
 
@@ -210,7 +216,7 @@ export class OrderFactory {
   })
 
   static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
-    action: 'BULK_IMPORT',
+    action: 'SYSTEM_CREATED',
     performedByUserId: 1,
     source: 'csv_billing',
     ...overrides

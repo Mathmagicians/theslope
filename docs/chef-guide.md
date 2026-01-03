@@ -10,11 +10,30 @@ Denne guide er til dig, der er chefkok på et madhold. Her finder du alt om menu
 
 | Opgave | Hvor |
 |--------|------|
+| Meld dig som chefkok | `/dinner` eller `/chef` |
 | Se mine madlavningsdage | `/chef` |
 | Planlæg menu | `/chef/dinner/[id]` |
 | Annoncér menu | `/chef/dinner/[id]` → Annoncér |
 | Se allergier | `/chef/dinner/[id]` → Allergier |
 | Se tilmeldinger | `/chef/dinner/[id]` → Tilmeldinger |
+
+---
+
+## Når du skal være chefkok for en fællesspisning
+
+Selvom du er på et madhold, skal du aktivt **melde dig som chefkok** for de middage, du vil stå for. Der er 2 måder at gøre det på:
+
+### Fra middagskalenderen
+
+1. Gå til [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner)
+2. Find en middag hvor dit hold er tildelt
+3. Klik på **Bliv chefkok**
+
+### Fra chefsiden
+
+1. Gå til [skraaningen.dk/chef](https://www.skraaningen.dk/chef)
+2. Find dit madhold i oversigten
+3. Klik på **Bliv chefkok** for de dage du vil stå for
 
 ---
 
@@ -101,4 +120,4 @@ Afbud efter deadline vises i tilmeldingsoversigten. Beboeren betaler stadig for 
 
 ---
 
-*Sidst opdateret: December 2025*
+*Sidst opdateret: Januar 2026*

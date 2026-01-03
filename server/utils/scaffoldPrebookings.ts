@@ -103,7 +103,7 @@ export async function scaffoldPrebookings(
             // Create new orders
             for (const batch of chunkOrderBatch(result.create)) {
                 await createOrders(d1Client, household.id, batch, {
-                    action: OrderAuditActionSchema.enum.SYSTEM_SCAFFOLD,
+                    action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
                     performedByUserId: null,
                     source: options.householdId ? 'preference-update' : 'scaffold-prebookings'
                 })

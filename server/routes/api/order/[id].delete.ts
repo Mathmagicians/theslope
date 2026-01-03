@@ -16,7 +16,7 @@ const idSchema = z.object({
  *
  * Uses authenticated user's ID for audit trail:
  * - Creates USER_CANCELLED audit entry (respected by scaffolder - won't recreate)
- * - If no session, creates ADMIN_DELETED entry (scaffolder may recreate)
+ * - If no session, creates SYSTEM_DELETED entry (may be re-created by scaffolder)
  */
 export default defineEventHandler(async (event):Promise<OrderDisplay> => {
     const {cloudflare} = event.context

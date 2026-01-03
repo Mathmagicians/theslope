@@ -74,7 +74,7 @@ export const OrderStateSchema = z.enum(['BOOKED','RELEASED','CANCELLED','CLOSED'
 
 export type OrderStateType = `${z.infer<typeof OrderStateSchema>}`
 
-export const OrderAuditActionSchema = z.enum(['USER_BOOKED','USER_CANCELLED','ADMIN_DELETED','SYSTEM_SCAFFOLD','SYSTEM_PRUNED','BULK_IMPORT']);
+export const OrderAuditActionSchema = z.enum(['USER_BOOKED','USER_CANCELLED','USER_CLAIMED','SYSTEM_CREATED','SYSTEM_DELETED']);
 
 export type OrderAuditActionType = `${z.infer<typeof OrderAuditActionSchema>}`
 

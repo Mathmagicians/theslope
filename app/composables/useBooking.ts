@@ -1,6 +1,7 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
+import {useHousehold} from '~/composables/useHousehold'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
@@ -144,8 +145,39 @@ export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
     // getNextDinnerDate is pre-configured with dinner duration
     const {getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
-    const {DinnerStateSchema} = useBookingValidation()
+    const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
     const DinnerState = DinnerStateSchema.enum
+
+    // ============================================================================
+    // Order Snapshot - Transform function for audit data
+    // ============================================================================
+
+    /**
+     * Build OrderSnapshot from OrderDetail + household shortName.
+     * Used by repository to create audit data with provenance fields.
+     *
+     * @param order - OrderDetail with inhabitant (name, lastName, householdId, allergies)
+     * @param householdShortname - Household shortName (fetched separately, not on OrderDetail)
+     */
+    const buildOrderSnapshot = (
+        order: Pick<OrderDetail, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state' | 'inhabitant'>,
+        householdShortname: string
+    ): OrderSnapshot => OrderSnapshotSchema.parse({
+        // From OrderDisplaySchema
+        id: order.id,
+        inhabitantId: order.inhabitantId,
+        dinnerEventId: order.dinnerEventId,
+        ticketPriceId: order.ticketPriceId,
+        priceAtBooking: order.priceAtBooking,
+        dinnerMode: order.dinnerMode,
+        state: order.state,
+        // Provenance (derived from relations)
+        inhabitantNameWithInitials: formatNameWithInitials(order.inhabitant),
+        householdShortname,
+        householdId: order.inhabitant.householdId,
+        allergies: order.inhabitant.allergies?.map(a => a.allergyType.name) ?? []
+    })
 
     /**
      * Calculate the current step state for a dinner event
@@ -371,6 +403,9 @@ export const useBooking = () => {
     }
 
     return {
+        // Order Snapshot
+        buildOrderSnapshot,
+        // Dinner Step State
         getDinnerStepState,
         getStepConfig,
         getStepDeadline,

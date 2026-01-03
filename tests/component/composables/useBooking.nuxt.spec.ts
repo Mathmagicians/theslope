@@ -309,4 +309,86 @@ describe('useBooking', () => {
             expect(result.userEmailHandle).toBe(expectedEmail)
         })
     })
+
+    describe('buildOrderSnapshot', () => {
+        const {buildOrderSnapshot} = useBooking()
+
+        // Base order data reused across tests
+        const baseOrder = () => ({
+            id: 42,
+            inhabitantId: 10,
+            dinnerEventId: 5,
+            ticketPriceId: 1,
+            priceAtBooking: 5500,
+            dinnerMode: 'DINEIN' as const,
+            state: 'BOOKED' as const,
+            inhabitant: {
+                id: 10,
+                heynaboId: 1001,
+                householdId: 7,
+                name: 'Anna',
+                lastName: 'Berg Larsen',
+                pictureUrl: null,
+                allergies: [
+                    {id: 1, inhabitantId: 10, allergyTypeId: 1, inhabitantComment: null, allergyType: {id: 1, name: 'Peanuts', description: 'Nut allergy', icon: '🥜'}, createdAt: new Date(), updatedAt: new Date()},
+                    {id: 2, inhabitantId: 10, allergyTypeId: 2, inhabitantComment: null, allergyType: {id: 2, name: 'Gluten', description: 'Wheat allergy', icon: '🌾'}, createdAt: new Date(), updatedAt: new Date()}
+                ]
+            }
+        })
+
+        it('builds snapshot with all fields from order', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+
+            expect(snapshot.id).toBe(42)
+            expect(snapshot.inhabitantId).toBe(10)
+            expect(snapshot.dinnerEventId).toBe(5)
+            expect(snapshot.ticketPriceId).toBe(1)
+            expect(snapshot.priceAtBooking).toBe(5500)
+            expect(snapshot.dinnerMode).toBe('DINEIN')
+            expect(snapshot.state).toBe('BOOKED')
+        })
+
+        it('formats inhabitantNameWithInitials using formatNameWithInitials', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            // "Anna Berg Larsen" → "Anna B.L."
+            expect(snapshot.inhabitantNameWithInitials).toBe('Anna B.L.')
+        })
+
+        it('includes householdShortname from parameter', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'S31_2')
+            expect(snapshot.householdShortname).toBe('S31_2')
+        })
+
+        it('includes householdId from inhabitant', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            expect(snapshot.householdId).toBe(7)
+        })
+
+        it('extracts allergy type names from nested allergies', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            expect(snapshot.allergies).toEqual(['Peanuts', 'Gluten'])
+        })
+
+        it('handles empty allergies array', () => {
+            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: []}}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.allergies).toEqual([])
+        })
+
+        it('handles undefined allergies (defaults to empty)', () => {
+            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: undefined}}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.allergies).toEqual([])
+        })
+
+        it.each([
+            {state: 'BOOKED' as const},
+            {state: 'RELEASED' as const},
+            {state: 'CLOSED' as const}
+        ])('preserves order state $state', ({state}) => {
+            const order = {...baseOrder(), state}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.state).toBe(state)
+        })
+    })
 })

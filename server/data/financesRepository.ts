@@ -451,7 +451,7 @@ export async function updateOrder(
  *
  * Audit action is determined by performedByUserId:
  * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
- * - Null: ADMIN_DELETED (admin deleted, may be recreated by scaffolder)
+ * - Null: SYSTEM_DELETED (system/admin deleted, may be re-created by scaffolder)
  *
  * ADR-011: Creates OrderHistory entries with denormalized fields before deletion.
  * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
@@ -472,7 +472,7 @@ export async function deleteOrder(
     const {OrderDisplaySchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
     const action = performedByUserId
         ? OrderAuditActionSchema.enum.USER_CANCELLED
-        : OrderAuditActionSchema.enum.ADMIN_DELETED
+        : OrderAuditActionSchema.enum.SYSTEM_DELETED
     console.info(`${LOG} Deleting ${ids.length} order(s) (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
     const prisma = await getPrismaClientConnection(d1Client)
 

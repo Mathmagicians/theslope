@@ -58,11 +58,10 @@ enum OrderState {
 
 enum OrderAuditAction {
   USER_BOOKED // User manually booked
-  USER_CANCELLED // User cancelled their booking (respect in scaffolding)
-  ADMIN_DELETED // Admin deleted (may recreate)
-  SYSTEM_SCAFFOLD // System auto-created from preferences
-  SYSTEM_PRUNED // System removed (preference changed to NONE)
-  BULK_IMPORT // Imported from billing CSV
+  USER_CANCELLED // User cancelled their booking (respected in scaffolding)
+  USER_CLAIMED // User claimed released ticket from another household
+  SYSTEM_CREATED // System/admin created (scaffolder, bulk import, admin action)
+  SYSTEM_DELETED // System/admin deleted (may be re-created by scaffolder)
 }
 
 enum JobType {

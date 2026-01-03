@@ -320,8 +320,9 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Order snapshot for audit data - captures order state at deletion time
-     * Derived from OrderDisplaySchema, picking only essential fields for audit trail
+     * Order snapshot for audit data - captures order state at deletion/release time
+     * Derived from OrderDisplaySchema, picking essential fields + provenance data
+     * Provenance enables "🔄 fra AR_1" display on claimed tickets
      */
     const OrderSnapshotSchema = OrderDisplaySchema.pick({
         id: true,
@@ -331,13 +332,26 @@ export const useBookingValidation = () => {
         priceAtBooking: true,
         dinnerMode: true,
         state: true
+    }).extend({
+        // Provenance fields for ticket claim feature (pre-formatted for immutable audit trail)
+        inhabitantNameWithInitials: z.string(),           // "Anna B.H." - colloquial format
+        householdShortname: z.string(),                   // "AR_1" - for "fra AR_1" display
+        householdId: z.number().int().positive(),         // For filtering released tickets
+        allergies: z.array(z.string()).optional()         // ["Peanuts", "Gluten"] - captured at CREATE, omitted at UPDATE/DELETE
     })
 
     /**
      * Create serialized audit data for OrderHistory
      */
-    function createOrderAuditData(orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string {
-        return JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
+    const createOrderAuditData = (orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string =>
+        JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
+
+    /**
+     * Deserialize audit data from OrderHistory
+     */
+    const deserializeOrderAuditData = (auditData: string): {orderSnapshot: z.infer<typeof OrderSnapshotSchema>} => {
+        const parsed = JSON.parse(auditData)
+        return {orderSnapshot: OrderSnapshotSchema.parse(parsed.orderSnapshot)}
     }
 
     // ============================================================================
@@ -658,6 +672,7 @@ export const useBookingValidation = () => {
         OrderHistoryCreateSchema,
         OrderSnapshotSchema,
         createOrderAuditData,
+        deserializeOrderAuditData,
 
         // Batch Order Creation
         OrderAuditActionSchema,
