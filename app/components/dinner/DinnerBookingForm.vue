@@ -22,6 +22,7 @@
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {SeasonDeadlines} from '~/composables/useSeason'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows in table
@@ -47,6 +48,7 @@ interface Props {
   orders?: OrderDisplay[]  // Household's orders
   allOrders?: OrderDisplay[]  // All orders for dinner (to find released tickets from others)
   ticketPrices?: TicketPrice[]
+  deadlines: SeasonDeadlines  // Season-configured deadline functions
   formMode?: FormMode
 }
 
@@ -78,8 +80,9 @@ const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage } = u
 // Ticket business logic
 const {getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
 
-// Season business logic for deadline checks
-const {canModifyOrders, canEditDiningMode, isDinnerPast} = useSeason()
+// Season business logic for deadline checks (deadlines from prop, isDinnerPast from composable)
+const {isDinnerPast} = useSeason()
+const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()

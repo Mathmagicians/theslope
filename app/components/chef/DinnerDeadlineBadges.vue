@@ -45,6 +45,7 @@
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
+import type { SeasonDeadlines } from '~/composables/useSeason'
 
 export interface DeadlineBadge {
   step: number           // Which stepper step this badge belongs to
@@ -56,6 +57,7 @@ export interface DeadlineBadge {
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
+  deadlines: SeasonDeadlines
   mode?: 'standalone' | 'stepper'
 }
 
@@ -67,12 +69,12 @@ const props = withDefaults(defineProps<Props>(), {
 const { SIZES, URGENCY_TO_BADGE, DEADLINE_BADGES } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
-const { canModifyOrders, getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
+const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const { getDinnerStepState, DEADLINE_LABELS } = useBooking()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
-// Current step state for this dinner
-const stepState = computed(() => getDinnerStepState(props.dinnerEvent))
+// Current step state for this dinner (uses season-specific deadline from props)
+const stepState = computed(() => getDinnerStepState(props.dinnerEvent, props.deadlines))
 
 // ========== MENU DEADLINE BADGE (Step 1: Annonceret) ==========
 // Green dot if announced (step >= 1), otherwise countdown with urgency color
@@ -82,8 +84,8 @@ const menuBadge = computed((): DeadlineBadge => {
   if (stepState.value >= DinnerStepState.ANNOUNCED) {
     return {
       step: 1,
-      label: 'Menu',
-      value: DEADLINE_BADGES.DONE.emoji,
+      label: DEADLINE_LABELS.ANNOUNCED.label,
+      value: `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.ANNOUNCED.closedText}`,
       color: DEADLINE_BADGES.DONE.color as NuxtUIColor,
       helpText: 'Menuen er annonceret'
     }
@@ -96,38 +98,41 @@ const menuBadge = computed((): DeadlineBadge => {
 
   return {
     step: 1,
-    label: 'Menu',
+    label: DEADLINE_LABELS.ANNOUNCED.label,
     value: `${badge.emoji} om ${countdown.formatted}`,
     color: badge.color as NuxtUIColor,
-    helpText: 'Tid til at annoncere menuen'
+    helpText: DEADLINE_LABELS.ANNOUNCED.openText
   }
 })
 
-// ========== TILMELDING STATUS BADGE (Step 2: Tilmelding lukket) ==========
+// ========== BOOKING CLOSED STATUS BADGE (Step 2) ==========
+// "Framelding" (not "Tilmelding") - system auto-signs up via preferences (ADR-015)
 
-const tilmeldingBadge = computed((): DeadlineBadge => {
-  const isOpen = canModifyOrders(props.dinnerEvent.date)
+const bookingClosedBadge = computed((): DeadlineBadge => {
+  const isOpen = props.deadlines.canModifyOrders(props.dinnerEvent.date)
   return {
     step: 2,
-    label: 'Tilmelding',
-    value: isOpen ? `${DEADLINE_BADGES.DONE.emoji} Åben` : `${DEADLINE_BADGES.ON_TRACK.emoji} Lukket`,
+    label: DEADLINE_LABELS.BOOKING_CLOSED.label,
+    value: isOpen
+      ? `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.BOOKING_CLOSED.openText}`
+      : `${DEADLINE_BADGES.ON_TRACK.emoji} ${DEADLINE_LABELS.BOOKING_CLOSED.closedText}`,
     color: (isOpen ? DEADLINE_BADGES.DONE.color : DEADLINE_BADGES.ON_TRACK.color) as NuxtUIColor,
     helpText: isOpen
-      ? 'Beboerne kan købe billetter'
-      : 'Billetsalget er lukket'
+      ? 'Framelding mulig'
+      : 'Man kan kun frigive billetter'
   }
 })
 
-// ========== INDKØB DEADLINE BADGE (Step 3: Madbestilling klar) ==========
+// ========== GROCERIES DONE BADGE (Step 3) ==========
 // Green dot if groceries done (totalCost > 0), otherwise countdown with urgency color
 
-const indkobBadge = computed((): DeadlineBadge => {
+const groceriesDoneBadge = computed((): DeadlineBadge => {
   // Groceries done when we've reached at least GROCERIES_DONE step
   if (stepState.value >= DinnerStepState.GROCERIES_DONE) {
     return {
       step: 3,
-      label: 'Indkøb',
-      value: DEADLINE_BADGES.DONE.emoji,
+      label: DEADLINE_LABELS.GROCERIES_DONE.label,
+      value: `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.GROCERIES_DONE.closedText}`,
       color: DEADLINE_BADGES.DONE.color as NuxtUIColor,
       helpText: 'Indkøb er registreret'
     }
@@ -140,15 +145,15 @@ const indkobBadge = computed((): DeadlineBadge => {
 
   return {
     step: 3,
-    label: 'Indkøb',
+    label: DEADLINE_LABELS.GROCERIES_DONE.label,
     value: `${badge.emoji} om ${countdown.formatted}`,
     color: badge.color as NuxtUIColor,
-    helpText: 'Tid til at registrere indkøb'
+    helpText: DEADLINE_LABELS.GROCERIES_DONE.openText
   }
 })
 
 // All badges in step order (for standalone mode)
-const badges = computed(() => [menuBadge.value, tilmeldingBadge.value, indkobBadge.value])
+const badges = computed(() => [menuBadge.value, bookingClosedBadge.value, groceriesDoneBadge.value])
 
 // Export badges by step (for stepper mode)
 const getBadgeForStep = (step: number): DeadlineBadge | null => {

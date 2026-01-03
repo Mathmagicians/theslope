@@ -62,6 +62,7 @@ import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {SeasonDeadlines} from '~/composables/useSeason'
 import {toDate} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
 import {getPaginationRowModel} from '@tanstack/vue-table'
@@ -70,6 +71,7 @@ interface Props {
   seasonDates: DateRange
   team: CookingTeamDisplay
   dinnerEvents: DinnerEventDisplay[]
+  deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
 }
@@ -366,6 +368,7 @@ const accordionValue = computed({
             <template #dinner-cell="{ row }">
               <ChefDinnerCard
                 :dinner-event="row.original"
+                :deadlines="deadlines"
                 :selected="row.original.id === selectedDinnerId"
                 :temporal-category="row.original.temporalCategory"
                 @select="emit('select', $event)"

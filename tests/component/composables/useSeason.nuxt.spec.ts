@@ -7,7 +7,6 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
@@ -16,6 +15,19 @@ const {DinnerEventCreateSchema} = useBookingValidation()
 
 // Shared test constant: days offset for dinners before cancellation deadline
 const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+
+// Shared helper: create season with specific dinner events
+const seasonWith = (dinnerEvents: ReturnType<typeof DinnerEventFactory.dinnerEventAt>[]) => ({
+    ...SeasonFactory.defaultSeason(),
+    dinnerEvents
+})
+
+// Shared test season with far future dinner events (before cancellation deadline)
+const testSeasonWithFutureDinners = seasonWith([
+    DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
+    DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
+    DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
+])
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -385,143 +397,171 @@ describe('getHolidaysForSeason', () => {
     })
 })
 
-describe('canModifyOrders', () => {
-    const { canModifyOrders } = useSeason()
+describe('deadlinesForSeason', () => {
+    const { deadlinesForSeason } = useSeason()
 
-    it('should allow modifications when dinner is far in future', () => {
-        // GIVEN: Dinner 15 days from now (at start of day)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dinnerDate = new Date(today)
-        dinnerDate.setDate(today.getDate() + 15)
+    // Default season config (matches app.config.ts defaults)
+    const defaultSeasonConfig = {
+        ticketIsCancellableDaysBefore: 10,
+        diningModeIsEditableMinutesBefore: 60
+    }
 
-        // WHEN: Checking if orders can be modified
-        const result = canModifyOrders(dinnerDate)
+    describe('canModifyOrders', () => {
+        const { canModifyOrders } = deadlinesForSeason(defaultSeasonConfig)
 
-        // THEN: Should allow (15 days > default 10 days deadline)
-        expect(result).toBe(true)
+        it('should allow modifications when dinner is far in future', () => {
+            // GIVEN: Dinner 15 days from now (at start of day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 15)
+
+            // WHEN: Checking if orders can be modified
+            const result = canModifyOrders(dinnerDate)
+
+            // THEN: Should allow (15 days > 10 days deadline)
+            expect(result).toBe(true)
+        })
+
+        it('should not allow modifications when dinner is tomorrow', () => {
+            // GIVEN: Dinner tomorrow (at start of day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 1)
+
+            // WHEN: Checking if orders can be modified
+            const result = canModifyOrders(dinnerDate)
+
+            // THEN: Should not allow (1 day < 10 days deadline)
+            expect(result).toBe(false)
+        })
+
+        it('should not allow modifications when dinner is in the past', () => {
+            // GIVEN: Dinner yesterday (at start of day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() - 1)
+
+            // WHEN: Checking if orders can be modified
+            const result = canModifyOrders(dinnerDate)
+
+            // THEN: Should not allow (past deadline)
+            expect(result).toBe(false)
+        })
+
+        it('should use season-specific deadline value', () => {
+            // GIVEN: Season with short 2-day deadline
+            const shortDeadlineSeason = { ticketIsCancellableDaysBefore: 2, diningModeIsEditableMinutesBefore: 60 }
+            const { canModifyOrders: shortDeadlineCheck } = deadlinesForSeason(shortDeadlineSeason)
+
+            // Dinner 3 days from now
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 3)
+
+            // WHEN: Checking with short deadline
+            const result = shortDeadlineCheck(dinnerDate)
+
+            // THEN: Should allow (3 days > 2 days deadline)
+            expect(result).toBe(true)
+        })
     })
 
-    it('should not allow modifications when dinner is tomorrow', () => {
-        // GIVEN: Dinner tomorrow (at start of day)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dinnerDate = new Date(today)
-        dinnerDate.setDate(today.getDate() + 1)
+    describe('canEditDiningMode', () => {
+        const { canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig)
 
-        // WHEN: Checking if orders can be modified
-        const result = canModifyOrders(dinnerDate)
+        it('should allow editing when dinner is far in future', () => {
+            // GIVEN: Dinner 10 days from now (at start of day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 10)
 
-        // THEN: Should not allow (1 day < default 2 days deadline)
-        expect(result).toBe(false)
+            // WHEN: Checking if dining mode can be edited
+            const result = canEditDiningMode(dinnerDate)
+
+            // THEN: Should allow (well before dinner time)
+            expect(result).toBe(true)
+        })
+
+        it('should allow editing when dinner is tomorrow', () => {
+            // GIVEN: Dinner tomorrow (at start of day)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 1)
+
+            // WHEN: Checking if dining mode can be edited
+            const result = canEditDiningMode(dinnerDate)
+
+            // THEN: Should allow (24 hours > 60 minutes deadline)
+            expect(result).toBe(true)
+        })
+
+        it('should not allow editing when dinner is in the past', () => {
+            // GIVEN: Dinner yesterday
+            const dinnerDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+
+            // WHEN: Checking if dining mode can be edited
+            const result = canEditDiningMode(dinnerDate)
+
+            // THEN: Should not allow (past deadline)
+            expect(result).toBe(false)
+        })
     })
 
-    it('should not allow modifications when dinner is in the past', () => {
-        // GIVEN: Dinner yesterday (at start of day)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dinnerDate = new Date(today)
-        dinnerDate.setDate(today.getDate() - 1)
+    describe('isAnnounceMenuPastDeadline', () => {
+        const { isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
 
-        // WHEN: Checking if orders can be modified
-        const result = canModifyOrders(dinnerDate)
+        it.each([
+            {
+                description: 'far in future (11 days)',
+                daysOffset: 11,
+                hoursOffset: 0,
+                expected: false  // Not past 10-day deadline
+            },
+            {
+                description: 'tomorrow',
+                daysOffset: 1,
+                hoursOffset: 0,
+                expected: true  // Past 10-day deadline
+            },
+            {
+                description: 'same day before dinner time',
+                daysOffset: 0,
+                hoursOffset: 6,
+                expected: true  // Past 10-day deadline
+            },
+            {
+                description: 'in the past (yesterday)',
+                daysOffset: -1,
+                hoursOffset: 0,
+                expected: true  // Past deadline
+            },
+            {
+                description: 'after dinner started (2 hours ago)',
+                daysOffset: 0,
+                hoursOffset: -2,
+                expected: true  // Past deadline
+            }
+        ])('should return $expected for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
+            // GIVEN: Dinner at calculated time
+            const now = new Date()
+            const dinnerDate = new Date(now)
+            dinnerDate.setDate(now.getDate() + daysOffset)
+            dinnerDate.setHours(now.getHours() + hoursOffset, 0, 0, 0)
 
-        // THEN: Should not allow (past deadline)
-        expect(result).toBe(false)
+            // WHEN: Checking if announce menu deadline has passed
+            const result = isAnnounceMenuPastDeadline(dinnerDate)
+
+            // THEN: Returns expected result
+            expect(result).toBe(expected)
+        })
     })
-})
-
-describe('canEditDiningMode', () => {
-    const { canEditDiningMode } = useSeason()
-
-    it('should allow editing when dinner is far in future', () => {
-        // GIVEN: Dinner 10 days from now (at start of day)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dinnerDate = new Date(today)
-        dinnerDate.setDate(today.getDate() + 10)
-
-        // WHEN: Checking if dining mode can be edited
-        const result = canEditDiningMode(dinnerDate)
-
-        // THEN: Should allow (well before dinner time)
-        expect(result).toBe(true)
-    })
-
-    it('should allow editing when dinner is tomorrow', () => {
-        // GIVEN: Dinner tomorrow (at start of day)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const dinnerDate = new Date(today)
-        dinnerDate.setDate(today.getDate() + 1)
-
-        // WHEN: Checking if dining mode can be edited
-        const result = canEditDiningMode(dinnerDate)
-
-        // THEN: Should allow (24 hours > default 60 minutes deadline)
-        expect(result).toBe(true)
-    })
-
-    it('should not allow editing when dinner is in the past', () => {
-        // GIVEN: Dinner yesterday
-        const dinnerDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
-
-        // WHEN: Checking if dining mode can be edited
-        const result = canEditDiningMode(dinnerDate)
-
-        // THEN: Should not allow (past deadline)
-        expect(result).toBe(false)
-    })
-})
-
-describe('isAnnounceMenuPastDeadline', () => {
-    const { isAnnounceMenuPastDeadline } = useSeason()
-
-    it.each([
-        {
-            description: 'far in future (11 days)',
-            daysOffset: 11,
-            hoursOffset: 0,
-            expected: false  // Not past 10-day deadline
-        },
-        {
-            description: 'tomorrow',
-            daysOffset: 1,
-            hoursOffset: 0,
-            expected: true  // Past 10-day deadline
-        },
-        {
-            description: 'same day before dinner time',
-            daysOffset: 0,
-            hoursOffset: 6,
-            expected: true  // Past 10-day deadline
-        },
-        {
-            description: 'in the past (yesterday)',
-            daysOffset: -1,
-            hoursOffset: 0,
-            expected: true  // Past deadline
-        },
-        {
-            description: 'after dinner started (2 hours ago)',
-            daysOffset: 0,
-            hoursOffset: -2,
-            expected: true  // Past deadline
-        }
-    ])('should return $expected for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
-        // GIVEN: Dinner at calculated time
-        const now = new Date()
-        const dinnerDate = new Date(now)
-        dinnerDate.setDate(now.getDate() + daysOffset)
-        dinnerDate.setHours(now.getHours() + hoursOffset, 0, 0, 0)
-
-        // WHEN: Checking if announce menu deadline has passed
-        const result = isAnnounceMenuPastDeadline(dinnerDate)
-
-        // THEN: Returns expected result
-        expect(result).toBe(expected)
-    })
-})
+}) // Close deadlinesForSeason describe
 
 describe('isOnTeam', () => {
     const { isOnTeam } = useSeason()
@@ -752,20 +792,10 @@ describe('createPreBookingGenerator', () => {
         dinnerPreferences
     })
 
-    // Standard ticket prices with IDs (using factory)
-    const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
-
-    // Dinner events - far future (before cancellation deadline) so NONE = skip
-    const dinnerEvents = [
-        DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
-        DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
-        DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
-    ]
-
     describe('generator function', () => {
         it('should skip inhabitants with no dinnerPreferences', () => {
             // GIVEN: Inhabitant with null preferences (using factory helper)
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
             const inhabitants = [createTestInhabitant(1, null, null)]
 
             // WHEN: Generate orders
@@ -776,11 +806,12 @@ describe('createPreBookingGenerator', () => {
         })
 
         it('should throw if no matching ticket price for type', () => {
-            // GIVEN: Ticket prices missing ADULT type
-            const incompleteTicketPrices = [
-                {id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12}
-            ]
-            const generator = createPreBookingGenerator(1, incompleteTicketPrices, dinnerEvents)
+            // GIVEN: Season with ticket prices missing ADULT type
+            const seasonMissingAdult = {
+                ...testSeasonWithFutureDinners,
+                ticketPrices: [{id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12}]
+            }
+            const generator = createPreBookingGenerator(seasonMissingAdult, 1, new Set())
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
             const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
@@ -827,7 +858,7 @@ describe('createPreBookingGenerator', () => {
             }
         ])('should generate $expectedCount orders for $description', ({birthDate, preferences, expectedCount, expectedPrice}) => {
             // GIVEN: Generator and inhabitant (using factory helper)
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
             const prefs = createPreferences(preferences)
             const inhabitants = [createTestInhabitant(1, birthDate, prefs)]
 
@@ -852,7 +883,7 @@ describe('createPreBookingGenerator', () => {
             const excludedKeys = new Set(['1-102'])
 
             // WHEN: Generator with exclusion (no existing orders)
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), excludedKeys)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 2 orders (dinner 101 and 103), not 3
@@ -866,7 +897,7 @@ describe('createPreBookingGenerator', () => {
             const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
             // WHEN: Generator with empty exclusion set (no existing orders)
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), new Set())
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), new Set())
             const orders = generator(inhabitants)
 
             // THEN: Should generate all 3 orders
@@ -886,7 +917,7 @@ describe('createPreBookingGenerator', () => {
             const excludedKeys = new Set(['1-101', '2-102'])
 
             // WHEN: Generator with exclusions (no existing orders)
-            const generator = createPreBookingGenerator(1, ticketPrices, dinnerEvents, new Set(), excludedKeys)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 4 orders (Anna: 102,103 + Bob: 101,103)
@@ -957,16 +988,6 @@ describe('createHouseholdOrderScaffold', () => {
     const {DinnerModeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
 
-    // Use factory for ticket prices with IDs
-    const ticketPrices = TicketFactory.defaultTicketPrices().map((tp, i) => ({...tp, id: i + 1}))
-
-    // Dinner events - far future (before cancellation deadline) so NONE = skip
-    const dinnerEvents = [
-        DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
-        DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
-        DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
-    ]
-
     // Helper to create test inhabitant with all required fields (using factory pattern)
     const createInhabitant = (id: number, prefs: (typeof DinnerMode)[keyof typeof DinnerMode][]) => ({
         ...HouseholdFactory.defaultInhabitantData(),
@@ -1036,7 +1057,7 @@ describe('createHouseholdOrderScaffold', () => {
             expected: {create: 0, delete: 2, idempotent: 0}
         }
     ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
-        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+        const scaffolder = createHouseholdOrderScaffold(testSeasonWithFutureDinners)
         const result = scaffolder(createHousehold(1, inhabitants), existing, cancelled)
 
         expect(result.create).toHaveLength(expected.create)
@@ -1045,7 +1066,7 @@ describe('createHouseholdOrderScaffold', () => {
     })
 
     it('applies same scaffolder to multiple households (curried pattern)', () => {
-        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinnerEvents)
+        const scaffolder = createHouseholdOrderScaffold(testSeasonWithFutureDinners)
         const monFri = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
 
         const result1 = scaffolder(createHousehold(1, [createInhabitant(1, allDineIn)]), [], new Set())
@@ -1056,12 +1077,10 @@ describe('createHouseholdOrderScaffold', () => {
     })
 
     // Deadline-based delete vs release behavior
-    const cancellableDaysBefore = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore
-
     it.each([
         {
             desc: 'far future dinner (before deadline) → delete',
-            daysFromToday: cancellableDaysBefore + 10,
+            daysFromToday: testSeasonWithFutureDinners.ticketIsCancellableDaysBefore + 10,
             expected: {delete: 1, update: 0}
         },
         {
@@ -1075,8 +1094,9 @@ describe('createHouseholdOrderScaffold', () => {
             expected: {delete: 0, update: 1}
         }
     ])('$desc', ({daysFromToday, expected}) => {
-        const dinner = [DinnerEventFactory.dinnerEventAt(201, daysFromToday)]
-        const scaffolder = createHouseholdOrderScaffold(ticketPrices, dinner)
+        const scaffolder = createHouseholdOrderScaffold(
+            seasonWith([DinnerEventFactory.dinnerEventAt(201, daysFromToday)])
+        )
 
         const result = scaffolder(
             createHousehold(1, [createInhabitant(1, allNone)]),
@@ -1098,8 +1118,9 @@ describe('createHouseholdOrderScaffold', () => {
 
     it('no RELEASED in create when no existing order (past deadline NONE)', () => {
         // GIVEN: Past dinner (after deadline) with NONE preference and NO existing order
-        const pastDinner = [DinnerEventFactory.dinnerEventAt(301, -5)]
-        const scaffolder = createHouseholdOrderScaffold(ticketPrices, pastDinner)
+        const scaffolder = createHouseholdOrderScaffold(
+            seasonWith([DinnerEventFactory.dinnerEventAt(301, -5)])
+        )
 
         // WHEN: Scaffolding with no existing orders
         const result = scaffolder(
@@ -1268,15 +1289,16 @@ describe('reconcileDinnerEvents', () => {
 })
 
 describe('getOrderCancellationAction', () => {
-    const { getOrderCancellationAction } = useSeason()
+    const { deadlinesForSeason } = useSeason()
     const { DinnerModeSchema, OrderStateSchema, OrderAuditActionSchema } = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
     const OrderAuditAction = OrderAuditActionSchema.enum
 
-    // Get cancellation deadline from app config (ADR-015 compliance)
-    const appConfig = useAppConfig()
-    const cancellableDaysBefore = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore
+    // Use default season for deadline calculation
+    const testSeason = SeasonFactory.defaultSeason()
+    const { getOrderCancellationAction } = deadlinesForSeason(testSeason)
+    const cancellableDaysBefore = testSeason.ticketIsCancellableDaysBefore
 
     // Helper to create dinner date relative to today
     const createDinnerDate = (daysFromToday: number): Date => {

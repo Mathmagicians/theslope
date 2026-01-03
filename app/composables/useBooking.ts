@@ -17,17 +17,17 @@ import type {TransactionCreateData} from '~~/server/data/financesRepository'
  * preferences (ADR-015 scaffolding). Deadline is for CANCELLING, not signing up.
  */
 export const DEADLINE_LABELS = {
-    MENU: {
+    ANNOUNCED: {
         label: 'Menu',
         openText: 'Venter på chefkokken',
         closedText: 'Annonceret'
     },
-    FRAMELDING: {
+    BOOKING_CLOSED: {
         label: 'Framelding',
         openText: 'Åben',
         closedText: 'Lukket'
     },
-    INDKOB: {
+    GROCERIES_DONE: {
         label: 'Indkøb',
         openText: 'Beløb mangler',
         closedText: 'Bestilt'
@@ -143,12 +143,15 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
 export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
     // getNextDinnerDate is pre-configured with dinner duration
-    const {getDefaultDinnerStartTime, getNextDinnerDate, canModifyOrders} = useSeason()
+    const {getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
     const {DinnerStateSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
 
     /**
      * Calculate the current step state for a dinner event
+     *
+     * @param dinnerEvent - Dinner event with state, date, and totalCost
+     * @param deadlines - Season-specific deadline functions from deadlinesForSeason()
      *
      * Logic:
      * - CONSUMED: DB state is CONSUMED
@@ -157,10 +160,13 @@ export const useBooking = () => {
      * - ANNOUNCED: DB state is ANNOUNCED
      * - SCHEDULED: Default
      */
-    const getDinnerStepState = (dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>): DinnerStepState => {
+    const getDinnerStepState = (
+        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
+        deadlines: { canModifyOrders: (date: Date) => boolean }
+    ): DinnerStepState => {
         const isAnnounced = dinnerEvent.state === DinnerState.ANNOUNCED
         const isConsumed = dinnerEvent.state === DinnerState.CONSUMED
-        const bookingClosed = !canModifyOrders(dinnerEvent.date)
+        const bookingClosed = !deadlines.canModifyOrders(dinnerEvent.date)
         const groceriesDone = dinnerEvent.totalCost > 0
 
         if (isConsumed) return DinnerStepState.CONSUMED
@@ -174,16 +180,22 @@ export const useBooking = () => {
      * Get step config for a dinner event (includes step number, title, icon, text)
      * Use .step for the step number, DINNER_STEP_MAP for all steps
      */
-    const getStepConfig = (dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>): StepConfig => {
-        return DINNER_STEP_MAP[getDinnerStepState(dinnerEvent)]
+    const getStepConfig = (
+        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
+        deadlines: { canModifyOrders: (date: Date) => boolean }
+    ): StepConfig => {
+        return DINNER_STEP_MAP[getDinnerStepState(dinnerEvent, deadlines)]
     }
 
     /**
      * Get deadline info for a dinner event's current step
      */
-    const getStepDeadline = (dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>): StepDeadlineResult => {
-        const {getDinnerTimeRange, getDefaultDinnerStartTime, isAnnounceMenuPastDeadline} = useSeason()
-        const config = getStepConfig(dinnerEvent)
+    const getStepDeadline = (
+        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
+        deadlines: { canModifyOrders: (date: Date) => boolean, isAnnounceMenuPastDeadline: (date: Date) => boolean }
+    ): StepDeadlineResult => {
+        const {getDinnerTimeRange, getDefaultDinnerStartTime} = useSeason()
+        const config = getStepConfig(dinnerEvent, deadlines)
 
         const appConfig = useAppConfig()
         const thresholds = {
@@ -193,7 +205,7 @@ export const useBooking = () => {
 
         const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
         const countdown = calculateCountdown(dinnerTimeRange.start)
-        const isPastMenuDeadline = isAnnounceMenuPastDeadline(dinnerEvent.date)
+        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
         return config.getDeadline(countdown, isPastMenuDeadline, thresholds)
     }
@@ -372,6 +384,7 @@ export const useBooking = () => {
         getPastDinnerIds,
         prepareTransactionData,
         CONSUMABLE_DINNER_STATES,
-        CLOSABLE_ORDER_STATES
+        CLOSABLE_ORDER_STATES,
+        DEADLINE_LABELS
     }
 }

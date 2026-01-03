@@ -54,28 +54,32 @@ export class TicketFactory {
                 overrides?.babyPrice ?? 0,
                 overrides?.seasonId,
                 'Baby (0-2 år)',
-                overrides?.babyAge ?? 2
+                overrides?.babyAge ?? 2,
+                1
             ),
             createTicketPrice(
                 TicketType.BABY,
                 overrides?.hungryBabyPrice ?? 1500,
                 overrides?.seasonId,
                 'Sulten baby (0-2 år)',
-                overrides?.hungryBabyAge ?? 2
+                overrides?.hungryBabyAge ?? 2,
+                2
             ),
             createTicketPrice(
                 TicketType.CHILD,
                 overrides?.childPrice ?? 3000,
                 overrides?.seasonId,
                 undefined,
-                overrides?.childAge ?? 12
+                overrides?.childAge ?? 12,
+                3
             ),
             createTicketPrice(
                 TicketType.ADULT,
                 overrides?.adultPrice ?? 5000,
                 overrides?.seasonId,
                 undefined,
-                undefined
+                undefined,
+                4
             )
         ]
     }

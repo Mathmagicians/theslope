@@ -23,8 +23,9 @@ export const useTicketPriceValidation = () => {
 
     type TicketPrice = z.infer<typeof TicketPriceSchema>
 
-    const createTicketPrice = (ticketType: string, price: number, seasonId?: number, description?: string, maximumAgeLimit?: number): TicketPrice => {
+    const createTicketPrice = (ticketType: string, price: number, seasonId?: number, description?: string, maximumAgeLimit?: number, id?: number): TicketPrice => {
         const ticketPrice = {
+            id,
             ticketType,
             price,
             seasonId,

@@ -108,9 +108,11 @@ const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-// Get dinner start time from season configuration
-const {getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
+// Get dinner start time and deadline functions from season configuration
+const {getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
 const dinnerStartTime = getDefaultDinnerStartTime()
+
+// Season-specific deadline functions (computed to react to season changes)
 
 // Date selection via URL query parameter
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
@@ -282,8 +284,9 @@ useHead({
       <!-- #hero: ChefMenuCard in VIEW mode with DinnerBookingForm -->
       <template #hero>
         <ChefMenuCard
-          v-if="dinnerEventDetail"
+          v-if="dinnerEventDetail && selectedSeason"
           :dinner-event="dinnerEventDetail"
+          :deadlines="deadlinesForSeason(selectedSeason)"
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
@@ -293,6 +296,7 @@ useHead({
             :dinner-event="dinnerEventDetail"
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
+            :deadlines="deadlinesForSeason(selectedSeason)"
             :form-mode="bookingFormMode"
             @update-booking="handleBookingUpdate"
             @update-all-bookings="handleAllBookingsUpdate"

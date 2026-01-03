@@ -26,11 +26,13 @@
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { DeadlineBadge } from '~/components/chef/DinnerDeadlineBadges.vue'
+import type { SeasonDeadlines } from '~/composables/useSeason'
 import DinnerDeadlineBadges from '~/components/chef/DinnerDeadlineBadges.vue'
 import { DINNER_STEP_MAP } from '~/composables/useBooking'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
+  deadlines: SeasonDeadlines
   mode?: 'compact' | 'full'
   showDeadlines?: boolean
 }
@@ -51,10 +53,10 @@ const DinnerState = DinnerStateSchema.enum
 // Template ref for DinnerDeadlineBadges to get badge data
 const deadlineBadgesRef = ref<InstanceType<typeof DinnerDeadlineBadges> | null>(null)
 
-// Current step and deadline
-const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent))
+// Current step and deadline (using season-specific deadlines from props)
+const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.deadlines))
 const currentStep = computed(() => currentStepConfig.value.step)
-const currentDeadline = computed(() => getStepDeadline(props.dinnerEvent))
+const currentDeadline = computed(() => getStepDeadline(props.dinnerEvent, props.deadlines))
 
 // Is cancelled?
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
@@ -89,6 +91,7 @@ const steps = computed(() => {
     <DinnerDeadlineBadges
       ref="deadlineBadgesRef"
       :dinner-event="dinnerEvent"
+      :deadlines="deadlines"
       mode="stepper"
       class="hidden"
     />

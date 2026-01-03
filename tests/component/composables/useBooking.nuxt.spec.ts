@@ -15,6 +15,9 @@ describe('useBooking', () => {
         getDinnerStepState
     } = useBooking()
 
+    const {deadlinesForSeason} = useSeason()
+    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+
     describe('buildDinnerUrl', () => {
         it.each([
             {
@@ -235,7 +238,7 @@ describe('useBooking', () => {
             }
         ])('$description', ({state, date, totalCost, expected}) => {
             const dinnerEvent = {state: state as keyof typeof DinnerState, date, totalCost}
-            expect(getDinnerStepState(dinnerEvent)).toBe(expected)
+            expect(getDinnerStepState(dinnerEvent, defaultDeadlines)).toBe(expected)
         })
     })
 
@@ -253,7 +256,7 @@ describe('useBooking', () => {
             futureDate.setDate(futureDate.getDate() + 14)
 
             const dinnerEvent = {state: 'SCHEDULED' as const, date: futureDate, totalCost: 0}
-            expect(getStepConfig(dinnerEvent).step).toBe(0)
+            expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
         })
     })
 

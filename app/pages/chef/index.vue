@@ -59,9 +59,11 @@ const bookingsStore = useBookingsStore()
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
+const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
 const dinnerStartTime = getDefaultDinnerStartTime()
+
+// Season-specific deadline functions
 
 // Team selection via query parameter
 const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<number>('team', {
@@ -404,6 +406,7 @@ useHead({
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
+                  :deadlines="deadlinesForSeason(selectedSeason)"
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"
                   @select="handleDinnerSelect"
@@ -423,8 +426,9 @@ useHead({
         <!-- #hero: ChefMenuCard with chef/view mode based on permissions -->
         <template #hero>
           <ChefMenuCard
-              v-if="dinnerEventDetail"
+              v-if="dinnerEventDetail && selectedSeason"
               :dinner-event="dinnerEventDetail"
+              :deadlines="deadlinesForSeason(selectedSeason)"
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :show-allergens="true"

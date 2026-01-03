@@ -36,10 +36,11 @@
  * - Mobile-first responsive design
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import type { TemporalCategory } from '~/composables/useSeason'
+import type { TemporalCategory, SeasonDeadlines } from '~/composables/useSeason'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
+  deadlines: SeasonDeadlines
   selected?: boolean
   temporalCategory?: TemporalCategory
 }
@@ -112,7 +113,7 @@ const handleClick = () => {
 
       <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events and cancelled -->
       <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1">
-        <DinnerDeadlineBadges :dinner-event="dinnerEvent" mode="standalone" />
+        <DinnerDeadlineBadges :dinner-event="dinnerEvent" :deadlines="deadlines" mode="standalone" />
       </div>
     </div>
   </UCard>

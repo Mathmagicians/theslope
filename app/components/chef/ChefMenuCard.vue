@@ -73,11 +73,13 @@
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
+import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { FormSubmitEvent } from '#ui/types'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
+  deadlines: SeasonDeadlines
   formMode?: FormMode           // VIEW or EDIT (from ~/types/form)
   showStateControls?: boolean   // Show stepper, deadlines, budget, actions (chef/team member)
   showAllergens?: boolean       // Show allergen section
@@ -145,7 +147,7 @@ const stateBadge = computed(() => {
 })
 
 // Dinner step (from useBooking business logic)
-const _currentStep = computed(() => getStepConfig(props.dinnerEvent).step)
+const _currentStep = computed(() => getStepConfig(props.dinnerEvent, props.deadlines).step)
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
 // Menu display
@@ -616,6 +618,7 @@ const handleCardClick = () => {
         <div class="pt-4 border-t">
           <DinnerStatusStepper
             :dinner-event="dinnerEvent"
+            :deadlines="deadlines"
             :mode="isEditing ? 'full' : 'compact'"
             :show-deadlines="isEditing"
           />

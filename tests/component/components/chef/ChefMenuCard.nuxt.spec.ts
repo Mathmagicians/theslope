@@ -3,8 +3,9 @@ import {describe, it, expect, vi} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import {ref, h} from 'vue'
-import {DinnerEventFactory} from '../../../e2e/testDataFactories/dinnerEventFactory'
-import {AllergyFactory} from '../../../e2e/testDataFactories/allergyFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {FORM_MODES} from '~/types/form'
 
 /**
@@ -61,11 +62,15 @@ mockComponent('DinnerBookingForm', {
 })
 
 describe('ChefMenuCard', () => {
+    const {deadlinesForSeason} = useSeason()
+    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+
     // DRY: Create wrapper with defaults
     const createWrapper = async (props: Record<string, unknown> = {}) => {
         return await mountSuspended(ChefMenuCard, {
             props: {
                 dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
+                deadlines: defaultDeadlines,
                 formMode: FORM_MODES.EDIT,
                 showAllergens: true,
                 ...props

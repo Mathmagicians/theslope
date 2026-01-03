@@ -14,6 +14,7 @@ Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN
 | Aktivér sæson | `/admin/planning` → Sæsonvælger |
 | Administrer madhold | `/admin/teams` |
 | Se husstande | `/admin/households` |
+| Administrer allergityper | `/admin/allergies` |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
 | Synkronisér fra Heynabo | `make heynabo-import-*` |
 
@@ -99,6 +100,34 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 2. Brug søgefeltet til at filtrere på adresse eller navn
 
 ![Admin Husstande](screenshots/admin/admin-households-list.png)
+
+---
+
+## Allergityper
+
+Administratorer og allergi-ansvarlige kan administrere allergi-kataloget.
+
+### Sådan opretter du en allergitype
+
+1. Gå til `/admin/allergies`
+2. Klik **Opret**
+3. Udfyld navn, beskrivelse og ikon (emoji)
+4. Klik **Gem**
+
+### Sådan ser du hvem der har en allergi
+
+1. Gå til `/admin/allergies`
+2. Klik på en allergitype i listen
+3. Se alle beboere med denne allergi og deres kommentarer
+
+### Multiselekt-tilstand
+
+1. Slå "Vælg flere allergier" til
+2. Marker de allergityper du vil se
+3. Se samlet antal påvirkede beboere
+4. Brug til menuoverblik (f.eks. "Ingen nødder i dag")
+
+> **Bemærk:** Sletning af en allergitype fjerner automatisk alle registreringer for den type (CASCADE).
 
 ---
 
@@ -206,4 +235,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: December 2025*
+*Sidst opdateret: Januar 2026*
