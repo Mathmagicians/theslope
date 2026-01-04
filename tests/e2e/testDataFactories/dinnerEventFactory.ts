@@ -316,22 +316,19 @@ export class DinnerEventFactory {
      */
     static readonly cleanupHeynaboEvents = async (
         context: BrowserContext,
-        heynaboEventIds: number[]
+        heynaboEventIds: number[] = []
     ): Promise<void> => {
-        console.info(`Cleaning up ${heynaboEventIds.length} Heynabo events...`)
+        console.info(`Cleaning up Heynabo events (${heynaboEventIds.length} explicit + nuke)...`)
 
-        // Call cleanup endpoint (to be implemented in GREEN phase)
-        // This endpoint will use system credentials to delete Heynabo events
         const response = await context.request.post('/api/test/heynabo/cleanup', {
             headers: headers,
-            data: { eventIds: heynaboEventIds }
+            data: { eventIds: heynaboEventIds, nuke: true }
         })
 
         const status = response.status()
         if (status !== 200) {
             const errorBody = await response.text()
             console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
-            // Don't throw - cleanup failures shouldn't fail tests
         } else {
             const result = await response.json()
             console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)

@@ -1110,12 +1110,23 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     }
 }
 
-export async function deleteSeason(d1Client: D1Database, id: number): Promise<Season> {
+export async function deleteSeason(
+    d1Client: D1Database,
+    id: number,
+    deleteHeynaboEvents: (heynaboEventIds: number[]) => Promise<number>
+): Promise<Season> {
     console.info(`🌞 > SEASON > [DELETE] Deleting season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {SeasonSchema} = useSeasonValidation()
 
     try {
+        // ADR-013: Fetch announced DinnerEvents BEFORE cascade deletion for Heynabo cleanup
+        const announcedEvents = await prisma.dinnerEvent.findMany({
+            where: {seasonId: id, heynaboEventId: {not: null}},
+            select: {id: true, heynaboEventId: true}
+        })
+        const heynaboEventIds = announcedEvents.map(e => e.heynaboEventId!)
+
         // Delete CookingTeamAssignments (strong relation to teams) - handled by cascade
         // Delete CookingTeams (strong relation to season) - handled by cascade
         // Delete DinnerEvents (strong relation to season - part of season schedule) - handled by cascade
@@ -1126,6 +1137,17 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
                 ticketPrices: true
             }
         })
+
+        // ADR-013: Delete from Heynabo AFTER local delete (best-effort, batch)
+        if (heynaboEventIds.length > 0) {
+            console.info(`🌞 > SEASON > [DELETE] Cleaning up ${heynaboEventIds.length} Heynabo events`)
+            const deleted = await deleteHeynaboEvents(heynaboEventIds)
+                .catch(err => {
+                    console.warn(`🌞 > SEASON > [DELETE] Failed to delete Heynabo events:`, err)
+                    return 0
+                })
+            console.info(`🌞 > SEASON > [DELETE] Deleted ${deleted}/${heynaboEventIds.length} Heynabo events`)
+        }
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
         // ADR-010: Repository MUST validate returned data

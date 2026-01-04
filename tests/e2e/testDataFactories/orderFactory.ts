@@ -363,13 +363,14 @@ export class OrderFactory {
 
   static readonly claimOrder = async (
     context: BrowserContext,
-    orderId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
     inhabitantId: number,
     expectedStatus: number = 200
   ): Promise<OrderDetail | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/claim`, {
+    const response = await context.request.post(`${ORDER_ENDPOINT}/claim`, {
       headers,
-      data: { inhabitantId }
+      data: { dinnerEventId, ticketPriceId, inhabitantId }
     })
 
     const status = response.status()

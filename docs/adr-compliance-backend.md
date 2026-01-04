@@ -14,11 +14,11 @@
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
 | **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints implemented) + Authorization middleware                     |
 | `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy filters, validates with OrderSchema                              |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds filters, validates with OrderSchema                |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
 | `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()` authorization                                         |
 | `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
-| `/api/order/[id]/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder() - race-safe atomic claim, `requireHouseholdAccess()`, USER_CLAIMED audit            |
+| `/api/order/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder(dinnerEventId, ticketPriceId) - FIFO by releasedAt, retry logic, USER_CLAIMED audit   |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |

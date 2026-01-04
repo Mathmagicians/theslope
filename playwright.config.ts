@@ -41,7 +41,7 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
-    // Setup projects - split API and UI auth
+    // Setup projects - admin auth
     {
       name: 'setup-api',
       testMatch: /auth\.setup\.ts/,
@@ -53,13 +53,25 @@ export default defineConfig({
       grep: /Authenticate admin for UI/,
       dependencies: ['setup-api']
     },
+    // Setup projects - member auth (non-admin)
+    {
+      name: 'setup-member-api',
+      testMatch: /auth\.setup\.ts/,
+      grep: /Authenticate member for API/
+    },
+    {
+      name: 'setup-member-ui',
+      testMatch: /auth\.setup\.ts/,
+      grep: /Authenticate member for UI/,
+      dependencies: ['setup-member-api']
+    },
     // API tests - parallel (excludes serial tests like heynabo)
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/.*\.spec\.ts/,
       testIgnore: /heynabo\.e2e\.spec\.ts/,
-      dependencies: ['setup-api'],
+      dependencies: ['setup-api', 'setup-member-api'],
     },
     // API serial tests (heynabo imports/deletes data) - runs after parallel API tests
     {
@@ -74,7 +86,7 @@ export default defineConfig({
       name: 'chromium-ui',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/.*\.spec\.ts/,
-      dependencies: ['setup-ui'],
+      dependencies: ['setup-ui', 'setup-member-ui'],
     },
 
     /* Test against mobile viewports. */

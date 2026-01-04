@@ -418,6 +418,29 @@ export class HouseholdFactory {
     }
 
     /**
+     * Update inhabitant preferences via household endpoint (for members, not admin)
+     * Uses /api/household/inhabitants/[id]/preferences - requires household access
+     */
+    static readonly updateInhabitantPreferences = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        dinnerPreferences: Record<string, string>,
+        expectedStatus: number = 200
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const response = await context.request.post(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+            headers,
+            data: {dinnerPreferences}
+        })
+
+        const status = response.status()
+        const responseBody = await response.text()
+        expect(status, `updateInhabitantPreferences failed: ${responseBody}`).toBe(expectedStatus)
+
+        if (expectedStatus !== 200) return null
+        return InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
+    }
+
+    /**
      * Delete inhabitant (for API test scenarios)
      */
     static readonly deleteInhabitant = async (

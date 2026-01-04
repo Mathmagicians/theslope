@@ -329,4 +329,24 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(result.usersCreated, 'IDEMPOTENT: No users created').toBe(0)
         expect(result.sanityCheck.passed, 'IDEMPOTENT: Sanity check passed').toBe(true)
     })
+
+    // Cleanup: Remove test data if tests fail before import can reconcile
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Best-effort cleanup of orphan user (may already be deleted by import)
+        if (testData.user.orphanId) {
+            await context.request.delete(`/api/admin/users/${testData.user.orphanId}`).catch(() => {})
+        }
+
+        // Best-effort cleanup of fake household (may already be deleted by import)
+        if (testData.household.fakeId) {
+            await context.request.delete(`/api/admin/household/${testData.household.fakeId}`).catch(() => {})
+        }
+
+        // Best-effort cleanup of fake inhabitant (may already be deleted by import)
+        if (testData.inhabitant.fakeId) {
+            await context.request.delete(`/api/admin/household/inhabitants/${testData.inhabitant.fakeId}`).catch(() => {})
+        }
+    })
 })

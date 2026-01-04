@@ -1,4 +1,4 @@
-import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
+import {createError, defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
 import {claimOrder} from "~~/server/data/financesRepository"
 import {getRequiredUser, requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {fetchInhabitant} from "~~/server/data/prismaRepository"
@@ -8,21 +8,20 @@ import {z} from "zod"
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.number({coerce: true}).positive().int()
-})
-
 const bodySchema = z.object({
+    dinnerEventId: z.number().int().positive(),
+    ticketPriceId: z.number().int().positive(),
     inhabitantId: z.number().int().positive()
 })
 
 /**
- * POST /api/order/[id]/claim - Claim a released ticket
+ * POST /api/order/claim - Claim a released ticket by ticket type
  *
- * Allows a user to claim a RELEASED ticket for an inhabitant in their household.
- * Original ticket price is preserved (priceAtBooking unchanged).
+ * Finds the first RELEASED ticket matching the dinnerEventId and ticketPriceId (FIFO by releasedAt)
+ * and claims it for the specified inhabitant.
  *
- * Race-safe: Uses atomic WHERE clause so concurrent claims fail gracefully.
+ * Race-safe: Uses atomic WHERE clause with retry logic (up to 3 attempts).
+ * Returns 409 if no matching ticket is available.
  *
  * ADR-002: Separate validation vs business logic error handling
  * ADR-009: Returns OrderDetail
@@ -34,11 +33,8 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
     const LOG = '🎟️ > ORDER > [CLAIM]'
 
     // Input validation (ADR-002)
-    let orderId!: number
     let body!: z.infer<typeof bodySchema>
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
-        orderId = params.id
         body = await readValidatedBody(event, bodySchema.parse)
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
@@ -58,21 +54,26 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         // Authorization: User must belong to the inhabitant's household
         await requireHouseholdAccess(event, inhabitant.householdId)
 
-        // Attempt atomic claim
-        const claimedOrder = await claimOrder(d1Client, orderId, body.inhabitantId, user.id)
+        // Attempt atomic claim with retry logic
+        const claimedOrder = await claimOrder(
+            d1Client,
+            body.dinnerEventId,
+            body.ticketPriceId,
+            body.inhabitantId,
+            user.id
+        )
 
         if (!claimedOrder) {
-            // Race condition or order not available
             throw createError({
                 statusCode: 409,
-                message: 'Ticket not available - already claimed or not released'
+                message: 'No matching ticket available - already claimed or not released'
             })
         }
 
-        console.info(`${LOG} User ${user.id} claimed order ${orderId} for inhabitant ${body.inhabitantId}`)
+        console.info(`${LOG} User ${user.id} claimed ticket (dinner=${body.dinnerEventId}, ticketPrice=${body.ticketPriceId}) for inhabitant ${body.inhabitantId}`)
         setResponseStatus(event, 200)
         return claimedOrder
     } catch (error) {
-        return throwH3Error(`${LOG} Error claiming order ${orderId}`, error)
+        return throwH3Error(`${LOG} Error claiming ticket`, error)
     }
 })

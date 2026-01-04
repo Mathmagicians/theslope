@@ -412,18 +412,43 @@ test.describe('Order API', () => {
     // Release (dinnerMode: NONE after deadline)
     await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
 
-    // Claim
-    const claimedOrder = await OrderFactory.claimOrder(context, orderId, testInhabitantId)
+    // Claim using dinnerEventId + ticketPriceId (FIFO by releasedAt)
+    const claimedOrder = await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId)
 
     expect(claimedOrder!.state).toBe(OrderStateSchema.enum.BOOKED)
     expect(claimedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(claimedOrder!.releasedAt).toBeNull()
   })
 
-  test('GIVEN BOOKED order WHEN claiming THEN fails with 409', async ({ browser }) => {
+  test('GIVEN no RELEASED orders WHEN claiming THEN fails with 409', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create order (state=BOOKED)
+    // Create order (state=BOOKED, not released)
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    testOrderIds.push(result!.createdIds[0]!)
+
+    // Claim without releasing - should fail (no RELEASED tickets available)
+    await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId, 409)
+  })
+
+  test('GIVEN non-existent dinner event WHEN claiming THEN fails with 409', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Non-existent dinner event ID - no matching tickets
+    await OrderFactory.claimOrder(context, 999999, testAdultTicketPriceId, testInhabitantId, 409)
+  })
+
+  test('GET with allHouseholds=true returns orders from all households', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create and release an order
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
@@ -435,13 +460,18 @@ test.describe('Order API', () => {
     const orderId = result!.createdIds[0]!
     testOrderIds.push(orderId)
 
-    // Claim without releasing - should fail
-    await OrderFactory.claimOrder(context, orderId, testInhabitantId, 409)
-  })
+    // Release the order
+    await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
 
-  test('GIVEN non-existent order WHEN claiming THEN fails with 409', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
+    // Fetch with allHouseholds=true, state=RELEASED
+    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventId=${testDinnerEventId}&state=RELEASED&allHouseholds=true&sortBy=releasedAt`, { headers })
 
-    await OrderFactory.claimOrder(context, 999999, testInhabitantId, 409)
+    expect(response.status()).toBe(200)
+    const orders = await response.json()
+
+    // Should include the released order
+    const foundOrder = orders.find((o: { id: number }) => o.id === orderId)
+    expect(foundOrder).toBeDefined()
+    expect(foundOrder.state).toBe(OrderStateSchema.enum.RELEASED)
   })
 })

@@ -205,6 +205,7 @@ model Order {
   priceAtBooking Int
   dinnerMode     DinnerMode     @default(DINEIN)
   state          OrderState     @default(BOOKED)
+  isGuestTicket  Boolean        @default(false) // True when ticket is for a guest (not the inhabitant themselves)
   releasedAt     DateTime? // when the order was released back to availability, first released is first in line for booking by other users
   closedAt       DateTime?
   createdAt      DateTime       @default(now())

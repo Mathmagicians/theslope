@@ -373,9 +373,30 @@ export async function deleteHeynaboEventAsSystem(eventId: number): Promise<void>
 }
 
 /**
+ * Batch delete Heynabo events using system credentials (admin delete)
+ * @param eventIds - Array of Heynabo event IDs to delete
+ * @returns Number of successfully deleted events
+ */
+export async function deleteHeynaboEventsAsSystem(eventIds: number[]): Promise<number> {
+    const token = await getSystemToken()
+    return deleteHeynaboEvents(token, eventIds)
+}
+
+/**
  * Fetch Heynabo event using system credentials (for testing/verification)
  */
 export async function fetchHeynaboEventAsSystem(eventId: number): Promise<HeynaboEventResponse> {
     const token = await getSystemToken()
     return fetchHeynaboEvent(token, eventId)
+}
+
+/**
+ * List all Heynabo events using system credentials (for test cleanup)
+ */
+export async function listHeynaboEventsAsSystem(): Promise<HeynaboEventResponse[]> {
+    const token = await getSystemToken()
+    const response = await $fetch<HeynaboEventResponse[]>(`${heyNaboApi}/members/events/`, {
+        headers: {Authorization: `Bearer ${token}`}
+    })
+    return response || []
 }

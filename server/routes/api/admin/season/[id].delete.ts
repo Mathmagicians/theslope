@@ -1,5 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteSeason} from "~~/server/data/prismaRepository"
+import {deleteHeynaboEventsAsSystem} from "~~/server/integration/heynabo/heynaboClient"
 import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
@@ -10,6 +11,12 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Season ID must be a positive integer')
 })
 
+/**
+ * Delete season (admin operation)
+ * DELETE /api/admin/season/[id]
+ *
+ * ADR-013: Heynabo cleanup for announced DinnerEvents (best-effort, batch)
+ */
 export default defineEventHandler(async (event): Promise<Season> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
@@ -25,7 +32,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     // Database operations try-catch - separate concerns
     try {
         console.info(`🌞 > DELETE SEASON > Deleting season with id ${id}`)
-        const deletedSeason = await deleteSeason(d1Client, id)
+        const deletedSeason = await deleteSeason(d1Client, id, deleteHeynaboEventsAsSystem)
         console.info(`🌞 > DELETE SEASON > Successfully deleted season ${deletedSeason.shortName}`)
         setResponseStatus(event, 200)
         return deletedSeason
