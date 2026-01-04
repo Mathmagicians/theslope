@@ -18,7 +18,16 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
    - 🧒 **Barn** (2-11 år) - reduceret pris
    - 🧑 **Voksen** (12+ år) - fuld pris
 
-> **Mangler dine børn i Heynabo?** Tilføj dem der først - så synkroniseres de automatisk til Skrånerappen.
+> **Vigtigt for forældre:** Tjek at dine børn er registreret i Heynabo **med korrekt fødselsdato**. Uden fødselsdato betaler du voksenpris for alle børn! Tilføj eller ret børnenes fødselsdato i Heynabo - så synkroniseres det automatisk til Skrånerappen.
+
+### Sådan tjekker du dine børns billettype
+
+1. Log ind på [skraaningen.dk](https://www.skraaningen.dk)
+2. Gå til **Husstanden** (fanen med hus-ikon)
+3. Se listen over husstandens medlemmer
+4. Hver person vises med deres billettype: 👶 Baby, 🧒 Barn, eller 🧑 Voksen
+
+Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdatoen i Heynabo. Ret det i Heynabo-appen, og det opdateres automatisk i Skrånerappen.
 
 ---
 

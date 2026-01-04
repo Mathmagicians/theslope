@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-02 (Inhabitant POST returns InhabitantUpdateResponse with scaffoldResult)
+**Last Updated:** 2026-01-04 (Ticket Claim feature complete - claim endpoint, state/sortBy filters, authorization)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -12,12 +12,13 @@
 
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
-| **Order Management** | | | | | **✅ FULLY COMPLIANT** (4/5 endpoints implemented) + Authorization middleware                     |
+| **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints implemented) + Authorization middleware                     |
 | `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() validates with OrderSchema                                                         |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy filters, validates with OrderSchema                              |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
+| `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()` authorization                                         |
 | `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
-| `/api/order/swap-order.post.ts` | N/A | N/A | N/A | N/A | Stub - not yet implemented                                                                       |
+| `/api/order/[id]/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder() - race-safe atomic claim, `requireHouseholdAccess()`, USER_CLAIMED audit            |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |

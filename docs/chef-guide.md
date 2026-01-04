@@ -58,8 +58,6 @@ Selvom du er på et madhold, skal du aktivt **melde dig som chefkok** for de mid
    - **Menubeskrivelse** - Detaljer om maden
 3. Gem ændringer
 
-![Chef Menu Card](screenshots/chef/chef-menu-card.png)
-
 ### Sådan annoncerer du menuen
 
 Når du annoncerer, synkroniseres menuen til Heynabo-kalenderen.

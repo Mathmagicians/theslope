@@ -1,57 +1,68 @@
 /**
- * GET /api/order - Fetch orders for current user's household
- *
- * User-facing endpoint - always filters by session user's household.
- * Pattern: Session-derived filtering (like /api/team/my)
+ * GET /api/order - Fetch orders
  *
  * Query params:
  * - dinnerEventId: Optional filter by specific dinner event
+ * - state: Optional filter by order state (e.g., RELEASED for claim queue)
+ * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
+ * - allHouseholds: false (default) = filter by session user's household
+ *                  true = return orders from all households
  *
  * ADR-002: Separate try-catch for validation and business logic
  * ADR-004: Logging standards
  */
 import {fetchOrders} from "~~/server/data/financesRepository"
+import {useBookingValidation} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
+const {OrderStateSchema} = useBookingValidation()
+
+const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
 
 const querySchema = z.object({
-    dinnerEventId: z.coerce.number().int().positive().optional()
+    dinnerEventId: z.coerce.number().int().positive().optional(),
+    state: OrderStateSchema.optional(),
+    sortBy: sortBySchema.optional(),
+    allHouseholds: z.coerce.boolean().optional().default(false)
 })
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-
-    // Get authenticated user's household ID from session
-    const session = await getUserSession(event)
-    const user = session?.user as UserDetail | undefined
-    const householdId = user?.Inhabitant?.householdId
-
-    if (!householdId) {
-        console.warn('🎟️ > ORDER > [GET] User has no household - returning empty array')
-        return []
-    }
+    const LOG = '🎟️ > ORDER > [GET]'
 
     // Validate query params
-    let dinnerId: number | undefined
+    let query: z.infer<typeof querySchema>
     try {
-        const query = await getValidatedQuery(event, querySchema.parse)
-        dinnerId = query.dinnerEventId
+        query = await getValidatedQuery(event, querySchema.parse)
     } catch (error) {
-        return throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
+        return throwH3Error(`${LOG} Input validation error`, error)
+    }
+
+    // Determine household filter: skip if allHouseholds=true, otherwise use session
+    let householdId: number | undefined
+    if (!query.allHouseholds) {
+        const session = await getUserSession(event)
+        const user = session?.user as UserDetail | undefined
+        householdId = user?.Inhabitant?.householdId
+
+        if (!householdId) {
+            console.warn(`${LOG} User has no household - returning empty array`)
+            return []
+        }
     }
 
     // Business logic
     try {
-        const orders = await fetchOrders(d1Client, dinnerId, householdId)
-        console.info(`🎟️ > ORDER > [GET] Fetched ${orders.length} orders for household ${householdId}`)
+        const orders = await fetchOrders(d1Client, query.dinnerEventId, householdId, query.state, query.sortBy)
+        console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders
     } catch (error) {
-        return throwH3Error('🎟️ > ORDER > [GET] Error fetching orders', error)
+        return throwH3Error(`${LOG} Error fetching orders`, error)
     }
 })

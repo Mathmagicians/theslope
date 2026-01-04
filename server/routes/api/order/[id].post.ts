@@ -1,6 +1,7 @@
 import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {fetchOrder, updateOrder, deleteOrder} from "~~/server/data/financesRepository"
 import {fetchSeason} from "~~/server/data/prismaRepository"
+import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import type {OrderDetail} from "~/composables/useBookingValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
@@ -68,6 +69,9 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         if (!existingOrder) {
             throw createError({statusCode: 404, message: `Order ${id} not found`})
         }
+
+        // Authorization: User must belong to the order's household
+        await requireHouseholdAccess(event, existingOrder.inhabitant.householdId)
 
         // Get season for deadline calculation
         const season = await fetchSeason(d1Client, existingOrder.dinnerEvent.seasonId!)

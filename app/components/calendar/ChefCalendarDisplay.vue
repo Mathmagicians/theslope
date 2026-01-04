@@ -269,6 +269,7 @@ const accordionValue = computed({
   <div class="flex flex-col h-full">
     <!-- Countdown Timer (Train Station Style) -->
     <div
+      data-testid="chef-next-cooking-countdown"
       :class="[
         CALENDAR.countdown.container,
         CHEF_CALENDAR.countdown.border,

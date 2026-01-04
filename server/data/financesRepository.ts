@@ -50,7 +50,7 @@ import {
  * ADR-002: Separate validation vs business logic error handling
  */
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 /*** ORDER AUDIT ***/
 
@@ -455,6 +455,127 @@ export async function updateOrder(
 }
 
 /**
+ * Claim a released order for another inhabitant.
+ *
+ * Transfers ownership of a RELEASED ticket to another inhabitant.
+ * Original price is preserved (priceAtBooking unchanged).
+ *
+ * Race-safe: Uses atomic WHERE clause (id + state=RELEASED) so concurrent
+ * claims will fail if someone else claims first.
+ *
+ * @param d1Client - D1 database client
+ * @param orderId - Order ID to claim
+ * @param newInhabitantId - Inhabitant claiming the ticket
+ * @param claimedByUserId - User performing the claim
+ * @returns Claimed order, or null if order not available (already claimed or not released)
+ *
+ * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
+ */
+export async function claimOrder(
+    d1Client: D1Database,
+    orderId: number,
+    newInhabitantId: number,
+    claimedByUserId: number
+): Promise<OrderDetail | null> {
+    const LOG = '🎟️ > ORDER > [CLAIM]'
+    console.info(`${LOG} Attempting to claim order ${orderId} for inhabitant ${newInhabitantId}`)
+
+    const {OrderDetailSchema, OrderStateSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        // Fetch order with provenance data for audit (before atomic update)
+        const existingOrder = await prisma.order.findFirst({
+            where: {id: orderId, state: OrderStateSchema.enum.RELEASED},
+            include: {
+                ticketPrice: {select: {ticketType: true}},
+                dinnerEvent: {select: {seasonId: true}},
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: {select: {address: true}}
+                    }
+                }
+            }
+        })
+
+        if (!existingOrder) {
+            console.warn(`${LOG} Order ${orderId} not available (not found or not RELEASED)`)
+            return null
+        }
+
+        // Atomic claim: WHERE includes state=RELEASED so concurrent claims fail
+        const claimedOrder = await prisma.order.update({
+            where: {id: orderId, state: OrderStateSchema.enum.RELEASED},
+            data: {
+                inhabitantId: newInhabitantId,
+                bookedByUserId: claimedByUserId,
+                state: OrderStateSchema.enum.BOOKED,
+                releasedAt: null
+            },
+            include: {
+                dinnerEvent: {
+                    select: {
+                        id: true, date: true, menuTitle: true, menuDescription: true,
+                        menuPictureUrl: true, state: true, totalCost: true,
+                        heynaboEventId: true, chefId: true, cookingTeamId: true,
+                        seasonId: true, createdAt: true, updatedAt: true
+                    }
+                },
+                inhabitant: {
+                    select: {
+                        id: true, heynaboId: true, householdId: true,
+                        name: true, lastName: true, pictureUrl: true
+                    }
+                },
+                bookedByUser: {select: {id: true, email: true}},
+                ticketPrice: {select: {id: true, ticketType: true, price: true, description: true}}
+            }
+        })
+
+        // Create audit entry with ORIGINAL household provenance
+        const auditSnapshot = {
+            id: existingOrder.id,
+            inhabitantId: existingOrder.inhabitantId,
+            dinnerEventId: existingOrder.dinnerEventId,
+            ticketPriceId: existingOrder.ticketPriceId,
+            priceAtBooking: existingOrder.priceAtBooking,
+            dinnerMode: existingOrder.dinnerMode,
+            state: existingOrder.state,
+            inhabitantNameWithInitials: formatNameWithInitials(existingOrder.inhabitant),
+            householdShortname: getHouseholdShortName(existingOrder.inhabitant.household.address),
+            householdId: existingOrder.inhabitant.householdId
+        }
+        await prisma.orderHistory.create({
+            data: {
+                orderId,
+                action: OrderAuditActionSchema.enum.USER_CLAIMED,
+                performedByUserId: claimedByUserId,
+                inhabitantId: newInhabitantId,
+                dinnerEventId: existingOrder.dinnerEventId,
+                seasonId: existingOrder.dinnerEvent?.seasonId ?? null,
+                auditData: createOrderAuditData(auditSnapshot)
+            }
+        })
+
+        console.info(`${LOG} Successfully claimed order ${orderId}`)
+
+        return OrderDetailSchema.parse({
+            ...claimedOrder,
+            ticketType: claimedOrder.ticketPrice?.ticketType ?? null
+        })
+    } catch (error) {
+        // P2025: Atomic WHERE didn't match - race condition, someone else claimed first
+        if (isPrismaNotFound(error)) {
+            console.warn(`${LOG} Order ${orderId} claimed by someone else (race condition)`)
+            return null
+        }
+        return throwH3Error(`${LOG} Error claiming order ${orderId}`, error)
+    }
+}
+
+/**
  * Delete an order and create audit trail entry.
  *
  * @param d1Client - D1 database client
@@ -557,11 +678,15 @@ export async function deleteOrder(
  *
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
+ * @param state - Optional state filter (e.g., RELEASED for claim queue)
+ * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
  */
 export async function fetchOrders(
     d1Client: D1Database,
     dinnerEventIds?: number | number[],
-    householdId?: number
+    householdId?: number,
+    state?: OrderState,
+    sortBy: 'createdAt' | 'releasedAt' = 'createdAt'
 ): Promise<OrderDisplay[]> {
     // Normalize to array, return early for empty
     const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
@@ -569,7 +694,8 @@ export async function fetchOrders(
 
     const filterDesc = [
         ids ? `${ids.length} dinner event(s)` : 'all events',
-        householdId ? `household ${householdId}` : 'all households'
+        householdId ? `household ${householdId}` : 'all households',
+        state ? `state=${state}` : 'all states'
     ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
@@ -580,10 +706,11 @@ export async function fetchOrders(
         const orders = await prisma.order.findMany({
             where: {
                 ...(ids && { dinnerEventId: { in: ids } }),
-                ...(householdId && { inhabitant: { householdId } })
+                ...(householdId && { inhabitant: { householdId } }),
+                ...(state && { state })
             },
             include: { ticketPrice: { select: { ticketType: true } } },
-            orderBy: { createdAt: 'asc' }
+            orderBy: { [sortBy]: 'asc' }
         })
 
         console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)

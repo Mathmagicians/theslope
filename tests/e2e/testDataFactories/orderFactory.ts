@@ -361,6 +361,28 @@ export class OrderFactory {
     return null
   }
 
+  static readonly claimOrder = async (
+    context: BrowserContext,
+    orderId: number,
+    inhabitantId: number,
+    expectedStatus: number = 200
+  ): Promise<OrderDetail | null> => {
+    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/claim`, {
+      headers,
+      data: { inhabitantId }
+    })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      return await response.json()
+    }
+
+    return null
+  }
+
   static readonly getOrderHistory = async (
     context: BrowserContext,
     orderId: number,

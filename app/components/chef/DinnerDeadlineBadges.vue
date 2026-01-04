@@ -55,6 +55,7 @@ export interface DeadlineBadge {
   value: string          // Badge text (emoji + text)
   color: NuxtUIColor     // Badge color
   helpText: string       // Help text for standalone mode
+  alarm: AlarmLevel      // Alarm level for conditional display (3 = overdue)
 }
 
 interface Props {
@@ -72,11 +73,8 @@ const { SIZES, ALARM_TO_BADGE } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
 const { getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()
-const { getDinnerStepState } = useBooking()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
-// Current step state for this dinner (uses season-specific deadline from props)
-const stepState = computed(() => getDinnerStepState(props.dinnerEvent, props.deadlines))
 
 // App config thresholds
 const appConfig = useAppConfig()
@@ -114,32 +112,42 @@ const createBadge = (
     label: 'label' in labels ? labels.label : '',
     value: result.description ? `${badge.emoji} ${result.description}` : `${badge.emoji} ${text}`,
     color: badge.color as NuxtUIColor,
-    helpText: text
+    helpText: text,
+    alarm
   }
 }
 
+// Get dinner state enum
+const { DinnerStateSchema } = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
+
 // ========== MENU BADGE (Step 1: Publiceret) ==========
+// Completed when dinner was actually ANNOUNCED (not just past)
 const menuBadge = computed((): DeadlineBadge => {
-  const isCompleted = stepState.value >= DinnerStepState.ANNOUNCED
-  return createBadge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, isCompleted)
+  const wasAnnounced = props.dinnerEvent.state === DinnerState.ANNOUNCED ||
+                       (props.dinnerEvent.state === DinnerState.CONSUMED && props.dinnerEvent.heynaboEventId !== null)
+  return createBadge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, wasAnnounced)
 })
 
 // ========== BOOKING CLOSED BADGE (Step 2: Lukket for ændringer) ==========
+// Completed when deadline has passed (booking closed)
 const bookingClosedBadge = computed((): DeadlineBadge => {
   const isOpen = props.deadlines.canModifyOrders(props.dinnerEvent.date)
   return createBadge(2, 'BOOKING_CLOSED', DinnerStepState.BOOKING_CLOSED, !isOpen)
 })
 
 // ========== GROCERIES BADGE (Step 3: Madbestilling klar) ==========
+// Completed when totalCost > 0 (chef entered grocery cost)
 const groceriesDoneBadge = computed((): DeadlineBadge => {
-  const isCompleted = stepState.value >= DinnerStepState.GROCERIES_DONE
-  return createBadge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, isCompleted)
+  const hasGroceries = props.dinnerEvent.totalCost > 0
+  return createBadge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, hasGroceries)
 })
 
 // ========== CONSUMED BADGE (Step 4: Afholdt) ==========
+// Completed when dinner state is CONSUMED
 const consumedBadge = computed((): DeadlineBadge => {
-  const isCompleted = stepState.value >= DinnerStepState.CONSUMED
-  return createBadge(4, 'CONSUMED', DinnerStepState.CONSUMED, isCompleted)
+  const isConsumed = props.dinnerEvent.state === DinnerState.CONSUMED
+  return createBadge(4, 'CONSUMED', DinnerStepState.CONSUMED, isConsumed)
 })
 
 // All badges in step order (for standalone mode) - step 0 (Planlagt) has no badge

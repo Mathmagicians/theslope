@@ -6,6 +6,9 @@ const isApiError = (error: unknown): error is ApiError => {
 }
 
 export const useApiHandler = () => {
+    // Capture toast reference during setup context
+    const toast = useToast()
+
     const handleApiError = (error: ApiError | unknown, action: string, customMessage?: string): string => {
         // Extract serializable parts (FetchError is not a POJO)
         // FetchError may use 'status' instead of 'statusCode'
@@ -42,7 +45,6 @@ export const useApiHandler = () => {
             }
         }
 
-        const toast = useToast()
         toast.add({
             icon: 'i-heroicons-exclamation-triangle',
             title: `${err.statusCode ?? 500}: Uh, åh, fejl kan ske`,

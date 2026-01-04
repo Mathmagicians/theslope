@@ -1,4 +1,5 @@
 import {describe, it, expect} from 'vitest'
+import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useSeason} from '~/composables/useSeason'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
@@ -17,17 +18,22 @@ const {DinnerEventCreateSchema} = useBookingValidation()
 // Shared test constant: days offset for dinners before cancellation deadline
 const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 
+// Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
+const today = new Date()
+const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
+    differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
+
 // Shared helper: create season with specific dinner events
 const seasonWith = (dinnerEvents: ReturnType<typeof DinnerEventFactory.dinnerEventAt>[]) => ({
     ...SeasonFactory.defaultSeason(),
     dinnerEvents
 })
 
-// Shared test season with far future dinner events (before cancellation deadline)
+// Shared test season with far future dinner events on Mon(1), Wed(3), Fri(5) - matches allDineIn preference
 const testSeasonWithFutureDinners = seasonWith([
-    DinnerEventFactory.dinnerEventAt(101, FAR_FUTURE_DAYS),
-    DinnerEventFactory.dinnerEventAt(102, FAR_FUTURE_DAYS + 2),
-    DinnerEventFactory.dinnerEventAt(103, FAR_FUTURE_DAYS + 4)
+    DinnerEventFactory.dinnerEventAt(101, daysToWeekday(1)), // Monday
+    DinnerEventFactory.dinnerEventAt(102, daysToWeekday(3)), // Wednesday
+    DinnerEventFactory.dinnerEventAt(103, daysToWeekday(5))  // Friday
 ])
 
 describe('useSeasonSchema', () => {

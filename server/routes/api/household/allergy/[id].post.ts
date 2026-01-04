@@ -4,7 +4,6 @@ import {useAllergyValidation, type AllergyDetail, type AllergyUpdate} from "~/co
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from 'zod'
 
-const {AllergyUpdateSchema} = useAllergyValidation()
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
@@ -15,6 +14,7 @@ const idSchema = z.object({
 export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+    const {AllergyUpdateSchema} = useAllergyValidation()
 
     // Validate input - fail early on invalid data
     let allergyId!: number

@@ -111,10 +111,10 @@ const getAlarmLevel = (countdown: { hours: number }, thresholds: { warning: numb
 // No deadline - always neutral
 const noDeadline = (): StepConfig['getDeadline'] => () => ({ description: '', alarm: -1 })
 
-// User action deadline: g/y/r/💀 (overdue shows skull)
+// User action deadline: g/y/r/💀 (overdue shows skull with "mangler")
 const userActionDeadline = (prefix: string): StepConfig['getDeadline'] =>
     (countdown, isPastDeadline, thresholds) => {
-        if (isPastDeadline) return { description: '', alarm: 3 }
+        if (isPastDeadline || countdown.hours <= 0) return { description: 'mangler', alarm: 3 }
         const alarm = getAlarmLevel(countdown, thresholds)
         return { description: prefix ? `${prefix} ${countdown.formatted.toLowerCase()}` : '', alarm }
     }

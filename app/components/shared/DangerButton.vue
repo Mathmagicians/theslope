@@ -70,13 +70,10 @@ const isConfirmMode = ref(false)
 const buttonRef = ref<HTMLElement | null>(null)
 const countdownProgress = ref(100) // 100% = full opacity, 0% = faded
 
-// Seconds remaining for debug display
-const secondsLeft = computed(() => Math.ceil(countdownProgress.value / 100 * props.autoResetMs / 1000))
-
 // Display computeds
 const displayText = computed(() => {
   if (props.loading) return props.loadingLabel
-  if (isConfirmMode.value) return `${props.confirmLabel} (${secondsLeft.value}s)`
+  if (isConfirmMode.value) return props.confirmLabel
   return props.label
 })
 

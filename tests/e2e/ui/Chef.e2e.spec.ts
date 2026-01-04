@@ -37,11 +37,14 @@ test.describe('Chef Page - Happy Day', () => {
         const {inhabitantId} = await getSessionUserInfo(context)
         await SeasonFactory.assignMemberToTeam(context, testTeamId, inhabitantId, TeamRole.CHEF)
 
-        // Create a dedicated dinner event for this test (avoids race condition with dinnerEvents[0])
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
+        // Get existing dinner events to find a valid cooking date within the season
+        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
+        expect(dinnerEvents.length, 'Singleton season should have dinner events').toBeGreaterThan(0)
+        const validCookingDate = new Date(dinnerEvents[0]!.date)
+
+        // Create a dinner event for our test team so countdown shows "Næste Madlavning"
         await DinnerEventFactory.createDinnerEvent(context, {
-            date: tomorrow,
+            date: validCookingDate,
             menuTitle: `ChefTestDinner-${testSalt}`,
             seasonId: activeSeason.id!,
             cookingTeamId: testTeamId,
@@ -49,44 +52,17 @@ test.describe('Chef Page - Happy Day', () => {
         })
     })
 
-    test('GIVEN chef with assigned team WHEN viewing chef page THEN sees team calendar and can select dinner', async ({page}) => {
-        // WHEN: Navigate to chef page
-        await page.goto(chefPageUrl)
+    test('GIVEN chef with assigned team WHEN viewing chef page THEN sees dashboard with countdown', async ({page}) => {
+        await page.goto(`${chefPageUrl}?team=${testTeamId}`)
 
-        // THEN: Wait for chef message to appear (use locator to handle multiple matches)
         await pollUntil(
             async () => await page.locator('text=Du er chefkok').first().isVisible().catch(() => false),
             (isVisible) => isVisible,
             10
         )
+        await expect(page.locator('text=Du er chefkok').first()).toBeVisible()
+        await expect(page.locator('text=Næste Madlavning').first()).toBeVisible()
 
-        await expect(page.locator('text=Du er chefkok').first(), 'Chef role message should be visible').toBeVisible()
-
-        // Documentation screenshot: Chef dashboard overview
         await doScreenshot(page, 'chef/chef-dashboard', true)
-    })
-
-    test('GIVEN chef page loaded WHEN dinner event exists THEN shows menu card and team info', async ({page}) => {
-        // Navigate to chef page
-        await page.goto(chefPageUrl)
-
-        // Wait for chef message to appear
-        await pollUntil(
-            async () => await page.locator('text=Du er chefkok').first().isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
-
-        // Wait for dinner event info to load (look for "Næste Madlavning")
-        await pollUntil(
-            async () => await page.locator('text=Næste Madlavning').first().isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
-
-        await expect(page.locator('text=Næste Madlavning').first(), 'Next cooking info should be visible').toBeVisible()
-
-        // Documentation screenshot: Chef menu card view
-        await doScreenshot(page, 'chef/chef-menu-card', true)
     })
 })

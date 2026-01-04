@@ -41,14 +41,25 @@ describe('SeasonStatusDisplay', () => {
             expect(wrapper.find(`[data-testid="${buttonTestId}"]`).exists()).toBe(shouldExist)
         })
 
-        it.each([
-            {seasonId: 2, event: 'activate', buttonTestId: 'activate-season'},
-            {seasonId: 1, event: 'deactivate', buttonTestId: 'deactivate-season'}
-        ])('seasonId=$seasonId emits $event on click', async ({seasonId, event, buttonTestId}) => {
-            const wrapper = await mount({seasonId, showActivationButton: true})
+        it('seasonId=2 emits activate on click', async () => {
+            const wrapper = await mount({seasonId: 2, showActivationButton: true})
             await nextTick()
-            await wrapper.find(`[data-testid="${buttonTestId}"]`).trigger('click')
-            expect(wrapper.emitted(event)).toBeTruthy()
+            await wrapper.find('[data-testid="activate-season"]').trigger('click')
+            expect(wrapper.emitted('activate')).toBeTruthy()
+        })
+
+        it('seasonId=1 emits deactivate on double-click (DangerButton confirm)', async () => {
+            const wrapper = await mount({seasonId: 1, showActivationButton: true})
+            await nextTick()
+            // DangerButton wraps UButton - find the actual button element inside
+            const dangerButton = wrapper.find('[data-testid="deactivate-season"]')
+            const button = dangerButton.find('button')
+            // DangerButton requires 2 clicks: first to arm, second to confirm
+            await button.trigger('click')
+            await nextTick()
+            await button.trigger('click')
+            await nextTick()
+            expect(wrapper.emitted('deactivate')).toBeTruthy()
         })
     })
 

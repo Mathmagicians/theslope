@@ -308,7 +308,7 @@ const columns = [
                     :items="availableAllergyTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
                     placeholder="🥛🥐🥚🥜 vælg en allergi..."
                     value-key="id"
-                    @update:model-value="(val: unknown) => val && handleAddAllergy((val as {id: number}).id)"
+                    @update:model-value="(val: number) => val && handleAddAllergy(val)"
                 >
                   <template #item="{ item }">
                     <span class="flex items-center gap-2">

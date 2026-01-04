@@ -393,4 +393,55 @@ test.describe('Order API', () => {
       testOrderIds.push(id)
     }
   })
+
+  test('GIVEN released order WHEN claiming THEN state becomes BOOKED', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create order
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    const orderId = result!.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    // Release (dinnerMode: NONE after deadline)
+    await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
+
+    // Claim
+    const claimedOrder = await OrderFactory.claimOrder(context, orderId, testInhabitantId)
+
+    expect(claimedOrder!.state).toBe(OrderStateSchema.enum.BOOKED)
+    expect(claimedOrder!.inhabitantId).toBe(testInhabitantId)
+    expect(claimedOrder!.releasedAt).toBeNull()
+  })
+
+  test('GIVEN BOOKED order WHEN claiming THEN fails with 409', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create order (state=BOOKED)
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    const orderId = result!.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    // Claim without releasing - should fail
+    await OrderFactory.claimOrder(context, orderId, testInhabitantId, 409)
+  })
+
+  test('GIVEN non-existent order WHEN claiming THEN fails with 409', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    await OrderFactory.claimOrder(context, 999999, testInhabitantId, 409)
+  })
 })
