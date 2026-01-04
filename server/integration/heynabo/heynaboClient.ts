@@ -395,8 +395,8 @@ export async function fetchHeynaboEventAsSystem(eventId: number): Promise<Heynab
  */
 export async function listHeynaboEventsAsSystem(): Promise<HeynaboEventResponse[]> {
     const token = await getSystemToken()
-    const response = await $fetch<HeynaboEventResponse[]>(`${heyNaboApi}/members/events/`, {
+    const response = await $fetch<{list: HeynaboEventResponse[]}>(`${heyNaboApi}/members/events/`, {
         headers: {Authorization: `Bearer ${token}`}
     })
-    return response || []
+    return response?.list || []
 }

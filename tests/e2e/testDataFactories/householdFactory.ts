@@ -420,14 +420,23 @@ export class HouseholdFactory {
     /**
      * Update inhabitant preferences via household endpoint (for members, not admin)
      * Uses /api/household/inhabitants/[id]/preferences - requires household access
+     *
+     * @param seasonId - Optional seasonId query param for parallel-safe testing
+     * @param assertResponse - Optional callback to assert response properties
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
         inhabitantId: number,
         dinnerPreferences: Record<string, string>,
-        expectedStatus: number = 200
+        expectedStatus: number = 200,
+        seasonId?: number,
+        assertResponse?: (response: InhabitantUpdateResponse) => void
     ): Promise<InhabitantUpdateResponse | null> => {
-        const response = await context.request.post(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+        const url = seasonId !== undefined
+            ? `/api/household/inhabitants/${inhabitantId}/preferences?seasonId=${seasonId}`
+            : `/api/household/inhabitants/${inhabitantId}/preferences`
+
+        const response = await context.request.post(url, {
             headers,
             data: {dinnerPreferences}
         })
@@ -437,7 +446,12 @@ export class HouseholdFactory {
         expect(status, `updateInhabitantPreferences failed: ${responseBody}`).toBe(expectedStatus)
 
         if (expectedStatus !== 200) return null
-        return InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
+
+        const parsed = InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
+        if (assertResponse) {
+            assertResponse(parsed)
+        }
+        return parsed
     }
 
     /**

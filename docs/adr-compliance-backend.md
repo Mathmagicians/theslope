@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-04 (Ticket Claim feature complete - claim endpoint, state/sortBy filters, authorization)
+**Last Updated:** 2026-01-04 (Household preferences endpoint for non-admin users)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
