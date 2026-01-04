@@ -51,6 +51,9 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   disabled: false,
   autoResetMs: 10000,
+  size: undefined,
+  icon: undefined,
+  confirmIcon: undefined,
   initialColor: 'neutral',
   initialVariant: 'outline'
 })

@@ -1,4 +1,4 @@
-import type {OrderDisplay, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -138,6 +138,34 @@ export const useBookingsStore = defineStore("Bookings", () => {
             return updatedOrder
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke opdatere bestilling')
+            throw e
+        }
+    }
+
+    const claimOrder = async (orderId: number, inhabitantId: number): Promise<OrderDetail> => {
+        try {
+            const claimedOrder = await $fetch<OrderDetail>(`/api/order/${orderId}/claim`, {
+                method: 'POST',
+                body: {inhabitantId}
+            })
+            console.info(CTX, `Claimed order ${orderId} for inhabitant ${inhabitantId}`)
+            await refreshOrders()
+            return claimedOrder
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke overtage billet')
+            throw e
+        }
+    }
+
+    const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
+        try {
+            const released = await $fetch<OrderDisplay[]>('/api/order', {
+                query: {dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
+            })
+            console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
+            return released.map(order => OrderDisplaySchema.parse(order))
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke hente ledige billetter')
             throw e
         }
     }
@@ -425,6 +453,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         createOrder,
         deleteOrder,
         updateOrder,
+        claimOrder,
+        fetchReleasedOrders,
         initBookingsStore,
 
         // dinner event actions
