@@ -220,6 +220,7 @@ const isAnnouncingDinner = computed(() => announceStatus.value === 'pending')
 // Cancel dinner with useAsyncData for loading state (ADR-007: component-local data)
 const cancelParams = ref<{dinnerEventId: number} | null>(null)
 const {
+  data: cancelResult,
   status: cancelStatus,
   execute: executeCancel
 } = useAsyncData(
@@ -302,8 +303,10 @@ const handleCancelDinner = async () => {
   cancelParams.value = {dinnerEventId: selectedDinnerId.value}
   await executeCancel()
 
+  console.log('Cancel result:', cancelResult.value, 'status:', cancelStatus.value)
+
   // Check if cancel succeeded (useAsyncData doesn't throw, it captures errors)
-  if (cancelStatus.value === 'error') {
+  if (cancelStatus.value === 'error' || !cancelResult.value) {
     console.error('Failed to cancel dinner')
     return
   }
@@ -311,7 +314,7 @@ const handleCancelDinner = async () => {
   await refreshDinnerEventDetail() // Refresh page-owned data
   toast.add({
     title: 'Middag aflyst',
-    description: 'Fællesspisningen er blevet aflyst',
+    description: `${cancelResult.value.menuTitle || 'Fællesspisningen'} d. ${formatDate(cancelResult.value.date)} er blevet aflyst`,
     icon: ICONS.xMark,
     color: COLOR.warning
   })

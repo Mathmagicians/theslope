@@ -18,20 +18,33 @@ import type {TransactionCreateData} from '~~/server/data/financesRepository'
  * preferences (ADR-015 scaffolding). Deadline is for CANCELLING, not signing up.
  */
 export const DEADLINE_LABELS = {
+    SCHEDULED: {
+        openText: 'Fællesspisningen er i kalenderen',
+        closedText: 'Fællesspisningen er i kalenderen'
+    },
     ANNOUNCED: {
         label: 'Menu',
-        openText: 'Venter på chefkokken',
-        closedText: 'Annonceret'
+        openText: 'Chefkokken skal publicere sin menu',
+        closedText: 'Chefkokken har publiceret sin menu',
+        deadlinePrefix: 'om'
     },
     BOOKING_CLOSED: {
         label: 'Framelding',
-        openText: 'Åben',
-        closedText: 'Lukket'
+        openText: 'Man kan ændre sin tilmelding',
+        closedText: 'Man kan ikke længere framelde sig',
+        deadlinePrefix: 'åben de næste'
     },
     GROCERIES_DONE: {
         label: 'Indkøb',
-        openText: 'Beløb mangler',
-        closedText: 'Bestilt'
+        openText: 'Chefkokken skal bestille madvarer',
+        closedText: 'Chefkokken har bestilt madvarer',
+        deadlinePrefix: 'om'
+    },
+    CONSUMED: {
+        label: 'Spisning',
+        openText: 'Fællesspisning forude',
+        closedText: 'Vi har spist den dejlige mad',
+        deadlinePrefix: 'om'
     }
 } as const
 
@@ -64,8 +77,15 @@ export enum DinnerStepState {
     CONSUMED
 }
 
-/** Alarm levels: 0=none, 1=warning, 2=critical */
-export type AlarmLevel = 0 | 1 | 2
+/**
+ * Deadline status levels for step indicators
+ * -1 = neutral (completed, or past deadline for non-user actions)
+ *  0 = success/green (on track, well before deadline)
+ *  1 = warning/yellow (approaching deadline)
+ *  2 = critical/red (very close to deadline)
+ *  3 = overdue/💀 (past deadline, not completed - user action required)
+ */
+export type AlarmLevel = -1 | 0 | 1 | 2 | 3
 
 export interface StepDeadlineResult {
     description: string
@@ -80,15 +100,38 @@ export interface StepConfig {
     getDeadline: (countdown: { hours: number; formatted: string }, isPastMenuDeadline: boolean, thresholds: { warning: number; critical: number }) => StepDeadlineResult
 }
 
-// Deadline helpers
-const staticDeadline = (description: string): StepConfig['getDeadline'] =>
-    () => ({ description, alarm: 0 })
+// Deadline helpers - calculate alarm level based on countdown and thresholds
+const getAlarmLevel = (countdown: { hours: number }, thresholds: { warning: number; critical: number }): AlarmLevel => {
+    if (countdown.hours <= 0) return 3 // overdue
+    if (countdown.hours < thresholds.critical) return 2 // critical/red
+    if (countdown.hours < thresholds.warning) return 1 // warning/yellow
+    return 0 // success/green
+}
 
-const countdownDeadline = (prefix: string, defaultText: string): StepConfig['getDeadline'] =>
+// No deadline - always neutral
+const noDeadline = (): StepConfig['getDeadline'] => () => ({ description: '', alarm: -1 })
+
+// User action deadline: g/y/r/💀 (overdue shows skull)
+const userActionDeadline = (prefix: string): StepConfig['getDeadline'] =>
+    (countdown, isPastDeadline, thresholds) => {
+        if (isPastDeadline) return { description: '', alarm: 3 }
+        const alarm = getAlarmLevel(countdown, thresholds)
+        return { description: prefix ? `${prefix} ${countdown.formatted.toLowerCase()}` : '', alarm }
+    }
+
+// System deadline: g/y/r/neutral (overdue shows neutral, not skull)
+const systemDeadline = (prefix: string): StepConfig['getDeadline'] =>
     (countdown, _, thresholds) => {
-        if (countdown.hours < thresholds.critical && countdown.hours > 0) return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm: 2 }
-        if (countdown.hours < thresholds.warning && countdown.hours > 0) return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm: 1 }
-        return { description: defaultText, alarm: 0 }
+        const alarm = getAlarmLevel(countdown, thresholds)
+        if (alarm === 3) return { description: '', alarm: -1 }
+        return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm }
+    }
+
+// Countdown only: green before, neutral after (no warning/critical)
+const countdownOnly = (prefix: string): StepConfig['getDeadline'] =>
+    (countdown) => {
+        if (countdown.hours <= 0) return { description: '', alarm: -1 }
+        return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm: 0 }
     }
 
 export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
@@ -96,42 +139,36 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
         step: 0,
         title: 'Planlagt',
         icon: ICONS.calendar,
-        text: 'Fællesspisningen er i kalenderen',
-        getDeadline: (countdown, isPastMenuDeadline, thresholds) => {
-            if (isPastMenuDeadline) return { description: 'Deadline overskredet', alarm: 2 }
-            if (countdown.hours <= 0) return { description: 'Deadline overskredet', alarm: 2 }
-            if (countdown.hours < thresholds.critical) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 2 }
-            if (countdown.hours < thresholds.warning) return { description: `Om ${countdown.formatted.toLowerCase()}`, alarm: 1 }
-            return { description: 'Menu planlægges', alarm: 0 }
-        }
+        text: DEADLINE_LABELS.SCHEDULED.closedText,
+        getDeadline: noDeadline()
     },
     [DinnerStepState.ANNOUNCED]: {
         step: 1,
         title: 'Publiceret',
         icon: ICONS.megaphone,
-        text: 'Chefkokken har publiceret sin menu',
-        getDeadline: countdownDeadline('Tilmelding lukker om', 'Booking åben')
+        text: DEADLINE_LABELS.ANNOUNCED.closedText,
+        getDeadline: userActionDeadline(DEADLINE_LABELS.ANNOUNCED.deadlinePrefix)
     },
     [DinnerStepState.BOOKING_CLOSED]: {
         step: 2,
         title: 'Lukket for ændringer',
         icon: ICONS.ticket,
-        text: 'Man kan ikke længere framelde sig',
-        getDeadline: staticDeadline('Bestillinger låst')
+        text: DEADLINE_LABELS.BOOKING_CLOSED.closedText,
+        getDeadline: systemDeadline(DEADLINE_LABELS.BOOKING_CLOSED.deadlinePrefix)
     },
     [DinnerStepState.GROCERIES_DONE]: {
         step: 3,
         title: 'Madbestilling klar',
         icon: ICONS.shoppingCart,
-        text: 'Chefkokken har bestilt madvarer',
-        getDeadline: countdownDeadline('Middag om', 'Klar til madlavning')
+        text: DEADLINE_LABELS.GROCERIES_DONE.closedText,
+        getDeadline: userActionDeadline(DEADLINE_LABELS.GROCERIES_DONE.deadlinePrefix)
     },
     [DinnerStepState.CONSUMED]: {
         step: 4,
         title: 'Afholdt',
         icon: ICONS.checkCircle,
-        text: 'Vi har spist den dejlige mad',
-        getDeadline: staticDeadline('Fællesspisning')
+        text: DEADLINE_LABELS.CONSUMED.closedText,
+        getDeadline: countdownOnly(DEADLINE_LABELS.CONSUMED.deadlinePrefix)
     }
 }
 

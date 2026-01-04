@@ -313,16 +313,13 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
           </UBadge>
         </div>
       </div>
-      <UButton
+      <DangerButton
         data-testid="delete-team-button"
-        color="winery"
-        variant="solid"
-        icon="i-healthicons-death-alt"
+        :label="`Slet ${teamName}`"
+        :confirm-label="`Tryk igen for at slette ${teamName}...`"
         class="w-full md:w-auto"
-        @click="handleDelete"
-      >
-        Slet <span class="whitespace-nowrap">{{ teamName }}</span>
-      </UButton>
+        @confirm="handleDelete"
+      />
     </div>
 
     <!-- VIEW MODE: Team name header -->

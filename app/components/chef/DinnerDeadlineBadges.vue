@@ -13,24 +13,24 @@
  * STEP → BADGE MAPPING (with urgency emojis)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
- * Urgency emojis: 🟢 done, ⚪ neutral, 🟡 warning, 🔴 critical
+ * Alarm levels: -1=neutral(⚪), 0=green(🟢), 1=yellow(🟡), 2=red(🔴), 3=overdue(⚫💀)
  *
  *  ●━━━━━━━━━━━━○━━━━━━━━━━━━○━━━━━━━━━━━━○━━━━━━━━━━━━○
  *  │            │            │            │            │
- *  Planlagt     Annonceret   Tilmelding   Indkøb       Afholdt
- *  │            │            lukket       klar         │
+ *  Planlagt     Publiceret   Lukket for   Madbestilling Afholdt
+ *  │            │            ændringer    klar         │
  *  │            │            │            │            │
- *  (no badge)   [🟡 om 2d]   [🟢 Åben]    [🔴 om 1d]   │
- *               Menu         Tilmelding   Indkøb       │
- *               deadline     status       deadline     │
+ *  (no badge)   [🟢 om 2d]   [🟢 åben..]  [🟢 om 1d]   [🟢 om..]
+ *               g/y/r/💀     g/y/r/⚪     g/y/r/💀     g/⚪
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * STANDALONE MODE (mode='standalone') - Vertical list for agenda card
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ Menu: [🟡 om 2d 4t]              ← Urgency emoji + countdown            │
- * │ Tilmelding: [🟢 Åben]            ← Status with emoji                    │
+ * │ Menu: [🟢 om 2d 4t]              ← Urgency emoji + countdown            │
+ * │ Framelding: [🟢 åben de næste..] ← Status with countdown                │
  * │ Indkøb: [🔴 om 1d]               ← Urgency emoji + countdown            │
+ * │ Spisning: [🟢 om 18d]            ← Countdown to dinner                  │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -39,18 +39,20 @@
  * Returns badge data for each step, rendered by stepper component
  *
  * ADR Compliance:
- * - ADR-001: Types from validation composables, business logic in useSeason
- * - Uses design system (URGENCY_TO_BADGE, COLOR)
+ * - ADR-001: Types from validation composables, business logic in useBooking
+ * - Uses design system (ALARM_TO_BADGE)
  * - Mobile-first responsive design
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { SeasonDeadlines } from '~/composables/useSeason'
+import type { AlarmLevel } from '~/composables/useBooking'
+import { DinnerStepState, DEADLINE_LABELS, DINNER_STEP_MAP } from '~/composables/useBooking'
 
 export interface DeadlineBadge {
   step: number           // Which stepper step this badge belongs to
   label: string          // Label for standalone mode
-  value: string          // Badge text
+  value: string          // Badge text (emoji + text)
   color: NuxtUIColor     // Badge color
   helpText: string       // Help text for standalone mode
 }
@@ -66,94 +68,82 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { SIZES, URGENCY_TO_BADGE, DEADLINE_BADGES } = useTheSlopeDesignSystem()
+const { SIZES, ALARM_TO_BADGE } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
-const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
-const { getDinnerStepState, DEADLINE_LABELS } = useBooking()
+const { getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()
+const { getDinnerStepState } = useBooking()
 const dinnerStartHour = getDefaultDinnerStartTime()
 
 // Current step state for this dinner (uses season-specific deadline from props)
 const stepState = computed(() => getDinnerStepState(props.dinnerEvent, props.deadlines))
 
-// ========== MENU DEADLINE BADGE (Step 1: Annonceret) ==========
-// Green dot if announced (step >= 1), otherwise countdown with urgency color
+// App config thresholds
+const appConfig = useAppConfig()
+const thresholds = {
+  warning: appConfig.theslope?.cookingDeadlines?.warningHours ?? 72,
+  critical: appConfig.theslope?.cookingDeadlines?.criticalHours ?? 24
+}
 
-const menuBadge = computed((): DeadlineBadge => {
-  // Menu is done when we've reached at least ANNOUNCED step
-  if (stepState.value >= DinnerStepState.ANNOUNCED) {
-    return {
-      step: 1,
-      label: DEADLINE_LABELS.ANNOUNCED.label,
-      value: `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.ANNOUNCED.closedText}`,
-      color: DEADLINE_BADGES.DONE.color as NuxtUIColor,
-      helpText: 'Menuen er annonceret'
-    }
-  }
+// Helper to get badge from alarm level
+const getBadgeFromAlarm = (alarm: AlarmLevel) => ALARM_TO_BADGE[alarm]
 
+// Helper to create badge for a step using DINNER_STEP_MAP getDeadline
+const createBadge = (
+  step: number,
+  stepKey: keyof typeof DEADLINE_LABELS,
+  stepState: DinnerStepState,
+  isCompleted: boolean
+): DeadlineBadge => {
+  const labels = DEADLINE_LABELS[stepKey]
+  const stepConfig = DINNER_STEP_MAP[stepState]
+
+  // Calculate deadline using step's getDeadline function
   const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
   const countdown = calculateCountdown(dinnerTimeRange.start)
-  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
-  const badge = URGENCY_TO_BADGE[urgency]
+  const isPastDeadline = props.deadlines.isAnnounceMenuPastDeadline(props.dinnerEvent.date)
+  const result = stepConfig.getDeadline(countdown, isPastDeadline, thresholds)
+
+  // Use neutral (-1) for completed steps, otherwise use calculated alarm
+  const alarm = isCompleted ? -1 : result.alarm
+  const badge = getBadgeFromAlarm(alarm)
+  const text = isCompleted ? labels.closedText : labels.openText
 
   return {
-    step: 1,
-    label: DEADLINE_LABELS.ANNOUNCED.label,
-    value: `${badge.emoji} om ${countdown.formatted}`,
+    step,
+    label: 'label' in labels ? labels.label : '',
+    value: result.description ? `${badge.emoji} ${result.description}` : `${badge.emoji} ${text}`,
     color: badge.color as NuxtUIColor,
-    helpText: DEADLINE_LABELS.ANNOUNCED.openText
+    helpText: text
   }
+}
+
+// ========== MENU BADGE (Step 1: Publiceret) ==========
+const menuBadge = computed((): DeadlineBadge => {
+  const isCompleted = stepState.value >= DinnerStepState.ANNOUNCED
+  return createBadge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, isCompleted)
 })
 
-// ========== BOOKING CLOSED STATUS BADGE (Step 2) ==========
-// "Framelding" (not "Tilmelding") - system auto-signs up via preferences (ADR-015)
-
+// ========== BOOKING CLOSED BADGE (Step 2: Lukket for ændringer) ==========
 const bookingClosedBadge = computed((): DeadlineBadge => {
   const isOpen = props.deadlines.canModifyOrders(props.dinnerEvent.date)
-  return {
-    step: 2,
-    label: DEADLINE_LABELS.BOOKING_CLOSED.label,
-    value: isOpen
-      ? `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.BOOKING_CLOSED.openText}`
-      : `${DEADLINE_BADGES.ON_TRACK.emoji} ${DEADLINE_LABELS.BOOKING_CLOSED.closedText}`,
-    color: (isOpen ? DEADLINE_BADGES.DONE.color : DEADLINE_BADGES.ON_TRACK.color) as NuxtUIColor,
-    helpText: isOpen
-      ? 'Framelding mulig'
-      : 'Man kan kun frigive billetter'
-  }
+  return createBadge(2, 'BOOKING_CLOSED', DinnerStepState.BOOKING_CLOSED, !isOpen)
 })
 
-// ========== GROCERIES DONE BADGE (Step 3) ==========
-// Green dot if groceries done (totalCost > 0), otherwise countdown with urgency color
-
+// ========== GROCERIES BADGE (Step 3: Madbestilling klar) ==========
 const groceriesDoneBadge = computed((): DeadlineBadge => {
-  // Groceries done when we've reached at least GROCERIES_DONE step
-  if (stepState.value >= DinnerStepState.GROCERIES_DONE) {
-    return {
-      step: 3,
-      label: DEADLINE_LABELS.GROCERIES_DONE.label,
-      value: `${DEADLINE_BADGES.DONE.emoji} ${DEADLINE_LABELS.GROCERIES_DONE.closedText}`,
-      color: DEADLINE_BADGES.DONE.color as NuxtUIColor,
-      helpText: 'Indkøb er registreret'
-    }
-  }
-
-  const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
-  const countdown = calculateCountdown(dinnerTimeRange.start)
-  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
-  const badge = URGENCY_TO_BADGE[urgency]
-
-  return {
-    step: 3,
-    label: DEADLINE_LABELS.GROCERIES_DONE.label,
-    value: `${badge.emoji} om ${countdown.formatted}`,
-    color: badge.color as NuxtUIColor,
-    helpText: DEADLINE_LABELS.GROCERIES_DONE.openText
-  }
+  const isCompleted = stepState.value >= DinnerStepState.GROCERIES_DONE
+  return createBadge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, isCompleted)
 })
 
-// All badges in step order (for standalone mode)
-const badges = computed(() => [menuBadge.value, bookingClosedBadge.value, groceriesDoneBadge.value])
+// ========== CONSUMED BADGE (Step 4: Afholdt) ==========
+const consumedBadge = computed((): DeadlineBadge => {
+  const isCompleted = stepState.value >= DinnerStepState.CONSUMED
+  return createBadge(4, 'CONSUMED', DinnerStepState.CONSUMED, isCompleted)
+})
+
+// All badges in step order (for standalone mode) - step 0 (Planlagt) has no badge
+const badges = computed(() => [menuBadge.value, bookingClosedBadge.value, groceriesDoneBadge.value, consumedBadge.value])
 
 // Export badges by step (for stepper mode)
 const getBadgeForStep = (step: number): DeadlineBadge | null => {

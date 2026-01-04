@@ -332,35 +332,10 @@ const handleAdvanceState = () => {
   emit('advance-state', DinnerState.ANNOUNCED)
 }
 
-// Two-step cancel confirmation (GitHub-style)
-const isCancelConfirmMode = ref(false)
-const cancelButtonRef = ref<HTMLElement | null>(null)
-
-const handleCancelClick = () => {
-  if (isCancelConfirmMode.value) {
-    // Second click - actually cancel
-    emit('cancel-dinner')
-    isCancelConfirmMode.value = false
-  } else {
-    // First click - enter confirm mode
-    isCancelConfirmMode.value = true
-  }
+// Cancel dinner handler (DangerButton handles 2-step confirmation)
+const handleCancelConfirm = () => {
+  emit('cancel-dinner')
 }
-
-// Reset confirm mode when clicking outside
-const handleClickOutside = (event: MouseEvent) => {
-  if (isCancelConfirmMode.value && cancelButtonRef.value && !cancelButtonRef.value.contains(event.target as Node)) {
-    isCancelConfirmMode.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
 
 const handleCardClick = () => {
   if (props.isCompact) {
@@ -484,21 +459,15 @@ const handleCardClick = () => {
                   Publicer
                 </UButton>
 
-                <!-- Cancel button -->
-                <div v-if="canCancelDinner(dinnerEvent)" ref="cancelButtonRef">
-                  <UButton
-                    :color="isCancelConfirmMode ? COLOR.error : HERO_BUTTON.primaryButton"
-                    :variant="isCancelConfirmMode ? 'solid' : 'outline'"
-                    :size="SIZES.standard"
-                    icon="i-heroicons-x-mark"
-                    :disabled="isCancelling"
-                    :loading="isCancelling"
-                    name="cancel-dinner"
-                    @click="handleCancelClick"
-                  >
-                    {{ isCancelConfirmMode ? `Aflys (${formattedShortDate})` : 'Aflys' }}
-                  </UButton>
-                </div>
+                <!-- Cancel button (GitHub-style 2-step confirmation) -->
+                <DangerButton
+                  v-if="canCancelDinner(dinnerEvent)"
+                  label="Aflys"
+                  :confirm-label="`Tryk igen for at aflyse ${formattedShortDate}...`"
+                  :loading="isCancelling"
+                  :initial-color="HERO_BUTTON.primaryButton"
+                  @confirm="handleCancelConfirm"
+                />
               </template>
             </div>
           </template>

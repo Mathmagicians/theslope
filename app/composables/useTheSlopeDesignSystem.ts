@@ -523,6 +523,9 @@ export const ICONS = {
     // Empty states
     robotDead: 'i-mage-robot-dead',
 
+    // Danger/delete confirmations
+    dangerConfirm: 'i-healthicons-death-alt',
+
     // Descriptive
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
@@ -921,11 +924,17 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
-    DONE: {
+    SUCCESS: {
         color: COLOR.success,
-        label: 'Færdig',
+        label: 'OK',
         icon: 'i-heroicons-check-circle',
         emoji: '🟢'
+    },
+    WARNING: {
+        color: COLOR.warning,
+        label: 'Snart',
+        icon: 'i-heroicons-clock',
+        emoji: '🟡'
     },
     CRITICAL: {
         color: COLOR.error,
@@ -933,11 +942,24 @@ export const DEADLINE_BADGES = {
         icon: 'i-heroicons-exclamation-circle',
         emoji: '🔴'
     },
-    WARNING: {
-        color: COLOR.warning,
-        label: 'Snart',
-        icon: 'i-heroicons-clock',
-        emoji: '🟡'
+    OVERDUE: {
+        color: COLOR.error,
+        label: 'Forsinket',
+        icon: ICONS.dangerConfirm,
+        emoji: '⚫'
+    },
+    NEUTRAL: {
+        color: COLOR.neutral,
+        label: 'Neutral',
+        icon: 'i-heroicons-minus-circle',
+        emoji: '⚪'
+    },
+    // Legacy aliases for backwards compatibility
+    DONE: {
+        color: COLOR.success,
+        label: 'Færdig',
+        icon: 'i-heroicons-check-circle',
+        emoji: '🟢'
     },
     ON_TRACK: {
         color: COLOR.neutral,
@@ -948,7 +970,20 @@ export const DEADLINE_BADGES = {
 } as const
 
 /**
+ * Maps AlarmLevel to DEADLINE_BADGES
+ * -1 = Neutral, 0 = Success/Green, 1 = Warning, 2 = Critical, 3 = Overdue/💀
+ */
+export const ALARM_TO_BADGE = {
+    [-1]: DEADLINE_BADGES.NEUTRAL,
+    0: DEADLINE_BADGES.SUCCESS,
+    1: DEADLINE_BADGES.WARNING,
+    2: DEADLINE_BADGES.CRITICAL,
+    3: DEADLINE_BADGES.OVERDUE
+} as const
+
+/**
  * Maps DeadlineUrgency (0 | 1 | 2) to DEADLINE_BADGES
+ * @deprecated Use ALARM_TO_BADGE instead
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export const URGENCY_TO_BADGE = {
@@ -1025,6 +1060,7 @@ export const useTheSlopeDesignSystem = () => {
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         DEADLINE_BADGES,
+        ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
         ICONS,
         IMG,

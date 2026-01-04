@@ -138,35 +138,12 @@ const alertConfig = computed(() => {
   }
 })
 
-// Button configuration based on active state
-const buttonConfig = computed(() => ({
-  activate: {
-    name: 'activate-season',
-    color: 'success' as const,
-    leadingIcon: ICONS.playCircle,
-    trailingIcon: ICONS.arrowRight,
-    label: 'Aktiver Sæson',
-    action: () => emit('activate')
-  },
-  deactivate: {
-    name: 'deactivate-season',
-    color: 'warning' as const,
-    leadingIcon: ICONS.pauseCircle,
-    trailingIcon: ICONS.arrowRight,
-    label: 'Deaktiver Sæson',
-    action: () => emit('deactivate')
-  }
-}))
-
-const currentButton = computed(() =>
-  season.value?.isActive ? buttonConfig.value.deactivate : buttonConfig.value.activate
-)
-
-// Button text - shows "Arbejder..." when loading
-const buttonText = computed(() => {
-  if (isActivatingSeason.value) return 'Arbejder...'
-  return currentButton.value.label
-})
+// Activate button config (deactivate now uses DangerButton)
+const activateButtonConfig = {
+  color: 'success' as const,
+  leadingIcon: ICONS.playCircle,
+  trailingIcon: ICONS.arrowRight
+}
 
 // Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
@@ -186,17 +163,29 @@ const showButton = computed(() => {
   >
     <template v-if="showButton" #actions>
       <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
+        <!-- Deactivate uses DangerButton (destructive action) -->
+        <DangerButton
+          v-if="season?.isActive"
+          data-testid="deactivate-season"
+          label="Deaktiver Sæson"
+          confirm-label="Tryk igen for at deaktivere..."
+          :loading="isActivatingSeason"
+          :size="SIZES.small"
+          @confirm="emit('deactivate')"
+        />
+        <!-- Activate uses regular button (constructive action) -->
         <UButton
-          :data-testid="currentButton.name"
-          :color="currentButton.color"
-          :leading-icon="currentButton.leadingIcon"
-          :trailing-icon="currentButton.trailingIcon"
+          v-else
+          data-testid="activate-season"
+          :color="activateButtonConfig.color"
+          :leading-icon="activateButtonConfig.leadingIcon"
+          :trailing-icon="activateButtonConfig.trailingIcon"
           :size="SIZES.small"
           :loading="isActivatingSeason"
           :disabled="isActivatingSeason"
-          @click="currentButton.action"
+          @click="emit('activate')"
         >
-          {{ buttonText }}
+          {{ isActivatingSeason ? 'Arbejder...' : 'Aktiver Sæson' }}
         </UButton>
       </UFormField>
     </template>
