@@ -14,6 +14,16 @@ VALUES(1, 2, 2, datetime('2020-01-01'), 'Heynabo!', 'Heynabo! ');
 INSERT OR IGNORE INTO Inhabitant (id, heynaboId, userId, householdId, name, lastName)
 VALUES(1, 153, 1, 1, 'Skraaningen', 'API');
 
+-- Seed Member User without system roles (idempotent - skips if exists)
+-- Email MUST match HEY_NABO_EJ_ADMIN_USERNAME environment variable
+INSERT OR IGNORE INTO User (id, email, phone, passwordHash, systemRoles, createdAt, updatedAt)
+VALUES(2, 'test@mathmagicians.dk', NULL, 'removeme', json('[]'), datetime('now'), datetime('now'));
+
+-- Seed Member Inhabitant in Admin Household (idempotent - skips if exists)
+-- Uses REAL heynaboId=231 so Heynabo import can upsert this record
+INSERT OR IGNORE INTO Inhabitant (id, heynaboId, userId, householdId, name, lastName)
+VALUES(2, 231, 2, 1, 'Test', 'Member');
+
 -- Seed Allergy Types (from allergiliste_062025.pdf)
 INSERT OR IGNORE INTO AllergyType (id, name, description, icon)
 VALUES

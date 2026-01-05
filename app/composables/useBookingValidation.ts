@@ -107,10 +107,17 @@ export const useBookingValidation = () => {
     /**
      * Order Display - Minimal for index endpoints (GET /api/order), all scalar fields
      * ADR-009: Lightweight with flattened ticketType
+     *
+     * Provenance: Optional fields populated for claimed tickets (USER_CLAIMED history)
+     * - householdShortname: Original owner's household shortname (e.g., "AR_1")
+     * - snapshotAllergies: Original ticket's allergies at claim time
      */
     const OrderDisplaySchema = OrderBaseSchema.extend({
         id: z.number().int().positive(),
-        ticketType: TicketTypeSchema.nullable() // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
+        ticketType: TicketTypeSchema.nullable(), // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
+        // Provenance fields for claimed tickets (populated from USER_CLAIMED OrderHistory)
+        provenanceHousehold: z.string().optional(),       // Original owner's household shortname
+        provenanceAllergies: z.array(z.string()).optional() // Original ticket's allergies at claim time
     })
 
     /**

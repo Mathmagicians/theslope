@@ -64,6 +64,7 @@ export const ROUTE_PERMISSIONS: Array<{
     { prefix: '/api/order/', methods: null, check: isAuthenticated },
     { prefix: '/api/household/', methods: null, check: isAuthenticated },
     { prefix: '/api/team/', methods: null, check: isAuthenticated },
+    { prefix: '/api/chef/', methods: null, check: isAuthenticated },
 
     // ===== FALLBACK =====
 

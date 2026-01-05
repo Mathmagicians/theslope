@@ -10,9 +10,34 @@
  * - UTable with household inhabitants + synthetic rows (power mode, guest)
  * - VIEW mode: Badges only, no synthetic rows, shows released ticket warnings
  * - EDIT mode: Full controls with power mode (first) and guest row (last)
+ * - Guest section: Shows guest tickets at bottom with "inviteret af" attribution
+ * - Provenance: Shows 🎟️ fra [shortname] for claimed/swapped tickets
+ * - Allergies: Shows 🥜 [allergies] for tickets with allergies from snapshot
  * - Deadline visibility: Shows booking/dining mode deadline status
  * - Released tickets: Only exist after booking deadline, warnings for own released
  * - Responsive: Horizontal selectors (desktop), vertical (mobile)
+ *
+ * EDIT Mode Layout:
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │  ⚡ Hele familien                            [🍽️][🕐][🛍️][❌]       [Gem]  │
+ * │ ─────────────────────────────────────────────────────────────────────────── │
+ * │  Anna Larsen              Voksen             [🍽️][🕐][🛍️][❌]        55 kr │
+ * │                                                                             │
+ * │  Bob Larsen               Voksen             [🍽️][🕐][🛍️][❌]        55 kr │
+ * │  🎟️ fra AR_1  🥜 Gluten, Mælk                                               │
+ * │                                                                             │
+ * │  Clara Larsen             Barn               [🍽️][🕐][🛍️][❌]        35 kr │
+ * │ ─────────────────────────────────────────────────────────────────────────── │
+ * │  👤 Tilføj gæst           [Voksen ▼]         [🍽️][🕐][🛍️]          [Tilføj] │
+ * │  🎟️ Ledige:  [Voksen] 2  [Barn] 1                                           │
+ * │ ─────────────────────────────────────────────────────────────────────────── │
+ * │  GÆSTER                                                                     │
+ * │  Gæst (inviteret af Anna) Voksen             [🍽️][🕐][🛍️][❌]        55 kr │
+ * │  🎟️ fra B12  🥜 Nødder                                                      │
+ * │                                                                             │
+ * │  Gæst (inviteret af Anna) Barn               [🍽️][🕐][🛍️][❌]        35 kr │
+ * │  🎟️ fra S31                                                                 │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * Deadline States:
  * - Before booking deadline: Normal booking, ❌ = cancel (delete order)

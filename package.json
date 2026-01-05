@@ -25,7 +25,7 @@
     "test:e2e:api": "npx playwright test --project=chromium-api --project=chromium-api-serial --reporter=html,line",
     "test:e2e:api:seq": "npx playwright test --project=chromium-api-serial --no-deps --reporter=html,line",
     "test:e2e:ui": "npx playwright test --project=chromium-ui --reporter=html,line",
-    "test:e2e:smoke": "npx playwright test --grep @smoke --reporter=html,line",
+    "test:e2e:smoke": "npx playwright test --project=chromium-smoke --reporter=html,line",
     "test:all": "npm run test:unit && npm run test:e2e:api && npm run test:e2e:ui",
     "db:seed:local": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --local",
     "db:seed": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env=dev --remote",
