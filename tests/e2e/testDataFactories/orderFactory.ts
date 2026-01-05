@@ -366,11 +366,12 @@ export class OrderFactory {
     dinnerEventId: number,
     ticketPriceId: number,
     inhabitantId: number,
+    isGuestTicket: boolean = false,
     expectedStatus: number = 200
   ): Promise<OrderDetail | null> => {
     const response = await context.request.post(`${ORDER_ENDPOINT}/claim`, {
       headers,
-      data: { dinnerEventId, ticketPriceId, inhabitantId }
+      data: { dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket }
     })
 
     const status = response.status()

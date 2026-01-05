@@ -478,6 +478,7 @@ export async function claimOrder(
     ticketPriceId: number,
     newInhabitantId: number,
     claimedByUserId: number,
+    isGuestTicket: boolean = false,
     maxRetries: number = 3
 ): Promise<OrderDetail | null> {
     const LOG = '🎟️ > ORDER > [CLAIM]'
@@ -524,6 +525,7 @@ export async function claimOrder(
                     inhabitantId: newInhabitantId,
                     bookedByUserId: claimedByUserId,
                     state: OrderStateSchema.enum.BOOKED,
+                    isGuestTicket,
                     releasedAt: null
                 },
                 include: {

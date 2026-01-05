@@ -97,6 +97,7 @@ export const useBookingValidation = () => {
         priceAtBooking: z.number().int(),
         dinnerMode: DinnerModeSchema,
         state: OrderStateSchema,
+        isGuestTicket: z.boolean().default(false), // True when ticket is for a guest (not the inhabitant themselves)
         releasedAt: z.coerce.date().nullable(),
         closedAt: z.coerce.date().nullable(),
         createdAt: z.coerce.date(),

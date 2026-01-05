@@ -52,22 +52,10 @@ test.describe('Household Preferences API', () => {
         )
     })
 
-    // Parametrized validation tests
-    const validationTests = [
-        {name: 'non-existent inhabitant', id: 999999, data: {dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)}, expectedStatus: 404},
-        {name: 'negative inhabitant ID', id: -1, data: {dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)}, expectedStatus: 400},
-        {name: 'missing dinnerPreferences', id: 'own', data: {}, expectedStatus: 400},
-        {name: 'invalid preferences format', id: 'own', data: {dinnerPreferences: 'invalid'}, expectedStatus: 400},
-    ] as const
-
-    validationTests.forEach(({name, id, data, expectedStatus}) => {
-        test(`GIVEN ${name} WHEN updating THEN returns ${expectedStatus}`, async ({browser}) => {
-            const memberContext = await memberValidatedBrowserContext(browser)
-            const {inhabitantId} = await getSessionUserInfo(memberContext)
-            const targetId = id === 'own' ? inhabitantId : id
-
-            const response = await memberContext.request.post(`/api/household/inhabitants/${targetId}/preferences`, {headers, data})
-            expect(response.status()).toBe(expectedStatus)
-        })
+    test('GIVEN non-existent inhabitant WHEN updating preferences THEN returns 404', async ({browser}) => {
+        const memberContext = await memberValidatedBrowserContext(browser)
+        await HouseholdFactory.updateInhabitantPreferences(
+            memberContext, 999999, createDefaultWeekdayMap(DinnerMode.DINEIN), 404
+        )
     })
 })

@@ -11,7 +11,8 @@ const {throwH3Error} = eventHandlerHelper
 const bodySchema = z.object({
     dinnerEventId: z.number().int().positive(),
     ticketPriceId: z.number().int().positive(),
-    inhabitantId: z.number().int().positive()
+    inhabitantId: z.number().int().positive(),
+    isGuestTicket: z.boolean().default(false) // True when claiming for a guest
 })
 
 /**
@@ -60,7 +61,8 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
             body.dinnerEventId,
             body.ticketPriceId,
             body.inhabitantId,
-            user.id
+            user.id,
+            body.isGuestTicket
         )
 
         if (!claimedOrder) {

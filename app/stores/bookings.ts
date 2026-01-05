@@ -142,13 +142,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
-    const claimOrder = async (dinnerEventId: number, ticketPriceId: number, inhabitantId: number): Promise<OrderDetail> => {
+    const claimOrder = async (dinnerEventId: number, ticketPriceId: number, inhabitantId: number, isGuestTicket: boolean = false): Promise<OrderDetail> => {
         try {
             const claimedOrder = await $fetch<OrderDetail>('/api/order/claim', {
                 method: 'POST',
-                body: {dinnerEventId, ticketPriceId, inhabitantId}
+                body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket}
             })
-            console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}`)
+            console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
             await refreshOrders()
             return claimedOrder
         } catch (e: unknown) {

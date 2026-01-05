@@ -206,6 +206,7 @@ const DinnerState = DinnerStateSchema.enum
 // Announce dinner with useAsyncData for loading state (ADR-007: component-local data)
 const announceParams = ref<{dinnerEventId: number} | null>(null)
 const {
+  data: announceResult,
   status: announceStatus,
   execute: executeAnnounce
 } = useAsyncData(
@@ -288,8 +289,10 @@ const handleAdvanceState = async (newState: string) => {
   }
 
   await refreshDinnerEventDetail() // Refresh page-owned data
+  const heynaboId = announceResult.value?.heynaboEventId
   toast.add({
     title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
+    description: heynaboId ? `Heynabo event ID: ${heynaboId}` : 'Ingen Heynabo ID returneret',
     icon: ICONS.megaphone,
     color: COLOR.success
   })

@@ -435,14 +435,14 @@ test.describe('Order API', () => {
     testOrderIds.push(result!.createdIds[0]!)
 
     // Claim without releasing - should fail (no RELEASED tickets available)
-    await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId, 409)
+    await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId, false, 409)
   })
 
   test('GIVEN non-existent dinner event WHEN claiming THEN fails with 409', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
     // Non-existent dinner event ID - no matching tickets
-    await OrderFactory.claimOrder(context, 999999, testAdultTicketPriceId, testInhabitantId, 409)
+    await OrderFactory.claimOrder(context, 999999, testAdultTicketPriceId, testInhabitantId, false, 409)
   })
 
   test('GET with allHouseholds=true returns orders from all households', async ({ browser }) => {
