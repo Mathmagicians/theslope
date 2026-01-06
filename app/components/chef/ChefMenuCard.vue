@@ -490,7 +490,7 @@ const handleCardClick = () => {
         <div v-if="dinnerEvent.chef" class="flex items-center gap-2 mt-3" data-testid="chef-display">
           <div class="relative">
             <UserListItem :inhabitants="dinnerEvent.chef" :show-names="false" compact />
-            <UIcon :name="ICONS.chef" class="absolute -top-1 -right-1 text-amber-600 text-sm" />
+            <UIcon :name="ICONS.chef" class="absolute -top-3 left-1/2 -translate-x-1/2 text-amber-600 text-2xl" />
           </div>
           <span class="text-sm text-neutral-600 dark:text-neutral-400">{{ chefNameWithInitials }}</span>
         </div>
