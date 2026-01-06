@@ -340,7 +340,7 @@ export type OrderAuditContext = {
 export type OrderUpdateFields = {
     dinnerMode?: DinnerMode
     state?: OrderState
-    releasedAt?: Date
+    releasedAt?: Date | null
 }
 
 /**

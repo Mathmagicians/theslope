@@ -112,7 +112,7 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         // If order was RELEASED, re-book it (restore BOOKED state, clear releasedAt)
         const isRebooking = existingOrder.state === OrderState.RELEASED
         const updates = isRebooking
-            ? {dinnerMode: body.dinnerMode, state: OrderState.BOOKED, releasedAt: undefined}
+            ? {dinnerMode: body.dinnerMode, state: OrderState.BOOKED, releasedAt: null}
             : {dinnerMode: body.dinnerMode}
 
         console.info(`${LOG} ${isRebooking ? 'Re-booking' : 'Updating'} order ${id} dinnerMode to ${body.dinnerMode}`)
