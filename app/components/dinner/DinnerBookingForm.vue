@@ -134,7 +134,7 @@ const household = computed(() => props.household ?? selectedHousehold.value)
 const { COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Ticket business logic
-const {getTicketTypeConfig, getTicketPriceForInhabitant, formatPrice} = useTicket()
+const {getTicketTypeConfig, getTicketPriceForInhabitant} = useTicket()
 
 // Season business logic for deadline checks (deadlines from prop, isDinnerPast from composable)
 const {isDinnerPast} = useSeason()

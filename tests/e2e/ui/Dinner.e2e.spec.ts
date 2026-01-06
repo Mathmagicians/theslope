@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 
-const {memberValidatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot} = testHelpers
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -26,17 +26,18 @@ test.describe('Dinner Page URL Navigation', () => {
     }
 
     test.beforeAll(async ({browser}) => {
-        const context = await memberValidatedBrowserContext(browser)
+        // Admin context for singleton season setup
+        const adminContext = await validatedBrowserContext(browser)
 
         // Use singleton active season (factory provides it with dinner events already created)
-        const season = await SeasonFactory.createActiveSeason(context)
+        const season = await SeasonFactory.createActiveSeason(adminContext)
 
         // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
             async () => {
-                const allEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
+                const allEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, season.id!)
                 const futureEvents = allEvents
                     .filter(e => new Date(e.date) >= today)
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -131,7 +132,9 @@ test.describe('Dinner Page URL Navigation', () => {
         await expect(panel, 'Dinner detail panel should be visible after auto-sync').toBeVisible()
     })
 
-    test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({page}) => {
+    test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
         const secondEventDate = testData.dates.second
 
         // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
@@ -164,7 +167,10 @@ test.describe('Dinner Page URL Navigation', () => {
         expect(panelText, `Panel should contain the date ${secondEventDate}`).toContain(secondEventDate)
     })
 
-    test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({page}) => {
+    test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
+
         // GIVEN: Date within season but without dinner event
         const noDinnerDate = formatDate(addDays(new Date(), 10))
 
@@ -197,7 +203,9 @@ test.describe('Dinner Page URL Navigation', () => {
         await expect(panel, 'Dinner detail panel should be visible after sync to nearest event').toBeVisible()
     })
 
-    test('GIVEN dinner page loaded WHEN clicking calendar date THEN displays selected dinner event', async ({page}) => {
+    test('GIVEN dinner page loaded WHEN clicking calendar date THEN displays selected dinner event', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
         const event2 = testData.events[1]!
 
         // GIVEN: Load page with first event's date

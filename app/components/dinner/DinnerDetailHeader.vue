@@ -46,10 +46,10 @@ const stateBadge = computed(() => {
 
 <template>
   <div
-    :class="`grid grid-cols-3 items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`"
+    :class="`flex flex-col md:grid md:grid-cols-3 items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`"
     data-testid="dinner-detail-header"
   >
-    <!-- Left: State badge -->
+    <!-- State badge (top on mobile, left on desktop) -->
     <div class="flex items-center gap-2">
       <UBadge
         color="mocha"
@@ -62,16 +62,16 @@ const stateBadge = computed(() => {
       </UBadge>
     </div>
 
-    <!-- Center: Date -->
-    <div class="flex items-center justify-center gap-2">
+    <!-- Date (middle on mobile, center on desktop) -->
+    <div class="flex items-center md:justify-center gap-2">
       <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize" />
       <span :class="TYPOGRAPHY.bodyTextMedium" class="capitalize">
         {{ formattedDate }}
       </span>
     </div>
 
-    <!-- Right: Heynabo link -->
-    <div class="flex items-center justify-end">
+    <!-- Heynabo link (bottom on mobile, right on desktop) -->
+    <div class="flex items-center md:justify-end">
       <UButton
         v-if="heynaboEventUrl"
         :to="heynaboEventUrl"

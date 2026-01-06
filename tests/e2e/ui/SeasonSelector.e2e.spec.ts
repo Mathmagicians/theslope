@@ -29,7 +29,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Create test-specific future season
         const futureYear = new Date().getFullYear() + 1
         futureSeason = await SeasonFactory.createSeason(context, {
-            shortName: salt('Future', testSalt),
+            shortName: salt('TestSeason-Future', testSalt),
             seasonDates: {
                 start: new Date(futureYear, 0, 1),
                 end: new Date(futureYear, 5, 30)
@@ -42,7 +42,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Create test-specific past season
         const pastYear = new Date().getFullYear() - 1
         pastSeason = await SeasonFactory.createSeason(context, {
-            shortName: salt('Past', testSalt),
+            shortName: salt('TestSeason-Past', testSalt),
             seasonDates: {
                 start: new Date(pastYear, 0, 1),
                 end: new Date(pastYear, 5, 30)

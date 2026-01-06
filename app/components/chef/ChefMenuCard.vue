@@ -120,6 +120,9 @@ const DinnerState = DinnerStateSchema.enum
 // Business logic from useBooking (ADR-001)
 const { getStepConfig, canCancelDinner } = useBooking()
 
+// Name formatting from useHousehold (ADR-001)
+const { formatNameWithInitials } = useHousehold()
+
 // Budget/VAT logic from useOrder (ADR-001)
 const { convertVat } = useOrder()
 
@@ -151,6 +154,12 @@ const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCE
 // Menu display
 const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())
 const menuTitle = computed(() => hasMenuTitle.value ? props.dinnerEvent.menuTitle : 'Chefkokken har ikke fundet på en god menu endnu')
+
+// Chef display
+const chefNameWithInitials = computed(() => {
+  if (!props.dinnerEvent.chef) return null
+  return formatNameWithInitials(props.dinnerEvent.chef)
+})
 
 // Format dates (formatDate auto-imported from ~/utils/date, uses Danish locale)
 const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
@@ -475,6 +484,15 @@ const handleCardClick = () => {
 
         <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
+        </div>
+
+        <!-- Chef display -->
+        <div v-if="dinnerEvent.chef" class="flex items-center gap-2 mt-3" data-testid="chef-display">
+          <div class="relative">
+            <UserListItem :inhabitants="dinnerEvent.chef" :show-names="false" compact />
+            <UIcon :name="ICONS.chef" class="absolute -top-1 -right-1 text-amber-600 text-sm" />
+          </div>
+          <span class="text-sm text-neutral-600 dark:text-neutral-400">{{ chefNameWithInitials }}</span>
         </div>
 
         <!-- Warning when menu title missing -->

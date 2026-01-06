@@ -10,7 +10,7 @@
  *
  * Left accent line: none (normal), blue (claimed), red (released)
  */
-import type {DinnerMode, OrderState} from '~/composables/useBookingValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
