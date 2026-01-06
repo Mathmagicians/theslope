@@ -194,7 +194,8 @@ export class DinnerEventFactory {
         dinnerEventData: Partial<DinnerEventCreate>,
         expectedStatus: number = 200
     ): Promise<DinnerEventDisplay | null> => {
-        const response = await context.request.post(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`, {
+        // Uses consolidated chef endpoint (ADR-013: user token with system fallback)
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}`, {
             headers: headers,
             data: dinnerEventData
         })
@@ -350,7 +351,8 @@ export class DinnerEventFactory {
         allergenIds: number[],
         expectedStatus: number = 200
     ): Promise<DinnerEventDetail> => {
-        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}/allergens`, {
+        // Uses consolidated chef endpoint
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}`, {
             headers: headers,
             data: {allergenIds}
         })

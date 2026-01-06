@@ -706,13 +706,15 @@ export async function deleteOrder(
  * @param householdId - Optional household filter (required for user-facing endpoints)
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
  * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
+ * @param includeProvenance - Include orderHistory for claimed ticket provenance (default: false)
  */
 export async function fetchOrders(
     d1Client: D1Database,
     dinnerEventIds?: number | number[],
     householdId?: number,
     state?: OrderState,
-    sortBy: 'createdAt' | 'releasedAt' = 'createdAt'
+    sortBy: 'createdAt' | 'releasedAt' = 'createdAt',
+    includeProvenance: boolean = false
 ): Promise<OrderDisplay[]> {
     // Normalize to array, return early for empty
     const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
@@ -725,7 +727,7 @@ export async function fetchOrders(
     ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
-    const {OrderDisplaySchema} = useBookingValidation()
+    const {OrderDisplaySchema, deserializeOrderAuditData, OrderAuditActionSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
@@ -735,15 +737,34 @@ export async function fetchOrders(
                 ...(householdId && { inhabitant: { householdId } }),
                 ...(state && { state })
             },
-            include: { ticketPrice: { select: { ticketType: true } } },
+            include: {
+                ticketPrice: { select: { ticketType: true } },
+                ...(includeProvenance && {
+                    orderHistory: {
+                        where: { action: OrderAuditActionSchema.enum.USER_CLAIMED },
+                        orderBy: { timestamp: 'desc' },
+                        take: 1
+                    }
+                })
+            },
             orderBy: { [sortBy]: 'asc' }
         })
 
         console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)
 
         return orders.map(order => {
-            const {ticketPrice, ...rest} = order
-            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
+            const {ticketPrice, orderHistory, ...rest} = order as typeof order & { orderHistory?: { auditData: string }[] }
+
+            // Extract provenance from USER_CLAIMED history if present
+            const claimHistory = orderHistory?.[0]
+            const provenance = claimHistory ? deserializeOrderAuditData(claimHistory.auditData).orderSnapshot : null
+
+            return OrderDisplaySchema.parse({
+                ...rest,
+                ticketType: ticketPrice?.ticketType ?? null,
+                provenanceHousehold: provenance?.householdShortname,
+                provenanceAllergies: provenance?.allergies
+            })
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET] : Error fetching orders for ${filterDesc}`, error)
@@ -1014,6 +1035,19 @@ export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEve
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Validate allergen IDs exist before creating join records
+        if (allergenIds.length > 0) {
+            const existingCount = await prisma.allergyType.count({
+                where: { id: { in: allergenIds } }
+            })
+            if (existingCount !== allergenIds.length) {
+                throw createError({
+                    statusCode: 404,
+                    message: `Some allergen IDs do not exist. Requested: ${allergenIds.length}, found: ${existingCount}`
+                })
+            }
+        }
+
         // Delete existing allergen assignments
         await prisma.dinnerEventAllergen.deleteMany({
             where: { dinnerEventId }

@@ -52,6 +52,7 @@ export class OrderFactory {
     priceAtBooking: 45,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: false,
     releasedAt: null,
     closedAt: null,
     createdAt: SeasonFactory.generateUniqueDate(),

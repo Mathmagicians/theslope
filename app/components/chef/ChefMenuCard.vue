@@ -86,8 +86,7 @@ interface Props {
   isCompact?: boolean           // Compact mode for calendar list items
   budget?: number               // Budget in øre (optional override)
   selected?: boolean            // For compact mode selection state
-  isAnnouncing?: boolean        // Loading state for announce button
-  isCancelling?: boolean        // Loading state for cancel button
+  isUpdating?: boolean          // Loading state for all edit buttons
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -97,8 +96,7 @@ const props = withDefaults(defineProps<Props>(), {
   isCompact: false,
   budget: undefined,
   selected: false,
-  isAnnouncing: false,
-  isCancelling: false
+  isUpdating: false
 })
 
 const emit = defineEmits<{
@@ -266,7 +264,7 @@ const isEditingMenu = ref(false)
 
 // Inline edit button configs - switches between edit pencil and ok/cancel
 const menuEditButtons = computed(() => {
-  if (!isEditing.value) return []
+  if (!isEditing.value || props.isUpdating) return []
   if (isEditingMenu.value) {
     return [
       { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-menu-inline', onClick: () => { emit('update:form', formState.value); isEditingMenu.value = false } },
@@ -279,7 +277,7 @@ const menuEditButtons = computed(() => {
 })
 
 const allergenEditButtons = computed(() => {
-  if (!isEditing.value) return []
+  if (!isEditing.value || props.isUpdating) return []
   if (isEditingAllergens.value) {
     return [
       { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave },
@@ -450,21 +448,22 @@ const handleCardClick = () => {
                   :color="HERO_BUTTON.primaryButton"
                   variant="outline"
                   :size="SIZES.standard"
-                  :icon="ICONS.megaphone"
-                  :disabled="!canAdvanceState || isAnnouncing"
-                  :loading="isAnnouncing"
+                  :icon="isUpdating ? undefined : ICONS.megaphone"
+                  :disabled="!canAdvanceState || isUpdating"
+                  :loading="isUpdating"
                   name="announce-dinner"
                   @click="handleAdvanceState"
                 >
-                  Publicer
+                  {{ isUpdating ? 'Arbejder...' : 'Publicer' }}
                 </UButton>
 
                 <!-- Cancel button (GitHub-style 2-step confirmation) -->
                 <DangerButton
                   v-if="canCancelDinner(dinnerEvent)"
-                  label="Aflys"
+                  :label="isUpdating ? 'Arbejder...' : 'Aflys'"
                   :confirm-label="`Tryk igen for at aflyse ${formattedShortDate}...`"
-                  :loading="isCancelling"
+                  :loading="isUpdating"
+                  :disabled="isUpdating"
                   :initial-color="HERO_BUTTON.primaryButton"
                   @confirm="handleCancelConfirm"
                 />

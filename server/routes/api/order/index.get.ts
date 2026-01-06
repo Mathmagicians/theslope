@@ -27,7 +27,8 @@ const querySchema = z.object({
     dinnerEventId: z.coerce.number().int().positive().optional(),
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
-    allHouseholds: z.coerce.boolean().optional().default(false)
+    allHouseholds: z.coerce.boolean().optional().default(false),
+    includeProvenance: z.coerce.boolean().optional().default(false)
 })
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
@@ -58,7 +59,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
 
     // Business logic
     try {
-        const orders = await fetchOrders(d1Client, query.dinnerEventId, householdId, query.state, query.sortBy)
+        const orders = await fetchOrders(d1Client, query.dinnerEventId, householdId, query.state, query.sortBy, query.includeProvenance)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

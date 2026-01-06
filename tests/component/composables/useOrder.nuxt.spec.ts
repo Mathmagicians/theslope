@@ -27,6 +27,7 @@ const createTestOrder = (overrides: {
     priceAtBooking: overrides.priceAtBooking ?? 5000,
     dinnerMode: DinnerMode.DINEIN,
     state: overrides.state ?? OrderState.BOOKED,
+    isGuestTicket: false,
     releasedAt: null,
     closedAt: null,
     createdAt: now,

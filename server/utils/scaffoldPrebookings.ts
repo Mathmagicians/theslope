@@ -43,7 +43,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch} = useSeason()
-    const {OrderAuditActionSchema, OrderStateSchema, chunkIds} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderStateSchema, chunkIds, chunkFetchIds} = useBookingValidation()
 
     // Resolve season ID - use provided or fall back to active season
     const effectiveSeasonId = options.seasonId ?? await fetchActiveSeasonId(d1Client)
@@ -66,11 +66,12 @@ export async function scaffoldPrebookings(
     // Fetch households - optionally filtered to single household
     const households = await fetchHouseholds(d1Client, options.householdId)
 
-    // Fetch orders and cancellation keys in parallel
-    const [existingOrders, cancelledKeys] = await Promise.all([
-        fetchOrders(d1Client, dinnerEventIds),
+    // Fetch orders (chunked) and cancellation keys in parallel
+    const [orderBatches, cancelledKeys] = await Promise.all([
+        Promise.all(chunkFetchIds(dinnerEventIds).map(batch => fetchOrders(d1Client, batch))),
         fetchUserCancellationKeys(d1Client, effectiveSeasonId)
     ])
+    const existingOrders = orderBatches.flat()
 
     console.info(`${LOG} Processing ${households.length} household(s) for ${dinnerEvents.length} events`)
 

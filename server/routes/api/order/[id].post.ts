@@ -32,10 +32,11 @@ const idSchema = z.object({
 export default defineEventHandler(async (event): Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const {DinnerModeSchema, OrderAuditActionSchema} = useBookingValidation()
+    const {DinnerModeSchema, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
     const {deadlinesForSeason} = useSeason()
     const DinnerMode = DinnerModeSchema.enum
     const OrderAuditAction = OrderAuditActionSchema.enum
+    const OrderState = OrderStateSchema.enum
     const LOG = '🎟️ > ORDER > [POST]'
 
     // Input validation schema
@@ -108,8 +109,14 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         }
 
         // Regular mode change (not cancellation)
-        console.info(`${LOG} Updating order ${id} dinnerMode to ${body.dinnerMode}`)
-        const updatedOrder = await updateOrder(d1Client, id, {dinnerMode: body.dinnerMode}, {
+        // If order was RELEASED, re-book it (restore BOOKED state, clear releasedAt)
+        const isRebooking = existingOrder.state === OrderState.RELEASED
+        const updates = isRebooking
+            ? {dinnerMode: body.dinnerMode, state: OrderState.BOOKED, releasedAt: undefined}
+            : {dinnerMode: body.dinnerMode}
+
+        console.info(`${LOG} ${isRebooking ? 'Re-booking' : 'Updating'} order ${id} dinnerMode to ${body.dinnerMode}`)
+        const updatedOrder = await updateOrder(d1Client, id, updates, {
             action: OrderAuditAction.USER_BOOKED,
             performedByUserId
         })

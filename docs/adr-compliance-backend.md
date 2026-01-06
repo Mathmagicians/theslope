@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-04 (Household preferences endpoint for non-admin users)
+**Last Updated:** 2026-01-05 (Consolidated chef dinner endpoint, household preferences endpoint)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -74,6 +74,10 @@
 | `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateAllergy() → AllergyWithRelations                                                           |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergy() → AllergyWithRelations                                                            |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createAllergy() → AllergyWithRelations                                                           |
+| **Chef Operations** | | | | | **✅ FULLY COMPLIANT (2026-01-05)** - Consolidated endpoint for member chef operations           |
+| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Consolidated: menu, state (announce/cancel), allergens. Heynabo: user token for announce, fallback to system token for menu sync |
+| **Household - Preferences** | | | | | **✅ FULLY COMPLIANT (2026-01-05)**                                                               |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -118,3 +122,4 @@ Reference these endpoints for correct ADR-002 implementation:
 - ✅ `/api/admin/household/[id].get.ts` - Complete pattern
 - ✅ `/api/order/[id].delete.ts` - DELETE pattern with validation
 - ✅ `/api/team/cooking/[id]/assign-role.post.ts` - Full ADR-001 & ADR-010 compliance with repository pattern
+- ✅ `/api/chef/dinner/[id].post.ts` - Consolidated chef endpoint with ADR-013 Heynabo token pattern

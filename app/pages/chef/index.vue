@@ -54,6 +54,7 @@ const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
+const {isDinnerUpdating} = storeToRefs(bookingsStore)
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
@@ -203,125 +204,60 @@ const toast = useToast()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-// Announce dinner with useAsyncData for loading state (ADR-007: component-local data)
-const announceParams = ref<{dinnerEventId: number} | null>(null)
-const {
-  data: announceResult,
-  status: announceStatus,
-  execute: executeAnnounce
-} = useAsyncData(
-    'chef-page-announce-dinner',
-    () => announceParams.value
-        ? bookingsStore.announceDinner(announceParams.value.dinnerEventId)
-        : Promise.resolve(null),
-    { immediate: false }
-)
-const isAnnouncingDinner = computed(() => announceStatus.value === 'pending')
-
-// Cancel dinner with useAsyncData for loading state (ADR-007: component-local data)
-const cancelParams = ref<{dinnerEventId: number} | null>(null)
-const {
-  data: cancelResult,
-  status: cancelStatus,
-  execute: executeCancel
-} = useAsyncData(
-    'chef-page-cancel-dinner',
-    () => cancelParams.value
-        ? bookingsStore.cancelDinner(cancelParams.value.dinnerEventId)
-        : Promise.resolve(null),
-    { immediate: false }
-)
-const isCancellingDinner = computed(() => cancelStatus.value === 'pending')
-
 const handleAllergenUpdate = async (allergenIds: number[]) => {
   if (!selectedDinnerId.value) return
-
-  try {
-    await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    const message = allergenIds.length > 0
-        ? 'Beboerne kan nu se allergenerne i menuen'
-        : 'Menuen er markeret uden allergener'
-    toast.add({
-      title: 'Allergeninformation gemt',
-      description: message,
-      icon: ICONS.checkCircle,
-      color: COLOR.success
-    })
-  } catch (error) {
-    // Error already handled by store with handleApiError
-    console.error('Failed to update allergens:', error)
-  }
+  const result = await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Allergeninformation gemt',
+    description: allergenIds.length > 0 ? 'Beboerne kan nu se allergenerne i menuen' : 'Menuen er markeret uden allergener',
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
 }
 
 const handleFormUpdate = async (data: ChefMenuForm) => {
   if (!selectedDinnerId.value) return
-
-  try {
-    await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
-    await refreshDinnerEventDetail()
-    toast.add({
-      title: 'Menu gemt',
-      description: 'Menuen er nu opdateret',
-      icon: ICONS.checkCircle,
-      color: COLOR.success
-    })
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    console.error('Failed to update menu:', error)
-  }
+  const result = await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Menu gemt',
+    description: `"${result.menuTitle}" er nu opdateret`,
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
+  await usersStore.loadMyTeams()
 }
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
-  // Only handle ANNOUNCED - CONSUMED is set automatically by cron job
   if (newState !== DinnerState.ANNOUNCED) return
-
-  // Check if this is a republish (already announced) or first publish
   const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
-
-  announceParams.value = {dinnerEventId: selectedDinnerId.value}
-  await executeAnnounce()
-
-  // Check if announce succeeded (useAsyncData captures errors, doesn't throw)
-  if (announceStatus.value === 'error') {
-    return
-  }
-
-  await refreshDinnerEventDetail() // Refresh page-owned data
-  const heynaboId = announceResult.value?.heynaboEventId
+  const result = await bookingsStore.announceDinner(selectedDinnerId.value)
+  if (!result) return
+  await refreshDinnerEventDetail()
   toast.add({
     title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
-    description: heynaboId ? `Heynabo event ID: ${heynaboId}` : 'Ingen Heynabo ID returneret',
+    description: result.heynaboEventId ? `Heynabo event ID: ${result.heynaboEventId}` : 'Ingen Heynabo ID returneret',
     icon: ICONS.megaphone,
     color: COLOR.success
   })
-  // Refresh team data to show updated state in calendar
   await usersStore.loadMyTeams()
 }
 
 const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
-
-  cancelParams.value = {dinnerEventId: selectedDinnerId.value}
-  await executeCancel()
-
-  console.log('Cancel result:', cancelResult.value, 'status:', cancelStatus.value)
-
-  // Check if cancel succeeded (useAsyncData doesn't throw, it captures errors)
-  if (cancelStatus.value === 'error' || !cancelResult.value) {
-    console.error('Failed to cancel dinner')
-    return
-  }
-
-  await refreshDinnerEventDetail() // Refresh page-owned data
+  const result = await bookingsStore.cancelDinner(selectedDinnerId.value)
+  if (!result) return
+  await refreshDinnerEventDetail()
   toast.add({
     title: 'Middag aflyst',
-    description: `${cancelResult.value.menuTitle || 'Fællesspisningen'} d. ${formatDate(cancelResult.value.date)} er blevet aflyst`,
+    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er blevet aflyst`,
     icon: ICONS.xMark,
     color: COLOR.warning
   })
-  // Refresh team data to show updated state in calendar
   await usersStore.loadMyTeams()
 }
 
@@ -438,8 +374,7 @@ useHead({
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :show-allergens="true"
-              :is-announcing="isAnnouncingDinner"
-              :is-cancelling="isCancellingDinner"
+              :is-updating="isDinnerUpdating"
               @update:form="handleFormUpdate"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"

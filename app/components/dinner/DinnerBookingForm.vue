@@ -51,7 +51,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows in table
-type RowType = 'inhabitant' | 'power' | 'guest'
+type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
 
 interface TableRow {
   rowType: RowType
@@ -65,6 +65,9 @@ interface TableRow {
   dinnerMode: DinnerMode
   price: number
   ticketPriceId: number
+  // Provenance for claimed tickets (from USER_CLAIMED history)
+  provenanceHousehold?: string
+  provenanceAllergies?: string[]
 }
 
 interface Props {
@@ -158,6 +161,18 @@ const userReleasedTickets = computed(() => {
 const releasedTicketCount = computed(() => releasedTicketsFromOthers.value.length)
 const hasReleasedTickets = computed(() => releasedTicketCount.value > 0)
 
+// Partition orders into guest vs regular (single pass)
+const partitionedOrders = computed(() =>
+  (props.orders ?? [])
+    .filter(o => o.dinnerEventId === props.dinnerEvent.id)
+    .reduce((acc, o) => {
+      (o.isGuestTicket ? acc.guestOrders : acc.regularOrders).push(o)
+      return acc
+    }, {guestOrders: [] as OrderDisplay[], regularOrders: [] as OrderDisplay[]})
+)
+const guestOrders = computed(() => partitionedOrders.value.guestOrders)
+const regularOrders = computed(() => partitionedOrders.value.regularOrders)
+
 // ============================================================================
 // TABLE CONFIGURATION
 // ============================================================================
@@ -180,9 +195,9 @@ const guestDisabledModes = computed(() =>
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
-  // Build inhabitant rows
+  // Build inhabitant rows (using regularOrders - excludes guest tickets)
   const inhabitantRows: TableRow[] = household.value.inhabitants.map(inhabitant => {
-    const order = props.orders?.find(o => o.inhabitantId === inhabitant.id && o.dinnerEventId === props.dinnerEvent.id)
+    const order = regularOrders.value.find(o => o.inhabitantId === inhabitant.id)
     const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
     const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, props.ticketPrices)
 
@@ -196,8 +211,10 @@ const tableData = computed((): TableRow[] => {
       order: order ?? null,
       orderState: order?.state as OrderState | undefined,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
-      price: ticketPrice?.price ?? 0,
-      ticketPriceId: ticketPrice?.id ?? 0
+      price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
+      ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? 0,
+      provenanceHousehold: order?.provenanceHousehold,
+      provenanceAllergies: order?.provenanceAllergies
     }
   })
 
@@ -219,6 +236,27 @@ const tableData = computed((): TableRow[] => {
     ...inhabitantRows,
     { ...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: '👤 Tilføj gæst', dinnerMode: draftGuestMode.value }
   ]
+})
+
+// Guest order rows for GÆSTER section - use order's captured values
+const {ticketTypeConfig} = useTicket()
+const guestTableData = computed((): TableRow[] => {
+  const bookerName = household.value?.inhabitants?.find(i => i.userId !== null)?.name ?? 'ukendt'
+
+  return guestOrders.value.map(order => ({
+    rowType: 'guest-order' as RowType,
+    id: `guest-${order.id}`,
+    name: `Gæst (inviteret af ${bookerName})`,
+    lastName: '',
+    ticketConfig: order.ticketType ? ticketTypeConfig[order.ticketType] : null,
+    order,
+    orderState: order.state as OrderState,
+    dinnerMode: order.dinnerMode,
+    price: order.priceAtBooking,
+    ticketPriceId: order.ticketPriceId ?? 0,
+    provenanceHousehold: order.provenanceHousehold,
+    provenanceAllergies: order.provenanceAllergies
+  }))
 })
 
 // ============================================================================
@@ -328,27 +366,36 @@ const deadlineStatusBadges = computed(() => [
               {{ row.original.ticketConfig.label }}
             </UBadge>
           </div>
+          <!-- Released ticket warning -->
           <div v-if="isOrderReleased(row.original.orderState)" class="flex items-center gap-1 mt-0.5">
             <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">FRIGIVET</UBadge>
             <span :class="TYPOGRAPHY.bodyTextMuted">(du betaler stadig)</span>
+          </div>
+          <!-- Provenance badges for claimed tickets -->
+          <div v-else-if="row.original.provenanceHousehold" class="flex items-center gap-2 mt-0.5">
+            <span :class="TYPOGRAPHY.bodyTextMuted">🎟️ fra {{ row.original.provenanceHousehold }}</span>
+            <span v-if="row.original.provenanceAllergies?.length" :class="TYPOGRAPHY.bodyTextMuted">
+              🥜 {{ row.original.provenanceAllergies.join(', ') }}
+            </span>
           </div>
         </div>
       </template>
 
       <!-- Mode Column -->
       <template #mode-cell="{ row }">
-        <!-- VIEW mode: Badge only -->
+        <!-- VIEW mode: Badge + mode selector -->
         <template v-if="!isEditModeAllowed">
-          <UBadge v-if="isOrderReleased(row.original.orderState)" :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">
-            FRIGIVET
-          </UBadge>
-          <DinnerModeSelector
-            v-else
-            :model-value="row.original.dinnerMode"
-            :form-mode="FORM_MODES.VIEW"
-            size="sm"
-            :name="`${row.original.rowType}-${row.original.id}-mode-view`"
-          />
+          <div class="flex items-center gap-2">
+            <UBadge v-if="isOrderReleased(row.original.orderState)" :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">
+              FRIGIVET
+            </UBadge>
+            <DinnerModeSelector
+              :model-value="row.original.dinnerMode"
+              :form-mode="FORM_MODES.VIEW"
+              size="sm"
+              :name="`${row.original.rowType}-${row.original.id}-mode-view`"
+            />
+          </div>
         </template>
 
         <!-- EDIT mode -->
@@ -408,5 +455,59 @@ const deadlineStatusBadges = computed(() => [
         </template>
       </template>
     </UTable>
+
+    <!-- GÆSTER Section (guest tickets at bottom) -->
+    <div v-if="guestTableData.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <h4 :class="[TYPOGRAPHY.bodyTextMedium, 'font-semibold mb-2']">GÆSTER</h4>
+      <UTable :data="guestTableData" :columns="columns" :row-key="(row: TableRow) => String(row.id)">
+        <!-- Name Column for Guest Orders -->
+        <template #name-cell="{ row }">
+          <div class="py-1">
+            <div class="flex items-center gap-2">
+              <span :class="TYPOGRAPHY.bodyTextMedium">{{ row.original.name }}</span>
+              <UBadge
+                v-if="row.original.ticketConfig"
+                :color="row.original.ticketConfig.color"
+                variant="subtle"
+                size="sm"
+              >
+                {{ row.original.ticketConfig.label }}
+              </UBadge>
+            </div>
+            <!-- Provenance badges -->
+            <div v-if="row.original.provenanceHousehold" class="flex items-center gap-2 mt-0.5">
+              <span :class="TYPOGRAPHY.bodyTextMuted">🎟️ fra {{ row.original.provenanceHousehold }}</span>
+              <span v-if="row.original.provenanceAllergies?.length" :class="TYPOGRAPHY.bodyTextMuted">
+                🥜 {{ row.original.provenanceAllergies.join(', ') }}
+              </span>
+            </div>
+          </div>
+        </template>
+
+        <!-- Mode Column for Guest Orders -->
+        <template #mode-cell="{ row }">
+          <!-- VIEW mode -->
+          <DinnerModeSelector
+            v-if="!isEditModeAllowed"
+            :model-value="row.original.dinnerMode"
+            :form-mode="FORM_MODES.VIEW"
+            size="sm"
+            :name="`guest-order-${row.original.id}-mode-view`"
+          />
+          <!-- EDIT mode -->
+          <div v-else class="flex items-center gap-2 md:gap-4">
+            <DinnerModeSelector
+              :model-value="row.original.dinnerMode"
+              :form-mode="FORM_MODES.EDIT"
+              :disabled-modes="disabledModes"
+              size="sm"
+              :name="`guest-order-${row.original.id}-mode-edit`"
+              @update:model-value="(mode: DinnerMode) => emit('updateBooking', row.original.order?.inhabitantId as number, mode, row.original.ticketPriceId)"
+            />
+            <span :class="[TYPOGRAPHY.bodyTextMedium, 'whitespace-nowrap']">{{ formatPrice(row.original.price) }} kr</span>
+          </div>
+        </template>
+      </UTable>
+    </div>
   </div>
 </template>

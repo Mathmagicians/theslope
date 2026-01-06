@@ -203,14 +203,21 @@ export const useBookingValidation = () => {
     // updateOrdersToClosed uses 2 data params, so max ~98 IDs. Using 90 for safety.
     const DELETE_BATCH_SIZE = 90
 
+    // findMany with nested includes: D1 limit is 100 params, but nested queries add overhead.
+    // fetchOrders includes orderHistory with WHERE clause, so use conservative 30 for IDs.
+    const FETCH_IDS_BATCH_SIZE = 30
+
     // Local type for batch chunking (avoids circular reference with exported type)
     type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
 
     // Curried chunk function for order batches
     const chunkOrderBatch = chunkArray<_OrderCreateWithPrice>(ORDER_BATCH_SIZE)
 
-    // Curried chunk function for ID arrays (used for batch deletes)
+    // Curried chunk function for ID arrays (used for batch deletes/updates)
     const chunkIds = chunkArray<number>(DELETE_BATCH_SIZE)
+
+    // Curried chunk function for IDs in fetch operations with nested includes
+    const chunkFetchIds = chunkArray<number>(FETCH_IDS_BATCH_SIZE)
 
     /**
      * Batch of orders for batch creation - validates business rules:
@@ -693,6 +700,7 @@ export const useBookingValidation = () => {
         DELETE_BATCH_SIZE,
         chunkOrderBatch,
         chunkIds,
+        chunkFetchIds,
 
         // Transaction Creation (lean batch schema - ADR-009)
         OrderForTransactionSchema,

@@ -3,9 +3,10 @@ import {z} from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import type {WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -30,7 +31,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
 
     let id!: number
     let seasonId: number | undefined
-    let dinnerPreferences: Record<string, string>
+    let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         const {InhabitantUpdateSchema} = useCoreValidation()
         const bodySchema = InhabitantUpdateSchema.pick({dinnerPreferences: true}).required()
