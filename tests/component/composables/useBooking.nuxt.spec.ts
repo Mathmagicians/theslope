@@ -50,11 +50,13 @@ describe('useBooking', () => {
     })
 
     describe('HEYNABO_EVENT_TEMPLATE', () => {
-        it('contains required template parts', () => {
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('synkroniseres fra skraaningen.dk')
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toContain('ændringer overskrives')
-            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI).toBe('📅')
-            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toContain('hilsner')
+        it('contains required template keys', () => {
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('skraaningen.dk')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.CHEF_PREFIX).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_TEXT).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.SEPARATOR).toBeDefined()
         })
     })
 
@@ -128,10 +130,10 @@ describe('useBooking', () => {
         })
 
         describe('description building', () => {
-            it('includes warning header', () => {
+            it('includes warning with robot emoji and skraaningen.dk reference', () => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload.description).toContain('synkroniseres fra skraaningen.dk')
-                expect(payload.description).toContain('ændringer overskrives')
+                expect(payload.description).toContain('🤖')
+                expect(payload.description).toContain('skraaningen.dk')
             })
 
             it('includes booking link with formatted date', () => {
@@ -162,13 +164,26 @@ describe('useBooking', () => {
             })
 
             it.each([
-                {name: 'includes cooking team when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: '// Team Alpha'},
-                {name: 'uses default when null', cookingTeam: null, shouldContain: '// Køkkenholdet'},
-                {name: 'uses default when undefined', cookingTeam: undefined, shouldContain: '// Køkkenholdet'}
+                {name: 'includes cooking team name when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: 'Team Alpha'},
+                {name: 'uses fallback when null', cookingTeam: null, shouldContain: 'Madholdet'},
+                {name: 'uses fallback when undefined', cookingTeam: undefined, shouldContain: 'Madholdet'}
             ])('$name', ({cookingTeam, shouldContain}) => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent({cookingTeam}), baseUrl)
 
                 expect(payload.description).toContain(shouldContain)
+            })
+
+            it('includes chef name with initials when chef is assigned', () => {
+                const chef = {id: 1, heynaboId: 101, householdId: 1, name: 'Anna', lastName: 'Berg Hansen', pictureUrl: null}
+                const payload = createHeynaboEventPayload(futureDinnerEvent({chef}), baseUrl)
+
+                expect(payload.description).toContain('Anna B.H.')
+            })
+
+            it('omits chef line when chef is not assigned', () => {
+                const payload = createHeynaboEventPayload(futureDinnerEvent({chef: null}), baseUrl)
+
+                expect(payload.description).not.toContain('chefkok')
             })
         })
     })

@@ -313,13 +313,16 @@ export const useBooking = () => {
 
     /**
      * Event description template for Heynabo sync (HTML formatted)
-     * Format: Each emoji on its own line, URL as HTML link, signature at the end
+     * Format: Title, description, chef, booking link, signature, then robot warning at bottom
      */
     const HEYNABO_EVENT_TEMPLATE = {
-        WARNING_ROBOT: '🤖 Denne begivenhed synkroniseres fra skraaningen.dk',
-        WARNING_EDIT: '⚠️ Ret ikke her - ændringer overskrives!',
-        BOOKING_EMOJI: '📅',
-        SIGNATURE_PREFIX: 'De bedste hilsner'
+        CHEF_PREFIX: '👨‍🍳 Dagens chefkok:',
+        BOOKING_TEXT: 'Du kan tilmelde/framelde dig middagen, ændre status til takeaway eller sen spisning, købe eller sælge billetter i Skrånerappen.',
+        BOOKING_LINK_PREFIX: 'Klik her:',
+        SIGNATURE_PREFIX: 'Kh',
+        SEPARATOR: '🍳🥘🍳🥘🍳🥘🍳🥘🍳',
+        WARNING_ROBOT: '🤖 Denne begivenhed synkroniseres automatisk fra skraaningen.dk',
+        WARNING_EDIT: '⚠️ Ret ikke i Heynabo - ændringer overskrives!'
     }
 
     /**
@@ -347,17 +350,34 @@ export const useBooking = () => {
         const dinnerUrl = buildDinnerUrl(baseUrl, dinnerEvent.date)
 
         // Build description with HTML formatting
-        // Each emoji on its own line, URL as clickable link, signature at the end
+        // Format: Title, description, chef (if assigned), booking link, signature, robot warning at bottom
         const lines = [
-            HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT,
-            HEYNABO_EVENT_TEMPLATE.WARNING_EDIT,
-            '',
-            dinnerEvent.menuDescription || dinnerEvent.menuTitle,
-            '',
-            `${HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI} <a href="${dinnerUrl}">Book din billet</a>`,
-            '',
-            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} // ${dinnerEvent.cookingTeam?.name || 'Køkkenholdet'}`
+            `<b>${dinnerEvent.menuTitle}</b>`,
+            ''
         ]
+
+        // Add menu description if present
+        if (dinnerEvent.menuDescription) {
+            lines.push(dinnerEvent.menuDescription, '')
+        }
+
+        // Add chef line only if chef is assigned
+        if (dinnerEvent.chef) {
+            lines.push(`${HEYNABO_EVENT_TEMPLATE.CHEF_PREFIX} ${formatNameWithInitials(dinnerEvent.chef)}`, '')
+        }
+
+        // Booking link and signature
+        lines.push(
+            HEYNABO_EVENT_TEMPLATE.BOOKING_TEXT,
+            `${HEYNABO_EVENT_TEMPLATE.BOOKING_LINK_PREFIX} <a href="${dinnerUrl}">${dinnerUrl}</a>`,
+            '',
+            `${HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX} ${dinnerEvent.cookingTeam?.name || 'Madholdet'}`,
+            '',
+            HEYNABO_EVENT_TEMPLATE.SEPARATOR,
+            HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT,
+            HEYNABO_EVENT_TEMPLATE.WARNING_EDIT
+        )
+
         const description = lines.join('<br>')
 
         // Use pre-configured getNextDinnerDate (duration already baked in from useSeason)

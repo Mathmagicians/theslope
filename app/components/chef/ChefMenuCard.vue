@@ -449,12 +449,12 @@ const handleCardClick = () => {
                   variant="outline"
                   :size="SIZES.standard"
                   :icon="isUpdating ? undefined : ICONS.megaphone"
-                  :disabled="!canAdvanceState || isUpdating"
+                  :disabled="!!dinnerEvent.heynaboEventId || !canAdvanceState || isUpdating"
                   :loading="isUpdating"
                   name="announce-dinner"
                   @click="handleAdvanceState"
                 >
-                  {{ isUpdating ? 'Arbejder...' : 'Publicer' }}
+                  {{ isUpdating ? 'Arbejder...' : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
                 </UButton>
 
                 <!-- Cancel button (GitHub-style 2-step confirmation) -->

@@ -38,7 +38,6 @@
 | `/household/[shortname]/allergies` | `household/[shortname]/[tab].vue` → `HouseholdAllergies.vue` | ✅ `useAllergiesStore()` | ❓ | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/household/[shortname]/settings` | `household/[shortname]/[tab].vue` → `HouseholdSettings.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/household/[shortname]/economy` | `household/[shortname]/[tab].vue` → `HouseholdEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
-| `/household/mytickets` | `household/mytickets.vue` | ✅ `useBookingsStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
 | **Other Routes** |
 | `/` | `index.vue` → `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | **✅ COMPLIANT** |
 | `/login` | `login.vue` → `Login.vue` | ✅ `useAuthStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
@@ -113,7 +112,7 @@
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useOrderValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
-| `DinnerTicket.vue` | `/household/[shortname]/bookings`, `/household/mytickets` | Parent props | `useOrderValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
+| `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
 ### Layout Components
 
