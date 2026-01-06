@@ -37,10 +37,14 @@ test.describe('Chef Page - Happy Day', () => {
         memberInhabitantId = inhabitantId
         await SeasonFactory.assignMemberToTeam(adminContext, testTeamId, memberInhabitantId, TeamRole.CHEF)
 
-        // Get existing dinner events to find a valid cooking date within the season
+        // Get existing dinner events to find a valid FUTURE cooking date within the season
+        // Note: Dinner events are now sorted chronologically (oldest first), so we find the first future date
         const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, activeSeason.id!)
         expect(dinnerEvents.length, 'Singleton season should have dinner events').toBeGreaterThan(0)
-        const validCookingDate = new Date(dinnerEvents[0]!.date)
+        const now = new Date()
+        const futureDinner = dinnerEvents.find(e => new Date(e.date) > now)
+        expect(futureDinner, 'Should have at least one future dinner event').toBeDefined()
+        const validCookingDate = new Date(futureDinner!.date)
 
         // Create a dinner event for the member's test team
         await DinnerEventFactory.createDinnerEvent(adminContext, {

@@ -34,8 +34,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import {isCalendarDateInDateList, formatDanishWeekdayDate, calculateCountdown, toDate} from '~/utils/date'
-import {isWithinInterval} from 'date-fns'
+import {isCalendarDateInDateList, toDate} from '~/utils/date'
 
 interface Props {
   seasonDates: DateRange
@@ -61,11 +60,10 @@ const {createEventList} = useCalendarEvents()
 const {
   getHolidayDatesFromDateRangeList,
   getDefaultDinnerStartTime,
-  getDinnerTimeRange,
   getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {CALENDAR, DINNER_CALENDAR, TYPOGRAPHY, SIZES, BG, TEXT, BORDER} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
@@ -125,32 +123,6 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
-const currentTime = ref(new Date())
-const updateInterval = ref<NodeJS.Timeout | null>(null)
-
-onMounted(() => {
-  updateInterval.value = setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (updateInterval.value) {
-    clearInterval(updateInterval.value)
-  }
-})
-
-const isDuringDinner = computed(() => {
-  if (!nextDinner.value) return false
-  const dinnerTimeRange = getDinnerTimeRange(new Date(nextDinner.value.date), dinnerStartHour, 60)
-  return isWithinInterval(currentTime.value, dinnerTimeRange)
-})
-
-const countdown = computed(() => {
-  if (!nextDinner.value || !nextDinnerDateRange.value) return null
-  return calculateCountdown(nextDinnerDateRange.value.start, currentTime.value)
-})
-
 // Legend items using design system classes
 const legendItems = computed(() => [
   {
@@ -201,48 +173,16 @@ const isSelected = (day: DateValue): boolean => {
 
 <template>
   <div class="flex flex-col h-full">
-    <!-- Countdown Timer (Train Station Style) - Always visible when enabled -->
-    <div v-if="showCountdown" class="bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2" :class="BORDER.peach[400]">
-      <!-- Active dinner state -->
-      <div v-if="nextDinner && countdown" class="text-center space-y-2">
-        <!-- Title -->
-        <div class="text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90">
-          Næste Fællesspisning
-        </div>
-
-        <!-- Weekday + Date (Danish 3-letter) -->
-        <div class="text-sm font-medium uppercase" :class="TEXT.peach[400]">
-          {{ formatDanishWeekdayDate(new Date(nextDinner.date)) }}
-        </div>
-
-        <!-- Countdown (Large - Most Important) -->
-        <div class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight" :class="TEXT.peach[400]">
-          <span class="opacity-75 text-amber-50">OM</span>
-          <span class="ml-2">{{ countdown.formatted }}</span>
-        </div>
-
-        <!-- Dinner Time (Smaller) with blinking dot during dinner -->
-        <div class="flex items-baseline justify-center gap-2">
-          <span class="text-xs md:text-sm" :class="TEXT.peach[50]">spisning kl </span>
-          <span
-class="text-xl md:text-2xl font-medium"
-                :class="TEXT.peach[300]">{{ dinnerStartHour.toString().padStart(2, '0') }}:00</span>
-          <span class="text-xs md:text-sm invisible" aria-hidden="true">spisning kl </span>
-          <span
-v-if="isDuringDinner"
-                class="w-3 h-3 rounded-full animate-pulse self-center"
-                :class="BG.peach[400]"
-                aria-label="Dinner is happening now"/>
-        </div>
-      </div>
-
-      <!-- Empty state -->
-      <div v-else class="text-center">
-        <div class="text-lg font-semibold tracking-widest uppercase">
-          Ingen Fællespsisning
-        </div>
-      </div>
-    </div>
+    <!-- Countdown Timer (Train Station Style) -->
+    <CountdownTimer
+      v-if="showCountdown"
+      title="Næste Fællesspisning"
+      time-label="spisning"
+      empty-text="Ingen"
+      :next-event="nextDinner"
+      :event-start-hour="dinnerStartHour"
+      palette="dinner"
+    />
 
     <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
     <UAccordion :items="accordionItems" :default-value="SIZES.calendarAccordionDefault" type="single" collapsible class="flex-1">

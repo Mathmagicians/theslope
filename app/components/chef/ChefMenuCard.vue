@@ -155,12 +155,6 @@ const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCE
 const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())
 const menuTitle = computed(() => hasMenuTitle.value ? props.dinnerEvent.menuTitle : 'Chefkokken har ikke fundet på en god menu endnu')
 
-// Chef display
-const chefNameWithInitials = computed(() => {
-  if (!props.dinnerEvent.chef) return null
-  return formatNameWithInitials(props.dinnerEvent.chef)
-})
-
 // Format dates (formatDate auto-imported from ~/utils/date, uses Danish locale)
 const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
 
@@ -486,13 +480,17 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef display -->
-        <div v-if="dinnerEvent.chef" class="flex items-center gap-2 mt-3" data-testid="chef-display">
-          <div class="relative">
-            <UserListItem :inhabitants="dinnerEvent.chef" :show-names="false" compact />
-            <UIcon :name="ICONS.chef" class="absolute -top-3 left-1/2 -translate-x-1/2 text-amber-600 text-2xl" />
-          </div>
-          <span class="text-sm text-neutral-600 dark:text-neutral-400">{{ chefNameWithInitials }}</span>
+        <!-- Chef display - portrait frame with chef hat -->
+        <div v-if="dinnerEvent.chef" class="relative pt-4 mt-4" data-testid="chef-display">
+          <UserListItem
+            :inhabitants="dinnerEvent.chef"
+            :name-formatter="formatNameWithInitials"
+            :link-to-profile="false"
+            ring-color="amber-500"
+            size="md"
+          />
+          <!-- Chef hat on top -->
+          <UIcon :name="ICONS.chef" class="absolute -top-1 left-3 text-amber-500 text-3xl -rotate-6 drop-shadow-md" />
         </div>
 
         <!-- Warning when menu title missing -->

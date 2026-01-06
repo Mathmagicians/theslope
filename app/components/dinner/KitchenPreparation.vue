@@ -192,6 +192,7 @@ const normalizedWidths = computed(() => {
           <span class="whitespace-nowrap">Voksen: {{ ticketTypeBreakdown.adult }}</span>
           <span class="whitespace-nowrap">| Barn: {{ ticketTypeBreakdown.child }}</span>
           <span class="whitespace-nowrap">| Baby: {{ ticketTypeBreakdown.baby }}</span>
+          <span class="whitespace-nowrap font-semibold">| # {{ ticketTypeBreakdown.adult + ticketTypeBreakdown.child + ticketTypeBreakdown.baby }}</span>
         </div>
       </div>
     </div>
@@ -223,7 +224,7 @@ const normalizedWidths = computed(() => {
           <span class="whitespace-nowrap">Voksen: {{ mode.ticketBreakdown.adult }}</span>
           <span class="whitespace-nowrap">| Barn: {{ mode.ticketBreakdown.child }}</span>
           <span class="whitespace-nowrap">| Baby: {{ mode.ticketBreakdown.baby }}</span>
-          <span class="whitespace-nowrap font-semibold">= {{ mode.ticketBreakdown.total }}</span>
+          <span class="whitespace-nowrap font-semibold"># {{ mode.ticketBreakdown.total }}</span>
         </div>
 
 

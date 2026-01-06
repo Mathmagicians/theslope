@@ -38,8 +38,10 @@ interface Props {
   compact?: boolean
   size?: NuxtUISize
   ringColor?: string
+  avatarWrapperClass?: string
   showNames?: boolean
   useFullName?: boolean
+  nameFormatter?: (inhabitant: InhabitantDisplay) => string
   label?: string
   linkToProfile?: boolean
 }
@@ -48,8 +50,10 @@ const props = withDefaults(defineProps<Props>(), {
   compact: false,
   size: undefined,
   ringColor: undefined,
+  avatarWrapperClass: undefined,
   showNames: true,
   useFullName: false,
+  nameFormatter: undefined,
   label: undefined,
   linkToProfile: true
 })
@@ -93,6 +97,10 @@ const duplicateFirstNames = computed(() => {
 
 // Format name based on props
 const formatName = (inhabitant: InhabitantDisplay): string => {
+  // Custom formatter takes priority
+  if (props.nameFormatter) {
+    return props.nameFormatter(inhabitant)
+  }
   if (props.useFullName) {
     return `${inhabitant.name} ${inhabitant.lastName}`
   }
