@@ -422,13 +422,14 @@ const handleCardClick = () => {
           :ui="{ hint: 'hidden md:block' }"
         >
           <template #default>
-            <div class="flex items-center gap-1 md:gap-2">
-              <div :class="['text-lg font-medium flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+            <div class="flex flex-col md:flex-row md:items-center gap-2">
+              <!-- Menu title -->
+              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
                 {{ menuTitle }}
               </div>
 
-              <!-- Action buttons (EDIT mode only) -->
-              <template v-if="isEditing">
+              <!-- Action buttons (EDIT mode only) - wrap on mobile -->
+              <div v-if="isEditing" class="flex flex-wrap items-center gap-1 md:gap-2">
                 <!-- Edit pencil button -->
                 <UButton
                   v-for="btn in menuEditButtons"
@@ -467,7 +468,7 @@ const handleCardClick = () => {
                   :initial-color="HERO_BUTTON.primaryButton"
                   @confirm="handleCancelConfirm"
                 />
-              </template>
+              </div>
             </div>
           </template>
         </UFormField>

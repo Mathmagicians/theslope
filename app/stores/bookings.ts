@@ -1,4 +1,4 @@
-import type {OrderDisplay, OrderDetail, OrderCreate, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -97,16 +97,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading all orders${withProvenance ? ' (with provenance)' : ''}`)
     }
 
-    const createOrder = async (orderData: OrderCreate): Promise<OrderDisplay> => {
+    const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
         try {
-            const createdOrder = await $fetch<OrderDisplay>('/api/order', {
+            const result = await $fetch<CreateOrdersResult>('/api/order', {
                 method: 'PUT',
-                body: orderData,
+                body: request,
                 headers: {'Content-Type': 'application/json'}
             })
-            console.info(CTX, `Created order ${createdOrder.id}`)
+            console.info(CTX, `Created ${result.createdIds.length} order(s)`)
             await refreshOrders()
-            return createdOrder
+            return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke oprette bestilling')
             throw e

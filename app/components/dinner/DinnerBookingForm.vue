@@ -30,7 +30,7 @@
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │ Clara Larsen                    ┃─────────────────────────────────────╮  │
  * │ FRIGIVET                        ┃         ░░🎟️░░                     │  │ <- RED (released)
- * │ (hvis nogen køber biletten...)  ┃         Barn                        │  │
+ * │                                 ┃         Barn                        │  │
  * │                                 ┃ 📤    35 kr           ❌ Ingen     │  │
  * │                                 ╰─────────────────────────────────────╯  │
  * └──────────────────────────────────────────────────────────────────────────┘
@@ -55,7 +55,6 @@
  * ├─────────────────────────────────┤
  * │ Clara Larsen                    │
  * │ FRIGIVET                        │
- * │ (hvis nogen køber biletten...)  │
  * │ ┃─────────────────────────────╮ │
  * │ ┃         ░░🎟️░░             │ │ <- RED (released)
  * │ ┃         Barn                │ │
@@ -207,8 +206,8 @@ const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 // ============================================================================
 
 const columns = [
-  {id: 'name', header: 'Hvem'},
-  {id: 'mode', header: 'Hvordan spiser I'}
+  {id: 'name', header: 'Billetter'},
+  {id: 'mode', header: 'Detaljer', class: 'hidden md:table-cell'}
 ]
 
 // Disabled modes based on deadline state
@@ -360,7 +359,10 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
         icon="i-heroicons-exclamation-triangle"
       >
         <template #title>
-          Du har {{ userReleasedTickets.length }} frigivet{{ userReleasedTickets.length === 1 ? ' billet' : ' billetter' }} - du betaler stadig!
+          Du har frigivet {{ userReleasedTickets.length }} billet{{ userReleasedTickets.length === 1 ? '' : 'ter' }}
+        </template>
+        <template #description>
+          Du betaler, medmindre andre køber
         </template>
       </UAlert>
       <UAlert
@@ -394,13 +396,17 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
           <div :class="TYPOGRAPHY.bodyTextMedium">
             {{ row.original.name }} {{ row.original.lastName }}
           </div>
-          <!-- Released ticket warning -->
-          <div v-if="isOrderReleased(row.original.orderState)" class="mt-0.5">
-            <UBadge :color="COLOR.error" variant="soft" size="sm" :icon="ICONS.ticket">FRIGIVET</UBadge>
-            <p :class="[TYPOGRAPHY.finePrint, 'text-gray-600 dark:text-gray-400 mt-0.5']">
-              køber nogen den, skal du ej betale
-            </p>
-          </div>
+          <!-- Released ticket badge -->
+          <UBadge
+            v-if="isOrderReleased(row.original.orderState)"
+            :color="COLOR.error"
+            variant="soft"
+            :size="SIZES.small"
+            :icon="ICONS.released"
+            class="mt-0.5"
+          >
+            FRIGIVET
+          </UBadge>
           <!-- Provenance badges for claimed tickets -->
           <div v-else-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-0.5">
             <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">

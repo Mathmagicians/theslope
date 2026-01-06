@@ -519,6 +519,7 @@ export const ICONS = {
     arrowUp: 'i-heroicons-arrow-up',
     sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
+    released: 'i-heroicons-arrow-up-tray',
 
     // Empty states
     robotDead: 'i-mage-robot-dead',

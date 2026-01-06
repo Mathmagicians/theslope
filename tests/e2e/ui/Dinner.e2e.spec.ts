@@ -1,19 +1,18 @@
 import {test, expect} from '@playwright/test'
-import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {memberValidatedBrowserContext, pollUntil, doScreenshot} = testHelpers
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
  *
  * Tests dinner event display, URL navigation, and calendar interaction
  * Uses singleton active season (global setup)
+ * Uses member context (non-admin) for UI navigation
  */
 test.describe('Dinner Page URL Navigation', () => {
     const dinnerPageUrl = '/dinner'
@@ -26,10 +25,8 @@ test.describe('Dinner Page URL Navigation', () => {
         }
     }
 
-    test.use({storageState: adminUIFile})
-
     test.beforeAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+        const context = await memberValidatedBrowserContext(browser)
 
         // Use singleton active season (factory provides it with dinner events already created)
         const season = await SeasonFactory.createActiveSeason(context)
@@ -65,7 +62,10 @@ test.describe('Dinner Page URL Navigation', () => {
     // NOTE: Do NOT cleanup singleton season here - global teardown handles it (ADR-003)
     // Individual test afterAll hooks must not delete singleton test data
 
-    test('GIVEN no date in URL WHEN page loads THEN auto-syncs to next dinner date and displays event', async ({page}) => {
+    test('GIVEN no date in URL WHEN page loads THEN auto-syncs to next dinner date and displays event', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
+
         // WHEN: Navigate to dinner page without date parameter
         await page.goto(dinnerPageUrl)
 
@@ -98,7 +98,10 @@ test.describe('Dinner Page URL Navigation', () => {
         await doScreenshot(page, 'dinner/dinner-calendar', true)
     })
 
-    test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({page}) => {
+    test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
+
         // WHEN: Navigate with invalid date parameter
         await page.goto(`${dinnerPageUrl}?date=99/99/9999`)
 

@@ -49,8 +49,8 @@ const {TYPOGRAPHY, ICONS, SIZES} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 
 const accentClass = computed(() => {
-  if (props.isReleased) return 'border-l-4 border-error'
-  if (props.isClaimed) return 'border-l-4 border-info'
+  if (props.isReleased) return 'border-l-4 md:border-l-8 border-error'
+  if (props.isClaimed) return 'border-l-4 md:border-l-8 border-info'
   return ''
 })
 
@@ -84,14 +84,16 @@ const isEditMode = computed(() => props.formMode === FORM_MODES.EDIT)
 
       <!-- Row 2: [State] Price | Mode -->
       <div class="flex items-center justify-between gap-2">
-        <!-- Left: State icon (if released) + Price -->
+        <!-- Left: State icon (fixed width for alignment) + Price -->
         <div class="flex items-center gap-1">
-          <UIcon
-            v-if="isReleased"
-            name="i-heroicons-arrow-up-tray"
-            class="w-4 h-4 text-error"
-          />
-          <span :class="[TYPOGRAPHY.finePrint, 'text-gray-600 dark:text-gray-400 whitespace-nowrap']">
+          <div class="w-4 h-4 flex-shrink-0">
+            <UIcon
+              v-if="isReleased"
+              :name="ICONS.released"
+              class="w-4 h-4 text-error"
+            />
+          </div>
+          <span :class="[TYPOGRAPHY.cardTitle, 'text-gray-600 dark:text-gray-400 whitespace-nowrap']">
             {{ formatPrice(price) }} kr
           </span>
         </div>
