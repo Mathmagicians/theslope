@@ -74,8 +74,9 @@ const activeOrders = computed(() => getActiveOrders(props.orders))
 const releasedOrders = computed(() => getReleasedOrders(props.orders))
 
 // Group orders by ticket type - always show all three types
+// Uses ALL orders (active + released) to match totalPortions
 const ticketTypeBreakdown = computed(() => {
-  const orders = activeOrders.value
+  const orders = props.orders
   return {
     adult: orders.filter(o => o.ticketType === TicketType.ADULT).length,
     child: orders.filter(o => o.ticketType === TicketType.CHILD).length,
@@ -84,7 +85,8 @@ const ticketTypeBreakdown = computed(() => {
 })
 
 // Calculate total portions using business logic (dynamic based on ticket prices)
-const totalPortions = computed(() => calculateTotalPortionsFromPrices(activeOrders.value))
+// Includes ALL orders (active + released) so it matches sum of all 4 bottom panels
+const totalPortions = computed(() => calculateTotalPortionsFromPrices(props.orders))
 
 // Helper to calculate ticket breakdown for dine-in modes
 const calculateTicketBreakdown = (orders: OrderDetail[]): TicketBreakdown => {

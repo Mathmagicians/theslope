@@ -1510,7 +1510,7 @@ export async function fetchTeam(id: number, d1Client: D1Database): Promise<Cooki
                 assignments: {
                     include: {inhabitant: true}
                 },
-                dinners: true,  // Include full dinners array for Detail
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1569,7 +1569,7 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
                 assignments: {
                     include: {inhabitant: true}
                 },
-                dinners: true,  // Include dinnerEvents for /chef page
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1627,7 +1627,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
                         inhabitant: true
                     }
                 },
-                dinners: true,
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1689,7 +1689,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                         inhabitant: true
                     }
                 },
-                dinners: true,
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
