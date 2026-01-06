@@ -49,9 +49,9 @@ const {TYPOGRAPHY, ICONS, SIZES} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 
 const accentClass = computed(() => {
-  if (props.isReleased) return 'border-l-4 md:border-l-8 border-error'
-  if (props.isClaimed) return 'border-l-4 md:border-l-8 border-info'
-  return ''
+  if (props.isReleased) return 'border-x-4 md:border-x-8 border-error'
+  if (props.isClaimed) return 'border-x-4 md:border-x-8 border-info'
+  return 'border-x-4 md:border-x-8 border-primary'
 })
 
 const isEditMode = computed(() => props.formMode === FORM_MODES.EDIT)

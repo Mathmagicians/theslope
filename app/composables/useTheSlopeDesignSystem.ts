@@ -535,6 +535,10 @@ export const ICONS = {
     clock: 'i-heroicons-clock',
     info: 'i-heroicons-information-circle',
 
+    // Status/state
+    lockOpen: 'i-heroicons-lock-open',
+    lockClosed: 'i-heroicons-lock-closed',
+
     // External links
     github: 'i-simple-icons-github',
     book: 'i-heroicons-book-open'

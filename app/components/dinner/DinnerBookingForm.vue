@@ -307,10 +307,24 @@ const powerModeHelperText = computed(() => {
 
 const guestHelperText = computed(() => hasReleasedTickets.value ? `🎟️ ${releasedTicketCount.value} ledige` : '')
 
-// Deadline status badges
+// Deadline labels from centralized composable (DRY)
+const {DEADLINE_LABELS} = useBooking()
+
+// Deadline status badges with explanation text
+// Note: canBook/canChangeDiningMode return TRUE when BEFORE deadline (open), FALSE when AFTER (closed)
 const deadlineStatusBadges = computed(() => [
-  { label: 'Tilmelding', isOpen: canBook.value },
-  { label: 'Hvordan spiser I', isOpen: canChangeDiningMode.value }
+  {
+    label: DEADLINE_LABELS.BOOKING_CLOSED.label,
+    isOpen: canBook.value,
+    openText: DEADLINE_LABELS.BOOKING_CLOSED.openText,
+    closedText: DEADLINE_LABELS.BOOKING_CLOSED.closedText
+  },
+  {
+    label: 'Hvordan spiser I',
+    isOpen: canChangeDiningMode.value,
+    openText: 'Du kan ændre til spisesal, sen spisning eller takeaway',
+    closedText: 'Du kan ikke længere ændre, hvordan I spiser'
+  }
 ])
 
 // ============================================================================
@@ -337,17 +351,20 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
   <!-- Booking form with inhabitants -->
   <div v-else class="space-y-4">
     <!-- Deadline Status Badges -->
-    <div class="flex flex-wrap gap-2 text-sm">
-      <UBadge
-        v-for="badge in deadlineStatusBadges"
-        :key="badge.label"
-        :color="badge.isOpen ? COLOR.success : COLOR.neutral"
-        variant="soft"
-        size="sm"
-        :icon="badge.isOpen ? 'i-heroicons-lock-open' : 'i-heroicons-lock-closed'"
-      >
-        {{ badge.label }}: {{ badge.isOpen ? 'Åben' : 'Lukket' }}
-      </UBadge>
+    <div class="flex flex-wrap gap-4">
+      <div v-for="badge in deadlineStatusBadges" :key="badge.label" class="flex flex-col items-start">
+        <UBadge
+          :color="badge.isOpen ? COLOR.success : COLOR.error"
+          variant="soft"
+          :size="SIZES.small"
+          :icon="badge.isOpen ? ICONS.lockOpen : ICONS.lockClosed"
+        >
+          {{ badge.label }}: {{ badge.isOpen ? 'Åben' : 'Lukket' }}
+        </UBadge>
+        <span :class="[TYPOGRAPHY.finePrint, 'text-gray-500 dark:text-gray-400 mt-0.5']">
+          {{ badge.isOpen ? badge.openText : badge.closedText }}
+        </span>
+      </div>
     </div>
 
     <!-- Released Ticket Warnings (only after booking deadline) -->
@@ -356,7 +373,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
         v-if="userReleasedTickets.length > 0"
         color="warning"
         variant="soft"
-        icon="i-heroicons-exclamation-triangle"
+        :icon="ICONS.released"
       >
         <template #title>
           Du har frigivet {{ userReleasedTickets.length }} billet{{ userReleasedTickets.length === 1 ? '' : 'ter' }}
