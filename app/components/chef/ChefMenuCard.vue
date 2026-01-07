@@ -498,8 +498,8 @@ const handleCardClick = () => {
           </div>
           <!-- Name + subtle chefkok label -->
           <div class="flex flex-col">
-            <span class="font-semibold">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-            <span class="text-xs text-neutral-500">Chefkok</span>
+            <span :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
+            <span :class="TYPOGRAPHY.bodyTextMuted">Chefkok</span>
           </div>
         </div>
 

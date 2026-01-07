@@ -182,6 +182,12 @@ const {
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
 const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
 
+// Fetch detail after hydration when ID is available
+// (useAsyncData's watch doesn't trigger for SSR→client value changes)
+onMounted(() => {
+  if (selectedDinnerId.value) refreshDinnerEventDetail()
+})
+
 const handleDinnerSelect = (dinnerId: number) => {
   const dinner = teamDinnerEvents.value.find((e: DinnerEventDisplay) => e.id === dinnerId)
   if (dinner) setSelectedDate(new Date(dinner.date))

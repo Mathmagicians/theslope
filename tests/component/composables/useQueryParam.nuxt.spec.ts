@@ -501,16 +501,29 @@ describe('useQueryParam.ts', () => {
       expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('value/with/slashes')
     })
 
-    it('should handle validation returning false', () => {
+    it('should handle validation returning false when syncWhen is true', () => {
       setupQuery({test: 'invalid'})
 
       const {value} = useQueryParam<string>('test', {
         validate: () => false,
         defaultValue: 'default',
-        syncWhen: () => false // Disable auto-sync for this test
+        syncWhen: () => true // Validation only runs when syncWhen is true
       })
 
       expect(value.value).toBe('default')
+    })
+
+    it('should defer validation when syncWhen is false (trust URL value)', () => {
+      setupQuery({test: 'invalid'})
+
+      const {value} = useQueryParam<string>('test', {
+        validate: () => false,
+        defaultValue: 'default',
+        syncWhen: () => false // Validation deferred - trust URL value until data ready
+      })
+
+      // URL value is trusted until syncWhen becomes true
+      expect(value.value).toBe('invalid')
     })
   })
 })

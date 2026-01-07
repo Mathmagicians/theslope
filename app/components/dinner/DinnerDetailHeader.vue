@@ -50,7 +50,7 @@ const emit = defineEmits<{
 
 <template>
   <div
-    :class="`flex flex-col md:grid md:grid-cols-3 items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`"
+    :class="`flex flex-col md:flex-row md:justify-between items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`"
     data-testid="dinner-detail-header"
   >
     <!-- State badge (top on mobile, left on desktop) -->
