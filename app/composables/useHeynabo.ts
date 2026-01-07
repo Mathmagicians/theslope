@@ -1,6 +1,7 @@
 import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserDisplay, SystemRole } from '~/composables/useCoreValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import { pruneAndCreate } from '~/utils/batchUtils'
+import { isSameDay } from 'date-fns'
 
 const { SystemRoleSchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
@@ -11,6 +12,20 @@ type InhabitantData = Omit<InhabitantCreate, 'householdId'>
 // EQUALITY FUNCTIONS - Named for testability (not exported)
 // ========================================================================
 
+// Compare nullable dates by day only (ignore time component)
+const isSameDayOrBothNull = (a: Date | null | undefined, b: Date | null | undefined): boolean => {
+    if (a == null && b == null) return true
+    if (a == null || b == null) return false
+    return isSameDay(a, b)
+}
+
+// Normalize phone: treat empty string as null (Heynabo returns "" for no phone)
+const normalizePhone = (phone: string | null | undefined): string | null =>
+    phone === '' || phone == null ? null : phone
+
+const isSamePhone = (a: string | null | undefined, b: string | null | undefined): boolean =>
+    normalizePhone(a) === normalizePhone(b)
+
 // Verifies Heynabo master data has not changed. TheSlope master data (pbsId) not included.
 const isHouseholdEqual = (existing: HouseholdCreate, incoming: HouseholdCreate): boolean =>
     existing.name === incoming.name &&
@@ -20,18 +35,17 @@ const isInhabitantEqual = (existing: InhabitantData, incoming: InhabitantData): 
     existing.name === incoming.name &&
     existing.lastName === incoming.lastName &&
     existing.pictureUrl === incoming.pictureUrl &&
-    existing.birthDate?.getTime() === incoming.birthDate?.getTime() &&
-    existing.user?.email === incoming.user?.email
+    isSameDayOrBothNull(existing.birthDate, incoming.birthDate)
 
 // Compares Heynabo-owned user fields. TheSlope-owned ALLERGYMANAGER role excluded.
 // Existing: UserDisplay (from fetchUsers), Incoming: InhabitantData (from Heynabo)
 // Key is inhabitant.heynaboId (stable), not email (can change).
+// Note: birthDate is an Inhabitant field, compared in isInhabitantEqual, not here.
 const isUserEqual = (existing: UserDisplay, incoming: InhabitantData): boolean => {
     if (!incoming.user) return false // Incoming has no user, existing does → delete
     const hasAdminRole = (roles: SystemRole[] | undefined) => roles?.includes(SystemRole.ADMIN) ?? false
     return existing.email === incoming.user.email &&
-        existing.phone === incoming.user.phone &&
-        existing.Inhabitant?.birthDate?.getTime() === incoming.birthDate?.getTime() &&
+        isSamePhone(existing.phone, incoming.user.phone) &&
         hasAdminRole(existing.systemRoles) === hasAdminRole(incoming.user.systemRoles)
 }
 

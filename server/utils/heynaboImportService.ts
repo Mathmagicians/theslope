@@ -106,6 +106,8 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
 
         // Process inhabitants for each household
         let inhabitantsCreated = 0
+        let inhabitantsUpdated = 0
+        let inhabitantsIdempotent = 0
         let inhabitantsDeleted = 0
         let usersDeleted = 0
 
@@ -153,7 +155,11 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
                     // Strip user to avoid cascade, skipRefetch for batch (ADR-014)
                     await Promise.all(chunk.map(i => saveInhabitant(d1Client, { ...i, user: undefined }, existingHousehold.id, true)))
                 }
+                inhabitantsUpdated += inhabitantReconciliation.update.length
             }
+
+            // Track idempotent inhabitants
+            inhabitantsIdempotent += inhabitantReconciliation.idempotent.length
         }
 
         // Reconcile users: existing UserDisplay (from DB) vs incoming InhabitantData (from Heynabo)
@@ -216,28 +222,50 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             console.info(`${LOG} Updated ${usersUpdated} users (ALLERGYMANAGER preserved)`)
         }
 
-        console.info(`${LOG} Inhabitants: created=${inhabitantsCreated}, deleted=${inhabitantsDeleted}`)
-        console.info(`${LOG} Users: created=${usersCreated}, deleted=${usersDeleted}, linked=${usersLinked}`)
+        console.info(`${LOG} Inhabitants: created=${inhabitantsCreated}, updated=${inhabitantsUpdated}, idempotent=${inhabitantsIdempotent}, deleted=${inhabitantsDeleted}`)
+        console.info(`${LOG} Users: created=${usersCreated}, updated=${usersUpdated}, deleted=${usersDeleted}, linked=${usersLinked}`)
 
-        // 9. Run sanity check to verify no orphan users
+        // 9. Run sanity check - compare DB counts vs Heynabo counts
+        const householdsForSanityCheck = await fetchHouseholds(d1Client)
         const usersForSanityCheck = await fetchUsers(d1Client)
+        const linkedUsersCount = usersForSanityCheck.filter(u => u.Inhabitant !== null).length
+
+        const dbCounts = {
+            households: householdsForSanityCheck.length,
+            inhabitants: householdsForSanityCheck.reduce((sum, h) => sum + h.inhabitants.length, 0),
+            users: linkedUsersCount
+        }
+
         const { sanityCheck } = useHeynaboValidation()
-        const sanityCheckResult = sanityCheck(usersForSanityCheck, incomingHouseholds)
+        const sanityCheckResult = sanityCheck(dbCounts, usersForSanityCheck, incomingHouseholds)
 
         if (!sanityCheckResult.passed) {
-            console.warn(`${LOG} Sanity check FAILED: ${sanityCheckResult.orphanUsers.length} orphan users found`)
+            const mismatches = []
+            if (sanityCheckResult.householdsMismatch) mismatches.push(`households: DB=${sanityCheckResult.householdsInDb} HN=${sanityCheckResult.householdsInHeynabo}`)
+            if (sanityCheckResult.inhabitantsMismatch) mismatches.push(`inhabitants: DB=${sanityCheckResult.inhabitantsInDb} HN=${sanityCheckResult.inhabitantsInHeynabo}`)
+            if (sanityCheckResult.usersMismatch) mismatches.push(`users: DB=${sanityCheckResult.usersInDb} HN=${sanityCheckResult.usersInHeynabo}`)
+            if (sanityCheckResult.orphanUsers.length > 0) mismatches.push(`orphans: ${sanityCheckResult.orphanUsers.length}`)
+            console.warn(`${LOG} Sanity check FAILED: ${mismatches.join(', ')}`)
         } else {
-            console.info(`${LOG} Sanity check passed: no orphan users`)
+            console.info(`${LOG} Sanity check passed: DB matches Heynabo (${dbCounts.households} households, ${dbCounts.inhabitants} inhabitants, ${dbCounts.users} users)`)
         }
 
         const result: HeynaboImportResponse = {
             jobRunId: jobRun.id,
+            // Households: all 4 outcomes
             householdsCreated: createdHouseholds.length,
+            householdsUpdated: householdReconciliation.update.length,
+            householdsIdempotent: householdReconciliation.idempotent.length,
             householdsDeleted,
-            householdsUnchanged: householdReconciliation.idempotent.length,
+            // Inhabitants: all 4 outcomes
             inhabitantsCreated,
+            inhabitantsUpdated,
+            inhabitantsIdempotent,
             inhabitantsDeleted,
+            // Users: all 4 outcomes + linked
             usersCreated,
+            usersUpdated,
+            usersIdempotent: userReconciliation.idempotent.length,
             usersDeleted,
             usersLinked,
             sanityCheck: sanityCheckResult

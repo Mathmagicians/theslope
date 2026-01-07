@@ -154,19 +154,43 @@ export const useHeynaboValidation = () => {
     const { UserDisplaySchema } = useCoreValidation()
 
     const SanityCheckResultSchema = z.object({
-        passed: z.boolean(),
-        orphanUsers: z.array(UserDisplaySchema)
+        passed: z.boolean().default(true),
+        orphanUsers: z.array(UserDisplaySchema).default([]),
+        // Count comparisons: DB vs Heynabo
+        householdsInDb: z.number().default(0),
+        householdsInHeynabo: z.number().default(0),
+        householdsMismatch: z.boolean().default(false),
+        inhabitantsInDb: z.number().default(0),
+        inhabitantsInHeynabo: z.number().default(0),
+        inhabitantsMismatch: z.boolean().default(false),
+        usersInDb: z.number().default(0),
+        usersInHeynabo: z.number().default(0),
+        usersMismatch: z.boolean().default(false)
     })
 
     /**
      * Sanity check: Verify HN import integrity
-     * Pure function - checks users whose emails came from HN data
+     * Compares counts: DB vs Heynabo for households, inhabitants, users
      *
-     * @param users - Array of UserDisplay to check (from DB)
-     * @param incomingHouseholds - HN import data with expected users
-     * @returns Parsed SanityCheckResult with passed boolean and orphan details
+     * @param dbCounts - Counts from DB after import { households, inhabitants, users }
+     * @param users - Array of UserDisplay to check for orphans
+     * @param incomingHouseholds - HN import data (source of truth)
+     * @returns SanityCheckResult with counts and mismatch flags
      */
-    const sanityCheck = (users: UserDisplay[], incomingHouseholds: HouseholdCreate[]): z.infer<typeof SanityCheckResultSchema> => {
+    const sanityCheck = (
+        dbCounts: { households: number; inhabitants: number; users: number },
+        users: UserDisplay[],
+        incomingHouseholds: HouseholdCreate[]
+    ): z.infer<typeof SanityCheckResultSchema> => {
+        // Count expected from Heynabo
+        const householdsInHeynabo = incomingHouseholds.length
+        const inhabitantsInHeynabo = incomingHouseholds.reduce(
+            (sum, h) => sum + (h.inhabitants?.length || 0), 0
+        )
+        const usersInHeynabo = incomingHouseholds.reduce(
+            (sum, h) => sum + (h.inhabitants?.filter(i => i.user)?.length || 0), 0
+        )
+
         // Build set of emails that SHOULD have inhabitant (from HN data)
         const expectedUserEmails = new Set<string>()
         for (const household of incomingHouseholds) {
@@ -183,27 +207,55 @@ export const useHeynaboValidation = () => {
             u.Inhabitant === null
         )
 
+        // Check mismatches
+        const householdsMismatch = dbCounts.households !== householdsInHeynabo
+        const inhabitantsMismatch = dbCounts.inhabitants !== inhabitantsInHeynabo
+        const usersMismatch = dbCounts.users !== usersInHeynabo
+
+        const passed = orphanUsers.length === 0 &&
+            !householdsMismatch &&
+            !inhabitantsMismatch &&
+            !usersMismatch
+
         return SanityCheckResultSchema.parse({
-            passed: orphanUsers.length === 0,
-            orphanUsers
+            passed,
+            orphanUsers,
+            householdsInDb: dbCounts.households,
+            householdsInHeynabo,
+            householdsMismatch,
+            inhabitantsInDb: dbCounts.inhabitants,
+            inhabitantsInHeynabo,
+            inhabitantsMismatch,
+            usersInDb: dbCounts.users,
+            usersInHeynabo,
+            usersMismatch
         })
     }
 
     // ========================================================================
     // HEYNABO IMPORT RESPONSE SCHEMA - Summary of sync operation (ADR-009: batch ops use lightweight types)
+    // Reports all 4 reconciliation outcomes (create, update, idempotent, delete) for each entity type
     // ========================================================================
 
     const HeynaboImportResponseSchema = z.object({
         jobRunId: z.number().int().positive(),
+        // Households: all 4 outcomes
         householdsCreated: z.number(),
+        householdsUpdated: z.number().default(0),
+        householdsIdempotent: z.number().default(0),
         householdsDeleted: z.number(),
-        householdsUnchanged: z.number(),
+        // Inhabitants: all 4 outcomes
         inhabitantsCreated: z.number(),
+        inhabitantsUpdated: z.number().default(0),
+        inhabitantsIdempotent: z.number().default(0),
         inhabitantsDeleted: z.number(),
+        // Users: all 4 outcomes + linked
         usersCreated: z.number(),
-        usersDeleted: z.number().default(0), // Default for backwards compatibility with old job runs
-        usersLinked: z.number().default(0), // Users linked to existing inhabitants
-        sanityCheck: SanityCheckResultSchema.default({ passed: true, orphanUsers: [] })
+        usersUpdated: z.number().default(0),
+        usersIdempotent: z.number().default(0),
+        usersDeleted: z.number().default(0),
+        usersLinked: z.number().default(0),
+        sanityCheck: SanityCheckResultSchema.default({})
     })
 
     return {

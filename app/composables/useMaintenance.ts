@@ -115,11 +115,25 @@ export const useMaintenance = () => {
 
     /**
      * Format heynabo import result as stats array for action cards
+     * Shows all 4 reconciliation outcomes: created, updated, idempotent, deleted
      */
     const formatHeynaboStats = (result: HeynaboImportResponse): { label: string; value: string }[] => [
-        { label: 'Husstande', value: `+${result.householdsCreated}, -${result.householdsDeleted}` },
-        { label: 'Beboere', value: `+${result.inhabitantsCreated}, -${result.inhabitantsDeleted}` },
-        { label: 'Brugere', value: `+${result.usersCreated}, -${result.usersDeleted}` }
+        {
+            label: 'Husstande',
+            value: `+${result.householdsCreated} ~${result.householdsUpdated ?? 0} =${result.householdsIdempotent ?? 0} -${result.householdsDeleted}`
+        },
+        {
+            label: 'Beboere',
+            value: `+${result.inhabitantsCreated} ~${result.inhabitantsUpdated ?? 0} =${result.inhabitantsIdempotent ?? 0} -${result.inhabitantsDeleted}`
+        },
+        {
+            label: 'Brugere',
+            value: `+${result.usersCreated} ~${result.usersUpdated ?? 0} =${result.usersIdempotent ?? 0} -${result.usersDeleted}`
+        },
+        {
+            label: 'Linked',
+            value: `${result.usersLinked}`
+        }
     ]
 
     /**
@@ -129,7 +143,8 @@ export const useMaintenance = () => {
         const stats = [
             { label: 'Middage afholdt', value: `${result.consume.consumed}` },
             { label: 'Ordrer lukket', value: `${result.close.closed}` },
-            { label: 'Transaktioner', value: `${result.transact.created}` }
+            { label: 'Transaktioner', value: `${result.transact.created}` },
+            { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {
             stats.push({ label: 'Bookinger', value: `+${result.scaffold.created}, -${result.scaffold.deleted}` })

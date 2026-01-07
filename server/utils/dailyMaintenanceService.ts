@@ -11,6 +11,7 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {consumeDinners} from '~~/server/utils/consumeDinners'
 import {closeOrders} from '~~/server/utils/closeOrders'
 import {createTransactions} from '~~/server/utils/createTransactions'
+import {clipPreferences} from '~~/server/utils/initializePreferences'
 import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
@@ -43,14 +44,19 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const transactResult = await createTransactions(d1Client)
         console.info(`${LOG} Step 3 complete: created ${transactResult.created} transactions`)
 
-        // 4. Scaffold pre-bookings for active season
+        // Initialize NULL preferences + scaffold pre-bookings (requires active season)
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
+        let initPrefsResult = {initialized: 0}
         let scaffoldResult = null
+
         if (activeSeasonId) {
+            initPrefsResult = await clipPreferences(d1Client, activeSeasonId)
+            console.info(`${LOG} initPrefs: initialized ${initPrefsResult.initialized} inhabitants`)
+
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
-            console.info(`${LOG} Step 4 complete: scaffolded ${scaffoldResult?.created ?? 0} orders`)
+            console.info(`${LOG} scaffold: created ${scaffoldResult?.created ?? 0} orders`)
         } else {
-            console.info(`${LOG} Step 4 skipped: no active season`)
+            console.info(`${LOG} initPrefs/scaffold skipped: no active season`)
         }
 
         const result: DailyMaintenanceResult = {
@@ -58,6 +64,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             consume: consumeResult,
             close: closeResult,
             transact: transactResult,
+            initPrefs: initPrefsResult,
             scaffold: scaffoldResult
         }
 

@@ -634,6 +634,14 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * Result of initPreferences operation
+     * Initializes NULL dinner preferences for new inhabitants
+     */
+    const InitPreferencesResultSchema = z.object({
+        initialized: z.number().int().nonnegative()
+    })
+
+    /**
      * Combined result of daily maintenance endpoint
      * Includes jobRunId for observability and parallel-safe test assertions
      */
@@ -642,6 +650,7 @@ export const useBookingValidation = () => {
         consume: ConsumeResultSchema,
         close: CloseOrdersResultSchema,
         transact: CreateTransactionsResultSchema,
+        initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
         scaffold: ScaffoldResultSchema.nullable()
     })
 
@@ -730,6 +739,7 @@ export const useBookingValidation = () => {
         ConsumeResultSchema,
         CloseOrdersResultSchema,
         CreateTransactionsResultSchema,
+        InitPreferencesResultSchema,
         DailyMaintenanceResultSchema
     }
 }
@@ -789,4 +799,5 @@ export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValid
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>
 export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CloseOrdersResultSchema']>
 export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
+export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>

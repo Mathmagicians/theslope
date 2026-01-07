@@ -226,8 +226,9 @@ const appConfig = useAppConfig()
 const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 
 // Cost input type: chef can enter either inkl. or ex moms
+// Default to 'ex' (excl. moms) since that's what appears on grocery receipts
 type CostInputType = 'inkl' | 'ex'
-const costInputType = ref<CostInputType>('inkl')
+const costInputType = ref<CostInputType>('ex')
 const costTypeOptions = [
   { value: 'inkl' as CostInputType, label: 'Inkl. moms' },
   { value: 'ex' as CostInputType, label: 'Ex moms' }
@@ -266,13 +267,14 @@ const costAlternativeDisplay = computed(() => {
 
 const isEditingMenu = ref(false)
 
-// Inline edit button configs - switches between edit pencil and ok/cancel
+// Inline edit button configs - switches between edit pencil and cancel/save
+// Button order: Cancel → Save (standard UX pattern, consistent with form buttons)
 const menuEditButtons = computed(() => {
   if (!isEditing.value || props.isUpdating) return []
   if (isEditingMenu.value) {
     return [
-      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-menu-inline', onClick: () => { emit('update:form', formState.value); isEditingMenu.value = false } },
-      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-menu-inline', onClick: handleMenuCancel }
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-menu-inline', onClick: handleMenuCancel },
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-menu-inline', onClick: () => { emit('update:form', formState.value); isEditingMenu.value = false } }
     ]
   }
   return [
@@ -284,8 +286,8 @@ const allergenEditButtons = computed(() => {
   if (!isEditing.value || props.isUpdating) return []
   if (isEditingAllergens.value) {
     return [
-      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave },
-      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-allergens-inline', onClick: handleAllergenCancel }
+      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-allergens-inline', onClick: handleAllergenCancel },
+      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave }
     ]
   }
   return [
@@ -524,14 +526,14 @@ const handleCardClick = () => {
         @submit="handleFormSubmit"
       >
         <UFormField label="Menu titel" name="menuTitle" required class="w-full" hint="Hvad er aftenens ret?">
-          <UInput v-model="formState.menuTitle" placeholder="f.eks. Spaghetti Carbonara" :size="SIZES.standard" name="chef-menu-title-input" class="w-full" />
+          <UInput v-model="formState.menuTitle" placeholder="Aftenens ret, f.eks. Spaghetti Carbonara" :size="SIZES.standard" name="chef-menu-title-input" class="w-full" />
         </UFormField>
         <UFormField label="Beskrivelse" name="menuDescription" class="w-full" hint="Beskriv menuen kort">
-          <UTextarea v-model="formState.menuDescription" placeholder="f.eks. Cremet pasta med bacon og parmesan" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" class="w-full" />
+          <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" class="w-full" />
         </UFormField>
         <UFormField label="Indkøbsomkostninger" name="totalCost" class="w-full" hint="Hvad kostede indkøbene?">
           <div class="flex gap-2 items-start">
-            <UInput v-model="totalCostKr" type="number" min="0" placeholder="f.eks. 450" :size="SIZES.standard" name="chef-total-cost-input" class="flex-1" />
+            <UInput v-model="totalCostKr" type="number" min="0" placeholder="Total fra kvitteringer" :size="SIZES.standard" name="chef-total-cost-input" class="flex-1" />
             <USelect v-model="costInputType" :items="costTypeOptions" value-key="value" :size="SIZES.standard" name="chef-cost-type-select" class="w-32" />
           </div>
           <div v-if="costAlternativeDisplay" :class="`mt-1 ${TYPOGRAPHY.finePrint} opacity-60`">

@@ -5,8 +5,10 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {WEEKDAYS} from '~~/app/types/dateTypes'
 import type {BrowserContext} from '@playwright/test'
 
 const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
@@ -83,6 +85,7 @@ test.describe('Daily Maintenance API', () => {
     test.describe.configure({mode: 'default'})
 
     const createdDinnerEventIds: number[] = []
+    const createdInhabitantIds: number[] = []
     let activeSeason: Season
 
     test.beforeAll(async ({browser}) => {
@@ -92,6 +95,9 @@ test.describe('Daily Maintenance API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        for (const id of createdInhabitantIds) {
+            await HouseholdFactory.deleteInhabitant(context, id)
+        }
         for (const id of createdDinnerEventIds) {
             await DinnerEventFactory.deleteDinnerEvent(context, id)
         }
@@ -140,8 +146,30 @@ test.describe('Daily Maintenance API', () => {
         createdDinnerEventIds.push(dinner.id)
         const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 
-        // Run maintenance (closes order + creates transaction)
-        await SeasonFactory.runDailyMaintenance(context)
+        // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
+        const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(
+            context, householdId, {dinnerPreferences: null}
+        )
+        createdInhabitantIds.push(nullPrefsInhabitant.id)
+        const existingBefore = await HouseholdFactory.getInhabitantById(context, inhabitantId)
+
+        // Run maintenance (closes order + creates transaction + initializes NULL prefs)
+        const maintenanceResult = await SeasonFactory.runDailyMaintenance(context)
+        expect(maintenanceResult.initPrefs.initialized, 'Should initialize NULL preferences').toBeGreaterThanOrEqual(1)
+
+        // Build expected maps: NULL→DINEIN on cooking days, existing→preserved on cooking days
+        const expectedNullPrefs = Object.fromEntries(
+            WEEKDAYS.map(day => [day, fullSeason.cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE])
+        )
+        const expectedExisting = Object.fromEntries(
+            WEEKDAYS.map(day => [day, fullSeason.cookingDays[day] ? existingBefore?.dinnerPreferences?.[day] : DinnerMode.NONE])
+        )
+
+        // Verify clipped preferences
+        const nullPrefsAfter = await HouseholdFactory.getInhabitantById(context, nullPrefsInhabitant.id)
+        const existingAfter = await HouseholdFactory.getInhabitantById(context, inhabitantId)
+        expect(nullPrefsAfter?.dinnerPreferences).toEqual(expectedNullPrefs)
+        expect(existingAfter?.dinnerPreferences).toEqual(expectedExisting)
 
         // Verify order is CLOSED
         const finalOrder = await OrderFactory.getOrder(context, orderId)

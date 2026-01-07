@@ -118,8 +118,8 @@ export const inhabitantReconciliationTestData = {
         createInhabitantTestData(108, 'Birthdate', 'Changer', null, NEW_BIRTHDATE)
     ],
     expected: {
-        idempotent: { count: 2, heynaboIds: [101, 106] },
-        update: { count: 4, heynaboIds: [102, 105, 107, 108] },
+        idempotent: { count: 3, heynaboIds: [101, 105, 106] },
+        update: { count: 3, heynaboIds: [102, 107, 108] },
         delete: { count: 1, heynaboIds: [103] },
         create: { count: 1, heynaboIds: [104] }
     }
@@ -158,7 +158,8 @@ export const userReconciliationTestData = {
         createUserDisplayTestData(204, 'Admin', 'Demoted', null, 'admin@test.dk', '+4544444444', true),
         createUserDisplayTestData(205, 'Email', 'Changer', null, 'old-email@test.dk', '+4577777777', false),
         createUserDisplayTestData(206, 'To Be', 'Deleted', null, 'delete@test.dk', '+4533333333', false),
-        createUserDisplayTestData(208, 'Birthdate', 'Changer', OLD_BIRTHDATE, 'birthdate@test.dk', '+4599999999', false)
+        createUserDisplayTestData(208, 'Unchanged', 'WithBirthdate', OLD_BIRTHDATE, 'birthdate@test.dk', '+4599999999', false),
+        createUserDisplayTestData(209, 'Phone', 'NullVsEmpty', null, 'nullphone@test.dk', null, false)
     ],
     incoming: [
         createInhabitantTestData(201, 'Unchanged', 'User', null, null, createUserTestData('unchanged@test.dk', '+4511111111', false)),
@@ -167,11 +168,12 @@ export const userReconciliationTestData = {
         createInhabitantTestData(204, 'Admin', 'Demoted', null, null, createUserTestData('admin@test.dk', '+4544444444', false)),
         createInhabitantTestData(205, 'Email', 'Changer', null, null, createUserTestData('new-email@test.dk', '+4577777777', false)),
         createInhabitantTestData(207, 'New', 'User', null, null, createUserTestData('create@test.dk', '+4555555555', false)),
-        createInhabitantTestData(208, 'Birthdate', 'Changer', null, NEW_BIRTHDATE, createUserTestData('birthdate@test.dk', '+4599999999', false))
+        createInhabitantTestData(208, 'Unchanged', 'WithBirthdate', null, NEW_BIRTHDATE, createUserTestData('birthdate@test.dk', '+4599999999', false)),
+        createInhabitantTestData(209, 'Phone', 'NullVsEmpty', null, null, createUserTestData('nullphone@test.dk', '', false))
     ],
     expected: {
-        idempotent: { count: 2, heynaboIds: [201, 202] },
-        update: { count: 4, heynaboIds: [203, 204, 205, 208] },
+        idempotent: { count: 4, heynaboIds: [201, 202, 208, 209] },
+        update: { count: 3, heynaboIds: [203, 204, 205] },
         delete: { count: 1, heynaboIds: [206] },
         create: { count: 1, heynaboIds: [207] }
     }

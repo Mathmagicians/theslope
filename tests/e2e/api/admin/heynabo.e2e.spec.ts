@@ -12,23 +12,22 @@ const {HeynaboImportResponseSchema} = useHeynaboValidation()
  * Heynabo Import E2E Tests
  *
  * Tests the 3-layer reconciliation (Household → Inhabitant → User) with 4 outcomes each:
- * - CREATE: Tested via initial import (populates DB from Heynabo)
+ * - CREATE: Delete households from DB → verify recreated from Heynabo
  * - UPDATE: Mutate TheSlope data to differ from Heynabo → verify Heynabo overwrites
  * - IDEMPOTENT: TheSlope-owned fields preserved when Heynabo data unchanged
  * - DELETE: Add entities not in Heynabo → verify deleted
  *
  * Coverage Matrix:
- * | Entity      | IDEMPOTENT              | UPDATE               | DELETE         | CREATE       |
- * |-------------|-------------------------|----------------------|----------------|--------------|
- * | Household   | pbsId, movedInDate      | name restored        | Fake deleted   | Initial sync |
- * | Inhabitant  | Skraaningen unchanged   | Babyyoda name        | Fake deleted   | Initial sync |
- * | User        | ALLERGYMANAGER role     | phone restored       | Orphan deleted | Initial sync |
+ * | Entity      | CREATE                  | UPDATE               | IDEMPOTENT              | DELETE         |
+ * |-------------|-------------------------|----------------------|-------------------------|----------------|
+ * | Household   | heynaboId 4,28 recreated| name restored        | pbsId, movedInDate      | Fake deleted   |
+ * | Inhabitant  | With households 4,28    | Babyyoda name        | Skraaningen unchanged   | Fake deleted   |
+ * | User        | With households 4,28    | phone restored       | ALLERGYMANAGER role     | Orphan deleted |
  *
  * Test Flow:
- * 1. beforeAll: Run initial Heynabo import (CREATE - populates DB from clean state)
- * 2. beforeAll: Mutate data to test UPDATE/DELETE/IDEMPOTENT
- * 3. Test 1: Run second import → verify reconciliation works
- * 4. Test 2: Run third import → verify idempotency (no changes)
+ * - beforeAll: Run 1 (init) → Mutations → Run 2 (reconciliation)
+ * - Test 1: Verify reconciliation (CREATE/UPDATE/DELETE/IDEMPOTENT)
+ * - Test 2: Run 3 → verify idempotency (all counts = 0)
  *
  * Test household: heynaboId=2 ("Heynabo!") from Heynabo API
  * Inhabitants:
@@ -46,9 +45,45 @@ const INHABITANTS = {
     BABYYODA: {heynaboId: 154, hasUser: false, name: 'Babyyoda'}
 }
 
+// ========================================================================
+// RECREATE TEST - Households to delete and verify recreation from Heynabo
+// Only heynaboIds are stable keys - all other data comes from Heynabo
+// ========================================================================
+const RECREATE_HOUSEHOLD_HEYNABO_IDS = [4, 28]
+
 // Test data containers - populated in beforeAll, verified in tests
 const testData = {
     householdId: 0,
+
+    // Run 2 reconciliation result - stored for Test 1 assertions
+    reconciliationResult: null as null | {
+        householdsCreated: number
+        householdsUpdated: number
+        householdsIdempotent: number
+        householdsDeleted: number
+        inhabitantsCreated: number
+        inhabitantsUpdated: number
+        inhabitantsIdempotent: number
+        inhabitantsDeleted: number
+        usersCreated: number
+        usersUpdated: number
+        usersIdempotent: number
+        usersDeleted: number
+        usersLinked: number
+        sanityCheck: {
+            passed: boolean
+            orphanUsers: unknown[]
+            householdsInDb: number
+            householdsInHeynabo: number
+            householdsMismatch: boolean
+            inhabitantsInDb: number
+            inhabitantsInHeynabo: number
+            inhabitantsMismatch: boolean
+            usersInDb: number
+            usersInHeynabo: number
+            usersMismatch: boolean
+        }
+    },
 
     // ========================================================================
     // HOUSEHOLD TEST DATA
@@ -203,23 +238,32 @@ test.describe.serial('Heynabo Integration API', () => {
 
         // Link orphan user to Babyyoda (limited role in Heynabo = no user)
         await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {userId: orphanUser.id})
+
+        // CREATE: Delete households to verify recreation from Heynabo
+        const householdsBeforeDelete = await HouseholdFactory.getAllHouseholds(context)
+        for (const heynaboId of RECREATE_HOUSEHOLD_HEYNABO_IDS) {
+            const household = householdsBeforeDelete.find(h => h.heynaboId === heynaboId)
+            if (household) {
+                await context.request.delete(`/api/admin/household/${household.id}`)
+            }
+        }
+
+        // Run 2: Reconciliation import
+        const reconciliationImport = await context.request.get('/api/admin/heynabo/import')
+        expect(reconciliationImport.status(), 'Reconciliation import must succeed').toBe(200)
+        testData.reconciliationResult = HeynaboImportResponseSchema.parse(await reconciliationImport.json())
     })
 
-    test('should reconcile mutations from Heynabo (UPDATE/DELETE/IDEMPOTENT)', async ({browser}) => {
+    test('should reconcile mutations from Heynabo (CREATE/UPDATE/DELETE/IDEMPOTENT)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const result = testData.reconciliationResult!
 
-        // Run reconciliation import (second import - after mutations)
-        const response = await context.request.get('/api/admin/heynabo/import')
-        const responseBody = await response.text()
-        expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
-
-        const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
-
-        // Verify import ran delete operations
-        expect(result.householdsDeleted, 'DELETE: At least fake household deleted').toBeGreaterThanOrEqual(1)
-        expect(result.inhabitantsDeleted, 'DELETE: At least fake inhabitant deleted').toBeGreaterThanOrEqual(1)
-        expect(result.usersDeleted, 'DELETE: At least orphan user deleted').toBeGreaterThanOrEqual(1)
-        expect(result.sanityCheck.passed).toBe(true)
+        // Verify reconciliation counts
+        expect(result.householdsCreated, 'CREATE: Deleted households recreated').toBeGreaterThanOrEqual(RECREATE_HOUSEHOLD_HEYNABO_IDS.length)
+        expect(result.householdsDeleted, 'DELETE: Fake household deleted').toBeGreaterThanOrEqual(1)
+        expect(result.inhabitantsDeleted, 'DELETE: Fake inhabitant deleted').toBeGreaterThanOrEqual(1)
+        expect(result.usersDeleted, 'DELETE: Orphan user deleted').toBeGreaterThanOrEqual(1)
+        expect(result.sanityCheck.passed, 'Sanity check passed').toBe(true)
 
         // Verify our specific test items were deleted via direct API checks
         const fakeHouseholdResponse = await context.request.get(`/api/admin/household/${testData.household.fakeId}`)
@@ -244,6 +288,13 @@ test.describe.serial('Heynabo Integration API', () => {
         // ========================================================================
         // HOUSEHOLD ASSERTIONS
         // ========================================================================
+
+        // CREATE: Deleted households recreated from Heynabo
+        for (const heynaboId of RECREATE_HOUSEHOLD_HEYNABO_IDS) {
+            const recreated = households.find(h => h.heynaboId === heynaboId)
+            expect(recreated, `CREATE: Household heynaboId=${heynaboId} recreated`).toBeDefined()
+            expect(recreated!.inhabitants.length, `CREATE: Household heynaboId=${heynaboId} has inhabitants`).toBeGreaterThan(0)
+        }
 
         // IDEMPOTENT: TheSlope-owned fields preserved
         expect(household!.pbsId, 'Household: pbsId preserved (TheSlope-owned)').toBe(testData.household.uniquePbsId)
@@ -320,13 +371,19 @@ test.describe.serial('Heynabo Integration API', () => {
 
         const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
 
-        // IDEMPOTENCY: No changes should occur
-        expect(result.householdsDeleted, 'IDEMPOTENT: No households deleted').toBe(0)
+        // IDEMPOTENCY: All entities should be idempotent (no create/update/delete)
+        expect(result.householdsIdempotent, 'IDEMPOTENT: All households idempotent').toBe(result.sanityCheck.householdsInHeynabo)
         expect(result.householdsCreated, 'IDEMPOTENT: No households created').toBe(0)
-        expect(result.inhabitantsDeleted, 'IDEMPOTENT: No inhabitants deleted').toBe(0)
+        expect(result.householdsUpdated, 'IDEMPOTENT: No households updated').toBe(0)
+        expect(result.householdsDeleted, 'IDEMPOTENT: No households deleted').toBe(0)
+        expect(result.inhabitantsIdempotent, 'IDEMPOTENT: All inhabitants idempotent').toBe(result.sanityCheck.inhabitantsInHeynabo)
         expect(result.inhabitantsCreated, 'IDEMPOTENT: No inhabitants created').toBe(0)
-        expect(result.usersDeleted, 'IDEMPOTENT: No users deleted').toBe(0)
+        expect(result.inhabitantsUpdated, 'IDEMPOTENT: No inhabitants updated').toBe(0)
+        expect(result.inhabitantsDeleted, 'IDEMPOTENT: No inhabitants deleted').toBe(0)
+        expect(result.usersIdempotent, 'IDEMPOTENT: All users idempotent').toBe(result.sanityCheck.usersInHeynabo)
         expect(result.usersCreated, 'IDEMPOTENT: No users created').toBe(0)
+        expect(result.usersUpdated, 'IDEMPOTENT: No users updated').toBe(0)
+        expect(result.usersDeleted, 'IDEMPOTENT: No users deleted').toBe(0)
         expect(result.sanityCheck.passed, 'IDEMPOTENT: Sanity check passed').toBe(true)
     })
 

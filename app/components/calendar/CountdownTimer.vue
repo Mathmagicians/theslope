@@ -16,8 +16,7 @@
  * └─────────────────────────────────────────┘
  */
 
-import {formatDanishWeekdayDate} from '~/utils/date'
-import {calculateCountdown} from '~/utils/date'
+import {formatDanishWeekdayDate, calculateCountdown} from '~/utils/date'
 import {isWithinInterval} from 'date-fns'
 
 const {

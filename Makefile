@@ -164,6 +164,8 @@ d1-nuke-households: ## Delete test households (local)
 	$(call d1_exec,theslope,DELETE FROM Allergy WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%')),--local)
 	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'),--local)
 	$(call d1_exec,theslope,DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%',--local)
+	@echo "🧹 Cleaning up fake inhabitants (Anders-uuid pattern)..."
+	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE name LIKE 'Anders-%-%-%-%-%',--local)
 	@echo "✅ Cleanup complete!"
 
 d1-nuke-users: ## Delete test users (local) - emails ending in @andeby.dk
