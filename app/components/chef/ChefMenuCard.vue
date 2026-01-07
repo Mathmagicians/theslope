@@ -104,6 +104,7 @@ const emit = defineEmits<{
   'update:allergens': [allergenIds: number[]]
   'advance-state': [newState: string]
   'cancel-dinner': []
+  'show-calendar': []
   select: [dinnerEventId: number]
 }>()
 
@@ -413,7 +414,7 @@ const handleCardClick = () => {
     </div>
 
     <template #header>
-      <DinnerDetailHeader :dinner-event="dinnerEvent" />
+      <DinnerDetailHeader :dinner-event="dinnerEvent" @show-calendar="emit('show-calendar')" />
     </template>
 
     <div class="space-y-6">
@@ -481,16 +482,25 @@ const handleCardClick = () => {
         </div>
 
         <!-- Chef display - portrait frame with chef hat -->
-        <div v-if="dinnerEvent.chef" class="relative pt-4 mt-4" data-testid="chef-display">
-          <UserListItem
-            :inhabitants="dinnerEvent.chef"
-            :name-formatter="formatNameWithInitials"
-            :link-to-profile="false"
-            ring-color="amber-500"
-            size="md"
-          />
-          <!-- Chef hat on top -->
-          <UIcon :name="ICONS.chef" class="absolute -top-1 left-3 text-amber-500 text-3xl -rotate-6 drop-shadow-md" />
+        <div v-if="dinnerEvent.chef" class="flex items-center gap-3 pt-4 mt-4" data-testid="chef-display">
+          <!-- Portrait frame around avatar only -->
+          <div class="relative">
+            <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
+              <UserListItem
+                :inhabitants="dinnerEvent.chef"
+                :show-names="false"
+                :link-to-profile="false"
+                :size="SIZES.standard"
+              />
+            </div>
+            <!-- Chef hat on top -->
+            <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
+          </div>
+          <!-- Name + subtle chefkok label -->
+          <div class="flex flex-col">
+            <span class="font-semibold">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
+            <span class="text-xs text-neutral-500">Chefkok</span>
+          </div>
         </div>
 
         <!-- Warning when menu title missing -->

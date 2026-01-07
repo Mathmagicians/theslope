@@ -42,6 +42,10 @@ const stateBadge = computed(() => {
   const fallback = DinnerState.SCHEDULED as keyof typeof DINNER_STATE_BADGES
   return DINNER_STATE_BADGES[state] ?? DINNER_STATE_BADGES[fallback]
 })
+
+const emit = defineEmits<{
+  'show-calendar': []
+}>()
 </script>
 
 <template>
@@ -62,13 +66,18 @@ const stateBadge = computed(() => {
       </UBadge>
     </div>
 
-    <!-- Date (middle on mobile, center on desktop) -->
-    <div class="flex items-center md:justify-center gap-2">
-      <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize" />
-      <span :class="TYPOGRAPHY.bodyTextMedium" class="capitalize">
-        {{ formattedDate }}
-      </span>
-    </div>
+    <!-- Date (middle on mobile, center on desktop) - clickable to show calendar -->
+    <UButton
+      variant="ghost"
+      color="neutral"
+      :size="SIZES.standard"
+      :icon="ICONS.calendar"
+      class="!text-[inherit]"
+      data-testid="show-calendar-toggle"
+      @click="emit('show-calendar')"
+    >
+      {{ formattedDate }}
+    </UButton>
 
     <!-- Heynabo link (bottom on mobile, right on desktop) -->
     <div class="flex items-center md:justify-end">

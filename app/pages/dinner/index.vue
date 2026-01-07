@@ -65,6 +65,9 @@ const {user} = storeToRefs(authStore)
 // Booking form state - EDIT mode prevents accidental changes
 const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
+// Calendar accordion state (open by default, toggled by date badge click)
+const calendarOpen = ref(true)
+
 // Booking handlers - update individual order (uses householdOrders, not dinnerEventDetail.tickets)
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
@@ -297,6 +300,7 @@ useHead({
         <template #calendar>
           <DinnerCalendarDisplay
             v-if="seasonDates && selectedDate"
+            v-model:calendar-open="calendarOpen"
             :season-dates="seasonDates"
             :cooking-days="cookingDays"
             :holidays="holidays"
@@ -326,6 +330,7 @@ useHead({
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
+          @show-calendar="calendarOpen = true"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm

@@ -827,7 +827,7 @@ export const DINNER_STATE_BADGES = {
     SCHEDULED: {
         label: 'Planlagt',
         color: COLOR.mocha,
-        icon: 'i-heroicons-calendar'
+        icon: 'i-heroicons-clipboard-document-list'
     },
     ANNOUNCED: {
         label: 'Annonceret',

@@ -151,17 +151,31 @@ const legendItems = computed(() => [
   }
 ])
 
-const accordionItems = [{
-  label: 'Kalender',
-  slot: 'calendar-content'
-}]
-
 const emit = defineEmits<{
   'date-selected': [date: Date]
 }>()
 
+// Calendar open state - parent controls via v-model:calendar-open
+const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
+
+// Accordion items with value for v-model binding
+const accordionItems = [{ label: 'Kalender', slot: 'calendar-content', value: '0' }]
+
+// Bridge between boolean model and accordion string value
+const accordionValue = computed({
+  get: () => calendarOpen.value ? '0' : undefined,
+  set: (v) => { calendarOpen.value = v === '0' }
+})
+
 const handleDateClick = (day: DateValue) => {
   emit('date-selected', toDate(day))
+}
+
+const handleCountdownClick = (dinnerId: number) => {
+  const dinner = props.dinnerEvents?.find(e => e.id === dinnerId)
+  if (dinner) {
+    emit('date-selected', new Date(dinner.date))
+  }
 }
 
 const isSelected = (day: DateValue): boolean => {
@@ -182,10 +196,12 @@ const isSelected = (day: DateValue): boolean => {
       :next-event="nextDinner"
       :event-start-hour="dinnerStartHour"
       palette="dinner"
+      clickable
+      @select="handleCountdownClick"
     />
 
-    <!-- Calendar Accordion (collapsed on mobile, open on desktop) -->
-    <UAccordion :items="accordionItems" :default-value="SIZES.calendarAccordionDefault" type="single" collapsible class="flex-1">
+    <!-- Calendar Accordion (parent controls open state via v-model:calendar-open) -->
+    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
       <template #calendar-content>
         <!-- Calendar Display -->
         <div class="flex-1">
