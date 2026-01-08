@@ -147,7 +147,8 @@ export const useMaintenance = () => {
             { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {
-            stats.push({ label: 'Bookinger', value: `+${result.scaffold.created}, -${result.scaffold.deleted}` })
+            // Format: +created -deleted ~released $priceUpdated (consistent with Heynabo stats)
+            stats.push({ label: 'Bookinger', value: `+${result.scaffold.created} -${result.scaffold.deleted} ~${result.scaffold.released} $${result.scaffold.priceUpdated}` })
         }
         return stats
     }

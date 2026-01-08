@@ -23,12 +23,12 @@
  *
  * Displays:
  * - Countdown timer (train station style with configurable colors from event list)
- * - Holidays (green chips)
+ * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
- * Domain-specific rendering via slots (chips for holidays, filled for actual).
+ * Domain-specific rendering via slots (rings for holidays, filled for actual).
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
@@ -147,7 +147,8 @@ const legendItems = computed(() => [
   },
   {
     label: 'Ferie',
-    type: 'chip' as const
+    type: 'circle' as const,
+    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.holiday}`
   }
 ])
 
@@ -207,10 +208,13 @@ const isSelected = (day: DateValue): boolean => {
         <div class="flex-1">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
-              <!-- Holiday takes precedence -->
-              <UChip v-if="isHoliday(day)" show size="md" color="success">
+              <!-- Holiday takes precedence (green ring) -->
+              <div
+                v-if="isHoliday(day)"
+                :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+              >
                 {{ day.day }}
-              </UChip>
+              </div>
 
               <!-- Dinner event (next/future/past) -->
               <div
@@ -235,10 +239,7 @@ const isSelected = (day: DateValue): boolean => {
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <div v-if="legendItem.type === 'chip'" class="w-8 h-8 flex items-center justify-center">
-                    <UChip show size="md" color="success">1</UChip>
-                  </div>
-                  <div v-else :class="legendItem.circleClass">
+                  <div :class="legendItem.circleClass">
                     1
                   </div>
                   <span>{{ legendItem.label }}</span>

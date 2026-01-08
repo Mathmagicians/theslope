@@ -390,4 +390,19 @@ describe('useHousehold', () => {
       })
     })
   })
+
+  describe('formatHouseholdFamilyName', () => {
+    const { formatHouseholdFamilyName } = useHousehold()
+
+    it.each([
+      { inhabitants: [], expected: null, scenario: 'empty array' },
+      { inhabitants: [{ lastName: '' }], expected: null, scenario: 'empty lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }], expected: 'Hansen', scenario: 'single person' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: 'Familien Hansen', scenario: 'same lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: 'Familien Hansen & Jensen', scenario: 'two lastNames' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: 'Familien Hansen & Jensen m.fl.', scenario: '3+ lastNames' }
+    ])('$scenario → $expected', ({ inhabitants, expected }) => {
+      expect(formatHouseholdFamilyName(inhabitants)).toBe(expected)
+    })
+  })
 })

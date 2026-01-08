@@ -3,7 +3,7 @@
  * HouseholdCalendarDisplay - Shows household bookings and cooking obligations
  *
  * Displays:
- * - Holidays (green chips)
+ * - Holidays (green rings)
  * - Team cooking days (◆ symbol when household member cooks)
  * - Bookings (● symbol when family members have bookings)
  * - Not booked (○ symbol for potential booking days without bookings)
@@ -50,6 +50,7 @@ interface Props {
 const props = defineProps<Props>()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
+const {CALENDAR, SIZES} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -112,10 +113,13 @@ const hasBookings = (eventLists: DayEventList[]) => {
     :number-of-months="1"
   >
     <template #day="{ day, eventLists }">
-      <!-- Holiday takes precedence -->
-      <UChip v-if="isHoliday(day)" show size="md" color="success">
+      <!-- Holiday takes precedence (green ring) -->
+      <div
+        v-if="isHoliday(day)"
+        :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+      >
         {{ day.day }}
-      </UChip>
+      </div>
 
       <!-- Team cooking day -->
       <div

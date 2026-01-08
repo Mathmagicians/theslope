@@ -619,12 +619,21 @@ export const useSeason = () => {
     }
 
     /**
+     * Get cooking deadline thresholds from app.config.ts
+     * DRY: Single source for warning/critical hours used by badges and calendar chips
+     */
+    const getCookingDeadlineThresholds = () => ({
+        warning: theslope.cookingDeadlines.warningHours,
+        critical: theslope.cookingDeadlines.criticalHours
+    })
+
+    /**
      * Calculate deadline urgency for cooking tasks using thresholds from app.config.ts
      * @param dinnerStartTime - The dinner event start time
      * @returns 0 (on track) | 1 (warning) | 2 (critical)
      */
     const getDeadlineUrgency = (dinnerStartTime: Date): DeadlineUrgency => {
-        const { criticalHours, warningHours } = theslope.cookingDeadlines
+        const { critical: criticalHours, warning: warningHours } = getCookingDeadlineThresholds()
         return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
     }
 
@@ -682,6 +691,7 @@ export const useSeason = () => {
         isOnTeam,
         isChefFor,
         getDeadlineUrgency,
+        getCookingDeadlineThresholds,
         getBillingCutoffDay,
 
         // Active season management - pure functions

@@ -272,14 +272,9 @@ export const useBooking = () => {
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
         deadlines: { canModifyOrders: (date: Date) => boolean, isAnnounceMenuPastDeadline: (date: Date) => boolean }
     ): StepDeadlineResult => {
-        const {getDinnerTimeRange, getDefaultDinnerStartTime} = useSeason()
+        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
         const config = getStepConfig(dinnerEvent, deadlines)
-
-        const appConfig = useAppConfig()
-        const thresholds = {
-            warning: appConfig.theslope?.cookingDeadlines?.warningHours ?? 72,
-            critical: appConfig.theslope?.cookingDeadlines?.criticalHours ?? 24
-        }
+        const thresholds = getCookingDeadlineThresholds()
 
         const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
         const countdown = calculateCountdown(dinnerTimeRange.start)
@@ -313,6 +308,40 @@ export const useBooking = () => {
      */
     const canCancelDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state'>): boolean => {
         return dinnerEvent.state !== DinnerState.CANCELLED && dinnerEvent.state !== DinnerState.CONSUMED
+    }
+
+    /**
+     * Get max alarm level for chef tasks (menu + groceries) - for calendar chips.
+     * Reuses DINNER_STEP_MAP.getDeadline() logic from DinnerDeadlineBadges.
+     *
+     * @returns AlarmLevel: -1 (all done), 0 (on track), 1 (warning), 2 (critical), 3 (overdue)
+     */
+    const getChefDeadlineAlarm = (
+        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
+        deadlines: { isAnnounceMenuPastDeadline: (date: Date) => boolean }
+    ): AlarmLevel => {
+        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
+        const thresholds = getCookingDeadlineThresholds()
+        const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
+        const countdown = calculateCountdown(dinnerTimeRange.start)
+        const isPastDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
+
+        const alarms: AlarmLevel[] = []
+
+        // Menu badge - same logic as DinnerDeadlineBadges.menuBadge
+        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
+                        (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        if (!menuDone) {
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+        }
+
+        // Groceries badge - same logic as DinnerDeadlineBadges.groceriesDoneBadge
+        const groceriesDone = dinnerEvent.totalCost > 0
+        if (!groceriesDone) {
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+        }
+
+        return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
     }
 
     /**
@@ -552,6 +581,7 @@ export const useBooking = () => {
         getDinnerStepState,
         getStepConfig,
         getStepDeadline,
+        getChefDeadlineAlarm,
         canAnnounceDinner,
         canCancelDinner,
         buildDinnerUrl,

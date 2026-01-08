@@ -55,6 +55,8 @@ export default defineNuxtConfig({
                 'success',
                 'warning',
                 'error',
+                // Tailwind colors for specific use cases
+                'yellow',    // Deadline warning chips (more visible than orange)
                 // Custom Pantone team colors
                 'mocha',
                 'pink',

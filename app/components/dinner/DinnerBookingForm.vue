@@ -486,13 +486,13 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             v-model="draftPowerMode"
             :form-mode="FORM_MODES.EDIT"
             :disabled-modes="disabledModes"
-            size="sm"
+            :size="SIZES.standard"
             name="power-mode-selector"
           />
           <UButton
             :color="COMPONENTS.powerMode.color"
             variant="solid"
-            size="sm"
+            :size="SIZES.standard"
             name="save-power-mode"
             @click="handlePowerModeUpdate"
           >
@@ -506,13 +506,13 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             v-model="draftGuestMode"
             :form-mode="FORM_MODES.EDIT"
             :disabled-modes="guestDisabledModes"
-            size="sm"
+            :size="SIZES.standard"
             name="guest-mode-selector"
           />
           <UButton
             color="primary"
             variant="solid"
-            size="sm"
+            :size="SIZES.standard"
             name="add-guest"
             @click="handleAddGuest"
           >

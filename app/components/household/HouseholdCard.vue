@@ -115,20 +115,46 @@ const expanded = ref<Record<number, boolean>>({})
 // Draft preferences (edited before save)
 const draftPreferences = ref<WeekDayMap<DinnerMode> | null>(null)
 const editingInhabitantId = ref<number | null>(null)
+const isSaving = ref(false)
+
+// Toast notifications
+const toast = useToast()
 
 // Save preferences
 const savePreferences = async () => {
   if (editingInhabitantId.value === null || !draftPreferences.value) return
 
+  isSaving.value = true
+  const isPowerMode = editingInhabitantId.value === -1
+
   try {
+    let result: { created: number; deleted: number; released: number; priceUpdated: number; unchanged: number; errored: number }
+
     // Power mode: update all inhabitants
-    if (editingInhabitantId.value === -1) {
-      await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value)
+    if (isPowerMode) {
+      result = await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value)
     }
     // Regular mode: update single inhabitant
     else {
-      await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value)
+      result = await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value)
     }
+
+    // Build result description with all possible outcomes
+    const parts: string[] = []
+    if (result.created > 0) parts.push(`${result.created} oprettet`)
+    if (result.deleted > 0) parts.push(`${result.deleted} slettet`)
+    if (result.released > 0) parts.push(`${result.released} frigivet`)
+    if (result.priceUpdated > 0) parts.push(`${result.priceUpdated} pris opdateret`)
+    if (result.errored > 0) parts.push(`${result.errored} fejlet`)
+    if (result.unchanged > 0) parts.push(`${result.unchanged} uændret`)
+    const description = parts.length > 0 ? parts.join(', ') : 'Ingen ændringer i bookinger'
+
+    toast.add({
+      title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
+      description,
+      icon: 'i-heroicons-check-circle',
+      color: 'success'
+    })
 
     // Close the row after save
     expanded.value = {}
@@ -136,6 +162,14 @@ const savePreferences = async () => {
     draftPreferences.value = null
   } catch (error) {
     console.error('Failed to update preferences:', error)
+    toast.add({
+      title: 'Kunne ikke gemme',
+      description: 'Der opstod en fejl. Prøv igen senere.',
+      icon: 'i-heroicons-exclamation-circle',
+      color: 'error'
+    })
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -330,12 +364,14 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                 <UButton
                     :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : 'primary'"
                     variant="solid"
-                    :icon="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : 'i-heroicons-check'"
+                    :icon="isSaving ? undefined : (row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : 'i-heroicons-check')"
                     :size="getIsMd ? 'md' : 'sm'"
+                    :loading="isSaving"
+                    :disabled="isSaving"
                     data-testid="save-preferences"
                     @click="savePreferences"
                 >
-                  {{ row.original.isSynthetic ? 'Gem for alle' : 'Gem' }}
+                  {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
                 </UButton>
               </div>
             </template>

@@ -53,6 +53,7 @@ export const COLOR = {
     warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
     info: 'info',             // Violet - information messages
     neutral: 'neutral',       // Sky - neutral/disabled
+    yellow: 'yellow',         // Yellow - deadline warnings (more visible than warning)
 
     // Brand Pantone colors (custom palettes in app.config.ts)
     mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
@@ -492,6 +493,7 @@ export const ICONS = {
     dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
     chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     household: 'i-heroicons-home',
+    preferences: 'i-heroicons-adjustments-horizontal',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
@@ -873,6 +875,7 @@ export const CALENDAR = {
         warning: 'ring-2 ring-amber-500',
         onTrack: ''
     },
+    holiday: 'ring-2 ring-green-500',
     // Base selection behavior - combine with palette-specific color
     selection: {
         base: 'ring-2 md:ring-4',
@@ -998,6 +1001,18 @@ export const URGENCY_TO_BADGE = {
     2: DEADLINE_BADGES.CRITICAL
 } as const
 
+/**
+ * Maps DeadlineUrgency to UChip colors for calendar display
+ * Uses 'yellow' for warning (more visible than orange 'warning')
+ * 0 = null (no chip), 1 = yellow, 2 = error (red), 3 = neutral (black/overdue)
+ */
+export const URGENCY_TO_CHIP_COLOR = {
+    0: null,
+    1: 'yellow',
+    2: 'error',
+    3: 'neutral'
+} as const
+
 // ============================================================================
 // PART 7: Empty State Messages (fun placeholders)
 // ============================================================================
@@ -1068,6 +1083,7 @@ export const useTheSlopeDesignSystem = () => {
         DEADLINE_BADGES,
         ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
+        URGENCY_TO_CHIP_COLOR,
         ICONS,
         IMG,
 

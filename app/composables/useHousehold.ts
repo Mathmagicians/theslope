@@ -183,9 +183,58 @@ export const useHousehold = () => {
         return (shortName: string): number | null => matchInhabitantByNameWithInitials(shortName, inhabitants)
     }
 
+    /**
+     * Format household family name from inhabitants' last names
+     * Used for displaying a welcoming household title instead of garbled Heynabo names
+     *
+     * Examples:
+     * - Single last name: "Familien Hansen"
+     * - Two last names: "Familien Hansen & Jensen"
+     * - Three+ last names: "Familien Hansen & Jensen m.fl."
+     * - Single person: "Hansen" (no "Familien" prefix)
+     * - No inhabitants: null
+     *
+     * @param inhabitants - Array of inhabitants with lastName
+     * @returns Formatted family name string or null if no inhabitants
+     */
+    const formatHouseholdFamilyName = (
+        inhabitants: Pick<InhabitantDisplay, 'lastName'>[]
+    ): string | null => {
+        if (inhabitants.length === 0) return null
+
+        // Extract unique last names, preserving order of first occurrence
+        const uniqueLastNames: string[] = []
+        for (const inhabitant of inhabitants) {
+            const lastName = inhabitant.lastName?.trim()
+            if (lastName && !uniqueLastNames.includes(lastName)) {
+                uniqueLastNames.push(lastName)
+            }
+        }
+
+        if (uniqueLastNames.length === 0) return null
+
+        // Single person household - no "Familien" prefix
+        if (inhabitants.length === 1) {
+            return uniqueLastNames[0]!
+        }
+
+        // Multiple people - use "Familien" prefix
+        if (uniqueLastNames.length === 1) {
+            return `Familien ${uniqueLastNames[0]}`
+        }
+
+        if (uniqueLastNames.length === 2) {
+            return `Familien ${uniqueLastNames[0]} & ${uniqueLastNames[1]}`
+        }
+
+        // 3+ unique last names - show first two + "m.fl."
+        return `Familien ${uniqueLastNames[0]} & ${uniqueLastNames[1]} m.fl.`
+    }
+
     return {
         computeAggregatedPreferences,
         formatNameWithInitials,
+        formatHouseholdFamilyName,
         matchInhabitantByNameWithInitials,
         createInhabitantMatcher
     }

@@ -118,7 +118,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         try {
             console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
 
-            await $fetch(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+            const result = await $fetch(`/api/household/inhabitants/${inhabitantId}/preferences`, {
                 method: 'POST',
                 body: { dinnerPreferences: preferences }
             })
@@ -129,6 +129,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
             if (selectedHouseholdId.value) {
                 await refreshSelectedHousehold()
             }
+
+            return result.scaffoldResult
         } catch (e: unknown) {
             handleApiError(e, 'updateInhabitantPreferences')
             throw e
@@ -153,8 +155,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
             console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
 
-            // Update all inhabitants in parallel
-            await Promise.all(
+            // Update all inhabitants in parallel and collect results
+            const results = await Promise.all(
                 household.inhabitants.map(inhabitant =>
                     $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
                         method: 'POST',
@@ -169,6 +171,16 @@ export const useHouseholdsStore = defineStore("Households", () => {
             if (selectedHouseholdId.value === householdId) {
                 await refreshSelectedHousehold()
             }
+
+            // Aggregate scaffold results from all updates
+            return results.reduce((acc, r) => ({
+                created: acc.created + r.scaffoldResult.created,
+                deleted: acc.deleted + r.scaffoldResult.deleted,
+                released: acc.released + r.scaffoldResult.released,
+                priceUpdated: acc.priceUpdated + r.scaffoldResult.priceUpdated,
+                unchanged: acc.unchanged + r.scaffoldResult.unchanged,
+                errored: acc.errored + r.scaffoldResult.errored
+            }), { created: 0, deleted: 0, released: 0, priceUpdated: 0, unchanged: 0, errored: 0 })
         } catch (e: unknown) {
             handleApiError(e, 'updateAllInhabitantPreferences')
             throw e
