@@ -501,6 +501,7 @@ export const ICONS = {
     help: 'i-heroicons-question-mark-circle',
 
     // Actions & feedback
+    clipboard: 'i-heroicons-clipboard-document-list',
     edit: 'i-heroicons-pencil',
     chevronDown: 'i-heroicons-chevron-down',
     chevronRight: 'i-heroicons-chevron-right',

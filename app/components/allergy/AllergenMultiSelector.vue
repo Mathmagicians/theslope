@@ -348,7 +348,7 @@ v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
           :ui="COMPONENTS.emptyStateAlertCompact"
       >
         <template #title>
-          Vælg allergier for at se statistik
+          Vælg allergener, for at se hvem de påvirker
         </template>
       </UAlert>
     </div>

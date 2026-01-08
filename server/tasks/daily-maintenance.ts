@@ -1,7 +1,7 @@
 /**
  * Nitro Scheduled Task: Daily Maintenance
  *
- * Triggered by Cloudflare Cron at 01:00 UTC (02:00/03:00 Copenhagen).
+ * Triggered by Cloudflare Cron at 02:00 UTC (03:00/04:00 Copenhagen).
  * Uses D1 directly via context.cloudflare.env.DB.
  */
 import {runDailyMaintenance} from '~~/server/utils/dailyMaintenanceService'

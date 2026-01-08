@@ -119,7 +119,7 @@ const jobHistoryColumns = [
 const jobHistoryRows = computed(() => {
   return jobRuns.value.map(jr => ({
     id: jr.id,
-    startedAt: jr.startedAt.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }),
+    startedAt: formatDate(jr.startedAt, 'dd/MM/yyyy HH:mm'),
     jobType: jobTypeLabels[jr.jobType as keyof typeof jobTypeLabels] ?? jr.jobType,
     status: jr.status,
     statusColor: getJobStatusColor(jr.status),
@@ -169,13 +169,19 @@ const formatStatsWithIcons = (
   icons: readonly string[],
   timestamp: Date
 ): { icon: string; text: string }[] => [
-  { icon: ICONS.clock, text: timestamp.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) },
+  { icon: ICONS.clock, text: formatDate(timestamp, 'dd/MM/yyyy HH:mm') },
   { icon: ICONS.checkCircle, text: 'Gennemført' },
   ...stats.map((stat, i) => ({
     icon: icons[i] ?? ICONS.info,
     text: `${stat.label}: ${stat.value}`
   }))
 ]
+
+// Get job run timestamp by ID (returns startedAt from job run record)
+const getJobRunTimestamp = (jobRunId: number): Date => {
+  const jobRun = jobRuns.value.find(jr => jr.id === jobRunId)
+  return jobRun?.startedAt ?? new Date()
+}
 
 // Fresh run stats (from stores)
 const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
@@ -185,7 +191,7 @@ const dailyMaintenanceStats = computed(() => {
   return formatStatsWithIcons(
     formatDailyMaintenanceStats(dailyMaintenanceResult.value),
     jobIconsMap.DAILY_MAINTENANCE,
-    new Date()
+    getJobRunTimestamp(dailyMaintenanceResult.value.jobRunId)
   )
 })
 
@@ -194,7 +200,7 @@ const monthlyBillingStats = computed(() => {
   return formatStatsWithIcons(
     formatMonthlyBillingStats(monthlyBillingResult.value.results),
     jobIconsMap.MONTHLY_BILLING,
-    new Date()
+    getJobRunTimestamp(monthlyBillingResult.value.jobRunId)
   )
 })
 
@@ -203,7 +209,7 @@ const heynaboImportStats = computed(() => {
   return formatStatsWithIcons(
     formatHeynaboStats(heynaboImport.value),
     jobIconsMap.HEYNABO_IMPORT,
-    new Date()
+    getJobRunTimestamp(heynaboImport.value.jobRunId)
   )
 })
 
@@ -248,6 +254,23 @@ const jobDefinitions = computed(() => {
 
   return [
     {
+      key: 'HEYNABO_IMPORT',
+      title: 'Heynabo Import',
+      buttonLabel: 'Kør import',
+      description: 'Synkroniser husstande og beboere fra Heynabo',
+      schedule: systemJobs.heynaboImport.description,
+      color: COLOR.ocean,
+      headerBg: BG.ocean[50],
+      icon: ICONS.users,
+      // Wired up via users store
+      isRunning: isImportHeynaboLoading.value,
+      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
+      hasError: isImportHeynaboErrored.value,
+      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
+      error: heynaboImportError.value,
+      trigger: importHeynaboDataAndRefresh
+    },
+    {
       key: 'DAILY_MAINTENANCE',
       title: 'Daglig Vedligeholdelse',
       buttonLabel: 'Kør daglig vedligeholdelse',
@@ -255,7 +278,7 @@ const jobDefinitions = computed(() => {
       schedule: systemJobs.dailyMaintenance.description,
       color: COLOR.peach,
       headerBg: BG.peach[50],
-      icon: ICONS.sync,
+      icon: ICONS.clipboard,
       // Wired up via bookings store
       isRunning: isDailyMaintenanceRunning.value,
       hasResult: hasDailyMaintenanceResult.value || hasHistoricalDailyMaintenance,
@@ -280,23 +303,6 @@ const jobDefinitions = computed(() => {
       stats: hasMonthlyBillingResult.value ? monthlyBillingStats.value : getLatestJobStats('MONTHLY_BILLING'),
       error: monthlyBillingError.value,
       trigger: runMonthlyBillingAndRefresh
-    },
-    {
-      key: 'HEYNABO_IMPORT',
-      title: 'Heynabo Import',
-      buttonLabel: 'Kør import',
-      description: 'Synkroniser husstande og beboere fra Heynabo',
-      schedule: systemJobs.heynaboImport.description,
-      color: COLOR.ocean,
-      headerBg: BG.ocean[50],
-      icon: ICONS.users,
-      // Wired up via users store
-      isRunning: isImportHeynaboLoading.value,
-      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
-      hasError: isImportHeynaboErrored.value,
-      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
-      error: heynaboImportError.value,
-      trigger: importHeynaboDataAndRefresh
     }
   ]
 })
@@ -323,7 +329,7 @@ const jobDefinitions = computed(() => {
             :class="[job.headerBg, 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2']"
           >
             <UIcon
-              :name="job.icon"
+              :name="job.isRunning ? ICONS.sync : job.icon"
               :class="['text-5xl md:text-6xl opacity-80', job.isRunning ? 'animate-spin' : '']"
             />
             <span :class="TYPOGRAPHY.bodyTextSmall">

@@ -282,14 +282,9 @@ const menuEditButtons = computed(() => {
   ]
 })
 
+// Allergen edit button - only shows pencil in view mode (save/cancel are text buttons at bottom)
 const allergenEditButtons = computed(() => {
-  if (!isEditing.value || props.isUpdating) return []
-  if (isEditingAllergens.value) {
-    return [
-      { icon: 'i-heroicons-x-mark', color: COLOR.neutral, variant: 'ghost' as const, name: 'cancel-allergens-inline', onClick: handleAllergenCancel },
-      { icon: ICONS.check, color: HERO_BUTTON.primaryButton, variant: 'solid' as const, name: 'save-allergens-inline', onClick: handleAllergenSave }
-    ]
-  }
+  if (!isEditing.value || props.isUpdating || isEditingAllergens.value) return []
   return [
     { icon: ICONS.edit, color: HERO_BUTTON.primaryButton, variant: 'ghost' as const, name: 'edit-allergens', onClick: () => { isEditingAllergens.value = true } }
   ]
@@ -575,26 +570,13 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- EDIT allergens: Show header with save/cancel buttons -->
-        <div v-else>
-          <UFormField hint="Gem eller annuller" :ui="{ hint: 'hidden md:block' }">
-            <template #default>
-              <div class="flex items-center gap-1 md:gap-2 mb-2">
-                <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
-                <UButton
-                  v-for="btn in allergenEditButtons"
-                  :key="btn.name"
-                  :icon="btn.icon"
-                  :color="btn.color"
-                  :variant="btn.variant"
-                  :size="SIZES.standard"
-                  square
-                  :name="btn.name"
-                  @click="btn.onClick"
-                />
-              </div>
-            </template>
-          </UFormField>
+        <!-- EDIT allergens: Title + text buttons at top, then selector -->
+        <div v-else class="space-y-4">
+          <div class="flex items-center gap-2">
+            <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
+            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
+            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
+          </div>
           <AllergenMultiSelector
             v-model="draftAllergenIds"
             :allergy-types="allergyTypes"

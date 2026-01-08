@@ -36,12 +36,12 @@ export const useMaintenance = () => {
     }
 
     /**
-     * Job schedule descriptions (Danish)
+     * Job schedule descriptions (Danish) - must match app.config.ts systemJobs
      */
     const jobScheduleLabels: Record<JobType, string> = {
-        [JobType.DAILY_MAINTENANCE]: 'Kl. 02:00',
-        [JobType.MONTHLY_BILLING]: '1. hver måned',
-        [JobType.HEYNABO_IMPORT]: 'Manuel',
+        [JobType.DAILY_MAINTENANCE]: 'Dagligt kl. 02:00',
+        [JobType.MONTHLY_BILLING]: 'D. 17. hver måned kl. 04:00',
+        [JobType.HEYNABO_IMPORT]: 'Dagligt kl. 03:00',
         [JobType.MAINTENANCE_IMPORT]: 'Manuel',
         [JobType.MAINTENANCE_EXPORT]: 'Manuel'
     }
