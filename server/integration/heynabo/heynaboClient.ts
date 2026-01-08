@@ -359,6 +359,19 @@ export async function updateHeynaboEventAsSystem(eventId: number, payload: Heyna
 }
 
 /**
+ * Update Heynabo event using user's token, with system token fallback
+ * ADR-013: Chef ops use user's token when available, system token as fallback for admins
+ */
+export async function updateHeynaboEventWithFallback(
+    userToken: string | undefined,
+    eventId: number,
+    payload: HeynaboEventCreate
+): Promise<HeynaboEventResponse> {
+    const token = userToken || await getSystemToken()
+    return updateHeynaboEvent(token, eventId, payload)
+}
+
+/**
  * Delete Heynabo event using system credentials (admin delete)
  */
 export async function deleteHeynaboEventAsSystem(eventId: number): Promise<void> {
@@ -373,9 +386,30 @@ export async function deleteHeynaboEventAsSystem(eventId: number): Promise<void>
 }
 
 /**
+ * Batch delete Heynabo events using system credentials (admin delete)
+ * @param eventIds - Array of Heynabo event IDs to delete
+ * @returns Number of successfully deleted events
+ */
+export async function deleteHeynaboEventsAsSystem(eventIds: number[]): Promise<number> {
+    const token = await getSystemToken()
+    return deleteHeynaboEvents(token, eventIds)
+}
+
+/**
  * Fetch Heynabo event using system credentials (for testing/verification)
  */
 export async function fetchHeynaboEventAsSystem(eventId: number): Promise<HeynaboEventResponse> {
     const token = await getSystemToken()
     return fetchHeynaboEvent(token, eventId)
+}
+
+/**
+ * List all Heynabo events using system credentials (for test cleanup)
+ */
+export async function listHeynaboEventsAsSystem(): Promise<HeynaboEventResponse[]> {
+    const token = await getSystemToken()
+    const response = await $fetch<{list: HeynaboEventResponse[]}>(`${heyNaboApi}/members/events/`, {
+        headers: {Authorization: `Bearer ${token}`}
+    })
+    return response?.list || []
 }

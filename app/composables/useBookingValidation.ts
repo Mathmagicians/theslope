@@ -97,6 +97,7 @@ export const useBookingValidation = () => {
         priceAtBooking: z.number().int(),
         dinnerMode: DinnerModeSchema,
         state: OrderStateSchema,
+        isGuestTicket: z.boolean().default(false), // True when ticket is for a guest (not the inhabitant themselves)
         releasedAt: z.coerce.date().nullable(),
         closedAt: z.coerce.date().nullable(),
         createdAt: z.coerce.date(),
@@ -106,10 +107,17 @@ export const useBookingValidation = () => {
     /**
      * Order Display - Minimal for index endpoints (GET /api/order), all scalar fields
      * ADR-009: Lightweight with flattened ticketType
+     *
+     * Provenance: Optional fields populated for claimed tickets (USER_CLAIMED history)
+     * - householdShortname: Original owner's household shortname (e.g., "AR_1")
+     * - snapshotAllergies: Original ticket's allergies at claim time
      */
     const OrderDisplaySchema = OrderBaseSchema.extend({
         id: z.number().int().positive(),
-        ticketType: TicketTypeSchema.nullable() // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
+        ticketType: TicketTypeSchema.nullable(), // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
+        // Provenance fields for claimed tickets (populated from USER_CLAIMED OrderHistory)
+        provenanceHousehold: z.string().optional(),       // Original owner's household shortname
+        provenanceAllergies: z.array(z.string()).optional() // Original ticket's allergies at claim time
     })
 
     /**
@@ -195,14 +203,21 @@ export const useBookingValidation = () => {
     // updateOrdersToClosed uses 2 data params, so max ~98 IDs. Using 90 for safety.
     const DELETE_BATCH_SIZE = 90
 
+    // findMany with nested includes: D1 limit is 100 params, but nested queries add overhead.
+    // fetchOrders includes orderHistory with WHERE clause, so use conservative 30 for IDs.
+    const FETCH_IDS_BATCH_SIZE = 30
+
     // Local type for batch chunking (avoids circular reference with exported type)
     type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
 
     // Curried chunk function for order batches
     const chunkOrderBatch = chunkArray<_OrderCreateWithPrice>(ORDER_BATCH_SIZE)
 
-    // Curried chunk function for ID arrays (used for batch deletes)
+    // Curried chunk function for ID arrays (used for batch deletes/updates)
     const chunkIds = chunkArray<number>(DELETE_BATCH_SIZE)
+
+    // Curried chunk function for IDs in fetch operations with nested includes
+    const chunkFetchIds = chunkArray<number>(FETCH_IDS_BATCH_SIZE)
 
     /**
      * Batch of orders for batch creation - validates business rules:
@@ -320,8 +335,9 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Order snapshot for audit data - captures order state at deletion time
-     * Derived from OrderDisplaySchema, picking only essential fields for audit trail
+     * Order snapshot for audit data - captures order state at deletion/release time
+     * Derived from OrderDisplaySchema, picking essential fields + provenance data
+     * Provenance enables "🔄 fra AR_1" display on claimed tickets
      */
     const OrderSnapshotSchema = OrderDisplaySchema.pick({
         id: true,
@@ -331,13 +347,26 @@ export const useBookingValidation = () => {
         priceAtBooking: true,
         dinnerMode: true,
         state: true
+    }).extend({
+        // Provenance fields for ticket claim feature (pre-formatted for immutable audit trail)
+        inhabitantNameWithInitials: z.string(),           // "Anna B.H." - colloquial format
+        householdShortname: z.string(),                   // "AR_1" - for "fra AR_1" display
+        householdId: z.number().int().positive(),         // For filtering released tickets
+        allergies: z.array(z.string()).optional()         // ["Peanuts", "Gluten"] - captured at CREATE, omitted at UPDATE/DELETE
     })
 
     /**
      * Create serialized audit data for OrderHistory
      */
-    function createOrderAuditData(orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string {
-        return JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
+    const createOrderAuditData = (orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string =>
+        JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
+
+    /**
+     * Deserialize audit data from OrderHistory
+     */
+    const deserializeOrderAuditData = (auditData: string): {orderSnapshot: z.infer<typeof OrderSnapshotSchema>} => {
+        const parsed = JSON.parse(auditData)
+        return {orderSnapshot: OrderSnapshotSchema.parse(parsed.orderSnapshot)}
     }
 
     // ============================================================================
@@ -557,11 +586,23 @@ export const useBookingValidation = () => {
      * Used to validate API response structure
      */
     const ScaffoldResultSchema = z.object({
-        seasonId: z.number().int().positive(),
+        seasonId: z.number().int().positive().nullable(),
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
+        released: z.number().int().nonnegative().default(0),
         unchanged: z.number().int().nonnegative(),
-        households: z.number().int().nonnegative()
+        households: z.number().int().nonnegative(),
+        errored: z.number().int().nonnegative().default(0)
+    })
+
+    /**
+     * Operation result for inhabitant update with preference re-scaffolding
+     * ADR-009: Operation result type (not entity type)
+     */
+    const {InhabitantDetailSchema} = useCoreValidation()
+    const InhabitantUpdateResponseSchema = z.object({
+        inhabitant: InhabitantDetailSchema,
+        scaffoldResult: ScaffoldResultSchema
     })
 
     // ============================================================================
@@ -593,6 +634,14 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * Result of initPreferences operation
+     * Initializes NULL dinner preferences for new inhabitants
+     */
+    const InitPreferencesResultSchema = z.object({
+        initialized: z.number().int().nonnegative()
+    })
+
+    /**
      * Combined result of daily maintenance endpoint
      * Includes jobRunId for observability and parallel-safe test assertions
      */
@@ -601,6 +650,7 @@ export const useBookingValidation = () => {
         consume: ConsumeResultSchema,
         close: CloseOrdersResultSchema,
         transact: CreateTransactionsResultSchema,
+        initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
         scaffold: ScaffoldResultSchema.nullable()
     })
 
@@ -647,6 +697,7 @@ export const useBookingValidation = () => {
         OrderHistoryCreateSchema,
         OrderSnapshotSchema,
         createOrderAuditData,
+        deserializeOrderAuditData,
 
         // Batch Order Creation
         OrderAuditActionSchema,
@@ -658,6 +709,7 @@ export const useBookingValidation = () => {
         DELETE_BATCH_SIZE,
         chunkOrderBatch,
         chunkIds,
+        chunkFetchIds,
 
         // Transaction Creation (lean batch schema - ADR-009)
         OrderForTransactionSchema,
@@ -681,11 +733,13 @@ export const useBookingValidation = () => {
 
         // Scaffold Pre-bookings
         ScaffoldResultSchema,
+        InhabitantUpdateResponseSchema,
 
         // Daily Maintenance
         ConsumeResultSchema,
         CloseOrdersResultSchema,
         CreateTransactionsResultSchema,
+        InitPreferencesResultSchema,
         DailyMaintenanceResultSchema
     }
 }
@@ -739,9 +793,11 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
+export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
 
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>
 export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CloseOrdersResultSchema']>
 export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
+export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>

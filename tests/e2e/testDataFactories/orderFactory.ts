@@ -52,6 +52,7 @@ export class OrderFactory {
     priceAtBooking: 45,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: false,
     releasedAt: null,
     closedAt: null,
     createdAt: SeasonFactory.generateUniqueDate(),
@@ -80,14 +81,14 @@ export class OrderFactory {
       id: 10,
       heynaboId: 1001,
       householdId: 1,
-      name: 'Test',
-      lastName: 'User',
+      name: 'Daisy',
+      lastName: 'Duck',
       pictureUrl: null,
       allergies: []
     },
     bookedByUser: {
       id: 1,
-      email: salt('test@example.com', testSalt)
+      email: salt('daisy', testSalt) + '@andeby.dk'
     },
     ticketPrice: {
       id: 1,
@@ -181,10 +182,11 @@ export class OrderFactory {
   })
 
   /**
-   * OrderSnapshot - for audit data (derived from OrderDisplaySchema)
-   * No salting needed - all fields are numeric IDs or enums
+   * OrderSnapshot - for audit data (derived from OrderDisplaySchema + provenance)
+   * Provenance fields enable "🔄 fra AR_1" display on claimed tickets
    */
   static readonly defaultOrderSnapshot = (overrides?: Partial<OrderSnapshot>): OrderSnapshot => ({
+    // From OrderDisplaySchema
     id: 1,
     inhabitantId: 10,
     dinnerEventId: 5,
@@ -192,6 +194,11 @@ export class OrderFactory {
     priceAtBooking: 4500,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    // Provenance fields (pre-formatted for immutable audit trail)
+    inhabitantNameWithInitials: 'Daisy D.',
+    householdShortname: 'AR_1',
+    householdId: 1,
+    allergies: [],
     ...overrides
   })
 
@@ -210,7 +217,7 @@ export class OrderFactory {
   })
 
   static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
-    action: 'BULK_IMPORT',
+    action: 'SYSTEM_CREATED',
     performedByUserId: 1,
     source: 'csv_billing',
     ...overrides
@@ -342,6 +349,30 @@ export class OrderFactory {
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {
       headers,
       data
+    })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      return await response.json()
+    }
+
+    return null
+  }
+
+  static readonly claimOrder = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    inhabitantId: number,
+    isGuestTicket: boolean = false,
+    expectedStatus: number = 200
+  ): Promise<OrderDetail | null> => {
+    const response = await context.request.post(`${ORDER_ENDPOINT}/claim`, {
+      headers,
+      data: { dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket }
     })
 
     const status = response.status()

@@ -3,8 +3,15 @@ import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import { HouseholdFactory } from '../testDataFactories/householdFactory'
 import { OrderFactory } from '../testDataFactories/orderFactory'
 import testHelpers from '../testHelpers'
+import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 
-const { validatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo } = testHelpers
+const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo } = testHelpers
+const { DinnerModeSchema } = useBookingValidation()
+const { createDefaultWeekdayMap } = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerModeSchema.enum.DINEIN
+})
 
 test.describe('Authorization Middleware', () => {
     // Track resources for cleanup
@@ -83,5 +90,26 @@ test.describe('Authorization Middleware', () => {
             dinnerEventId: dinnerEvent.id,
             orders: [OrderFactory.defaultOrderItem({ inhabitantId: otherInhabitant.id, ticketPriceId })]
         }, 403)
+    })
+
+    test('GIVEN member WHEN updating preferences via admin endpoint THEN returns 403', async ({ browser }) => {
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const { inhabitantId } = await getSessionUserInfo(memberContext)
+
+        // Member tries to update their OWN preferences via admin endpoint - should be 403
+        const preferences = createDefaultWeekdayMap(DinnerModeSchema.enum.DINEIN)
+        await HouseholdFactory.updateInhabitant(memberContext, inhabitantId, { dinnerPreferences: preferences }, 403)
+    })
+
+    test('GIVEN member WHEN updating preferences via household endpoint THEN succeeds', async ({ browser }) => {
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const { inhabitantId } = await getSessionUserInfo(memberContext)
+
+        // Member updates their OWN preferences via household endpoint - should work
+        const preferences = createDefaultWeekdayMap(DinnerModeSchema.enum.TAKEAWAY)
+        const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitantId, preferences)
+
+        expect(result).not.toBeNull()
+        expect(result!.inhabitant.id).toBe(inhabitantId)
     })
 })

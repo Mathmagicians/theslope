@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, doScreenshot} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -28,7 +28,7 @@ test.describe('AdminHouseholds View', () => {
 
         // Wait for container to be visible
         await pollUntil(
-            async () => await page.locator('[data-test-id="admin-households"]').isVisible(),
+            async () => await page.locator('[data-testid="admin-households"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
@@ -37,7 +37,7 @@ test.describe('AdminHouseholds View', () => {
         await pollUntil(
             async () => {
                 const hasEmptyState = await page.getByText('Ingen er flyttet ind i appen endnu').count() > 0
-                const hasDataRows = await page.locator('[data-test-id="admin-households"] tbody tr td').count() > 1
+                const hasDataRows = await page.locator('[data-testid="admin-households"] tbody tr td').count() > 1
                 return hasEmptyState || hasDataRows
             },
             (ready) => ready,
@@ -54,10 +54,10 @@ test.describe('AdminHouseholds View', () => {
             await navigateToHouseholds(page)
         }
 
-        await page.locator('[data-test-id="household-search"]').fill(searchTerm)
+        await page.locator('[data-testid="household-search"]').fill(searchTerm)
 
         await pollUntil(
-            async () => await page.locator(`[data-test-id="household-address-${householdId}"]`).isVisible(),
+            async () => await page.locator(`[data-testid="household-address-${householdId}"]`).isVisible(),
             (isVisible) => isVisible,
             10
         )
@@ -70,7 +70,7 @@ test.describe('AdminHouseholds View', () => {
 
     test('Can load admin households page', async ({page}) => {
         await navigateToHouseholds(page)
-        await expect(page.locator('[data-test-id="admin-households"]')).toBeVisible()
+        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
     })
 
     test('GIVEN households with/without inhabitants WHEN searching THEN correct households are displayed', async ({
@@ -95,8 +95,8 @@ test.describe('AdminHouseholds View', () => {
         // WHEN: Navigate and search for household with inhabitants
         await navigateAndFindHousehold(page, householdWithInhabitants.id, householdWithInhabitants.address, true)
 
-        // THEN: Household and all inhabitants are visible (use data-test-id for exact match)
-        const householdAddressCell = page.locator(`[data-test-id="household-address-${householdWithInhabitants.id}"]`)
+        // THEN: Household and all inhabitants are visible (use data-testid for exact match)
+        const householdAddressCell = page.locator(`[data-testid="household-address-${householdWithInhabitants.id}"]`)
         await expect(householdAddressCell, 'Household with inhabitants should be visible').toBeVisible()
 
         // Find the row containing this household for inhabitant checks
@@ -108,11 +108,14 @@ test.describe('AdminHouseholds View', () => {
             ).toBeVisible()
         }
 
+        // Documentation screenshot: Admin Households list with inhabitants
+        await doScreenshot(page, 'admin/admin-households-list', true)
+
         // WHEN: Search for empty household (without reload, just new search)
         await navigateAndFindHousehold(page, householdEmpty.id, householdEmpty.address, false)
 
-        // THEN: Empty household is visible (use data-test-id for exact match)
-        const emptyHouseholdCell = page.locator(`[data-test-id="household-address-${householdEmpty.id}"]`)
+        // THEN: Empty household is visible (use data-testid for exact match)
+        const emptyHouseholdCell = page.locator(`[data-testid="household-address-${householdEmpty.id}"]`)
         await expect(emptyHouseholdCell, 'Empty household row should be visible').toBeVisible()
     })
 })

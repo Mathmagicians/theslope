@@ -62,14 +62,15 @@ import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {SeasonDeadlines} from '~/composables/useSeason'
 import {toDate} from '~/utils/date'
-import {isWithinInterval} from 'date-fns'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
   seasonDates: DateRange
   team: CookingTeamDisplay
   dinnerEvents: DinnerEventDisplay[]
+  deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
 }
@@ -84,7 +85,7 @@ const emit = defineEmits<{
 }>()
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {getDinnerTimeRange, getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
+const {getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
@@ -110,33 +111,6 @@ const {
   nextDinnerDateRange,
   dinnerStartHour
 } = useTemporalSplit(props.dinnerEvents)
-
-// Countdown timer (component-local with lifecycle hooks)
-const currentTime = ref(new Date())
-const updateInterval = ref<NodeJS.Timeout | null>(null)
-
-onMounted(() => {
-  updateInterval.value = setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
-})
-
-onUnmounted(() => {
-  if (updateInterval.value) {
-    clearInterval(updateInterval.value)
-  }
-})
-
-const isDuringEvent = computed(() => {
-  if (!nextDinner.value) return false
-  const eventTimeRange = getDinnerTimeRange(new Date(nextDinner.value.date), dinnerStartHour, 60)
-  return isWithinInterval(currentTime.value, eventTimeRange)
-})
-
-const countdown = computed(() => {
-  if (!nextDinner.value || !nextDinnerDateRange.value) return null
-  return calculateCountdown(nextDinnerDateRange.value.start, currentTime.value)
-})
 
 // Create event lists with ocean color (professional chef palette)
 const allEventLists = computed(() =>
@@ -266,54 +240,17 @@ const accordionValue = computed({
 <template>
   <div class="flex flex-col h-full">
     <!-- Countdown Timer (Train Station Style) -->
-    <div
-      :class="[
-        CALENDAR.countdown.container,
-        CHEF_CALENDAR.countdown.border,
-        nextDinner ? 'cursor-pointer hover:ring-2 hover:ring-ocean-300 dark:hover:ring-ocean-700 transition-all' : ''
-      ]"
-      @click="nextDinner ? emit('select', nextDinner.id) : null"
-    >
-      <!-- Active cooking event state -->
-      <div v-if="nextDinner && countdown" class="text-center space-y-2">
-        <!-- Title -->
-        <div :class="CALENDAR.countdown.title">
-          Næste Madlavning
-        </div>
-
-        <!-- Weekday + Date (Danish 3-letter) -->
-        <div :class="[CALENDAR.countdown.date, CHEF_CALENDAR.countdown.accent]">
-          {{ formatDanishWeekdayDate(new Date(nextDinner.date)) }}
-        </div>
-
-        <!-- Countdown (Large - Most Important) -->
-        <div :class="[CALENDAR.countdown.number, CHEF_CALENDAR.countdown.accent]">
-          <span :class="CALENDAR.countdown.numberPrefix">OM</span>
-          <span class="ml-2">{{ countdown.formatted }}</span>
-        </div>
-
-        <!-- Cooking Time (Smaller) with blinking dot during event -->
-        <div class="flex items-baseline justify-center gap-2">
-          <span :class="[CALENDAR.countdown.timeLabel, CHEF_CALENDAR.countdown.accentLight]">madlavning kl </span>
-          <span :class="[CALENDAR.countdown.timeValue, CHEF_CALENDAR.countdown.accentMedium]">
-            {{ dinnerStartHour.toString().padStart(2, '0') }}:00
-          </span>
-          <span class="text-xs md:text-sm invisible" aria-hidden="true">madlavning kl </span>
-          <span
-            v-if="isDuringEvent"
-            :class="[CALENDAR.countdown.dot, CHEF_CALENDAR.countdown.dot]"
-            aria-label="Cooking is happening now"
-          />
-        </div>
-      </div>
-
-      <!-- Empty state -->
-      <div v-else class="text-center">
-        <div class="text-lg font-semibold tracking-widest uppercase">
-          Ingen Madlavning
-        </div>
-      </div>
-    </div>
+    <CountdownTimer
+      data-testid="chef-next-cooking-countdown"
+      title="Næste Madlavning"
+      time-label="madlavning"
+      empty-text="Ingen"
+      :next-event="nextDinner"
+      :event-start-hour="dinnerStartHour"
+      palette="chef"
+      clickable
+      @select="emit('select', $event)"
+    />
 
     <!-- Accordion wraps both view toggle and content (collapsed on mobile, open on desktop) -->
     <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
@@ -366,6 +303,7 @@ const accordionValue = computed({
             <template #dinner-cell="{ row }">
               <ChefDinnerCard
                 :dinner-event="row.original"
+                :deadlines="deadlines"
                 :selected="row.original.id === selectedDinnerId"
                 :temporal-category="row.original.temporalCategory"
                 @select="emit('select', $event)"

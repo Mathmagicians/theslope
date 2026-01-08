@@ -36,10 +36,11 @@
  * - Mobile-first responsive design
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import type { TemporalCategory } from '~/composables/useSeason'
+import type { TemporalCategory, SeasonDeadlines } from '~/composables/useSeason'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
+  deadlines: SeasonDeadlines
   selected?: boolean
   temporalCategory?: TemporalCategory
 }
@@ -82,13 +83,12 @@ const handleClick = () => {
 </script>
 
 <template>
+  <div :data-testid="`chef-dinner-card-${dinnerEvent.id}`" @click="handleClick">
   <UCard
-    :name="`chef-dinner-card-${dinnerEvent.id}`"
     :ui="{
       root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
       body: 'p-1.5 md:p-3 w-full'
     }"
-    @click="handleClick"
   >
     <!-- Compact vertical layout (fits narrow sidebar) -->
     <div class="space-y-0.5 md:space-y-1 w-full">
@@ -112,8 +112,9 @@ const handleClick = () => {
 
       <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events and cancelled -->
       <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1">
-        <DinnerDeadlineBadges :dinner-event="dinnerEvent" mode="standalone" />
+        <DinnerDeadlineBadges :dinner-event="dinnerEvent" :deadlines="deadlines" mode="standalone" />
       </div>
     </div>
   </UCard>
+  </div>
 </template>

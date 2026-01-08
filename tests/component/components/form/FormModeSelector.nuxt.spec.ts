@@ -23,10 +23,10 @@ describe('FormModeSelector', () => {
             }
         })
 
-        // Verify that 3 buttons are rendered
-        const viewButton = wrapper.find(`[name="${BUTTON_NAMES.view}"]`)
-        const editButton = wrapper.find(`[name="${BUTTON_NAMES.edit}"]`)
-        const createButton = wrapper.find(`[name="${BUTTON_NAMES.create}"]`)
+        // Verify that 3 buttons are rendered (use data-testid instead of name)
+        const viewButton = wrapper.find(`[data-testid="${BUTTON_NAMES.view}"]`)
+        const editButton = wrapper.find(`[data-testid="${BUTTON_NAMES.edit}"]`)
+        const createButton = wrapper.find(`[data-testid="${BUTTON_NAMES.create}"]`)
 
         expect(viewButton.exists()).toBe(true)
         expect(editButton.exists()).toBe(true)
@@ -36,13 +36,13 @@ describe('FormModeSelector', () => {
     }
 
     const clickButton = async (wrapper: WrapperType, buttonName: string) => {
-        const button = wrapper.find(`[name="${buttonName}"]`)
+        const button = wrapper.find(`[data-testid="${buttonName}"]`)
         await button.trigger('click')
         await nextTick()
     }
 
     const getButton = (wrapper: WrapperType, buttonName: string) => {
-        return wrapper.find(`[name="${buttonName}"]`)
+        return wrapper.find(`[data-testid="${buttonName}"]`)
     }
 
     it('renders with default view mode', async () => {

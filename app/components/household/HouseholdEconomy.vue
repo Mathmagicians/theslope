@@ -88,7 +88,7 @@ const columns = {
 </script>
 
 <template>
-  <div data-test-id="household-economy" class="space-y-6">
+  <div data-testid="household-economy" class="space-y-6">
     <ViewError v-if="isErrored" :error="error?.statusCode" message="Kunne ikke hente økonomioversigt"/>
     <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
 

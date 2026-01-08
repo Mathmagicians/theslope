@@ -62,7 +62,7 @@ const getButtonVariant = (mode: FormMode) => {
     <UButton
         v-for="item in items"
         :key="item.mode"
-        :name="`form-mode-${item.mode}`"
+        :data-testid="`form-mode-${item.mode}`"
         :disabled="isDisabled(item.mode)"
         :active="isSelected(item.mode)"
         :variant="getButtonVariant(item.mode)"

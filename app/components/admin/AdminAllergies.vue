@@ -255,7 +255,7 @@ const catalogEmptyState = {
     />
 
     <UCard
-        data-test-id="admin-allergies"
+        data-testid="admin-allergies"
         class="w-full px-0"
     >
       <template #header>

@@ -83,18 +83,18 @@ test.describe('Household members display', () => {
         expect(response.status()).toBe(200)
 
         await pollUntil(
-            async () => await page.locator('[data-test-id="household-members"]').isVisible(),
+            async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
-        const babyTicket = page.locator(`[data-test-id="ticket-type-${babyId}"]`)
+        const babyTicket = page.locator(`[data-testid="ticket-type-${babyId}"]`)
         await expect(babyTicket).toContainText('Baby')
 
-        const donaldTicket = page.locator(`[data-test-id="ticket-type-${donaldId}"]`)
+        const donaldTicket = page.locator(`[data-testid="ticket-type-${donaldId}"]`)
         await expect(donaldTicket).toContainText('Barn')
 
-        const daisyTicket = page.locator(`[data-test-id="ticket-type-${daisyId}"]`)
+        const daisyTicket = page.locator(`[data-testid="ticket-type-${daisyId}"]`)
         await expect(daisyTicket).toContainText('Voksen')
 
         // Documentation screenshot showing ticket types in VIEW mode
@@ -115,7 +115,7 @@ test.describe('Household members display', () => {
         expect(response.status()).toBe(200)
 
         await pollUntil(
-            async () => await page.locator('[data-test-id="household-members"]').isVisible(),
+            async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible,
             10
         )

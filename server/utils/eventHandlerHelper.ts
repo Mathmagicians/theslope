@@ -6,6 +6,13 @@ import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 
+/**
+ * Check if error is Prisma "record not found" (P2025)
+ * Useful for atomic WHERE clauses where not-found indicates a race condition
+ */
+const isPrismaNotFound = (error: unknown): boolean =>
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_RECORD_NOT_FOUND
+
 type SerializableError = {
     name: string
     message: string
@@ -60,9 +67,9 @@ const getSerializableCause = (error: unknown): SerializableError => {
 }
 
 const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statusCode: number = 500): H3Error => {
-    // If error is already an H3Error, just re-throw it (pass through from repository layer)
+    // If error is already an H3Error, return it (let throwH3Error handle logging)
     if (error instanceof H3Error) {
-        throw error
+        return error
     }
 
     const hasValidationCause = error && typeof error === 'object' && 'cause' in error
@@ -195,6 +202,7 @@ const getSessionUserId = async (event: H3Event): Promise<number | null> => {
 }
 
 const eventHandlerHelper = {
+    isPrismaNotFound,
     h3eFromCatch,
     h3eFromPrismaError,
     logH3Error,

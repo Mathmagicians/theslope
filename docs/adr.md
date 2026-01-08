@@ -199,14 +199,14 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 ## ADR-012: Prisma.skip for Optional Field Updates
 
-**Status:** Accepted | **Date:** 2025-11-24
+**Status:** Accepted | **Date:** 2025-11-24 | **Updated:** 2026-01-02
 
 ### Decision
 
-**Use `Prisma.skip` to omit optional fields** - Never pass explicit `undefined` to Prisma `data` objects.
+**Use `Prisma.skip` to omit optional fields in `data` objects only** - Never pass explicit `undefined` to Prisma `data` objects.
 
 ```typescript
-// ✅ Use Prisma.skip
+// ✅ Use Prisma.skip in DATA objects
 data: { optionalField: field === undefined ? Prisma.skip : serializeField(field) }
 
 // ❌ Explicit undefined causes runtime error
@@ -215,11 +215,29 @@ data: { optionalField: field ? serializeField(field) : undefined }
 
 **Semantics:** `Prisma.skip` = "don't update", `null` = "set to NULL"
 
+### WHERE Clause Patterns
+
+**CRITICAL: `Prisma.skip` does NOT work in WHERE clauses** - it silently fails to filter.
+
+```typescript
+// ❌ WRONG: Prisma.skip in WHERE - filter silently ignored!
+where: householdId ? { id: householdId } : Prisma.skip
+
+// ✅ CORRECT: Empty object for "no filter"
+where: householdId !== undefined ? { id: householdId } : {}
+
+// ✅ ALSO CORRECT: Spread pattern acceptable in WHERE
+where: { ...(householdId && { id: householdId }) }
+```
+
+**Production bug (2026-01-02):** `Prisma.skip` in WHERE clause caused scaffolding to process ALL households instead of filtering to one, creating race conditions in parallel tests.
+
 ### Compliance
 
-1. MUST use `Prisma.skip` for conditional field omission
-2. MUST NOT use spread patterns `...(condition && {field})`
-3. `undefined` in `where` clauses is acceptable
+1. MUST use `Prisma.skip` for conditional field omission in `data` objects
+2. MUST NOT use `Prisma.skip` in `where` clauses - use `{}` or spread pattern
+3. MUST NOT use spread patterns in `data` objects (use `Prisma.skip`)
+4. `undefined` in `where` clauses is acceptable (Prisma ignores undefined conditions)
 
 ---
 
@@ -318,6 +336,34 @@ POST /api/admin/entity/:id → EntityDetail
 
 Create lightweight repository functions for bulk updates (>10 entities).
 
+### Operation Result Types
+
+**The "two types per entity" rule applies to ENTITIES, not operation responses.**
+
+Operation result types are **response envelopes** for operations with side effects (imports, scaffolding, maintenance jobs). They describe what the operation did, not the entities themselves.
+
+| Category | Naming Pattern | Examples |
+|----------|----------------|----------|
+| **Entity types** | `EntityDisplay`, `EntityDetail` | `OrderDisplay`, `SeasonDetail` |
+| **Operation results** | `OperationResult`, `OperationResponse` | `ScaffoldResult`, `BillingImportResponse` |
+
+**When to use operation result types:**
+- Batch operations that create/update/delete multiple entities
+- Import operations summarizing what was processed
+- Maintenance jobs reporting counts and side effects
+- Operations returning both entities AND metadata (counts, errors, jobRunId)
+
+**Codebase examples:**
+
+| Composable | Operation Result Types |
+|------------|------------------------|
+| `useBookingValidation` | `CreateOrdersResult`, `ScaffoldResult`, `DailyMaintenanceResult` |
+| `useBillingValidation` | `BillingImportResponse`, `BillingGenerationResult`, `MonthlyBillingResponse` |
+| `useHeynaboValidation` | `HeynaboImportResponse` |
+| `useMaintenanceValidation` | `SeasonImportResponse` |
+
+**Placement:** Define operation result types in the validation composable where the operation's domain logic lives.
+
 ### Compliance
 
 1. Index = display-ready, Detail = operation-ready
@@ -325,6 +371,7 @@ Create lightweight repository functions for bulk updates (>10 entities).
 3. **ONLY 2 types per entity** - NO EntityResponse, Entity, etc.
 4. Batch operations MUST use Display types
 5. Prisma types MUST NOT leave repository layer (ADR-010)
+6. Operation result types are NOT entity types - they MAY be added as needed for side-effect operations
 
 ---
 

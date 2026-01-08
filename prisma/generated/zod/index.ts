@@ -26,7 +26,7 @@ export const HouseholdScalarFieldEnumSchema = z.enum(['id','heynaboId','pbsId','
 
 export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','totalCost','heynaboEventId','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
 
-export const OrderScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','bookedByUserId','ticketPriceId','priceAtBooking','dinnerMode','state','releasedAt','closedAt','createdAt','updatedAt']);
+export const OrderScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','bookedByUserId','ticketPriceId','priceAtBooking','dinnerMode','state','isGuestTicket','releasedAt','closedAt','createdAt','updatedAt']);
 
 export const TransactionScalarFieldEnumSchema = z.enum(['id','orderId','orderSnapshot','userSnapshot','amount','userEmailHandle','createdAt','invoiceId']);
 
@@ -74,7 +74,7 @@ export const OrderStateSchema = z.enum(['BOOKED','RELEASED','CANCELLED','CLOSED'
 
 export type OrderStateType = `${z.infer<typeof OrderStateSchema>}`
 
-export const OrderAuditActionSchema = z.enum(['USER_BOOKED','USER_CANCELLED','ADMIN_DELETED','SYSTEM_SCAFFOLD','SYSTEM_PRUNED','BULK_IMPORT']);
+export const OrderAuditActionSchema = z.enum(['USER_BOOKED','USER_CANCELLED','USER_CLAIMED','SYSTEM_CREATED','SYSTEM_DELETED']);
 
 export type OrderAuditActionType = `${z.infer<typeof OrderAuditActionSchema>}`
 
@@ -215,6 +215,7 @@ export const OrderSchema = z.object({
   bookedByUserId: z.number().int().nullable(),
   ticketPriceId: z.number().int().nullable(),
   priceAtBooking: z.number().int(),
+  isGuestTicket: z.boolean(),
   releasedAt: z.coerce.date().nullable(),
   closedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
@@ -663,6 +664,7 @@ export const OrderSelectSchema: z.ZodType<Prisma.OrderSelect> = z.object({
   priceAtBooking: z.boolean().optional(),
   dinnerMode: z.boolean().optional(),
   state: z.boolean().optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.boolean().optional(),
   closedAt: z.boolean().optional(),
   createdAt: z.boolean().optional(),
@@ -1595,6 +1597,7 @@ export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.object
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
+  isGuestTicket: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
   releasedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   closedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -1616,6 +1619,7 @@ export const OrderOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderOrderByW
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
+  isGuestTicket: z.lazy(() => SortOrderSchema).optional(),
   releasedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   closedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -1643,6 +1647,7 @@ export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
+  isGuestTicket: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
   releasedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   closedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -1664,6 +1669,7 @@ export const OrderOrderByWithAggregationInputSchema: z.ZodType<Prisma.OrderOrder
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
+  isGuestTicket: z.lazy(() => SortOrderSchema).optional(),
   releasedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   closedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -1687,6 +1693,7 @@ export const OrderScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.OrderSc
   priceAtBooking: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeWithAggregatesFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateWithAggregatesFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
+  isGuestTicket: z.union([ z.lazy(() => BoolWithAggregatesFilterSchema), z.boolean() ]).optional(),
   releasedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
   closedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
@@ -2954,6 +2961,7 @@ export const OrderCreateInputSchema: z.ZodType<Prisma.OrderCreateInput> = z.obje
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -2975,6 +2983,7 @@ export const OrderUncheckedCreateInputSchema: z.ZodType<Prisma.OrderUncheckedCre
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -2987,6 +2996,7 @@ export const OrderUpdateInputSchema: z.ZodType<Prisma.OrderUpdateInput> = z.obje
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3008,6 +3018,7 @@ export const OrderUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderUncheckedUpd
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3025,6 +3036,7 @@ export const OrderCreateManyInputSchema: z.ZodType<Prisma.OrderCreateManyInput> 
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -3035,6 +3047,7 @@ export const OrderUpdateManyMutationInputSchema: z.ZodType<Prisma.OrderUpdateMan
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -3050,6 +3063,7 @@ export const OrderUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderUnchecke
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -4370,6 +4384,11 @@ export const EnumOrderStateFilterSchema: z.ZodType<Prisma.EnumOrderStateFilter> 
   not: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => NestedEnumOrderStateFilterSchema) ]).optional(),
 }).strict();
 
+export const BoolFilterSchema: z.ZodType<Prisma.BoolFilter> = z.object({
+  equals: z.boolean().optional(),
+  not: z.union([ z.boolean(),z.lazy(() => NestedBoolFilterSchema) ]).optional(),
+}).strict();
+
 export const TicketPriceNullableScalarRelationFilterSchema: z.ZodType<Prisma.TicketPriceNullableScalarRelationFilter> = z.object({
   is: z.lazy(() => TicketPriceWhereInputSchema).optional().nullable(),
   isNot: z.lazy(() => TicketPriceWhereInputSchema).optional().nullable(),
@@ -4389,6 +4408,7 @@ export const OrderCountOrderByAggregateInputSchema: z.ZodType<Prisma.OrderCountO
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
+  isGuestTicket: z.lazy(() => SortOrderSchema).optional(),
   releasedAt: z.lazy(() => SortOrderSchema).optional(),
   closedAt: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -4413,6 +4433,7 @@ export const OrderMaxOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMaxOrder
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
+  isGuestTicket: z.lazy(() => SortOrderSchema).optional(),
   releasedAt: z.lazy(() => SortOrderSchema).optional(),
   closedAt: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -4428,6 +4449,7 @@ export const OrderMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMinOrder
   priceAtBooking: z.lazy(() => SortOrderSchema).optional(),
   dinnerMode: z.lazy(() => SortOrderSchema).optional(),
   state: z.lazy(() => SortOrderSchema).optional(),
+  isGuestTicket: z.lazy(() => SortOrderSchema).optional(),
   releasedAt: z.lazy(() => SortOrderSchema).optional(),
   closedAt: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
@@ -4461,6 +4483,14 @@ export const EnumOrderStateWithAggregatesFilterSchema: z.ZodType<Prisma.EnumOrde
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedEnumOrderStateFilterSchema).optional(),
   _max: z.lazy(() => NestedEnumOrderStateFilterSchema).optional(),
+}).strict();
+
+export const BoolWithAggregatesFilterSchema: z.ZodType<Prisma.BoolWithAggregatesFilter> = z.object({
+  equals: z.boolean().optional(),
+  not: z.union([ z.boolean(),z.lazy(() => NestedBoolWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedBoolFilterSchema).optional(),
+  _max: z.lazy(() => NestedBoolFilterSchema).optional(),
 }).strict();
 
 export const OrderNullableScalarRelationFilterSchema: z.ZodType<Prisma.OrderNullableScalarRelationFilter> = z.object({
@@ -4750,11 +4780,6 @@ export const EnumRoleWithAggregatesFilterSchema: z.ZodType<Prisma.EnumRoleWithAg
   _max: z.lazy(() => NestedEnumRoleFilterSchema).optional(),
 }).strict();
 
-export const BoolFilterSchema: z.ZodType<Prisma.BoolFilter> = z.object({
-  equals: z.boolean().optional(),
-  not: z.union([ z.boolean(),z.lazy(() => NestedBoolFilterSchema) ]).optional(),
-}).strict();
-
 export const CookingTeamListRelationFilterSchema: z.ZodType<Prisma.CookingTeamListRelationFilter> = z.object({
   every: z.lazy(() => CookingTeamWhereInputSchema).optional(),
   some: z.lazy(() => CookingTeamWhereInputSchema).optional(),
@@ -4823,14 +4848,6 @@ export const SeasonSumOrderByAggregateInputSchema: z.ZodType<Prisma.SeasonSumOrd
   ticketIsCancellableDaysBefore: z.lazy(() => SortOrderSchema).optional(),
   diningModeIsEditableMinutesBefore: z.lazy(() => SortOrderSchema).optional(),
   consecutiveCookingDays: z.lazy(() => SortOrderSchema).optional(),
-}).strict();
-
-export const BoolWithAggregatesFilterSchema: z.ZodType<Prisma.BoolWithAggregatesFilter> = z.object({
-  equals: z.boolean().optional(),
-  not: z.union([ z.boolean(),z.lazy(() => NestedBoolWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedBoolFilterSchema).optional(),
-  _max: z.lazy(() => NestedBoolFilterSchema).optional(),
 }).strict();
 
 export const EnumTicketTypeFilterSchema: z.ZodType<Prisma.EnumTicketTypeFilter> = z.object({
@@ -5806,6 +5823,10 @@ export const EnumOrderStateFieldUpdateOperationsInputSchema: z.ZodType<Prisma.En
   set: z.lazy(() => OrderStateSchema).optional(),
 }).strict();
 
+export const BoolFieldUpdateOperationsInputSchema: z.ZodType<Prisma.BoolFieldUpdateOperationsInput> = z.object({
+  set: z.boolean().optional(),
+}).strict();
+
 export const DinnerEventUpdateOneRequiredWithoutTicketsNestedInputSchema: z.ZodType<Prisma.DinnerEventUpdateOneRequiredWithoutTicketsNestedInput> = z.object({
   create: z.union([ z.lazy(() => DinnerEventCreateWithoutTicketsInputSchema), z.lazy(() => DinnerEventUncheckedCreateWithoutTicketsInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => DinnerEventCreateOrConnectWithoutTicketsInputSchema).optional(),
@@ -6208,10 +6229,6 @@ export const DinnerEventUncheckedCreateNestedManyWithoutSeasonInputSchema: z.Zod
   connectOrCreate: z.union([ z.lazy(() => DinnerEventCreateOrConnectWithoutSeasonInputSchema), z.lazy(() => DinnerEventCreateOrConnectWithoutSeasonInputSchema).array() ]).optional(),
   createMany: z.lazy(() => DinnerEventCreateManySeasonInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => DinnerEventWhereUniqueInputSchema), z.lazy(() => DinnerEventWhereUniqueInputSchema).array() ]).optional(),
-}).strict();
-
-export const BoolFieldUpdateOperationsInputSchema: z.ZodType<Prisma.BoolFieldUpdateOperationsInput> = z.object({
-  set: z.boolean().optional(),
 }).strict();
 
 export const CookingTeamUpdateManyWithoutSeasonNestedInputSchema: z.ZodType<Prisma.CookingTeamUpdateManyWithoutSeasonNestedInput> = z.object({
@@ -6621,6 +6638,11 @@ export const NestedEnumOrderStateFilterSchema: z.ZodType<Prisma.NestedEnumOrderS
   not: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => NestedEnumOrderStateFilterSchema) ]).optional(),
 }).strict();
 
+export const NestedBoolFilterSchema: z.ZodType<Prisma.NestedBoolFilter> = z.object({
+  equals: z.boolean().optional(),
+  not: z.union([ z.boolean(),z.lazy(() => NestedBoolFilterSchema) ]).optional(),
+}).strict();
+
 export const NestedEnumDinnerModeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDinnerModeWithAggregatesFilter> = z.object({
   equals: z.lazy(() => DinnerModeSchema).optional(),
   in: z.lazy(() => DinnerModeSchema).array().optional(),
@@ -6641,6 +6663,14 @@ export const NestedEnumOrderStateWithAggregatesFilterSchema: z.ZodType<Prisma.Ne
   _max: z.lazy(() => NestedEnumOrderStateFilterSchema).optional(),
 }).strict();
 
+export const NestedBoolWithAggregatesFilterSchema: z.ZodType<Prisma.NestedBoolWithAggregatesFilter> = z.object({
+  equals: z.boolean().optional(),
+  not: z.union([ z.boolean(),z.lazy(() => NestedBoolWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedBoolFilterSchema).optional(),
+  _max: z.lazy(() => NestedBoolFilterSchema).optional(),
+}).strict();
+
 export const NestedEnumRoleFilterSchema: z.ZodType<Prisma.NestedEnumRoleFilter> = z.object({
   equals: z.lazy(() => RoleSchema).optional(),
   in: z.lazy(() => RoleSchema).array().optional(),
@@ -6656,19 +6686,6 @@ export const NestedEnumRoleWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEn
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedEnumRoleFilterSchema).optional(),
   _max: z.lazy(() => NestedEnumRoleFilterSchema).optional(),
-}).strict();
-
-export const NestedBoolFilterSchema: z.ZodType<Prisma.NestedBoolFilter> = z.object({
-  equals: z.boolean().optional(),
-  not: z.union([ z.boolean(),z.lazy(() => NestedBoolFilterSchema) ]).optional(),
-}).strict();
-
-export const NestedBoolWithAggregatesFilterSchema: z.ZodType<Prisma.NestedBoolWithAggregatesFilter> = z.object({
-  equals: z.boolean().optional(),
-  not: z.union([ z.boolean(),z.lazy(() => NestedBoolWithAggregatesFilterSchema) ]).optional(),
-  _count: z.lazy(() => NestedIntFilterSchema).optional(),
-  _min: z.lazy(() => NestedBoolFilterSchema).optional(),
-  _max: z.lazy(() => NestedBoolFilterSchema).optional(),
 }).strict();
 
 export const NestedEnumTicketTypeFilterSchema: z.ZodType<Prisma.NestedEnumTicketTypeFilter> = z.object({
@@ -7120,6 +7137,7 @@ export const OrderCreateWithoutBookedByUserInputSchema: z.ZodType<Prisma.OrderCr
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7139,6 +7157,7 @@ export const OrderUncheckedCreateWithoutBookedByUserInputSchema: z.ZodType<Prism
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7254,6 +7273,7 @@ export const OrderScalarWhereInputSchema: z.ZodType<Prisma.OrderScalarWhereInput
   priceAtBooking: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   dinnerMode: z.union([ z.lazy(() => EnumDinnerModeFilterSchema), z.lazy(() => DinnerModeSchema) ]).optional(),
   state: z.union([ z.lazy(() => EnumOrderStateFilterSchema), z.lazy(() => OrderStateSchema) ]).optional(),
+  isGuestTicket: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
   releasedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   closedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
@@ -7415,6 +7435,7 @@ export const OrderCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.OrderCrea
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7434,6 +7455,7 @@ export const OrderUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7835,6 +7857,7 @@ export const OrderCreateWithoutDinnerEventInputSchema: z.ZodType<Prisma.OrderCre
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -7854,6 +7877,7 @@ export const OrderUncheckedCreateWithoutDinnerEventInputSchema: z.ZodType<Prisma
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -8429,6 +8453,7 @@ export const OrderCreateWithoutTransactionInputSchema: z.ZodType<Prisma.OrderCre
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -8449,6 +8474,7 @@ export const OrderUncheckedCreateWithoutTransactionInputSchema: z.ZodType<Prisma
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -8506,6 +8532,7 @@ export const OrderUpdateWithoutTransactionInputSchema: z.ZodType<Prisma.OrderUpd
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -8526,6 +8553,7 @@ export const OrderUncheckedUpdateWithoutTransactionInputSchema: z.ZodType<Prisma
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9287,6 +9315,7 @@ export const OrderCreateWithoutTicketPriceInputSchema: z.ZodType<Prisma.OrderCre
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9306,6 +9335,7 @@ export const OrderUncheckedCreateWithoutTicketPriceInputSchema: z.ZodType<Prisma
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9381,6 +9411,7 @@ export const OrderCreateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.OrderCr
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9401,6 +9432,7 @@ export const OrderUncheckedCreateWithoutOrderHistoryInputSchema: z.ZodType<Prism
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9456,6 +9488,7 @@ export const OrderUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.OrderUp
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9476,6 +9509,7 @@ export const OrderUncheckedUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prism
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9575,6 +9609,7 @@ export const OrderCreateManyBookedByUserInputSchema: z.ZodType<Prisma.OrderCreat
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9596,6 +9631,7 @@ export const OrderUpdateWithoutBookedByUserInputSchema: z.ZodType<Prisma.OrderUp
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9615,6 +9651,7 @@ export const OrderUncheckedUpdateWithoutBookedByUserInputSchema: z.ZodType<Prism
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9631,6 +9668,7 @@ export const OrderUncheckedUpdateManyWithoutBookedByUserInputSchema: z.ZodType<P
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9700,6 +9738,7 @@ export const OrderCreateManyInhabitantInputSchema: z.ZodType<Prisma.OrderCreateM
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9791,6 +9830,7 @@ export const OrderUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.OrderUpda
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9810,6 +9850,7 @@ export const OrderUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9826,6 +9867,7 @@ export const OrderUncheckedUpdateManyWithoutInhabitantInputSchema: z.ZodType<Pri
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -9969,6 +10011,7 @@ export const OrderCreateManyDinnerEventInputSchema: z.ZodType<Prisma.OrderCreate
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -9984,6 +10027,7 @@ export const OrderUpdateWithoutDinnerEventInputSchema: z.ZodType<Prisma.OrderUpd
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10003,6 +10047,7 @@ export const OrderUncheckedUpdateWithoutDinnerEventInputSchema: z.ZodType<Prisma
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10019,6 +10064,7 @@ export const OrderUncheckedUpdateManyWithoutDinnerEventInputSchema: z.ZodType<Pr
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10403,6 +10449,7 @@ export const OrderCreateManyTicketPriceInputSchema: z.ZodType<Prisma.OrderCreate
   priceAtBooking: z.number().int(),
   dinnerMode: z.lazy(() => DinnerModeSchema).optional(),
   state: z.lazy(() => OrderStateSchema).optional(),
+  isGuestTicket: z.boolean().optional(),
   releasedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
   createdAt: z.coerce.date().optional(),
@@ -10413,6 +10460,7 @@ export const OrderUpdateWithoutTicketPriceInputSchema: z.ZodType<Prisma.OrderUpd
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10432,6 +10480,7 @@ export const OrderUncheckedUpdateWithoutTicketPriceInputSchema: z.ZodType<Prisma
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -10448,6 +10497,7 @@ export const OrderUncheckedUpdateManyWithoutTicketPriceInputSchema: z.ZodType<Pr
   priceAtBooking: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   dinnerMode: z.union([ z.lazy(() => DinnerModeSchema), z.lazy(() => EnumDinnerModeFieldUpdateOperationsInputSchema) ]).optional(),
   state: z.union([ z.lazy(() => OrderStateSchema), z.lazy(() => EnumOrderStateFieldUpdateOperationsInputSchema) ]).optional(),
+  isGuestTicket: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
   releasedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   closedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),

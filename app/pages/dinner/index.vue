@@ -55,23 +55,61 @@ const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSy
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
 
+// Toast for user feedback
+const toast = useToast()
+
+// Auth store for current user info
+const authStore = useAuthStore()
+const {user} = storeToRefs(authStore)
+
 // Booking form state - EDIT mode prevents accidental changes
 const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
+// Calendar accordion state (open by default, toggled by date badge click)
+const calendarOpen = ref(true)
+
 // Booking handlers - update individual order (uses householdOrders, not dinnerEventDetail.tickets)
-const handleBookingUpdate = async (inhabitantId: number, dinnerMode: DinnerMode, _ticketPriceId: number) => {
+const {DinnerModeSchema} = useBookingValidation()
+const DinnerModeEnum = DinnerModeSchema.enum
+
+const handleBookingUpdate = async (inhabitantId: number, dinnerMode: DinnerMode, ticketPriceId: number) => {
   const order = householdOrders.value?.find(o => o.inhabitantId === inhabitantId)
-  if (!order?.id) {
-    console.warn('No order found for inhabitant', inhabitantId)
-    return
-  }
 
   try {
-    await bookingsStore.updateOrder(order.id, { dinnerMode })
+    if (order?.id) {
+      // Existing order - update it
+      await bookingsStore.updateOrder(order.id, { dinnerMode })
+      toast.add({ title: 'Tilmelding opdateret', color: 'success', icon: ICONS.checkCircle })
+    } else {
+      // No order exists - create new one (only if not NONE)
+      if (dinnerMode === DinnerModeEnum.NONE) {
+        return
+      }
+
+      const householdId = user.value?.Inhabitant?.household?.id
+      const bookedByUserId = user.value?.id
+
+      if (!selectedDinnerId.value || !householdId || !bookedByUserId) {
+        console.warn('Missing data for booking creation:', { selectedDinnerId: selectedDinnerId.value, householdId, bookedByUserId })
+        return
+      }
+
+      await bookingsStore.createOrder({
+        householdId,
+        dinnerEventId: selectedDinnerId.value,
+        orders: [{
+          inhabitantId,
+          ticketPriceId,
+          dinnerMode,
+          bookedByUserId
+        }]
+      })
+      toast.add({ title: 'Tilmelding oprettet', color: 'success', icon: ICONS.checkCircle })
+    }
     await refreshBookingData()
-    console.info('Booking updated:', { inhabitantId, dinnerMode, orderId: order.id })
   } catch (e) {
-    console.error('Failed to update booking:', e)
+    console.error('Failed to update/create booking:', e)
+    toast.add({ title: 'Kunne ikke opdatere tilmelding', color: 'error', icon: ICONS.exclamationCircle })
   }
 }
 
@@ -85,9 +123,10 @@ const handleAllBookingsUpdate = async (dinnerMode: DinnerMode) => {
       orders.filter(o => o.id).map(order => bookingsStore.updateOrder(order.id!, { dinnerMode }))
     )
     await refreshBookingData()
-    console.info('All household bookings updated:', { dinnerMode, count: orders.length })
+    toast.add({ title: 'Alle tilmeldinger opdateret', color: 'success', icon: ICONS.checkCircle })
   } catch (e) {
     console.error('Failed to update all bookings:', e)
+    toast.add({ title: 'Kunne ikke opdatere tilmeldinger', color: 'error', icon: ICONS.exclamationCircle })
   }
 }
 
@@ -108,9 +147,11 @@ const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-// Get dinner start time from season configuration
-const {getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
+// Get dinner start time and deadline functions from season configuration
+const {getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
 const dinnerStartTime = getDefaultDinnerStartTime()
+
+// Season-specific deadline functions (computed to react to season changes)
 
 // Date selection via URL query parameter
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
@@ -259,6 +300,7 @@ useHead({
         <template #calendar>
           <DinnerCalendarDisplay
             v-if="seasonDates && selectedDate"
+            v-model:calendar-open="calendarOpen"
             :season-dates="seasonDates"
             :cooking-days="cookingDays"
             :holidays="holidays"
@@ -282,17 +324,20 @@ useHead({
       <!-- #hero: ChefMenuCard in VIEW mode with DinnerBookingForm -->
       <template #hero>
         <ChefMenuCard
-          v-if="dinnerEventDetail"
+          v-if="dinnerEventDetail && selectedSeason"
           :dinner-event="dinnerEventDetail"
+          :deadlines="deadlinesForSeason(selectedSeason)"
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
+          @show-calendar="calendarOpen = true"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm
             :dinner-event="dinnerEventDetail"
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
+            :deadlines="deadlinesForSeason(selectedSeason)"
             :form-mode="bookingFormMode"
             @update-booking="handleBookingUpdate"
             @update-all-bookings="handleAllBookingsUpdate"

@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2025-12-23 (Added usePermissions composable, updated auth.ts store)
+**Last Updated:** 2026-01-03 (Added TableSearchPagination, updated households.ts with preference actions)
 
 ## Legend
 
@@ -38,7 +38,6 @@
 | `/household/[shortname]/allergies` | `household/[shortname]/[tab].vue` → `HouseholdAllergies.vue` | ✅ `useAllergiesStore()` | ❓ | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/household/[shortname]/settings` | `household/[shortname]/[tab].vue` → `HouseholdSettings.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/household/[shortname]/economy` | `household/[shortname]/[tab].vue` → `HouseholdEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
-| `/household/mytickets` | `household/mytickets.vue` | ✅ `useBookingsStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
 | **Other Routes** |
 | `/` | `index.vue` → `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | **✅ COMPLIANT** |
 | `/login` | `login.vue` → `Login.vue` | ✅ `useAuthStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
@@ -89,6 +88,8 @@
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `FormModeSelector.vue` | All CRUD admin routes | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
 | `SeasonSelector.vue` | `/admin/planning`, `/admin/teams`, `/admin/chefs` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
+| `TableSearchPagination.vue` | `/admin/users`, `/admin/households` | None | `useTheSlopeDesignSystem()` | N/A | N/A | ✅ | ✅ Indirect | **✅ COMPLIANT** |
+| `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** |
 | `UserView.vue` | All routes (PageHeader) | `useAuthStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `UserListItem.vue` | `/admin/users` | Parent props | `useUserValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
 
@@ -111,7 +112,7 @@
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useOrderValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
-| `DinnerTicket.vue` | `/household/[shortname]/bookings`, `/household/mytickets` | Parent props | `useOrderValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
+| `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
 ### Layout Components
 
@@ -129,7 +130,7 @@
 | Store | ADR-007 useFetch | ADR-007 Status Computeds | ADR-007 isReady | ADR-007 watch:false | Component Tests | Status |
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
-| `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
+| `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - Added `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()` actions |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks |
@@ -151,6 +152,7 @@
 | `useOrderValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useDinnerEventValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Dinner step states, Heynabo payload, deadline labels |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |

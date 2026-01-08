@@ -5,12 +5,12 @@ import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRange
 import { nextTick, ref } from 'vue'
 
 describe('CalendarDateRangeListPicker', () => {
-    const ELEMENT_NAMES = {
-        addButton: 'holidayRangeAddToList',
+    const ELEMENT_TESTIDS = {
+        addButton: 'holiday-range-add',
         dateRangePicker: 'holidayRangeList',
         errorContainer: 'holidayPicker',
         holidayListItem: (index: number) => `holidayRangeList-${index}`,
-        removeButton: (index: number) => `holidayRangeRemoveFromList-${index}`
+        removeButton: (index: number) => `holiday-range-remove-${index}`
     } as const
 
     interface DateRange {
@@ -38,7 +38,7 @@ describe('CalendarDateRangeListPicker', () => {
     }
 
     const clickAddButton = async (wrapper: WrapperType) => {
-        const addButton = wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`)
+        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`)
         await addButton.trigger('click')
         await nextTick()
     }
@@ -46,7 +46,7 @@ describe('CalendarDateRangeListPicker', () => {
     it('renders with empty date ranges', async () => {
         const wrapper = await createWrapper()
         expect(wrapper.exists()).toBe(true)
-        const addButton = wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`)
+        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`)
         expect(addButton.text()).toContain('Tilføj ferie')
     })
 
@@ -70,7 +70,7 @@ describe('CalendarDateRangeListPicker', () => {
             }
         ])
 
-        const holidayInput = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`)
+        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`)
         expect(holidayInput.exists()).toBe(true)
     })
 
@@ -114,10 +114,10 @@ describe('CalendarDateRangeListPicker', () => {
         });
 
         // Verify the holiday input exists before removal
-        expect(wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`).exists()).toBe(true)
-        
+        expect(wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`).exists()).toBe(true)
+
         // Click the remove button
-        const removeButton = wrapper.find(`[name="${ELEMENT_NAMES.removeButton(0)}"]`)
+        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`)
         await removeButton.trigger('click')
         await nextTick()
         
@@ -146,15 +146,15 @@ describe('CalendarDateRangeListPicker', () => {
         expect(wrapper.exists()).toBe(true);
         
         // Verify the holiday input exists
-        const holidayInput = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`);
+        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
         expect(holidayInput.exists()).toBe(true);
-        
+
         // In disabled mode, the add button and datepicker should not be visible
-        const addButton = wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`);
+        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`);
         expect(addButton.exists()).toBe(false);
-        
+
         // In disabled mode, the delete button should not be visible
-        const removeButton = wrapper.find(`[name="${ELEMENT_NAMES.removeButton(0)}"]`);
+        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`);
         expect(removeButton.exists()).toBe(false);
         
         // In disabled mode, we should have an icon instead of the remove button
@@ -206,7 +206,7 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick(); // Sometimes two ticks are needed
         
         // Verify the component renders the holiday properly
-        const holidayListItem = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`);
+        const holidayListItem = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
         expect(holidayListItem.exists()).toBe(true);
     })
     
@@ -256,7 +256,7 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick();
         
         // Verify component properly renders the store data
-        const holidayItem = wrapper.find(`[name="${ELEMENT_NAMES.holidayListItem(0)}"]`);
+        const holidayItem = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
         expect(holidayItem.exists()).toBe(true);
     })
 })

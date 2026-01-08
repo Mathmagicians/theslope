@@ -29,8 +29,8 @@ export default defineNuxtConfig({
         // Tasks call HTTP endpoints which have D1 access
         // Times in UTC: Copenhagen is UTC+1 (winter) / UTC+2 (summer)
         scheduledTasks: {
-            '0 1 * * *': ['daily-maintenance'],   // 01:00 UTC = 02:00/03:00 Copenhagen
-            '0 2 * * *': ['heynabo-import'],      // 02:00 UTC = 03:00/04:00 Copenhagen
+            '0 1 * * *': ['heynabo-import'],      // 01:00 UTC = 02:00/03:00 Copenhagen (runs first)
+            '0 2 * * *': ['daily-maintenance'],   // 02:00 UTC = 03:00/04:00 Copenhagen (runs after import)
             '0 3 17 * *': ['monthly-billing']     // 17th at 03:00 UTC = 04:00/05:00 Copenhagen
         }
     },

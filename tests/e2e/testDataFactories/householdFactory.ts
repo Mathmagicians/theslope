@@ -3,16 +3,19 @@
 import type { BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
+import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
-const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema} = useCoreValidation()
-const {DinnerModeSchema} = useBookingValidation()
+const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
+const {DinnerModeSchema, InhabitantUpdateResponseSchema} = useBookingValidation()
+const {HeynaboImportResponseSchema} = useHeynaboValidation()
 const DinnerMode = DinnerModeSchema.enum
 const HOUSEHOLD_ENDPOINT = '/api/admin/household'
 const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
+const HEYNABO_IMPORT_ENDPOINT = '/api/admin/heynabo/import'
 
 // Use high base ID to avoid conflicts with real Heynabo data (which uses low IDs)
 const TEST_DATA_ID_BASE = 900000
@@ -108,6 +111,43 @@ export class HouseholdFactory {
     }
 
     /**
+     * Get all households (Display type per ADR-009)
+     */
+    static readonly getAllHouseholds = async (context: BrowserContext): Promise<HouseholdDisplay[]> => {
+        const response = await context.request.get(HOUSEHOLD_ENDPOINT)
+        expect(response.status()).toBe(200)
+
+        const responseBody = await response.json()
+        expect(Array.isArray(responseBody)).toBe(true)
+        return HouseholdDisplaySchema.array().parse(responseBody)
+    }
+
+    /**
+     * Update household (for setting TheSlope-owned fields like pbsId, movedInDate, moveOutDate)
+     */
+    static readonly updateHousehold = async (
+        context: BrowserContext,
+        householdId: number,
+        updates: Partial<HouseholdDetail>,
+        expectedStatus: number = 200
+    ): Promise<HouseholdDetail | null> => {
+        const {HouseholdDetailSchema} = useCoreValidation()
+        const response = await context.request.post(`${HOUSEHOLD_ENDPOINT}/${householdId}`, {
+            headers: headers,
+            data: updates
+        })
+
+        const status = response.status()
+        expect(status, 'Unexpected status').toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const rawData = await response.json()
+            return HouseholdDetailSchema.parse(rawData)
+        }
+        return null
+    }
+
+    /**
      * Delete household(s) - accepts single ID or array of IDs
      * Always returns HouseholdDetail[] for consistent typing
      * For cleanup (afterAll): Don't pass expectedStatus - silent on success, logs only failures
@@ -179,27 +219,19 @@ export class HouseholdFactory {
     }
 
     /**
-     * Create inhabitant for existing household
+     * Create inhabitant with config object pattern (ADR-003)
+     * Preferred method - allows setting any inhabitant field including dinnerPreferences
      */
-    static readonly createInhabitantForHousehold = async (
+    static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
         householdId: number,
-        inhabitantName: string = "Pluto Hund",
-        birthDate?: Date | null,
+        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> = {},
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
-        // Split name into first and last
-        const nameParts = inhabitantName.split(' ')
-        // Only use defaults for success cases (201) - validation tests need exact invalid data
-        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
-        const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
-
-        // Generate unique testSalt for each inhabitant to avoid heynaboId collisions
-        const inhabitantData = {
+        // Merge partial with defaults, householdId always from parameter
+        const inhabitantData: InhabitantCreate = {
             ...this.defaultInhabitantData(temporaryAndRandom()),
-            name: firstName,
-            lastName: lastName,
-            birthDate: birthDate !== undefined ? birthDate : null,
+            ...partialInhabitant,
             householdId: householdId
         }
 
@@ -219,6 +251,30 @@ export class HouseholdFactory {
         }
 
         return responseBody
+    }
+
+    /**
+     * Create inhabitant for existing household (legacy signature)
+     * Calls createInhabitantWithConfig internally
+     */
+    static readonly createInhabitantForHousehold = async (
+        context: BrowserContext,
+        householdId: number,
+        inhabitantName: string = "Pluto Hund",
+        birthDate?: Date | null,
+        expectedStatus: number = 201
+    ): Promise<InhabitantDetail> => {
+        // Split name into first and last
+        const nameParts = inhabitantName.split(' ')
+        // Only use defaults for success cases (201) - validation tests need exact invalid data
+        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
+        const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
+
+        return this.createInhabitantWithConfig(context, householdId, {
+            name: firstName,
+            lastName: lastName,
+            birthDate: birthDate !== undefined ? birthDate : null
+        }, expectedStatus)
     }
 
 
@@ -318,26 +374,84 @@ export class HouseholdFactory {
 
     /**
      * Update inhabitant (for preference updates, etc.)
+     * When dinnerPreferences updated, triggers re-scaffolding.
+     * If seasonId not provided, endpoint uses active season.
+     *
+     * Returns InhabitantUpdateResponse: { inhabitant, scaffoldResult }
+     * ADR-009: Operation result type wrapping entity + side effect
+     *
+     * @param seasonId - Optional seasonId query param for parallel-safe testing
      */
     static readonly updateInhabitant = async (
         context: BrowserContext,
         inhabitantId: number,
         updates: Partial<InhabitantDetail>,
-        expectedStatus: number = 200
-    ): Promise<InhabitantDetail | null> => {
-        const response = await context.request.post(`${INHABITANT_ENDPOINT}/${inhabitantId}`, {
+        expectedStatus: number = 200,
+        seasonId?: number,
+        assertResponse?: (response: InhabitantUpdateResponse) => void
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const url = seasonId !== undefined
+            ? `${INHABITANT_ENDPOINT}/${inhabitantId}?seasonId=${seasonId}`
+            : `${INHABITANT_ENDPOINT}/${inhabitantId}`
+
+        const response = await context.request.post(url, {
             headers: headers,
             data: updates
         })
 
         const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
+        const responseBody = await response.text()
+        expect(status, `updateInhabitant failed: ${responseBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
-            return InhabitantDetailSchema.parse(await response.json())
+        if (expectedStatus !== 200) {
+            return null
         }
 
-        return null
+        const raw = JSON.parse(responseBody)
+        const parsed = InhabitantUpdateResponseSchema.parse(raw)
+
+        if (assertResponse) {
+            assertResponse(parsed)
+        }
+
+        return parsed
+    }
+
+    /**
+     * Update inhabitant preferences via household endpoint (for members, not admin)
+     * Uses /api/household/inhabitants/[id]/preferences - requires household access
+     *
+     * @param seasonId - Optional seasonId query param for parallel-safe testing
+     * @param assertResponse - Optional callback to assert response properties
+     */
+    static readonly updateInhabitantPreferences = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        dinnerPreferences: Record<string, string>,
+        expectedStatus: number = 200,
+        seasonId?: number,
+        assertResponse?: (response: InhabitantUpdateResponse) => void
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const url = seasonId !== undefined
+            ? `/api/household/inhabitants/${inhabitantId}/preferences?seasonId=${seasonId}`
+            : `/api/household/inhabitants/${inhabitantId}/preferences`
+
+        const response = await context.request.post(url, {
+            headers,
+            data: {dinnerPreferences}
+        })
+
+        const status = response.status()
+        const responseBody = await response.text()
+        expect(status, `updateInhabitantPreferences failed: ${responseBody}`).toBe(expectedStatus)
+
+        if (expectedStatus !== 200) return null
+
+        const parsed = InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
+        if (assertResponse) {
+            assertResponse(parsed)
+        }
+        return parsed
     }
 
     /**
@@ -360,5 +474,24 @@ export class HouseholdFactory {
             console.warn(`❌ Inhabitant ${inhabitantId} deletion returned ${status} (expected ${expectedStatus}):`, body)
             return null
         }
+    }
+
+    // === HEYNABO IMPORT METHODS ===
+
+    /**
+     * Run Heynabo import - syncs households/inhabitants/users from Heynabo
+     * ADR-013: Heynabo is source of truth for its data
+     */
+    static readonly runHeynaboImport = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<HeynaboImportResponse> => {
+        const response = await context.request.get(HEYNABO_IMPORT_ENDPOINT)
+        const responseBody = await response.text()
+        const status = response.status()
+
+        expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
+
+        return HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
     }
 }

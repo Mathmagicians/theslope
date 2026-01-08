@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -27,13 +27,13 @@ test.describe('AdminTeams Form UI', () => {
 
         // Wait for page to be interactive - verify form mode buttons are visible (poll for store init)
         await pollUntil(
-            async () => await page.locator('button[name="form-mode-view"]').isVisible(),
+            async () => await page.getByTestId('form-mode-view').isVisible(),
             (isVisible) => isVisible,
             10
         )
-        await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
-        await expect(page.locator('button[name="form-mode-edit"]')).toBeVisible()
-        await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
+        await expect(page.getByTestId('form-mode-view')).toBeVisible()
+        await expect(page.getByTestId('form-mode-edit')).toBeVisible()
+        await expect(page.getByTestId('form-mode-create')).toBeVisible()
     })
 
     test.describe('Create Mode', () => {
@@ -89,7 +89,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to edit mode with season in URL
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible === true,
                 10
             )
@@ -103,7 +103,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the teams
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -112,6 +112,9 @@ test.describe('AdminTeams Form UI', () => {
             const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
             await expect(teamTabs.first()).toBeVisible()
             await expect(teamTabs).toHaveCount(2)
+
+            // Documentation screenshot: Admin Teams management view
+            await doScreenshot(page, 'admin/admin-teams-edit', true)
         })
 
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {
@@ -121,7 +124,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the team
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -156,7 +159,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the team
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -200,7 +203,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the team
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -238,7 +241,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the teams
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.locator('button[name="form-mode-edit"]').isVisible(),
+                async () => await page.getByTestId('form-mode-edit').isVisible(),
                 (isVisible) => isVisible,
                 10
             )

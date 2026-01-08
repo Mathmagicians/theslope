@@ -501,9 +501,12 @@ export const ICONS = {
     help: 'i-heroicons-question-mark-circle',
 
     // Actions & feedback
+    clipboard: 'i-heroicons-clipboard-document-list',
     edit: 'i-heroicons-pencil',
     chevronDown: 'i-heroicons-chevron-down',
     chevronRight: 'i-heroicons-chevron-right',
+    sortAscending: 'i-lucide-arrow-up-narrow-wide',
+    sortDescending: 'i-lucide-arrow-down-wide-narrow',
     check: 'i-heroicons-check',
     checkCircle: 'i-heroicons-check-circle',
     plusCircle: 'i-heroicons-plus-circle',
@@ -517,9 +520,13 @@ export const ICONS = {
     arrowUp: 'i-heroicons-arrow-up',
     sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
+    released: 'i-heroicons-arrow-up-tray',
 
     // Empty states
     robotDead: 'i-mage-robot-dead',
+
+    // Danger/delete confirmations
+    dangerConfirm: 'i-healthicons-death-alt',
 
     // Descriptive
     mail: 'i-guidance-mail',
@@ -528,6 +535,10 @@ export const ICONS = {
     // Time & info
     clock: 'i-heroicons-clock',
     info: 'i-heroicons-information-circle',
+
+    // Status/state
+    lockOpen: 'i-heroicons-lock-open',
+    lockClosed: 'i-heroicons-lock-closed',
 
     // External links
     github: 'i-simple-icons-github',
@@ -817,7 +828,7 @@ export const DINNER_STATE_BADGES = {
     SCHEDULED: {
         label: 'Planlagt',
         color: COLOR.mocha,
-        icon: 'i-heroicons-calendar'
+        icon: 'i-heroicons-clipboard-document-list'
     },
     ANNOUNCED: {
         label: 'Annonceret',
@@ -919,11 +930,17 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
-    DONE: {
+    SUCCESS: {
         color: COLOR.success,
-        label: 'Færdig',
+        label: 'OK',
         icon: 'i-heroicons-check-circle',
         emoji: '🟢'
+    },
+    WARNING: {
+        color: COLOR.warning,
+        label: 'Snart',
+        icon: 'i-heroicons-clock',
+        emoji: '🟡'
     },
     CRITICAL: {
         color: COLOR.error,
@@ -931,11 +948,24 @@ export const DEADLINE_BADGES = {
         icon: 'i-heroicons-exclamation-circle',
         emoji: '🔴'
     },
-    WARNING: {
-        color: COLOR.warning,
-        label: 'Snart',
-        icon: 'i-heroicons-clock',
-        emoji: '🟡'
+    OVERDUE: {
+        color: COLOR.error,
+        label: 'Forsinket',
+        icon: ICONS.dangerConfirm,
+        emoji: '⚫'
+    },
+    NEUTRAL: {
+        color: COLOR.neutral,
+        label: 'Neutral',
+        icon: 'i-heroicons-minus-circle',
+        emoji: '⚪'
+    },
+    // Legacy aliases for backwards compatibility
+    DONE: {
+        color: COLOR.success,
+        label: 'Færdig',
+        icon: 'i-heroicons-check-circle',
+        emoji: '🟢'
     },
     ON_TRACK: {
         color: COLOR.neutral,
@@ -946,7 +976,20 @@ export const DEADLINE_BADGES = {
 } as const
 
 /**
+ * Maps AlarmLevel to DEADLINE_BADGES
+ * -1 = Neutral, 0 = Success/Green, 1 = Warning, 2 = Critical, 3 = Overdue/💀
+ */
+export const ALARM_TO_BADGE = {
+    [-1]: DEADLINE_BADGES.NEUTRAL,
+    0: DEADLINE_BADGES.SUCCESS,
+    1: DEADLINE_BADGES.WARNING,
+    2: DEADLINE_BADGES.CRITICAL,
+    3: DEADLINE_BADGES.OVERDUE
+} as const
+
+/**
  * Maps DeadlineUrgency (0 | 1 | 2) to DEADLINE_BADGES
+ * @deprecated Use ALARM_TO_BADGE instead
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export const URGENCY_TO_BADGE = {
@@ -1023,6 +1066,7 @@ export const useTheSlopeDesignSystem = () => {
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         DEADLINE_BADGES,
+        ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
         ICONS,
         IMG,

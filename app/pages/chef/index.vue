@@ -54,14 +54,17 @@ const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
+const {isDinnerUpdating} = storeToRefs(bookingsStore)
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
+const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
 const dinnerStartTime = getDefaultDinnerStartTime()
+
+// Season-specific deadline functions
 
 // Team selection via query parameter
 const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<number>('team', {
@@ -179,6 +182,12 @@ const {
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
 const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
 
+// Fetch detail after hydration when ID is available
+// (useAsyncData's watch doesn't trigger for SSR→client value changes)
+onMounted(() => {
+  if (selectedDinnerId.value) refreshDinnerEventDetail()
+})
+
 const handleDinnerSelect = (dinnerId: number) => {
   const dinner = teamDinnerEvents.value.find((e: DinnerEventDisplay) => e.id === dinnerId)
   if (dinner) setSelectedDate(new Date(dinner.date))
@@ -201,119 +210,60 @@ const toast = useToast()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-// Announce dinner with useAsyncData for loading state (ADR-007: component-local data)
-const announceParams = ref<{dinnerEventId: number} | null>(null)
-const {
-  status: announceStatus,
-  execute: executeAnnounce
-} = useAsyncData(
-    'chef-page-announce-dinner',
-    () => announceParams.value
-        ? bookingsStore.announceDinner(announceParams.value.dinnerEventId)
-        : Promise.resolve(null),
-    { immediate: false }
-)
-const isAnnouncingDinner = computed(() => announceStatus.value === 'pending')
-
-// Cancel dinner with useAsyncData for loading state (ADR-007: component-local data)
-const cancelParams = ref<{dinnerEventId: number} | null>(null)
-const {
-  status: cancelStatus,
-  execute: executeCancel
-} = useAsyncData(
-    'chef-page-cancel-dinner',
-    () => cancelParams.value
-        ? bookingsStore.cancelDinner(cancelParams.value.dinnerEventId)
-        : Promise.resolve(null),
-    { immediate: false }
-)
-const isCancellingDinner = computed(() => cancelStatus.value === 'pending')
-
 const handleAllergenUpdate = async (allergenIds: number[]) => {
   if (!selectedDinnerId.value) return
-
-  try {
-    await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
-    await refreshDinnerEventDetail() // Refresh page-owned data
-    const message = allergenIds.length > 0
-        ? 'Beboerne kan nu se allergenerne i menuen'
-        : 'Menuen er markeret uden allergener'
-    toast.add({
-      title: 'Allergeninformation gemt',
-      description: message,
-      icon: ICONS.checkCircle,
-      color: COLOR.success
-    })
-  } catch (error) {
-    // Error already handled by store with handleApiError
-    console.error('Failed to update allergens:', error)
-  }
+  const result = await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Allergeninformation gemt',
+    description: allergenIds.length > 0 ? 'Beboerne kan nu se allergenerne i menuen' : 'Menuen er markeret uden allergener',
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
 }
 
 const handleFormUpdate = async (data: ChefMenuForm) => {
   if (!selectedDinnerId.value) return
-
-  try {
-    await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
-    await refreshDinnerEventDetail()
-    toast.add({
-      title: 'Menu gemt',
-      description: 'Menuen er nu opdateret',
-      icon: ICONS.checkCircle,
-      color: COLOR.success
-    })
-    await usersStore.loadMyTeams()
-  } catch (error) {
-    console.error('Failed to update menu:', error)
-  }
+  const result = await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Menu gemt',
+    description: `"${result.menuTitle}" er nu opdateret`,
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
+  await usersStore.loadMyTeams()
 }
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
-  // Only handle ANNOUNCED - CONSUMED is set automatically by cron job
   if (newState !== DinnerState.ANNOUNCED) return
-
-  // Check if this is a republish (already announced) or first publish
   const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
-
-  announceParams.value = {dinnerEventId: selectedDinnerId.value}
-  await executeAnnounce()
-
-  // Check if announce succeeded (useAsyncData captures errors, doesn't throw)
-  if (announceStatus.value === 'error') {
-    return
-  }
-
-  await refreshDinnerEventDetail() // Refresh page-owned data
+  const result = await bookingsStore.announceDinner(selectedDinnerId.value)
+  if (!result) return
+  await refreshDinnerEventDetail()
   toast.add({
     title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
+    description: result.heynaboEventId ? `Heynabo event ID: ${result.heynaboEventId}` : 'Ingen Heynabo ID returneret',
     icon: ICONS.megaphone,
     color: COLOR.success
   })
-  // Refresh team data to show updated state in calendar
   await usersStore.loadMyTeams()
 }
 
 const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
-
-  cancelParams.value = {dinnerEventId: selectedDinnerId.value}
-  await executeCancel()
-
-  // Check if cancel succeeded (useAsyncData doesn't throw, it captures errors)
-  if (cancelStatus.value === 'error') {
-    console.error('Failed to cancel dinner')
-    return
-  }
-
-  await refreshDinnerEventDetail() // Refresh page-owned data
+  const result = await bookingsStore.cancelDinner(selectedDinnerId.value)
+  if (!result) return
+  await refreshDinnerEventDetail()
   toast.add({
     title: 'Middag aflyst',
-    description: 'Fællesspisningen er blevet aflyst',
+    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er blevet aflyst`,
     icon: ICONS.xMark,
     color: COLOR.warning
   })
-  // Refresh team data to show updated state in calendar
   await usersStore.loadMyTeams()
 }
 
@@ -404,6 +354,7 @@ useHead({
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
+                  :deadlines="deadlinesForSeason(selectedSeason)"
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"
                   @select="handleDinnerSelect"
@@ -423,13 +374,13 @@ useHead({
         <!-- #hero: ChefMenuCard with chef/view mode based on permissions -->
         <template #hero>
           <ChefMenuCard
-              v-if="dinnerEventDetail"
+              v-if="dinnerEventDetail && selectedSeason"
               :dinner-event="dinnerEventDetail"
+              :deadlines="deadlinesForSeason(selectedSeason)"
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :show-allergens="true"
-              :is-announcing="isAnnouncingDinner"
-              :is-cancelling="isCancellingDinner"
+              :is-updating="isDinnerUpdating"
               @update:form="handleFormUpdate"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"

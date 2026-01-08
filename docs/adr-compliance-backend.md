@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2025-12-29 (Feedback endpoint added)
+**Last Updated:** 2026-01-05 (Consolidated chef dinner endpoint, household preferences endpoint)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -12,12 +12,13 @@
 
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
-| **Order Management** | | | | | **✅ FULLY COMPLIANT** (4/5 endpoints implemented) + Authorization middleware                     |
+| **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints implemented) + Authorization middleware                     |
 | `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() validates with OrderSchema                                                         |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds filters, validates with OrderSchema                |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
+| `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()` authorization                                         |
 | `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
-| `/api/order/swap-order.post.ts` | N/A | N/A | N/A | N/A | Stub - not yet implemented                                                                       |
+| `/api/order/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder(dinnerEventId, ticketPriceId) - FIFO by releasedAt, retry logic, USER_CLAIMED audit   |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |
@@ -47,7 +48,7 @@
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                              |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteInhabitant() → Inhabitant with deserializeInhabitant()                                     |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitant() → Inhabitant with deserialization                                              |
-| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → Inhabitant with deserialization                                             |
+| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference change) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveInhabitant() → Inhabitant with deserializeInhabitant()                                       |
 | **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT**                                                                            |
@@ -60,6 +61,7 @@
 | `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignTeamsResponse                                                                      |
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignAffinitiesResponse                                                                 |
 | `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002/015 patterns, job tracking, uses teamService                             |
+| `/api/admin/season/[id]/scaffold-prebookings.post.ts` | ✅ | ✅ | ✅ | ✅ | scaffoldPrebookings() → ScaffoldResult (ADR-015 idempotent)                                      |
 | **Admin - Allergy Types** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyTypes() validates with AllergyTypDetailSchema                                        |
 | `/api/admin/allergy-type/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyType() validates with AllergyTypeDisplaySchema                                       |
@@ -72,6 +74,10 @@
 | `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateAllergy() → AllergyWithRelations                                                           |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergy() → AllergyWithRelations                                                            |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createAllergy() → AllergyWithRelations                                                           |
+| **Chef Operations** | | | | | **✅ FULLY COMPLIANT (2026-01-05)** - Consolidated endpoint for member chef operations           |
+| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Consolidated: menu, state (announce/cancel), allergens. Heynabo: user token for announce, fallback to system token for menu sync |
+| **Household - Preferences** | | | | | **✅ FULLY COMPLIANT (2026-01-05)**                                                               |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -116,3 +122,4 @@ Reference these endpoints for correct ADR-002 implementation:
 - ✅ `/api/admin/household/[id].get.ts` - Complete pattern
 - ✅ `/api/order/[id].delete.ts` - DELETE pattern with validation
 - ✅ `/api/team/cooking/[id]/assign-role.post.ts` - Full ADR-001 & ADR-010 compliance with repository pattern
+- ✅ `/api/chef/dinner/[id].post.ts` - Consolidated chef endpoint with ADR-013 Heynabo token pattern

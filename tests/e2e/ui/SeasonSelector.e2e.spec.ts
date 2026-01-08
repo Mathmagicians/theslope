@@ -29,7 +29,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Create test-specific future season
         const futureYear = new Date().getFullYear() + 1
         futureSeason = await SeasonFactory.createSeason(context, {
-            shortName: salt('Future', testSalt),
+            shortName: salt('TestSeason-Future', testSalt),
             seasonDates: {
                 start: new Date(futureYear, 0, 1),
                 end: new Date(futureYear, 5, 30)
@@ -42,7 +42,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Create test-specific past season
         const pastYear = new Date().getFullYear() - 1
         pastSeason = await SeasonFactory.createSeason(context, {
-            shortName: salt('Past', testSalt),
+            shortName: salt('TestSeason-Past', testSalt),
             seasonDates: {
                 start: new Date(pastYear, 0, 1),
                 end: new Date(pastYear, 5, 30)
@@ -164,21 +164,21 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     })
 
     test('GIVEN future season WHEN viewing status display THEN shows activation controls', async ({page}) => {
-        // Navigate directly to future season in VIEW mode
-        await navigateToPlanning(page, futureSeason.shortName, 'view')
+        // Navigate directly to future season in EDIT mode (activation button only visible in edit mode)
+        await navigateToPlanning(page, futureSeason.shortName, 'edit')
 
         // Debug: screenshot before waiting for button
         await doScreenshot(page, 'season-status-before-button-wait')
 
         // Wait for activation button to load
         await pollUntil(
-            async () => await page.locator('button[name="activate-season"]').isVisible(),
+            async () => await page.getByTestId('activate-season').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Should show enabled activation button
-        const activateButton = page.locator('button[name="activate-season"]')
+        const activateButton = page.getByTestId('activate-season')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).not.toBeDisabled()
         await expect(activateButton).toContainText('Aktiver Sæson')
@@ -191,18 +191,18 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     })
 
     test('GIVEN active season WHEN viewing status display THEN shows deactivation controls', async ({page}) => {
-        // Navigate directly to active season in VIEW mode
-        await navigateToPlanning(page, activeSeason.shortName, 'view')
+        // Navigate directly to active season in EDIT mode (deactivation button only visible in edit mode)
+        await navigateToPlanning(page, activeSeason.shortName, 'edit')
 
         // Wait for deactivation button to load (active seasons show deactivate, not activate)
         await pollUntil(
-            async () => await page.locator('button[name="deactivate-season"]').isVisible(),
+            async () => await page.getByTestId('deactivate-season').isVisible(),
             (isVisible) => isVisible,
             10
         )
 
         // THEN: Should show enabled deactivation button
-        const deactivateButton = page.locator('button[name="deactivate-season"]')
+        const deactivateButton = page.getByTestId('deactivate-season')
         await expect(deactivateButton).toBeVisible()
         await expect(deactivateButton).not.toBeDisabled()
         await expect(deactivateButton).toContainText('Deaktiver Sæson')

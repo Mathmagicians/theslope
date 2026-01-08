@@ -119,6 +119,7 @@ expect(result).toBe(expectedValue)
 | Direct `$fetch` in E2E tests | Factory methods |
 | `console.log()` | `expect()` assertions |
 | `page.waitForTimeout()` | `pollUntil()` or `waitForResponse()` |
+| `name` or `data-test-id` on buttons | `data-testid` + `getByTestId()` |
 
 ---
 
@@ -175,8 +176,8 @@ await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 ### Finding Elements
 
 ```typescript
-// ✅ DO: DOM selectors
-const button = wrapper.find('[name="submit-button"]')
+// ✅ DO: data-testid selectors
+const button = wrapper.find('[data-testid="submit-button"]')
 await button.trigger('click')
 
 // ❌ DON'T: Component wrappers (events don't emit)
@@ -204,13 +205,13 @@ const emitted = button.emitted('update:modelValue')  // Always undefined
 ### Working Pattern
 
 ```typescript
-const ELEMENT_NAMES = {
-    addButton: 'holidayRangeAddToList',
-    removeButton: (index: number) => `holidayRangeRemoveFromList-${index}`
+const TEST_IDS = {
+    addButton: 'holiday-range-add',
+    removeButton: (index: number) => `holiday-range-remove-${index}`
 } as const
 
 const clickAddButton = async (wrapper: any) => {
-    await wrapper.find(`[name="${ELEMENT_NAMES.addButton}"]`).trigger('click')
+    await wrapper.find(`[data-testid="${TEST_IDS.addButton}"]`).trigger('click')
     await nextTick()
 }
 ```
@@ -285,7 +286,7 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
   // WHEN: Interact via UI
   await page.goto('/admin/planning?mode=create')
   await page.locator('input[name="start"]').fill('01/01/2025')
-  await page.locator('button[name="submit"]').click()
+  await page.getByTestId('submit-season').click()
 
   // THEN: Verify via API (reliable)
   const seasons = await SeasonFactory.getSeasons(context)
@@ -296,14 +297,12 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
 ### Selectors
 
 ```typescript
-// Complex UI components
+// Buttons and interactive elements - use getByTestId
 await page.getByTestId('season-selector').click()
+await page.getByTestId('submit-season').click()
 
-// Form elements
+// Form inputs - name attribute works (native HTML)
 await page.locator('input[name="start"]').fill('01/01/2025')
-
-// Nested components
-await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
 ```
 
 ### Waiting Patterns
@@ -346,7 +345,7 @@ test.afterAll(async ({ browser }) => {
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| Click not emitting | `emitted()` undefined | Use `find('[name="..."]')` not `findAllComponents()` |
+| Click not emitting | `emitted()` undefined | Use `find('[data-testid="..."]')` not `findAllComponents()` |
 | Test pollution | Pass alone, fail together | Add `clearNuxtData()` to `beforeEach()` |
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |

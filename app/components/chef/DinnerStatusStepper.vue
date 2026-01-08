@@ -6,17 +6,17 @@
  * STEP → BADGE INTEGRATION
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
+ * Alarm levels: -1=neutral(⚪), 0=green(🟢), 1=yellow(🟡), 2=red(🔴), 3=overdue(⚫💀)
+ *
  *  ●━━━━━━━━━━━━○━━━━━━━━━━━━○━━━━━━━━━━━━○━━━━━━━━━━━━○
  *  │            │            │            │            │
- *  Planlagt     Annonceret   Tilmelding   Indkøb       Afholdt
- *  │            │            lukket       klar         │
+ *  Planlagt     Publiceret   Lukket for   Madbestilling Afholdt
+ *  │            │            ændringer    klar         │
  *  │            │            │            │            │
- *  (no badge)   [⚠️ om 2d]   [✅ Åben]    (future)     │
- *               Menu         Tilmelding                │
- *               deadline     status                    │
+ *  (no badge)   [🟢 om 2d]   [🟢 åben..]  [🟢 om 1d]   [🟢 om..]
+ *               g/y/r/💀     g/y/r/⚪     g/y/r/💀     g/⚪
  *
  * Badges are rendered UNDER each step using DinnerDeadlineBadges data.
- * The badge belongs to the step it leads TO (the goal), not the current step.
  *
  * ADR Compliance:
  * - ADR-001: Business logic in useBooking composable (DINNER_STEP_MAP, getStepConfig)
@@ -26,11 +26,13 @@
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { DeadlineBadge } from '~/components/chef/DinnerDeadlineBadges.vue'
+import type { SeasonDeadlines } from '~/composables/useSeason'
 import DinnerDeadlineBadges from '~/components/chef/DinnerDeadlineBadges.vue'
 import { DINNER_STEP_MAP } from '~/composables/useBooking'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
+  deadlines: SeasonDeadlines
   mode?: 'compact' | 'full'
   showDeadlines?: boolean
 }
@@ -44,22 +46,21 @@ const props = withDefaults(defineProps<Props>(), {
 const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
-const { getStepConfig, getStepDeadline } = useBooking()
+const { getStepConfig } = useBooking()
 const { DinnerStateSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Template ref for DinnerDeadlineBadges to get badge data
 const deadlineBadgesRef = ref<InstanceType<typeof DinnerDeadlineBadges> | null>(null)
 
-// Current step and deadline
-const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent))
+// Current step (using season-specific deadlines from props)
+const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.deadlines))
 const currentStep = computed(() => currentStepConfig.value.step)
-const currentDeadline = computed(() => getStepDeadline(props.dinnerEvent))
 
 // Is cancelled?
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
 
-// Is past/consumed event? (no badges shown for past events, like in dinner card view)
+// Is past/consumed event? (only show overdue badges for past events - user actions that were never completed)
 const isPastEvent = computed(() => props.dinnerEvent.state === DinnerState.CONSUMED)
 
 // Get badge for a specific step (from DinnerDeadlineBadges via ref)
@@ -70,16 +71,22 @@ const getBadgeForStep = (step: number): DeadlineBadge | null => {
 // Build stepper items from DINNER_STEP_MAP
 const steps = computed(() => {
   const step = currentStep.value
-  const deadline = currentDeadline.value
 
-  return Object.values(DINNER_STEP_MAP).map((config) => ({
-    step: config.step,
-    title: config.title,
-    description: config.step === step && props.showDeadlines ? deadline.description : config.text,
-    icon: config.icon,
-    disabled: config.step > step,
-    color: getBadgeForStep(config.step)?.color ?? COLOR.neutral
-  }))
+  return Object.values(DINNER_STEP_MAP).map((config) => {
+    const badge = getBadgeForStep(config.step)
+    // Use badge helpText (open/closed text based on completion)
+    // For step 0 (Planlagt), use config.text since there's no badge
+    const description = badge?.helpText ?? config.text
+
+    return {
+      step: config.step,
+      title: config.title,
+      description,
+      icon: config.icon,
+      disabled: config.step > step,
+      color: badge?.color ?? COLOR.neutral
+    }
+  })
 })
 </script>
 
@@ -89,6 +96,7 @@ const steps = computed(() => {
     <DinnerDeadlineBadges
       ref="deadlineBadgesRef"
       :dinner-event="dinnerEvent"
+      :deadlines="deadlines"
       mode="stepper"
       class="hidden"
     />
@@ -118,11 +126,11 @@ const steps = computed(() => {
       :color="COLOR.primary"
       :ui="{ description: TYPOGRAPHY.finePrint }"
     >
-      <!-- Custom description: text + badge below (no badges for past events) -->
+      <!-- Custom description: text + badge below (show overdue badges even for past events) -->
       <template #description="{ item }">
         <div>
           <span>{{ item.description }}</span>
-          <div v-if="!isPastEvent && getBadgeForStep(item.step)" class="mt-1">
+          <div v-if="getBadgeForStep(item.step) && (!isPastEvent || getBadgeForStep(item.step)!.alarm === 3)" class="mt-1">
             <span>{{ getBadgeForStep(item.step)!.value }}</span>
           </div>
         </div>

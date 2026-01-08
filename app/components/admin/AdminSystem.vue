@@ -38,6 +38,7 @@ const {
     formatDuration,
     formatTriggeredBy,
     formatResultSummary,
+    parseResultSummary,
     formatHeynaboStats,
     formatDailyMaintenanceStats,
     formatMonthlyBillingStats
@@ -118,7 +119,7 @@ const jobHistoryColumns = [
 const jobHistoryRows = computed(() => {
   return jobRuns.value.map(jr => ({
     id: jr.id,
-    startedAt: jr.startedAt.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }),
+    startedAt: formatDate(jr.startedAt, 'dd/MM/yyyy HH:mm'),
     jobType: jobTypeLabels[jr.jobType as keyof typeof jobTypeLabels] ?? jr.jobType,
     status: jr.status,
     statusColor: getJobStatusColor(jr.status),
@@ -153,58 +154,63 @@ const objectToTreeItems = (obj: Record<string, unknown>, prefix = ''): { label: 
 const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as Record<string, unknown>))
 
 // ============================================================================
-// DAILY MAINTENANCE JOB - uses bookings store (ADR-007)
+// JOB STATS FORMATTING - shared by fresh runs and historical data (DRY)
 // ============================================================================
 
-const dailyMaintenanceIcons = [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.calendar]
+const jobIconsMap = {
+  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.edit, ICONS.ticket],
+  MONTHLY_BILLING: [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.economy],
+  HEYNABO_IMPORT: [ICONS.household, ICONS.users, ICONS.user]
+} as const
+
+// Format stats with icons for card display (used by both fresh and historical)
+const formatStatsWithIcons = (
+  stats: { label: string; value: string }[],
+  icons: readonly string[],
+  timestamp: Date
+): { icon: string; text: string }[] => [
+  { icon: ICONS.clock, text: formatDate(timestamp, 'dd/MM/yyyy HH:mm') },
+  { icon: ICONS.checkCircle, text: 'Gennemført' },
+  ...stats.map((stat, i) => ({
+    icon: icons[i] ?? ICONS.info,
+    text: `${stat.label}: ${stat.value}`
+  }))
+]
+
+// Get job run timestamp by ID (returns startedAt from job run record)
+const getJobRunTimestamp = (jobRunId: number): Date => {
+  const jobRun = jobRuns.value.find(jr => jr.id === jobRunId)
+  return jobRun?.startedAt ?? new Date()
+}
+
+// Fresh run stats (from stores)
+const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
+
 const dailyMaintenanceStats = computed(() => {
   if (!hasDailyMaintenanceResult.value || !dailyMaintenanceResult.value) return []
-  const stats = formatDailyMaintenanceStats(dailyMaintenanceResult.value)
-  return [
-    { icon: ICONS.clock, text: new Date().toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) },
-    { icon: ICONS.checkCircle, text: 'Gennemført' },
-    ...stats.map((stat, i) => ({
-      icon: dailyMaintenanceIcons[i] ?? ICONS.info,
-      text: `${stat.label}: ${stat.value}`
-    }))
-  ]
+  return formatStatsWithIcons(
+    formatDailyMaintenanceStats(dailyMaintenanceResult.value),
+    jobIconsMap.DAILY_MAINTENANCE,
+    getJobRunTimestamp(dailyMaintenanceResult.value.jobRunId)
+  )
 })
 
-// ============================================================================
-// MONTHLY BILLING JOB - uses bookings store (ADR-007)
-// ============================================================================
-
-const monthlyBillingIcons = [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.checkCircle]
 const monthlyBillingStats = computed(() => {
   if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.results) return []
-  const stats = formatMonthlyBillingStats(monthlyBillingResult.value.results)
-  return [
-    { icon: ICONS.clock, text: new Date().toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) },
-    { icon: ICONS.checkCircle, text: 'Gennemført' },
-    ...stats.map((stat, i) => ({
-      icon: monthlyBillingIcons[i] ?? ICONS.info,
-      text: `${stat.label}: ${stat.value}`
-    }))
-  ]
+  return formatStatsWithIcons(
+    formatMonthlyBillingStats(monthlyBillingResult.value.results),
+    jobIconsMap.MONTHLY_BILLING,
+    getJobRunTimestamp(monthlyBillingResult.value.jobRunId)
+  )
 })
 
-// ============================================================================
-// HEYNABO IMPORT JOB - uses users store (ADR-007)
-// ============================================================================
-
-const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
-const heynaboImportIcons = [ICONS.household, ICONS.users, ICONS.user]
 const heynaboImportStats = computed(() => {
   if (!hasHeynaboImportResult.value || !heynaboImport.value) return []
-  const stats = formatHeynaboStats(heynaboImport.value)
-  return [
-    { icon: ICONS.clock, text: new Date().toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' }) },
-    { icon: ICONS.checkCircle, text: 'Gennemført' },
-    ...stats.map((stat, i) => ({
-      icon: heynaboImportIcons[i] ?? ICONS.info,
-      text: `${stat.label}: ${stat.value}`
-    }))
-  ]
+  return formatStatsWithIcons(
+    formatHeynaboStats(heynaboImport.value),
+    jobIconsMap.HEYNABO_IMPORT,
+    getJobRunTimestamp(heynaboImport.value.jobRunId)
+  )
 })
 
 // ============================================================================
@@ -219,14 +225,25 @@ const getLatestJobStats = (jobType: string): { icon: string; text: string }[] =>
   const latestRun = getLatestJobRunByType(jobType)
   if (!latestRun || !latestRun.resultSummary) return []
 
-  const resultText = formatResultSummary(latestRun.jobType, latestRun.resultSummary)
-  const timeText = latestRun.startedAt.toLocaleString('da-DK', { dateStyle: 'short', timeStyle: 'short' })
+  const parsed = parseResultSummary(latestRun.jobType, latestRun.resultSummary)
+  if (!parsed) return []
 
-  return [
-    { icon: getJobStatusIcon(latestRun.status), text: `${jobStatusLabels[latestRun.status as keyof typeof jobStatusLabels]}` },
-    { icon: ICONS.clock, text: timeText },
-    { icon: ICONS.info, text: resultText }
-  ]
+  const icons = jobIconsMap[jobType as keyof typeof jobIconsMap] ?? []
+  let stats: { label: string; value: string }[] = []
+
+  switch (jobType) {
+    case 'DAILY_MAINTENANCE':
+      stats = formatDailyMaintenanceStats(parsed as Parameters<typeof formatDailyMaintenanceStats>[0])
+      break
+    case 'MONTHLY_BILLING':
+      stats = formatMonthlyBillingStats(parsed as Parameters<typeof formatMonthlyBillingStats>[0])
+      break
+    case 'HEYNABO_IMPORT':
+      stats = formatHeynaboStats(parsed as Parameters<typeof formatHeynaboStats>[0])
+      break
+  }
+
+  return formatStatsWithIcons(stats, icons, latestRun.startedAt)
 }
 
 const jobDefinitions = computed(() => {
@@ -237,6 +254,23 @@ const jobDefinitions = computed(() => {
 
   return [
     {
+      key: 'HEYNABO_IMPORT',
+      title: 'Heynabo Import',
+      buttonLabel: 'Kør import',
+      description: 'Synkroniser husstande og beboere fra Heynabo',
+      schedule: systemJobs.heynaboImport.description,
+      color: COLOR.ocean,
+      headerBg: BG.ocean[50],
+      icon: ICONS.users,
+      // Wired up via users store
+      isRunning: isImportHeynaboLoading.value,
+      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
+      hasError: isImportHeynaboErrored.value,
+      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
+      error: heynaboImportError.value,
+      trigger: importHeynaboDataAndRefresh
+    },
+    {
       key: 'DAILY_MAINTENANCE',
       title: 'Daglig Vedligeholdelse',
       buttonLabel: 'Kør daglig vedligeholdelse',
@@ -244,7 +278,7 @@ const jobDefinitions = computed(() => {
       schedule: systemJobs.dailyMaintenance.description,
       color: COLOR.peach,
       headerBg: BG.peach[50],
-      icon: ICONS.sync,
+      icon: ICONS.clipboard,
       // Wired up via bookings store
       isRunning: isDailyMaintenanceRunning.value,
       hasResult: hasDailyMaintenanceResult.value || hasHistoricalDailyMaintenance,
@@ -269,23 +303,6 @@ const jobDefinitions = computed(() => {
       stats: hasMonthlyBillingResult.value ? monthlyBillingStats.value : getLatestJobStats('MONTHLY_BILLING'),
       error: monthlyBillingError.value,
       trigger: runMonthlyBillingAndRefresh
-    },
-    {
-      key: 'HEYNABO_IMPORT',
-      title: 'Heynabo Import',
-      buttonLabel: 'Kør import',
-      description: 'Synkroniser husstande og beboere fra Heynabo',
-      schedule: systemJobs.heynaboImport.description,
-      color: COLOR.ocean,
-      headerBg: BG.ocean[50],
-      icon: ICONS.users,
-      // Wired up via users store
-      isRunning: isImportHeynaboLoading.value,
-      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
-      hasError: isImportHeynaboErrored.value,
-      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
-      error: heynaboImportError.value,
-      trigger: importHeynaboDataAndRefresh
     }
   ]
 })
@@ -312,7 +329,7 @@ const jobDefinitions = computed(() => {
             :class="[job.headerBg, 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2']"
           >
             <UIcon
-              :name="job.icon"
+              :name="job.isRunning ? ICONS.sync : job.icon"
               :class="['text-5xl md:text-6xl opacity-80', job.isRunning ? 'animate-spin' : '']"
             />
             <span :class="TYPOGRAPHY.bodyTextSmall">

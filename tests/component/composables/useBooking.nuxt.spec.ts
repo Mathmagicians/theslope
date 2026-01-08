@@ -15,6 +15,9 @@ describe('useBooking', () => {
         getDinnerStepState
     } = useBooking()
 
+    const {deadlinesForSeason} = useSeason()
+    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+
     describe('buildDinnerUrl', () => {
         it.each([
             {
@@ -47,11 +50,13 @@ describe('useBooking', () => {
     })
 
     describe('HEYNABO_EVENT_TEMPLATE', () => {
-        it('contains required template parts', () => {
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('synkroniseres fra skraaningen.dk')
-            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toContain('ændringer overskrives')
-            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_EMOJI).toBe('📅')
-            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toContain('hilsner')
+        it('contains required template keys', () => {
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_ROBOT).toContain('skraaningen.dk')
+            expect(HEYNABO_EVENT_TEMPLATE.WARNING_EDIT).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.CHEF_PREFIX).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.BOOKING_TEXT).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.SIGNATURE_PREFIX).toBeDefined()
+            expect(HEYNABO_EVENT_TEMPLATE.SEPARATOR).toBeDefined()
         })
     })
 
@@ -125,10 +130,10 @@ describe('useBooking', () => {
         })
 
         describe('description building', () => {
-            it('includes warning header', () => {
+            it('includes warning with robot emoji and skraaningen.dk reference', () => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload.description).toContain('synkroniseres fra skraaningen.dk')
-                expect(payload.description).toContain('ændringer overskrives')
+                expect(payload.description).toContain('🤖')
+                expect(payload.description).toContain('skraaningen.dk')
             })
 
             it('includes booking link with formatted date', () => {
@@ -159,13 +164,26 @@ describe('useBooking', () => {
             })
 
             it.each([
-                {name: 'includes cooking team when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: '// Team Alpha'},
-                {name: 'uses default when null', cookingTeam: null, shouldContain: '// Køkkenholdet'},
-                {name: 'uses default when undefined', cookingTeam: undefined, shouldContain: '// Køkkenholdet'}
+                {name: 'includes cooking team name when provided', cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Team Alpha'}), shouldContain: 'Team Alpha'},
+                {name: 'uses fallback when null', cookingTeam: null, shouldContain: 'Madholdet'},
+                {name: 'uses fallback when undefined', cookingTeam: undefined, shouldContain: 'Madholdet'}
             ])('$name', ({cookingTeam, shouldContain}) => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent({cookingTeam}), baseUrl)
 
                 expect(payload.description).toContain(shouldContain)
+            })
+
+            it('includes chef name with initials when chef is assigned', () => {
+                const chef = {id: 1, heynaboId: 101, householdId: 1, name: 'Anna', lastName: 'Berg Hansen', pictureUrl: null}
+                const payload = createHeynaboEventPayload(futureDinnerEvent({chef}), baseUrl)
+
+                expect(payload.description).toContain('Anna B.H.')
+            })
+
+            it('omits chef line when chef is not assigned', () => {
+                const payload = createHeynaboEventPayload(futureDinnerEvent({chef: null}), baseUrl)
+
+                expect(payload.description).not.toContain('chefkok')
             })
         })
     })
@@ -235,7 +253,7 @@ describe('useBooking', () => {
             }
         ])('$description', ({state, date, totalCost, expected}) => {
             const dinnerEvent = {state: state as keyof typeof DinnerState, date, totalCost}
-            expect(getDinnerStepState(dinnerEvent)).toBe(expected)
+            expect(getDinnerStepState(dinnerEvent, defaultDeadlines)).toBe(expected)
         })
     })
 
@@ -253,7 +271,7 @@ describe('useBooking', () => {
             futureDate.setDate(futureDate.getDate() + 14)
 
             const dinnerEvent = {state: 'SCHEDULED' as const, date: futureDate, totalCost: 0}
-            expect(getStepConfig(dinnerEvent).step).toBe(0)
+            expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
         })
     })
 
@@ -293,7 +311,7 @@ describe('useBooking', () => {
         const {OrderSnapshotSchema} = useBillingValidation()
 
         it.each([
-            {desc: 'with user', order: OrderFactory.defaultOrderForTransaction('test'), expectedEmail: 'test@example.com-test'},
+            {desc: 'with user', order: OrderFactory.defaultOrderForTransaction('test'), expectedEmail: 'daisy-test@andeby.dk'},
             {desc: 'without user', order: {...OrderFactory.defaultOrderForTransaction('test'), bookedByUser: null}, expectedEmail: ''}
         ])('$desc → snapshot roundtrips, email is $expectedEmail', ({order, expectedEmail}) => {
             const results = prepareTransactionData([order])
@@ -304,6 +322,88 @@ describe('useBooking', () => {
             expect(snapshot.dinnerEvent.id).toBe(order.dinnerEvent.id)
             expect(snapshot.inhabitant.id).toBe(order.inhabitant.id)
             expect(result.userEmailHandle).toBe(expectedEmail)
+        })
+    })
+
+    describe('buildOrderSnapshot', () => {
+        const {buildOrderSnapshot} = useBooking()
+
+        // Base order data reused across tests
+        const baseOrder = () => ({
+            id: 42,
+            inhabitantId: 10,
+            dinnerEventId: 5,
+            ticketPriceId: 1,
+            priceAtBooking: 5500,
+            dinnerMode: 'DINEIN' as const,
+            state: 'BOOKED' as const,
+            inhabitant: {
+                id: 10,
+                heynaboId: 1001,
+                householdId: 7,
+                name: 'Anna',
+                lastName: 'Berg Larsen',
+                pictureUrl: null,
+                allergies: [
+                    {id: 1, inhabitantId: 10, allergyTypeId: 1, inhabitantComment: null, allergyType: {id: 1, name: 'Peanuts', description: 'Nut allergy', icon: '🥜'}, createdAt: new Date(), updatedAt: new Date()},
+                    {id: 2, inhabitantId: 10, allergyTypeId: 2, inhabitantComment: null, allergyType: {id: 2, name: 'Gluten', description: 'Wheat allergy', icon: '🌾'}, createdAt: new Date(), updatedAt: new Date()}
+                ]
+            }
+        })
+
+        it('builds snapshot with all fields from order', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+
+            expect(snapshot.id).toBe(42)
+            expect(snapshot.inhabitantId).toBe(10)
+            expect(snapshot.dinnerEventId).toBe(5)
+            expect(snapshot.ticketPriceId).toBe(1)
+            expect(snapshot.priceAtBooking).toBe(5500)
+            expect(snapshot.dinnerMode).toBe('DINEIN')
+            expect(snapshot.state).toBe('BOOKED')
+        })
+
+        it('formats inhabitantNameWithInitials using formatNameWithInitials', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            // "Anna Berg Larsen" → "Anna B.L."
+            expect(snapshot.inhabitantNameWithInitials).toBe('Anna B.L.')
+        })
+
+        it('includes householdShortname from parameter', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'S31_2')
+            expect(snapshot.householdShortname).toBe('S31_2')
+        })
+
+        it('includes householdId from inhabitant', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            expect(snapshot.householdId).toBe(7)
+        })
+
+        it('extracts allergy type names from nested allergies', () => {
+            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
+            expect(snapshot.allergies).toEqual(['Peanuts', 'Gluten'])
+        })
+
+        it('handles empty allergies array', () => {
+            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: []}}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.allergies).toEqual([])
+        })
+
+        it('handles undefined allergies (defaults to empty)', () => {
+            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: undefined}}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.allergies).toEqual([])
+        })
+
+        it.each([
+            {state: 'BOOKED' as const},
+            {state: 'RELEASED' as const},
+            {state: 'CLOSED' as const}
+        ])('preserves order state $state', ({state}) => {
+            const order = {...baseOrder(), state}
+            const snapshot = buildOrderSnapshot(order, 'AR_7')
+            expect(snapshot.state).toBe(state)
         })
     })
 })

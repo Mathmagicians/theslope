@@ -25,6 +25,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         error: householdsError,
         refresh: refreshHouseholds
     } = useFetch<HouseholdDisplay[]>('/api/admin/household', {
+        key: 'households-store-households',
         immediate: true,
         watch: false,
         default: () => []
@@ -107,6 +108,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Update inhabitant dinner preferences
+     * Uses household endpoint (not admin) - requires household access
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
@@ -116,7 +118,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         try {
             console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
 
-            await $fetch(`/api/admin/household/inhabitants/${inhabitantId}`, {
+            await $fetch(`/api/household/inhabitants/${inhabitantId}/preferences`, {
                 method: 'POST',
                 body: { dinnerPreferences: preferences }
             })
@@ -135,6 +137,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Update all inhabitants' dinner preferences in a household (power mode)
+     * Uses household endpoint (not admin) - requires household access
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
@@ -153,7 +156,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             // Update all inhabitants in parallel
             await Promise.all(
                 household.inhabitants.map(inhabitant =>
-                    $fetch(`/api/admin/household/inhabitants/${inhabitant.id}`, {
+                    $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
                         method: 'POST',
                         body: { dinnerPreferences: preferences }
                     })

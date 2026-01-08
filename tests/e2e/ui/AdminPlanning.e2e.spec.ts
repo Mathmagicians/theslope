@@ -21,7 +21,7 @@ test.describe('AdminPlanning UI', () => {
     await page.goto(adminPlanningUrl)
 
     await pollUntil(
-      async () => await page.locator('[data-test-id="admin-planning"]').isVisible(),
+      async () => await page.getByTestId('admin-planning').isVisible(),
       (isVisible) => isVisible,
       10
     )
@@ -29,9 +29,9 @@ test.describe('AdminPlanning UI', () => {
     await doScreenshot(page, 'admin/admin-planning-loaded', true)
 
     await expect(page.getByTestId('season-selector')).toBeVisible()
-    await expect(page.locator('button[name="form-mode-view"]')).toBeVisible()
-    await expect(page.locator('button[name="form-mode-edit"]')).toBeVisible()
-    await expect(page.locator('button[name="form-mode-create"]')).toBeVisible()
+    await expect(page.getByTestId('form-mode-view')).toBeVisible()
+    await expect(page.getByTestId('form-mode-edit')).toBeVisible()
+    await expect(page.getByTestId('form-mode-create')).toBeVisible()
   })
 
   test('GIVEN season exists WHEN navigating with season param THEN season is displayed', async ({ page, browser }) => {

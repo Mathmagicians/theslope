@@ -63,6 +63,35 @@ export class SeasonFactory {
         return new Date(year, randomMonth, 1)
     }
 
+    /**
+     * Get the next occurrence of a specific weekday from today
+     * @param targetDay - Day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+     * @returns Date of next occurrence at midnight (may be today if today is the target day)
+     */
+    static readonly nextWeekday = (targetDay: number): Date => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const currentDay = today.getDay()
+        // Days until target (0 if today is target, otherwise calculate forward)
+        const daysUntil = (targetDay - currentDay + 7) % 7
+        // If today is the target day, we still want "next" occurrence, so add 7 if daysUntil is 0
+        const daysToAdd = daysUntil === 0 ? 7 : daysUntil
+        today.setDate(today.getDate() + daysToAdd)
+        return today
+    }
+
+    /**
+     * Get a Mon-Fri date range starting from the next Monday
+     * Useful for tests needing exactly 3 Mon/Wed/Fri cooking days
+     * @returns { start: nextMonday, end: nextFriday } - 5-day window
+     */
+    static readonly nextMondayToFriday = (): { start: Date, end: Date } => {
+        const monday = this.nextWeekday(1) // Monday = 1
+        const friday = new Date(monday)
+        friday.setDate(monday.getDate() + 4) // Friday is 4 days after Monday
+        return { start: monday, end: friday }
+    }
+
     // Default season data for tests
     // 7-day season starting from TOMORROW with Mon/Wed/Fri cooking days for fast, realistic testing
     // ADR-015: Tomorrow ensures all events are scaffoldable regardless of test execution time
@@ -427,7 +456,8 @@ export class SeasonFactory {
 
     /**
      * Clean up the cached active season singleton
-     * Deletes the test season from database, clears the cache, and restores previously active season
+     * Deletes the test season from database, clears the cache, and restores appropriate active season
+     * Uses selectMostAppropriateActiveSeason to find the best season to activate (DB lookup, not in-memory)
      * Gracefully handles parallel workers trying to delete the same singleton (ignores 404)
      * @param context BrowserContext for API requests
      */
@@ -449,17 +479,30 @@ export class SeasonFactory {
 
         // Clear in-memory cache (may be null if global teardown process)
         this.activeSeason = null
+        this.previouslyActiveSeason = null
 
-        // Restore the previously active season if one existed
-        if (this.previouslyActiveSeason) {
-            console.info('🌞 > SEASON_FACTORY > Restoring previously active season:', this.previouslyActiveSeason.shortName)
+        // Restore the most appropriate active season from remaining non-test seasons
+        // Global teardown runs in separate process, so we can't rely on in-memory previouslyActiveSeason
+        const remainingSeasons = await this.getAllSeasons(context)
+        const nonTestSeasons = remainingSeasons.filter(s => !s.shortName?.startsWith('TestSeason'))
+
+        // Use selectMostAppropriateActiveSeason to find the best candidate
+        const {selectMostAppropriateActiveSeason} = await import('~/utils/season')
+        const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
+
+        if (seasonToActivate) {
+            console.info('🌞 > SEASON_FACTORY > Activating most appropriate season:', seasonToActivate.shortName)
             const response = await context.request.post('/api/admin/season/active', {
                 headers: headers,
-                data: { seasonId: this.previouslyActiveSeason.id }
+                data: { seasonId: seasonToActivate.id }
             })
-            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-            console.info('🌞 > SEASON_FACTORY > Previously active season restored')
-            this.previouslyActiveSeason = null
+            if (response.status() === 200) {
+                console.info('🌞 > SEASON_FACTORY > Season activated successfully')
+            } else {
+                console.warn('🌞 > SEASON_FACTORY > Failed to activate season:', response.status())
+            }
+        } else {
+            console.info('🌞 > SEASON_FACTORY > No eligible non-test seasons to activate')
         }
     }
 

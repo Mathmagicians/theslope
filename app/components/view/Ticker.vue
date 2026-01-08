@@ -6,7 +6,7 @@
  */
 
 interface Props {
-  words: string[]
+  words?: string[]
 }
 
 withDefaults(defineProps<Props>(), {

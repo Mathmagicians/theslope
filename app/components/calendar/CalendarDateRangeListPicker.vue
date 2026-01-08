@@ -70,7 +70,7 @@ const onAddHolidayRange = () => {
       </UFormField>
       <UButton
           :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
-          name="holidayRangeAddToList"
+          data-testid="holiday-range-add"
           color="info"
           size="lg"
           icon="i-heroicons-sun"
@@ -84,8 +84,8 @@ const onAddHolidayRange = () => {
     <ul v-if="model?.length > 0" class="mt-4 space-y-2">
       <li
           v-for="(dates, index) in model"
-          :id="`holidayRangeList-${index}`"
-          :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`">
+          :key="`holiday-${index}-${dates ? dates.start?.getTime() : 'empty'}`"
+          :data-testid="`holidayRangeList-${index}`">
         <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <div class="flex items-center gap-2">
             <UInput
@@ -101,7 +101,7 @@ const onAddHolidayRange = () => {
             </UInput>
             <UButton
                 v-if="!props.disabled"
-                :name="`holidayRangeRemoveFromList-${index}`"
+                :data-testid="`holiday-range-remove-${index}`"
                 color="error"
                 icon="i-heroicons-trash"
                 size="sm"

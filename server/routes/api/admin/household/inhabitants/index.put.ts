@@ -25,6 +25,9 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     try {
         console.info(`👩‍🏠 > INHABITANT > [PUT] Creating inhabitant ${inhabitantData.name} for household ${householdId}`)
         const savedInhabitant = await saveInhabitant(d1Client, inhabitantData, householdId)
+        if (!savedInhabitant) {
+            return throwH3Error('👩‍🏠 > INHABITANT > [PUT] Failed to fetch inhabitant after save', new Error('Unexpected null'))
+        }
         console.info(`👩‍🏠 > INHABITANT > [PUT] Successfully created inhabitant ${savedInhabitant.name}`)
         setResponseStatus(event, 201)
         return savedInhabitant

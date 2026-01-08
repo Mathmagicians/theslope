@@ -14,11 +14,11 @@ test.describe('Household tab navigation', () => {
     let shortName: string
 
     const tabs = [
-        {name: 'Tilmeldinger', path: 'bookings', selector: '[data-test-id="household-bookings"]'},
-        {name: 'Husstanden', path: 'members', selector: '[data-test-id="household-members"]'},
-        {name: 'Allergier', path: 'allergies', selector: '[data-test-id="household-allergies"]'},
-        {name: 'Økonomi', path: 'economy', selector: '[data-test-id="household-economy"]'},
-        {name: 'Indstillinger', path: 'settings', selector: '[data-test-id="household-settings"]'}
+        {name: 'Tilmeldinger', path: 'bookings', selector: '[data-testid="household-bookings"]'},
+        {name: 'Husstanden', path: 'members', selector: '[data-testid="household-members"]'},
+        {name: 'Allergier', path: 'allergies', selector: '[data-testid="household-allergies"]'},
+        {name: 'Økonomi', path: 'economy', selector: '[data-testid="household-economy"]'},
+        {name: 'Indstillinger', path: 'settings', selector: '[data-testid="household-settings"]'}
     ] as const
 
     const defaultTab = tabs[0]!

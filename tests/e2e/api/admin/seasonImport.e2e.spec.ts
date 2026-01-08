@@ -22,11 +22,22 @@ test.describe('Season Import API', () => {
 
         const firstBody = await firstResponse.json()
         expect(firstBody.seasonId).toBeDefined()
+        expect(firstBody.isNew, `Expected first import to update existing season, got isNew=${firstBody.isNew}`).toBe(false)
         expect(firstBody.teamsCreated).toBeGreaterThanOrEqual(0) // May be 0 if teams already exist
 
-        // Verify season exists
+        // Verify season exists with teams that have affinities set
         const season = await SeasonFactory.getSeason(context, firstBody.seasonId)
         expect(season.id).toBe(firstBody.seasonId)
+        expect(season.CookingTeams, 'Season should have cooking teams').toBeDefined()
+        expect(season.CookingTeams!.length, 'Season should have at least one team').toBeGreaterThan(0)
+
+        // Verify each team has affinity derived from calendar (not null)
+        for (const team of season.CookingTeams!) {
+            expect(team.affinity, `Team ${team.name} should have affinity set`).not.toBeNull()
+            // Affinity should have at least one cooking day set to true
+            const hasCookingDay = Object.values(team.affinity!).some(v => v === true)
+            expect(hasCookingDay, `Team ${team.name} affinity should have at least one cooking day`).toBe(true)
+        }
 
         // Second import - should be idempotent (ADR-015)
         const secondResponse = await SeasonImportFactory.importSeason(context, calendarCsv, teamsCsv)

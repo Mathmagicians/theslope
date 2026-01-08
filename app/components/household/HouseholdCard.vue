@@ -191,7 +191,7 @@ const columns = [
 <template>
   <!-- Weekly Preferences Section -->
   <UCard
-data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
+data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
          :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <template #header>
       <h3 class="text-lg font-semibold">Husstandens ugentlige booking præferencer</h3>
@@ -215,6 +215,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
               square
               :size="getIsMd ? 'md' : 'xs'"
               :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
+              :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="row.getIsExpanded() ? 'rotate-180' : ''"
               class="transition-transform duration-200"
               @click="handleToggleRow(row)"
@@ -227,7 +228,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
               :color="row.original.ticketConfig?.color ?? 'neutral'"
               variant="subtle"
               size="sm"
-              :data-test-id="`ticket-type-${row.original.id}`"
+              :data-testid="`ticket-type-${row.original.id}`"
           >
             {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
           </UBadge>
@@ -321,7 +322,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
                     variant="ghost"
                     icon="i-heroicons-x-mark"
                     :size="getIsMd ? 'md' : 'sm'"
-                    name="cancel-preferences"
+                    data-testid="cancel-preferences"
                     @click="handleToggleRow(row)"
                 >
                   Annuller
@@ -331,7 +332,7 @@ data-test-id="household-members" class="rounded-none md:rounded-lg border-t-0 md
                     variant="solid"
                     :icon="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : 'i-heroicons-check'"
                     :size="getIsMd ? 'md' : 'sm'"
-                    name="save-preferences"
+                    data-testid="save-preferences"
                     @click="savePreferences"
                 >
                   {{ row.original.isSynthetic ? 'Gem for alle' : 'Gem' }}

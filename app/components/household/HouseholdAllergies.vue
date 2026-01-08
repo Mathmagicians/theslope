@@ -252,7 +252,7 @@ const columns = [
 </script>
 
 <template>
-  <UCard data-test-id="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
+  <UCard data-testid="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
     <!-- HEADER -->
     <template #header>
       <h3 class="text-lg font-semibold">Familiens allergier og diætkrav</h3>
@@ -308,7 +308,7 @@ const columns = [
                     :items="availableAllergyTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
                     placeholder="🥛🥐🥚🥜 vælg en allergi..."
                     value-key="id"
-                    @update:model-value="(val: unknown) => val && handleAddAllergy((val as {id: number}).id)"
+                    @update:model-value="(val: number) => val && handleAddAllergy(val)"
                 >
                   <template #item="{ item }">
                     <span class="flex items-center gap-2">

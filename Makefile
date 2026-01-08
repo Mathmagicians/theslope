@@ -142,7 +142,7 @@ d1-seed-master-data-prod: ## Load master data to prod
 # ============================================================================
 # DATABASE QUERIES
 # ============================================================================
-.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households
+.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes d1-nuke-all
 
 d1-list-users-local:
 	$(call d1_exec,theslope,SELECT * FROM User,--local)
@@ -164,9 +164,21 @@ d1-nuke-households: ## Delete test households (local)
 	$(call d1_exec,theslope,DELETE FROM Allergy WHERE inhabitantId IN (SELECT id FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%')),--local)
 	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE householdId IN (SELECT id FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%'),--local)
 	$(call d1_exec,theslope,DELETE FROM Household WHERE name LIKE 'Test%' OR address LIKE 'Andeby%',--local)
+	@echo "🧹 Cleaning up fake inhabitants (Anders-uuid pattern)..."
+	$(call d1_exec,theslope,DELETE FROM Inhabitant WHERE name LIKE 'Anders-%-%-%-%-%',--local)
 	@echo "✅ Cleanup complete!"
 
-d1-nuke-all: d1-nuke-seasons d1-nuke-households
+d1-nuke-users: ## Delete test users (local) - emails ending in @andeby.dk
+	@echo "🧹 Cleaning up test users..."
+	$(call d1_exec,theslope,DELETE FROM User WHERE email LIKE '%@andeby.dk',--local)
+	@echo "✅ Test users cleaned up!"
+
+d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
+	@echo "🧹 Cleaning up test allergy types..."
+	$(call d1_exec,theslope,DELETE FROM AllergyType WHERE name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %',--local)
+	@echo "✅ Test allergy types cleaned up!"
+
+d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
 
 # ============================================================================
@@ -311,6 +323,9 @@ heynabo-get-locations-prod: ## List all locations (prod)
 
 heynabo-get-nhbrs-dev: ## List all neighbors (dev)
 	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/users/")
+
+heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
+	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
 
 # ============================================================================
 # TESTING

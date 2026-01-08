@@ -1,5 +1,7 @@
 import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
 import {fetchOrder, updateOrder, deleteOrder} from "~~/server/data/financesRepository"
+import {fetchSeason} from "~~/server/data/prismaRepository"
+import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import type {OrderDetail} from "~/composables/useBookingValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
@@ -30,10 +32,11 @@ const idSchema = z.object({
 export default defineEventHandler(async (event): Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const {DinnerModeSchema, OrderAuditActionSchema} = useBookingValidation()
-    const {getOrderCancellationAction} = useSeason()
+    const {DinnerModeSchema, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
+    const {deadlinesForSeason} = useSeason()
     const DinnerMode = DinnerModeSchema.enum
     const OrderAuditAction = OrderAuditActionSchema.enum
+    const OrderState = OrderStateSchema.enum
     const LOG = '🎟️ > ORDER > [POST]'
 
     // Input validation schema
@@ -68,6 +71,16 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
             throw createError({statusCode: 404, message: `Order ${id} not found`})
         }
 
+        // Authorization: User must belong to the order's household
+        await requireHouseholdAccess(event, existingOrder.inhabitant.householdId)
+
+        // Get season for deadline calculation
+        const season = await fetchSeason(d1Client, existingOrder.dinnerEvent.seasonId!)
+        if (!season) {
+            throw createError({statusCode: 404, message: `Season not found for order ${id}`})
+        }
+        const {getOrderCancellationAction} = deadlinesForSeason(season)
+
         const isCancellation = body.dinnerMode === DinnerMode.NONE
 
         // Handle cancellation (dinnerMode → NONE)
@@ -96,8 +109,14 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
         }
 
         // Regular mode change (not cancellation)
-        console.info(`${LOG} Updating order ${id} dinnerMode to ${body.dinnerMode}`)
-        const updatedOrder = await updateOrder(d1Client, id, {dinnerMode: body.dinnerMode}, {
+        // If order was RELEASED, re-book it (restore BOOKED state, clear releasedAt)
+        const isRebooking = existingOrder.state === OrderState.RELEASED
+        const updates = isRebooking
+            ? {dinnerMode: body.dinnerMode, state: OrderState.BOOKED, releasedAt: null}
+            : {dinnerMode: body.dinnerMode}
+
+        console.info(`${LOG} ${isRebooking ? 'Re-booking' : 'Updating'} order ${id} dinnerMode to ${body.dinnerMode}`)
+        const updatedOrder = await updateOrder(d1Client, id, updates, {
             action: OrderAuditAction.USER_BOOKED,
             performedByUserId
         })

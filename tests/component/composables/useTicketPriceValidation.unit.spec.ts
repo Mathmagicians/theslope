@@ -129,16 +129,15 @@ describe('useTicketPriceValidation', () => {
     describe('reconcileTicketPrices', () => {
         const { reconcileTicketPrices } = useTicketPriceValidation()
 
-        // Helper to add ids to factory data
-        const withIds = (prices: ReturnType<typeof TicketFactory.defaultTicketPrices>, startId = 1) =>
-            prices.map((p, i) => ({ ...p, id: startId + i }))
-
-        const existing = withIds(TicketFactory.defaultTicketPrices({ seasonId: 1 }))
+        // Factory data with IDs for existing prices
+        const existing = TicketFactory.defaultTicketPrices({ seasonId: 1 })
+        // Factory data without IDs for new prices
+        const newPrices = TicketFactory.defaultTicketPricesWithoutIds({ seasonId: 1 })
 
         it.each([
             {
                 scenario: 'new ticket price (no id) → create',
-                incoming: [...existing, { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0], description: 'New price' }],
+                incoming: [...existing, { ...newPrices[0], description: 'New price' }],
                 expected: { create: 1, update: 0, idempotent: 4, delete: 0 }
             },
             {
@@ -161,7 +160,7 @@ describe('useTicketPriceValidation', () => {
                 incoming: [
                     existing[0]!,                                   // idempotent
                     { ...existing[1]!, price: 2000 },               // update
-                    { ...TicketFactory.defaultTicketPrices({ seasonId: 1 })[0]!, description: 'Brand new' } // create
+                    { ...newPrices[0]!, description: 'Brand new' }  // create (no id)
                     // existing[2] and existing[3] removed → delete
                 ],
                 expected: { create: 1, update: 1, idempotent: 1, delete: 2 }

@@ -69,16 +69,14 @@ v-if="props.error"
 
       <!-- Error Cause -->
       <UPopover v-if="props.cause">
-        <template #trigger>
-          <UButton
-              color="error"
-              size="sm"
-              variant="ghost"
-              icon="i-heroicons-exclamation-triangle"
-              label="Se stacktrace"/>
-        </template>
-        <template #panel>
-          <div class="text-xs text-gray-400 whitespace-pre-wrap overflow-auto max-h-[300px]">
+        <UButton
+            color="error"
+            size="sm"
+            variant="ghost"
+            icon="i-heroicons-exclamation-triangle"
+            label="Se stacktrace"/>
+        <template #content>
+          <div class="text-xs text-gray-400 whitespace-pre-wrap overflow-auto max-h-[300px] p-2">
             {{ props.cause.stack }}
           </div>
         </template>

@@ -28,11 +28,13 @@ describe('useTicket', () => {
             ['no birthDate', null, ticketPrices, 'ADULT'],
             ['no ticket prices (5yo)', new Date('2020-01-01'), undefined, 'CHILD'],  // Falls back to defaults
             ['empty ticket prices (1yo)', new Date('2024-01-01'), [] as TicketPrice[], 'BABY'],  // Falls back to defaults
-            // Age-based with explicit prices
-            ['1 year old', new Date('2024-01-01'), ticketPrices, 'BABY'],
-            ['2 years old (boundary)', new Date('2023-01-15'), ticketPrices, 'BABY'],
+            // Age-based with explicit prices (maximumAgeLimit means UNDER that age)
+            ['0 years old', new Date('2025-01-01'), ticketPrices, 'BABY'],  // Under 2 → BABY
+            ['1 year old', new Date('2024-01-01'), ticketPrices, 'BABY'],   // Under 2 → BABY
+            ['2 years old (boundary)', new Date('2023-01-15'), ticketPrices, 'CHILD'],  // Not under 2 → CHILD
             ['3 years old', new Date('2022-01-01'), ticketPrices, 'CHILD'],
-            ['12 years old (boundary)', new Date('2013-01-15'), ticketPrices, 'CHILD'],
+            ['11 years old', new Date('2014-01-01'), ticketPrices, 'CHILD'], // Under 12 → CHILD
+            ['12 years old (boundary)', new Date('2013-01-15'), ticketPrices, 'ADULT'],  // Not under 12 → ADULT
             ['25 years old', new Date('2000-01-01'), ticketPrices, 'ADULT']
         ])('GIVEN %s THEN returns %s',
             (_, birthDate, prices, expected) => {

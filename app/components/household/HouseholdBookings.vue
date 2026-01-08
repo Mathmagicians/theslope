@@ -63,7 +63,7 @@ const visibleCookingDays = computed(() => {
 <template>
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
-  <div v-else-if="isSelectedSeasonInitialized && activeSeason" data-test-id="household-bookings">
+  <div v-else-if="isSelectedSeasonInitialized && activeSeason" data-testid="household-bookings">
     <!-- Master-Detail layout -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Master: Calendar (1/3 on large screens) -->
@@ -178,6 +178,6 @@ const visibleCookingDays = computed(() => {
     variant="subtle"
     title="Ingen aktiv sæson"
     description="Der er ingen aktiv fællesspisnings sæson i øjeblikket. Kontakt administratoren for at aktivere en sæson."
-    data-test-id="household-bookings-empty"
+    data-testid="household-bookings-empty"
   />
 </template>

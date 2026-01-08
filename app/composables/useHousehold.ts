@@ -74,16 +74,17 @@ export const useHousehold = () => {
 
     /**
      * Match a short name against inhabitants list
-     * Supports five strategies (tried in order):
+     * Supports six strategies (tried in order):
      * 1. Exact match: "Mads Bruun Hovgaard" matches {name: "Mads", lastName: "Bruun Hovgaard"}
-     * 2. Initials format: "Mads B.H." matches {name: "Mads", lastName: "Bruun Hovgaard"}
+     * 2. Initials format (exact): "Mads B.H." matches {name: "Mads", lastName: "Bruun Hovgaard"}
+     * 2b. Single initial (unique): "Mads B." matches {name: "Mads", lastName: "Bruun Hovgaard"} if unique
      * 3. First name only (unique): "Babyyoda" matches {name: "Babyyoda", ...}
      * 4. First word match (unique): "Jimmy" matches {name: "Jimmy Diksen", ...}
      * 5. First name + lastName prefix: "Jeppe Eg" matches {name: "Jeppe", lastName: "Eg Bilslev"}
      *
-     * @param shortName - Name to match (e.g., "Mads B.H." or "Mads Bruun Hovgaard" or "Babyyoda")
+     * @param shortName - Name to match (e.g., "Mads B.H." or "Mads B." or "Babyyoda")
      * @param inhabitants - List of inhabitants to match against
-     * @returns Matched inhabitant ID or null if no match
+     * @returns Matched inhabitant ID or null if no match/ambiguous
      */
     const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]): number | null => {
         const normalizedInput = normalizeName(shortName)
@@ -105,7 +106,7 @@ export const useHousehold = () => {
         const inputParts = normalizedInput.split(' ')
         const inputFirstWord = inputParts[0]!
 
-        // Strategy 2: Match "FirstName X.Y." format against initials
+        // Strategy 2: Match "FirstName X.Y." format against initials (exact count match)
         if (inputParts.length >= 2) {
             const inputRest = inputParts.slice(1).join(' ')
 
@@ -126,6 +127,23 @@ export const useHousehold = () => {
                         )
                     })
                     if (initialsMatch) return initialsMatch.id
+
+                    // Strategy 2b: Single initial matches ANY word of remaining name + lastName
+                    // "Anna L." matches {name: "Anna", lastName: "Berg Larsen"} (L matches Larsen)
+                    // "Anna B." matches {name: "Anna Berg", lastName: "Larsen"} (B matches Berg in name)
+                    if (initials.length === 1) {
+                        const singleInitial = initials[0]!
+                        const singleInitialMatches = normalized.filter(i => {
+                            const nameWords = i.name.split(' ')
+                            // First word of name must match input first word
+                            if (nameWords[0] !== inputFirstWord) return false
+                            // Initial can match remaining name words OR lastName words
+                            const remainingNameWords = nameWords.slice(1)
+                            const lastNameWords = i.lastName.split(' ')
+                            return [...remainingNameWords, ...lastNameWords].some(word => word.startsWith(singleInitial))
+                        })
+                        if (singleInitialMatches.length === 1) return singleInitialMatches[0]!.id
+                    }
                 }
             }
         }

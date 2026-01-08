@@ -134,7 +134,7 @@ describe('AllergenMultiSelector', () => {
                 showStatistics: true
             })
 
-            expect(wrapper.html()).toContain('Vælg allergier for at se statistik')
+            expect(wrapper.html()).toContain('Vælg allergener')
         })
 
         it.each([

@@ -313,16 +313,13 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
           </UBadge>
         </div>
       </div>
-      <UButton
+      <DangerButton
         data-testid="delete-team-button"
-        color="winery"
-        variant="solid"
-        icon="i-healthicons-death-alt"
+        :label="`Slet ${teamName}`"
+        :confirm-label="`Tryk igen for at slette ${teamName}...`"
         class="w-full md:w-auto"
-        @click="handleDelete"
-      >
-        Slet <span class="whitespace-nowrap">{{ teamName }}</span>
-      </UButton>
+        @confirm="handleDelete"
+      />
     </div>
 
     <!-- VIEW MODE: Team name header -->
@@ -338,12 +335,12 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
       </UBadge>
     </div>
 
-    <!-- EDIT MODE: Two-row layout as per mockup -->
-    <div v-if="mode === 'edit'" class="space-y-4">
-      <!-- ROW 1: Team members (left 50%) + Inhabitant finder (right 50%) -->
+    <!-- REGULAR/EDIT MODE: Shared two-row layout -->
+    <div class="space-y-4">
+      <!-- ROW 1: Team members (left) + Inhabitant finder (right, EDIT only) -->
       <div class="flex flex-col md:flex-row gap-2 md:gap-4">
         <!-- LEFT: Team members -->
-        <div class="w-full md:w-1/2 space-y-4">
+        <div :class="isEditable ? 'w-full md:w-1/2' : 'w-full'" class="space-y-4">
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
           <div class="flex flex-col gap-4">
             <div
@@ -375,7 +372,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
                     {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
                   <UButton
-                    v-if="member.id"
+                    v-if="isEditable && member.id"
                     color="winery"
                     variant="ghost"
                     size="xs"
@@ -392,8 +389,8 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
           </div>
         </div>
 
-        <!-- RIGHT: Inhabitant finder -->
-        <div class="w-full md:w-1/2 space-y-4">
+        <!-- RIGHT: Inhabitant finder (EDIT mode only) -->
+        <div v-if="isEditable" class="w-full md:w-1/2 space-y-4">
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilføj medlemmer</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"
@@ -411,14 +408,17 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
         </div>
       </div>
 
-      <!-- ROW 2: Weekday assignments (left 25%) + Calendar (right 75%) -->
+      <!-- ROW 2: Weekday assignments (left) + Calendar (right) -->
       <div class="flex flex-col md:flex-row gap-2 md:gap-4">
-        <!-- LEFT: Team Affinity -->
+        <!-- LEFT: Team Affinity (compact in VIEW mode, editable checkboxes in EDIT mode) -->
         <div class="w-full md:w-1/4">
           <WeekDayMapDisplay
             :model-value="affinity"
             :parent-restriction="seasonCookingDays"
-            label="Holdets madlavningsdage"
+            :disabled="!isEditable"
+            :compact="!isEditable"
+            :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
+            :color="teamColor"
             @update:model-value="(value) => emit('update:affinity', value)"
           />
         </div>
@@ -438,42 +438,6 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- REGULAR MODE: Single row layout on desktop -->
-    <div v-else>
-      <!-- Members display -->
-      <div v-if="!hasNoMembers" class="flex flex-col md:flex-row gap-4">
-        <div
-          v-for="(members, role) in roleGroups"
-          v-show="members.length > 0"
-          :key="role"
-          class="flex-1"
-        >
-          <UserListItem
-            :inhabitants="members.map(m => m.inhabitant)"
-            :compact="false"
-            size="md"
-            :ring-color="teamColor"
-            :label="ROLE_LABELS[role]"
-          />
-        </div>
-      </div>
-      <!-- Empty state -->
-      <UAlert
-        v-else
-        variant="soft"
-        :color="COLOR.neutral"
-        :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
-        :ui="COMPONENTS.emptyStateAlert"
-      >
-        <template #title>
-          {{ emptyStateMessage.text }}
-        </template>
-        <template #description>
-          Ingen medlemmer på dette køkkenhold
-        </template>
-      </UAlert>
     </div>
   </div>
 </template>

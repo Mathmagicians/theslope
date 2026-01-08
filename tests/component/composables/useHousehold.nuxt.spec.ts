@@ -261,7 +261,10 @@ describe('useHousehold', () => {
       { id: 28, name: 'Tommy Nielsen', lastName: 'Larsen' },   // composite first name
       { id: 73, name: 'Kai ', lastName: 'Berg Hansen ' },      // trailing whitespace in DB
       { id: 85, name: 'Zara Noor', lastName: 'Khan' },         // composite first name
-      { id: 122, name: 'Nova Star', lastName: 'Berg Hansen' }  // composite first name
+      { id: 122, name: 'Nova Star', lastName: 'Berg Hansen' }, // composite first name
+      // Single initial with multi-part lastName (Strategy 2b)
+      { id: 202, name: 'Orion', lastName: 'Nebula Star' },     // ambiguous with id 203
+      { id: 203, name: 'Orion', lastName: 'Nova Prime' }       // ambiguous: both "Orion N."
     ]
 
     describe('exact match', () => {
@@ -296,6 +299,23 @@ describe('useHousehold', () => {
         { shortName: 'Helle A.', expectedId: 1, description: 'single initial' }
       ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+    })
+
+    describe('initials format - single initial with multi-part lastName (Strategy 2b)', () => {
+      it.each([
+        { shortName: 'Signe D.', expectedId: 4, description: 'matches first lastName word' },
+        { shortName: 'Signe M.', expectedId: 4, description: 'matches second lastName word' },
+        { shortName: 'signe d.', expectedId: 4, description: 'case insensitive' },
+        { shortName: 'Tommy N.', expectedId: 28, description: 'composite name: initial matches second word of name' },
+        { shortName: 'Tommy L.', expectedId: 28, description: 'composite name: initial matches lastName' }
+      ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
+        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      })
+
+      it('returns null when single initial is ambiguous', () => {
+        // Both Orion Nebula Star (202) and Orion Nova Prime (203) have lastName word starting with N
+        expect(matchInhabitantByNameWithInitials('Orion N.', testInhabitants)).toBeNull()
       })
     })
 
@@ -354,7 +374,6 @@ describe('useHousehold', () => {
         { shortName: 'Unknown Person', reason: 'no inhabitant with this name' },
         { shortName: 'Signe', reason: 'non-unique first name (two Signes exist)' },
         { shortName: 'Signe X.Y.', reason: 'wrong initials' },
-        { shortName: 'Signe D.', reason: 'incomplete initials for two-part last name' },
         { shortName: 'Anna D.M.', reason: 'wrong first name' }
       ])('returns null for "$shortName" ($reason)', ({ shortName }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBeNull()

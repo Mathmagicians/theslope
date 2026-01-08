@@ -1,4 +1,4 @@
-import type { UserDetail } from '~/composables/useCoreValidation'
+import type { UserDetail, UserDisplay } from '~/composables/useCoreValidation'
 import { SystemRoleSchema } from '~~/prisma/generated/zod'
 
 /**
@@ -12,29 +12,29 @@ const SystemRole = SystemRoleSchema.enum
 // ============= BASE PREDICATES =============
 
 /** Check if user has ADMIN role */
-export const isAdmin = (user: UserDetail): boolean =>
+export const isAdmin = (user: UserDetail | UserDisplay): boolean =>
     user.systemRoles?.includes(SystemRole.ADMIN) ?? false
 
 /** Check if user has ALLERGYMANAGER role */
-export const isAllergyManager = (user: UserDetail): boolean =>
+export const isAllergyManager = (user: UserDetail | UserDisplay): boolean =>
     user.systemRoles?.includes(SystemRole.ALLERGYMANAGER) ?? false
 
 /** Check if user belongs to specified household */
-export const isInHousehold = (user: UserDetail, householdId: number): boolean =>
+export const isInHousehold = (user: UserDetail | UserDisplay, householdId: number): boolean =>
     user.Inhabitant?.householdId === householdId
 
 /** Always returns true - for authenticated-only routes */
-export const isAuthenticated = (_user: UserDetail): boolean => true
+export const isAuthenticated = (_user: UserDetail | UserDisplay): boolean => true
 
 // ============= COMPOSED PREDICATES =============
 
 /** Permission for allergy mutations: ADMIN or ALLERGYMANAGER */
-export const canMutateAllergies = (user: UserDetail): boolean =>
+export const canMutateAllergies = (user: UserDetail | UserDisplay): boolean =>
     isAdmin(user) || isAllergyManager(user)
 
 // ============= ROUTE PERMISSION TABLE =============
 
-type PermissionCheck = (user: UserDetail) => boolean
+type PermissionCheck = (user: UserDetail | UserDisplay) => boolean
 
 /**
  * Route permission table - evaluated in order (most specific first)
@@ -64,6 +64,7 @@ export const ROUTE_PERMISSIONS: Array<{
     { prefix: '/api/order/', methods: null, check: isAuthenticated },
     { prefix: '/api/household/', methods: null, check: isAuthenticated },
     { prefix: '/api/team/', methods: null, check: isAuthenticated },
+    { prefix: '/api/chef/', methods: null, check: isAuthenticated },
 
     // ===== FALLBACK =====
 

@@ -1,16 +1,20 @@
 import {test, expect} from '@playwright/test'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import testHelpers from '../../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
 // Only track household - CASCADE will delete all inhabitants (ADR-005)
+// BUT users have SET NULL relationship - must track and cleanup separately
 let testHouseholdId: number
 const createdSeasonIds: number[] = []
+const createdUserIds: number[] = []
 
 test.describe('Admin Inhabitant API', () => {
 
@@ -88,22 +92,28 @@ test.describe('Admin Inhabitant API', () => {
         test('PUT /api/admin/inhabitant should create inhabitant with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
-            const testEmail = salt('usertest', testSalt) + '@example.com'
+            const testEmail = UserFactory.defaultUser(testSalt).email
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Test-Inhabitant', testEmail)
             expect(testInhabitant.id).toBeDefined()
 
             // Verify inhabitant has user association
             expect(testInhabitant.userId).toBeDefined()
+
+            // Track user for cleanup (SET NULL means user survives inhabitant deletion)
+            createdUserIds.push(testInhabitant.userId!)
         })
 
         test('DELETE inhabitant should clear weak association with user account', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
-            const testEmail = salt('userdelete', testSalt) + '@example.com'
+            const testEmail = UserFactory.defaultUser(testSalt).email
             const testInhabitant = await HouseholdFactory.createInhabitantWithUser(context, testHouseholdId, 'User-Delete-Test-Inhabitant', testEmail)
 
             const userId = testInhabitant.userId
             expect(userId).toBeDefined()
+
+            // Track user for cleanup (SET NULL means user survives inhabitant deletion)
+            createdUserIds.push(userId!)
 
             // Delete the inhabitant
             await HouseholdFactory.deleteInhabitant(context, testInhabitant.id)
@@ -197,10 +207,212 @@ test.describe('Admin Inhabitant API', () => {
             expect(response.status()).toBe(200)
             const updated = await response.json()
 
-            expect(updated.dinnerPreferences).toEqual(newPreferences)
-            expect(updated.name).toBe(createdInhabitant.name)
-            expect(updated.birthDate).toBe(createdInhabitant.birthDate)
-            expect(updated.householdId).toBe(createdInhabitant.householdId)
+            // Response is InhabitantUpdateResponse: { inhabitant, scaffoldResult }
+            expect(updated.inhabitant.dinnerPreferences).toEqual(newPreferences)
+            expect(updated.inhabitant.name).toBe(createdInhabitant.name)
+            expect(updated.inhabitant.birthDate).toBe(createdInhabitant.birthDate)
+            expect(updated.inhabitant.householdId).toBe(createdInhabitant.householdId)
+            expect(updated.scaffoldResult).toBeDefined()
+        })
+    })
+
+    test.describe('Preference Re-scaffolding', () => {
+        // Each test creates its own season with explicit seasonId for parallel-safe execution
+        // Cleanup tracked via scaffoldTestHouseholdIds array, deleted in afterAll
+
+        const scaffoldTestHouseholdIds: number[] = []
+        const scaffoldTestSeasonIds: number[] = []
+
+        // Shared setup helpers
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+        const DinnerMode = DinnerModeSchema.enum
+        const OrderState = OrderStateSchema.enum
+        const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+            valueSchema: DinnerModeSchema,
+            defaultValue: DinnerMode.NONE
+        })
+        const ALL_DINEIN = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN])
+        const ALL_NONE = createDefaultWeekdayMap([DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE])
+
+        // Cancel period longer than season span so dinners are past deadline → RELEASED
+        // ADR-015: Before deadline → DELETE (user not charged), After deadline → RELEASE (user charged)
+        // Season spans 7 days from tomorrow (day +1 to +8), so 9-day deadline ensures all dinners
+        // are past deadline even when test runs before dinner time (18:00) on day 0
+        // (8-day deadline for day +8 dinner = today at 18:00, still deletable if test runs earlier)
+        const LONG_CANCEL_PERIOD = 9
+
+        test.afterAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            await HouseholdFactory.deleteHousehold(context, scaffoldTestHouseholdIds)
+            await SeasonFactory.cleanupSeasons(context, scaffoldTestSeasonIds)
+        })
+
+        // Parametrized test for create/delete preference changes
+        const preferenceChangeTests = [
+            {name: 'NONE→DINEIN creates orders', from: ALL_NONE, to: ALL_DINEIN, expectCreated: true},
+            {name: 'DINEIN→NONE removes orders (deleted or released)', from: ALL_DINEIN, to: ALL_NONE, expectCreated: false}
+        ] as const
+
+        preferenceChangeTests.forEach(({name, from, to, expectCreated}) => {
+            test(`GIVEN season WHEN preference changes ${name}`, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+
+                // GIVEN: Season with LONG_CANCEL_PERIOD to observe RELEASE behavior
+                // ADR-015: Before deadline → DELETE, After deadline → RELEASE
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                    ticketIsCancellableDaysBefore: LONG_CANCEL_PERIOD
+                })
+                scaffoldTestSeasonIds.push(season.id as number)
+
+                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                    context, {name: salt('Pref-Change-Test', testSalt)}, 1
+                )
+                scaffoldTestHouseholdIds.push(household.id)
+                const inhabitant = inhabitants[0]!
+
+                // Set initial preferences
+                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: from}, 200, season.id)
+
+                const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
+
+                // Verify setup: dinner events exist, orders match initial preferences
+                expect(dinnerEvents.length, 'Season should have dinner events').toBeGreaterThan(0)
+                if (expectCreated) {
+                    // NONE→DINEIN: Starting with NONE preferences means no initial orders
+                    expect(inhabitantOrdersBefore.length, 'Starting with NONE should have no orders').toBe(0)
+                } else {
+                    // DINEIN→NONE: Starting with DINEIN preferences creates orders for all dinners
+                    expect(inhabitantOrdersBefore.length, 'Starting with DINEIN should have orders for all dinners').toBe(dinnerEvents.length)
+                }
+
+                // WHEN: Change preferences
+                await HouseholdFactory.updateInhabitant(
+                    context, inhabitant.id, {dinnerPreferences: to}, 200, season.id,
+                    ({scaffoldResult}) => {
+                        expect(scaffoldResult.seasonId).toBe(season.id)
+                        if (expectCreated) {
+                            expect(scaffoldResult.created).toBeGreaterThan(0)
+                        } else {
+                            // ADR-015: With LONG_CANCEL_PERIOD all dinners are past deadline → all RELEASED
+                            expect(scaffoldResult.deleted, `No orders should be deleted (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
+                            expect(scaffoldResult.unchanged, `No orders should be unchanged (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
+                            expect(scaffoldResult.released, `Expected ${inhabitantOrdersBefore.length} orders released`).toBe(inhabitantOrdersBefore.length)
+                        }
+                    }
+                )
+
+                // THEN: Verify orders state
+                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
+
+                if (expectCreated) {
+                    expect(inhabitantOrdersAfter.length).toBeGreaterThan(0)
+                } else {
+                    // ADR-015: RELEASED orders remain in DB (user charged), no BOOKED orders remain
+                    const releasedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.RELEASED)
+                    expect(releasedOrdersAfter.length, 'All orders should be released').toBe(inhabitantOrdersBefore.length)
+                    const bookedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.BOOKED)
+                    expect(bookedOrdersAfter.length, 'No BOOKED orders should remain').toBe(0)
+                }
+            })
+        })
+
+        test('GIVEN USER_CANCELLED order WHEN preferences re-saved THEN cancelled order NOT recreated', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season + household + scaffolded orders
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Cancel-Respect-Test', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // Scaffold initial orders
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrders.length).toBeGreaterThan(0)
+
+            // User cancels one specific order (creates USER_CANCELLED audit)
+            const orderToCancel = inhabitantOrders[0]!
+            await OrderFactory.deleteOrder(context, orderToCancel.id)
+
+            // WHEN: Re-save same preferences
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            // THEN: Cancelled order NOT recreated
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrdersAfter.length).toBe(inhabitantOrders.length - 1)
+
+            const cancelledDinnerOrders = ordersAfter.filter(
+                o => o.dinnerEventId === orderToCancel.dinnerEventId && o.inhabitantId === inhabitant.id
+            )
+            expect(cancelledDinnerOrders.length).toBe(0)
+        })
+
+        test('GIVEN two households WHEN household A updates preferences THEN only household A gets orders (householdId filter works)', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season + two households (both with DINEIN preferences set at creation)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const households = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('HouseholdA', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('HouseholdB', testSalt)}, 1)
+            ])
+            households.forEach(h => scaffoldTestHouseholdIds.push(h.household.id))
+
+            const [inhabitantA, inhabitantB] = households.map(h => h.inhabitants[0]!)
+            expect(inhabitantA).toBeDefined()
+            expect(inhabitantB).toBeDefined()
+
+            // Verify no orders exist yet
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantA!.id).length).toBe(0)
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitantB!.id).length).toBe(0)
+
+            // WHEN: A updates preferences (scaffolds only for A, householdId filter applied)
+            await HouseholdFactory.updateInhabitant(context, inhabitantA!.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
+                ({scaffoldResult}) => expect(scaffoldResult.households).toBe(1)
+            )
+
+            // THEN: Only A has orders - B should still have 0 (householdId filter worked)
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantA!.id).length).toBeGreaterThan(0)
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitantB!.id).length).toBe(0)
+        })
+
+        test('GIVEN no seasonId provided WHEN preferences updated THEN active season used', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // Ensure active season exists
+            const activeSeason = await SeasonFactory.createActiveSeason(context)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Active-Season-Test', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // WHEN: Update preferences WITHOUT seasonId - endpoint uses active season
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, undefined,
+                ({inhabitant, scaffoldResult}) => {
+                    expect(inhabitant).toBeDefined()
+                    expect(scaffoldResult.seasonId).toBe(activeSeason.id)
+                }
+            )
         })
     })
 
@@ -250,6 +462,12 @@ test.describe('Admin Inhabitant API', () => {
             } catch (error) {
                 console.warn(`Failed to cleanup test household ${testHouseholdId}:`, error)
             }
+        }
+
+        // Clean up users created via createInhabitantWithUser (SET NULL means they survive inhabitant deletion)
+        if (createdUserIds.length > 0) {
+            await UserFactory.cleanupUsers(context, createdUserIds)
+            console.info(`Cleaned up ${createdUserIds.length} test user(s)`)
         }
     })
 })

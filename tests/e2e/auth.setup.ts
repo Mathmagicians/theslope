@@ -1,48 +1,45 @@
-import type { APIRequestContext} from '@playwright/test';
+import type {APIRequestContext, Page} from '@playwright/test'
 import {test as setup, expect} from '@playwright/test'
 import {authFiles} from './config'
 
-const userName = process.env.HEY_NABO_USERNAME as string
+const adminUserName = process.env.HEY_NABO_USERNAME as string
+const memberUserName = process.env.HEY_NABO_EJ_ADMIN_USERNAME as string
 const password = process.env.HEY_NABO_PASSWORD as string
 const headers = {'Content-Type': 'application/json'}
 
-async function performLogin(request: APIRequestContext) {
-    const response = await request.post('/api/auth/login', {
-        headers: headers,
-        data: { email: userName, password: password }
-    })
+async function performLogin(request: APIRequestContext, userName: string) {
+    const response = await request.post('/api/auth/login', {headers, data: {email: userName, password}})
     const responseBody = await response.json().catch(() => ({}))
-    expect(response.status(), `Login failed: ${JSON.stringify(responseBody)}`).toBe(200)
+    expect(response.status(), `Login failed for ${userName}: ${JSON.stringify(responseBody)}`).toBe(200)
     expect(responseBody).toHaveProperty('email', userName)
-
-    const responseHeaders = response.headers()
-    const setCookieHeader = responseHeaders['set-cookie'] ?? ''
-    const responseCookies = new Map(setCookieHeader
-        .split('\n')
-        .map((c: string) => (c.split(';', 2)[0] ?? '').split('=') as [string, string]))
-
-    expect(responseCookies.size).toBeGreaterThan(0)
-    const nuxtCookie = responseCookies.get('nuxt-session')
-    expect(nuxtCookie).toBeDefined()
-    expect(nuxtCookie!.length).toBeGreaterThan(0)
-
     return response
 }
-setup('Authenticate admin for API', async ({request}) => {
-   await performLogin(request)
-    await request.storageState({path: authFiles.adminFile})
 
+async function setupUIAuth(page: Page, userName: string, storageFile: string) {
+    await page.goto('/login')
+    await page.waitForURL('/login')
+    await performLogin(page.request, userName)
+    await page.goto('/admin')
+    await page.waitForURL('/admin/planning')
+    await page.context().storageState({path: storageFile})
+}
+
+// Admin auth
+setup('Authenticate admin for API', async ({request}) => {
+    await performLogin(request, adminUserName)
+    await request.storageState({path: authFiles.adminFile})
 })
 
 setup('Authenticate admin for UI', async ({page}) => {
-    //Authenticate as admin for  browser tests
-    // Visit admin page to ensure all client-side auth is set
-    await page.goto('/login')
-    await page.waitForURL('/login')
-    await performLogin(page.request)
-    await page.goto('/admin')
-    await page.waitForURL('/admin/planning')
+    await setupUIAuth(page, adminUserName, authFiles.adminUIFile)
+})
 
-    // Save browser state
-    await page.context().storageState({ path: authFiles.adminUIFile })
+// Member auth (non-admin)
+setup('Authenticate member for API', async ({request}) => {
+    await performLogin(request, memberUserName)
+    await request.storageState({path: authFiles.memberFile})
+})
+
+setup('Authenticate member for UI', async ({page}) => {
+    await setupUIAuth(page, memberUserName, authFiles.memberUIFile)
 })

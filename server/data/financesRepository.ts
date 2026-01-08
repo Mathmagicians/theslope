@@ -21,6 +21,8 @@ import type {
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
+import {useHousehold} from '~/composables/useHousehold'
+import {getHouseholdShortName} from '~/composables/useCoreValidation'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
 import {
@@ -48,7 +50,7 @@ import {
  * ADR-002: Separate validation vs business logic error handling
  */
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 /*** ORDER AUDIT ***/
 
@@ -338,7 +340,7 @@ export type OrderAuditContext = {
 export type OrderUpdateFields = {
     dinnerMode?: DinnerMode
     state?: OrderState
-    releasedAt?: Date
+    releasedAt?: Date | null
 }
 
 /**
@@ -365,18 +367,25 @@ export async function updateOrder(
     const LOG = '🎟️ > ORDER > [UPDATE]'
     console.info(`${LOG} Updating order ${id}`, updates, `action=${audit.action}`)
     const {OrderDetailSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
     const prisma = await getPrismaClientConnection(d1Client)
 
     // Validate audit action
     const validatedAction = OrderAuditActionSchema.parse(audit.action)
 
     try {
-        // Fetch existing order for audit data
+        // Fetch existing order for audit data (includes household for provenance)
         const existingOrder = await prisma.order.findUnique({
             where: {id},
             include: {
                 ticketPrice: {select: {ticketType: true}},
-                dinnerEvent: {select: {seasonId: true}}
+                dinnerEvent: {select: {seasonId: true}},
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: {select: {address: true}}
+                    }
+                }
             }
         })
 
@@ -408,8 +417,7 @@ export async function updateOrder(
             }
         })
 
-        // Create audit entry (ADR-011)
-        // Construct snapshot with updated values for audit trail
+        // Create audit entry (ADR-011) with provenance fields (allergies omitted - captured at CREATE)
         const auditSnapshot = {
             id: existingOrder.id,
             inhabitantId: existingOrder.inhabitantId,
@@ -417,7 +425,11 @@ export async function updateOrder(
             ticketPriceId: existingOrder.ticketPriceId,
             priceAtBooking: existingOrder.priceAtBooking,
             dinnerMode: updates.dinnerMode ?? existingOrder.dinnerMode,
-            state: updates.state ?? existingOrder.state
+            state: updates.state ?? existingOrder.state,
+            // Provenance fields
+            inhabitantNameWithInitials: formatNameWithInitials(existingOrder.inhabitant),
+            householdShortname: getHouseholdShortName(existingOrder.inhabitant.household.address),
+            householdId: existingOrder.inhabitant.householdId
         }
         await prisma.orderHistory.create({
             data: {
@@ -443,6 +455,153 @@ export async function updateOrder(
 }
 
 /**
+ * Claim a released ticket for an inhabitant.
+ *
+ * Finds the first RELEASED order matching dinnerEventId + ticketPriceId (FIFO by releasedAt)
+ * and transfers ownership to the new inhabitant. Original price is preserved.
+ *
+ * Race-safe: Uses atomic WHERE clause (id + state=RELEASED) so concurrent
+ * claims will fail if someone else claims first.
+ *
+ * @param d1Client - D1 database client
+ * @param dinnerEventId - Dinner event to claim ticket for
+ * @param ticketPriceId - Ticket price tier to match
+ * @param newInhabitantId - Inhabitant claiming the ticket
+ * @param claimedByUserId - User performing the claim
+ * @returns Claimed order, or null if no matching ticket available
+ *
+ * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
+ */
+export async function claimOrder(
+    d1Client: D1Database,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    newInhabitantId: number,
+    claimedByUserId: number,
+    isGuestTicket: boolean = false,
+    maxRetries: number = 3
+): Promise<OrderDetail | null> {
+    const LOG = '🎟️ > ORDER > [CLAIM]'
+    const {OrderDetailSchema, OrderStateSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const attemptClaim = async (attempt: number): Promise<OrderDetail | null> => {
+        console.info(`${LOG} Attempt ${attempt}: claiming ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${newInhabitantId}`)
+
+        // Find first RELEASED order matching criteria (FIFO by releasedAt)
+        const existingOrder = await prisma.order.findFirst({
+            where: {
+                dinnerEventId,
+                ticketPriceId,
+                state: OrderStateSchema.enum.RELEASED
+            },
+            orderBy: {releasedAt: 'asc'},
+            include: {
+                ticketPrice: {select: {ticketType: true}},
+                dinnerEvent: {select: {seasonId: true}},
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: {select: {address: true}}
+                    }
+                }
+            }
+        })
+
+        // No ticket available - stop (don't retry)
+        if (!existingOrder) {
+            console.warn(`${LOG} No RELEASED ticket available (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId})`)
+            return null
+        }
+
+        const orderId = existingOrder.id
+
+        try {
+            // Atomic claim: WHERE includes state=RELEASED so concurrent claims fail
+            const claimedOrder = await prisma.order.update({
+                where: {id: orderId, state: OrderStateSchema.enum.RELEASED},
+                data: {
+                    inhabitantId: newInhabitantId,
+                    bookedByUserId: claimedByUserId,
+                    state: OrderStateSchema.enum.BOOKED,
+                    isGuestTicket,
+                    releasedAt: null
+                },
+                include: {
+                    dinnerEvent: {
+                        select: {
+                            id: true, date: true, menuTitle: true, menuDescription: true,
+                            menuPictureUrl: true, state: true, totalCost: true,
+                            heynaboEventId: true, chefId: true, cookingTeamId: true,
+                            seasonId: true, createdAt: true, updatedAt: true
+                        }
+                    },
+                    inhabitant: {
+                        select: {
+                            id: true, heynaboId: true, householdId: true,
+                            name: true, lastName: true, pictureUrl: true
+                        }
+                    },
+                    bookedByUser: {select: {id: true, email: true}},
+                    ticketPrice: {select: {id: true, ticketType: true, price: true, description: true}}
+                }
+            })
+
+            // Create audit entry with ORIGINAL household provenance
+            const auditSnapshot = {
+                id: existingOrder.id,
+                inhabitantId: existingOrder.inhabitantId,
+                dinnerEventId: existingOrder.dinnerEventId,
+                ticketPriceId: existingOrder.ticketPriceId,
+                priceAtBooking: existingOrder.priceAtBooking,
+                dinnerMode: existingOrder.dinnerMode,
+                state: existingOrder.state,
+                inhabitantNameWithInitials: formatNameWithInitials(existingOrder.inhabitant),
+                householdShortname: getHouseholdShortName(existingOrder.inhabitant.household.address),
+                householdId: existingOrder.inhabitant.householdId
+            }
+            await prisma.orderHistory.create({
+                data: {
+                    orderId,
+                    action: OrderAuditActionSchema.enum.USER_CLAIMED,
+                    performedByUserId: claimedByUserId,
+                    inhabitantId: newInhabitantId,
+                    dinnerEventId: existingOrder.dinnerEventId,
+                    seasonId: existingOrder.dinnerEvent?.seasonId ?? null,
+                    auditData: createOrderAuditData(auditSnapshot)
+                }
+            })
+
+            console.info(`${LOG} Successfully claimed order ${orderId}`)
+
+            return OrderDetailSchema.parse({
+                ...claimedOrder,
+                ticketType: claimedOrder.ticketPrice?.ticketType ?? null
+            })
+        } catch (error) {
+            // P2025: Race lost - someone else claimed this ticket
+            if (isPrismaNotFound(error)) {
+                console.warn(`${LOG} Attempt ${attempt}: lost race for order ${orderId}`)
+                // Retry if attempts remaining
+                if (attempt < maxRetries) {
+                    return attemptClaim(attempt + 1)
+                }
+                console.warn(`${LOG} Max retries exhausted`)
+                return null
+            }
+            throw error
+        }
+    }
+
+    try {
+        return await attemptClaim(1)
+    } catch (error) {
+        return throwH3Error(`${LOG} Error claiming ticket`, error)
+    }
+}
+
+/**
  * Delete an order and create audit trail entry.
  *
  * @param d1Client - D1 database client
@@ -451,7 +610,7 @@ export async function updateOrder(
  *
  * Audit action is determined by performedByUserId:
  * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
- * - Null: ADMIN_DELETED (admin deleted, may be recreated by scaffolder)
+ * - Null: SYSTEM_DELETED (system/admin deleted, may be re-created by scaffolder)
  *
  * ADR-011: Creates OrderHistory entries with denormalized fields before deletion.
  * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
@@ -470,19 +629,26 @@ export async function deleteOrder(
     if (ids.length === 0) return []
 
     const {OrderDisplaySchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {formatNameWithInitials} = useHousehold()
     const action = performedByUserId
         ? OrderAuditActionSchema.enum.USER_CANCELLED
-        : OrderAuditActionSchema.enum.ADMIN_DELETED
+        : OrderAuditActionSchema.enum.SYSTEM_DELETED
     console.info(`${LOG} Deleting ${ids.length} order(s) (action: ${action}, performedBy: ${performedByUserId ?? 'admin/system'})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // 1. Fetch orders with relations to get denormalized fields and seasonId
+        // 1. Fetch orders with relations for audit data (includes inhabitant/household for provenance)
         const ordersToDelete = await prisma.order.findMany({
             where: { id: { in: ids } },
             include: {
                 ticketPrice: { select: { ticketType: true } },
-                dinnerEvent: { select: { seasonId: true } }
+                dinnerEvent: { select: { seasonId: true } },
+                inhabitant: {
+                    select: {
+                        name: true, lastName: true, householdId: true,
+                        household: { select: { address: true } }
+                    }
+                }
             }
         })
 
@@ -491,7 +657,7 @@ export async function deleteOrder(
             return []
         }
 
-        // 2. Create audit entries with denormalized fields BEFORE deletion
+        // 2. Create audit entries with provenance fields BEFORE deletion (allergies omitted - captured at CREATE)
         await prisma.orderHistory.createMany({
             data: ordersToDelete.map(order => ({
                 orderId: order.id,
@@ -500,7 +666,19 @@ export async function deleteOrder(
                 inhabitantId: order.inhabitantId,
                 dinnerEventId: order.dinnerEventId,
                 seasonId: order.dinnerEvent?.seasonId ?? null,
-                auditData: createOrderAuditData(order)
+                auditData: createOrderAuditData({
+                    id: order.id,
+                    inhabitantId: order.inhabitantId,
+                    dinnerEventId: order.dinnerEventId,
+                    ticketPriceId: order.ticketPriceId,
+                    priceAtBooking: order.priceAtBooking,
+                    dinnerMode: order.dinnerMode,
+                    state: order.state,
+                    // Provenance fields
+                    inhabitantNameWithInitials: formatNameWithInitials(order.inhabitant),
+                    householdShortname: getHouseholdShortName(order.inhabitant.household.address),
+                    householdId: order.inhabitant.householdId
+                })
             }))
         })
 
@@ -513,7 +691,7 @@ export async function deleteOrder(
 
         // Transform Prisma types to domain types and validate (ADR-010)
         return ordersToDelete.map(order => {
-            const {ticketPrice, ...rest} = order
+            const {ticketPrice, inhabitant, ...rest} = order
             return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
         })
     } catch (error) {
@@ -526,11 +704,17 @@ export async function deleteOrder(
  *
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
+ * @param state - Optional state filter (e.g., RELEASED for claim queue)
+ * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
+ * @param includeProvenance - Include orderHistory for claimed ticket provenance (default: false)
  */
 export async function fetchOrders(
     d1Client: D1Database,
     dinnerEventIds?: number | number[],
-    householdId?: number
+    householdId?: number,
+    state?: OrderState,
+    sortBy: 'createdAt' | 'releasedAt' = 'createdAt',
+    includeProvenance: boolean = false
 ): Promise<OrderDisplay[]> {
     // Normalize to array, return early for empty
     const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
@@ -538,28 +722,49 @@ export async function fetchOrders(
 
     const filterDesc = [
         ids ? `${ids.length} dinner event(s)` : 'all events',
-        householdId ? `household ${householdId}` : 'all households'
+        householdId ? `household ${householdId}` : 'all households',
+        state ? `state=${state}` : 'all states'
     ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
-    const {OrderDisplaySchema} = useBookingValidation()
+    const {OrderDisplaySchema, deserializeOrderAuditData, OrderAuditActionSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const orders = await prisma.order.findMany({
             where: {
                 ...(ids && { dinnerEventId: { in: ids } }),
-                ...(householdId && { inhabitant: { householdId } })
+                ...(householdId && { inhabitant: { householdId } }),
+                ...(state && { state })
             },
-            include: { ticketPrice: { select: { ticketType: true } } },
-            orderBy: { createdAt: 'asc' }
+            include: {
+                ticketPrice: { select: { ticketType: true } },
+                ...(includeProvenance && {
+                    orderHistory: {
+                        where: { action: OrderAuditActionSchema.enum.USER_CLAIMED },
+                        orderBy: { timestamp: 'desc' },
+                        take: 1
+                    }
+                })
+            },
+            orderBy: { [sortBy]: 'asc' }
         })
 
         console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)
 
         return orders.map(order => {
-            const {ticketPrice, ...rest} = order
-            return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
+            const {ticketPrice, orderHistory, ...rest} = order as typeof order & { orderHistory?: { auditData: string }[] }
+
+            // Extract provenance from USER_CLAIMED history if present
+            const claimHistory = orderHistory?.[0]
+            const provenance = claimHistory ? deserializeOrderAuditData(claimHistory.auditData).orderSnapshot : null
+
+            return OrderDisplaySchema.parse({
+                ...rest,
+                ticketType: ticketPrice?.ticketType ?? null,
+                provenanceHousehold: provenance?.householdShortname,
+                provenanceAllergies: provenance?.allergies
+            })
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET] : Error fetching orders for ${filterDesc}`, error)
@@ -830,6 +1035,19 @@ export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEve
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Validate allergen IDs exist before creating join records
+        if (allergenIds.length > 0) {
+            const existingCount = await prisma.allergyType.count({
+                where: { id: { in: allergenIds } }
+            })
+            if (existingCount !== allergenIds.length) {
+                throw createError({
+                    statusCode: 404,
+                    message: `Some allergen IDs do not exist. Requested: ${allergenIds.length}, found: ${existingCount}`
+                })
+            }
+        }
+
         // Delete existing allergen assignments
         await prisma.dinnerEventAllergen.deleteMany({
             where: { dinnerEventId }
@@ -939,23 +1157,32 @@ export async function fetchPendingOrdersOnConsumedDinners(
 }
 
 /**
- * Update orders to CLOSED state with timestamp in batch
+ * Update orders to a target state with appropriate timestamp in batch.
+ * - CLOSED: sets closedAt
+ * - RELEASED: sets releasedAt
  */
-export async function updateOrdersToClosed(
+export async function updateOrdersToState(
     d1Client: D1Database,
-    orderIds: number[]
+    orderIds: number[],
+    targetState: OrderState
 ): Promise<number> {
     if (orderIds.length === 0) return 0
 
     const {OrderStateSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+    const now = new Date()
+
+    // Set appropriate timestamp based on target state
+    const data: { state: OrderState, closedAt?: Date, releasedAt?: Date } = { state: targetState }
+    if (targetState === OrderStateSchema.enum.CLOSED) {
+        data.closedAt = now
+    } else if (targetState === OrderStateSchema.enum.RELEASED) {
+        data.releasedAt = now
+    }
 
     const result = await prisma.order.updateMany({
         where: { id: { in: orderIds } },
-        data: {
-            state: OrderStateSchema.enum.CLOSED,
-            closedAt: new Date()
-        }
+        data
     })
 
     return result.count

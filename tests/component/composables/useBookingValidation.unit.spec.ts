@@ -608,6 +608,7 @@ describe('useBookingValidation', () => {
         seasonId: 1,
         created: 10,
         deleted: 2,
+        released: 1,
         unchanged: 50,
         households: 5
       }
@@ -617,8 +618,8 @@ describe('useBookingValidation', () => {
       })
 
       it.each([
-        {desc: 'zero counts', data: {seasonId: 1, created: 0, deleted: 0, unchanged: 0, households: 0}},
-        {desc: 'large counts', data: {seasonId: 99, created: 1000, deleted: 500, unchanged: 2000, households: 100}}
+        {desc: 'zero counts', data: {seasonId: 1, created: 0, deleted: 0, released: 0, unchanged: 0, households: 0}},
+        {desc: 'large counts', data: {seasonId: 99, created: 1000, deleted: 500, released: 200, unchanged: 2000, households: 100}}
       ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
         expect(() => ScaffoldResultSchema.parse(data)).not.toThrow()
       })
@@ -639,7 +640,7 @@ describe('useBookingValidation', () => {
         consume: {consumed: 5},
         close: {closed: 10},
         transact: {created: 8},
-        scaffold: {seasonId: 1, created: 20, deleted: 0, unchanged: 100, households: 10}
+        scaffold: {seasonId: 1, created: 20, deleted: 0, released: 0, unchanged: 100, households: 10}
       }
 
       it('GIVEN valid maintenance result WHEN parsing THEN succeeds', () => {
@@ -663,7 +664,7 @@ describe('useBookingValidation', () => {
           consume: {consumed: 0},
           close: {closed: 0},
           transact: {created: 0},
-          scaffold: {seasonId: 1, created: 0, deleted: 0, unchanged: 150, households: 15}
+          scaffold: {seasonId: 1, created: 0, deleted: 0, released: 0, unchanged: 150, households: 15}
         }
         expect(() => DailyMaintenanceResultSchema.parse(idempotentResult)).not.toThrow()
       })

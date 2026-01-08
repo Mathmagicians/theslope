@@ -119,6 +119,7 @@
  *   - Team header: Inline name editing (✏️), member count, delete button
  *   - Side-by-side sections become vertically stacked on mobile
  */
+import {h, resolveComponent} from 'vue'
 import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
@@ -334,8 +335,60 @@ const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
 
-// TABLE COLUMNS for VIEW mode
+// VIEW MODE: Expandable rows state (TanStack Table pattern from AdminUsers)
+const expanded = ref<Record<number, boolean>>({})
+const expandedTeam = ref<CookingTeamDisplay | null>(null)
+
+// Watch for row expansion to track expanded team and enforce single expansion
+watch(expanded, (newExpanded, oldExpanded) => {
+  const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[Number(key)])
+
+  if (expandedKeys.length > 1) {
+    // More than one row expanded - close all except the most recently opened
+    const newlyExpandedKey = expandedKeys.find(key => !oldExpanded[Number(key)])
+    if (newlyExpandedKey) {
+      Object.keys(expanded.value).forEach(key => {
+        if (key !== newlyExpandedKey) {
+          expanded.value[Number(key)] = false
+        }
+      })
+
+      // Set expanded team for the newly expanded row
+      const rowIndex = Number(newlyExpandedKey)
+      expandedTeam.value = displayedTeams.value[rowIndex] ?? null
+    }
+  } else if (expandedKeys.length === 1) {
+    // Exactly one row expanded - set expanded team
+    const rowIndex = Number(expandedKeys[0])
+    expandedTeam.value = displayedTeams.value[rowIndex] ?? null
+  } else {
+    // No rows expanded - clear expanded team
+    expandedTeam.value = null
+  }
+})
+
+// TABLE COLUMNS for VIEW mode - using TanStack Table API
+interface TableRow {
+  getIsExpanded: () => boolean
+  toggleExpanded: () => void
+  original: CookingTeamDisplay
+}
+
+const {ICONS} = useTheSlopeDesignSystem()
+
 const columns = [
+  {
+    id: 'expand',
+    cell: ({row}: {row: TableRow}) =>
+        h(resolveComponent('UButton'), {
+          color: 'neutral',
+          variant: 'ghost',
+          icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
+          square: true,
+          'aria-label': row.getIsExpanded() ? 'Luk' : 'Åbn detaljer',
+          onClick: () => row.toggleExpanded()
+        })
+  },
   {
     accessorKey: 'name',
     header: 'Madhold'
@@ -354,7 +407,7 @@ const columns = [
 
 <template>
   <UCard
-      data-test-id="admin-teams"
+      data-testid="admin-teams"
       class="w-full px-0"
   >
     <template #header>
@@ -493,6 +546,7 @@ v-else
         <!-- VIEW MODE: Table with team assignments -->
         <div v-else class="px-4 pb-4 space-y-6">
           <UTable
+              v-model:expanded="expanded"
               :columns="columns"
               :data="displayedTeams"
               :loading="isSelectedSeasonLoading"
@@ -527,6 +581,20 @@ v-else
                   :cooking-days-count="row.original.cookingDaysCount ?? 0"
                   compact
               />
+            </template>
+
+            <!-- Expanded row content: Full team card (single expansion, selectedSeason guaranteed by showAdminTeams) -->
+            <template #expanded>
+              <div v-if="expandedTeam?.id" class="p-4 bg-neutral-50 dark:bg-neutral-900">
+                <CookingTeamCard
+                    :team-id="expandedTeam.id"
+                    :team-number="displayedTeams.findIndex(t => t.id === expandedTeam!.id) + 1"
+                    :season-cooking-days="selectedSeason!.cookingDays"
+                    :season-dates="selectedSeason!.seasonDates"
+                    :holidays="selectedSeason!.holidays"
+                    mode="regular"
+                />
+              </div>
             </template>
 
             <template #empty-state>

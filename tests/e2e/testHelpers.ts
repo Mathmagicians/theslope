@@ -2,7 +2,6 @@ import type {Browser, Page, BrowserContext, BrowserContextOptions} from "@playwr
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {randomUUID} from 'crypto'
-const { adminFile } = authFiles
 
 const headers = {'Content-Type': 'application/json'}
 
@@ -43,13 +42,19 @@ const saltedId = (base: number = 0, testSalt?: string): number => {
     // Combine into 32-bit result (SQLite INT is 64-bit, this is plenty)
     return Math.abs((h2 >>> 0) + (h1 >>> 0) * 0x100) % 2147483647
 }
-const validatedBrowserContext = async (browser:Browser, baseURL?: string) => {
-    const options: BrowserContextOptions = { storageState: adminFile }
-    if (baseURL) {
-        options.baseURL = baseURL
-    }
+const createAuthContext = async (browser: Browser, storageState: string, baseURL?: string) => {
+    const options: BrowserContextOptions = {storageState}
+    if (baseURL) options.baseURL = baseURL
     return await browser.newContext(options)
 }
+
+/** Authenticated browser context for admin user */
+const validatedBrowserContext = (browser: Browser, baseURL?: string) =>
+    createAuthContext(browser, authFiles.adminFile, baseURL)
+
+/** Authenticated browser context for regular member (non-admin) */
+const memberValidatedBrowserContext = (browser: Browser, baseURL?: string) =>
+    createAuthContext(browser, authFiles.memberFile, baseURL)
 
 /**
  * Generic polling function with exponential backoff
@@ -179,6 +184,7 @@ const testHelpers = {
     temporaryAndRandom,
     headers,
     validatedBrowserContext,
+    memberValidatedBrowserContext,
     pollUntil,
     doScreenshot,
     selectDropdownOption,

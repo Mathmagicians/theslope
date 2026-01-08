@@ -111,13 +111,13 @@ const onAddTicketPrice = () => {
                 placeholder="0.00"/>
           </UFormField>
 
-          <UFormField label="Max alder" name="maxAge" class="flex-1 min-w-0">
+          <UFormField label="Angiv aldersgrænse" name="maxAge" class="flex-1 min-w-0">
             <UInput
                 v-model="newTicket.maximumAgeLimit"
                 type="number"
                 min="0"
                 name="maxAge"
-                placeholder="--"/>
+                placeholder="Eventuel aldersgrænse"/>
           </UFormField>
         </div>
 
@@ -158,7 +158,7 @@ const onAddTicketPrice = () => {
           <div class="flex flex-col gap-1">
             <div class="flex items-start gap-2">
               <UInput
-                  :model-value="`${formatTicketType(ticket.ticketType)}: ${toDKK(ticket.price)} DKK${ticket.maximumAgeLimit ? ` (max ${ticket.maximumAgeLimit} år)` : ''}`"
+                  :model-value="`${formatTicketType(ticket.ticketType)}: ${toDKK(ticket.price)} DKK${ticket.maximumAgeLimit ? ` (under ${ticket.maximumAgeLimit} år)` : ''}`"
                   :name="`ticketPrice-${index}`"
                   disabled
                   :ui="{ base: 'truncate-none' }"

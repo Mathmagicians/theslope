@@ -63,7 +63,12 @@ export function useQueryParam<T>(
       : options.defaultValue
   }
 
+  // Track syncWhen result as computed so value recomputes when dependencies change
+  const isSyncReady = computed(() => syncWhen())
+
   const readFromQuery = (): T => {
+    // Access isSyncReady.value to ensure computed dependency is tracked
+    const canValidate = isSyncReady.value
     const queryValue = route.query[key] as string | undefined
 
     if (queryValue === undefined) {
@@ -76,7 +81,17 @@ export function useQueryParam<T>(
 
     const deserialized = deserialize(queryValue)
 
-    if (deserialized === null || !validate(deserialized)) {
+    if (deserialized === null) {
+      if (options.normalize) {
+        const normalized = options.normalize(deserialized)
+        return normalized !== null ? normalized : getDefault()
+      }
+      return getDefault()
+    }
+
+    // Only validate when syncWhen conditions are met
+    // This prevents premature validation before dependent data is loaded
+    if (canValidate && !validate(deserialized)) {
       if (options.normalize) {
         const normalized = options.normalize(deserialized)
         return normalized !== null ? normalized : getDefault()
@@ -133,7 +148,7 @@ export function useQueryParam<T>(
 
   // AUTO-SYNC: Automatically sync URL when needed and conditions are met
   watchPostEffect(() => {
-    if (syncWhen() && needsSync.value) {
+    if (isSyncReady.value && needsSync.value) {
       setValue(value.value)
       console.info(`🔗 > Auto-synced query param '${key}' to:`, value.value)
     }

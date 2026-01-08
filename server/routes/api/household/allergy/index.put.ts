@@ -3,12 +3,12 @@ import {createAllergy} from "~~/server/data/allergyRepository"
 import {useAllergyValidation, type AllergyDetail, type AllergyCreate} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
-const {AllergyCreateSchema} = useAllergyValidation()
 const {throwH3Error} = eventHandlerHelper
 
 export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+    const {AllergyCreateSchema} = useAllergyValidation()
 
     // Validate input - fail early on invalid data
     let allergyData!: AllergyCreate

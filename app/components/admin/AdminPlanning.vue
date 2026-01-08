@@ -186,7 +186,7 @@ const handleDeactivateSeason = async () => {
 <template>
 
   <UCard
-      data-test-id="admin-planning"
+      data-testid="admin-planning"
       class="w-full px-0"
   >
     <template #header>
@@ -211,7 +211,7 @@ const handleDeactivateSeason = async () => {
         <SeasonStatusDisplay
             v-if="selectedSeason && (formMode === FORM_MODES.VIEW || formMode === FORM_MODES.EDIT)"
             :season-id="selectedSeason.id ?? null"
-            :show-activation-button="true"
+            :show-activation-button="formMode === FORM_MODES.EDIT"
             class="mb-6"
             @activate="handleActivateSeason"
             @deactivate="handleDeactivateSeason"

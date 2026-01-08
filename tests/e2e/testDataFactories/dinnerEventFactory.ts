@@ -60,6 +60,17 @@ export class DinnerEventFactory {
         updatedAt: this.today
     })
 
+    /**
+     * Create dinner event display at specific days from today
+     * Useful for testing deadline-based logic (before/after cancellation deadline)
+     */
+    static readonly dinnerEventAt = (id: number, daysFromToday: number): DinnerEventDisplay => {
+        const date = new Date()
+        date.setHours(0, 0, 0, 0)
+        date.setDate(date.getDate() + daysFromToday)
+        return { ...this.defaultDinnerEventDisplay(), id, date }
+    }
+
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
         ...this.defaultDinnerEventDisplay(testSalt),
         menuDescription: 'A delicious test menu',
@@ -183,7 +194,8 @@ export class DinnerEventFactory {
         dinnerEventData: Partial<DinnerEventCreate>,
         expectedStatus: number = 200
     ): Promise<DinnerEventDisplay | null> => {
-        const response = await context.request.post(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`, {
+        // Uses consolidated chef endpoint (ADR-013: user token with system fallback)
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}`, {
             headers: headers,
             data: dinnerEventData
         })
@@ -305,22 +317,19 @@ export class DinnerEventFactory {
      */
     static readonly cleanupHeynaboEvents = async (
         context: BrowserContext,
-        heynaboEventIds: number[]
+        heynaboEventIds: number[] = []
     ): Promise<void> => {
-        console.info(`Cleaning up ${heynaboEventIds.length} Heynabo events...`)
+        console.info(`Cleaning up Heynabo events (${heynaboEventIds.length} explicit + nuke)...`)
 
-        // Call cleanup endpoint (to be implemented in GREEN phase)
-        // This endpoint will use system credentials to delete Heynabo events
         const response = await context.request.post('/api/test/heynabo/cleanup', {
             headers: headers,
-            data: { eventIds: heynaboEventIds }
+            data: { eventIds: heynaboEventIds, nuke: true }
         })
 
         const status = response.status()
         if (status !== 200) {
             const errorBody = await response.text()
             console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
-            // Don't throw - cleanup failures shouldn't fail tests
         } else {
             const result = await response.json()
             console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)
@@ -342,7 +351,8 @@ export class DinnerEventFactory {
         allergenIds: number[],
         expectedStatus: number = 200
     ): Promise<DinnerEventDetail> => {
-        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}/allergens`, {
+        // Uses consolidated chef endpoint
+        const response = await context.request.post(`/api/chef/dinner/${dinnerEventId}`, {
             headers: headers,
             data: {allergenIds}
         })

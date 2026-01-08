@@ -126,8 +126,14 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
 
     try {
         // ADR-009: Include lightweight Inhabitant relation for display
+        // Sort by Inhabitant name/lastName (users without inhabitants will be at the end)
         const users = await prisma.user.findMany({
-            select: USER_DISPLAY_SELECT
+            select: USER_DISPLAY_SELECT,
+            orderBy: [
+                { Inhabitant: { name: 'asc' } },
+                { Inhabitant: { lastName: 'asc' } },
+                { email: 'asc' }
+            ]
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
@@ -146,13 +152,19 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
 
     try {
         // Query users where systemRoles JSON array contains the specified role
+        // Sort by Inhabitant name/lastName (users without inhabitants will be at the end)
         const users = await prisma.user.findMany({
             where: {
                 systemRoles: {
                     contains: systemRole
                 }
             },
-            select: USER_DISPLAY_SELECT
+            select: USER_DISPLAY_SELECT,
+            orderBy: [
+                { Inhabitant: { name: 'asc' } },
+                { Inhabitant: { lastName: 'asc' } },
+                { email: 'asc' }
+            ]
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
@@ -185,6 +197,57 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
     } catch (error) {
         return throwH3Error('🪪 > USER > [DELETE]: Error deleting user', error)
     }
+}
+
+/**
+ * Create users via createManyAndReturn (ADR-014: Prisma auto-chunks for D1)
+ * Returns minimal fields needed for linking (id, email) - createManyAndReturn doesn't support relations.
+ * Caller responsible for chunking. No lookup here.
+ */
+export async function createUsers(d1Client: D1Database, users: UserCreate[]): Promise<{id: number, email: string}[]> {
+    if (users.length === 0) return []
+
+    console.info(`🪪 > USER > [BATCH CREATE] Creating ${users.length} users`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const created = await prisma.user.createManyAndReturn({
+        data: users.map(u => serializeUserInput(u)),
+        select: { id: true, email: true }
+    })
+
+    console.info(`🪪 > USER > [BATCH CREATE] Created ${created.length} users`)
+    return created
+}
+
+/**
+ * Batch link users to inhabitants by setting Inhabitant.userId (ADR-014)
+ * Uses Promise.all for parallelism within caller's chunk.
+ * Returns count of successful links.
+ */
+export async function linkUsersToInhabitants(
+    d1Client: D1Database,
+    links: { userId: number; inhabitantHeynaboId: number }[]
+): Promise<number> {
+    if (links.length === 0) return 0
+
+    console.info(`🔗 > LINK > Linking ${links.length} users to inhabitants`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const results = await Promise.all(
+        links.map(({ userId, inhabitantHeynaboId }) =>
+            prisma.inhabitant.update({
+                where: { heynaboId: inhabitantHeynaboId },
+                data: { userId }
+            }).then(() => true).catch(() => {
+                console.warn(`🔗 > LINK > Failed: inhabitant ${inhabitantHeynaboId} not found`)
+                return false
+            })
+        )
+    )
+
+    const linked = results.filter(Boolean).length
+    console.info(`🔗 > LINK > Linked ${linked}/${links.length} users`)
+    return linked
 }
 
 export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
@@ -224,7 +287,7 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
 
 /*** INHABITANTS ***/
 
-export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number): Promise<InhabitantDetail> {
+export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number, skipRefetch?: boolean): Promise<InhabitantDetail | null> {
     console.info(`👩‍🏠 > INHABITANT > [SAVE] Saving inhabitant ${inhabitant.name} to household ${householdId}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeInhabitantDetail} = useCoreValidation()
@@ -260,10 +323,19 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
                 }
             })
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Associated user profile for ${inhabitant.name} in household ${householdId}`)
+            // skipRefetch: return null for batch operations (ADR-014)
+            if (skipRefetch) {
+                return null
+            }
             // ADR-010: Deserialize to domain type before returning
             return deserializeInhabitantDetail(updatedInhabitant)
         } else {
             console.info(`👩‍🏠 > INHABITANT > [SAVE] Inhabitant ${inhabitant.name} saved without user profile`)
+        }
+
+        // skipRefetch: return null for batch operations (ADR-014)
+        if (skipRefetch) {
+            return null
         }
 
         // ADR-010: Deserialize to domain type before returning
@@ -282,7 +354,7 @@ export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<Inha
  * @param householdId - Household ID to assign to all inhabitants
  * @returns Array of created inhabitant IDs
  */
-export async function createInhabitantsBatch(
+export async function createInhabitants(
     d1Client: D1Database,
     inhabitants: Omit<InhabitantCreate, 'householdId'>[],
     householdId: number
@@ -532,7 +604,7 @@ export async function updateInhabitantPreferencesBulk(
 
 /*** HOUSEHOLDS ***/
 
-export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate): Promise<HouseholdDetail> {
+export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate, skipRefetch?: boolean): Promise<HouseholdDetail | null> {
     console.info(`🏠 > HOUSEHOLD > [SAVE] Saving household at ${household.address} (Heynabo ID: ${household.heynaboId})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -560,6 +632,11 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             console.info(`🏠 > HOUSEHOLD > [SAVE] Saved ${inhabitantIds.length} inhabitants to household ${newHousehold.address}`)
         }
 
+        // skipRefetch: return null for batch operations (ADR-014)
+        if (skipRefetch) {
+            return null
+        }
+
         // ADR-009: Return HouseholdDetail (same as GET/:id) by refetching with relations
         const householdDetail = await fetchHousehold(d1Client, newHousehold.id)
         if (!householdDetail) {
@@ -584,7 +661,7 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
  * @param households - Array of HouseholdCreate (max 8 per call due to D1 limits)
  * @returns Array of created household IDs
  */
-export async function createHouseholdsBatch(
+export async function createHouseholds(
     d1Client: D1Database,
     households: HouseholdCreate[]
 ): Promise<number[]> {
@@ -645,13 +722,14 @@ export async function deleteHouseholdsByHeynaboId(
 }
 
 // ADR-009 & ADR-010: Returns HouseholdDisplay (all scalar fields + lightweight inhabitant relation)
-export async function fetchHouseholds(d1Client: D1Database): Promise<HouseholdDisplay[]> {
-    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households with lightweight inhabitant data`)
+export async function fetchHouseholds(d1Client: D1Database, householdId?: number): Promise<HouseholdDisplay[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households${householdId ? ` for id ${householdId}` : ''} with lightweight inhabitant data`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeHouseholdDisplay} = useCoreValidation()
 
     try {
         const households = await prisma.household.findMany({
+            where: householdId !== undefined ? {id: householdId} : {},
             include: {
                 inhabitants: {
                     select: {
@@ -934,7 +1012,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
             where: {id: seasonId},
             data: {isActive: true},
             include: {
-                dinnerEvents: true,
+                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 CookingTeams: {
                     include: {
                         assignments: {
@@ -967,7 +1045,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
         const season = await prisma.season.findFirst({
             where: {id},
             include: {
-                dinnerEvents: true,
+                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 CookingTeams: {
                     include: {
                         assignments: {
@@ -1032,12 +1110,23 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     }
 }
 
-export async function deleteSeason(d1Client: D1Database, id: number): Promise<Season> {
+export async function deleteSeason(
+    d1Client: D1Database,
+    id: number,
+    deleteHeynaboEvents: (heynaboEventIds: number[]) => Promise<number>
+): Promise<Season> {
     console.info(`🌞 > SEASON > [DELETE] Deleting season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {SeasonSchema} = useSeasonValidation()
 
     try {
+        // ADR-013: Fetch announced DinnerEvents BEFORE cascade deletion for Heynabo cleanup
+        const announcedEvents = await prisma.dinnerEvent.findMany({
+            where: {seasonId: id, heynaboEventId: {not: null}},
+            select: {id: true, heynaboEventId: true}
+        })
+        const heynaboEventIds = announcedEvents.map(e => e.heynaboEventId!)
+
         // Delete CookingTeamAssignments (strong relation to teams) - handled by cascade
         // Delete CookingTeams (strong relation to season) - handled by cascade
         // Delete DinnerEvents (strong relation to season - part of season schedule) - handled by cascade
@@ -1048,6 +1137,17 @@ export async function deleteSeason(d1Client: D1Database, id: number): Promise<Se
                 ticketPrices: true
             }
         })
+
+        // ADR-013: Delete from Heynabo AFTER local delete (best-effort, batch)
+        if (heynaboEventIds.length > 0) {
+            console.info(`🌞 > SEASON > [DELETE] Cleaning up ${heynaboEventIds.length} Heynabo events`)
+            const deleted = await deleteHeynaboEvents(heynaboEventIds)
+                .catch(err => {
+                    console.warn(`🌞 > SEASON > [DELETE] Failed to delete Heynabo events:`, err)
+                    return 0
+                })
+            console.info(`🌞 > SEASON > [DELETE] Deleted ${deleted}/${heynaboEventIds.length} Heynabo events`)
+        }
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
         // ADR-010: Repository MUST validate returned data
@@ -1086,7 +1186,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
             },
             include: {
                 ticketPrices: true,
-                dinnerEvents: true,
+                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 CookingTeams: true
             }
         })
@@ -1410,7 +1510,7 @@ export async function fetchTeam(id: number, d1Client: D1Database): Promise<Cooki
                 assignments: {
                     include: {inhabitant: true}
                 },
-                dinners: true,  // Include full dinners array for Detail
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1469,7 +1569,7 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
                 assignments: {
                     include: {inhabitant: true}
                 },
-                dinners: true,  // Include dinnerEvents for /chef page
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1527,7 +1627,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
                         inhabitant: true
                     }
                 },
-                dinners: true,
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }
@@ -1589,7 +1689,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                         inhabitant: true
                     }
                 },
-                dinners: true,
+                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 _count: {
                     select: {dinners: true}
                 }

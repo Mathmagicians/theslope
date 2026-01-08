@@ -1,6 +1,6 @@
 # Feature Proposal: Season Activation & Auto-Booking
 
-**Status:** Approved | **Date:** 2025-12-04 | **Updated:** 2025-12-13
+**Status:** ✅ Complete (reference document) | **Date:** 2025-12-04 | **Updated:** 2025-12-30
 
 ## Already Implemented
 
@@ -75,11 +75,9 @@
 
 ## Remaining Tasks
 
-1. **Monthly Billing Implementation** - Implement invoice generation
-   - Create `POST /api/admin/billing/generate` endpoint (currently stub)
-   - Aggregate transactions from previous billing period
-   - Generate invoices per household
-   - Mark transactions as invoiced
+**✅ All tasks complete.** This proposal can be archived.
+
+~~1. **Monthly Billing Implementation**~~ - ✅ Implemented in `POST /api/admin/maintenance/monthly`
 
 ---
 

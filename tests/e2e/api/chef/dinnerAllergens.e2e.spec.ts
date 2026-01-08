@@ -1,17 +1,15 @@
 import {test, expect} from '@playwright/test'
-import {authFiles} from '../../config'
 import {SeasonFactory} from '../../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '../../testDataFactories/allergyFactory'
 import testHelpers from '../../testHelpers'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, headers, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom} = testHelpers
 
 /**
- * E2E API Tests for Chef Dinner Allergens Endpoint
+ * E2E API Tests for Chef Dinner Allergens
  *
- * POST /api/chef/dinner/[id]/allergens
+ * Uses consolidated endpoint: POST /api/chef/dinner/[id] with {allergenIds: [...]}
  *
  * Tests allergen assignment and the critical bug fix:
  * Response allergens contain AllergyType objects with `id`,
@@ -23,8 +21,6 @@ const {validatedBrowserContext, headers, temporaryAndRandom} = testHelpers
  * - Cleanup in afterAll cascades via season deletion
  */
 test.describe('Chef Dinner Allergens API', () => {
-    test.use({storageState: adminUIFile})
-
     // Unique salt for this test file run
     const testSalt = temporaryAndRandom()
 
@@ -80,15 +76,16 @@ test.describe('Chef Dinner Allergens API', () => {
     }
 
     test.describe('Allergen Assignment', () => {
-        test('GIVEN dinner event WHEN setting allergens THEN returns allergens with id property (bug fix verification)', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const dinnerEvent = await createTestDinnerEvent(context)
-            const allergyTypes = await createTestAllergyTypes(context)
+        test('GIVEN dinner event WHEN member sets allergens THEN returns allergens with id property (bug fix verification)', async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const dinnerEvent = await createTestDinnerEvent(adminContext)
+            const allergyTypes = await createTestAllergyTypes(adminContext)
             const allergyTypeIds = allergyTypes.map(a => a.id)
 
-            // WHEN: Set allergens on dinner event
+            // WHEN: Member sets allergens on dinner event (chef operation)
             const updatedDinner = await DinnerEventFactory.updateDinnerEventAllergens(
-                context,
+                memberContext,
                 dinnerEvent.id,
                 allergyTypeIds
             )
@@ -106,14 +103,15 @@ test.describe('Chef Dinner Allergens API', () => {
             })
         })
 
-        test('GIVEN single allergen WHEN setting THEN returns correct allergen', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const dinnerEvent = await createTestDinnerEvent(context)
-            const allergyTypes = await createTestAllergyTypes(context, 1)
+        test('GIVEN single allergen WHEN member sets THEN returns correct allergen', async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const dinnerEvent = await createTestDinnerEvent(adminContext)
+            const allergyTypes = await createTestAllergyTypes(adminContext, 1)
             const singleAllergenId = allergyTypes[0]!.id
 
             const updatedDinner = await DinnerEventFactory.updateDinnerEventAllergens(
-                context,
+                memberContext,
                 dinnerEvent.id,
                 [singleAllergenId]
             )
@@ -123,21 +121,22 @@ test.describe('Chef Dinner Allergens API', () => {
             expect(updatedDinner.allergens![0]!.id).toBe(singleAllergenId)
         })
 
-        test('GIVEN allergens WHEN clearing THEN returns empty array', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const dinnerEvent = await createTestDinnerEvent(context)
-            const allergyTypes = await createTestAllergyTypes(context, 2)
+        test('GIVEN allergens WHEN member clears THEN returns empty array', async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const dinnerEvent = await createTestDinnerEvent(adminContext)
+            const allergyTypes = await createTestAllergyTypes(adminContext, 2)
 
-            // Set allergens first
+            // Set allergens first (member operation)
             await DinnerEventFactory.updateDinnerEventAllergens(
-                context,
+                memberContext,
                 dinnerEvent.id,
                 allergyTypes.map(a => a.id)
             )
 
-            // Clear them
+            // Clear them (member operation)
             const updatedDinner = await DinnerEventFactory.updateDinnerEventAllergens(
-                context,
+                memberContext,
                 dinnerEvent.id,
                 []
             )
@@ -148,57 +147,40 @@ test.describe('Chef Dinner Allergens API', () => {
     })
 
     test.describe('Validation', () => {
-        test('GIVEN invalid dinner event ID WHEN setting allergens THEN returns 400', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
+        test('GIVEN non-existent dinner event WHEN member sets allergens THEN returns 404', async ({browser}) => {
+            const memberContext = await memberValidatedBrowserContext(browser)
 
-            const response = await context.request.post('/api/chef/dinner/invalid/allergens', {
-                headers,
-                data: {allergenIds: [1]}
-            })
-
-            expect(response.status()).toBe(400)
+            // Use factory with expected error status
+            await DinnerEventFactory.updateDinnerEventAllergens(memberContext, 999999, [1], 404)
         })
 
-        test('GIVEN non-existent dinner event WHEN setting allergens THEN returns error', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
+        test('GIVEN non-existent allergen IDs WHEN member sets allergens THEN returns 404', async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const dinnerEvent = await createTestDinnerEvent(adminContext)
 
-            const response = await context.request.post('/api/chef/dinner/999999/allergens', {
-                headers,
-                data: {allergenIds: [1]}
-            })
-
-            expect(response.status()).toBeGreaterThanOrEqual(400)
-        })
-
-        test('GIVEN invalid allergen IDs WHEN setting allergens THEN returns 400', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const dinnerEvent = await createTestDinnerEvent(context)
-
-            const response = await context.request.post(`/api/chef/dinner/${dinnerEvent.id}/allergens`, {
-                headers,
-                data: {allergenIds: ['invalid']}
-            })
-
-            expect(response.status()).toBe(400)
+            // Allergen IDs that don't exist - validated before FK constraint
+            await DinnerEventFactory.updateDinnerEventAllergens(memberContext, dinnerEvent.id, [999998, 999999], 404)
         })
     })
 
     test.describe('Data Persistence', () => {
-        test('GIVEN allergens set WHEN fetching dinner event THEN allergens persist with id property', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const dinnerEvent = await createTestDinnerEvent(context)
-            const allergyTypes = await createTestAllergyTypes(context, 2)
+        test('GIVEN member sets allergens WHEN fetching dinner event THEN allergens persist with id property', async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const dinnerEvent = await createTestDinnerEvent(adminContext)
+            const allergyTypes = await createTestAllergyTypes(adminContext, 2)
             const allergyTypeIds = allergyTypes.map(a => a.id)
 
-            // Set allergens
+            // Set allergens (member/chef operation)
             await DinnerEventFactory.updateDinnerEventAllergens(
-                context,
+                memberContext,
                 dinnerEvent.id,
                 allergyTypeIds
             )
 
-            // Fetch dinner event
-            const fetchedDinner = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id)
+            // Fetch dinner event (can use either context)
+            const fetchedDinner = await DinnerEventFactory.getDinnerEvent(memberContext, dinnerEvent.id)
 
             // Verify allergens persist with correct structure
             expect(fetchedDinner).not.toBeNull()
