@@ -90,7 +90,12 @@ export default defineNuxtConfig({
         },
         // Client-side settings - automatic tree-shaking
         clientBundle: {
-            scan: true  // Only bundle icons actually used in components
+            scan: true,  // Only bundle icons actually used in components
+            // Explicitly include icons used by NuxtUI internally (not detected by scanning)
+            icons: [
+                'lucide:sun',
+                'lucide:moon'
+            ]
         },
         provider: 'server'  // Use server-side icon provider
     },

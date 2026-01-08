@@ -1,4 +1,4 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type BookingFeedbackItem, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
@@ -494,7 +494,7 @@ export const useBooking = () => {
         const desiredOrders: OrderCreateWithPrice[] = dinnerMode === DinnerModeSchema.enum.NONE
             ? []
             : inhabitants.map(inhabitant => {
-                const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate, ticketPrices, dinnerDate)
+                const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, ticketPrices, dinnerDate)
                 if (!ticketPrice) throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
 
                 return OrderCreateWithPriceSchema.parse({

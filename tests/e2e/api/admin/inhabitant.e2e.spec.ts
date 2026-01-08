@@ -358,6 +358,60 @@ test.describe('Admin Inhabitant API', () => {
             expect(cancelledDinnerOrders.length).toBe(0)
         })
 
+        // Real-world scenario: Admin adds/corrects a child's birthdate after initial household setup.
+        // Without birthdate, inhabitant is treated as ADULT (unknown age = adult pricing).
+        // When birthdate is added and shows they're a child, existing orders must update to CHILD pricing.
+        // This triggers re-scaffolding via inhabitant POST endpoint when birthDate field changes.
+        test('GIVEN adult inhabitant with orders WHEN birthdate added (becomes child) THEN orders updated with CHILD price', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            const {TicketTypeSchema} = useBookingValidation()
+            const TicketType = TicketTypeSchema.enum
+
+            // GIVEN: Season + household with adult inhabitant (no birthdate = unknown age = ADULT pricing)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            // Create inhabitant WITHOUT birthdate (will be adult by default)
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Price-Category-Test', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // Scaffold initial orders as adult
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrdersBefore.length).toBeGreaterThan(0)
+
+            // Verify all orders have ADULT ticket type
+            inhabitantOrdersBefore.forEach(order => {
+                expect(order.ticketType, `Order ${order.id} should have ADULT ticket`).toBe(TicketType.ADULT)
+            })
+
+            // WHEN: Add birthdate that makes inhabitant a child (e.g., 8 years old)
+            const childBirthdate = new Date()
+            childBirthdate.setFullYear(childBirthdate.getFullYear() - 8)
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {birthDate: childBirthdate}, 200, season.id,
+                ({scaffoldResult}) => {
+                    expect(scaffoldResult.priceUpdated, 'Should have price updates').toBeGreaterThan(0)
+                    expect(scaffoldResult.released, 'No releases expected').toBe(0)
+                }
+            )
+
+            // THEN: All orders should have CHILD ticket type
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id && o.state === OrderState.BOOKED)
+            expect(inhabitantOrdersAfter.length, 'Same number of booked orders').toBe(inhabitantOrdersBefore.length)
+
+            inhabitantOrdersAfter.forEach(order => {
+                expect(order.ticketType, `Order ${order.id} should now have CHILD ticket`).toBe(TicketType.CHILD)
+            })
+        })
+
         test('GIVEN two households WHEN household A updates preferences THEN only household A gets orders (householdId filter works)', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()

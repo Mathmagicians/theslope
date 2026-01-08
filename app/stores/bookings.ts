@@ -1,25 +1,7 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, TicketPrice} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, ProcessBookingResult} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-
-export interface PowerBookingRequest {
-    dinnerEventId: number
-    dinnerMode: DinnerMode
-    existingOrders: OrderDisplay[]
-    inhabitants: InhabitantDisplay[]
-    ticketPrices: TicketPrice[]
-    householdId: number
-    bookedByUserId: number
-}
-
-export interface PowerBookingResult {
-    orders: OrderDisplay[]  // Final state of all orders after operation
-    created: number         // New orders (inhabitant had no order, mode != NONE)
-    updated: number         // Mode changed (DINEIN↔TAKEAWAY↔LATE, or re-booked from RELEASED)
-    released: number        // Cancelled after deadline (state=RELEASED, user pays)
-    deleted: number         // Cancelled before deadline (order removed, no charge)
-    skipped: number         // No change (no order + mode=NONE, or same mode already)
-}
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -188,6 +170,58 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(e, 'Kunne ikke hente ledige billetter')
             throw e
         }
+    }
+
+    /**
+     * Process booking for one or more inhabitants on a single dinner.
+     * Consolidates individual and power mode booking logic.
+     */
+    const processBooking = async (
+        inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'birthDate'>[],
+        existingOrders: OrderDisplay[],
+        dinnerMode: DinnerMode,
+        dinnerId: number,
+        dinnerDate: Date,
+        ticketPrices: TicketPrice[],
+        householdId: number,
+        userId: number
+    ): Promise<ProcessBookingResult> => {
+        const {reconcileSingleDinnerUserBooking, buildBookingFeedback} = useBooking()
+
+        // Reconcile to get create/update/delete buckets
+        const result = reconcileSingleDinnerUserBooking(
+            inhabitants, existingOrders, dinnerMode, dinnerId, dinnerDate, ticketPrices, householdId, userId
+        )
+
+        // Execute creates
+        if (result.create.length > 0) {
+            await createOrder({
+                householdId,
+                dinnerEventId: dinnerId,
+                orders: result.create.map(o => ({
+                    inhabitantId: o.inhabitantId,
+                    ticketPriceId: o.ticketPriceId!,
+                    bookedByUserId: userId,
+                    dinnerMode: o.dinnerMode
+                }))
+            })
+        }
+
+        // Execute updates
+        for (const desired of result.update) {
+            const existing = existingOrders.find(o => o.inhabitantId === desired.inhabitantId && o.dinnerEventId === dinnerId)
+            if (existing?.id) await updateOrder(existing.id, {dinnerMode: desired.dinnerMode})
+        }
+
+        // Execute deletes
+        for (const order of result.delete) {
+            if (order.id) await deleteOrder(order.id)
+        }
+
+        const nameMap = new Map(inhabitants.map(i => [i.id, i.name]))
+        const feedback = buildBookingFeedback(result, nameMap, dinnerMode)
+        console.info(CTX, `Processed booking: ${JSON.stringify(feedback.summary)}`)
+        return feedback
     }
 
     // DINNER EVENT ACTIONS
@@ -387,6 +421,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateOrder,
         claimOrder,
         fetchReleasedOrders,
+        processBooking,
 
         // dinner event actions
         isDinnerUpdating,

@@ -91,7 +91,7 @@ const revenueByType = computed(() => {
     >
       <h4 :class="TYPOGRAPHY.sectionSubheading">Budget</h4>
       <UIcon
-        :name="showDetails ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+        :name="showDetails ? 'i-heroicons-chevron-down' : 'i-heroicons-chevron-right'"
         class="w-4 h-4 opacity-50"
       />
     </button>

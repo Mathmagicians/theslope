@@ -590,6 +590,7 @@ export const useBookingValidation = () => {
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
         released: z.number().int().nonnegative().default(0),
+        priceUpdated: z.number().int().nonnegative().default(0),  // Price category changes (birthdate added/changed or birthday passed)
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
         errored: z.number().int().nonnegative().default(0)
