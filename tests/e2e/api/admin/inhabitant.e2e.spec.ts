@@ -236,8 +236,10 @@ test.describe('Admin Inhabitant API', () => {
 
         // Cancel period longer than season span so dinners are past deadline → RELEASED
         // ADR-015: Before deadline → DELETE (user not charged), After deadline → RELEASE (user charged)
-        // Season spans 7 days from tomorrow, so 8-day deadline ensures all dinners are past deadline
-        const LONG_CANCEL_PERIOD = 8
+        // Season spans 7 days from tomorrow (day +1 to +8), so 9-day deadline ensures all dinners
+        // are past deadline even when test runs before dinner time (18:00) on day 0
+        // (8-day deadline for day +8 dinner = today at 18:00, still deletable if test runs earlier)
+        const LONG_CANCEL_PERIOD = 9
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -275,6 +277,16 @@ test.describe('Admin Inhabitant API', () => {
                 const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
                 const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
 
+                // Verify setup: dinner events exist, orders match initial preferences
+                expect(dinnerEvents.length, 'Season should have dinner events').toBeGreaterThan(0)
+                if (expectCreated) {
+                    // NONE→DINEIN: Starting with NONE preferences means no initial orders
+                    expect(inhabitantOrdersBefore.length, 'Starting with NONE should have no orders').toBe(0)
+                } else {
+                    // DINEIN→NONE: Starting with DINEIN preferences creates orders for all dinners
+                    expect(inhabitantOrdersBefore.length, 'Starting with DINEIN should have orders for all dinners').toBe(dinnerEvents.length)
+                }
+
                 // WHEN: Change preferences
                 await HouseholdFactory.updateInhabitant(
                     context, inhabitant.id, {dinnerPreferences: to}, 200, season.id,
@@ -284,8 +296,9 @@ test.describe('Admin Inhabitant API', () => {
                             expect(scaffoldResult.created).toBeGreaterThan(0)
                         } else {
                             // ADR-015: With LONG_CANCEL_PERIOD all dinners are past deadline → all RELEASED
+                            expect(scaffoldResult.deleted, `No orders should be deleted (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
+                            expect(scaffoldResult.unchanged, `No orders should be unchanged (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
                             expect(scaffoldResult.released, `Expected ${inhabitantOrdersBefore.length} orders released`).toBe(inhabitantOrdersBefore.length)
-                            expect(scaffoldResult.deleted, 'No orders should be deleted (all past deadline)').toBe(0)
                         }
                     }
                 )
