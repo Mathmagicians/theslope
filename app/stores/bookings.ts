@@ -1,5 +1,25 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, TicketPrice} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+
+export interface PowerBookingRequest {
+    dinnerEventId: number
+    dinnerMode: DinnerMode
+    existingOrders: OrderDisplay[]
+    inhabitants: InhabitantDisplay[]
+    ticketPrices: TicketPrice[]
+    householdId: number
+    bookedByUserId: number
+}
+
+export interface PowerBookingResult {
+    orders: OrderDisplay[]  // Final state of all orders after operation
+    created: number         // New orders (inhabitant had no order, mode != NONE)
+    updated: number         // Mode changed (DINEIN↔TAKEAWAY↔LATE, or re-booked from RELEASED)
+    released: number        // Cancelled after deadline (state=RELEASED, user pays)
+    deleted: number         // Cancelled before deadline (order removed, no charge)
+    skipped: number         // No change (no order + mode=NONE, or same mode already)
+}
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES

@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'

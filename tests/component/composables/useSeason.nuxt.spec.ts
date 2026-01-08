@@ -943,13 +943,13 @@ describe('createPreBookingGenerator', () => {
     })
 
     describe('reconcilePreBookings', () => {
-        // Helper using factory for proper OrderDisplay type
-        const createExistingOrder = (inhabitantId: number, dinnerEventId: number) =>
-            OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId })
+        // Helper using factory for proper OrderDisplay type (default ticketPriceId: 1, dinnerMode: DINEIN)
+        const createExistingOrder = (inhabitantId: number, dinnerEventId: number, overrides?: {ticketPriceId?: number, dinnerMode?: typeof DinnerMode[keyof typeof DinnerMode]}) =>
+            OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId, ...overrides })
 
         // Helper for incoming orders (OrderCreateWithPrice - does NOT have id, createdAt, updatedAt, ticketType)
-        const createIncomingOrder = (inhabitantId: number, dinnerEventId: number) =>
-            ({ inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const })
+        const createIncomingOrder = (inhabitantId: number, dinnerEventId: number, overrides?: {ticketPriceId?: number, priceAtBooking?: number, dinnerMode?: typeof DinnerMode[keyof typeof DinnerMode]}) =>
+            ({ inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const, ...overrides })
 
         it.each([
             {
@@ -957,6 +957,7 @@ describe('createPreBookingGenerator', () => {
                 existing: [] as ReturnType<typeof createExistingOrder>[],
                 incoming: [createIncomingOrder(1, 101)],
                 expectedCreate: 1,
+                expectedUpdate: 0,
                 expectedDelete: 0,
                 expectedIdempotent: 0
             },
@@ -965,6 +966,7 @@ describe('createPreBookingGenerator', () => {
                 existing: [createExistingOrder(1, 101)],
                 incoming: [createIncomingOrder(1, 101)],
                 expectedCreate: 0,
+                expectedUpdate: 0,
                 expectedDelete: 0,
                 expectedIdempotent: 1
             },
@@ -973,6 +975,7 @@ describe('createPreBookingGenerator', () => {
                 existing: [createExistingOrder(1, 101)],
                 incoming: [] as ReturnType<typeof createIncomingOrder>[],
                 expectedCreate: 0,
+                expectedUpdate: 0,
                 expectedDelete: 1,
                 expectedIdempotent: 0
             },
@@ -981,15 +984,72 @@ describe('createPreBookingGenerator', () => {
                 existing: [createExistingOrder(1, 101), createExistingOrder(1, 102)],
                 incoming: [createIncomingOrder(1, 101), createIncomingOrder(1, 103)],
                 expectedCreate: 1,  // 103 is new
+                expectedUpdate: 0,
                 expectedDelete: 1,  // 102 is deleted
                 expectedIdempotent: 1  // 101 unchanged
+            },
+            // === PRICE CATEGORY CHANGE TESTS ===
+            // These test the fix for: birthdate added/changed OR birthday passed during season
+            {
+                description: 'price category change: ADULT→CHILD (birthdate added)',
+                existing: [createExistingOrder(1, 101, {ticketPriceId: 1})],  // ADULT (ticketPriceId: 1)
+                incoming: [createIncomingOrder(1, 101, {ticketPriceId: 2, priceAtBooking: 3000})],  // CHILD (ticketPriceId: 2)
+                expectedCreate: 0,
+                expectedUpdate: 1,  // Price category changed → update
+                expectedDelete: 0,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'price category change: CHILD→ADULT (birthday passed)',
+                existing: [createExistingOrder(1, 101, {ticketPriceId: 2})],  // CHILD
+                incoming: [createIncomingOrder(1, 101, {ticketPriceId: 1, priceAtBooking: 5000})],  // ADULT
+                expectedCreate: 0,
+                expectedUpdate: 1,  // Price category changed → update
+                expectedDelete: 0,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'dinnerMode change only (no price change)',
+                existing: [createExistingOrder(1, 101, {dinnerMode: DinnerMode.DINEIN})],
+                incoming: [createIncomingOrder(1, 101, {dinnerMode: DinnerMode.TAKEAWAY})],
+                expectedCreate: 0,
+                expectedUpdate: 1,  // Mode changed → update (release)
+                expectedDelete: 0,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'both dinnerMode AND price changed',
+                existing: [createExistingOrder(1, 101, {ticketPriceId: 1, dinnerMode: DinnerMode.DINEIN})],
+                incoming: [createIncomingOrder(1, 101, {ticketPriceId: 2, dinnerMode: DinnerMode.TAKEAWAY})],
+                expectedCreate: 0,
+                expectedUpdate: 1,  // Both changed → update
+                expectedDelete: 0,
+                expectedIdempotent: 0
+            },
+            {
+                description: 'mixed: price change + new + delete + idempotent',
+                existing: [
+                    createExistingOrder(1, 101, {ticketPriceId: 1}),  // Will have price change
+                    createExistingOrder(1, 102),                      // Will be deleted
+                    createExistingOrder(1, 103)                       // Will be idempotent
+                ],
+                incoming: [
+                    createIncomingOrder(1, 101, {ticketPriceId: 2}),  // Price change
+                    createIncomingOrder(1, 103),                      // Idempotent (same ticketPriceId: 1)
+                    createIncomingOrder(1, 104)                       // New
+                ],
+                expectedCreate: 1,      // 104 is new
+                expectedUpdate: 1,      // 101 has price change
+                expectedDelete: 1,      // 102 is deleted
+                expectedIdempotent: 1   // 103 unchanged
             }
-        ])('should handle $description', ({existing, incoming, expectedCreate, expectedDelete, expectedIdempotent}) => {
+        ])('should handle $description', ({existing, incoming, expectedCreate, expectedUpdate, expectedDelete, expectedIdempotent}) => {
             // WHEN: Reconciling pre-bookings
             const result = reconcilePreBookings(existing)(incoming)
 
             // THEN: Returns expected counts
             expect(result.create).toHaveLength(expectedCreate)
+            expect(result.update).toHaveLength(expectedUpdate)
             expect(result.delete).toHaveLength(expectedDelete)
             expect(result.idempotent).toHaveLength(expectedIdempotent)
         })
@@ -1019,8 +1079,9 @@ describe('createHouseholdOrderScaffold', () => {
     })
 
     // Helper to create order with all required fields (using factory)
+    // Uses ticketPriceId: 4 (ADULT) to match defaultInhabitantData() birthDate: 1990-01-15
     const createOrder = (inhabitantId: number, dinnerEventId: number, mode = DinnerMode.DINEIN) =>
-        OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId, dinnerMode: mode })
+        OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId, dinnerMode: mode, ticketPriceId: 4 })
 
     // Mon, Wed, Fri preferences (matches dinner events)
     const allDineIn = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]

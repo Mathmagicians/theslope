@@ -668,6 +668,40 @@ export const useBookingValidation = () => {
         updatedAt: z.string().optional()
     })
 
+    // ============================================================================
+    // User Booking Result Schemas (for processBooking feedback)
+    // ============================================================================
+
+    /**
+     * Action taken on an order during booking operation
+     */
+    const BookingActionSchema = z.enum(['created', 'updated', 'released', 'deleted', 'skipped'])
+
+    /**
+     * Feedback item for user notification - includes name for toast message
+     * Example: "Anna Hansen tilmeldt til tirsdag"
+     */
+    const BookingFeedbackItemSchema = z.object({
+        inhabitantId: z.number().int().positive(),
+        inhabitantName: z.string(),
+        action: BookingActionSchema,
+        dinnerMode: DinnerModeSchema
+    })
+
+    /**
+     * Result from processBooking operation with detailed feedback per inhabitant
+     */
+    const ProcessBookingResultSchema = z.object({
+        feedback: z.array(BookingFeedbackItemSchema),
+        summary: z.object({
+            created: z.number().int().nonnegative(),
+            updated: z.number().int().nonnegative(),
+            released: z.number().int().nonnegative(),
+            deleted: z.number().int().nonnegative(),
+            skipped: z.number().int().nonnegative()
+        })
+    })
+
     return {
         // Enums
         OrderStateSchema,
@@ -740,7 +774,12 @@ export const useBookingValidation = () => {
         CloseOrdersResultSchema,
         CreateTransactionsResultSchema,
         InitPreferencesResultSchema,
-        DailyMaintenanceResultSchema
+        DailyMaintenanceResultSchema,
+
+        // User Booking (processBooking feedback)
+        BookingActionSchema,
+        BookingFeedbackItemSchema,
+        ProcessBookingResultSchema
     }
 }
 
@@ -801,3 +840,8 @@ export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>[
 export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
+
+// User Booking (processBooking feedback)
+export type BookingAction = z.infer<ReturnType<typeof useBookingValidation>['BookingActionSchema']>
+export type BookingFeedbackItem = z.infer<ReturnType<typeof useBookingValidation>['BookingFeedbackItemSchema']>
+export type ProcessBookingResult = z.infer<ReturnType<typeof useBookingValidation>['ProcessBookingResultSchema']>

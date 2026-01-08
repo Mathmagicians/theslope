@@ -1,7 +1,11 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type BookingFeedbackItem, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
+import {useTicket} from '~/composables/useTicket'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {PruneAndCreateResult} from '~/utils/batchUtils'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
@@ -464,6 +468,83 @@ export const useBooking = () => {
         }))
     }
 
+    // ============================================================================
+    // Single Dinner User Booking - Pure functions reusing scaffolder's reconcilePreBookings
+    // ============================================================================
+
+    /**
+     * Reconcile user booking for a single dinner.
+     */
+    const reconcileSingleDinnerUserBooking = (
+        inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
+        existingOrders: OrderDisplay[],
+        dinnerMode: DinnerMode,
+        dinnerId: number,
+        dinnerDate: Date,
+        ticketPrices: TicketPrice[],
+        householdId: number,
+        userId: number
+    ): PruneAndCreateResult<OrderDisplay, OrderCreateWithPrice> => {
+        const {reconcilePreBookings} = useSeason()
+        const {getTicketPriceForInhabitant} = useTicket()
+        const {OrderCreateWithPriceSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
+
+        const ordersForDinner = existingOrders.filter(o => o.dinnerEventId === dinnerId)
+
+        const desiredOrders: OrderCreateWithPrice[] = dinnerMode === DinnerModeSchema.enum.NONE
+            ? []
+            : inhabitants.map(inhabitant => {
+                const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate, ticketPrices, dinnerDate)
+                if (!ticketPrice) throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
+
+                return OrderCreateWithPriceSchema.parse({
+                    dinnerEventId: dinnerId,
+                    inhabitantId: inhabitant.id,
+                    householdId,
+                    bookedByUserId: userId,
+                    ticketPriceId: ticketPrice.id,
+                    priceAtBooking: ticketPrice.price,
+                    dinnerMode,
+                    state: OrderStateSchema.enum.BOOKED
+                })
+            })
+
+        return reconcilePreBookings(ordersForDinner)(desiredOrders)
+    }
+
+    /**
+     * Build user-friendly feedback from reconciliation result.
+     */
+    const buildBookingFeedback = (
+        result: PruneAndCreateResult<OrderDisplay, OrderCreateWithPrice>,
+        inhabitantNames: Map<number, string>,
+        dinnerMode: DinnerMode
+    ): ProcessBookingResult => {
+        const mapToFeedback = (items: {inhabitantId: number}[], action: BookingAction) =>
+            items.map(o => ({
+                inhabitantId: o.inhabitantId,
+                inhabitantName: inhabitantNames.get(o.inhabitantId) ?? 'Ukendt',
+                action,
+                dinnerMode
+            }))
+
+        return {
+            feedback: [
+                ...mapToFeedback(result.create, 'created'),
+                ...mapToFeedback(result.update, 'updated'),
+                ...mapToFeedback(result.delete, 'deleted'),
+                ...mapToFeedback(result.idempotent, 'skipped')
+            ],
+            summary: {
+                created: result.create.length,
+                updated: result.update.length,
+                released: 0,
+                deleted: result.delete.length,
+                skipped: result.idempotent.length
+            }
+        }
+    }
+
     return {
         // Order Snapshot
         buildOrderSnapshot,
@@ -482,6 +563,9 @@ export const useBooking = () => {
         prepareTransactionData,
         CONSUMABLE_DINNER_STATES,
         CLOSABLE_ORDER_STATES,
-        DEADLINE_LABELS
+        DEADLINE_LABELS,
+        // Single Dinner User Booking
+        reconcileSingleDinnerUserBooking,
+        buildBookingFeedback
     }
 }

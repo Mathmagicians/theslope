@@ -277,11 +277,17 @@ export const useSeason = () => {
      * E = OrderDisplay (existing orders from DB, has id for deletion)
      * I = OrderCreateWithPrice (incoming orders from generator, no id)
      * Key: composite inhabitantId-dinnerEventId
-     * Equal: same dinnerMode (no update needed if preference matches)
+     * Equal: same dinnerMode AND ticketPriceId (detects preference changes AND price category changes)
+     *
+     * Price category changes occur when:
+     * - Birthdate added/changed (Heynabo import) → NULL→Date changes ticket type
+     * - Birthday passed during season → CHILD→ADULT on specific dinner dates
      */
     const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
         (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
-        (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
+        (existing, incoming) =>
+            existing.dinnerMode === incoming.dinnerMode &&
+            existing.ticketPriceId === incoming.ticketPriceId
     )
 
     /**

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<cript setup lang="ts">
 /**
  * Dinner Page - Master/Detail view of communal dinners
  *
@@ -256,7 +256,7 @@ useHead({
     }
   ]
 })
-</script>
+</cript>
 
 <template>
   <Loader v-if="!isPlanStoreReady" text="Henter sæsondata..." />
