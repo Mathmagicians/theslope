@@ -181,14 +181,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             // Aggregate scaffold results from all updates
-            const aggregatedResult = results.reduce((acc, r) => ({
+            const aggregatedResult: ScaffoldResult = results.reduce((acc, r) => ({
+                seasonId: r.scaffoldResult.seasonId,  // All results should have same seasonId
                 created: acc.created + r.scaffoldResult.created,
                 deleted: acc.deleted + r.scaffoldResult.deleted,
                 released: acc.released + r.scaffoldResult.released,
                 priceUpdated: acc.priceUpdated + r.scaffoldResult.priceUpdated,
+                modeUpdated: acc.modeUpdated + r.scaffoldResult.modeUpdated,
                 unchanged: acc.unchanged + r.scaffoldResult.unchanged,
+                households: 1,  // Power mode updates single household
                 errored: acc.errored + r.scaffoldResult.errored
-            }), { created: 0, deleted: 0, released: 0, priceUpdated: 0, unchanged: 0, errored: 0 })
+            }), { seasonId: null, created: 0, deleted: 0, released: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0 } as ScaffoldResult)
 
             // Store result for persistent UI display
             lastPreferenceResult.value = aggregatedResult

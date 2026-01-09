@@ -6,26 +6,14 @@
  * - Master (Calendar): 1/3 width on large screens, shows 1 month
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
-
-interface Inhabitant {
-  id: number
-  name: string
-  lastName: string
-  birthDate?: Date | null
-}
-
-interface Household {
-  id: number
-  name: string
-  shortName: string
-  inhabitants: Inhabitant[]
-}
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
 interface Props {
-  household: Household
+  household: HouseholdDetail
 }
 
-const _props = defineProps<Props>()
+const props = defineProps<Props>()
+const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
 const {computeLockStatus} = useBooking()
@@ -39,7 +27,32 @@ const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
 
-const selectedDate = ref<Date | null>(null)
+const {view, selectedDate, setDate} = useBookingView({
+  syncWhen: () => isSelectedSeasonInitialized.value
+})
+
+const handleDateSelected = (date: Date) => setDate(date)
+
+// Find dinner event for selected date
+const selectedDinnerEvent = computed(() => {
+  if (!selectedDate.value) return null
+  return dinnerEvents.value.find(e =>
+    new Date(e.date).toDateString() === selectedDate.value.toDateString()
+  ) ?? null
+})
+
+// Season data for view components
+const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
+
+// Dynamic view components
+const viewComponents = {
+  day: defineAsyncComponent(() => import('~/components/dinner/DinnerBookingForm.vue')),
+  week: defineAsyncComponent(() => import('~/components/booking/BookingWeekView.vue')),
+  month: defineAsyncComponent(() => import('~/components/booking/BookingMonthView.vue'))
+}
+
+const currentViewComponent = computed(() => viewComponents[view.value])
 </script>
 
 <template>
@@ -55,9 +68,9 @@ const selectedDate = ref<Date | null>(null)
           :holidays="holidays"
           :dinner-events="dinnerEvents"
           :lock-status="lockStatus"
-          :selected-date="selectedDate ?? undefined"
+          :selected-date="selectedDate"
           :number-of-months="1"
-          @date-selected="selectedDate = $event"
+          @date-selected="handleDateSelected"
         />
       </div>
 
@@ -65,9 +78,19 @@ const selectedDate = ref<Date | null>(null)
       <div class="lg:col-span-2">
         <UCard>
           <template #header>
-            <h3 class="text-sm font-semibold">Familiens bookinger</h3>
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold">Familiens bookinger</h3>
+              <BookingViewSwitcher v-model="view" />
+            </div>
           </template>
-          <!-- New component will go here -->
+          <component
+            :is="currentViewComponent"
+            :household="household"
+            :selected-date="selectedDate"
+            :dinner-event="selectedDinnerEvent"
+            :ticket-prices="ticketPrices"
+            :deadlines="deadlines!"
+          />
         </UCard>
       </div>
     </div>

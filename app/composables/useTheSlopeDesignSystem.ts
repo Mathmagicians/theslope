@@ -364,11 +364,15 @@ export const COMPONENTS = {
         description: 'text-xs'
     },
 
+    // Responsive row icon sizing (matches birthday cake pattern)
+    rowIconClass: 'size-4 md:size-6',
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
         icon: 'i-fluent-emoji-high-contrast-woman-superhero',
         buttonIcon: 'i-heroicons-bolt',
+        iconClass: 'size-4 md:size-6 text-warning-500',
         alert: {
             color: 'warning' as const,
             variant: 'soft' as const,
@@ -378,6 +382,13 @@ export const COMPONENTS = {
             color: 'warning' as const,
             variant: 'outline' as const
         }
+    },
+
+    // Guest row - guest ticket booking pattern
+    guestRow: {
+        color: 'info' as const,
+        icon: 'i-heroicons-user-plus',
+        iconClass: 'size-4 md:size-6 text-info-500'
     },
 
     // Table interactions - row selection and click patterns
@@ -485,6 +496,7 @@ export const ICONS = {
     calendar: 'i-heroicons-calendar',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
     ticket: 'i-heroicons-ticket',

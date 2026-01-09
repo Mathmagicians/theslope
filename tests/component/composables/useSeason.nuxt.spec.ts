@@ -5,7 +5,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
