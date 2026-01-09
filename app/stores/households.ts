@@ -119,8 +119,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
     const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>) => {
-        const {handleApiError} = useApiHandler()
-
         try {
             console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
 
@@ -152,8 +150,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
     const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>) => {
-        const {handleApiError} = useApiHandler()
-
         try {
             // Get the household to access inhabitants
             const household = households.value.find(h => h.id === householdId)

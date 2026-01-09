@@ -56,7 +56,7 @@
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode, ScaffoldResult} from '~/composables/useBookingValidation'
 
 interface Props {
   household: HouseholdDetail
@@ -146,7 +146,7 @@ const savePreferences = async () => {
   const isPowerMode = editingInhabitantId.value === -1
 
   try {
-    let result: { created: number; deleted: number; released: number; priceUpdated: number; unchanged: number; errored: number }
+    let result: ScaffoldResult
 
     // Power mode: update all inhabitants
     if (isPowerMode) {
@@ -346,7 +346,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                 :parent-restriction="activeSeason?.cookingDays"
                 :show-labels="true"
                 :consensus="row.original.consensus"
-                :name="`inhabitant-${row.original.id}-preferences-edit`"
+                :name="row.original.isSynthetic ? 'power-mode-preferences-edit' : `inhabitant-${row.original.id}-preferences-edit`"
                 @update:model-value="updateDraft"
             />
 
