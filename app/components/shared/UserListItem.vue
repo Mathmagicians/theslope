@@ -23,6 +23,7 @@
 │  useFullName    - Full name vs first name (default: false)      │
 │  label          - Group mode label, e.g., "bofæller"            │
 │  linkToProfile  - Avatar links to Heynabo (default: true)       │
+│  icon           - Avatar fallback icon (default: ICONS.user)    │
 │                                                                 │
 │ SLOTS:                                                          │
 │  #badge({ inhabitant }) - Custom badges per inhabitant          │
@@ -44,7 +45,10 @@ interface Props {
   nameFormatter?: (inhabitant: InhabitantDisplay) => string
   label?: string
   linkToProfile?: boolean
+  icon?: string
 }
+
+const {ICONS} = useTheSlopeDesignSystem()
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
@@ -55,8 +59,11 @@ const props = withDefaults(defineProps<Props>(), {
   useFullName: false,
   nameFormatter: undefined,
   label: undefined,
-  linkToProfile: true
+  linkToProfile: true,
+  icon: undefined
 })
+
+const avatarIcon = computed(() => props.icon ?? ICONS.user)
 
 // Slot type definition
 defineSlots<{
@@ -150,7 +157,7 @@ const {getUserUrl} = useHeynabo()
             <UAvatar
               :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
-              icon="i-heroicons-user"
+              :icon="avatarIcon"
               :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
             />
           </UTooltip>
@@ -159,7 +166,7 @@ const {getUserUrl} = useHeynabo()
           <UAvatar
             :src="inhabitant.pictureUrl ?? undefined"
             :alt="`${inhabitant.name} ${inhabitant.lastName}`"
-            icon="i-heroicons-user"
+            :icon="avatarIcon"
             :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
           />
         </UTooltip>
@@ -193,7 +200,7 @@ const {getUserUrl} = useHeynabo()
         :src="singleInhabitant.pictureUrl ?? undefined"
         :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
         :size="avatarSize"
-        icon="i-heroicons-user"
+        :icon="avatarIcon"
         :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
       />
     </ULink>
@@ -202,7 +209,7 @@ const {getUserUrl} = useHeynabo()
       :src="singleInhabitant.pictureUrl ?? undefined"
       :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
       :size="avatarSize"
-      icon="i-heroicons-user"
+      :icon="avatarIcon"
       :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
     />
 

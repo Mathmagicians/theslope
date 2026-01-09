@@ -24,6 +24,7 @@ const noScaffoldResult = (): ScaffoldResult => ({
     deleted: 0,
     released: 0,
     priceUpdated: 0,
+    modeUpdated: 0,
     unchanged: 0,
     households: 0,
     errored: 0

@@ -45,7 +45,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch} = useSeason()
-    const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkIds, chunkFetchIds} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds} = useBookingValidation()
 
     // Resolve season ID - use provided or fall back to active season
     const effectiveSeasonId = options.seasonId ?? await fetchActiveSeasonId(d1Client)
