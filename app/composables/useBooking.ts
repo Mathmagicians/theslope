@@ -574,6 +574,73 @@ export const useBooking = () => {
         }
     }
 
+    // ============================================================================
+    // Scaffold Result Formatting - Consistent display across UI and logs
+    // ============================================================================
+
+    const SCAFFOLD_FIELDS = [
+        { key: 'created', symbol: '+', label: 'oprettet' },
+        { key: 'deleted', symbol: '-', label: 'slettet' },
+        { key: 'released', symbol: '~', label: 'frigivet' },
+        { key: 'priceUpdated', symbol: '$', label: 'pris opdateret' },
+        { key: 'modeUpdated', symbol: 'm', label: 'mode opdateret' },
+        { key: 'unchanged', symbol: '=', label: 'uændret' },
+        { key: 'errored', symbol: '!', label: 'fejlet' },
+    ] as const
+
+    type ScaffoldResultFormat = 'compact' | 'verbose'
+
+    /**
+     * Format scaffold result for display (toast, logs)
+     * - 'verbose' (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
+     * - 'compact': Technical symbols for admin/logs - "+7 =179"
+     * Only includes non-zero counts for cleaner output
+     */
+    const formatScaffoldResult = (
+        result: Pick<ScaffoldResult, 'created' | 'deleted' | 'released' | 'priceUpdated' | 'modeUpdated' | 'unchanged' | 'errored'>,
+        format: ScaffoldResultFormat = 'verbose'
+    ): string => {
+        const parts = SCAFFOLD_FIELDS
+            .filter(f => result[f.key] > 0)
+            .map(f => format === 'compact'
+                ? `${f.symbol}${result[f.key]}`
+                : `${result[f.key]} ${f.label}`)
+
+        if (parts.length === 0) {
+            return format === 'compact' ? '(ingen)' : 'Ingen ændringer i bookinger'
+        }
+        return parts.join(format === 'compact' ? ' ' : ', ')
+    }
+
+    // ============================================================================
+    // Lock Status - Compute booking lock status for calendar display
+    // ============================================================================
+
+    /**
+     * Compute lock status map for dinner events
+     *
+     * @param dinnerEvents - Dinner events to check
+     * @param deadlines - Season deadlines from deadlinesForSeason()
+     * @param releasedOrdersByDinnerId - Map of dinner ID → count of RELEASED orders (tickets for sale)
+     * @returns Map of dinner ID → released ticket count (null = not locked, 0 = locked no tickets, >0 = locked with tickets)
+     */
+    const computeLockStatus = (
+        dinnerEvents: Array<{ id: number; date: Date }>,
+        deadlines: { canModifyOrders: (date: Date) => boolean },
+        releasedOrdersByDinnerId?: Map<number, number>
+    ): Map<number, number | null> => {
+        const result = new Map<number, number | null>()
+
+        for (const dinner of dinnerEvents) {
+            const isLocked = !deadlines.canModifyOrders(dinner.date)
+            if (isLocked) {
+                result.set(dinner.id, releasedOrdersByDinnerId?.get(dinner.id) ?? 0)
+            }
+        }
+
+        return result
+    }
+
     return {
         // Order Snapshot
         buildOrderSnapshot,
@@ -596,6 +663,10 @@ export const useBooking = () => {
         DEADLINE_LABELS,
         // Single Dinner User Booking
         reconcileSingleDinnerUserBooking,
-        buildBookingFeedback
+        buildBookingFeedback,
+        // Scaffold Result Formatting
+        formatScaffoldResult,
+        // Lock Status
+        computeLockStatus
     }
 }

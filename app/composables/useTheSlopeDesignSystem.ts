@@ -524,8 +524,9 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
 
-    // Empty states
+    // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
+    robotHappy: 'i-mage-robot-happy',
 
     // Danger/delete confirmations
     dangerConfirm: 'i-healthicons-death-alt',
@@ -729,7 +730,13 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
      * Used in table headers and weekday selector rows
      * Responsive padding, borders, background, and minimum widths
      */
-    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
+    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32',
+
+    /**
+     * Badge/button content size for dinner mode icons
+     * Mobile: size-4 (16px), Desktop: size-8 (32px)
+     */
+    badgeContentSize: 'size-4 md:size-8'
 })
 
 /**
@@ -1007,11 +1014,37 @@ export const URGENCY_TO_BADGE = {
  * 0 = null (no chip), 1 = yellow, 2 = error (red), 3 = neutral (black/overdue)
  */
 export const URGENCY_TO_CHIP_COLOR = {
-    0: null,
-    1: 'yellow',
-    2: 'error',
-    3: 'neutral'
+    [-1]: null,  // No dinner
+    0: null,     // On track
+    1: 'yellow', // Warning
+    2: 'error',  // Critical
+    3: 'neutral' // Overdue
 } as const
+
+/**
+ * BOOKING_LOCK_STATUS - Lock indicator chips for household booking calendar
+ *
+ * Shows booking deadline status based on released ticket count:
+ * - null: Not locked (deadline not yet passed) - no chip
+ * - 0: Locked, no tickets available - peach chip (matches selection ring)
+ * - >0: Locked, tickets available - yellow chip
+ */
+export const BOOKING_LOCK_STATUS = {
+    locked: {
+        color: 'peach' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    },
+    lockedWithTickets: {
+        color: 'yellow' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    }
+} as const
+
+/** Get lock status config from released ticket count (null = not locked, 0 = locked, >0 = tickets available) */
+export const getLockStatusConfig = (releasedCount: number | null) => {
+    if (releasedCount === null) return null
+    return releasedCount > 0 ? BOOKING_LOCK_STATUS.lockedWithTickets : BOOKING_LOCK_STATUS.locked
+}
 
 // ============================================================================
 // PART 7: Empty State Messages (fun placeholders)
@@ -1084,6 +1117,8 @@ export const useTheSlopeDesignSystem = () => {
         ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
         URGENCY_TO_CHIP_COLOR,
+        BOOKING_LOCK_STATUS,
+        getLockStatusConfig,
         ICONS,
         IMG,
 

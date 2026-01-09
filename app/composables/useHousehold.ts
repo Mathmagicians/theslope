@@ -1,3 +1,4 @@
+import {z} from 'zod'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -13,10 +14,16 @@ export const useHousehold = () => {
     const DinnerMode = DinnerModeSchema.enum
     type DinnerMode = typeof DinnerMode[keyof typeof DinnerMode]
 
-    // Create weekday map factory with DINEIN as default
-    const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+    // Create weekday map factory with DINEIN as default (for preferences)
+    const {createDefaultWeekdayMap: createDinnerModeMap} = useWeekDayMapValidation<DinnerMode>({
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
+    })
+
+    // Create weekday map factory for booleans (for consensus)
+    const {createDefaultWeekdayMap: createBooleanMap} = useWeekDayMapValidation<boolean>({
+        valueSchema: z.boolean(),
+        defaultValue: true
     })
 
     /**
@@ -31,12 +38,13 @@ export const useHousehold = () => {
      */
     const computeAggregatedPreferences = (
         inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[]
-    ): WeekDayMap<DinnerMode> => {
-        if (inhabitants.length === 0) {
-            return createDefaultWeekdayMap(DinnerMode.DINEIN)
-        }
+    ): { preferences: WeekDayMap<DinnerMode>, consensus: WeekDayMap<boolean> } => {
+        const preferences = createDinnerModeMap(DinnerMode.DINEIN)
+        const consensus = createBooleanMap(true)
 
-        const aggregated = createDefaultWeekdayMap(DinnerMode.DINEIN)
+        if (inhabitants.length === 0) {
+            return { preferences, consensus }
+        }
 
         for (const day of WEEKDAYS) {
             // Map preferences, treating null as default value (DINEIN)
@@ -49,10 +57,11 @@ export const useHousehold = () => {
             const allSame = preferencesForDay.every(pref => pref === firstPreference)
 
             // If all inhabitants agree, use consensus; otherwise default (DINEIN)
-            aggregated[day] = allSame ? firstPreference : DinnerMode.DINEIN
+            preferences[day] = allSame ? firstPreference : DinnerMode.DINEIN
+            consensus[day] = allSame
         }
 
-        return aggregated
+        return { preferences, consensus }
     }
 
     /**

@@ -43,6 +43,7 @@ interface Props {
   name?: string
   parentRestriction?: WeekDayMap | null // Filter which weekdays to display (e.g., season cooking days)
   showLabels?: boolean // Whether to show weekday labels (default true for standalone, false for table)
+  consensus?: WeekDayMap<boolean> | null // Which days have consensus (power mode)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -51,7 +52,8 @@ const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   name: undefined,
   parentRestriction: null,
-  showLabels: true
+  showLabels: true,
+  consensus: null
 })
 
 const emit = defineEmits<{
@@ -92,6 +94,11 @@ const visibleDays = computed(() => {
 const getDayValue = (day: WeekDay): DinnerModeValue => {
   return props.modelValue?.[day] ?? DinnerMode.DINEIN
 }
+
+// Check if day has consensus (undefined if no consensus map = not power mode)
+const getDayConsensus = (day: WeekDay): boolean | undefined => {
+  return props.consensus?.[day]
+}
 </script>
 
 <template>
@@ -110,6 +117,7 @@ const getDayValue = (day: WeekDay): DinnerModeValue => {
       :model-value="getDayValue(day)"
       :form-mode="formMode"
       :disabled="disabled"
+      :consensus="getDayConsensus(day)"
       size="sm"
       :name="`${name}-${day}`"
     />
@@ -131,6 +139,7 @@ const getDayValue = (day: WeekDay): DinnerModeValue => {
         :model-value="getDayValue(day)"
         :form-mode="formMode"
         :disabled="disabled"
+        :consensus="getDayConsensus(day)"
         size="sm"
         :name="`${name}-${day}`"
         @update:model-value="(value) => updateDay(day, value as DinnerModeValue)"

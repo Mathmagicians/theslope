@@ -5,6 +5,7 @@ import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 export const useUsersStore = defineStore("Users", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
+    const {formatHeynaboStats} = useMaintenance()
 
     // Get SystemRole enum from validation composable
     const {SystemRoleSchema} = useCoreValidation()
@@ -123,12 +124,14 @@ export const useUsersStore = defineStore("Users", () => {
 
         const result = heynaboImport.value
         if (result) {
-            console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Synced: ${result.householdsCreated} households created, ${result.householdsDeleted} deleted, ${result.inhabitantsCreated} inhabitants created, ${result.usersCreated} users created`)
+            const stats = formatHeynaboStats(result)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > ${description}`)
 
             // Show success toast with import summary
             toast.add({
                 title: 'Heynabo import fuldført',
-                description: `Oprettet: ${result.householdsCreated} husstande, ${result.inhabitantsCreated} beboere, ${result.usersCreated} brugere. Slettet: ${result.householdsDeleted} husstande, ${result.inhabitantsDeleted} beboere.`,
+                description,
                 color: 'success'
             })
         }

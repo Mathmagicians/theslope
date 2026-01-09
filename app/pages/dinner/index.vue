@@ -68,8 +68,9 @@ const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 // Calendar accordion state (open by default, toggled by date badge click)
 const calendarOpen = ref(true)
 
-// Booking validation
+// Booking validation and helpers
 const {DinnerModeSchema} = useBookingValidation()
+const {computeLockStatus} = useBooking()
 
 // Helper: Format feedback result for toast message
 const ACTION_LABELS: Record<BookingAction, string> = {
@@ -222,8 +223,8 @@ const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-// Get dinner start time and deadline functions from season configuration
 const {getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
+const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
 const dinnerStartTime = getDefaultDinnerStartTime()
 
 // Season-specific deadline functions (computed to react to season changes)
@@ -380,6 +381,7 @@ useHead({
             :cooking-days="cookingDays"
             :holidays="holidays"
             :dinner-events="dinnerEvents"
+            :lock-status="lockStatus"
             :show-countdown="true"
             :color="COLOR.peach"
             :selected-date="selectedDate"
@@ -416,6 +418,7 @@ useHead({
             :form-mode="bookingFormMode"
             @update-booking="handleBookingUpdate"
             @update-all-bookings="handleAllBookingsUpdate"
+            @cancel="bookingFormMode = FORM_MODES.VIEW"
           />
 
           <!-- Booking action button -->

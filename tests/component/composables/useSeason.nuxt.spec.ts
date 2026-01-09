@@ -18,6 +18,14 @@ const {DinnerEventCreateSchema} = useBookingValidation()
 // Shared test constant: days offset for dinners before cancellation deadline
 const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 
+// Mode deadline constants (minutes) for testing dining mode editability
+const MODE_DEADLINE = {
+    ALWAYS_EDITABLE: 0,   // 0 = always editable
+    SHORT: 90,            // 90 minutes - before deadline for far future dinners
+    DAY: 1440,            // 24 hours - reliably past deadline for today's dinner
+    WEEK: 10080           // 1 week - reliably past deadline for tomorrow's dinner
+} as const
+
 // Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
 const today = new Date()
 const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
@@ -803,10 +811,13 @@ describe('createPreBookingGenerator', () => {
         dinnerPreferences
     })
 
+    // Helper to create empty existing orders map
+    const emptyExistingOrders = () => new Map<string, { dinnerMode: DinnerMode }>()
+
     describe('generator function', () => {
         it('should skip inhabitants with no dinnerPreferences', () => {
             // GIVEN: Inhabitant with null preferences (using factory helper)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, emptyExistingOrders())
             const inhabitants = [createTestInhabitant(1, null, null)]
 
             // WHEN: Generate orders
@@ -822,7 +833,7 @@ describe('createPreBookingGenerator', () => {
                 ...testSeasonWithFutureDinners,
                 ticketPrices: [{id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12}]
             }
-            const generator = createPreBookingGenerator(seasonMissingAdult, 1, new Set())
+            const generator = createPreBookingGenerator(seasonMissingAdult, 1, emptyExistingOrders())
             const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
             const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
@@ -871,7 +882,7 @@ describe('createPreBookingGenerator', () => {
         ])('should generate $expectedCount orders for $description', ({ticketType, preferences, expectedCount, expectedPrice}) => {
             const birthDate = TicketFactory.birthDateForTicketType(ticketType, firstDinnerDate)
             // GIVEN: Generator and inhabitant (using factory helper)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, emptyExistingOrders())
             const prefs = createPreferences(preferences)
             const inhabitants = [createTestInhabitant(1, birthDate, prefs)]
 
@@ -896,7 +907,7 @@ describe('createPreBookingGenerator', () => {
             const excludedKeys = new Set(['1-102'])
 
             // WHEN: Generator with exclusion (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, emptyExistingOrders(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 2 orders (dinner 101 and 103), not 3
@@ -910,7 +921,7 @@ describe('createPreBookingGenerator', () => {
             const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
 
             // WHEN: Generator with empty exclusion set (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), new Set())
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, emptyExistingOrders(), new Set())
             const orders = generator(inhabitants)
 
             // THEN: Should generate all 3 orders
@@ -930,7 +941,7 @@ describe('createPreBookingGenerator', () => {
             const excludedKeys = new Set(['1-101', '2-102'])
 
             // WHEN: Generator with exclusions (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
+            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, emptyExistingOrders(), excludedKeys)
             const orders = generator(inhabitants)
 
             // THEN: Should generate 4 orders (Anna: 102,103 + Bob: 101,103)
@@ -939,6 +950,140 @@ describe('createPreBookingGenerator', () => {
             const bobOrders = orders.filter(o => o.inhabitantId === 2)
             expect(annaOrders.map(o => o.dinnerEventId)).toEqual([102, 103])
             expect(bobOrders.map(o => o.dinnerEventId)).toEqual([101, 103])
+        })
+
+        // Mode change deadline behavior (canEditDiningMode)
+        // Generator should output existing mode when past deadline, preference mode when before deadline
+        describe('mode change deadline', () => {
+            // Helper to create existing orders map (key → { dinnerMode })
+            const createExistingOrdersMap = (orders: Array<{ inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }>) =>
+                new Map(orders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, { dinnerMode: o.dinnerMode }]))
+
+            it.each([
+                {
+                    desc: 'far future dinner (before deadline) → outputs preference mode',
+                    daysFromToday: FAR_FUTURE_DAYS,
+                    modeDeadlineMinutes: MODE_DEADLINE.SHORT,
+                    existingMode: DinnerMode.DINEIN,
+                    preferenceMode: DinnerMode.TAKEAWAY,
+                    expectedMode: DinnerMode.TAKEAWAY  // Before deadline: use preference
+                },
+                {
+                    desc: 'near future dinner (before deadline, 0 min) → outputs preference mode',
+                    daysFromToday: 1,
+                    modeDeadlineMinutes: MODE_DEADLINE.ALWAYS_EDITABLE,
+                    existingMode: DinnerMode.DINEIN,
+                    preferenceMode: DinnerMode.TAKEAWAY,
+                    expectedMode: DinnerMode.TAKEAWAY  // Before deadline: use preference
+                },
+                {
+                    desc: 'near future dinner (after deadline) → outputs existing mode',
+                    daysFromToday: 1,
+                    modeDeadlineMinutes: MODE_DEADLINE.WEEK,
+                    existingMode: DinnerMode.DINEIN,
+                    preferenceMode: DinnerMode.TAKEAWAY,
+                    expectedMode: DinnerMode.DINEIN  // After deadline: keep existing
+                },
+                {
+                    desc: 'today dinner (after deadline) → outputs existing mode',
+                    daysFromToday: 0,
+                    modeDeadlineMinutes: MODE_DEADLINE.DAY,
+                    existingMode: DinnerMode.DINEIN,
+                    preferenceMode: DinnerMode.TAKEAWAY,
+                    expectedMode: DinnerMode.DINEIN  // After deadline: keep existing
+                },
+                {
+                    desc: 'DINEINLATE to TAKEAWAY (after deadline) → outputs existing mode',
+                    daysFromToday: 0,
+                    modeDeadlineMinutes: MODE_DEADLINE.DAY,
+                    existingMode: DinnerMode.DINEINLATE,
+                    preferenceMode: DinnerMode.TAKEAWAY,
+                    expectedMode: DinnerMode.DINEINLATE  // After deadline: keep existing
+                }
+            ])('$desc', ({ daysFromToday, modeDeadlineMinutes, existingMode, preferenceMode, expectedMode }) => {
+                // GIVEN: Dinner event at specific day
+                const dinnerEvent = DinnerEventFactory.dinnerEventAt(701, daysFromToday)
+
+                // AND: Season with specified mode deadline
+                const season = {
+                    ...SeasonFactory.defaultSeason(),
+                    dinnerEvents: [dinnerEvent],
+                    diningModeIsEditableMinutesBefore: modeDeadlineMinutes
+                }
+
+                // AND: Existing order with specific mode
+                const existingOrdersMap = createExistingOrdersMap([
+                    { inhabitantId: 1, dinnerEventId: 701, dinnerMode: existingMode }
+                ])
+
+                // AND: Inhabitant with different preference (all days same mode for simplicity)
+                const allPreferenceMode = Array(7).fill(preferenceMode) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+                const prefs = createPreferences(allPreferenceMode)
+                const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), prefs)]
+
+                // WHEN: Generator creates orders
+                const generator = createPreBookingGenerator(season, 1, existingOrdersMap, new Set())
+                const orders = generator(inhabitants)
+
+                // THEN: Should output expected mode based on deadline
+                expect(orders).toHaveLength(1)
+                expect(orders[0]!.dinnerMode).toBe(expectedMode)
+                expect(orders[0]!.state).toBe('BOOKED')  // Mode change stays BOOKED
+            })
+
+            it('no existing order + after deadline → outputs preference mode (new booking)', () => {
+                // GIVEN: Today dinner (past mode deadline)
+                const dinnerEvent = DinnerEventFactory.dinnerEventAt(801, 0)
+                const season = {
+                    ...SeasonFactory.defaultSeason(),
+                    dinnerEvents: [dinnerEvent],
+                    diningModeIsEditableMinutesBefore: 90
+                }
+
+                // AND: No existing orders
+                const existingOrdersMap = new Map<string, { dinnerMode: DinnerMode }>()
+
+                // AND: Inhabitant with TAKEAWAY preference
+                const allTakeaway = Array(7).fill(DinnerMode.TAKEAWAY) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+                const prefs = createPreferences(allTakeaway)
+                const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), prefs)]
+
+                // WHEN: Generator creates orders
+                const generator = createPreBookingGenerator(season, 1, existingOrdersMap, new Set())
+                const orders = generator(inhabitants)
+
+                // THEN: Should use preference (no existing order to preserve)
+                expect(orders).toHaveLength(1)
+                expect(orders[0]!.dinnerMode).toBe(DinnerMode.TAKEAWAY)
+            })
+
+            it('same mode existing + after deadline → outputs same mode (idempotent)', () => {
+                // GIVEN: Today dinner (past mode deadline)
+                const dinnerEvent = DinnerEventFactory.dinnerEventAt(901, 0)
+                const season = {
+                    ...SeasonFactory.defaultSeason(),
+                    dinnerEvents: [dinnerEvent],
+                    diningModeIsEditableMinutesBefore: 90
+                }
+
+                // AND: Existing order with DINEIN
+                const existingOrdersMap = createExistingOrdersMap([
+                    { inhabitantId: 1, dinnerEventId: 901, dinnerMode: DinnerMode.DINEIN }
+                ])
+
+                // AND: Inhabitant with same DINEIN preference
+                const allDinein = Array(7).fill(DinnerMode.DINEIN) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+                const prefs = createPreferences(allDinein)
+                const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), prefs)]
+
+                // WHEN: Generator creates orders
+                const generator = createPreBookingGenerator(season, 1, existingOrdersMap, new Set())
+                const orders = generator(inhabitants)
+
+                // THEN: Should output DINEIN (same as both existing and preference)
+                expect(orders).toHaveLength(1)
+                expect(orders[0]!.dinnerMode).toBe(DinnerMode.DINEIN)
+            })
         })
     })
 
@@ -1205,6 +1350,194 @@ describe('createHouseholdOrderScaffold', () => {
 
         // THEN: Create bucket should be empty - generator skips RELEASED when no existing order
         expect(result.create).toHaveLength(0)
+    })
+
+    // Dining mode change deadline behavior (canEditDiningMode)
+    // Uses diningModeIsEditableMinutesBefore - separate from cancellation deadline
+    it.each([
+        {
+            desc: 'far future dinner (before deadline) → update',
+            daysFromToday: FAR_FUTURE_DAYS,
+            modeDeadlineMinutes: 90,
+            expected: {update: 1, idempotent: 0}
+        },
+        {
+            desc: 'tomorrow dinner (before deadline) → update',
+            daysFromToday: 1,
+            modeDeadlineMinutes: MODE_DEADLINE.ALWAYS_EDITABLE,
+            expected: {update: 1, idempotent: 0}
+        },
+        {
+            desc: 'tomorrow dinner (after deadline) → idempotent',
+            daysFromToday: 1,
+            modeDeadlineMinutes: MODE_DEADLINE.WEEK,
+            expected: {update: 0, idempotent: 1}
+        },
+        {
+            desc: 'today dinner (after deadline) → idempotent',
+            daysFromToday: 0,
+            modeDeadlineMinutes: MODE_DEADLINE.DAY,
+            expected: {update: 0, idempotent: 1}
+        }
+    ])('mode change: $desc', ({daysFromToday, modeDeadlineMinutes, expected}) => {
+        const dinnerEvent = DinnerEventFactory.dinnerEventAt(401, daysFromToday)
+        const existingOrder = createOrder(1, 401, DinnerMode.DINEIN)
+
+        const season = {
+            ...SeasonFactory.defaultSeason(),
+            dinnerEvents: [dinnerEvent],
+            diningModeIsEditableMinutesBefore: modeDeadlineMinutes
+        }
+        const scaffolder = createHouseholdOrderScaffold(season)
+
+        // All TAKEAWAY = mode change from existing DINEIN
+        const allTakeaway = Array(7).fill(DinnerMode.TAKEAWAY) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+        const result = scaffolder(
+            createHousehold(1, [createInhabitant(1, allTakeaway)]),
+            [existingOrder],
+            new Set()
+        )
+
+        expect(result.update).toHaveLength(expected.update)
+        expect(result.idempotent).toHaveLength(expected.idempotent)
+        expect(result.create).toHaveLength(0)
+        expect(result.delete).toHaveLength(0)
+
+        // Mode change keeps BOOKED (unlike cancellation which releases)
+        if (expected.update > 0) {
+            result.update.forEach(order => {
+                expect(order.dinnerMode).toBe(DinnerMode.TAKEAWAY)
+                expect(order.state).toBe('BOOKED')
+            })
+        }
+    })
+
+    it('price change bypasses dining mode deadline (always updated)', () => {
+        // Today dinner = past mode deadline
+        const dinnerEvent = DinnerEventFactory.dinnerEventAt(601, 0)
+        const existingOrder = OrderFactory.defaultOrder(undefined, {
+            inhabitantId: 1,
+            dinnerEventId: 601,
+            dinnerMode: DinnerMode.DINEIN,
+            ticketPriceId: 2  // CHILD
+        })
+
+        // Adult birthdate = will get ticketPriceId: 4 (ADULT)
+        const adultInhabitant = {
+            ...HouseholdFactory.defaultInhabitantData(),
+            id: 1,
+            householdId: 1,
+            birthDate: new Date(1990, 0, 1),
+            dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({
+                ...acc,
+                [day]: allDineIn[i]
+            }), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+        }
+
+        const season = {
+            ...SeasonFactory.defaultSeason(),
+            dinnerEvents: [dinnerEvent],
+            diningModeIsEditableMinutesBefore: MODE_DEADLINE.SHORT
+        }
+        const scaffolder = createHouseholdOrderScaffold(season)
+
+        const result = scaffolder(
+            createHousehold(1, [adultInhabitant]),
+            [existingOrder],
+            new Set()
+        )
+
+        // Price change goes to update regardless of mode deadline
+        expect(result.update).toHaveLength(1)
+        expect(result.update[0]!.ticketPriceId).toBe(4)
+    })
+
+    it('price + mode change: before mode deadline → both updated', () => {
+        // Far future dinner = before mode deadline
+        const dinnerEvent = DinnerEventFactory.dinnerEventAt(701, FAR_FUTURE_DAYS)
+        const existingOrder = OrderFactory.defaultOrder(undefined, {
+            inhabitantId: 1,
+            dinnerEventId: 701,
+            dinnerMode: DinnerMode.DINEIN,
+            ticketPriceId: 2  // CHILD
+        })
+
+        // Adult birthdate = will get ticketPriceId: 4 (ADULT)
+        // Preference = TAKEAWAY (different from existing DINEIN)
+        const allTakeaway = Array(7).fill(DinnerMode.TAKEAWAY) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+        const adultWithTakeaway = {
+            ...HouseholdFactory.defaultInhabitantData(),
+            id: 1,
+            householdId: 1,
+            birthDate: new Date(1990, 0, 1),
+            dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({
+                ...acc,
+                [day]: allTakeaway[i]
+            }), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+        }
+
+        const season = {
+            ...SeasonFactory.defaultSeason(),
+            dinnerEvents: [dinnerEvent],
+            diningModeIsEditableMinutesBefore: MODE_DEADLINE.SHORT
+        }
+        const scaffolder = createHouseholdOrderScaffold(season)
+
+        const result = scaffolder(
+            createHousehold(1, [adultWithTakeaway]),
+            [existingOrder],
+            new Set()
+        )
+
+        // Before deadline: both price and mode are updated
+        expect(result.update).toHaveLength(1)
+        expect(result.update[0]!.ticketPriceId).toBe(4)  // ADULT price
+        expect(result.update[0]!.dinnerMode).toBe(DinnerMode.TAKEAWAY)  // Mode also updated
+        expect(result.idempotent).toHaveLength(0)
+    })
+
+    it('price + mode change: after mode deadline → price updated, mode preserved', () => {
+        // Today dinner = past mode deadline
+        const dinnerEvent = DinnerEventFactory.dinnerEventAt(801, 0)
+        const existingOrder = OrderFactory.defaultOrder(undefined, {
+            inhabitantId: 1,
+            dinnerEventId: 801,
+            dinnerMode: DinnerMode.DINEIN,
+            ticketPriceId: 2  // CHILD
+        })
+
+        // Adult birthdate = will get ticketPriceId: 4 (ADULT)
+        // Preference = TAKEAWAY (different from existing DINEIN)
+        const allTakeaway = Array(7).fill(DinnerMode.TAKEAWAY) as (typeof DinnerMode)[keyof typeof DinnerMode][]
+        const adultWithTakeaway = {
+            ...HouseholdFactory.defaultInhabitantData(),
+            id: 1,
+            householdId: 1,
+            birthDate: new Date(1990, 0, 1),
+            dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({
+                ...acc,
+                [day]: allTakeaway[i]
+            }), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
+        }
+
+        const season = {
+            ...SeasonFactory.defaultSeason(),
+            dinnerEvents: [dinnerEvent],
+            diningModeIsEditableMinutesBefore: MODE_DEADLINE.DAY  // Past deadline for mode
+        }
+        const scaffolder = createHouseholdOrderScaffold(season)
+
+        const result = scaffolder(
+            createHousehold(1, [adultWithTakeaway]),
+            [existingOrder],
+            new Set()
+        )
+
+        // Past mode deadline: price updated, but mode stays as existing (DINEIN)
+        expect(result.update).toHaveLength(1)
+        expect(result.update[0]!.ticketPriceId).toBe(4)  // ADULT price
+        expect(result.update[0]!.dinnerMode).toBe(DinnerMode.DINEIN)  // Mode preserved (past deadline)
+        expect(result.idempotent).toHaveLength(0)
     })
 })
 

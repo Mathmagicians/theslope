@@ -7,6 +7,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
     const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
+    const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
@@ -292,10 +293,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
         } else if (hasDailyMaintenanceResult.value) {
             const r = dailyMaintenanceResult.value!
-            console.info(CTX, `Daily maintenance completed: Consumed: ${r.consume.consumed}, Closed: ${r.close.closed}, Transactions: ${r.transact.created}`)
+            const stats = formatDailyMaintenanceStats(r)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Daily maintenance completed: ${description}`)
             toast.add({
                 title: 'Daglig vedligeholdelse afsluttet',
-                description: `Middage: ${r.consume.consumed}, Ordrer lukket: ${r.close.closed}, Transaktioner: ${r.transact.created}`,
+                description,
                 color: 'success'
             })
         }
@@ -374,6 +377,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const hasMonthlyBillingResult = computed(() => monthlyBillingStatus.value === 'success' && monthlyBillingResult.value !== null)
     const hasMonthlyBillingError = computed(() => monthlyBillingStatus.value === 'error')
 
+    const {formatMonthlyBillingStats} = useMaintenance()
+
     const runMonthlyBilling = async () => {
         await executeMonthlyBilling()
 
@@ -381,12 +386,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
         } else if (hasMonthlyBillingResult.value) {
             const results = monthlyBillingResult.value!.results
-            const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
-            const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
-            console.info(CTX, `Monthly billing completed: ${results.length} periods, Invoices: ${totalInvoices}, Transactions: ${totalTransactions}`)
+            const stats = formatMonthlyBillingStats(results)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Monthly billing completed: ${description}`)
             toast.add({
                 title: 'Månedlig fakturering afsluttet',
-                description: `${results.length} periode(r), Fakturaer: ${totalInvoices}, Transaktioner: ${totalTransactions}`,
+                description,
                 color: 'success'
             })
             // Refresh billing periods to show new data

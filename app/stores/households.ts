@@ -2,6 +2,8 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
+import type {ScaffoldResult} from '~/composables/useBookingValidation'
+import {useBooking} from '~/composables/useBooking'
 
 /**
  * Household store - manages household data and API operations
@@ -12,9 +14,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
+    const {formatScaffoldResult} = useBooking()
 
     // STATE - Server data only
     const selectedHouseholdId = ref<number | null>(null)
+
+    // Last preference update result (persists across component remounts)
+    const lastPreferenceResult = ref<ScaffoldResult | null>(null)
 
     // ========================================
     // State - useFetch with status exposed internally
@@ -123,7 +129,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 body: { dinnerPreferences: preferences }
             })
 
-            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated preferences for inhabitant ${inhabitantId}`)
+            // Store result for persistent UI display
+            lastPreferenceResult.value = result.scaffoldResult
+            console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
 
             // Refresh the selected household to get updated data
             if (selectedHouseholdId.value) {
@@ -155,17 +163,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
             console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
 
-            // Update all inhabitants in parallel and collect results
-            const results = await Promise.all(
-                household.inhabitants.map(inhabitant =>
-                    $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
-                        method: 'POST',
-                        body: { dinnerPreferences: preferences }
-                    })
-                )
-            )
-
-            console.info(`🏠 > HOUSEHOLDS_STORE > Successfully updated all ${household.inhabitants.length} inhabitants`)
+            // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
+            // Each update triggers scaffoldPrebookings for the same household - parallel execution
+            // causes FK constraint errors when multiple scaffolds try to delete the same orders
+            const results = []
+            for (const inhabitant of household.inhabitants) {
+                const result = await $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
+                    method: 'POST',
+                    body: { dinnerPreferences: preferences }
+                })
+                results.push(result)
+            }
 
             // Refresh the selected household once after all updates
             if (selectedHouseholdId.value === householdId) {
@@ -173,7 +181,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             // Aggregate scaffold results from all updates
-            return results.reduce((acc, r) => ({
+            const aggregatedResult = results.reduce((acc, r) => ({
                 created: acc.created + r.scaffoldResult.created,
                 deleted: acc.deleted + r.scaffoldResult.deleted,
                 released: acc.released + r.scaffoldResult.released,
@@ -181,6 +189,12 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 unchanged: acc.unchanged + r.scaffoldResult.unchanged,
                 errored: acc.errored + r.scaffoldResult.errored
             }), { created: 0, deleted: 0, released: 0, priceUpdated: 0, unchanged: 0, errored: 0 })
+
+            // Store result for persistent UI display
+            lastPreferenceResult.value = aggregatedResult
+            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult, 'compact')}`)
+
+            return aggregatedResult
         } catch (e: unknown) {
             handleApiError(e, 'updateAllInhabitantPreferences')
             throw e
@@ -218,6 +232,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // State
         households,
         selectedHousehold,
+        lastPreferenceResult,
         // Computed
         myHousehold,
         isHouseholdsLoading,

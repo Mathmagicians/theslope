@@ -26,6 +26,7 @@ const skippedResult = (): ScaffoldResult => ({
     deleted: 0,
     released: 0,
     priceUpdated: 0,
+    modeUpdated: 0,
     unchanged: 0,
     households: 0,
     errored: 0
@@ -44,7 +45,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch} = useSeason()
-    const {OrderAuditActionSchema, OrderStateSchema, ScaffoldResultSchema, chunkIds, chunkFetchIds} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkIds, chunkFetchIds} = useBookingValidation()
 
     // Resolve season ID - use provided or fall back to active season
     const effectiveSeasonId = options.seasonId ?? await fetchActiveSeasonId(d1Client)
@@ -79,11 +80,16 @@ export async function scaffoldPrebookings(
     // Create scaffolder configured for this season (with filtered dinner events)
     const scaffolder = createHouseholdOrderScaffold({ ...season, dinnerEvents })
 
+    // Build lookup for deadline checks: dinnerEventId → date
+    const dinnerEventDateById = new Map(dinnerEvents.map(de => [de.id, de.date]))
+    const { canModifyOrders } = useSeason().deadlinesForSeason(season)
+
     // Process each household and accumulate results
     let totalCreated = 0
     let totalDeleted = 0
     let totalReleased = 0
     let totalPriceUpdated = 0
+    let totalModeUpdated = 0
     let totalUnchanged = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
@@ -99,7 +105,6 @@ export async function scaffoldPrebookings(
             )
 
             const result = scaffolder(household, householdOrders, cancelledKeys)
-            const deleteIds = result.delete.map(o => o.id)
 
             // Create new orders
             for (const batch of chunkOrderBatch(result.create)) {
@@ -110,15 +115,17 @@ export async function scaffoldPrebookings(
                 })
             }
 
-            // Update changed orders: price changes vs mode changes (past deadline releases)
-            let householdReleased = 0
+            // Update changed orders: price changes, mode changes, or releases (NONE after deadline)
             let householdPriceUpdates = 0
+            let householdModeUpdates = 0
+            let householdUpdateReleased = 0
             for (const incoming of result.update) {
                 const key = `${incoming.inhabitantId}-${incoming.dinnerEventId}`
                 const existing = orderByKey.get(key)
                 if (!existing) continue
 
                 const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
+                const isReleaseIntent = incoming.dinnerMode === DinnerModeSchema.enum.NONE
 
                 if (isPriceChange) {
                     // Price category changed (birthdate added/changed) - update fields, keep BOOKED
@@ -131,11 +138,44 @@ export async function scaffoldPrebookings(
                         action: OrderAuditActionSchema.enum.SYSTEM_UPDATED,
                         performedByUserId: null
                     })
-                } else {
-                    // Mode-only change past deadline - release order (user charged)
-                    householdReleased++
+                } else if (isReleaseIntent) {
+                    // NONE preference after deadline - release order (user charged, ticket claimable)
+                    householdUpdateReleased++
                     await updateOrder(d1Client, existing.id, {
                         dinnerMode: incoming.dinnerMode,
+                        state: OrderStateSchema.enum.RELEASED,
+                        releasedAt: new Date()
+                    }, {
+                        action: OrderAuditActionSchema.enum.SYSTEM_UPDATED,
+                        performedByUserId: null
+                    })
+                } else {
+                    // Mode change between eating modes (DINEIN/TAKEAWAY/DINEINLATE) - update mode, keep BOOKED
+                    householdModeUpdates++
+                    await updateOrder(d1Client, existing.id, {
+                        dinnerMode: incoming.dinnerMode
+                    }, {
+                        action: OrderAuditActionSchema.enum.SYSTEM_UPDATED,
+                        performedByUserId: null
+                    })
+                }
+            }
+
+            // Delete or release orders based on cancellation deadline
+            let householdDeleted = 0
+            let householdReleased = 0
+            for (const toDelete of result.delete) {
+                const dinnerDate = dinnerEventDateById.get(toDelete.dinnerEventId)
+                if (!dinnerDate) continue
+
+                if (canModifyOrders(dinnerDate)) {
+                    // Before cancellation deadline - delete order (no charge)
+                    householdDeleted++
+                    await deleteOrder(d1Client, [toDelete.id], null)
+                } else {
+                    // After cancellation deadline - release order (user charged, ticket claimable)
+                    householdReleased++
+                    await updateOrder(d1Client, toDelete.id, {
                         state: OrderStateSchema.enum.RELEASED,
                         releasedAt: new Date()
                     }, {
@@ -145,16 +185,11 @@ export async function scaffoldPrebookings(
                 }
             }
 
-            // Delete orders
-            for (const batch of chunkIds(deleteIds)) {
-                await deleteOrder(d1Client, batch, null)
-            }
-
             totalCreated += result.create.length
-            totalReleased += householdReleased
+            totalDeleted += householdDeleted
+            totalReleased += householdReleased + householdUpdateReleased
             totalPriceUpdated += householdPriceUpdates
-            totalDeleted += deleteIds.length
-
+            totalModeUpdated += householdModeUpdates
             totalUnchanged += result.idempotent.length
             processedHouseholds++
         } catch (error) {
@@ -169,7 +204,7 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, priceUpdated=${totalPriceUpdated}, unchanged=${totalUnchanged}, households=${processedHouseholds}, errored=${erroredHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, households=${processedHouseholds}, errored=${erroredHouseholds}`)
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
@@ -177,6 +212,7 @@ export async function scaffoldPrebookings(
         deleted: totalDeleted,
         released: totalReleased,
         priceUpdated: totalPriceUpdated,
+        modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,
         households: processedHouseholds,
         errored: erroredHouseholds

@@ -26,6 +26,7 @@
  * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
+ * - Lock chips (optional) - red for locked, yellow for locked with tickets available
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for holidays, filled for actual).
@@ -34,6 +35,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
 
 interface Props {
@@ -45,6 +47,8 @@ interface Props {
   color?: string
   useRings?: boolean
   selectedDate?: Date
+  /** Lock status map keyed by dinner event ID (null = not locked, 0 = locked, >0 = tickets available) */
+  lockStatus?: Map<number, number | null>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -53,7 +57,8 @@ const props = withDefaults(defineProps<Props>(), {
   showCountdown: false,
   color: 'peach',
   useRings: false,
-  selectedDate: undefined
+  selectedDate: undefined,
+  lockStatus: undefined
 })
 
 const {createEventList} = useCalendarEvents()
@@ -63,7 +68,7 @@ const {
   getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {CALENDAR, DINNER_CALENDAR, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
@@ -109,6 +114,24 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
+// Get dinner event for a specific day
+const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
+  const dayDate = toDate(day)
+  return props.dinnerEvents?.find(event =>
+    dayDate.toDateString() === new Date(event.date).toDateString()
+  )
+}
+
+// Get lock status config for a day (null if not locked or no lockStatus provided)
+const getLockStatusForDay = (day: DateValue) => {
+  if (!props.lockStatus) return null
+  const dinner = getDinnerForDay(day)
+  if (!dinner) return null
+  const releasedCount = props.lockStatus.get(dinner.id)
+  if (releasedCount === undefined) return null
+  return getLockStatusConfig(releasedCount)
+}
+
 // Day type detection - returns 'next' | 'future' | 'past' | null
 type DayType = 'next' | 'future' | 'past'
 const getDayType = (eventLists: DayEventList[]): DayType | null => {
@@ -123,34 +146,30 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
+// Legend item types
+type LegendItem =
+  | { label: string; type: 'circle'; circleClass: string }
+  | { label: string; type: 'chip'; chipColor: NuxtUIColor }
+
 // Legend items using design system classes
-const legendItems = computed(() => [
-  {
-    label: 'Næste fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}`
-  },
-  {
-    label: 'Valgt dato',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}`
-  },
-  {
-    label: 'Planlagt fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}`
-  },
-  {
-    label: 'Tidligere fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
-  },
-  {
-    label: 'Ferie',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.holiday}`
+const legendItems = computed((): LegendItem[] => {
+  const items: LegendItem[] = [
+    { label: 'Næste fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}` },
+    { label: 'Valgt dato', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}` },
+    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}` },
+    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}` },
+    { label: 'Ferie', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.holiday}` }
+  ]
+
+  if (props.lockStatus) {
+    items.push(
+      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color },
+      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color }
+    )
   }
-])
+
+  return items
+})
 
 const emit = defineEmits<{
   'date-selected': [date: Date]
@@ -216,7 +235,23 @@ const isSelected = (day: DateValue): boolean => {
                 {{ day.day }}
               </div>
 
-              <!-- Dinner event (next/future/past) -->
+              <!-- Locked dinner with chip (next/future, not past) -->
+              <UChip
+                v-else-if="getLockStatusForDay(day) && getDayType(eventLists) !== 'past'"
+                show
+                size="md"
+                :color="getLockStatusForDay(day)!.color"
+                :data-testid="`calendar-dinner-date-${day.day}`"
+              >
+                <div
+                  :class="[SIZES.calendarCircle, CALENDAR.day.shape, getDayColorClass(getDayType(eventLists)!), isSelected(day) ? DINNER_CALENDAR.selection : '']"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
+              </UChip>
+
+              <!-- Regular dinner event (next/future/past) - no lock -->
               <div
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
@@ -239,7 +274,12 @@ const isSelected = (day: DateValue): boolean => {
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <div :class="legendItem.circleClass">
+                  <!-- Chip for lock indicators -->
+                  <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor">
+                    1
+                  </UChip>
+                  <!-- Circle for other indicators -->
+                  <div v-else :class="legendItem.circleClass">
                     1
                   </div>
                   <span>{{ legendItem.label }}</span>

@@ -123,6 +123,7 @@ const emit = defineEmits<{
   updateBooking: [inhabitant: BookingInhabitant, dinnerMode: DinnerMode, isGuestTicket: boolean]
   updateAllBookings: [inhabitants: BookingInhabitant[], dinnerMode: DinnerMode]
   addGuest: [dinnerMode: DinnerMode]
+  cancel: []
 }>()
 
 // Helper to build emit payload for inhabitant rows (id is number for inhabitant rowType)
@@ -490,8 +491,19 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             name="power-mode-selector"
           />
           <UButton
+            color="neutral"
+            variant="ghost"
+            :icon="ICONS.xMark"
+            :size="SIZES.standard"
+            name="cancel-power-mode"
+            @click="emit('cancel')"
+          >
+            Annuller
+          </UButton>
+          <UButton
             :color="COMPONENTS.powerMode.color"
             variant="solid"
+            :icon="COMPONENTS.powerMode.buttonIcon"
             :size="SIZES.standard"
             name="save-power-mode"
             @click="handlePowerModeUpdate"
