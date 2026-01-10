@@ -32,12 +32,15 @@ registerEndpoint('/api/admin/household', householdIndexEndpoint)
 // Test Helpers - Use factory data + schema validation
 // ========================================
 
-// Lightweight inhabitant for Display (index endpoint)
-const createMockInhabitantDisplay = (id: number) => ({
-  id,
-  name: `Inhabitant-${id}`,
-  lastName: 'Test'
-})
+// Lightweight inhabitant for Display (index endpoint) - uses factory for required fields
+const createMockInhabitantDisplay = (id: number, householdId: number = 1) => {
+  const base = HouseholdFactory.defaultInhabitantData(`test-display-${id}`)
+  return {
+    ...base,
+    id,
+    householdId
+  }
+}
 
 // Build mock data from factory defaults
 const createMockHouseholds = (): HouseholdDisplay[] => {
@@ -91,6 +94,7 @@ const createMockScaffoldResult = (overrides = {}) => {
     deleted: 0,
     released: 0,
     priceUpdated: 0,
+    modeUpdated: 0,
     unchanged: 0,
     households: 1,
     errored: 0,
@@ -267,13 +271,16 @@ describe('Households Store', () => {
 
       await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
 
-      // Verify aggregated result
+      // Verify aggregated result (includes all ScaffoldResult fields)
       expect(store.lastPreferenceResult).toEqual({
+        seasonId: 1,     // Same for all (household in same season)
         created: 5,      // 3 + 2
         deleted: 2,      // 1 + 1
         released: 1,     // 0 + 1
         priceUpdated: 1, // 0 + 1
+        modeUpdated: 0,  // 0 + 0
         unchanged: 3,    // 2 + 1
+        households: 1,   // Power mode = single household
         errored: 0       // 0 + 0
       })
     })

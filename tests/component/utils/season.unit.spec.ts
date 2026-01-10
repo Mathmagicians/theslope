@@ -21,7 +21,8 @@ import {
     selectMostAppropriateActiveSeason,
     sortSeasonsByActivePriority,
     splitDinnerEvents,
-    sortDinnerEventsByTemporal
+    sortDinnerEventsByTemporal,
+    getEventsForGridView
 } from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -1530,5 +1531,64 @@ describe('Active Season Management utilities', () => {
             // THEN: Respects custom threshold values
             expect(urgency).toBe(expectedUrgency)
         })
+    })
+})
+
+describe('getEventsForGridView', () => {
+    // Helper to create events from dates
+    const eventsFromDates = (dates: Date[]) => dates.map((date, i) => ({ id: i + 1, date }))
+
+    // Week 2 of 2025: Mon Jan 6 - Sun Jan 12
+    // Week 3 of 2025: Mon Jan 13 - Sun Jan 19
+    it.each([
+        // Basic grouping
+        { scenario: 'empty events', events: [], range: [6, 12], expectedWeekSizes: [] },
+        { scenario: 'single event', events: [8], range: [6, 12], expectedWeekSizes: [1] },
+        { scenario: 'same week', events: [6, 8, 10], range: [6, 12], expectedWeekSizes: [3] },
+        { scenario: 'two weeks', events: [8, 10, 13, 15], range: [6, 19], expectedWeekSizes: [2, 2] },
+
+        // Week completion at start (preceding events in same week as first in-range)
+        { scenario: 'start: include preceding same week', events: [7, 9, 10], range: [9, 12], expectedWeekSizes: [3] },
+        { scenario: 'start: exclude preceding diff week', events: [3, 7, 9], range: [9, 12], expectedWeekSizes: [2] },
+
+        // Week completion at end (following events in same week as last in-range)
+        { scenario: 'end: include following same week', events: [8, 9, 10], range: [6, 9], expectedWeekSizes: [3] },
+        { scenario: 'end: exclude following diff week', events: [9, 10, 13], range: [6, 9], expectedWeekSizes: [2] },
+
+        // Combined start and end
+        { scenario: 'both: complete start and end weeks', events: [7, 8, 14, 16, 17], range: [8, 16], expectedWeekSizes: [2, 3] },
+        { scenario: 'single day range with week completion', events: [6, 8, 10], range: [8, 8], expectedWeekSizes: [3] },
+
+        // Edge cases
+        { scenario: 'no events in range', events: [3, 20], range: [6, 12], expectedWeekSizes: [] },
+        { scenario: 'boundary: events exactly at range edges', events: [6, 12], range: [6, 12], expectedWeekSizes: [2] },
+    ])('$scenario', ({ events, range, expectedWeekSizes }) => {
+        // Convert day-of-month to full dates (Jan 2025)
+        const eventDates = events.map(d => new Date(2025, 0, d))
+        const dateRange = { start: new Date(2025, 0, range[0]), end: new Date(2025, 0, range[1]) }
+
+        const result = getEventsForGridView(eventsFromDates(eventDates), dateRange)
+
+        expect(result.map(w => w.length)).toEqual(expectedWeekSizes)
+    })
+
+    it('preserves event properties', () => {
+        const events = [
+            { id: 1, date: new Date(2025, 0, 8), menuTitle: 'Pasta' },
+            { id: 2, date: new Date(2025, 0, 10), menuTitle: 'Taco' }
+        ]
+        const result = getEventsForGridView(events, { start: new Date(2025, 0, 6), end: new Date(2025, 0, 12) })
+
+        expect(result[0]).toMatchObject([{ id: 1, menuTitle: 'Pasta' }, { id: 2, menuTitle: 'Taco' }])
+    })
+
+    it('handles year boundary (ISO week spanning Dec/Jan)', () => {
+        // Dec 30 2024 = Mon, Dec 31 = Tue, Jan 2 2025 = Thu - all same ISO week
+        const events = eventsFromDates([new Date(2024, 11, 30), new Date(2024, 11, 31), new Date(2025, 0, 2)])
+        const range = { start: new Date(2024, 11, 31), end: new Date(2025, 0, 5) }
+
+        const result = getEventsForGridView(events, range)
+
+        expect(result.map(w => w.length)).toEqual([3])
     })
 })

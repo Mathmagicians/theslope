@@ -22,6 +22,9 @@ const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
 planStore.initPlanStore()
 
+const bookingsStore = useBookingsStore()
+const {orders} = storeToRefs(bookingsStore)
+
 const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
@@ -39,6 +42,13 @@ const selectedDinnerEvent = computed(() => {
   return dinnerEvents.value.find(e =>
     new Date(e.date).toDateString() === selectedDate.value.toDateString()
   ) ?? null
+})
+
+// Load orders when dinner event changes
+watchEffect(() => {
+  if (selectedDinnerEvent.value) {
+    bookingsStore.loadOrdersForDinner(selectedDinnerEvent.value.id, true)
+  }
 })
 
 // Season data for view components
@@ -84,12 +94,21 @@ const currentViewComponent = computed(() => viewComponents[view.value])
             </div>
           </template>
           <component
+            v-if="selectedDinnerEvent && deadlines"
             :is="currentViewComponent"
             :household="household"
-            :selected-date="selectedDate"
             :dinner-event="selectedDinnerEvent"
+            :orders="orders"
             :ticket-prices="ticketPrices"
-            :deadlines="deadlines!"
+            :deadlines="deadlines"
+          />
+          <UAlert
+            v-else
+            icon="i-heroicons-calendar-days"
+            color="neutral"
+            variant="soft"
+            title="Vælg en dato"
+            description="Klik på en dato i kalenderen for at se og redigere bookinger"
           />
         </UCard>
       </div>

@@ -6,7 +6,8 @@ import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval,
-    createDateInTimezone
+    createDateInTimezone,
+    areSameWeek
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
 import {subDays} from "date-fns/subDays"
@@ -642,4 +643,54 @@ export const calculateDeadlineUrgency = (
 
     // Critical: now > criticalFreezeTime (less than criticalHours remaining)
     return 2
+}
+
+/**
+ * Get dinner events for a grid view grouped by week.
+ * Single pass reduce over sorted events.
+ */
+export const getEventsForGridView = <T extends { date: Date }>(
+    events: T[],
+    range: DateRange
+): T[][] => {
+    type Acc = { weeks: T[][], firstDate: Date | null, lastDate: Date | null }
+
+    const addToWeeks = (weeks: T[][], event: T): T[][] => {
+        const last = weeks.at(-1)
+        if (!last || !areSameWeek(event.date, last[0]!.date)) {
+            return [...weeks, [event]]
+        }
+        last.push(event)
+        return weeks
+    }
+
+    const result = events.reduce<Acc>((acc, event) => {
+        const inRange = isWithinInterval(event.date, range)
+
+        if (!acc.firstDate && !inRange) {
+            // Before range - buffer by week
+            return {...acc, weeks: addToWeeks(acc.weeks, event)}
+        }
+
+        if (inRange) {
+            const firstDate = acc.firstDate ?? event.date
+            const weeks = !acc.firstDate
+                ? acc.weeks.filter(w => areSameWeek(w[0]!.date, event.date))
+                : acc.weeks
+            return {
+                firstDate,
+                lastDate: event.date,
+                weeks: addToWeeks(weeks, event)
+            }
+        }
+
+        if (acc.lastDate && areSameWeek(event.date, acc.lastDate)) {
+            // After range, same week as last
+            return {...acc, weeks: addToWeeks(acc.weeks, event)}
+        }
+
+        return acc
+    }, {weeks: [], firstDate: null, lastDate: null})
+
+    return result.weeks
 }
