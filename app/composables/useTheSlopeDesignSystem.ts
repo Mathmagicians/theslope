@@ -1100,6 +1100,12 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
         { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
         { emoji: '🔧', text: 'Tandhjulene er ved at blive poleret' }
+    ],
+    noDinners: [
+        { emoji: '😴', text: 'Gryderne sover i denne periode' },
+        { emoji: '🍳', text: 'Panderne hviler sig' },
+        { emoji: '🥄', text: 'Grydeskeerne venter på næste middag' },
+        { emoji: '🧂', text: 'Saltet venter tålmodigt i skabet' }
     ]
 } as const
 
