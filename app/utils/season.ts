@@ -667,8 +667,8 @@ export const getEventsForGridView = <T extends { date: Date }>(
     const result = events.reduce<Acc>((acc, event) => {
         const inRange = isWithinInterval(event.date, range)
 
-        if (!acc.firstDate && !inRange) {
-            // Before range - buffer by week
+        if (!acc.firstDate && !inRange && isBefore(event.date, range.start) && areSameWeek(event.date, range.start)) {
+            // Before range but same week as range start - include for week completion
             return {...acc, weeks: addToWeeks(acc.weeks, event)}
         }
 

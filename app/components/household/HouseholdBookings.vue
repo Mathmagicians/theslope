@@ -17,6 +17,7 @@ const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
 const {computeLockStatus} = useBooking()
+const {ICONS, COLOR} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
@@ -94,8 +95,8 @@ const currentViewComponent = computed(() => viewComponents[view.value])
             </div>
           </template>
           <component
-            v-if="selectedDinnerEvent && deadlines"
             :is="currentViewComponent"
+            v-if="selectedDinnerEvent && deadlines"
             :household="household"
             :dinner-event="selectedDinnerEvent"
             :orders="orders"
@@ -104,8 +105,8 @@ const currentViewComponent = computed(() => viewComponents[view.value])
           />
           <UAlert
             v-else
-            icon="i-heroicons-calendar-days"
-            color="neutral"
+            :icon="ICONS.calendar"
+            :color="COLOR.neutral"
             variant="soft"
             title="Vælg en dato"
             description="Klik på en dato i kalenderen for at se og redigere bookinger"
@@ -116,8 +117,8 @@ const currentViewComponent = computed(() => viewComponents[view.value])
   </div>
   <UAlert
     v-else
-    icon="i-heroicons-calendar-days"
-    color="primary"
+    :icon="ICONS.calendar"
+    :color="COLOR.primary"
     variant="subtle"
     title="Ingen aktiv sæson"
     description="Der er ingen aktiv fællesspisnings sæson i øjeblikket. Kontakt administratoren for at aktivere en sæson."

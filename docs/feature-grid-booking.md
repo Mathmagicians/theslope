@@ -32,13 +32,19 @@ Legend: 🍽️ Spiser  🕐 Sen  🛍️ Take  ❌ Nej  ~frigivet  +hentet  �
 - **Edit/View mode** with Save/Cancel
 
 ## Files
-| File | Action |
-|------|--------|
-| `booking/BookingGridView.vue` | Create |
-| `booking/DinnerModeToggle.vue` | Create |
-| `booking/BookingWeekView.vue` | Delete |
-| `booking/BookingMonthView.vue` | Delete |
-| `household/HouseholdBookings.vue` | Modify |
+| File | Action | Status |
+|------|--------|--------|
+| `booking/BookingWeekView.vue` | Delete | ✅ Done |
+| `booking/BookingMonthView.vue` | Delete | ✅ Done |
+| `dinner/DinnerModeSelector.vue` | Add toggle mode | ✅ Done (`interaction="toggle"`) |
+| `booking/BookingGridView.vue` | Create | ⏳ |
+| `household/HouseholdBookings.vue` | Modify | ⏳ |
+
+## Supporting Utilities
+| Utility | Location | Status |
+|---------|----------|--------|
+| `areSameWeek(a, b)` | `date.ts` | ✅ Done (8 tests) |
+| `getEventsForGridView(events, range)` | `season.ts` | ✅ Done (14 tests) |
 
 ## Status Indicators
 - `~N` (error color) = N tickets released by you

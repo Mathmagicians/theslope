@@ -8,8 +8,8 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {memberUIFile} = authFiles
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -26,13 +26,13 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
     let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
 
-    test.use({storageState: adminUIFile})
+    test.use({storageState: memberUIFile})
 
     // Helper to navigate to household members page and wait for load
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
         await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+            (response) => response.url().includes('/api/household/') && response.status() === 200,
             {timeout: 10000}
         )
         await pollUntil(
@@ -233,12 +233,14 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-fredag-DINEIN`).click()
 
         // WHEN: Save preferences (triggers scaffolding)
-        const saveResponsePromise = page.waitForResponse(
-            (r) => r.url().includes('/api/admin/household/inhabitants/') && r.request().method() === 'POST',
-            {timeout: 15000}
-        )
         await page.getByTestId('save-preferences').click()
-        await saveResponsePromise
+
+        // THEN: Wait for result alert to appear (confirms save completed)
+        await pollUntil(
+            async () => await page.getByTestId('last-result-alert').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
 
         // THEN: Wait for save to complete and verify 3 orders were scaffolded (one per cooking day)
         const ordersAfter = await pollUntil(
@@ -297,7 +299,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // WHEN: Navigate to power mode household
         await page.goto(`/household/${encodeURIComponent(powerShortName)}/members`)
         await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+            (response) => response.url().includes('/api/household/') && response.status() === 200,
             {timeout: 10000}
         )
         await pollUntil(
@@ -336,7 +338,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // WHEN: Save preferences (triggers scaffolding for ALL inhabitants)
         // Wait for the last API response (power mode sends multiple sequential requests)
         const saveResponsePromise = page.waitForResponse(
-            (r) => r.url().includes('/api/admin/household/inhabitants/') && r.request().method() === 'POST',
+            (r) => r.url().includes('/api/household/inhabitants/') && r.url().includes('/preferences') && r.request().method() === 'POST',
             {timeout: 30000}
         )
         await page.getByTestId('save-preferences').click()
