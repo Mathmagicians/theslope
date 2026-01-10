@@ -277,11 +277,17 @@ export const useSeason = () => {
      * E = OrderDisplay (existing orders from DB, has id for deletion)
      * I = OrderCreateWithPrice (incoming orders from generator, no id)
      * Key: composite inhabitantId-dinnerEventId
-     * Equal: same dinnerMode (no update needed if preference matches)
+     * Equal: same dinnerMode AND ticketPriceId (detects preference changes AND price category changes)
+     *
+     * Price category changes occur when:
+     * - Birthdate added/changed (Heynabo import) → NULL→Date changes ticket type
+     * - Birthday passed during season → CHILD→ADULT on specific dinner dates
      */
     const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
         (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
-        (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
+        (existing, incoming) =>
+            existing.dinnerMode === incoming.dinnerMode &&
+            existing.ticketPriceId === incoming.ticketPriceId
     )
 
     /**
@@ -292,8 +298,8 @@ export const useSeason = () => {
      *
      * @param season - Season with ticketPrices, dinnerEvents, and deadline config
      * @param householdId - Household ID for order tracking
-     * @param existingOrderKeys - Set of "inhabitantId-dinnerEventId" keys for existing orders
-     *                            (used to generate RELEASED orders only when order exists)
+     * @param existingOrdersByKey - Map of "inhabitantId-dinnerEventId" keys to existing order info
+     *                              (used for mode deadline checks and RELEASED generation)
      * @param excludedKeys - Set of "inhabitantId-dinnerEventId" keys to exclude
      *                       (typically user cancellations that should not be recreated)
      *
@@ -302,18 +308,18 @@ export const useSeason = () => {
      *
      * @example
      * const cancellations = await fetchUserCancellationKeys(d1, seasonId)
-     * const existingKeys = new Set(existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`))
-     * const generateDesired = createPreBookingGenerator(season, householdId, existingKeys, cancellations)
+     * const existingByKey = new Map(existingOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, { dinnerMode: o.dinnerMode }]))
+     * const generateDesired = createPreBookingGenerator(season, householdId, existingByKey, cancellations)
      * const desired = generateDesired(inhabitants)
      * const result = reconcilePreBookings(existingOrders)(desired)
      */
     const createPreBookingGenerator = (
         season: Season,
         householdId: number,
-        existingOrderKeys: Set<string>,
+        existingOrdersByKey: Map<string, { dinnerMode: DinnerMode }>,
         excludedKeys: Set<string> = new Set()
     ) => {
-        const { canModifyOrders } = deadlinesForSeason(season)
+        const { canModifyOrders, canEditDiningMode } = deadlinesForSeason(season)
         const ticketPrices = season.ticketPrices
         const dinnerEvents = season.dinnerEvents ?? []
 
@@ -344,7 +350,7 @@ export const useSeason = () => {
                             // Before deadline: no order needed (will delete if exists)
                             if (canModifyOrders(de.date)) return null
                             // After deadline: release only if order exists (can't charge for non-existent order)
-                            if (!existingOrderKeys.has(key)) return null
+                            if (!existingOrdersByKey.has(key)) return null
                             // Generate RELEASED order (price for schema validation - existing order has frozen price)
                             const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
                             const ticketPrice = ticketPriceByType.get(ticketType)
@@ -363,6 +369,12 @@ export const useSeason = () => {
                             })
                         }
 
+                        // Mode change deadline: if existing order has different mode and past deadline, keep existing mode
+                        const existingOrder = existingOrdersByKey.get(key)
+                        const effectiveMode = (existingOrder && existingOrder.dinnerMode !== preference && !canEditDiningMode(de.date))
+                            ? existingOrder.dinnerMode  // Past deadline: keep existing mode (will be idempotent)
+                            : preference                 // Before deadline or no existing: use preference
+
                         // Determine ticket type based on age at dinner date
                         const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
                         const ticketPrice = ticketPriceByType.get(ticketType)
@@ -377,7 +389,7 @@ export const useSeason = () => {
                             bookedByUserId: null,
                             ticketPriceId: ticketPrice.id,
                             priceAtBooking: ticketPrice.price,
-                            dinnerMode: preference,
+                            dinnerMode: effectiveMode,
                             state: OrderState.BOOKED
                         })
                     })
@@ -407,10 +419,10 @@ export const useSeason = () => {
         existingOrders: OrderDisplay[],
         cancelledKeys: Set<string> = new Set()
     ) => {
-        const existingOrderKeys = new Set(
-            existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`)
+        const existingOrdersByKey = new Map(
+            existingOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, { dinnerMode: o.dinnerMode }])
         )
-        const generator = createPreBookingGenerator(season, household.id, existingOrderKeys, cancelledKeys)
+        const generator = createPreBookingGenerator(season, household.id, existingOrdersByKey, cancelledKeys)
         const desiredOrders = generator(household.inhabitants)
         return reconcilePreBookings(existingOrders)(desiredOrders)
     }
@@ -613,12 +625,21 @@ export const useSeason = () => {
     }
 
     /**
+     * Get cooking deadline thresholds from app.config.ts
+     * DRY: Single source for warning/critical hours used by badges and calendar chips
+     */
+    const getCookingDeadlineThresholds = () => ({
+        warning: theslope.cookingDeadlines.warningHours,
+        critical: theslope.cookingDeadlines.criticalHours
+    })
+
+    /**
      * Calculate deadline urgency for cooking tasks using thresholds from app.config.ts
      * @param dinnerStartTime - The dinner event start time
      * @returns 0 (on track) | 1 (warning) | 2 (critical)
      */
     const getDeadlineUrgency = (dinnerStartTime: Date): DeadlineUrgency => {
-        const { criticalHours, warningHours } = theslope.cookingDeadlines
+        const { critical: criticalHours, warning: warningHours } = getCookingDeadlineThresholds()
         return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
     }
 
@@ -676,6 +697,7 @@ export const useSeason = () => {
         isOnTeam,
         isChefFor,
         getDeadlineUrgency,
+        getCookingDeadlineThresholds,
         getBillingCutoffDay,
 
         // Active season management - pure functions

@@ -53,6 +53,7 @@ export const COLOR = {
     warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
     info: 'info',             // Violet - information messages
     neutral: 'neutral',       // Sky - neutral/disabled
+    yellow: 'yellow',         // Yellow - deadline warnings (more visible than warning)
 
     // Brand Pantone colors (custom palettes in app.config.ts)
     mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
@@ -363,11 +364,15 @@ export const COMPONENTS = {
         description: 'text-xs'
     },
 
+    // Responsive row icon sizing (matches birthday cake pattern)
+    rowIconClass: 'size-4 md:size-6',
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
         icon: 'i-fluent-emoji-high-contrast-woman-superhero',
         buttonIcon: 'i-heroicons-bolt',
+        iconClass: 'size-4 md:size-6 text-warning-500',
         alert: {
             color: 'warning' as const,
             variant: 'soft' as const,
@@ -377,6 +382,13 @@ export const COMPONENTS = {
             color: 'warning' as const,
             variant: 'outline' as const
         }
+    },
+
+    // Guest row - guest ticket booking pattern
+    guestRow: {
+        color: 'info' as const,
+        icon: 'i-heroicons-user-plus',
+        iconClass: 'size-4 md:size-6 text-info-500'
     },
 
     // Table interactions - row selection and click patterns
@@ -484,6 +496,7 @@ export const ICONS = {
     calendar: 'i-heroicons-calendar',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
     ticket: 'i-heroicons-ticket',
@@ -492,6 +505,7 @@ export const ICONS = {
     dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
     chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     household: 'i-heroicons-home',
+    preferences: 'i-heroicons-adjustments-horizontal',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
@@ -522,8 +536,9 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
 
-    // Empty states
+    // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
+    robotHappy: 'i-mage-robot-happy',
 
     // Danger/delete confirmations
     dangerConfirm: 'i-healthicons-death-alt',
@@ -727,7 +742,13 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
      * Used in table headers and weekday selector rows
      * Responsive padding, borders, background, and minimum widths
      */
-    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
+    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32',
+
+    /**
+     * Badge/button content size for dinner mode icons
+     * Mobile: size-4 (16px), Desktop: size-8 (32px)
+     */
+    badgeContentSize: 'size-4 md:size-8'
 })
 
 /**
@@ -873,6 +894,7 @@ export const CALENDAR = {
         warning: 'ring-2 ring-amber-500',
         onTrack: ''
     },
+    holiday: 'ring-2 ring-green-500',
     // Base selection behavior - combine with palette-specific color
     selection: {
         base: 'ring-2 md:ring-4',
@@ -998,6 +1020,44 @@ export const URGENCY_TO_BADGE = {
     2: DEADLINE_BADGES.CRITICAL
 } as const
 
+/**
+ * Maps DeadlineUrgency to UChip colors for calendar display
+ * Uses 'yellow' for warning (more visible than orange 'warning')
+ * 0 = null (no chip), 1 = yellow, 2 = error (red), 3 = neutral (black/overdue)
+ */
+export const URGENCY_TO_CHIP_COLOR = {
+    [-1]: null,  // No dinner
+    0: null,     // On track
+    1: 'yellow', // Warning
+    2: 'error',  // Critical
+    3: 'neutral' // Overdue
+} as const
+
+/**
+ * BOOKING_LOCK_STATUS - Lock indicator chips for household booking calendar
+ *
+ * Shows booking deadline status based on released ticket count:
+ * - null: Not locked (deadline not yet passed) - no chip
+ * - 0: Locked, no tickets available - peach chip (matches selection ring)
+ * - >0: Locked, tickets available - yellow chip
+ */
+export const BOOKING_LOCK_STATUS = {
+    locked: {
+        color: 'peach' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    },
+    lockedWithTickets: {
+        color: 'yellow' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    }
+} as const
+
+/** Get lock status config from released ticket count (null = not locked, 0 = locked, >0 = tickets available) */
+export const getLockStatusConfig = (releasedCount: number | null) => {
+    if (releasedCount === null) return null
+    return releasedCount > 0 ? BOOKING_LOCK_STATUS.lockedWithTickets : BOOKING_LOCK_STATUS.locked
+}
+
 // ============================================================================
 // PART 7: Empty State Messages (fun placeholders)
 // ============================================================================
@@ -1068,6 +1128,9 @@ export const useTheSlopeDesignSystem = () => {
         DEADLINE_BADGES,
         ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
+        URGENCY_TO_CHIP_COLOR,
+        BOOKING_LOCK_STATUS,
+        getLockStatusConfig,
         ICONS,
         IMG,
 

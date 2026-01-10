@@ -72,16 +72,9 @@ const props = withDefaults(defineProps<Props>(), {
 const { SIZES, ALARM_TO_BADGE } = useTheSlopeDesignSystem()
 
 // Business logic from composables (ADR-001)
-const { getDefaultDinnerStartTime, getDinnerTimeRange } = useSeason()
+const { getDefaultDinnerStartTime, getDinnerTimeRange, getCookingDeadlineThresholds } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
-
-
-// App config thresholds
-const appConfig = useAppConfig()
-const thresholds = {
-  warning: appConfig.theslope?.cookingDeadlines?.warningHours ?? 72,
-  critical: appConfig.theslope?.cookingDeadlines?.criticalHours ?? 24
-}
+const thresholds = getCookingDeadlineThresholds()
 
 // Helper to get badge from alarm level
 const getBadgeFromAlarm = (alarm: AlarmLevel) => ALARM_TO_BADGE[alarm]

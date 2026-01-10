@@ -116,11 +116,28 @@ const props = withDefaults(defineProps<Props>(), {
   formMode: FORM_MODES.VIEW
 })
 
+// Inhabitant data needed for processBooking (matches Pick<InhabitantDisplay, 'id' | 'name' | 'birthDate'>)
+type BookingInhabitant = { id: number; name: string; birthDate: Date | null }
+
 const emit = defineEmits<{
-  updateBooking: [inhabitantId: number, dinnerMode: DinnerMode, ticketPriceId: number]
-  updateAllBookings: [dinnerMode: DinnerMode]
+  updateBooking: [inhabitant: BookingInhabitant, dinnerMode: DinnerMode, isGuestTicket: boolean]
+  updateAllBookings: [inhabitants: BookingInhabitant[], dinnerMode: DinnerMode]
   addGuest: [dinnerMode: DinnerMode]
+  cancel: []
 }>()
+
+// Helper to build emit payload for inhabitant rows (id is number for inhabitant rowType)
+const emitInhabitantBooking = (row: TableRow, mode: DinnerMode) => {
+  if (typeof row.id !== 'number') return
+  emit('updateBooking', { id: row.id, name: row.name, birthDate: row.birthDate ?? null }, mode, false)
+}
+
+// Helper for guest-order rows (inhabitantId comes from order)
+const emitGuestBooking = (row: TableRow, mode: DinnerMode) => {
+  const inhabitantId = row.order?.inhabitantId
+  if (!inhabitantId) return
+  emit('updateBooking', { id: inhabitantId, name: row.name, birthDate: null }, mode, true)
+}
 
 // Self-initialize household store for auxiliary data
 const householdsStore = useHouseholdsStore()
@@ -291,7 +308,14 @@ const guestTableData = computed((): TableRow[] => {
 // HANDLERS
 // ============================================================================
 
-const handlePowerModeUpdate = () => emit('updateAllBookings', draftPowerMode.value)
+const handlePowerModeUpdate = () => {
+  const inhabitants = (household.value?.inhabitants ?? []).map(i => ({
+    id: i.id,
+    name: i.name,
+    birthDate: i.birthDate ?? null
+  }))
+  emit('updateAllBookings', inhabitants, draftPowerMode.value)
+}
 const handleAddGuest = () => emit('addGuest', draftGuestMode.value)
 const isOrderReleased = (orderState: OrderState | undefined): boolean => orderState === OrderStateEnum.RELEASED
 
@@ -449,7 +473,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
               :form-mode="isEditModeAllowed ? FORM_MODES.EDIT : FORM_MODES.VIEW"
               :disabled-modes="disabledModes"
               :selector-name="`${row.original.rowType}-${row.original.id}-mobile`"
-              @update:dinner-mode="(mode: DinnerMode) => emit('updateBooking', row.original.id as number, mode, row.original.ticketPriceId)"
+              @update:dinner-mode="(mode: DinnerMode) => emitInhabitantBooking(row.original, mode)"
             />
           </div>
         </div>
@@ -463,13 +487,24 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             v-model="draftPowerMode"
             :form-mode="FORM_MODES.EDIT"
             :disabled-modes="disabledModes"
-            size="sm"
+            :size="SIZES.standard"
             name="power-mode-selector"
           />
           <UButton
+            color="neutral"
+            variant="ghost"
+            :icon="ICONS.xMark"
+            :size="SIZES.standard"
+            name="cancel-power-mode"
+            @click="emit('cancel')"
+          >
+            Annuller
+          </UButton>
+          <UButton
             :color="COMPONENTS.powerMode.color"
             variant="solid"
-            size="sm"
+            :icon="COMPONENTS.powerMode.buttonIcon"
+            :size="SIZES.standard"
             name="save-power-mode"
             @click="handlePowerModeUpdate"
           >
@@ -483,13 +518,13 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             v-model="draftGuestMode"
             :form-mode="FORM_MODES.EDIT"
             :disabled-modes="guestDisabledModes"
-            size="sm"
+            :size="SIZES.standard"
             name="guest-mode-selector"
           />
           <UButton
             color="primary"
             variant="solid"
-            size="sm"
+            :size="SIZES.standard"
             name="add-guest"
             @click="handleAddGuest"
           >
@@ -508,7 +543,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
             :form-mode="isEditModeAllowed ? FORM_MODES.EDIT : FORM_MODES.VIEW"
             :disabled-modes="disabledModes"
             :selector-name="`${row.original.rowType}-${row.original.id}`"
-            @update:dinner-mode="(mode: DinnerMode) => emit('updateBooking', row.original.id as number, mode, row.original.ticketPriceId)"
+            @update:dinner-mode="(mode: DinnerMode) => emitInhabitantBooking(row.original, mode)"
           />
         </div>
       </template>
@@ -548,7 +583,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
                 :form-mode="isEditModeAllowed ? FORM_MODES.EDIT : FORM_MODES.VIEW"
                 :disabled-modes="disabledModes"
                 :selector-name="`guest-${row.original.id}-mobile`"
-                @update:dinner-mode="(mode: DinnerMode) => emit('updateBooking', row.original.order?.inhabitantId as number, mode, row.original.ticketPriceId)"
+                @update:dinner-mode="(mode: DinnerMode) => emitGuestBooking(row.original, mode)"
               />
             </div>
           </div>
@@ -567,7 +602,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
               :form-mode="isEditModeAllowed ? FORM_MODES.EDIT : FORM_MODES.VIEW"
               :disabled-modes="disabledModes"
               :selector-name="`guest-${row.original.id}`"
-              @update:dinner-mode="(mode: DinnerMode) => emit('updateBooking', row.original.order?.inhabitantId as number, mode, row.original.ticketPriceId)"
+              @update:dinner-mode="(mode: DinnerMode) => emitGuestBooking(row.original, mode)"
             />
           </div>
         </template>

@@ -1,5 +1,5 @@
 import {
-    addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
+    addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
     formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration
 } from "date-fns"
@@ -15,8 +15,13 @@ export const DATE_SETTINGS =
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
         SEASON_NAME_MASK: 'MM/yy',
-        timezone: 'Europe/Copenhagen'
+        timezone: 'Europe/Copenhagen',
+        weekStartsOn: 1 as const // Monday (ISO week)
     }
+
+/** Check if two dates are in the same week (Monday-based, ISO standard) */
+export const areSameWeek = (a: Date, b: Date): boolean =>
+    isSameWeek(a, b, {weekStartsOn: DATE_SETTINGS.weekStartsOn})
 
 // Takes an iso week number, and a year in which the week is in, and a weekday number (0-6),
 // and returns the date of that weekday in that week in that year

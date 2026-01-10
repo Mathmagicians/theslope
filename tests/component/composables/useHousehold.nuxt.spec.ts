@@ -21,7 +21,7 @@ describe('useHousehold', () => {
         const result = computeAggregatedPreferences([])
 
         WEEKDAYS.forEach(day => {
-          expect(result[day]).toBe(DinnerMode.DINEIN)
+          expect(result.preferences[day]).toBe(DinnerMode.DINEIN)
         })
       })
 
@@ -35,7 +35,7 @@ describe('useHousehold', () => {
 
         // Null preferences are treated as default (DINEIN)
         WEEKDAYS.forEach(day => {
-          expect(result[day]).toBe(DinnerMode.DINEIN)
+          expect(result.preferences[day]).toBe(DinnerMode.DINEIN)
         })
       })
     })
@@ -60,7 +60,7 @@ describe('useHousehold', () => {
           const result = computeAggregatedPreferences(inhabitants)
 
           WEEKDAYS.forEach(day => {
-            expect(result[day]).toBe(mode)
+            expect(result.preferences[day]).toBe(mode)
           })
         })
 
@@ -71,7 +71,7 @@ describe('useHousehold', () => {
           const result = computeAggregatedPreferences(inhabitants)
 
           WEEKDAYS.forEach(day => {
-            expect(result[day]).toBe(mode)
+            expect(result.preferences[day]).toBe(mode)
           })
         })
       })
@@ -112,12 +112,12 @@ describe('useHousehold', () => {
 
           // Check mixed days - fall back to DINEIN
           expectMixed.forEach(day => {
-            expect(result[day as keyof typeof result]).toBe(DinnerMode.DINEIN)
+            expect(result.preferences[day as keyof typeof result.preferences]).toBe(DinnerMode.DINEIN)
           })
 
           // Check consensus days
           Object.entries(expectConsensus).forEach(([day, value]) => {
-            expect(result[day as keyof typeof result]).toBe(value)
+            expect(result.preferences[day as keyof typeof result.preferences]).toBe(value)
           })
         })
       })
@@ -138,8 +138,8 @@ describe('useHousehold', () => {
         const result = computeAggregatedPreferences(inhabitants)
 
         // null treated as DINEIN, so consensus is DINEIN
-        expect(result.mandag).toBe(DinnerMode.DINEIN)
-        expect(result.tirsdag).toBe(DinnerMode.DINEIN)
+        expect(result.preferences.mandag).toBe(DinnerMode.DINEIN)
+        expect(result.preferences.tirsdag).toBe(DinnerMode.DINEIN)
       })
 
       it('returns DINEIN when null values cause mismatch with non-default', () => {
@@ -158,8 +158,8 @@ describe('useHousehold', () => {
 
         const result = computeAggregatedPreferences(inhabitants)
 
-        expect(result.mandag).toBe(DinnerMode.DINEIN) // All agree (null → DINEIN)
-        expect(result.tirsdag).toBe(DinnerMode.DINEIN) // Mixed, falls back to DINEIN
+        expect(result.preferences.mandag).toBe(DinnerMode.DINEIN) // All agree (null → DINEIN)
+        expect(result.preferences.tirsdag).toBe(DinnerMode.DINEIN) // Mixed, falls back to DINEIN
       })
     })
 
@@ -202,7 +202,7 @@ describe('useHousehold', () => {
           const result = computeAggregatedPreferences(inhabitants)
 
           WEEKDAYS.forEach((day, i) => {
-            expect(result[day]).toBe(expected[i])
+            expect(result.preferences[day]).toBe(expected[i])
           })
         })
       })
@@ -234,9 +234,9 @@ describe('useHousehold', () => {
 
           const result = computeAggregatedPreferences(inhabitants)
 
-          expect(result.mandag).toBe(DinnerMode.DINEIN)
-          expect(result.fredag).toBe(DinnerMode.TAKEAWAY)
-          expect(result.lørdag).toBe(DinnerMode.NONE)
+          expect(result.preferences.mandag).toBe(DinnerMode.DINEIN)
+          expect(result.preferences.fredag).toBe(DinnerMode.TAKEAWAY)
+          expect(result.preferences.lørdag).toBe(DinnerMode.NONE)
         })
       })
     })
@@ -388,6 +388,21 @@ describe('useHousehold', () => {
         expect(matcher('Signe H.')).toBe(12)
         expect(matcher('Unknown')).toBeNull()
       })
+    })
+  })
+
+  describe('formatHouseholdFamilyName', () => {
+    const { formatHouseholdFamilyName } = useHousehold()
+
+    it.each([
+      { inhabitants: [], expected: null, scenario: 'empty array' },
+      { inhabitants: [{ lastName: '' }], expected: null, scenario: 'empty lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }], expected: 'Hansen', scenario: 'single person' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: 'Familien Hansen', scenario: 'same lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: 'Familien Hansen & Jensen', scenario: 'two lastNames' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: 'Familien Hansen & Jensen m.fl.', scenario: '3+ lastNames' }
+    ])('$scenario → $expected', ({ inhabitants, expected }) => {
+      expect(formatHouseholdFamilyName(inhabitants)).toBe(expected)
     })
   })
 })

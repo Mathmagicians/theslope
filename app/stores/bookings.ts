@@ -1,10 +1,13 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, ProcessBookingResult} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
     const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
+    const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
@@ -170,6 +173,58 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
+    /**
+     * Process booking for one or more inhabitants on a single dinner.
+     * Consolidates individual and power mode booking logic.
+     */
+    const processBooking = async (
+        inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'birthDate'>[],
+        existingOrders: OrderDisplay[],
+        dinnerMode: DinnerMode,
+        dinnerId: number,
+        dinnerDate: Date,
+        ticketPrices: TicketPrice[],
+        householdId: number,
+        userId: number
+    ): Promise<ProcessBookingResult> => {
+        const {reconcileSingleDinnerUserBooking, buildBookingFeedback} = useBooking()
+
+        // Reconcile to get create/update/delete buckets
+        const result = reconcileSingleDinnerUserBooking(
+            inhabitants, existingOrders, dinnerMode, dinnerId, dinnerDate, ticketPrices, householdId, userId
+        )
+
+        // Execute creates
+        if (result.create.length > 0) {
+            await createOrder({
+                householdId,
+                dinnerEventId: dinnerId,
+                orders: result.create.map(o => ({
+                    inhabitantId: o.inhabitantId,
+                    ticketPriceId: o.ticketPriceId!,
+                    bookedByUserId: userId,
+                    dinnerMode: o.dinnerMode
+                }))
+            })
+        }
+
+        // Execute updates
+        for (const desired of result.update) {
+            const existing = existingOrders.find(o => o.inhabitantId === desired.inhabitantId && o.dinnerEventId === dinnerId)
+            if (existing?.id) await updateOrder(existing.id, {dinnerMode: desired.dinnerMode})
+        }
+
+        // Execute deletes
+        for (const order of result.delete) {
+            if (order.id) await deleteOrder(order.id)
+        }
+
+        const nameMap = new Map(inhabitants.map(i => [i.id, i.name]))
+        const feedback = buildBookingFeedback(result, nameMap, dinnerMode)
+        console.info(CTX, `Processed booking: ${JSON.stringify(feedback.summary)}`)
+        return feedback
+    }
+
     // DINNER EVENT ACTIONS
     type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
 
@@ -238,10 +293,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
         } else if (hasDailyMaintenanceResult.value) {
             const r = dailyMaintenanceResult.value!
-            console.info(CTX, `Daily maintenance completed: Consumed: ${r.consume.consumed}, Closed: ${r.close.closed}, Transactions: ${r.transact.created}`)
+            const stats = formatDailyMaintenanceStats(r)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Daily maintenance completed: ${description}`)
             toast.add({
                 title: 'Daglig vedligeholdelse afsluttet',
-                description: `Middage: ${r.consume.consumed}, Ordrer lukket: ${r.close.closed}, Transaktioner: ${r.transact.created}`,
+                description,
                 color: 'success'
             })
         }
@@ -320,6 +377,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const hasMonthlyBillingResult = computed(() => monthlyBillingStatus.value === 'success' && monthlyBillingResult.value !== null)
     const hasMonthlyBillingError = computed(() => monthlyBillingStatus.value === 'error')
 
+    const {formatMonthlyBillingStats} = useMaintenance()
+
     const runMonthlyBilling = async () => {
         await executeMonthlyBilling()
 
@@ -327,12 +386,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
         } else if (hasMonthlyBillingResult.value) {
             const results = monthlyBillingResult.value!.results
-            const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
-            const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
-            console.info(CTX, `Monthly billing completed: ${results.length} periods, Invoices: ${totalInvoices}, Transactions: ${totalTransactions}`)
+            const stats = formatMonthlyBillingStats(results)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Monthly billing completed: ${description}`)
             toast.add({
                 title: 'Månedlig fakturering afsluttet',
-                description: `${results.length} periode(r), Fakturaer: ${totalInvoices}, Transaktioner: ${totalTransactions}`,
+                description,
                 color: 'success'
             })
             // Refresh billing periods to show new data
@@ -367,6 +426,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateOrder,
         claimOrder,
         fetchReleasedOrders,
+        processBooking,
 
         // dinner event actions
         isDinnerUpdating,

@@ -1,7 +1,11 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
+import {useTicket} from '~/composables/useTicket'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {PruneAndCreateResult} from '~/utils/batchUtils'
 import {calculateCountdown} from '~/utils/date'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
@@ -268,14 +272,9 @@ export const useBooking = () => {
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
         deadlines: { canModifyOrders: (date: Date) => boolean, isAnnounceMenuPastDeadline: (date: Date) => boolean }
     ): StepDeadlineResult => {
-        const {getDinnerTimeRange, getDefaultDinnerStartTime} = useSeason()
+        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
         const config = getStepConfig(dinnerEvent, deadlines)
-
-        const appConfig = useAppConfig()
-        const thresholds = {
-            warning: appConfig.theslope?.cookingDeadlines?.warningHours ?? 72,
-            critical: appConfig.theslope?.cookingDeadlines?.criticalHours ?? 24
-        }
+        const thresholds = getCookingDeadlineThresholds()
 
         const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
         const countdown = calculateCountdown(dinnerTimeRange.start)
@@ -309,6 +308,40 @@ export const useBooking = () => {
      */
     const canCancelDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state'>): boolean => {
         return dinnerEvent.state !== DinnerState.CANCELLED && dinnerEvent.state !== DinnerState.CONSUMED
+    }
+
+    /**
+     * Get max alarm level for chef tasks (menu + groceries) - for calendar chips.
+     * Reuses DINNER_STEP_MAP.getDeadline() logic from DinnerDeadlineBadges.
+     *
+     * @returns AlarmLevel: -1 (all done), 0 (on track), 1 (warning), 2 (critical), 3 (overdue)
+     */
+    const getChefDeadlineAlarm = (
+        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
+        deadlines: { isAnnounceMenuPastDeadline: (date: Date) => boolean }
+    ): AlarmLevel => {
+        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
+        const thresholds = getCookingDeadlineThresholds()
+        const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
+        const countdown = calculateCountdown(dinnerTimeRange.start)
+        const isPastDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
+
+        const alarms: AlarmLevel[] = []
+
+        // Menu badge - same logic as DinnerDeadlineBadges.menuBadge
+        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
+                        (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        if (!menuDone) {
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+        }
+
+        // Groceries badge - same logic as DinnerDeadlineBadges.groceriesDoneBadge
+        const groceriesDone = dinnerEvent.totalCost > 0
+        if (!groceriesDone) {
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+        }
+
+        return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
     }
 
     /**
@@ -464,6 +497,150 @@ export const useBooking = () => {
         }))
     }
 
+    // ============================================================================
+    // Single Dinner User Booking - Pure functions reusing scaffolder's reconcilePreBookings
+    // ============================================================================
+
+    /**
+     * Reconcile user booking for a single dinner.
+     */
+    const reconcileSingleDinnerUserBooking = (
+        inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
+        existingOrders: OrderDisplay[],
+        dinnerMode: DinnerMode,
+        dinnerId: number,
+        dinnerDate: Date,
+        ticketPrices: TicketPrice[],
+        householdId: number,
+        userId: number
+    ): PruneAndCreateResult<OrderDisplay, OrderCreateWithPrice> => {
+        const {reconcilePreBookings} = useSeason()
+        const {getTicketPriceForInhabitant} = useTicket()
+        const {OrderCreateWithPriceSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
+
+        const ordersForDinner = existingOrders.filter(o => o.dinnerEventId === dinnerId)
+
+        const desiredOrders: OrderCreateWithPrice[] = dinnerMode === DinnerModeSchema.enum.NONE
+            ? []
+            : inhabitants.map(inhabitant => {
+                const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, ticketPrices, dinnerDate)
+                if (!ticketPrice) throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
+
+                return OrderCreateWithPriceSchema.parse({
+                    dinnerEventId: dinnerId,
+                    inhabitantId: inhabitant.id,
+                    householdId,
+                    bookedByUserId: userId,
+                    ticketPriceId: ticketPrice.id,
+                    priceAtBooking: ticketPrice.price,
+                    dinnerMode,
+                    state: OrderStateSchema.enum.BOOKED
+                })
+            })
+
+        return reconcilePreBookings(ordersForDinner)(desiredOrders)
+    }
+
+    /**
+     * Build user-friendly feedback from reconciliation result.
+     */
+    const buildBookingFeedback = (
+        result: PruneAndCreateResult<OrderDisplay, OrderCreateWithPrice>,
+        inhabitantNames: Map<number, string>,
+        dinnerMode: DinnerMode
+    ): ProcessBookingResult => {
+        const mapToFeedback = (items: {inhabitantId: number}[], action: BookingAction) =>
+            items.map(o => ({
+                inhabitantId: o.inhabitantId,
+                inhabitantName: inhabitantNames.get(o.inhabitantId) ?? 'Ukendt',
+                action,
+                dinnerMode
+            }))
+
+        return {
+            feedback: [
+                ...mapToFeedback(result.create, 'created'),
+                ...mapToFeedback(result.update, 'updated'),
+                ...mapToFeedback(result.delete, 'deleted'),
+                ...mapToFeedback(result.idempotent, 'skipped')
+            ],
+            summary: {
+                created: result.create.length,
+                updated: result.update.length,
+                released: 0,
+                deleted: result.delete.length,
+                skipped: result.idempotent.length
+            }
+        }
+    }
+
+    // ============================================================================
+    // Scaffold Result Formatting - Consistent display across UI and logs
+    // ============================================================================
+
+    const SCAFFOLD_FIELDS = [
+        { key: 'created', symbol: '+', label: 'oprettet' },
+        { key: 'deleted', symbol: '-', label: 'slettet' },
+        { key: 'released', symbol: '~', label: 'frigivet' },
+        { key: 'priceUpdated', symbol: '$', label: 'pris opdateret' },
+        { key: 'modeUpdated', symbol: 'm', label: 'mode opdateret' },
+        { key: 'unchanged', symbol: '=', label: 'uændret' },
+        { key: 'errored', symbol: '!', label: 'fejlet' },
+    ] as const
+
+    type ScaffoldResultFormat = 'compact' | 'verbose'
+
+    /**
+     * Format scaffold result for display (toast, logs)
+     * - 'verbose' (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
+     * - 'compact': Technical symbols for admin/logs - "+7 =179"
+     * Only includes non-zero counts for cleaner output
+     */
+    const formatScaffoldResult = (
+        result: Pick<ScaffoldResult, 'created' | 'deleted' | 'released' | 'priceUpdated' | 'modeUpdated' | 'unchanged' | 'errored'>,
+        format: ScaffoldResultFormat = 'verbose'
+    ): string => {
+        const parts = SCAFFOLD_FIELDS
+            .filter(f => result[f.key] > 0)
+            .map(f => format === 'compact'
+                ? `${f.symbol}${result[f.key]}`
+                : `${result[f.key]} ${f.label}`)
+
+        if (parts.length === 0) {
+            return format === 'compact' ? '(ingen)' : 'Ingen ændringer i bookinger'
+        }
+        return parts.join(format === 'compact' ? ' ' : ', ')
+    }
+
+    // ============================================================================
+    // Lock Status - Compute booking lock status for calendar display
+    // ============================================================================
+
+    /**
+     * Compute lock status map for dinner events
+     *
+     * @param dinnerEvents - Dinner events to check
+     * @param deadlines - Season deadlines from deadlinesForSeason()
+     * @param releasedOrdersByDinnerId - Map of dinner ID → count of RELEASED orders (tickets for sale)
+     * @returns Map of dinner ID → released ticket count (null = not locked, 0 = locked no tickets, >0 = locked with tickets)
+     */
+    const computeLockStatus = (
+        dinnerEvents: Array<{ id: number; date: Date }>,
+        deadlines: { canModifyOrders: (date: Date) => boolean },
+        releasedOrdersByDinnerId?: Map<number, number>
+    ): Map<number, number | null> => {
+        const result = new Map<number, number | null>()
+
+        for (const dinner of dinnerEvents) {
+            const isLocked = !deadlines.canModifyOrders(dinner.date)
+            if (isLocked) {
+                result.set(dinner.id, releasedOrdersByDinnerId?.get(dinner.id) ?? 0)
+            }
+        }
+
+        return result
+    }
+
     return {
         // Order Snapshot
         buildOrderSnapshot,
@@ -471,6 +648,7 @@ export const useBooking = () => {
         getDinnerStepState,
         getStepConfig,
         getStepDeadline,
+        getChefDeadlineAlarm,
         canAnnounceDinner,
         canCancelDinner,
         buildDinnerUrl,
@@ -482,6 +660,13 @@ export const useBooking = () => {
         prepareTransactionData,
         CONSUMABLE_DINNER_STATES,
         CLOSABLE_ORDER_STATES,
-        DEADLINE_LABELS
+        DEADLINE_LABELS,
+        // Single Dinner User Booking
+        reconcileSingleDinnerUserBooking,
+        buildBookingFeedback,
+        // Scaffold Result Formatting
+        formatScaffoldResult,
+        // Lock Status
+        computeLockStatus
     }
 }

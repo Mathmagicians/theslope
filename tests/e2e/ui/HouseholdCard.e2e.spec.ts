@@ -8,8 +8,8 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {memberUIFile} = authFiles
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -26,13 +26,13 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
     let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
 
-    test.use({storageState: adminUIFile})
+    test.use({storageState: memberUIFile})
 
     // Helper to navigate to household members page and wait for load
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
         await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
+            (response) => response.url().includes('/api/household/') && response.status() === 200,
             {timeout: 10000}
         )
         await pollUntil(
@@ -235,6 +235,13 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // WHEN: Save preferences (triggers scaffolding)
         await page.getByTestId('save-preferences').click()
 
+        // THEN: Wait for result alert to appear (confirms save completed)
+        await pollUntil(
+            async () => await page.getByTestId('last-result-alert').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
         // THEN: Wait for save to complete and verify 3 orders were scaffolded (one per cooking day)
         const ordersAfter = await pollUntil(
             async () => {
@@ -245,5 +252,126 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         )
 
         expect(ordersAfter.length, 'Donald should have 3 scaffolded orders (Mon/Wed/Fri)').toBe(3)
+    })
+
+    test('ADR-015: GIVEN household with 2+ inhabitants with NONE prefs WHEN using power mode to set DINEIN THEN all inhabitants get orders scaffolded', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const powerModeTestSalt = temporaryAndRandom()
+
+        // GIVEN: Create dedicated household for power mode test
+        const powerHousehold = await HouseholdFactory.createHousehold(context, {
+            name: salt('PowerModeDucks', powerModeTestSalt)
+        })
+        const powerHouseholdId = powerHousehold.id
+        const powerShortName = powerHousehold.shortName
+
+        // GIVEN: Create 2 inhabitants with NONE preferences
+        const today = new Date()
+        const nonePrefs = createDefaultWeekdayMap(DinnerMode.NONE)
+
+        const [daisy, dewey] = await Promise.all([
+            HouseholdFactory.createInhabitantWithConfig(context, powerHouseholdId, {
+                name: salt('Daisy', powerModeTestSalt),
+                lastName: salt('Duck', powerModeTestSalt),
+                birthDate: new Date(today.getFullYear() - 25, today.getMonth(), 1),
+                dinnerPreferences: nonePrefs
+            }),
+            HouseholdFactory.createInhabitantWithConfig(context, powerHouseholdId, {
+                name: salt('Dewey', powerModeTestSalt),
+                lastName: salt('Duck', powerModeTestSalt),
+                birthDate: new Date(today.getFullYear() - 10, today.getMonth(), 1),
+                dinnerPreferences: nonePrefs
+            })
+        ])
+
+        // GIVEN: Get dinner event count
+        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
+        expect(dinnerEvents.length, 'Season should have 3 dinner events').toBe(3)
+
+        // Verify no orders exist initially for both inhabitants
+        const allDinnerEventIds = dinnerEvents.map(e => e.id!)
+        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, allDinnerEventIds)
+        const daisyInitialOrders = initialOrders.filter(o => o.inhabitantId === daisy.id)
+        const deweyInitialOrders = initialOrders.filter(o => o.inhabitantId === dewey.id)
+        expect(daisyInitialOrders.length, 'Daisy should have no orders initially').toBe(0)
+        expect(deweyInitialOrders.length, 'Dewey should have no orders initially').toBe(0)
+
+        // WHEN: Navigate to power mode household
+        await page.goto(`/household/${encodeURIComponent(powerShortName)}/members`)
+        await page.waitForResponse(
+            (response) => response.url().includes('/api/household/') && response.status() === 200,
+            {timeout: 10000}
+        )
+        await pollUntil(
+            async () => await page.locator('[data-testid="household-members"]').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
+        // WHEN: Click power mode toggle (bolt icon)
+        const powerModeToggle = page.getByTestId('power-mode-toggle')
+        await pollUntil(
+            async () => await powerModeToggle.isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+        await powerModeToggle.click()
+
+        // WHEN: Wait for power mode edit buttons to appear
+        await pollUntil(
+            async () => {
+                const button = page.getByTestId('power-mode-preferences-edit-mandag-DINEIN')
+                return await button.count() > 0
+            },
+            (count) => count,
+            10
+        )
+
+        // WHEN: Change all cooking days to DINEIN via power mode (Mon, Wed, Fri)
+        await page.getByTestId('power-mode-preferences-edit-mandag-DINEIN').click()
+        await page.getByTestId('power-mode-preferences-edit-onsdag-DINEIN').click()
+        await page.getByTestId('power-mode-preferences-edit-fredag-DINEIN').click()
+
+        // Documentation screenshot showing power mode editing
+        await doScreenshot(page, 'household/household-card-power-mode-editing', true)
+
+        // WHEN: Save preferences (triggers scaffolding for ALL inhabitants)
+        // Wait for the last API response (power mode sends multiple sequential requests)
+        const saveResponsePromise = page.waitForResponse(
+            (r) => r.url().includes('/api/household/inhabitants/') && r.url().includes('/preferences') && r.request().method() === 'POST',
+            {timeout: 30000}
+        )
+        await page.getByTestId('save-preferences').click()
+        await saveResponsePromise
+
+        // THEN: Wait for save to complete and verify orders scaffolded for both inhabitants
+        // Expected: 2 inhabitants × 3 cooking days = 6 total orders
+        const ordersAfter = await pollUntil(
+            async () => {
+                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, allDinnerEventIds)
+                return orders.filter(o => o.inhabitantId === daisy.id || o.inhabitantId === dewey.id)
+            },
+            (orders) => orders.length === 6,
+            15,
+            500
+        )
+
+        // Verify each inhabitant has correct number of orders
+        const daisyOrders = ordersAfter.filter(o => o.inhabitantId === daisy.id)
+        const deweyOrders = ordersAfter.filter(o => o.inhabitantId === dewey.id)
+        expect(daisyOrders.length, 'Daisy should have 3 orders (Mon/Wed/Fri)').toBe(3)
+        expect(deweyOrders.length, 'Dewey should have 3 orders (Mon/Wed/Fri)').toBe(3)
+
+        // THEN: Verify last result alert shows aggregated scaffold result
+        const lastResultAlert = page.getByTestId('last-result-alert')
+        await pollUntil(
+            async () => await lastResultAlert.isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+        await expect(lastResultAlert).toContainText('6')  // 6 created orders
+
+        // Cleanup
+        await HouseholdFactory.deleteHousehold(context, powerHouseholdId).catch(() => {})
     })
 })

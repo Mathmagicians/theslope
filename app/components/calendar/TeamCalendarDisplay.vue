@@ -6,7 +6,7 @@
  * - Calendar view: Shows team assignments on calendar with colored badges
  * - Selection support: Click to select dinner event (optional via emit)
  * - Multi-team support: Shows all teams with distinct colors
- * - Holiday awareness: Displays holidays as green chips
+ * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
  *
@@ -42,6 +42,7 @@ const emit = defineEmits<{
 const {getTeamColor} = useCookingTeam()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
+const {CALENDAR, SIZES} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -105,10 +106,13 @@ const getCalendarDayClasses = (day: DateValue) => [
 <template>
   <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
         <template #day="{ day, eventLists }">
-          <!-- Holiday takes precedence -->
-          <UChip v-if="isHoliday(day)" show size="md" color="success">
+          <!-- Holiday takes precedence (green ring) -->
+          <div
+            v-if="isHoliday(day)"
+            :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+          >
             {{ day.day }}
-          </UChip>
+          </div>
 
           <!-- Team cooking day with tooltip and selection -->
           <UTooltip
@@ -148,8 +152,8 @@ const getCalendarDayClasses = (day: DateValue) => [
 
             <!-- Holidays -->
             <div v-if="holidays && holidays.length > 0" class="flex items-center gap-3">
-              <div class="w-8 h-8 flex items-center justify-center shrink-0">
-                <UChip show size="md" color="success">1</UChip>
+              <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday, 'shrink-0']">
+                1
               </div>
               <span>Ferie</span>
             </div>

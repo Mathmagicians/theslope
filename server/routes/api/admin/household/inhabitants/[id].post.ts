@@ -23,6 +23,8 @@ const noScaffoldResult = (): ScaffoldResult => ({
     created: 0,
     deleted: 0,
     released: 0,
+    priceUpdated: 0,
+    modeUpdated: 0,
     unchanged: 0,
     households: 0,
     errored: 0
@@ -51,12 +53,17 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         const updatedInhabitant = await updateInhabitant(d1Client, id, inhabitantData)
         console.info(`👩‍🏠 > INHABITANT > [POST] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName}`)
 
-        // Re-scaffold if dinner preferences changed
+        // Re-scaffold if dinner preferences OR birthDate changed (affects ticket price category)
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         let scaffoldResult: ScaffoldResult = noScaffoldResult()
 
-        if (inhabitantData.dinnerPreferences !== undefined) {
-            console.info(`👩‍🏠 > INHABITANT > [POST] Preferences changed, re-scaffolding household ${updatedInhabitant.householdId}`)
+        const shouldRescaffold = inhabitantData.dinnerPreferences !== undefined || inhabitantData.birthDate !== undefined
+        if (shouldRescaffold) {
+            const reason = [
+                inhabitantData.dinnerPreferences !== undefined && 'preferences',
+                inhabitantData.birthDate !== undefined && 'birthDate'
+            ].filter(Boolean).join('+')
+            console.info(`👩‍🏠 > INHABITANT > [POST] ${reason} changed, re-scaffolding household ${updatedInhabitant.householdId}`)
             scaffoldResult = await scaffoldPrebookings(d1Client, {
                 seasonId,
                 householdId: updatedInhabitant.householdId

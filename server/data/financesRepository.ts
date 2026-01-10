@@ -341,6 +341,8 @@ export type OrderUpdateFields = {
     dinnerMode?: DinnerMode
     state?: OrderState
     releasedAt?: Date | null
+    ticketPriceId?: number
+    priceAtBooking?: number
 }
 
 /**

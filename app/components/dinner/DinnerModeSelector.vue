@@ -7,6 +7,7 @@
  * - Weekly preferences (WeekDayMapDinnerModeDisplay uses this 5 times)
  * - Single event booking (ChefMenuCard booking rows)
  * - Table headers (weekday title badges)
+ * - Grid cells (BookingGridView uses toggle mode)
  *
  * TITLE MODE (modelValue is WeekDay):
  * ┌─────┐
@@ -18,7 +19,7 @@
  * │ 🍽️ Fællesspisning │ - Badge showing current selection
  * └────────────────┘
  *
- * SELECTOR EDIT MODE (modelValue is DinnerMode):
+ * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default):
  * ┌──────────────────────────────────────────────────────┐
  * │ [🍽️ Spis][🕐 Sen][🛍️ Takeaway][❌ Ingen]          │
  * │  ^^^^^^^^^                                           │
@@ -26,6 +27,11 @@
  * │           ^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^^^^         │
  * │           inactive (ghost, neutral)                  │
  * └──────────────────────────────────────────────────────┘
+ *
+ * SELECTOR EDIT MODE - TOGGLE (interaction="toggle"):
+ * ┌─────┐
+ * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE
+ * └─────┘   Compact for grid cells
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
@@ -37,9 +43,8 @@ type BadgeVariant = NonNullable<BadgeProps['variant']>
 type ButtonSize = NonNullable<ButtonProps['size']>
 type ButtonVariant = NonNullable<ButtonProps['variant']>
 
-// Local styling constants (used only in this component)
+// Local styling constant (field group only - badge size from design system)
 const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1'
-const WEEKDAY_BADGE_CONTENT_SIZE = 'size-4 md:size-8'
 
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
@@ -49,6 +54,8 @@ interface Props {
   name?: string
   showLabel?: boolean // Show mode label text in VIEW mode (when in selector mode)
   size?: ButtonSize
+  consensus?: boolean // Power mode: true=all agree, false=mixed preferences, undefined=not power mode
+  interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -58,15 +65,25 @@ const props = withDefaults(defineProps<Props>(), {
   disabledModes: () => [],
   name: 'dinner-mode-selector',
   showLabel: false,
-  size: 'md'
+  size: 'sm',
+  consensus: undefined,
+  interaction: 'buttons'
 })
 
 const emit = defineEmits<{
   'update:modelValue': [value: DinnerMode]
 }>()
 
+// Track if user has made a selection (consensus decided)
+const hasUserSelected = ref(false)
+
+// Reset when consensus changes (new edit session)
+watch(() => props.consensus, () => {
+  hasUserSelected.value = false
+})
+
 // Design system
-const { WEEKDAY, ORIENTATIONS } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS, ICONS } = useTheSlopeDesignSystem()
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
@@ -132,7 +149,24 @@ const isModeDisabled = (mode: DinnerMode): boolean => {
 // Update value (selector mode only)
 const updateMode = (value: DinnerMode) => {
   if (props.disabled || isModeDisabled(value) || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  hasUserSelected.value = true
   emit('update:modelValue', value)
+}
+
+// Toggle to next mode (for toggle interaction)
+const toggleMode = () => {
+  if (props.disabled || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  const currentIndex = dinnerModeOrder.indexOf(dinnerMode.value)
+  // Find next enabled mode (skip disabled ones)
+  for (let i = 1; i <= dinnerModeOrder.length; i++) {
+    const nextIndex = (currentIndex + i) % dinnerModeOrder.length
+    const nextMode = dinnerModeOrder[nextIndex]!
+    if (!isModeDisabled(nextMode)) {
+      hasUserSelected.value = true
+      emit('update:modelValue', nextMode)
+      return
+    }
+  }
 }
 
 // Get dinner mode value (when in selector mode)
@@ -143,13 +177,15 @@ const getModeIcon = (): string => {
   return dinnerModeConfig[dinnerMode.value]!.icon
 }
 
-// Get badge color for VIEW mode
+// Get badge color for VIEW mode (neutral when no consensus in power mode)
 const getBadgeColor = (): BadgeColor => {
+  if (props.consensus === false) return 'neutral'
   return dinnerModeConfig[dinnerMode.value]!.activeColor
 }
 
-// Get badge variant for VIEW mode
+// Get badge variant for VIEW mode (outline when no consensus in power mode)
 const getBadgeVariant = (): BadgeVariant => {
+  if (props.consensus === false) return 'outline'
   return dinnerModeConfig[dinnerMode.value]!.viewVariant
 }
 
@@ -163,6 +199,13 @@ const getButtonColor = (mode: DinnerMode): BadgeColor => {
 const getButtonVariant = (mode: DinnerMode): ButtonVariant => {
   const isActive = dinnerMode.value === mode
   return isActive ? dinnerModeConfig[mode]!.editActiveVariant : dinnerModeConfig[mode]!.editInactiveVariant
+}
+
+// Check if button should pulse (DINEIN is fallback default without consensus)
+// Stop pulsing once user makes any selection (consensus decided)
+const shouldPulse = (mode: DinnerMode): boolean => {
+  if (hasUserSelected.value) return false
+  return mode === DinnerMode.DINEIN && dinnerMode.value === DinnerMode.DINEIN && props.consensus === false
 }
 
 // Get mode label
@@ -180,7 +223,7 @@ const getModeLabel = (): string => {
       :name="name"
       :data-testid="name"
     >
-      <div :class="`${WEEKDAY_BADGE_CONTENT_SIZE} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+      <div :class="`${WEEKDAY.badgeContentSize} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
         {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
       </div>
     </UBadge>
@@ -197,9 +240,24 @@ const getModeLabel = (): string => {
       :name="name"
       :data-testid="name"
     >
-      <UIcon :name="getModeIcon()" :class="WEEKDAY_BADGE_CONTENT_SIZE" />
+      <UIcon v-if="consensus === false" :name="ICONS.help" :class="WEEKDAY.badgeContentSize" />
+      <UIcon v-else :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
       <span v-if="showLabel" class="ml-1">{{ getModeLabel() }}</span>
     </UBadge>
+
+    <!-- EDIT MODE: Toggle (single button, click cycles) -->
+    <UButton
+      v-else-if="formMode === FORM_MODES.EDIT && interaction === 'toggle'"
+      :icon="getModeIcon()"
+      :color="dinnerModeConfig[dinnerMode]!.activeColor"
+      :variant="dinnerModeConfig[dinnerMode]!.editActiveVariant"
+      :disabled="disabled"
+      :size="size"
+      :name="name"
+      :data-testid="name"
+      :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
+      @click="toggleMode"
+    />
 
     <!-- EDIT MODE: Button group for selection -->
     <UFieldGroup
@@ -219,7 +277,8 @@ const getModeLabel = (): string => {
         :disabled="isModeDisabled(mode)"
         :size="size"
         :data-testid="`${name}-${mode}`"
-        class="rounded-none md:rounded-md"
+        :class="['rounded-none md:rounded-md', { 'animate-pulse': shouldPulse(mode) }]"
+        :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
         @click="updateMode(mode)"
       />
     </UFieldGroup>

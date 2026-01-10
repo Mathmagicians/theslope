@@ -167,7 +167,7 @@ watch(() => route.path, () => {
             <UCollapsible v-model:open="showFeedbackForm" :unmount-on-hide="false">
               <template #content>
                 <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
-                  <div v-if="isSuccess" class="text-center py-2 md:py-3 space-y-2">
+                  <div v-if="isSuccess" class="text-center py-3 md:py-4 space-y-3">
                     <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
                     <UButton
                         v-if="feedbackResult?.html_url"
@@ -177,7 +177,7 @@ watch(() => route.path, () => {
                         :label="`Se issue #${feedbackResult.number}`"
                         :size="SIZES.small"
                         variant="link"
-                        class="block mx-auto"
+                        class="block mx-auto underline decoration-dashed underline-offset-4"
                     />
                   </div>
                   <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">

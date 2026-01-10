@@ -23,8 +23,8 @@ const tabs = [
   },
   {
     key: 'members',
-    label: 'Husstanden',
-    icon: 'i-heroicons-users',
+    label: 'Præferencer',
+    icon: 'i-heroicons-adjustments-horizontal',
     component: 'HouseholdCard'
   },
   {
@@ -83,8 +83,15 @@ const {initHouseholdsStore} = householdStore
 
 initHouseholdsStore(shortname.value)
 
-// Type-safe household name for template (guaranteed non-null when isHouseholdsStoreReady)
-const householdName = computed(() => selectedHousehold.value?.name ?? '')
+// Format household title: address + family name
+const { formatHouseholdFamilyName } = useHousehold()
+const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
+const householdFamilyName = computed(() =>
+  selectedHousehold.value?.inhabitants
+    ? formatHouseholdFamilyName(selectedHousehold.value.inhabitants)
+    : null
+)
 
 useHead({
   title: `🏠 ${shortname.value}`,
@@ -110,7 +117,8 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
       <template #header>
         <div class="flex items-center gap-1 md:gap-2">
           <UIcon name="i-heroicons-home" class="text-2xl"/>
-          <h2 class="text-xl font-semibold">{{ householdName }}</h2>
+          <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
+          <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
         </div>
       </template>
       <UTabs
