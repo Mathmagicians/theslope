@@ -1,9 +1,12 @@
 import type {WeekDay} from '~/types/dateTypes'
-import type {AvatarProps, ButtonProps} from '@nuxt/ui'
+import type {AvatarProps, ButtonProps, BadgeProps} from '@nuxt/ui'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
 export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUIBadgeColor = NonNullable<BadgeProps['color']>
+export type NuxtUIBadgeVariant = NonNullable<BadgeProps['variant']>
+export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
 
 /**
  * Color System - TheSlope Design System

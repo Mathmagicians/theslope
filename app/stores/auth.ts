@@ -26,8 +26,9 @@ export const useAuthStore = defineStore("Auth", () => {
     const isAdmin = computed(() => user.value ? permissions.isAdmin(user.value) : false)
     const isAllergyManager = computed(() => user.value ? permissions.isAllergyManager(user.value) : false)
     const address = computed(() => user.value?.Inhabitant?.household?.address)
+    const isMemberOfHousehold = (householdId: number) => permissions.isHouseholdMember(householdId)
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, address, loggedIn, user, session, clear, fetch}
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {

@@ -225,6 +225,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return feedback
     }
 
+    /** ADR-016: Grid booking workhorse - handles multiple dinners with per-inhabitant modes */
+    const processGridBooking = async (
+        _changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]
+    ): Promise<ProcessBookingResult> => {
+        throw new Error('processGridBooking not implemented - ADR-016')
+    }
+
     // DINNER EVENT ACTIONS
     type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
 
@@ -427,6 +434,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         claimOrder,
         fetchReleasedOrders,
         processBooking,
+        processGridBooking,
 
         // dinner event actions
         isDinnerUpdating,
