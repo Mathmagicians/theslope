@@ -417,7 +417,7 @@ export class OrderFactory {
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
     const { OrderDisplaySchema } = useBookingValidation()
-    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventId=${dinnerEventId}`, { headers })
+    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventIds=${dinnerEventId}`, { headers })
 
     const status = response.status()
     const errorBody = status !== expectedStatus ? await response.text() : ''

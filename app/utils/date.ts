@@ -267,6 +267,15 @@ export function formatDanishWeekdayDate(date: Date): string {
 }
 
 /**
+ * Format date with single-letter weekday and day number (compact for grids)
+ * @param date - Date to format
+ * @returns Formatted string like "M 15" (Monday 15th)
+ */
+export function formatCompactWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEEEE d')
+}
+
+/**
  * Calculate countdown from current time to target time
  * Shows days when >24h away, hours and minutes when <24h away
  * @param targetDate - Target date/time (e.g., dinner time)

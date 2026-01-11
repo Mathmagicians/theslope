@@ -45,19 +45,24 @@ const selectedDinnerEvent = computed(() => {
   ) ?? null
 })
 
-// Load orders when dinner event changes
+// Grid view (week/month) is full-width without calendar
+const isGridView = computed(() => view.value === 'week' || view.value === 'month')
+
+// Visible dinner event IDs based on view and date range (day=1, week=~4, month=~16)
+const visibleDinnerEventIds = computed(() =>
+  getEventsForGridView(dinnerEvents.value, dateRange.value).flat().map(e => e.id)
+)
+
+// Load orders for visible dinner events
 watchEffect(() => {
-  if (selectedDinnerEvent.value) {
-    bookingsStore.loadOrdersForDinner(selectedDinnerEvent.value.id, true)
+  if (visibleDinnerEventIds.value.length > 0) {
+    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, true)
   }
 })
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
-
-// Grid view (week/month) is full-width without calendar
-const isGridView = computed(() => view.value === 'week' || view.value === 'month')
 </script>
 
 <template>

@@ -6,28 +6,50 @@
  * @see HouseholdCard.vue for synthetic row pattern (power mode)
  *
  * VIEW MODE:
- * ┌──────────┬───────┬──────┬──────╫──────┬──────╫──────┐
- * │ Beboer   │ Antal │ Ti 7 │ To 9 ║Ti 14 │To 16 ║Ti 21 │
- * ├──────────┼───────┼──────┼──────╫──────┼──────╫──────┤
- * │ Anna     │   4   │  🍽️  │ 📤❌ ║  🛍️  │  🍽️  ║ 🎟️🍽️│
- * │ Lars     │   3   │  🍽️  │  🕐  ║  🍽️  │  ❌  ║  🍽️  │
- * │ 🎫 Gæst  │   1   │  🍽️  │      ║      │      ║      │
- * └──────────┴───────┴──────┴──────╨──────┴──────╨──────┘
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  ◀  Uge 3 (13-19 jan)  ▶                               ✏️  │
+ * ├──────────┬───────┬──────┬──────╫──────┬──────┬──────╫──────┤
+ * │ Beboer   │ Antal │  M   │  T   ║  O   │  T   │  F   ║  S   │
+ * │          │       │ 13/1 │ 14/1 ║ 15/1 │ 16/1 │ 17/1 ║ 19/1 │
+ * │          │       │      │      ║      │      │      ║      │ <- chip row (fixed h)
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │⚡Alle    │       │  🍽️  │  ?   ║  🍽️  │  🍽️  │  🍽️  ║  ❌  │ <- consensus
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │ Anna     │   4   │  🍽️  │  🍽️  ║  🛍️  │  🍽️  │  🍽️  ║  ❌  │
+ * │ Lars     │   3   │  🍽️  │  🕐  ║  🍽️  │  ❌  │  🍽️  ║  ❌  │
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │ 🎫 Gæst  │   1   │  🍽️  │      ║      │      │  🍽️  ║      │ <- existing guest
+ * └──────────┴───────┴──────┴──────╨──────┴──────┴──────╨──────┘
+ *                     ↑ past columns muted
  *
  * EDIT MODE:
- * ┌──────────┬───────┬──────┬──────╫──────┬──────╫──────┐
- * │ Beboer   │ Antal │ Ti 7 │ To 9 ║Ti 14 │To 16 ║Ti 21 │
- * ├──────────┼───────┼──────┼──────╫──────┼──────╫──────┤
- * │⚡Alle    │       │  🍽️  │  🍽️  ║  🛍️  │  🍽️  ║  🍽️  │ <- POWER ROW
- * │ Anna     │   4   │  🍽️° │  🍽️  ║  🛍️° │  🍽️  ║  🍽️  │ °= modified
- * │ Lars     │   3   │  🍽️  │  🕐° ║  🍽️  │  ❌  ║  🍽️  │
- * │➕Gæst    │       │  +   │  +   ║  +   │  +   ║  +   │ <- ADD GUEST
- * │ 🎫 Gæst  │   1   │  🍽️  │      ║      │      ║      │
- * ├──────────┴───────┴──────┴──────╨──────┴──────╨──────┤
- * │ 3 ændringer              [Annuller] [Gem]           │ <- PINNED FOOTER
- * └─────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  ◀  Uge 3 (13-19 jan)  ▶                                   │
+ * ├──────────┬───────┬──────┬──────╫──────┬──────┬──────╫──────┤
+ * │ Beboer   │ Antal │ 13   │ 14   ║ 15   │To 16 │Fr 17 ║Sø 19 │
+ * │          │       │(🟠)  │(🟡2) ║(🟠)  │      │      ║      │ <- chip: 🟠=locked, 🟡N=tickets
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │⚡Alle    │       │  🍽️  │  ?   ║  🍽️  │  🍽️  │  ?°  ║  ❌  │ <- past=view, future=edit
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │ Anna     │   4   │  🍽️  │  🍽️  ║  🛍️  │  🍽️  │  🍽️° ║  ❌  │
+ * │ Lars     │   3   │  🍽️  │  🕐  ║  🍽️  │  ❌° │  🍽️  ║  ❌  │
+ * ├──────────┼───────┼──────┼──────╫──────┼──────┼──────╫──────┤
+ * │ 🎫 Gæst  │   1   │  🍽️  │      ║      │      │  🍽️  ║      │ <- existing guest
+ * │ ➕ Gæst │       │      │      ║      │  +   │  +   ║  +   │ <- add guest (future only)
+ * ├──────────┴───────┴──────┴──────╨──────┴──────┴──────╨──────┤
+ * │ 3 ændringer                         [Annuller] [Gem]       │
+ * └────────────────────────────────────────────────────────────┘
  *
- * Cell states: 🍽️=eating, 📤=released, 🎟️=claimed, °=modified
+ * ROW TYPES:
+ * | Row Type    | Icon | VIEW           | EDIT                | Description        |
+ * |-------------|------|----------------|---------------------|--------------------|
+ * | power       | ⚡   | Consensus/?    | Editable (future)   | Bulk update all    |
+ * | inhabitant  | 👤   | Booking state  | Editable (future)   | Household member   |
+ * | guest-order | 🎫   | Booking state  | Locked past, edit   | Existing guest     |
+ * | guest-add   | ➕   | Hidden         | + buttons (future)  | Add new guest      |
+ *
+ * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified
+ * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode} from '~/composables/useBookingValidation'
@@ -38,7 +60,7 @@ import type {DateRange} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
-type RowType = 'power' | 'inhabitant'
+type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
 
 interface GridRow {
   rowType: RowType
@@ -46,6 +68,7 @@ interface GridRow {
   name: string
   inhabitant?: InhabitantDisplay
   inhabitants?: InhabitantDisplay[] // For power mode
+  guestOrder?: OrderDisplay // For existing guest bookings
   isSynthetic: boolean
 }
 
@@ -67,15 +90,19 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   save: [changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]]
   cancel: []
+  'update:formMode': [mode: FormMode]
+  navigate: [direction: 'prev' | 'next']
+  addGuest: [eventId: number]
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Validation schemas
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
+const OrderStateEnum = OrderStateSchema.enum
 
 // ============================================================================
 // DRAFT STATE (ADR-016)
@@ -114,6 +141,7 @@ const handlePowerUpdate = (eventId: number, newMode: DinnerMode) => {
 
 const handleCancel = () => {
   draftChanges.value.clear()
+  emit('update:formMode', FORM_MODES.VIEW)
   emit('cancel')
 }
 
@@ -124,6 +152,16 @@ const handleSave = () => {
   })
   emit('save', changes)
   draftChanges.value.clear()
+  emit('update:formMode', FORM_MODES.VIEW)
+}
+
+// Handle mode change from FormModeSelector
+const handleModeChange = (mode: FormMode) => {
+  if (mode === FORM_MODES.VIEW && hasPendingChanges.value) {
+    // If switching back to VIEW with pending changes, clear them
+    draftChanges.value.clear()
+  }
+  emit('update:formMode', mode)
 }
 
 // ============================================================================
@@ -150,7 +188,7 @@ const columns = computed(() => {
   // Dynamic columns for each dinner event
   const eventColumns = flatEvents.value.map((event, idx) => ({
     id: `event-${event.id}`,
-    header: formatDanishWeekdayDate(new Date(event.date)),
+    header: formatCompactWeekdayDate(event.date),
     size: 50,
     meta: {
       eventId: event.id,
@@ -173,28 +211,50 @@ const columnPinning = ref({
 
 const tableData = computed((): GridRow[] => {
   const inhabitants = props.household.inhabitants
+  const rows: GridRow[] = []
 
-  const inhabitantRows: GridRow[] = inhabitants.map(inhabitant => ({
-    rowType: 'inhabitant' as RowType,
-    id: inhabitant.id,
-    name: inhabitant.name,
-    inhabitant,
-    isSynthetic: false
-  }))
-
-  // VIEW mode: just inhabitants
-  if (props.formMode === FORM_MODES.VIEW) return inhabitantRows
-
-  // EDIT mode: power row + inhabitants
-  const powerRow: GridRow = {
+  // Power row - ALWAYS shown (consensus in VIEW, editable in EDIT)
+  rows.push({
     rowType: 'power',
     id: 'power-mode',
     name: 'Alle',
     inhabitants,
     isSynthetic: true
+  })
+
+  // Inhabitant rows
+  inhabitants.forEach(inhabitant => {
+    rows.push({
+      rowType: 'inhabitant',
+      id: inhabitant.id,
+      name: inhabitant.name,
+      inhabitant,
+      isSynthetic: false
+    })
+  })
+
+  // Guest order rows (existing guest bookings)
+  guestOrders.value.forEach((order, idx) => {
+    rows.push({
+      rowType: 'guest-order',
+      id: `guest-${order.id}`,
+      name: `Gæst ${idx + 1}`,
+      guestOrder: order,
+      isSynthetic: false
+    })
+  })
+
+  // Guest add row - only in EDIT mode
+  if (props.formMode === FORM_MODES.EDIT) {
+    rows.push({
+      rowType: 'guest-add',
+      id: 'guest-add',
+      name: 'Tilføj gæst',
+      isSynthetic: true
+    })
   }
 
-  return [powerRow, ...inhabitantRows]
+  return rows
 })
 
 // ============================================================================
@@ -207,12 +267,23 @@ const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | 
 const getDinnerModeForCell = (inhabitantId: number, eventId: number): DinnerMode =>
   getOrderForCell(inhabitantId, eventId)?.dinnerMode ?? DinnerModeEnum.NONE
 
-const getMealCountForInhabitant = (inhabitantId: number): number => {
-  return props.orders.filter(o =>
+// Order counts for inhabitant in visible range
+const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, released: number } => {
+  const visibleEventIds = new Set(flatEvents.value.map(e => e.id))
+  const orders = props.orders.filter(o =>
     o.inhabitantId === inhabitantId &&
-    o.dinnerMode !== DinnerModeEnum.NONE
-  ).length
+    (o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED) &&
+    visibleEventIds.has(o.dinnerEventId)
+  )
+  return {
+    total: orders.length,
+    released: orders.filter(o => o.state === OrderStateEnum.RELEASED).length
+  }
 }
+
+// Check if order is released (for cell visual indicator)
+const isOrderReleased = (inhabitantId: number, eventId: number): boolean =>
+  getOrderForCell(inhabitantId, eventId)?.state === OrderStateEnum.RELEASED
 
 // Consensus for power row - check if all inhabitants have same mode for an event
 const getEventConsensus = (eventId: number): { mode: DinnerMode, hasConsensus: boolean } => {
@@ -234,10 +305,109 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
   const weekIndex = eventsByWeek.value.findIndex(week => week.some(e => e.id === event.id))
   return eventsByWeek.value[weekIndex]?.[0]?.id === event.id
 }
+
+// ============================================================================
+// DEADLINE LOGIC (same pattern as DinnerBookingForm)
+// ============================================================================
+
+const {isDinnerPast} = useSeason()
+const {canModifyOrders, canEditDiningMode} = props.deadlines
+
+const isEventPast = (event: DinnerEventDisplay): boolean => isDinnerPast(event.date)
+const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
+const canChangeEventMode = (event: DinnerEventDisplay): boolean => canEditDiningMode(event.date)
+
+// Disabled modes for event (same pattern as DinnerBookingForm.disabledModes)
+const getDisabledModesForEvent = (event: DinnerEventDisplay): DinnerMode[] => {
+  if (isEventPast(event)) return [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
+  if (!canChangeEventMode(event)) return [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
+  return []
+}
+
+// Lock status for column header chips (reuse calendar pattern)
+const {BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
+
+const getEventLockStatus = (event: DinnerEventDisplay): { config: typeof BOOKING_LOCK_STATUS.locked, count: number } | null => {
+  if (canBookEvent(event)) return null // Not locked
+  if (isEventPast(event)) return null // Past events don't show lock chip
+  // Count released orders for this event
+  const releasedCount = props.orders.filter(o =>
+    o.dinnerEventId === event.id && o.state === OrderStateEnum.RELEASED
+  ).length
+  const config = getLockStatusConfig(releasedCount)
+  return config ? { config, count: releasedCount } : null
+}
+
+// ============================================================================
+// NAVIGATION
+// ============================================================================
+
+const navigationLabel = computed(() => {
+  if (!props.dateRange.start || !props.dateRange.end) return ''
+
+  if (props.view === 'week') {
+    const weekNum = getWeekNumber(props.dateRange.start)
+    const startDay = props.dateRange.start.getDate()
+    const endDay = props.dateRange.end.getDate()
+    const monthName = props.dateRange.start.toLocaleDateString('da-DK', { month: 'short' })
+    return `Uge ${weekNum} (${startDay}-${endDay} ${monthName})`
+  }
+  return props.dateRange.start.toLocaleDateString('da-DK', { month: 'long', year: 'numeric' })
+})
+
+const getWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
+
+// ============================================================================
+// GUEST ORDERS
+// ============================================================================
+
+const guestOrders = computed(() =>
+  props.orders.filter(o => o.inhabitantId === null || !props.household.inhabitants.some(i => i.id === o.inhabitantId))
+)
 </script>
 
 <template>
-  <div data-testid="booking-grid-view">
+  <div data-testid="booking-grid-view" class="flex flex-col">
+    <!-- Navigation Header -->
+    <div class="flex items-center justify-between px-2 py-2 border-b border-default">
+      <div class="flex items-center gap-2">
+        <UButton
+          :icon="ICONS.arrowLeft"
+          :color="COLOR.neutral"
+          variant="ghost"
+          :size="SIZES.xs"
+          data-testid="grid-nav-prev"
+          @click="emit('navigate', 'prev')"
+        />
+        <span class="text-sm font-medium">{{ navigationLabel }}</span>
+        <UButton
+          :icon="ICONS.arrowRight"
+          :color="COLOR.neutral"
+          variant="ghost"
+          :size="SIZES.xs"
+          data-testid="grid-nav-next"
+          @click="emit('navigate', 'next')"
+        />
+      </div>
+      <!-- Pencil button to enter edit mode (VIEW only) -->
+      <UButton
+        v-if="formMode === FORM_MODES.VIEW"
+        :icon="ICONS.edit"
+        :color="COLOR.neutral"
+        variant="ghost"
+        :size="SIZES.xs"
+        data-testid="grid-edit"
+        @click="emit('update:formMode', FORM_MODES.EDIT)"
+      />
+    </div>
+
+    <!-- Grid Table -->
     <UTable
       sticky
       :data="tableData"
@@ -261,6 +431,25 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
         </div>
       </template>
 
+      <!-- Dynamic event column headers: M / 29/1 / chip (fixed height) -->
+      <template v-for="event in flatEvents" :key="`header-${event.id}`" #[`event-${event.id}-header`]>
+        <div class="flex flex-col items-center" :class="{ 'text-muted': isEventPast(event) }">
+          <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
+          <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
+          <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets -->
+          <div class="h-6 flex items-center justify-center">
+            <UChip
+              v-if="getEventLockStatus(event)"
+              :color="getEventLockStatus(event)!.config.color"
+              :text="getEventLockStatus(event)!.count > 0 ? String(getEventLockStatus(event)!.count) : undefined"
+              size="3xl"
+              position="bottom-left"
+              standalone
+            />
+          </div>
+        </div>
+      </template>
+
       <!-- Name column -->
       <template #name-cell="{row}">
         <!-- Power row -->
@@ -277,56 +466,49 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
         </div>
         <!-- Inhabitant row -->
         <UserListItem
-          v-else-if="row.original.inhabitant"
+          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
           :inhabitants="row.original.inhabitant"
           :link-to-profile="false"
           compact
         />
-      </template>
-
-      <!-- Count column (meal count) -->
-      <template #count-cell="{row}">
-        <span v-if="row.original.rowType === 'inhabitant' && row.original.inhabitant" class="text-sm">
-          {{ getMealCountForInhabitant(row.original.inhabitant.id) }}
-        </span>
-      </template>
-
-      <!-- Footer: Cancel/Save buttons (ADR-016) -->
-      <template #name-footer>
-        <div v-if="formMode === FORM_MODES.EDIT" class="flex items-center gap-2">
-          <UBadge v-if="hasPendingChanges" :color="COLOR.warning" variant="soft" :size="SIZES.xs">
-            {{ pendingChangeCount }} ændringer
-          </UBadge>
-          <UButton
-            :color="COLOR.neutral"
-            variant="ghost"
-            :size="SIZES.xs"
-            data-testid="grid-cancel"
-            @click="handleCancel"
-          >
-            Annuller
-          </UButton>
-          <UButton
-            :color="COLOR.primary"
-            :size="SIZES.xs"
-            :disabled="!hasPendingChanges"
-            data-testid="grid-save"
-            @click="handleSave"
-          >
-            Gem
-          </UButton>
+        <!-- Guest order row -->
+        <div v-else-if="row.original.rowType === 'guest-order'" class="flex items-center gap-1">
+          <UIcon :name="ICONS.ticket" class="size-4 text-info" />
+          <span class="text-sm">{{ row.original.name }}</span>
+        </div>
+        <!-- Guest add row -->
+        <div v-else-if="row.original.rowType === 'guest-add'" class="flex items-center gap-1">
+          <UIcon :name="ICONS.userPlus" class="size-4 text-info" />
+          <span class="text-sm text-muted">{{ row.original.name }}</span>
         </div>
       </template>
 
-      <!-- Dynamic event columns -->
+      <!-- Count column (order count + released badge) -->
+      <template #count-cell="{row}">
+        <div v-if="row.original.rowType === 'inhabitant' && row.original.inhabitant" class="flex items-center gap-1">
+          <span class="text-sm">{{ getOrderCountsForInhabitant(row.original.inhabitant.id).total }}</span>
+          <UBadge
+            v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).released > 0"
+            :color="getOrderStateColor(true, false)"
+            variant="soft"
+            :size="SIZES.small"
+          >
+            <UIcon :name="ICONS.released" class="size-3" />
+            {{ getOrderCountsForInhabitant(row.original.inhabitant.id).released }}
+          </UBadge>
+        </div>
+      </template>
+
+      <!-- Dynamic event columns - cells -->
       <template v-for="event in flatEvents" :key="event.id" #[`event-${event.id}-cell`]="{row}">
-        <!-- Power row: show consensus mode, ? if no consensus -->
+        <!-- Power row: consensus mode or ? -->
         <template v-if="row.original.rowType === 'power'">
           <DinnerModeSelector
             v-if="getEventConsensus(event.id).hasConsensus"
             :model-value="getEventConsensus(event.id).mode"
-            :form-mode="formMode"
-            :interaction="formMode === FORM_MODES.EDIT ? 'toggle' : 'buttons'"
+            :form-mode="isEventPast(event) ? FORM_MODES.VIEW : formMode"
+            :interaction="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
+            :disabled-modes="getDisabledModesForEvent(event)"
             :size="SIZES.xs"
             :name="`power-${event.id}`"
             @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
@@ -337,21 +519,76 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
             variant="ghost"
             :size="SIZES.xs"
             icon="i-heroicons-question-mark-circle"
-            :class="formMode === FORM_MODES.EDIT ? 'animate-pulse' : ''"
-            @click="formMode === FORM_MODES.EDIT && handlePowerUpdate(event.id, DinnerModeEnum.DINEIN)"
+            :class="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'animate-pulse' : ''"
+            :disabled="isEventPast(event)"
+            @click="!isEventPast(event) && formMode === FORM_MODES.EDIT && handlePowerUpdate(event.id, DinnerModeEnum.DINEIN)"
           />
         </template>
+
         <!-- Inhabitant row -->
         <DinnerModeSelector
-          v-else-if="row.original.inhabitant"
+          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
           :model-value="getCellMode(row.original.inhabitant.id, event.id)"
-          :form-mode="formMode"
-          :interaction="formMode === FORM_MODES.EDIT ? 'toggle' : 'buttons'"
+          :form-mode="isEventPast(event) ? FORM_MODES.VIEW : formMode"
+          :interaction="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
+          :disabled-modes="getDisabledModesForEvent(event)"
           :size="SIZES.xs"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
           @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
         />
+
+        <!-- Guest order row -->
+        <DinnerModeSelector
+          v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrder?.dinnerEventId === event.id"
+          :model-value="row.original.guestOrder.dinnerMode"
+          :form-mode="FORM_MODES.VIEW"
+          :size="SIZES.xs"
+          :name="`guest-${row.original.guestOrder.id}-${event.id}`"
+        />
+
+        <!-- Guest add row: + button for future events -->
+        <UButton
+          v-else-if="row.original.rowType === 'guest-add' && !isEventPast(event) && canBookEvent(event)"
+          :icon="ICONS.plusCircle"
+          :color="COLOR.info"
+          variant="ghost"
+          :size="SIZES.xs"
+          :data-testid="`guest-add-${event.id}`"
+          @click="emit('addGuest', event.id)"
+        />
+      </template>
+
+      <!-- Footer: Cancel/Save buttons (ADR-016) -->
+      <template #tfoot>
+        <tr v-if="formMode === FORM_MODES.EDIT">
+          <td :colspan="columns.length" class="px-2 py-2 border-t border-default">
+            <div class="flex items-center gap-2">
+              <UBadge v-if="hasPendingChanges" :color="COLOR.warning" variant="soft" :size="SIZES.xs">
+                {{ pendingChangeCount }} ændringer
+              </UBadge>
+              <div class="flex-1" />
+              <UButton
+                :color="COLOR.neutral"
+                variant="ghost"
+                :size="SIZES.xs"
+                data-testid="grid-cancel"
+                @click="handleCancel"
+              >
+                Annuller
+              </UButton>
+              <UButton
+                :color="COLOR.primary"
+                :size="SIZES.xs"
+                :disabled="!hasPendingChanges"
+                data-testid="grid-save"
+                @click="handleSave"
+              >
+                Gem
+              </UButton>
+            </div>
+          </td>
+        </tr>
       </template>
     </UTable>
   </div>

@@ -468,7 +468,7 @@ test.describe('Order API', () => {
     await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
 
     // Fetch with allHouseholds=true, state=RELEASED
-    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventId=${testDinnerEventId}&state=RELEASED&allHouseholds=true&sortBy=releasedAt`, { headers })
+    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventIds=${testDinnerEventId}&state=RELEASED&allHouseholds=true&sortBy=releasedAt`, { headers })
 
     expect(response.status()).toBe(200)
     const orders = await response.json()

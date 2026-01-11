@@ -1199,6 +1199,56 @@ describe('createPreBookingGenerator', () => {
             expect(result.idempotent).toHaveLength(expectedIdempotent)
         })
     })
+
+    describe('fromDesiredOrders (ADR-016: user booking)', () => {
+        const {createOrderGeneratorFactory} = useSeason()
+
+        // Helpers
+        const createDesiredOrder = (inhabitantId: number, dinnerEventId: number, mode: typeof DinnerMode[keyof typeof DinnerMode], ticketPriceId = 1) =>
+            ({ inhabitantId, dinnerEventId, dinnerMode: mode, ticketPriceId, isGuestTicket: false })
+
+        const createExistingMap = (orders: Array<{inh: number, de: number, mode: typeof DinnerMode[keyof typeof DinnerMode]}>) =>
+            new Map(orders.map(o => [`${o.inh}-${o.de}`, { dinnerMode: o.mode }]))
+
+        it.each([
+            { desc: 'BOOKED for eating mode (far future)', daysFromToday: FAR_FUTURE_DAYS, mode: DinnerMode.DINEIN, hasExisting: false, expectedState: 'BOOKED', expectedCount: 1 },
+            { desc: 'BOOKED for TAKEAWAY (far future)', daysFromToday: FAR_FUTURE_DAYS, mode: DinnerMode.TAKEAWAY, hasExisting: false, expectedState: 'BOOKED', expectedCount: 1 },
+            { desc: 'skip NONE before deadline', daysFromToday: FAR_FUTURE_DAYS, mode: DinnerMode.NONE, hasExisting: false, expectedState: null, expectedCount: 0 },
+            { desc: 'skip NONE before deadline (even with existing)', daysFromToday: FAR_FUTURE_DAYS, mode: DinnerMode.NONE, hasExisting: true, expectedState: null, expectedCount: 0 },
+            { desc: 'RELEASED for NONE after deadline + existing', daysFromToday: 0, mode: DinnerMode.NONE, hasExisting: true, expectedState: 'RELEASED', expectedCount: 1 },
+            { desc: 'skip NONE after deadline without existing', daysFromToday: 0, mode: DinnerMode.NONE, hasExisting: false, expectedState: null, expectedCount: 0 }
+        ])('$desc', ({ daysFromToday, mode, hasExisting, expectedState, expectedCount }) => {
+            const season = seasonWith([DinnerEventFactory.dinnerEventAt(101, daysFromToday)])
+            const existingMap = hasExisting ? createExistingMap([{inh: 1, de: 101, mode: DinnerMode.DINEIN}]) : new Map()
+            const factory = createOrderGeneratorFactory(season, 1, existingMap)
+
+            const result = factory.fromDesiredOrders([createDesiredOrder(1, 101, mode)], 42)
+
+            expect(result).toHaveLength(expectedCount)
+            if (expectedCount > 0) {
+                expect(result[0]!.state).toBe(expectedState)
+                expect(result[0]!.bookedByUserId).toBe(42)
+            }
+        })
+
+        it('should enforce mode deadline (keep existing after deadline)', () => {
+            const season = { ...seasonWith([DinnerEventFactory.dinnerEventAt(101, 0)]), diningModeIsEditableMinutesBefore: MODE_DEADLINE.DAY }
+            const existingMap = createExistingMap([{inh: 1, de: 101, mode: DinnerMode.DINEIN}])
+            const factory = createOrderGeneratorFactory(season, 1, existingMap)
+
+            const result = factory.fromDesiredOrders([createDesiredOrder(1, 101, DinnerMode.TAKEAWAY)], 42)
+
+            expect(result[0]!.dinnerMode).toBe(DinnerMode.DINEIN) // Enforced existing
+        })
+
+        it.each([
+            { desc: 'invalid ticketPriceId', ticketPriceId: 999, dinnerEventId: 101, errorMatch: /ticketPriceId/ },
+            { desc: 'invalid dinnerEventId', ticketPriceId: 1, dinnerEventId: 999, errorMatch: /dinnerEventId/ }
+        ])('should throw for $desc', ({ ticketPriceId, dinnerEventId, errorMatch }) => {
+            const factory = createOrderGeneratorFactory(testSeasonWithFutureDinners, 1, new Map())
+            expect(() => factory.fromDesiredOrders([createDesiredOrder(1, dinnerEventId, DinnerMode.DINEIN, ticketPriceId)], 42)).toThrow(errorMatch)
+        })
+    })
 })
 
 describe('createHouseholdOrderScaffold', () => {

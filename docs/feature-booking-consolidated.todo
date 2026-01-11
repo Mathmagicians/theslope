@@ -1,0 +1,422 @@
+# Feature: Unified Booking Through Scaffold (ADR-016)
+# Status: Planning
+# Created: 2026-01-11
+
+## PROBLEM SUMMARY
+
+Two bugs caused by fragmented booking logic:
+- BUG #1: NONE mode deletes instead of releases (after deadline)
+- BUG #2: Single-user edit deletes other household members' orders
+
+Root cause: Store calls CRUD endpoints directly with broken reconciliation logic.
+Solution: All booking mutations go through scaffolder (except atomic claim).
+
+================================================================================
+## 1. USE CASES
+================================================================================
+
+| UC  | Name                | User Action                          | When              |
+|-----|---------------------|--------------------------------------|-------------------|
+| UC1 | Single inhabitant   | User sets mode for one person        | Before deadline   |
+| UC2 | Power mode          | User sets mode for ALL inhabitants   | Before deadline   |
+| UC3 | Grid booking        | User edits multiple dinners in grid  | Before deadline   |
+| UC4 | Add guest           | User adds guest ticket               | Before deadline   |
+| UC5 | Release ticket      | User sets NONE after deadline        | After deadline    |
+| UC6 | Claim ticket        | User claims RELEASED ticket (FIFO)   | After deadline    |
+
+================================================================================
+## 2. USE CASE → STORE METHOD → ENDPOINT MAPPING
+================================================================================
+
+| UC  | Store Method               | orders Map Example                    | guests       | dinnerEventIds | Endpoint                        |
+|-----|----------------------------|---------------------------------------|--------------|----------------|---------------------------------|
+| UC1 | updateInhabitantBooking()  | {"123-456": "DINEIN"}                 | []           | [456]          | POST /api/household/order/scaffold |
+| UC2 | updateHouseholdBooking()   | {"123-456": "TA", "124-456": "TA"}    | []           | [456]          | POST /api/household/order/scaffold |
+| UC3 | updateGridBooking()        | {"123-456": "DI", "123-457": "NONE"}  | []           | [456, 457]     | POST /api/household/order/scaffold |
+| UC4 | addGuestBooking()          | {}                                    | [{...}]      | [456]          | POST /api/household/order/scaffold |
+| UC5 | updateInhabitantBooking()  | {"123-456": "NONE"}                   | []           | [456]          | POST /api/household/order/scaffold |
+| UC6 | claimOrder()               | N/A                                   | N/A          | N/A            | POST /api/order/claim (SEPARATE)   |
+
+Note: UC5 (release) uses same method as UC1 - scaffolder detects NONE + past deadline → RELEASED state
+
+================================================================================
+## 3. SCHEMAS
+================================================================================
+
+### 3.1 REQUEST SCHEMA: ScaffoldOrdersRequestSchema
+
+Location: app/composables/useBookingValidation.ts
+
+```typescript
+const ScaffoldOrdersRequestSchema = z.object({
+    householdId: z.number().int().positive(),
+
+    dinnerEventIds: z.array(z.number().int().positive()).min(1),
+    // Which dinner events to process
+    // Single dinner: [456]
+    // Grid booking: [456, 457, 458]
+
+    orders: z.record(z.string(), DinnerModeSchema),
+    // Key format: "${inhabitantId}-${dinnerEventId}"
+    // Value: DinnerMode (DINEIN | DINEINLATE | TAKEAWAY | NONE)
+    // Example: { "123-456": "DINEIN", "124-456": "TAKEAWAY" }
+    // Empty {} when only adding guests
+
+    guests: z.array(z.object({
+        dinnerEventId: z.number().int().positive(),
+        ticketPriceId: z.number().int().positive(),
+        dinnerMode: DinnerModeSchema,
+        allergyTypeIds: z.array(z.number().int().positive()).optional()
+    })).default([]),
+    // Guest tickets to add (uses booker's inhabitantId + isGuestTicket=true)
+
+    triggeredBy: z.object({
+        type: z.enum(['USER', 'SYSTEM']),
+        userId: z.number().int().positive().nullable(),
+        reason: z.string().min(1)
+    })
+    // Audit context for OrderHistory
+    // USER: userId set, reason like "user-booking-single"
+    // SYSTEM: userId null, reason like "preference-change"
+})
+```
+
+### 3.2 RESPONSE SCHEMA: ScaffoldOrdersResponseSchema
+
+Location: app/composables/useBookingValidation.ts
+
+```typescript
+const ScaffoldOrdersResponseSchema = z.object({
+    result: ScaffoldResultSchema,
+    // Counts for toast: { created, deleted, released, priceUpdated, modeUpdated, unchanged, errored }
+
+    orders: z.array(OrderDisplaySchema)
+    // All orders for household after scaffold (for UI refresh)
+})
+```
+
+### 3.3 HELPER SCHEMAS
+
+Location: app/composables/useBookingValidation.ts
+
+```typescript
+// For grid booking changes
+const GridBookingChangeSchema = z.object({
+    inhabitantId: z.number().int().positive(),
+    dinnerEventId: z.number().int().positive(),
+    dinnerMode: DinnerModeSchema
+})
+
+// For guest bookings
+const GuestBookingSchema = z.object({
+    dinnerEventId: z.number().int().positive(),
+    ticketPriceId: z.number().int().positive(),
+    dinnerMode: DinnerModeSchema,
+    allergyTypeIds: z.array(z.number().int().positive()).optional()
+})
+
+// Audit trigger context
+const ScaffoldTriggerSchema = z.object({
+    type: z.enum(['USER', 'SYSTEM']),
+    userId: z.number().int().positive().nullable(),
+    reason: z.string().min(1)
+})
+```
+
+### 3.4 EXTENDED SCAFFOLDER OPTIONS
+
+Location: server/utils/scaffoldPrebookings.ts
+
+```typescript
+type ScaffoldOptions = {
+    seasonId?: number              // Filter to season (default: active)
+    householdId?: number           // Filter to household (default: all)
+    dinnerEventIds?: number[]      // Filter to dinners (default: rolling window)
+    desiredOrders?: Record<string, DinnerMode>  // Override preferences
+    guests?: GuestBooking[]        // Guest tickets to add
+    triggeredBy?: ScaffoldTrigger  // Audit context
+}
+```
+
+================================================================================
+## 4. STORE INTERFACE (FINAL)
+================================================================================
+
+Location: app/stores/bookings.ts
+
+### 4.1 INTERNAL METHOD (calls endpoint)
+
+```typescript
+scaffoldOrders(request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse>
+```
+
+### 4.2 CONVENIENCE WRAPPERS (components use these)
+
+```typescript
+// UC1: Single inhabitant
+updateInhabitantBooking(
+    householdId: number,
+    inhabitantId: number,
+    dinnerEventId: number,
+    dinnerMode: DinnerMode,
+    userId: number
+): Promise<ScaffoldOrdersResponse>
+
+// UC2: Power mode (all inhabitants same mode)
+updateHouseholdBooking(
+    householdId: number,
+    inhabitants: Array<{ id: number }>,
+    dinnerEventId: number,
+    dinnerMode: DinnerMode,
+    userId: number
+): Promise<ScaffoldOrdersResponse>
+
+// UC3: Grid booking (multiple dinners, per-inhabitant modes)
+updateGridBooking(
+    householdId: number,
+    changes: GridBookingChange[],
+    userId: number
+): Promise<ScaffoldOrdersResponse>
+
+// UC4: Add guest tickets
+addGuestBooking(
+    householdId: number,
+    guests: GuestBooking[],
+    userId: number
+): Promise<ScaffoldOrdersResponse>
+```
+
+### 4.3 SEPARATE (atomic FIFO - not through scaffold)
+
+```typescript
+// UC6: Claim released ticket
+claimOrder(
+    dinnerEventId: number,
+    ticketPriceId: number,
+    inhabitantId: number,
+    isGuestTicket?: boolean
+): Promise<OrderDetail>
+```
+
+### 4.4 QUERY METHODS (keep as-is)
+
+```typescript
+fetchReleasedOrders(dinnerEventId: number): Promise<OrderDisplay[]>
+loadOrdersForDinner(dinnerEventId: number, withProvenance?: boolean): void
+loadOrdersForInhabitant(inhabitantId: number, withProvenance?: boolean): void
+loadAllOrders(withProvenance?: boolean): void
+refreshOrders(): Promise<void>
+```
+
+================================================================================
+## 5. ENDPOINT MAP
+================================================================================
+
+| Endpoint                          | Method | Purpose                    | Called By                    | Status      |
+|-----------------------------------|--------|----------------------------|------------------------------|-------------|
+| /api/household/order/scaffold     | POST   | All booking mutations      | Store convenience wrappers   | NEW         |
+| /api/order/claim                  | POST   | Atomic FIFO claim          | claimOrder()                 | KEEP        |
+| /api/order                        | GET    | Query orders               | useAsyncData                 | KEEP        |
+| /api/order                        | PUT    | Bulk create                | (admin/tests only)           | DEPRECATE   |
+| /api/order/[id]                   | GET    | Single order detail        | (admin/tests only)           | KEEP        |
+| /api/order/[id]                   | POST   | Update order               | (admin/tests only)           | DEPRECATE   |
+| /api/order/[id]                   | DELETE | Delete order               | (admin/tests only)           | DEPRECATE   |
+
+================================================================================
+## 6. WHAT TO KEEP / CHANGE / DELETE
+================================================================================
+
+### 6.1 ENDPOINTS
+
+| File                                              | Action    | Notes                              |
+|---------------------------------------------------|-----------|-----------------------------------|
+| server/routes/api/household/order/scaffold.post.ts | CREATE    | New unified booking endpoint      |
+| server/routes/api/order/claim.post.ts             | KEEP      | Atomic FIFO - stays separate      |
+| server/routes/api/order/index.get.ts              | KEEP      | Query orders                      |
+| server/routes/api/order/index.put.ts              | DEPRECATE | Mark admin/test only              |
+| server/routes/api/order/[id].post.ts              | DEPRECATE | Mark admin/test only              |
+| server/routes/api/order/[id].delete.ts            | DEPRECATE | Mark admin/test only              |
+
+### 6.2 STORE METHODS
+
+| Method                          | Action  | Replacement                    |
+|---------------------------------|---------|--------------------------------|
+| scaffoldOrders()                | CREATE  | Internal - calls new endpoint  |
+| updateInhabitantBooking()       | CREATE  | UC1, UC5                       |
+| updateHouseholdBooking()        | CREATE  | UC2                            |
+| updateGridBooking()             | CREATE  | UC3                            |
+| addGuestBooking()               | CREATE  | UC4                            |
+| claimOrder()                    | KEEP    | UC6 - atomic FIFO              |
+| fetchReleasedOrders()           | KEEP    | Query for claim UI             |
+| loadOrdersForDinner()           | KEEP    | Query filter                   |
+| loadOrdersForInhabitant()       | KEEP    | Query filter                   |
+| loadAllOrders()                 | KEEP    | Query filter                   |
+| createOrder()                   | DELETE  | Replaced by scaffoldOrders     |
+| updateOrder()                   | DELETE  | Replaced by scaffoldOrders     |
+| deleteOrder()                   | DELETE  | Replaced by scaffoldOrders     |
+| processBooking()                | DELETE  | Replaced by convenience methods|
+| processGridBooking()            | DELETE  | Replaced by updateGridBooking  |
+
+### 6.3 COMPOSABLE FUNCTIONS
+
+| Function                           | File              | Action  | Notes                          |
+|------------------------------------|-------------------|---------|--------------------------------|
+| reconcileSingleDinnerUserBooking() | useBooking.ts     | DELETE  | Scaffolder handles reconciliation |
+| buildBookingFeedback()             | useBooking.ts     | DELETE  | Response from scaffolder       |
+| formatScaffoldResult()             | useBooking.ts     | KEEP    | Used for toast display         |
+
+### 6.4 SCAFFOLDER
+
+| File                              | Action  | Changes                                |
+|-----------------------------------|---------|----------------------------------------|
+| server/utils/scaffoldPrebookings.ts | EXTEND  | Add dinnerEventIds, desiredOrders, guests, triggeredBy |
+
+================================================================================
+## 7. IMPLEMENTATION PHASES
+================================================================================
+
+### PHASE 1: Schemas
+Files:
+  - app/composables/useBookingValidation.ts
+Tasks:
+  [ ] Add ScaffoldOrdersRequestSchema
+  [ ] Add ScaffoldOrdersResponseSchema
+  [ ] Add GridBookingChangeSchema
+  [ ] Add GuestBookingSchema (if not exists)
+  [ ] Add ScaffoldTriggerSchema
+  [ ] Export types: ScaffoldOrdersRequest, ScaffoldOrdersResponse, GridBookingChange, GuestBooking, ScaffoldTrigger
+Tests:
+  [ ] Unit tests for new schemas
+
+### PHASE 2: Scaffolder Extension
+Files:
+  - server/utils/scaffoldPrebookings.ts
+  - app/composables/useSeason.ts (if needed for helper functions)
+Tasks:
+  [ ] Extend ScaffoldOptions type
+  [ ] Add dinnerEventIds filtering logic
+  [ ] Add desiredOrders override logic (user intent overrides preferences)
+  [ ] Add guests handling (create guest orders)
+  [ ] Add triggeredBy audit context (USER_BOOKED vs SYSTEM_CREATED)
+  [ ] Handle NONE + past deadline → RELEASED state
+Tests:
+  [ ] Unit tests for scaffolder with new options
+  [ ] Integration test: single dinner with desiredOrders
+  [ ] Integration test: guest creation
+
+### PHASE 3: New Endpoint
+Files:
+  - server/routes/api/household/order/scaffold.post.ts (NEW)
+Tasks:
+  [ ] Create endpoint with ADR-002 error handling
+  [ ] Validate with ScaffoldOrdersRequestSchema
+  [ ] Authorization via requireHouseholdAccess()
+  [ ] Map request to ScaffoldOptions
+  [ ] Call scaffoldPrebookings()
+  [ ] Fetch affected orders for response
+  [ ] Return ScaffoldOrdersResponse
+Tests:
+  [ ] E2E: Single inhabitant booking
+  [ ] E2E: Power mode booking
+  [ ] E2E: NONE before deadline (delete)
+  [ ] E2E: NONE after deadline (release)
+  [ ] E2E: Add guest
+  [ ] E2E: Authorization failure
+
+### PHASE 4: Store Refactor
+Files:
+  - app/stores/bookings.ts
+Tasks:
+  [ ] Add scaffoldOrders() internal method
+  [ ] Add updateInhabitantBooking()
+  [ ] Add updateHouseholdBooking()
+  [ ] Add updateGridBooking()
+  [ ] Add addGuestBooking()
+  [ ] Keep claimOrder() unchanged
+  [ ] Keep query methods unchanged
+  [ ] DO NOT DELETE old methods yet (components still use them)
+Tests:
+  [ ] Component tests for new store methods
+
+### PHASE 5: Component Updates
+Files:
+  - app/components/dinner/DinnerBookingForm.vue
+  - app/components/household/HouseholdBookings.vue
+  - app/pages/dinner/index.vue (or wherever handlers live)
+Tasks:
+  [ ] Update DinnerBookingForm emits (simplified)
+  [ ] Update parent handlers to call new store methods
+  [ ] Update toast to use ScaffoldResult from response
+  [ ] Test all use cases via UI
+Tests:
+  [ ] E2E: Full booking flow via UI
+  [ ] E2E: Power mode via UI
+  [ ] E2E: Guest booking via UI
+
+### PHASE 6: Cleanup
+Files:
+  - app/stores/bookings.ts
+  - app/composables/useBooking.ts
+  - docs/adr.md
+  - docs/adr-compliance-backend.md
+Tasks:
+  [ ] DELETE store methods: createOrder, updateOrder, deleteOrder, processBooking, processGridBooking
+  [ ] DELETE composable functions: reconcileSingleDinnerUserBooking, buildBookingFeedback
+  [ ] Mark CRUD endpoints as deprecated (comment only)
+  [ ] Add ADR-016 to docs/adr.md
+  [ ] Update adr-compliance-backend.md with new endpoint
+Tests:
+  [ ] Full E2E regression
+  [ ] Verify no store calls to CRUD endpoints
+
+================================================================================
+## 8. AUDIT TRAIL
+================================================================================
+
+### 8.1 AUDIT ACTIONS BY TRIGGER
+
+| Trigger                        | triggeredBy.type | triggeredBy.userId | triggeredBy.reason       | Audit Action     |
+|--------------------------------|------------------|--------------------|--------------------------|------------------|
+| User single booking            | USER             | session.userId     | "user-booking-single"    | USER_BOOKED      |
+| User power mode                | USER             | session.userId     | "user-booking-power"     | USER_BOOKED      |
+| User grid booking              | USER             | session.userId     | "user-booking-grid"      | USER_BOOKED      |
+| User add guest                 | USER             | session.userId     | "user-booking-guest"     | USER_BOOKED      |
+| User sets NONE before deadline | USER             | session.userId     | "user-booking-cancel"    | USER_CANCELLED   |
+| User sets NONE after deadline  | USER             | session.userId     | "user-booking-release"   | USER_BOOKED      |
+| User claims ticket             | USER             | session.userId     | N/A (separate endpoint)  | USER_CLAIMED     |
+| Preference change (creates)    | SYSTEM           | null               | "preference-change"      | SYSTEM_CREATED   |
+| Preference change (deletes)    | SYSTEM           | null               | "preference-change"      | SYSTEM_DELETED   |
+| Daily maintenance              | SYSTEM           | null               | "daily-maintenance"      | SYSTEM_CREATED   |
+| Season activation              | SYSTEM           | null               | "season-activation"      | SYSTEM_CREATED   |
+
+### 8.2 NONE MODE BEHAVIOR BY DEADLINE
+
+| When              | User Action          | Database Operation | Order State     | Audit Action   | Recreatable?   |
+|-------------------|----------------------|--------------------|-----------------|----------------|----------------|
+| Before deadline   | User sets NONE       | DELETE order       | N/A (deleted)   | USER_CANCELLED | No (explicit)  |
+| After deadline    | User sets NONE       | UPDATE order       | RELEASED        | USER_BOOKED    | No (released)  |
+| N/A (system)      | Preference removed   | DELETE order       | N/A (deleted)   | SYSTEM_DELETED | Yes (pref chg) |
+
+### 8.3 AUDIT SEMANTICS
+
+- **USER_CANCELLED**: User explicitly cancelled booking before deadline. Scaffolder should NOT recreate
+  (user made deliberate choice to not attend specific dinner)
+- **USER_BOOKED**: User made/modified booking (includes releasing after deadline)
+- **USER_CLAIMED**: User claimed a released ticket
+- **SYSTEM_CREATED**: System created order based on preferences (can be regenerated)
+- **SYSTEM_DELETED**: System deleted order due to preference change (would recreate if preference restored)
+
+================================================================================
+## 9. SUCCESS CRITERIA
+================================================================================
+
+[ ] BUG #1 FIXED: NONE after deadline creates RELEASED order (not deleted)
+[ ] BUG #2 FIXED: Single inhabitant edit only affects that inhabitant
+[ ] All 6 use cases work via UI
+[ ] Store never calls CRUD endpoints directly
+[ ] Claim stays separate (atomic FIFO)
+[ ] Audit trail shows correct USER vs SYSTEM context
+[ ] Tests pass
+[ ] ADR-016 documented
+
+================================================================================

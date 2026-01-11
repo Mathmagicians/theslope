@@ -608,6 +608,96 @@ export const useBookingValidation = () => {
     })
 
     // ============================================================================
+    // UNIFIED BOOKING SCAFFOLD (ADR-016)
+    // All booking mutations go through scaffolder except atomic claim
+    // ============================================================================
+
+    /**
+     * Desired order - unified schema for all booking types (DRY: picked from OrderBaseSchema)
+     * - ticketPriceId required: UI sends the price shown to user (no server derivation)
+     * - allergyTypeIds: guest allergies (inhabitants have allergies via Allergy table)
+     */
+    const DesiredOrderSchema = OrderBaseSchema.pick({
+        inhabitantId: true,
+        dinnerEventId: true,
+        dinnerMode: true,
+        isGuestTicket: true
+    }).extend({
+        ticketPriceId: z.number().int().positive(),
+        allergyTypeIds: z.array(z.number().int().positive()).optional()
+    })
+
+    // Local type for conversion (avoids circular reference)
+    type _DesiredOrder = z.infer<typeof DesiredOrderSchema>
+    type _OrderState = z.infer<typeof OrderStateSchema>
+
+    /**
+     * Convert DesiredOrder to OrderCreateWithPrice
+     * Service provides context: householdId, bookedByUserId, priceAtBooking, state
+     */
+    const convertDesiredToOrderCreate = (
+        desired: _DesiredOrder,
+        householdId: number,
+        bookedByUserId: number,
+        priceAtBooking: number,
+        state: _OrderState
+    ): _OrderCreateWithPrice => OrderCreateWithPriceSchema.parse({
+        dinnerEventId: desired.dinnerEventId,
+        inhabitantId: desired.inhabitantId,
+        bookedByUserId,
+        ticketPriceId: desired.ticketPriceId,
+        priceAtBooking,
+        dinnerMode: desired.dinnerMode,
+        state,
+        householdId
+    })
+
+    /**
+     * Scaffold orders request - unified booking endpoint
+     * POST /api/household/order/scaffold
+     *
+     * Use cases:
+     * - UC1: Single inhabitant booking
+     * - UC2: Power mode (all inhabitants same mode)
+     * - UC3: Grid booking (multiple dinners)
+     * - UC4: Add guest (isGuestTicket=true)
+     * - UC5: Release ticket (NONE after deadline)
+     *
+     * Audit context derived server-side:
+     * - performedByUserId = session user
+     * - action = USER_BOOKED or USER_CANCELLED
+     * - source = 'user-booking'
+     */
+    const ScaffoldOrdersRequestSchema = z.object({
+        householdId: z.number().int().positive(),
+        seasonId: z.number().int().positive().optional(),
+        dinnerEventIds: z.array(z.number().int().positive()).min(1),
+        orders: z.array(DesiredOrderSchema)
+    })
+
+    /**
+     * Scaffold orders response - returns result
+     */
+    const ScaffoldOrdersResponseSchema = z.object({
+        householdId: z.number().int().positive(),
+        scaffoldResult: ScaffoldResultSchema
+    })
+
+    // ============================================================================
+    // Query Parameter Normalization
+    // ============================================================================
+
+    /**
+     * Normalize query param to array of positive integers
+     * Handles: undefined→[], single number→[n], array→[n,...]
+     * Used for endpoints accepting 0, 1, or many IDs (e.g., dinnerEventIds)
+     */
+    const IdOrIdsSchema = z.union([
+        z.coerce.number().int().positive().transform(n => [n]),
+        z.array(z.coerce.number().int().positive())
+    ]).optional().default([]).transform(v => v ?? [])
+
+    // ============================================================================
     // Daily Maintenance Result Schemas
     // ============================================================================
 
@@ -771,6 +861,12 @@ export const useBookingValidation = () => {
         ScaffoldResultSchema,
         InhabitantUpdateResponseSchema,
 
+        // Unified Booking Scaffold (ADR-016)
+        DesiredOrderSchema,
+        ScaffoldOrdersRequestSchema,
+        ScaffoldOrdersResponseSchema,
+        convertDesiredToOrderCreate,
+
         // Daily Maintenance
         ConsumeResultSchema,
         CloseOrdersResultSchema,
@@ -781,7 +877,10 @@ export const useBookingValidation = () => {
         // User Booking (processBooking feedback)
         BookingActionSchema,
         BookingFeedbackItemSchema,
-        ProcessBookingResultSchema
+        ProcessBookingResultSchema,
+
+        // Query Parameter Normalization
+        IdOrIdsSchema
     }
 }
 
@@ -835,6 +934,11 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
 export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
+
+// Unified Booking Scaffold (ADR-016)
+export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['DesiredOrderSchema']>
+export type ScaffoldOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersRequestSchema']>
+export type ScaffoldOrdersResponse = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersResponseSchema']>
 
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>

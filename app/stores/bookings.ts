@@ -17,14 +17,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
 
     // Selected context for filtering orders
-    const selectedDinnerEventId = ref<number | null>(null)
+    const selectedDinnerEventIds = ref<number[]>([]) // Empty = all events
     const selectedInhabitantId = ref<number | null>(null)
     const includeProvenance = ref(false) // Only true for household booking view (shows "🔄 fra AR_1" on claimed tickets)
 
     // Fetch orders - reactive based on selected filters
     const buildOrdersQuery = () => {
         const params = new URLSearchParams()
-        if (selectedDinnerEventId.value) params.append('dinnerEventId', String(selectedDinnerEventId.value))
+        // Array of IDs: empty=all, otherwise filter
+        selectedDinnerEventIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
         if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
         if (includeProvenance.value) params.append('includeProvenance', 'true')
         return params.toString()
@@ -79,22 +80,23 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Actions
     // ========================================
 
-    const loadOrdersForDinner = (dinnerEventId: number, withProvenance = false) => {
-        selectedDinnerEventId.value = dinnerEventId
+    const loadOrdersForDinners = (dinnerEventIds: number | number[], withProvenance = false) => {
+        const ids = [dinnerEventIds].flat()
+        selectedDinnerEventIds.value = ids
         selectedInhabitantId.value = null
         includeProvenance.value = withProvenance
-        console.info(CTX, `Loading orders for dinner event: ${dinnerEventId}${withProvenance ? ' (with provenance)' : ''}`)
+        console.info(CTX, `Loading orders for ${ids.length} dinner(s)${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const loadOrdersForInhabitant = (inhabitantId: number, withProvenance = false) => {
         selectedInhabitantId.value = inhabitantId
-        selectedDinnerEventId.value = null
+        selectedDinnerEventIds.value = []
         includeProvenance.value = withProvenance
         console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const loadAllOrders = (withProvenance = false) => {
-        selectedDinnerEventId.value = null
+        selectedDinnerEventIds.value = []
         selectedInhabitantId.value = null
         includeProvenance.value = withProvenance
         console.info(CTX, `Loading all orders${withProvenance ? ' (with provenance)' : ''}`)
@@ -425,7 +427,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         ordersByTicketType,
 
         // actions
-        loadOrdersForDinner,
+        loadOrdersForDinners,
         loadOrdersForInhabitant,
         loadAllOrders,
         createOrder,
