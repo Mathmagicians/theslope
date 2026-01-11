@@ -50,6 +50,10 @@ import {FORM_MODES} from '~/types/form'
 // Row types for synthetic rows in table
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
 
+// Ticket config type - use NuxtUIColor from design system
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
+
 interface TableRow {
   rowType: RowType
   id: number | string
@@ -58,10 +62,11 @@ interface TableRow {
   birthDate?: Date | null
   inhabitant?: InhabitantDisplay // For UserListItem in single mode
   inhabitants?: InhabitantDisplay[] // For UserListItem in group mode (power)
-  ticketConfig: ReturnType<ReturnType<typeof useTicket>['getTicketTypeConfig']> | null
+  ticketConfig: TicketConfig
   order: OrderDisplay | null
   orderState: OrderState | undefined
   dinnerMode: DinnerMode
+  consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number
   provenanceHousehold?: string
@@ -99,6 +104,9 @@ const {selectedHousehold} = storeToRefs(householdsStore)
 householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
+// Household business logic for consensus
+const {computeConsensus} = useHousehold()
+
 // Permission-based form mode - EDIT if user is member of household (ADR: permission in composable)
 const {isHouseholdMember} = usePermissions()
 const formMode = computed(() => {
@@ -135,14 +143,30 @@ const {allergyTypes} = storeToRefs(allergiesStore)
 // EXPANDABLE ROW STATE
 // ============================================================================
 
-const {expanded} = useExpandableRow()
-
-// Draft state for editing (set when row expands)
+// Draft state for editing
 const draftMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
 const draftGuestTicketPriceId = ref<number | undefined>(undefined)
 const draftGuestAllergies = ref<number[]>([])
 const editingRowId = ref<number | string | null>(null)
 const isSaving = ref(false)
+
+// Expandable row with callbacks
+const {expanded} = useExpandableRow({
+  onExpand: (rowIndex) => {
+    const row = tableData.value[rowIndex]
+    if (row) {
+      editingRowId.value = row.id
+      draftMode.value = row.dinnerMode
+      if (row.rowType === 'guest') {
+        draftGuestAllergies.value = []
+      }
+    }
+  },
+  onCollapse: () => {
+    editingRowId.value = null
+    draftGuestAllergies.value = []
+  }
+})
 
 // Initialize guest ticket price when ticket prices available
 watch(() => props.ticketPrices, (prices) => {
@@ -220,11 +244,16 @@ const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 // TABLE CONFIGURATION
 // ============================================================================
 
-const columns = [
+const columns = computed(() => [
   {id: 'expand'},
-  {id: 'name', header: 'Beboer'},
+  {id: 'name', header: getIsMd.value ? 'Beboer' : 'Billetter'},
   {id: 'ticket', class: 'hidden md:table-cell'}  // No header - ticket inline on mobile
-]
+])
+
+// Find the booker (inhabitant with userId) to show who invited guests
+const bookerInhabitant = computed(() =>
+  (household.value?.inhabitants as InhabitantDisplay[] | undefined)?.find(i => i.userId !== null) ?? null
+)
 
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
@@ -242,7 +271,7 @@ const tableData = computed((): TableRow[] => {
       name: inhabitant.name,
       lastName: inhabitant.lastName,
       birthDate: inhabitant.birthDate,
-      inhabitant, // For UserListItem single mode
+      inhabitant,
       ticketConfig,
       order: order ?? null,
       orderState: order?.state as OrderState | undefined,
@@ -254,39 +283,12 @@ const tableData = computed((): TableRow[] => {
     }
   })
 
-  // VIEW mode: inhabitants only
-  if (!isEditModeAllowed.value) return inhabitantRows
-
-  // EDIT mode: power mode + inhabitants + guest
-  const defaultSyntheticRow = {
-    lastName: '',
-    ticketConfig: null,
-    order: null,
-    orderState: undefined as OrderState | undefined,
-    price: 0,
-    ticketPriceId: 0
-  }
-
-  return [
-    {...defaultSyntheticRow, rowType: 'power' as RowType, id: 'power-mode', name: 'Hele familien', inhabitants: allInhabitants, dinnerMode: DinnerModeEnum.DINEIN},
-    ...inhabitantRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', dinnerMode: DinnerModeEnum.DINEIN}
-  ]
-})
-
-// Guest order rows for GÆSTER section
-// Find the booker (inhabitant with userId) to show who invited the guest
-const bookerInhabitant = computed(() =>
-  (household.value?.inhabitants as InhabitantDisplay[] | undefined)?.find(i => i.userId !== null) ?? null
-)
-
-const guestTableData = computed((): TableRow[] => {
-  return guestOrders.value.map(order => ({
+  const guestOrderRows: TableRow[] = guestOrders.value.map(order => ({
     rowType: 'guest-order' as RowType,
     id: `guest-${order.id}`,
     name: 'Gæst',
     lastName: '',
-    inhabitant: bookerInhabitant.value ?? undefined, // Show who invited the guest
+    inhabitant: bookerInhabitant.value ?? undefined,
     ticketConfig: order.ticketType ? ticketTypeConfig[order.ticketType] : null,
     order,
     orderState: order.state as OrderState,
@@ -296,26 +298,48 @@ const guestTableData = computed((): TableRow[] => {
     provenanceHousehold: order.provenanceHousehold,
     provenanceAllergies: order.provenanceAllergies
   }))
+
+  // Compute consensus from inhabitant dinnerModes
+  const inhabitantModes = inhabitantRows.map(r => r.dinnerMode)
+  const {value: consensusMode, consensus: hasConsensus} = computeConsensus(inhabitantModes, DinnerModeEnum.DINEIN)
+
+  // Default synthetic row template
+  const defaultSyntheticRow = {
+    lastName: '',
+    ticketConfig: null,
+    order: null,
+    orderState: undefined as OrderState | undefined,
+    price: 0,
+    ticketPriceId: 0
+  }
+
+  // Power row with consensus (shown in both VIEW and EDIT modes)
+  const powerRow: TableRow = {
+    ...defaultSyntheticRow,
+    rowType: 'power' as RowType,
+    id: 'power-mode',
+    name: 'Hele familien',
+    inhabitants: allInhabitants,
+    ticketConfig: COMPONENTS.powerMode.ticketConfig,
+    dinnerMode: consensusMode,
+    consensus: hasConsensus
+  }
+
+  // VIEW mode: power + inhabitants + guest orders
+  if (!isEditModeAllowed.value) return [powerRow, ...inhabitantRows, ...guestOrderRows]
+
+  // EDIT mode: power + inhabitants + guest orders + add guest
+  return [
+    powerRow,
+    ...inhabitantRows,
+    ...guestOrderRows,
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', dinnerMode: DinnerModeEnum.DINEIN}
+  ]
 })
 
 // ============================================================================
 // HANDLERS
 // ============================================================================
-
-const handleRowExpand = (row: TableRow) => {
-  editingRowId.value = row.id
-  draftMode.value = row.dinnerMode
-  // Reset guest-specific drafts
-  if (row.rowType === 'guest') {
-    draftGuestAllergies.value = []
-  }
-}
-
-const handleRowCollapse = () => {
-  editingRowId.value = null
-  draftMode.value = DinnerModeEnum.DINEIN
-  draftGuestAllergies.value = []
-}
 
 const handleSave = async (row: TableRow) => {
   isSaving.value = true
@@ -345,9 +369,8 @@ const handleSave = async (row: TableRow) => {
       }
     }
 
-    // Collapse row after save
+    // Collapse row after save (onCollapse callback handles cleanup)
     expanded.value = {}
-    handleRowCollapse()
   } finally {
     isSaving.value = false
   }
@@ -355,7 +378,6 @@ const handleSave = async (row: TableRow) => {
 
 const handleCancel = () => {
   expanded.value = {}
-  handleRowCollapse()
   emit('cancel')
 }
 
@@ -473,14 +495,14 @@ const allergyOptions = computed(() =>
           :data-testid="`${row.original.rowType}-${row.original.id}-toggle`"
           :class="[row.getIsExpanded() ? 'rotate-180' : '', row.original.rowType === 'power' && !row.getIsExpanded() ? 'hover:animate-pulse hover:text-warning' : '']"
           class="transition-all duration-300"
-          @click="() => { row.toggleExpanded(); row.getIsExpanded() ? handleRowExpand(row.original) : handleRowCollapse() }"
+          @click="row.toggleExpanded()"
         />
       </template>
 
       <!-- Name Column -->
       <template #name-cell="{row}">
         <div class="py-1">
-          <!-- Power Mode Row - UserListItem in GROUP mode with label below -->
+          <!-- Power Mode Row - UserListItem in GROUP mode with ticket below -->
           <div v-if="row.original.rowType === 'power' && row.original.inhabitants" class="flex flex-col gap-0.5">
             <UserListItem
               :inhabitants="row.original.inhabitants"
@@ -489,10 +511,15 @@ const allergyOptions = computed(() =>
               compact
               label="beboere"
             />
-            <UBadge :color="COMPONENTS.powerMode.color" variant="subtle" :size="SIZES.small">
-              <UIcon :name="COMPONENTS.powerMode.buttonIcon" class="size-3" />
-              Power mode
-            </UBadge>
+            <!-- DinnerTicket for power row (mobile only - desktop in ticket-cell) -->
+            <div class="md:hidden mt-2">
+              <DinnerTicket
+                :ticket-config="row.original.ticketConfig"
+                :price="row.original.price"
+                :dinner-mode="row.original.dinnerMode"
+                :consensus="row.original.consensus"
+              />
+            </div>
           </div>
 
           <!-- Guest Add Row -->
@@ -578,7 +605,17 @@ const allergyOptions = computed(() =>
 
       <!-- Ticket Column (desktop only) -->
       <template #ticket-cell="{row}">
-        <div v-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" class="hidden md:block">
+        <!-- Power row: show DinnerTicket with consensus (desktop) -->
+        <div v-if="row.original.rowType === 'power'" class="hidden md:block">
+          <DinnerTicket
+            :ticket-config="row.original.ticketConfig"
+            :price="row.original.price"
+            :dinner-mode="row.original.dinnerMode"
+            :consensus="row.original.consensus"
+          />
+        </div>
+        <!-- Inhabitant/Guest rows: show ticket -->
+        <div v-else-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" class="hidden md:block">
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
@@ -603,7 +640,7 @@ const allergyOptions = computed(() =>
           <template #header>
             <h4 class="text-md font-semibold text-balance">
               <template v-if="row.original.rowType === 'power'">
-                Power mode: Vælg spisning for hele familien
+                Vælg for hele familien
               </template>
               <template v-else-if="row.original.rowType === 'guest'">
                 Tilføj gæst til middagen
@@ -699,146 +736,5 @@ const allergyOptions = computed(() =>
         </UCard>
       </template>
     </UTable>
-
-    <!-- GÆSTER Section -->
-    <div v-if="guestTableData.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-      <h4 :class="[TYPOGRAPHY.bodyTextMedium, 'font-semibold mb-2']">GÆSTER</h4>
-      <UTable
-        v-model:expanded="expanded"
-        :data="guestTableData"
-        :columns="columns"
-        row-key="id"
-        :ui="{th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4'}"
-      >
-        <!-- Same templates as main table for guest-order rows -->
-        <template #expand-cell="{row}">
-          <UButton
-            v-if="isEditModeAllowed"
-            color="neutral"
-            variant="ghost"
-            :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.edit"
-            square
-            :size="getIsMd ? 'md' : 'xs'"
-            aria-label="Rediger"
-            :data-testid="`guest-order-${row.original.id}-toggle`"
-            :class="row.getIsExpanded() ? 'rotate-180' : ''"
-            class="transition-all duration-300"
-            @click="() => { row.toggleExpanded(); row.getIsExpanded() ? handleRowExpand(row.original) : handleRowCollapse() }"
-          />
-        </template>
-
-        <template #name-cell="{row}">
-          <div class="py-1">
-            <!-- Guest - show who invited using UserListItem -->
-            <div class="flex items-center gap-2">
-              <UIcon :name="ICONS.userPlus" class="size-4 text-info flex-shrink-0" />
-              <span class="text-sm text-muted">Gæst af</span>
-              <UserListItem
-                v-if="row.original.inhabitant"
-                :inhabitants="row.original.inhabitant"
-                :link-to-profile="false"
-                compact
-                :show-names="true"
-              />
-              <span v-else class="text-sm">ukendt</span>
-            </div>
-            <!-- Provenance badges -->
-            <div v-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-1 ml-6">
-              <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">
-                fra {{ row.original.provenanceHousehold }}
-              </UBadge>
-              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
-                🥜 {{ row.original.provenanceAllergies.join(', ') }}
-              </UBadge>
-            </div>
-            <!-- Mobile ticket -->
-            <div class="mt-2 md:hidden">
-              <DinnerTicket
-                :ticket-config="row.original.ticketConfig"
-                :price="row.original.price"
-                :dinner-mode="row.original.dinnerMode"
-                :is-released="isOrderReleased(row.original.orderState)"
-                :is-claimed="isTicketClaimed(row.original)"
-                is-guest
-                :allergies="row.original.provenanceAllergies"
-                :provenance-household="row.original.provenanceHousehold"
-              />
-            </div>
-          </div>
-        </template>
-
-        <template #ticket-cell="{row}">
-          <div class="hidden md:block">
-            <DinnerTicket
-              :ticket-config="row.original.ticketConfig"
-              :price="row.original.price"
-              :dinner-mode="row.original.dinnerMode"
-              :is-released="isOrderReleased(row.original.orderState)"
-              :is-claimed="isTicketClaimed(row.original)"
-              is-guest
-              :allergies="row.original.provenanceAllergies"
-              :provenance-household="row.original.provenanceHousehold"
-            />
-          </div>
-        </template>
-
-        <template #expanded="{row}">
-          <UCard
-            color="info"
-            :variant="COMPONENTS.powerMode.card.variant"
-            class="max-w-full overflow-x-auto"
-            :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}"
-          >
-            <template #header>
-              <h4 class="text-md font-semibold">Opdater gæstebillet</h4>
-            </template>
-
-            <!-- Provenance allergies (read-only) -->
-            <div v-if="row.original.provenanceAllergies?.length" class="flex flex-wrap gap-2">
-              <span class="text-sm text-muted">Allergier:</span>
-              <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" variant="soft">
-                🥜 {{ allergy }}
-              </UBadge>
-            </div>
-
-            <DinnerModeSelector
-              v-model="draftMode"
-              :form-mode="FORM_MODES.EDIT"
-              :disabled-modes="disabledModes"
-              :size="SIZES.standard"
-              :name="`guest-order-${row.original.id}-mode-edit`"
-              orientation="horizontal"
-              show-label
-            />
-
-            <template #footer>
-              <div class="flex justify-start md:justify-end gap-2">
-                <UButton
-                  :color="COLOR.neutral"
-                  variant="ghost"
-                  :icon="ICONS.xMark"
-                  :size="getIsMd ? 'md' : 'sm'"
-                  @click="handleCancel"
-                >
-                  Annuller
-                </UButton>
-                <UButton
-                  color="info"
-                  variant="solid"
-                  :size="getIsMd ? 'md' : 'sm'"
-                  :loading="isSaving"
-                  @click="handleSave(row.original)"
-                >
-                  <template #leading>
-                    <UIcon :name="ICONS.check" />
-                  </template>
-                  Gem
-                </UButton>
-              </div>
-            </template>
-          </UCard>
-        </template>
-      </UTable>
-    </div>
   </div>
 </template>

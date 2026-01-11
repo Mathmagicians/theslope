@@ -55,6 +55,7 @@ interface Props {
   consensus?: boolean // Power mode: true=all agree, false=mixed preferences, undefined=not power mode
   interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
   orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
+  isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -67,7 +68,8 @@ const props = withDefaults(defineProps<Props>(), {
   size: undefined, // Falls back to responsive SIZES.small
   consensus: undefined,
   interaction: 'buttons',
-  orientation: 'responsive' // Default: vertical on mobile, horizontal on desktop
+  orientation: 'responsive', // Default: vertical on mobile, horizontal on desktop
+  isModified: false
 })
 
 const emit = defineEmits<{
@@ -105,15 +107,18 @@ const dinnerModeOrder: DinnerMode[] = [
   DinnerMode.NONE
 ]
 
-// Dinner mode display config
-const dinnerModeConfig: Record<DinnerMode, {
+// Display config type
+type ModeDisplayConfig = {
   label: string
   icon: string
   activeColor: BadgeColor
   viewVariant: BadgeVariant
   editActiveVariant: ButtonVariant
   editInactiveVariant: ButtonVariant
-}> = {
+}
+
+// Dinner mode display config
+const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
   [DinnerMode.DINEIN]: {
     label: 'Spisesal',
     icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
@@ -133,7 +138,7 @@ const dinnerModeConfig: Record<DinnerMode, {
   [DinnerMode.TAKEAWAY]: {
     label: 'Takeaway',
     icon: 'i-heroicons-shopping-bag',
-    activeColor: 'warning',
+    activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
     editInactiveVariant: 'soft'
@@ -146,6 +151,16 @@ const dinnerModeConfig: Record<DinnerMode, {
     editActiveVariant: 'soft',
     editInactiveVariant: 'ghost'
   }
+}
+
+// Mixed/no consensus config (used when consensus === false)
+const mixedModeConfig: ModeDisplayConfig = {
+  label: 'Blandet',
+  icon: ICONS.help,
+  activeColor: 'neutral',
+  viewVariant: 'outline',
+  editActiveVariant: 'outline',
+  editInactiveVariant: 'ghost'
 }
 
 // Check if a specific mode is disabled
@@ -179,22 +194,23 @@ const toggleMode = () => {
 // Get dinner mode value (when in selector mode)
 const dinnerMode = computed(() => props.modelValue as DinnerMode)
 
-// Get icon for current mode
-const getModeIcon = (): string => {
-  return dinnerModeConfig[dinnerMode.value]!.icon
+// Get effective config - uses mixedModeConfig when consensus === false (VIEW mode only)
+const getViewConfig = (): ModeDisplayConfig => {
+  if (props.consensus === false) return mixedModeConfig
+  return dinnerModeConfig[dinnerMode.value]!
 }
 
-// Get badge color for VIEW mode (neutral when no consensus in power mode)
-const getBadgeColor = (): BadgeColor => {
-  if (props.consensus === false) return 'neutral'
-  return dinnerModeConfig[dinnerMode.value]!.activeColor
-}
+// Get icon for current mode (VIEW mode uses mixedModeConfig when no consensus)
+const getModeIcon = (): string => getViewConfig().icon
 
-// Get badge variant for VIEW mode (outline when no consensus in power mode)
-const getBadgeVariant = (): BadgeVariant => {
-  if (props.consensus === false) return 'outline'
-  return dinnerModeConfig[dinnerMode.value]!.viewVariant
-}
+// Get badge color for VIEW mode
+const getBadgeColor = (): BadgeColor => getViewConfig().activeColor
+
+// Get badge variant for VIEW mode
+const getBadgeVariant = (): BadgeVariant => getViewConfig().viewVariant
+
+// Get mode label (VIEW mode uses mixedModeConfig when no consensus)
+const getModeLabel = (): string => getViewConfig().label
 
 // Get button color for EDIT mode (active vs inactive)
 const getButtonColor = (mode: DinnerMode): BadgeColor => {
@@ -214,30 +230,26 @@ const shouldPulse = (mode: DinnerMode): boolean => {
   if (hasUserSelected.value) return false
   return mode === DinnerMode.DINEIN && dinnerMode.value === DinnerMode.DINEIN && props.consensus === false
 }
-
-// Get mode label
-const getModeLabel = (): string => {
-  return dinnerModeConfig[dinnerMode.value]!.label
-}
 </script>
 
 <template>
-  <!-- TITLE MODE: Weekday header badge -->
-  <template v-if="isTitle">
-    <UBadge
-      v-bind="WEEKDAY.titleBadgeProps"
-      :size="responsiveSize"
-      :name="name"
-      :data-testid="name"
-    >
-      <div :class="`${WEEKDAY.badgeContentSize} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
-        {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
-      </div>
-    </UBadge>
-  </template>
+  <div :class="{ 'border-l-2 border-warning pl-0.5': isModified }">
+    <!-- TITLE MODE: Weekday header badge -->
+    <template v-if="isTitle">
+      <UBadge
+        v-bind="WEEKDAY.titleBadgeProps"
+        :size="responsiveSize"
+        :name="name"
+        :data-testid="name"
+      >
+        <div :class="`${WEEKDAY.badgeContentSize} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+          {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
+        </div>
+      </UBadge>
+    </template>
 
-  <!-- SELECTOR MODE: Dinner mode selection -->
-  <template v-else>
+    <!-- SELECTOR MODE: Dinner mode selection -->
+    <template v-else>
     <!-- VIEW MODE: Badge + fine print label below -->
     <div v-if="formMode === FORM_MODES.VIEW" class="flex flex-col items-center gap-0.5">
       <UBadge
@@ -247,8 +259,7 @@ const getModeLabel = (): string => {
         :name="name"
         :data-testid="name"
       >
-        <UIcon v-if="consensus === false" :name="ICONS.help" :class="WEEKDAY.badgeContentSize" />
-        <UIcon v-else :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
+        <UIcon :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
       </UBadge>
       <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
     </div>
@@ -292,5 +303,6 @@ const getModeLabel = (): string => {
       </UFieldGroup>
       <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
     </div>
-  </template>
+    </template>
+  </div>
 </template>

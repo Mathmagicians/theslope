@@ -86,6 +86,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
 const { WEEKDAY, COMPONENTS, COLOR, ICONS } = useTheSlopeDesignSystem()
+const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
 const tableData = computed(() => {
@@ -107,7 +108,7 @@ const tableData = computed(() => {
     birthDate: null,
     dinnerPreferences: aggregatedPrefs,
     consensus,
-    ticketConfig: {label: 'Powermode!', color: 'warning' as const},
+    ticketConfig: powerMode.ticketConfig,
     isSynthetic: true,
     inhabitants: props.household.inhabitants // For group display
   }
@@ -238,16 +239,18 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           />
         </template>
 
-        <!-- Ticket type column -->
+        <!-- Ticket type column (desktop only) -->
         <template #ticketType-cell="{ row }">
-          <UBadge
-              :color="row.original.ticketConfig?.color ?? 'neutral'"
-              variant="subtle"
-              size="sm"
-              :data-testid="`ticket-type-${row.original.id}`"
-          >
-            {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
-          </UBadge>
+          <div class="hidden md:block">
+            <UBadge
+                :color="row.original.ticketConfig?.color ?? 'neutral'"
+                variant="subtle"
+                size="sm"
+                :data-testid="`ticket-type-${row.original.id}`"
+            >
+              {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
+            </UBadge>
+          </div>
         </template>
 
         <!-- Name column - includes ticket badge on mobile -->

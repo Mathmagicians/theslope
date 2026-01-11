@@ -2,6 +2,7 @@ import {test, expect} from '@playwright/test'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -128,6 +129,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
 
     test('DINEIN → NONE releases orders (released > 0)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const {OrderStateSchema} = useBookingValidation()
 
         // Get dinner event count for season
         const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
@@ -150,6 +152,18 @@ test.describe('Preference Transition Scaffold Counts', () => {
                 expect(response.scaffoldResult.created, 'Should not create any orders').toBe(0)
             }
         )
+
+        // Verify released orders have dinnerMode = NONE (data integrity check)
+        // Use admin endpoint - user-facing /api/order filters by session user's household
+        const dinnerEventIds = dinnerEvents.map(de => de.id)
+        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEventIds)
+        const inhabitantOrders = orders.filter(o => o.inhabitantId === testInhabitantId)
+        const releasedOrders = inhabitantOrders.filter(o => o.state === OrderStateSchema.enum.RELEASED)
+
+        expect(releasedOrders.length, 'Should have released orders').toBe(cookingDayCount)
+        for (const order of releasedOrders) {
+            expect(order.dinnerMode, `Released order ${order.id} must have dinnerMode NONE`).toBe(DinnerMode.NONE)
+        }
     })
 
     test('DINEIN → TAKEAWAY does NOT release orders (mode change only)', async ({browser}) => {

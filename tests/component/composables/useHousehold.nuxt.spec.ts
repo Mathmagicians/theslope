@@ -13,6 +13,26 @@ describe('useHousehold', () => {
     defaultValue: DinnerMode.DINEIN
   })
 
+  describe('computeConsensus', () => {
+    const { computeConsensus } = useHousehold()
+
+    it.each([
+      { values: [], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: true } },
+      { values: [DinnerMode.TAKEAWAY], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.TAKEAWAY, consensus: true } },
+      { values: [DinnerMode.NONE, DinnerMode.NONE], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.NONE, consensus: true } },
+      { values: [DinnerMode.DINEIN, DinnerMode.TAKEAWAY], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: false } },
+      { values: [DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: false } }
+    ])('returns $expected for $values.length values', ({ values, defaultValue, expected }) => {
+      expect(computeConsensus(values, defaultValue)).toEqual(expected)
+    })
+
+    it('works with non-DinnerMode types', () => {
+      expect(computeConsensus(['a', 'a', 'a'], 'default')).toEqual({ value: 'a', consensus: true })
+      expect(computeConsensus(['a', 'b'], 'default')).toEqual({ value: 'default', consensus: false })
+      expect(computeConsensus([1, 1], 0)).toEqual({ value: 1, consensus: true })
+    })
+  })
+
   describe('computeAggregatedPreferences', () => {
     const { computeAggregatedPreferences } = useHousehold()
 

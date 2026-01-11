@@ -376,6 +376,7 @@ export const COMPONENTS = {
         icon: 'i-fluent-emoji-high-contrast-woman-superhero',
         buttonIcon: 'i-heroicons-bolt',
         iconClass: 'size-4 md:size-6 text-warning-500',
+        ticketConfig: {label: 'Powermode!', color: 'warning' as const, icon: 'i-heroicons-bolt'},
         alert: {
             color: 'warning' as const,
             variant: 'soft' as const,

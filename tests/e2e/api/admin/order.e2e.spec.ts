@@ -149,10 +149,12 @@ test.describe('Order API', () => {
     expect(updatedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
     expect(updatedOrder!.releasedAt).toBeDefined()
 
-    // Order should still exist in database
+    // Order should still exist in database with correct state
     const retrievedOrder = await OrderFactory.getOrder(context, orderId)
     expect(retrievedOrder).toBeDefined()
     expect(retrievedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
+    // DATA INTEGRITY: Verify dinnerMode=NONE persisted (RELEASED orders must have NONE mode)
+    expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
   })
 
   test('POST cancellation BEFORE deadline deletes order (user not charged)', async ({ browser }) => {
@@ -418,6 +420,8 @@ test.describe('Order API', () => {
     expect(claimedOrder!.state).toBe(OrderStateSchema.enum.BOOKED)
     expect(claimedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(claimedOrder!.releasedAt).toBeNull()
+    // Claim preserves NONE mode - user must explicitly select new mode afterward
+    expect(claimedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
   })
 
   test('GIVEN no RELEASED orders WHEN claiming THEN fails with 409', async ({ browser }) => {
@@ -473,5 +477,7 @@ test.describe('Order API', () => {
     const foundOrder = orders.find((o: { id: number }) => o.id === orderId)
     expect(foundOrder).toBeDefined()
     expect(foundOrder.state).toBe(OrderStateSchema.enum.RELEASED)
+    // DATA INTEGRITY: RELEASED orders must have dinnerMode=NONE
+    expect(foundOrder.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
   })
 })

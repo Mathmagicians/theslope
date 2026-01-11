@@ -36,8 +36,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
-            (isVisible) => isVisible,
-            10
+            (isVisible) => isVisible
         )
     }
 
@@ -92,8 +91,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // THEN: Verify VIEW mode shows initial preferences
         await pollUntil(
             async () => await page.getByTestId(`inhabitant-${scroogeId}-preferences-view`).isVisible(),
-            (isVisible) => isVisible,
-            10
+            (isVisible) => isVisible
         )
 
         // WHEN: Click pencil icon to edit Scrooge's preferences (use specific testid, not .first())
@@ -105,8 +103,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
                 const button = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
                 return await button.count() > 0
             },
-            (count) => count,
-            10
+            (count) => count
         )
 
         // WHEN: Change Monday to TAKEAWAY

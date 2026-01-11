@@ -48,6 +48,7 @@ interface Props {
   isReleased?: boolean
   isClaimed?: boolean
   isGuest?: boolean
+  consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: string[] // Inhabitant's own allergies (shown on ticket)
   provenanceHousehold?: string // Source household if claimed
 }
@@ -56,6 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
   isReleased: false,
   isClaimed: false,
   isGuest: false,
+  consensus: undefined,
   allergies: () => [],
   provenanceHousehold: undefined
 })
@@ -78,10 +80,10 @@ const hasAllergies = computed(() => props.allergies && props.allergies.length > 
 // Has extra info row (provenance or allergy names)
 const hasExtraRow = computed(() => props.provenanceHousehold || hasAllergies.value)
 
-// Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · Gæst"
+// Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · Gæst" or "Powermode!" (no price for power mode)
 const badgeText = computed(() => {
   const parts = [props.ticketConfig?.label ?? '']
-  parts.push(`${formatPrice(props.price)} kr`)
+  if (props.consensus === undefined) parts.push(`${formatPrice(props.price)} kr`) // Only show price for regular tickets
   if (props.isGuest) parts.push('Gæst')
   return parts.join(' · ')
 })
@@ -141,6 +143,7 @@ const badgeText = computed(() => {
           <!-- Mode badge (uses DinnerModeSelector in VIEW mode) -->
           <DinnerModeSelector
             :model-value="dinnerMode"
+            :consensus="consensus"
             show-label
           />
         </div>

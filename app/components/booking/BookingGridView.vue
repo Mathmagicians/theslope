@@ -214,6 +214,21 @@ const getMealCountForInhabitant = (inhabitantId: number): number => {
   ).length
 }
 
+// Consensus for power row - check if all inhabitants have same mode for an event
+const getEventConsensus = (eventId: number): { mode: DinnerMode, hasConsensus: boolean } => {
+  const inhabitants = props.household.inhabitants
+  if (inhabitants.length === 0) return { mode: DinnerModeEnum.DINEIN, hasConsensus: true }
+
+  const modes = inhabitants.map(i => getCellMode(i.id, eventId))
+  const firstMode = modes[0]!
+  const hasConsensus = modes.every(m => m === firstMode)
+
+  return {
+    mode: hasConsensus ? firstMode : DinnerModeEnum.DINEIN,
+    hasConsensus
+  }
+}
+
 const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => {
   if (idx === 0) return false
   const weekIndex = eventsByWeek.value.findIndex(week => week.some(e => e.id === event.id))
@@ -305,16 +320,27 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
 
       <!-- Dynamic event columns -->
       <template v-for="event in flatEvents" :key="event.id" #[`event-${event.id}-cell`]="{row}">
-        <!-- Power row -->
-        <DinnerModeSelector
-          v-if="row.original.rowType === 'power'"
-          :model-value="DinnerModeEnum.DINEIN"
-          :form-mode="formMode"
-          :interaction="formMode === FORM_MODES.EDIT ? 'toggle' : 'buttons'"
-          :size="SIZES.xs"
-          :name="`power-${event.id}`"
-          @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
-        />
+        <!-- Power row: show consensus mode, ? if no consensus -->
+        <template v-if="row.original.rowType === 'power'">
+          <DinnerModeSelector
+            v-if="getEventConsensus(event.id).hasConsensus"
+            :model-value="getEventConsensus(event.id).mode"
+            :form-mode="formMode"
+            :interaction="formMode === FORM_MODES.EDIT ? 'toggle' : 'buttons'"
+            :size="SIZES.xs"
+            :name="`power-${event.id}`"
+            @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
+          />
+          <UButton
+            v-else
+            :color="COMPONENTS.powerMode.color"
+            variant="ghost"
+            :size="SIZES.xs"
+            icon="i-heroicons-question-mark-circle"
+            :class="formMode === FORM_MODES.EDIT ? 'animate-pulse' : ''"
+            @click="formMode === FORM_MODES.EDIT && handlePowerUpdate(event.id, DinnerModeEnum.DINEIN)"
+          />
+        </template>
         <!-- Inhabitant row -->
         <DinnerModeSelector
           v-else-if="row.original.inhabitant"
@@ -323,7 +349,7 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
           :interaction="formMode === FORM_MODES.EDIT ? 'toggle' : 'buttons'"
           :size="SIZES.xs"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
-          :class="{ 'ring-2 ring-warning ring-offset-1': isCellModified(row.original.inhabitant.id, event.id) }"
+          :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
           @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
         />
       </template>

@@ -27,14 +27,27 @@ export const useHousehold = () => {
     })
 
     /**
+     * Compute consensus for any array of values
+     * Returns first value if all same, defaultValue if mixed or empty
+     */
+    const computeConsensus = <T>(
+        values: T[],
+        defaultValue: T
+    ): { value: T, consensus: boolean } => {
+        if (values.length === 0) {
+            return { value: defaultValue, consensus: true }
+        }
+        const first = values[0]!
+        const allSame = values.every(v => v === first)
+        return {
+            value: allSame ? first : defaultValue,
+            consensus: allSame
+        }
+    }
+
+    /**
      * Compute aggregated dinner preferences across multiple inhabitants
-     * Returns consensus value if all inhabitants have same preference for a day
-     * Returns default (DINEIN) if preferences are mixed or no inhabitants
-     * Null/undefined preferences are treated as default value (DINEIN)
-     * Used for "all members" power mode functionality
-     *
-     * @param inhabitants - Array of inhabitants with their dinner preferences
-     * @returns WeekDayMap with consensus values or DINEIN for mixed days
+     * Uses computeConsensus for each weekday
      */
     const computeAggregatedPreferences = (
         inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[]
@@ -47,18 +60,12 @@ export const useHousehold = () => {
         }
 
         for (const day of WEEKDAYS) {
-            // Map preferences, treating null as default value (DINEIN)
             const preferencesForDay = inhabitants.map(i =>
                 i.dinnerPreferences?.[day] ?? DinnerMode.DINEIN
             )
-
-            // Check if all preferences are the same (array is non-empty due to guard above)
-            const firstPreference = preferencesForDay[0]!
-            const allSame = preferencesForDay.every(pref => pref === firstPreference)
-
-            // If all inhabitants agree, use consensus; otherwise default (DINEIN)
-            preferences[day] = allSame ? firstPreference : DinnerMode.DINEIN
-            consensus[day] = allSame
+            const result = computeConsensus(preferencesForDay, DinnerMode.DINEIN)
+            preferences[day] = result.value
+            consensus[day] = result.consensus
         }
 
         return { preferences, consensus }
@@ -241,6 +248,7 @@ export const useHousehold = () => {
     }
 
     return {
+        computeConsensus,
         computeAggregatedPreferences,
         formatNameWithInitials,
         formatHouseholdFamilyName,
