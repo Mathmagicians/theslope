@@ -480,12 +480,8 @@ const allergyOptions = computed(() =>
       <!-- Name Column -->
       <template #name-cell="{row}">
         <div class="py-1">
-          <!-- Power Mode Row - UserListItem in GROUP mode with clear label -->
-          <div v-if="row.original.rowType === 'power' && row.original.inhabitants" class="flex items-center gap-2">
-            <UBadge :color="COMPONENTS.powerMode.color" variant="subtle" :size="SIZES.small">
-              <UIcon :name="COMPONENTS.powerMode.buttonIcon" class="size-3" />
-              Power mode
-            </UBadge>
+          <!-- Power Mode Row - UserListItem in GROUP mode with label below -->
+          <div v-if="row.original.rowType === 'power' && row.original.inhabitants" class="flex flex-col gap-0.5">
             <UserListItem
               :inhabitants="row.original.inhabitants"
               :show-names="false"
@@ -493,6 +489,10 @@ const allergyOptions = computed(() =>
               compact
               label="beboere"
             />
+            <UBadge :color="COMPONENTS.powerMode.color" variant="subtle" :size="SIZES.small">
+              <UIcon :name="COMPONENTS.powerMode.buttonIcon" class="size-3" />
+              Power mode
+            </UBadge>
           </div>
 
           <!-- Guest Add Row -->
@@ -665,6 +665,8 @@ const allergyOptions = computed(() =>
             :disabled-modes="row.original.rowType === 'guest' ? guestDisabledModes : disabledModes"
             :size="SIZES.standard"
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"
+            orientation="horizontal"
+            show-label
           />
 
           <template #footer>
@@ -805,6 +807,8 @@ const allergyOptions = computed(() =>
               :disabled-modes="disabledModes"
               :size="SIZES.standard"
               :name="`guest-order-${row.original.id}-mode-edit`"
+              orientation="horizontal"
+              show-label
             />
 
             <template #footer>

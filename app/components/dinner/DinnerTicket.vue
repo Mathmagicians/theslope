@@ -60,22 +60,17 @@ const props = withDefaults(defineProps<Props>(), {
   provenanceHousehold: undefined
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COLOR, getOrderStateColor} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 
-// Both-side accent line color based on ticket state
-const accentClass = computed(() => {
-  if (props.isReleased) return 'border-x-4 md:border-x-8 border-error'
-  if (props.isClaimed) return 'border-x-4 md:border-x-8 border-info'
-  return 'border-x-4 md:border-x-8 border-primary'
-})
+// Accent color from design system
+const accentColor = computed(() => getOrderStateColor(props.isReleased, props.isClaimed))
+
+// Both-side accent line class
+const accentClass = computed(() => `border-x-4 md:border-x-8 border-${accentColor.value}`)
 
 // State icon color (matches accent)
-const stateIconColor = computed(() => {
-  if (props.isReleased) return 'text-error'
-  if (props.isClaimed) return 'text-info'
-  return 'text-primary'
-})
+const stateIconColor = computed(() => `text-${accentColor.value}`)
 
 // Has allergies to show
 const hasAllergies = computed(() => props.allergies && props.allergies.length > 0)
@@ -97,9 +92,9 @@ const badgeText = computed(() => {
     class="relative overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800/50 p-2 md:p-3 w-full"
     :class="accentClass"
   >
-    <!-- 🎟️ Dramatic oversize watermark - bleeds out like a real ticket stamp -->
-    <div class="absolute -bottom-8 -right-6 md:-bottom-12 md:-right-8 opacity-[0.04] pointer-events-none rotate-[-15deg]">
-      <UIcon :name="ICONS.ticket" class="size-40 md:size-56 text-gray-500 dark:text-gray-400" />
+    <!-- 🎟️ Watermark - sized to look like the ticket border -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <UIcon name="i-heroicons-ticket-solid" class="w-full h-[140%] opacity-[0.12] text-gray-400 dark:text-gray-500" />
     </div>
 
     <!-- Ticket content -->

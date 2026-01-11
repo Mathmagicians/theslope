@@ -133,9 +133,18 @@ test.describe('Household members display', () => {
             10
         )
 
-        // Click TAKEAWAY button directly using its testid
+        // Poll for TAKEAWAY button to be rendered (same pattern as passing HouseholdCard test)
+        await pollUntil(
+            async () => {
+                const button = page.getByTestId(`inhabitant-${donaldId}-preferences-edit-mandag-TAKEAWAY`)
+                return await button.count() > 0
+            },
+            (count) => count,
+            10
+        )
+
+        // Click TAKEAWAY button
         const takeawayButton = page.getByTestId(`inhabitant-${donaldId}-preferences-edit-mandag-TAKEAWAY`)
-        await expect(takeawayButton, `TAKEAWAY button for inhabitant ${donaldId} should be visible`).toBeVisible({timeout: 5000})
         await takeawayButton.click()
 
         // Click the Save button to persist changes

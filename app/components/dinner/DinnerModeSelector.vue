@@ -50,10 +50,11 @@ interface Props {
   disabled?: boolean
   disabledModes?: DinnerMode[] // Specific modes to disable (e.g., after deadline)
   name?: string
-  showLabel?: boolean // Show mode label text in VIEW mode (when in selector mode)
+  showLabel?: boolean // Show mode label text below selector (both VIEW and EDIT modes)
   size?: ButtonSize
   consensus?: boolean // Power mode: true=all agree, false=mixed preferences, undefined=not power mode
   interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
+  orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -65,7 +66,8 @@ const props = withDefaults(defineProps<Props>(), {
   showLabel: false,
   size: undefined, // Falls back to responsive SIZES.small
   consensus: undefined,
-  interaction: 'buttons'
+  interaction: 'buttons',
+  orientation: 'responsive' // Default: vertical on mobile, horizontal on desktop
 })
 
 const emit = defineEmits<{
@@ -89,8 +91,11 @@ const responsiveSize = computed(() => props.size ?? SIZES.small)
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
 
-// Unwrap responsive orientation (vertical on mobile, horizontal on desktop)
-const buttonOrientation = computed(() => ORIENTATIONS.responsive.value)
+// Button orientation: use prop override if provided, otherwise responsive (vertical mobile, horizontal desktop)
+const buttonOrientation = computed(() => {
+  if (props.orientation === 'responsive') return ORIENTATIONS.responsive.value
+  return props.orientation
+})
 
 // Dinner mode order for iteration
 const dinnerModeOrder: DinnerMode[] = [

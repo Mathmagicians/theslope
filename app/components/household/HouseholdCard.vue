@@ -192,23 +192,13 @@ const visibleDays = computed(() => {
   return WEEKDAYS.filter(day => activeSeason.value!.cookingDays[day])
 })
 
-// Table columns
-const columns = [
-  {
-    id: 'expand'
-  },
-  {
-    id: 'name',
-    header: 'Navn'
-  },
-  {
-    id: 'ticketType',
-    header: 'Billet'
-  },
-  {
-    id: 'preferences'
-  }
-]
+// Table columns - 3 columns on mobile (toggle, name+ticket, modes), 4 on desktop
+const columns = computed(() => [
+  { id: 'expand' },
+  { id: 'name', header: getIsMd.value ? 'Medlem' : undefined },
+  { id: 'ticketType', header: getIsMd.value ? 'Billet' : undefined, class: 'hidden md:table-cell' },
+  { id: 'preferences' }
+])
 </script>
 
 <template>
@@ -260,31 +250,35 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           </UBadge>
         </template>
 
-        <!-- Name column -->
+        <!-- Name column - includes ticket badge on mobile -->
         <template #name-cell="{ row }">
-          <!-- Power mode: show all family members in group -->
-          <UserListItem
-              v-if="row.original.isSynthetic"
-              :inhabitants="household.inhabitants"
-              compact
-              :show-names="false"
-              ring-color="warning"
-              label="beboere"
-          />
-          <!-- Regular mode: show single inhabitant -->
-          <UserListItem
-              v-else
-              :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
-              compact
-              ring-color="primary"
-          >
-            <template #badge="{ inhabitant }">
-              <span v-if="inhabitant.birthDate" class="text-xs text-muted flex items-center gap-1">
-                <UIcon name="i-heroicons-cake" class="size-4 md:size-6" />
-                {{ formatDate(inhabitant.birthDate) }}
-              </span>
-            </template>
-          </UserListItem>
+          <div class="flex flex-col gap-0.5">
+            <!-- Power mode: show all family members in group -->
+            <UserListItem
+                v-if="row.original.isSynthetic"
+                :inhabitants="household.inhabitants"
+                compact
+                :show-names="false"
+                ring-color="warning"
+                label="beboere"
+            />
+            <!-- Regular mode: show single inhabitant -->
+            <UserListItem
+                v-else
+                :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
+                compact
+                ring-color="primary"
+            />
+            <!-- Ticket badge - mobile only (under name) -->
+            <UBadge
+                class="md:hidden w-fit"
+                :color="row.original.ticketConfig?.color ?? 'neutral'"
+                variant="subtle"
+                size="xs"
+            >
+              {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
+            </UBadge>
+          </div>
         </template>
 
         <!-- Preferences header (weekday labels) -->
@@ -344,7 +338,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
               <!-- Actions grouped -->
               <div class="flex justify-start md:justify-end">
-                <UButtonGroup :size="getIsMd ? 'md' : 'sm'">
+                <UFieldGroup :size="getIsMd ? 'md' : 'sm'">
                   <UButton
                       :color="COLOR.neutral"
                       variant="ghost"
@@ -375,7 +369,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                     </template>
                     {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
                   </UButton>
-                </UButtonGroup>
+                </UFieldGroup>
               </div>
             </div>
           </UFormField>

@@ -176,6 +176,7 @@ export async function scaffoldPrebookings(
                     // After cancellation deadline - release order (user charged, ticket claimable)
                     householdReleased++
                     await updateOrder(d1Client, toDelete.id, {
+                        dinnerMode: DinnerModeSchema.enum.NONE,
                         state: OrderStateSchema.enum.RELEASED,
                         releasedAt: new Date()
                     }, {
