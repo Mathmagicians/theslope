@@ -482,6 +482,24 @@ export const TICKET_TYPE_COLORS = {
     BABY: COLOR.neutral
 } as const
 
+// ============================================================================
+// PART 5: Order State Display (for DinnerTicket accent colors)
+// ============================================================================
+
+/** Order state to accent color mapping for ticket display */
+export const ORDER_STATE_COLORS: Record<'normal' | 'released' | 'claimed', NuxtUIBadgeColor> = {
+    normal: 'primary',
+    released: 'error',
+    claimed: 'info'
+}
+
+/** Get order state accent color from isReleased/isClaimed flags */
+export const getOrderStateColor = (isReleased: boolean, isClaimed: boolean): NuxtUIBadgeColor => {
+    if (isReleased) return ORDER_STATE_COLORS.released
+    if (isClaimed) return ORDER_STATE_COLORS.claimed
+    return ORDER_STATE_COLORS.normal
+}
+
 /**
  * ICONS - Standard icon names for common UI elements
  *
@@ -1140,6 +1158,8 @@ export const useTheSlopeDesignSystem = () => {
         URGENCY_TO_CHIP_COLOR,
         BOOKING_LOCK_STATUS,
         getLockStatusConfig,
+        ORDER_STATE_COLORS,
+        getOrderStateColor,
         ICONS,
         IMG,
 

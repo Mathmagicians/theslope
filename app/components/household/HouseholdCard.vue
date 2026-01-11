@@ -314,79 +314,71 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
         <!-- Expanded row: EDIT mode preferences -->
         <template #expanded="{ row }">
-          <UCard
-              :color="row.original.isSynthetic ? COMPONENTS.powerMode.card.color : 'primary'"
-              :variant="COMPONENTS.powerMode.card.variant"
-              class="max-w-full overflow-x-auto"
-              :ui="{ body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4' }"
+          <UFormField
+              :label="row.original.isSynthetic ? 'Power mode: Opdater præferencer for hele husstanden' : `Opdater fællesspisning præferencer for ${row.original.name}`"
+              class="py-2"
           >
-            <template #header>
-              <!-- Power mode header -->
-              <h4 class="text-md font-semibold text-balance">
-                {{ row.original.isSynthetic ? 'Power mode: Opdater præferencer for hele husstanden' : `Opdater fællesspisning præferencer for ${row.original.name}` }}
-              </h4>
-            </template>
+            <div class="flex flex-col gap-3">
+              <!-- Power mode warning alert -->
+              <UAlert
+                  v-if="row.original.isSynthetic"
+                  :icon="COMPONENTS.powerMode.alert.icon"
+                  :color="COMPONENTS.powerMode.alert.color"
+                  :variant="COMPONENTS.powerMode.alert.variant"
+                  title="Du er ved at aktivere power mode"
+                  :description="`Her kan du editere hele familien på en gang. Ændringer påvirker alle ${household.inhabitants.length} medlemmer i husstanden. Individuelle præferencer overskrives.`"
+                  class="min-w-0"
+                  :ui="{ title: 'break-words', description: 'break-words' }"
+              />
 
-            <!-- Power mode warning alert -->
-            <UAlert
-                v-if="row.original.isSynthetic"
-                :icon="COMPONENTS.powerMode.alert.icon"
-                :color="COMPONENTS.powerMode.alert.color"
-                :variant="COMPONENTS.powerMode.alert.variant"
-                title="Du er ved at aktivere power mode"
-                :description="`Her kan du editere hele familien på en gang. Ændringer påvirker alle ${household.inhabitants.length} medlemmer i husstanden. Individuelle præferencer overskrives.`"
-                class="min-w-0"
-                :ui="{ title: 'break-words', description: 'break-words' }"
-            />
+              <!-- Preference editor -->
+              <WeekDayMapDinnerModeDisplay
+                  :model-value="draftPreferences"
+                  :form-mode="FORM_MODES.EDIT"
+                  :parent-restriction="activeSeason?.cookingDays"
+                  :show-labels="true"
+                  :consensus="row.original.consensus"
+                  :name="row.original.isSynthetic ? 'power-mode-preferences-edit' : `inhabitant-${row.original.id}-preferences-edit`"
+                  @update:model-value="updateDraft"
+              />
 
-            <!-- Preference editor -->
-            <WeekDayMapDinnerModeDisplay
-                :model-value="draftPreferences"
-                :form-mode="FORM_MODES.EDIT"
-                :parent-restriction="activeSeason?.cookingDays"
-                :show-labels="true"
-                :consensus="row.original.consensus"
-                :name="row.original.isSynthetic ? 'power-mode-preferences-edit' : `inhabitant-${row.original.id}-preferences-edit`"
-                @update:model-value="updateDraft"
-            />
-
-            <template #footer>
-              <div class="flex justify-start md:justify-end gap-2">
-                <UButton
-                    :color="COLOR.neutral"
-                    variant="ghost"
-                    :icon="ICONS.xMark"
-                    :size="getIsMd ? 'md' : 'sm'"
-                    data-testid="cancel-preferences"
-                    @click="row.toggleExpanded()"
-                >
-                  Annuller
-                </UButton>
-                <UButton
-                    :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
-                    variant="solid"
-                    :size="getIsMd ? 'md' : 'sm'"
-                    :loading="false"
-                    :disabled="isSaving"
-                    class="group"
-                    data-testid="save-preferences"
-                    @click="savePreferences"
-                >
-                  <template #leading>
-                    <UIcon
-                      :name="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : ICONS.check"
-                      :class="[
-                        'transition-all duration-700',
-                        row.original.isSynthetic && isSaving ? 'animate-spin' : '',
-                        row.original.isSynthetic && !isSaving ? 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]' : ''
-                      ]"
-                    />
-                  </template>
-                  {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
-                </UButton>
+              <!-- Actions grouped -->
+              <div class="flex justify-start md:justify-end">
+                <UButtonGroup :size="getIsMd ? 'md' : 'sm'">
+                  <UButton
+                      :color="COLOR.neutral"
+                      variant="ghost"
+                      :icon="ICONS.xMark"
+                      data-testid="cancel-preferences"
+                      @click="row.toggleExpanded()"
+                  >
+                    Annuller
+                  </UButton>
+                  <UButton
+                      :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
+                      variant="solid"
+                      :loading="isSaving"
+                      :disabled="isSaving"
+                      class="group"
+                      data-testid="save-preferences"
+                      @click="savePreferences"
+                  >
+                    <template #leading>
+                      <UIcon
+                        :name="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : ICONS.check"
+                        :class="[
+                          'transition-all duration-700',
+                          row.original.isSynthetic && isSaving ? 'animate-spin' : '',
+                          row.original.isSynthetic && !isSaving ? 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]' : ''
+                        ]"
+                      />
+                    </template>
+                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
+                  </UButton>
+                </UButtonGroup>
               </div>
-            </template>
-          </UCard>
+            </div>
+          </UFormField>
         </template>
       </UTable>
 

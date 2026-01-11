@@ -14,24 +14,22 @@
  * │ Man │ - Weekday title badge (3 letters desktop, 1 letter mobile)
  * └─────┘
  *
- * SELECTOR VIEW MODE (modelValue is DinnerMode):
- * ┌────────────────┐
- * │ 🍽️ Fællesspisning │ - Badge showing current selection
- * └────────────────┘
+ * SELECTOR VIEW MODE (modelValue is DinnerMode, showLabel=true):
+ * ┌─────┐
+ * │ 🍽️  │  - Badge showing current selection
+ * └─────┘
+ * Spisesal   - Fine print label below
  *
- * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default):
- * ┌──────────────────────────────────────────────────────┐
- * │ [🍽️ Spis][🕐 Sen][🛍️ Takeaway][❌ Ingen]          │
- * │  ^^^^^^^^^                                           │
- * │  active (solid, success)                             │
- * │           ^^^^^^^^ ^^^^^^^^^^^^ ^^^^^^^^^^^^         │
- * │           inactive (ghost, neutral)                  │
- * └──────────────────────────────────────────────────────┘
+ * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default, showLabel=true):
+ * ┌────────────────────────┐
+ * │ [🍽️][🕐][🛍️][❌]     │  - Icon buttons
+ * └────────────────────────┘
+ *        Spisesal            - Fine print label of selected mode below
  *
  * SELECTOR EDIT MODE - TOGGLE (interaction="toggle"):
  * ┌─────┐
  * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE
- * └─────┘   Compact for grid cells
+ * └─────┘   Compact for grid cells (no label)
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
@@ -65,7 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
   disabledModes: () => [],
   name: 'dinner-mode-selector',
   showLabel: false,
-  size: 'sm',
+  size: undefined, // Falls back to responsive SIZES.small
   consensus: undefined,
   interaction: 'buttons'
 })
@@ -83,7 +81,10 @@ watch(() => props.consensus, () => {
 })
 
 // Design system
-const { WEEKDAY, ORIENTATIONS, ICONS } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY } = useTheSlopeDesignSystem()
+
+// Responsive size: use prop if provided, otherwise use responsive default
+const responsiveSize = computed(() => props.size ?? SIZES.small)
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
@@ -91,7 +92,7 @@ const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
 // Unwrap responsive orientation (vertical on mobile, horizontal on desktop)
 const buttonOrientation = computed(() => ORIENTATIONS.responsive.value)
 
-// Dinner mode display config (shared with WeekDayMapDinnerModeDisplay)
+// Dinner mode order for iteration
 const dinnerModeOrder: DinnerMode[] = [
   DinnerMode.DINEIN,
   DinnerMode.DINEINLATE,
@@ -99,6 +100,7 @@ const dinnerModeOrder: DinnerMode[] = [
   DinnerMode.NONE
 ]
 
+// Dinner mode display config
 const dinnerModeConfig: Record<DinnerMode, {
   label: string
   icon: string
@@ -108,7 +110,7 @@ const dinnerModeConfig: Record<DinnerMode, {
   editInactiveVariant: ButtonVariant
 }> = {
   [DinnerMode.DINEIN]: {
-    label: 'Fællesspisning',
+    label: 'Spisesal',
     icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
     activeColor: 'success',
     viewVariant: 'solid',
@@ -116,8 +118,8 @@ const dinnerModeConfig: Record<DinnerMode, {
     editInactiveVariant: 'soft'
   },
   [DinnerMode.DINEINLATE]: {
-    label: 'Fællesspisning (sen)',
-    icon: 'i-heroicons-clock',
+    label: 'Sen',
+    icon: 'i-heroicons-moon',
     activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
@@ -126,18 +128,18 @@ const dinnerModeConfig: Record<DinnerMode, {
   [DinnerMode.TAKEAWAY]: {
     label: 'Takeaway',
     icon: 'i-heroicons-shopping-bag',
-    activeColor: 'success',
+    activeColor: 'warning',
     viewVariant: 'solid',
     editActiveVariant: 'solid',
     editInactiveVariant: 'soft'
   },
   [DinnerMode.NONE]: {
-    label: 'Ingen spisning',
+    label: 'Ingen',
     icon: 'i-heroicons-x-circle',
     activeColor: 'error',
     viewVariant: 'soft',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'soft'
+    editActiveVariant: 'soft',
+    editInactiveVariant: 'ghost'
   }
 }
 
@@ -219,7 +221,7 @@ const getModeLabel = (): string => {
   <template v-if="isTitle">
     <UBadge
       v-bind="WEEKDAY.titleBadgeProps"
-      :size="size"
+      :size="responsiveSize"
       :name="name"
       :data-testid="name"
     >
@@ -231,56 +233,59 @@ const getModeLabel = (): string => {
 
   <!-- SELECTOR MODE: Dinner mode selection -->
   <template v-else>
-    <!-- VIEW MODE: Badge showing current selection -->
-    <UBadge
-      v-if="formMode === FORM_MODES.VIEW"
-      :color="getBadgeColor()"
-      :variant="getBadgeVariant()"
-      :size="size"
-      :name="name"
-      :data-testid="name"
-    >
-      <UIcon v-if="consensus === false" :name="ICONS.help" :class="WEEKDAY.badgeContentSize" />
-      <UIcon v-else :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
-      <span v-if="showLabel" class="ml-1">{{ getModeLabel() }}</span>
-    </UBadge>
+    <!-- VIEW MODE: Badge + fine print label below -->
+    <div v-if="formMode === FORM_MODES.VIEW" class="flex flex-col items-center gap-0.5">
+      <UBadge
+        :color="getBadgeColor()"
+        :variant="getBadgeVariant()"
+        :size="responsiveSize"
+        :name="name"
+        :data-testid="name"
+      >
+        <UIcon v-if="consensus === false" :name="ICONS.help" :class="WEEKDAY.badgeContentSize" />
+        <UIcon v-else :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
+      </UBadge>
+      <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
+    </div>
 
-    <!-- EDIT MODE: Toggle (single button, click cycles) -->
+    <!-- EDIT MODE: Toggle (single button, click cycles) - no label for compact grid use -->
     <UButton
       v-else-if="formMode === FORM_MODES.EDIT && interaction === 'toggle'"
       :icon="getModeIcon()"
       :color="dinnerModeConfig[dinnerMode]!.activeColor"
       :variant="dinnerModeConfig[dinnerMode]!.editActiveVariant"
       :disabled="disabled"
-      :size="size"
+      :size="responsiveSize"
       :name="name"
       :data-testid="name"
       :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
       @click="toggleMode"
     />
 
-    <!-- EDIT MODE: Button group for selection -->
-    <UFieldGroup
-      v-else-if="formMode === FORM_MODES.EDIT"
-      :size="size"
-      :orientation="buttonOrientation"
-      :class="FIELD_GROUP_CLASSES"
-      :name="name"
-      :data-testid="name"
-    >
-      <UButton
-        v-for="mode in dinnerModeOrder"
-        :key="mode"
-        :icon="dinnerModeConfig[mode]!.icon"
-        :color="getButtonColor(mode)"
-        :variant="getButtonVariant(mode)"
-        :disabled="isModeDisabled(mode)"
-        :size="size"
-        :data-testid="`${name}-${mode}`"
-        :class="['rounded-none md:rounded-md', { 'animate-pulse': shouldPulse(mode) }]"
-        :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
-        @click="updateMode(mode)"
-      />
-    </UFieldGroup>
+    <!-- EDIT MODE: Button group + fine print label below -->
+    <div v-else-if="formMode === FORM_MODES.EDIT" class="flex flex-col items-center gap-0.5">
+      <UFieldGroup
+        :size="responsiveSize"
+        :orientation="buttonOrientation"
+        :class="FIELD_GROUP_CLASSES"
+        :name="name"
+        :data-testid="name"
+      >
+        <UButton
+          v-for="mode in dinnerModeOrder"
+          :key="mode"
+          :icon="dinnerModeConfig[mode]!.icon"
+          :color="getButtonColor(mode)"
+          :variant="getButtonVariant(mode)"
+          :disabled="isModeDisabled(mode)"
+          :size="responsiveSize"
+          :data-testid="`${name}-${mode}`"
+          :class="['rounded-none md:rounded-md', { 'animate-pulse': shouldPulse(mode) }]"
+          :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
+          @click="updateMode(mode)"
+        />
+      </UFieldGroup>
+      <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
+    </div>
   </template>
 </template>

@@ -1,51 +1,97 @@
 # Feature: BookingGridView
 
+**ADR Reference:** [ADR-016: Grid Booking Pattern with Draft State](./adr.md#adr-016-grid-booking-pattern-with-draft-state)
+
 ## Overview
-Unified week/month grid for household booking management. Full-width layout (no calendar master) with horizontal scroll for day columns.
+Unified week/month grid for household booking management. Reuses display logic from DinnerBookingForm. Uses **draft state pattern** with Cancel/Save, and `processGridBooking` workhorse.
 
-## Layout
-```
-┌────────────────────────────────────────────────────────────────────┐
-│  ◀ Januar 2025 ▶                    [Dag][Uge][Mnd] [Annuller][Gem]│
-├──────────────────┬─────────────────────────────────────────────────┤
-│ FIXED            │ SCROLLABLE (dinner days only)                   │
-├──────────┬───────┼──────┬──────╫──────┬──────╫──────┬──────────────┤
-│ Beboer   │Status │ Ti 7 │ To 9 ║Ti 14 │To 16 ║Ti 21 │ ...          │
-│          │       │      │  🟡  ║      │      ║      │              │
-├──────────┼───────┼──────┼──────╫──────┼──────╫──────┼──────────────┤
-│ Voksen   │       │      │      ║      │      ║      │              │
-│ Anna     │ ~2    │  🍽️  │  🍽️  ║  🛍️  │  🍽️  ║  🍽️  │              │
-├──────────┼───────┼──────┼──────╫──────┼──────╫──────┼──────────────┤
-│ Barn     │       │      │      ║      │      ║      │              │
-│ Lars     │ +1    │  🍽️  │  🕐  ║  🍽️  │  ❌  ║  🍽️  │              │
-└──────────┴───────┴──────┴──────╨──────┴──────╨──────┴──────────────┘
-Legend: 🍽️ Spiser  🕐 Sen  🛍️ Take  ❌ Nej  ~frigivet  +hentet  🟠Lukket 🟡Ledige
+**ASCII layouts:** See `BookingGridView.vue` component header for VIEW/EDIT mode layouts.
+
+## Row Types (same as DinnerBookingForm)
+| Row Type | When Shown | Description |
+|----------|------------|-------------|
+| `power` | Edit mode | Updates ALL inhabitants for clicked column |
+| `inhabitant` | Always | Regular household member |
+| `guest` | Edit mode | Add new guest ticket for a day |
+| `guest-order` | Always (if exists) | Existing guest bookings |
+
+## Cell Display
+Reuse existing components:
+- **DinnerModeSelector** with `interaction="toggle"` for mode cycling
+- Released/claimed status: icon + accent color (from DinnerTicket pattern)
+- Compact: just mode icon + status icon (no full ticket in grid)
+
+| State | Icon | Accent |
+|-------|------|--------|
+| Normal | mode icon | primary |
+| Released | 📤 + mode | error |
+| Claimed | 🎟️ + mode | info |
+
+## Architecture (ADR-016)
+
+### Workhorse: processGridBooking
+Single function handles ALL booking mutations:
+
+```typescript
+type GridBookingChange = {
+  inhabitantId: number
+  dinnerEventId: number
+  dinnerMode: DinnerMode
+}
+
+const processGridBooking = async (
+  changes: GridBookingChange[],
+  existingOrders: OrderDisplay[],
+  inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
+  ticketPrices: TicketPrice[],
+  dinnerEventDates: Map<number, Date>,
+  householdId: number,
+  userId: number
+): Promise<GridBookingResult>
 ```
 
-## Key Features
-- **Single component** for week + month (`view` prop)
-- **Only dinner days** as columns
-- **Week boundary accent** (thicker border)
-- **Lock chips** like calendar (peach=locked, yellow=tickets)
-- **Mode toggle** cycles: DINEIN→LATE→TAKE→NONE
-- **Fixed columns** (name/status) with scrollable days
-- **Edit/View mode** with Save/Cancel
+### Specialization: processBooking
+Single-dinner API delegates to workhorse:
+
+```typescript
+const processBooking = async (...) => {
+  const changes = inhabitants.map(i => ({
+    inhabitantId: i.id,
+    dinnerEventId: dinnerId,
+    dinnerMode
+  }))
+  return processGridBooking(changes, ...)
+}
+```
 
 ## Files
 | File | Action | Status |
 |------|--------|--------|
-| `booking/BookingWeekView.vue` | Delete | ✅ Done |
-| `booking/BookingMonthView.vue` | Delete | ✅ Done |
-| `dinner/DinnerModeSelector.vue` | Add toggle mode | ✅ Done (`interaction="toggle"`) |
-| `booking/BookingGridView.vue` | Create | ⏳ |
-| `household/HouseholdBookings.vue` | Modify | ⏳ |
+| `dinner/DinnerModeSelector.vue` | Reuse (`interaction="toggle"`) | ✅ Done |
+| `dinner/DinnerTicket.vue` | Reuse patterns (released/claimed) | ✅ Done |
+| `dinner/DinnerBookingForm.vue` | Reference for row types | ✅ Done |
+| `booking/BookingGridView.vue` | Create with draft state | ⚠️ Partial |
+| `stores/bookings.ts` | Add `processGridBooking` | ❌ TODO |
 
-## Supporting Utilities
-| Utility | Location | Status |
-|---------|----------|--------|
-| `areSameWeek(a, b)` | `date.ts` | ✅ Done (8 tests) |
-| `getEventsForGridView(events, range)` | `season.ts` | ✅ Done (14 tests) |
+## Implementation Checklist
 
-## Status Indicators
-- `~N` (error color) = N tickets released by you
-- `+N` (success color) = N tickets claimed from others
+### Phase 1: Workhorse Function
+- [ ] Add `GridBookingChange`, `GridBookingResult` types
+- [ ] Implement `processGridBooking` in bookingsStore
+- [ ] Refactor `processBooking` to delegate
+- [ ] Tests
+
+### Phase 2: Grid View
+- [ ] Draft state Map
+- [ ] Cell display with released/claimed status
+- [ ] Mode toggle (DinnerModeSelector)
+- [ ] Power row
+- [ ] Guest rows (add + existing)
+- [ ] Cancel/Save buttons
+- [ ] Amount column
+
+### Phase 3: Polish
+- [ ] Week boundary styling
+- [ ] Navigation (◀ ▶)
+- [ ] Error handling
+- [ ] E2E tests

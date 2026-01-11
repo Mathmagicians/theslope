@@ -46,7 +46,7 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
-import {FORM_MODES, type FormMode} from '~/types/form'
+import {FORM_MODES} from '~/types/form'
 import type {DinnerMode, OrderDisplay, ProcessBookingResult, BookingAction} from '~/composables/useBookingValidation'
 
 // Design system
@@ -58,12 +58,9 @@ const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
 // Toast for user feedback
 const toast = useToast()
 
-// Auth store for current user info
+// Auth store for current user info (used in booking handlers)
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
-
-// Booking form state - EDIT mode prevents accidental changes
-const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
 // Calendar accordion state (open by default, toggled by date badge click)
 const calendarOpen = ref(true)
@@ -415,40 +412,10 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            :form-mode="bookingFormMode"
             @update-booking="handleBookingUpdate"
             @update-all-bookings="handleAllBookingsUpdate"
-            @cancel="bookingFormMode = FORM_MODES.VIEW"
           />
 
-          <!-- Booking action button -->
-          <div class="mt-4">
-            <UButton
-              v-if="bookingFormMode === FORM_MODES.VIEW"
-              :color="COLOR.warning"
-              variant="solid"
-              size="lg"
-              name="edit-booking"
-              block
-              :icon="ICONS.edit"
-              @click="bookingFormMode = FORM_MODES.EDIT"
-            >
-              Rediger booking
-            </UButton>
-
-            <UButton
-              v-else
-              color="neutral"
-              variant="outline"
-              size="lg"
-              name="back-from-booking"
-              block
-              :icon="ICONS.arrowLeft"
-              @click="bookingFormMode = FORM_MODES.VIEW"
-            >
-              Tilbage
-            </UButton>
-          </div>
         </ChefMenuCard>
       </template>
 

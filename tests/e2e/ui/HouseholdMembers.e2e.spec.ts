@@ -133,10 +133,9 @@ test.describe('Household members display', () => {
             10
         )
 
-        // Find Monday's button group (data-testid contains the pattern) and click TAKEAWAY (3rd button)
-        // Button order: DINEIN(0), DINEINLATE(1), TAKEAWAY(2), NONE(3)
-        const mondayGroup = page.locator(`[data-testid="inhabitant-${donaldId}-preferences-edit-mandag"]`)
-        const takeawayButton = mondayGroup.locator('button').nth(2)
+        // Click TAKEAWAY button directly using its testid
+        const takeawayButton = page.getByTestId(`inhabitant-${donaldId}-preferences-edit-mandag-TAKEAWAY`)
+        await expect(takeawayButton, `TAKEAWAY button for inhabitant ${donaldId} should be visible`).toBeVisible({timeout: 5000})
         await takeawayButton.click()
 
         // Click the Save button to persist changes
