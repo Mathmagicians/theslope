@@ -437,6 +437,7 @@ describe('decideOrderAction', () => {
         dinnerMode: DinnerMode.DINEIN,
         ticketPriceId: 1,
         isGuestTicket: false,
+        state: OrderState.BOOKED,
         ...overrides
     })
 
@@ -617,6 +618,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         dinnerMode: DinnerMode.DINEIN,
         ticketPriceId: 1,
         isGuestTicket: false,
+        state: OrderState.BOOKED,
         ...overrides
     })
 

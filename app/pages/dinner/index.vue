@@ -184,22 +184,15 @@ const refreshBookingData = async () => {
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const householdId = user.value?.Inhabitant?.household?.id
+  const dinnerEventId = selectedDinnerId.value
 
-  if (orders.length === 0 || !householdId) {
-    console.warn('Missing data for booking:', {orders: orders.length, householdId})
+  if (orders.length === 0 || !householdId || !dinnerEventId) {
+    console.warn('Missing data for booking:', {orders: orders.length, householdId, dinnerEventId})
     return
   }
 
-  // Extract unique dinner event IDs from the orders
-  const dinnerEventIds = [...new Set(orders.map(o => o.dinnerEventId))]
-
   try {
-    const response = await bookingsStore.processBookings({
-      householdId,
-      dinnerEventIds,
-      orders
-    })
-
+    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
     await refreshBookingData()
     toast.add({
       title: formatScaffoldResult(response.scaffoldResult),

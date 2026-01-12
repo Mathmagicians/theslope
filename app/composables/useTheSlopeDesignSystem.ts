@@ -388,10 +388,11 @@ export const COMPONENTS = {
         }
     },
 
-    // Guest row - guest ticket booking pattern
+    // Guest row - guest ticket booking patterns
     guestRow: {
         color: 'info' as const,
-        icon: 'i-heroicons-user-plus',
+        addIcon: 'i-heroicons-user-plus',      // For "add guest" rows
+        orderIcon: 'i-heroicons-ticket',        // For existing guest orders
         iconClass: 'size-4 md:size-6 text-info-500'
     },
 

@@ -47,12 +47,17 @@ Use `orderId` for updates. Generator decides intent → Scaffolder executes.
 - Removed `convertDesiredToOrderCreate` from useBookingValidation.ts
 - Cleaned unused imports
 
-### ⏳ Phase 5: Component Updates (PENDING)
-- [ ] DinnerBookingForm: include orderId in emitted DesiredOrder
-- [ ] BookingGridView: include orderId in emitted changes
-- [ ] HouseholdBookings: ADD missing @save-bookings handler for day view
+### ⏳ Phase 5: Component Updates (IN PROGRESS)
+- [x] DinnerBookingForm: include orderId and state in emitted DesiredOrder
+- [x] HouseholdBookings.handleGridSave: include orderId and state
+- [x] useBooking.buildGuestOrder: include state
+- [x] Store refactored: processSingleEventBookings + processMultipleEventsBookings
+- [x] dinner/index.vue: updated to use processSingleEventBookings
+- [ ] HouseholdBookings day view: ADD missing @save-bookings handler for DinnerBookingForm
+- [ ] BookingGridView: guest booking UX (currently emits addGuest, needs design decision)
 
 ### ⏳ Phase 6: Final Cleanup (PENDING)
+- [ ] Fix remaining lint errors
 - [ ] Update ADR-016 in docs/adr.md
 - [ ] Full E2E regression tests
 

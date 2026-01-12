@@ -15,12 +15,12 @@ async function performLogin(request: APIRequestContext, userName: string) {
     return response
 }
 
-async function setupUIAuth(page: Page, userName: string, storageFile: string) {
+async function setupUIAuth(page: Page, userName: string, storageFile: string, landingPath: string = '/admin', expectedUrl: string | RegExp = '/admin/planning') {
     await page.goto('/login')
     await page.waitForURL('/login')
     await performLogin(page.request, userName)
-    await page.goto('/admin')
-    await page.waitForURL('/admin/planning')
+    await page.goto(landingPath)
+    await page.waitForURL(expectedUrl)
     await page.context().storageState({path: storageFile})
 }
 
@@ -41,5 +41,5 @@ setup('Authenticate member for API', async ({request}) => {
 })
 
 setup('Authenticate member for UI', async ({page}) => {
-    await setupUIAuth(page, memberUserName, authFiles.memberUIFile)
+    await setupUIAuth(page, memberUserName, authFiles.memberUIFile, '/dinner', '/dinner')
 })

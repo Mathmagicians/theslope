@@ -784,16 +784,20 @@ export const useBooking = () => {
         bookerId: number,
         dinnerEventId: number,
         ticketPriceId: number,
-        dinnerMode: DinnerMode = DinnerModeSchema.enum.DINEIN,
+        dinnerMode?: DinnerMode,
         allergyTypeIds?: number[]
-    ): DesiredOrder => ({
-        inhabitantId: bookerId,
-        dinnerEventId,
-        dinnerMode,
-        ticketPriceId,
-        isGuestTicket: true,
-        allergyTypeIds
-    })
+    ): DesiredOrder => {
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+        return {
+            inhabitantId: bookerId,
+            dinnerEventId,
+            dinnerMode: dinnerMode ?? DinnerModeSchema.enum.DINEIN,
+            ticketPriceId,
+            isGuestTicket: true,
+            allergyTypeIds,
+            state: OrderStateSchema.enum.BOOKED
+        }
+    }
 
     // ============================================================================
     // Scaffold Result Formatting - Consistent display across UI and logs

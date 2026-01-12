@@ -45,13 +45,13 @@ import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreVali
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {FORM_MODES} from '~/types/form'
 
 // Row types for synthetic rows in table
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
 
-// Ticket config type - use NuxtUIColor from design system
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+// Ticket config type
 type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
 
 interface TableRow {
@@ -204,18 +204,20 @@ const householdInhabitantIds = computed(() =>
   new Set(household.value?.inhabitants?.map(i => i.id) ?? [])
 )
 
-const releasedTicketsFromOthers = computed(() => {
-  if (canBook.value) return []
-  return (props.allOrders ?? []).filter(o =>
+const releasedTicketsFromOthers = computed(() =>
+  (props.allOrders ?? []).filter(o =>
     o.state === OrderStateEnum.RELEASED &&
+    o.dinnerEventId === props.dinnerEvent.id &&
     !householdInhabitantIds.value.has(o.inhabitantId)
   )
-})
+)
 
-const userReleasedTickets = computed(() => {
-  if (canBook.value) return []
-  return (props.orders ?? []).filter(o => o.state === OrderStateEnum.RELEASED)
-})
+const userReleasedTickets = computed(() =>
+  (props.orders ?? []).filter(o =>
+    o.state === OrderStateEnum.RELEASED &&
+    o.dinnerEventId === props.dinnerEvent.id
+  )
+)
 
 const releasedTicketCount = computed(() => releasedTicketsFromOthers.value.length)
 const hasReleasedTickets = computed(() => releasedTicketCount.value > 0)
@@ -260,6 +262,12 @@ const tableData = computed((): TableRow[] => {
     const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
     const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, props.ticketPrices)
 
+    // Existing order: preserve ticketPriceId. New booking: compute from age.
+    const resolvedTicketPriceId = order?.ticketPriceId ?? ticketPrice?.id
+    if (!resolvedTicketPriceId) {
+      throw new Error(`Cannot resolve ticketPriceId for inhabitant ${inhabitant.id}`)
+    }
+
     return {
       rowType: 'inhabitant' as RowType,
       id: inhabitant.id,
@@ -272,7 +280,7 @@ const tableData = computed((): TableRow[] => {
       orderState: order?.state as OrderState | undefined,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
-      ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? 0,
+      ticketPriceId: resolvedTicketPriceId,
       provenanceHousehold: order?.provenanceHousehold,
       provenanceAllergies: order?.provenanceAllergies
     }
@@ -291,6 +299,12 @@ const tableData = computed((): TableRow[] => {
     .map(([key, orders]) => {
       const firstOrder = orders[0]!
       const booker = allInhabitants.find(i => i.id === firstOrder.inhabitantId)
+
+      // Guest order must have ticketPriceId
+      if (!firstOrder.ticketPriceId) {
+        throw new Error(`Guest order ${firstOrder.id} missing ticketPriceId`)
+      }
+
       return {
         rowType: 'guest-order' as RowType,
         id: `guest-group-${key}`,
@@ -303,7 +317,7 @@ const tableData = computed((): TableRow[] => {
         orderState: firstOrder.state as OrderState,
         dinnerMode: firstOrder.dinnerMode,
         price: firstOrder.priceAtBooking,
-        ticketPriceId: firstOrder.ticketPriceId ?? 0,
+        ticketPriceId: firstOrder.ticketPriceId,
         guestCount: orders.length,
         provenanceHousehold: firstOrder.provenanceHousehold,
         provenanceAllergies: firstOrder.provenanceAllergies
@@ -361,6 +375,7 @@ const handleSave = async (row: TableRow) => {
 
     if (row.rowType === 'power') {
       // Power mode: all inhabitants with same mode
+      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
       orders = tableData.value
         .filter((r: TableRow) => r.rowType === 'inhabitant')
         .map((r: TableRow) => ({
@@ -368,10 +383,13 @@ const handleSave = async (row: TableRow) => {
           dinnerEventId,
           dinnerMode: draftMode.value,
           ticketPriceId: r.ticketPriceId,
-          isGuestTicket: false
+          isGuestTicket: false,
+          orderId: r.order?.id,
+          state: OrderStateEnum.BOOKED
         }))
     } else if (row.rowType === 'guest') {
       // Add new guest ticket(s) - linked to the booker (user's inhabitant)
+      // No orderId - these are creates, state = BOOKED
       const bookerId = bookerInhabitant.value?.id
       const {ticketPriceId, allergies, count} = guestDraft.value
       if (bookerId && ticketPriceId) {
@@ -381,11 +399,13 @@ const handleSave = async (row: TableRow) => {
           dinnerMode: draftMode.value,
           ticketPriceId,
           isGuestTicket: true,
-          allergyTypeIds: allergies.length > 0 ? allergies : undefined
+          allergyTypeIds: allergies.length > 0 ? allergies : undefined,
+          state: OrderStateEnum.BOOKED
         }))
       }
     } else if (row.rowType === 'guest-order') {
       // Update existing guest
+      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
       const inhabitantId = row.order?.inhabitantId
       if (inhabitantId) {
         orders = [{
@@ -393,18 +413,23 @@ const handleSave = async (row: TableRow) => {
           dinnerEventId,
           dinnerMode: draftMode.value,
           ticketPriceId: row.ticketPriceId,
-          isGuestTicket: true
+          isGuestTicket: true,
+          orderId: row.order?.id,
+          state: OrderStateEnum.BOOKED
         }]
       }
     } else {
       // Update single inhabitant
+      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
       if (typeof row.id === 'number') {
         orders = [{
           inhabitantId: row.id,
           dinnerEventId,
           dinnerMode: draftMode.value,
           ticketPriceId: row.ticketPriceId,
-          isGuestTicket: false
+          isGuestTicket: false,
+          orderId: row.order?.id,
+          state: OrderStateEnum.BOOKED
         }]
       }
     }
@@ -514,6 +539,7 @@ const allergyOptions = computed(() =>
       :data="tableData"
       :columns="columns"
       row-key="id"
+      data-testid="booking-table"
       :ui="{tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4'}"
     >
       <!-- Expand button column -->
@@ -720,6 +746,7 @@ const allergyOptions = computed(() =>
             v-model="draftMode"
             :form-mode="FORM_MODES.EDIT"
             :disabled-modes="row.original.rowType === 'guest' ? guestDisabledModes : disabledModes"
+            :consensus="row.original.consensus"
             :size="SIZES.standard"
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"
             orientation="horizontal"
@@ -756,5 +783,25 @@ const allergyOptions = computed(() =>
         </UCard>
       </template>
     </UTable>
+
+    <!-- Legend: DinnerModeSelector in VIEW mode with labels (DRY) -->
+    <UAlert
+      v-if="isEditModeAllowed"
+      :icon="ICONS.info"
+      :color="COLOR.neutral"
+      variant="subtle"
+      title="Forklaring"
+      class="mt-4"
+    >
+      <template #description>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEINLATE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.TAKEAWAY" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.NONE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" :consensus="false" />
+        </div>
+      </template>
+    </UAlert>
   </div>
 </template>

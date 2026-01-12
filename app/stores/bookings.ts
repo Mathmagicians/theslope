@@ -1,12 +1,10 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, ProcessBookingResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
-import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
 
@@ -175,78 +173,61 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
+    const isProcessingBookings = ref(false)
+
     /**
-     * Process booking for one or more inhabitants on a single dinner.
-     * Consolidates individual and power mode booking logic.
+     * ADR-016: Internal scaffold endpoint call.
      */
-    const processBooking = async (
-        inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'birthDate'>[],
-        existingOrders: OrderDisplay[],
-        dinnerMode: DinnerMode,
-        dinnerId: number,
-        dinnerDate: Date,
-        ticketPrices: TicketPrice[],
-        householdId: number,
-        userId: number
-    ): Promise<ProcessBookingResult> => {
-        const {reconcileSingleDinnerUserBooking, buildBookingFeedback} = useBooking()
-
-        // Reconcile to get create/update/delete buckets
-        const result = reconcileSingleDinnerUserBooking(
-            inhabitants, existingOrders, dinnerMode, dinnerId, dinnerDate, ticketPrices, householdId, userId
-        )
-
-        // Execute creates
-        if (result.create.length > 0) {
-            await createOrder({
-                householdId,
-                dinnerEventId: dinnerId,
-                orders: result.create.map(o => ({
-                    inhabitantId: o.inhabitantId,
-                    ticketPriceId: o.ticketPriceId!,
-                    bookedByUserId: userId,
-                    dinnerMode: o.dinnerMode
-                }))
-            })
-        }
-
-        // Execute updates
-        for (const desired of result.update) {
-            const existing = existingOrders.find(o => o.inhabitantId === desired.inhabitantId && o.dinnerEventId === dinnerId)
-            if (existing?.id) await updateOrder(existing.id, {dinnerMode: desired.dinnerMode})
-        }
-
-        // Execute deletes
-        for (const order of result.delete) {
-            if (order.id) await deleteOrder(order.id)
-        }
-
-        const nameMap = new Map(inhabitants.map(i => [i.id, i.name]))
-        const feedback = buildBookingFeedback(result, nameMap, dinnerMode)
-        console.info(CTX, `Processed booking: ${JSON.stringify(feedback.summary)}`)
-        return feedback
+    const _scaffoldOrders = async (request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse> => {
+        const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
+            method: 'POST',
+            body: request
+        })
+        await refreshOrders()
+        return ScaffoldOrdersResponseSchema.parse(result)
     }
 
     /**
-     * ADR-016: Unified booking mutation via scaffold endpoint.
-     * Replaces direct order mutations with atomic reconciliation.
-     *
-     * @param request - Desired orders + dinner event scope
-     * @returns ScaffoldResult with created/deleted/released counts
+     * ADR-016: Process bookings for a single dinner event.
+     * Used by day view, power mode, and guest booking.
      */
-    const processBookings = async (request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse> => {
-        const {ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const processSingleEventBookings = async (
+        householdId: number,
+        dinnerEventId: number,
+        orders: DesiredOrder[]
+    ): Promise<ScaffoldOrdersResponse> => {
+        isProcessingBookings.value = true
         try {
-            const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
-                method: 'POST',
-                body: request
-            })
-            console.info(CTX, `processBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
-            await refreshOrders()
-            return ScaffoldOrdersResponseSchema.parse(result)
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders })
+            console.info(CTX, `processSingleEventBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
+            return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke gemme bookinger')
             throw e
+        } finally {
+            isProcessingBookings.value = false
+        }
+    }
+
+    /**
+     * ADR-016: Process bookings for multiple dinner events.
+     * Used by grid view (week/month).
+     */
+    const processMultipleEventsBookings = async (
+        householdId: number,
+        dinnerEventIds: number[],
+        orders: DesiredOrder[]
+    ): Promise<ScaffoldOrdersResponse> => {
+        isProcessingBookings.value = true
+        try {
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders })
+            console.info(CTX, `processMultipleEventsBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
+            return result
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke gemme bookinger')
+            throw e
+        } finally {
+            isProcessingBookings.value = false
         }
     }
 
@@ -449,8 +430,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateOrder,
         claimOrder,
         fetchReleasedOrders,
-        processBooking,
-        processBookings,
+        isProcessingBookings,
+        processSingleEventBookings,
+        processMultipleEventsBookings,
 
         // dinner event actions
         isDinnerUpdating,

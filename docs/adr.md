@@ -2,184 +2,124 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
-## ADR-016: Grid Booking Pattern with Draft State
+## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-01-12
 
 ### Context
 
-The household booking system requires a grid view showing multiple inhabitants (rows) × multiple dinner events (columns) for week/month planning. This differs from single-dinner booking:
-
-- **Scale**: Potentially dozens of bookings edited in one session (5 inhabitants × 8 dinners = 40 cells)
-- **Atomicity**: Users expect to review all changes before committing
-- **Mixed modes**: Different inhabitants can have different modes for the same dinner
-- **Reuse**: Must use same scaffolder/reconciliation pattern as existing booking system
+Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
+1. NONE after deadline deletes instead of releases
+2. Single-user edit deletes other household members
+3. Guest tickets indistinguishable (same abstract key)
 
 ### Decision
 
-**1. Grid views use draft state with explicit Cancel/Save.**
+**Use `orderId` for updates. Generator decides intent → Scaffolder executes.**
 
-**2. `processGridBooking` is the workhorse function; `processBooking` is a specialization.**
+### Architecture
 
-| Function | Scope | Use Case |
-|----------|-------|----------|
-| `processGridBooking` | Multiple dinners, per-inhabitant modes | Grid view save, batch operations |
-| `processBooking` | Single dinner, uniform mode | Power mode, single booking (delegates to workhorse) |
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         GENERATOR (useBooking.ts)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│ decideOrderAction(input) → { bucket, order } | null                 │
+│   - Pure function, no side effects                                  │
+│   - Returns bucket: create | update | delete | idempotent           │
+│   - Sets state (BOOKED/RELEASED) and dinnerMode                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ resolveDesiredOrdersToBuckets() - User mode (explicit orders)       │
+│ resolveOrdersFromPreferencesToBuckets() - System mode (preferences) │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SCAFFOLDER (scaffoldPrebookings.ts)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ Transform: DesiredOrder → OrderCreateWithPrice                      │
+│   - Add bookedByUserId (from context)                               │
+│   - Lookup priceAtBooking (from ticketPrices)                       │
+│   - Add householdId                                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│ Execute buckets:                                                    │
+│   - create → createOrders()                                         │
+│   - update → updateOrder() + releasedAt for releases                │
+│   - delete → deleteOrder()                                          │
+│   - idempotent → skip                                               │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-### Workhorse: processGridBooking
+### Decision Matrix
 
-The grid booking workhorse accepts explicit (inhabitant, event, mode) tuples and uses the same `reconcilePreBookings` pattern as the scaffolder:
+| `orderId` | `dinnerMode` | `existing` | `deadline` | → Action |
+|-----------|--------------|------------|------------|----------|
+| absent | ≠ NONE | N/A | any | **CREATE** (state=BOOKED) |
+| absent | = NONE | N/A | any | SKIP |
+| present | = NONE | found | before | **DELETE** |
+| present | = NONE | found | after | **UPDATE** (state=RELEASED) |
+| present | ≠ NONE | RELEASED | any | **UPDATE** (state=BOOKED, reclaim) |
+| present | ≠ NONE | same | any | **IDEMPOTENT** |
+| present | ≠ NONE | diff | any | **UPDATE** (mode/price change) |
+| present | any | not found | any | SKIP (stale) |
+
+### DesiredOrder Schema
 
 ```typescript
-// bookingsStore.ts - THE WORKHORSE
-const processGridBooking = async (
-  changes: Array<{ inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }>,
-  existingOrders: OrderDisplay[],
-  inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
-  ticketPrices: TicketPrice[],
-  dinnerEventDates: Map<number, Date>,  // eventId → date for deadline checks
-  householdId: number,
-  userId: number
-): Promise<GridBookingResult> => {
-  // Group changes by dinner event
-  const changesByEvent = groupBy(changes, c => c.dinnerEventId)
-
-  // Process each dinner event using reconciler
-  for (const [eventId, eventChanges] of changesByEvent) {
-    const dinnerDate = dinnerEventDates.get(eventId)!
-    const modeByInhabitant = new Map(eventChanges.map(c => [c.inhabitantId, c.dinnerMode]))
-
-    // Build desired orders for this event (same pattern as scaffolder)
-    const desiredOrders = buildDesiredOrders(inhabitants, modeByInhabitant, eventId, ...)
-
-    // Reconcile using pruneAndCreate (ADR-015 pattern)
-    const result = reconcilePreBookings(existingOrders.filter(o => o.dinnerEventId === eventId))(desiredOrders)
-
-    // Execute creates/updates/deletes with deadline-aware logic
-    await executeReconciliation(result, dinnerDate, canModifyOrders, canEditDiningMode)
-  }
+DesiredOrderSchema = {
+  inhabitantId: number,
+  dinnerEventId: number,
+  dinnerMode: DinnerMode,
+  ticketPriceId: number,
+  isGuestTicket: boolean,
+  state: OrderState,           // Generator sets: BOOKED or RELEASED
+  orderId?: number,            // Present for updates, absent for creates
+  allergyTypeIds?: number[]    // Guest allergies
 }
 ```
 
-### Specialization: processBooking
+### Two Modes
 
-Single-dinner booking (power mode, individual booking) delegates to the workhorse:
+| Mode | Trigger | Generator | Use Case |
+|------|---------|-----------|----------|
+| **System** | Preference change, cron | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates |
+| **User** | UI booking | `resolveDesiredOrdersToBuckets` | Grid view, single booking |
 
-```typescript
-// bookingsStore.ts - SPECIALIZATION (existing API unchanged)
-const processBooking = async (
-  inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'birthDate'>[],
-  existingOrders: OrderDisplay[],
-  dinnerMode: DinnerMode,  // Same mode for all inhabitants
-  dinnerId: number,
-  dinnerDate: Date,
-  ticketPrices: TicketPrice[],
-  householdId: number,
-  userId: number
-): Promise<ProcessBookingResult> => {
-  // Convert uniform mode to per-inhabitant changes
-  const changes = inhabitants.map(i => ({
-    inhabitantId: i.id,
-    dinnerEventId: dinnerId,
-    dinnerMode
-  }))
+### Frontend Pattern
 
-  // Delegate to workhorse
-  return processGridBooking(
-    changes,
-    existingOrders,
-    inhabitants,
-    ticketPrices,
-    new Map([[dinnerId, dinnerDate]]),
-    householdId,
-    userId
-  )
-}
-```
-
-### Frontend Draft State Pattern
-
-Grid view accumulates changes in local state before calling the workhorse:
+UI components emit `DesiredOrder[]` with `orderId` for existing orders:
 
 ```typescript
-// BookingGridView.vue
-const draftChanges = ref<Map<string, DinnerMode>>(new Map())  // key: `${inhabitantId}-${eventId}`
-
-// Cell displays draft value if exists, otherwise server value
-const getCellMode = (inhabitantId: number, eventId: number): DinnerMode => {
-  const key = `${inhabitantId}-${eventId}`
-  return draftChanges.value.get(key) ?? getOrderMode(inhabitantId, eventId)
-}
-
-// Toggle updates draft only
-const handleCellToggle = (inhabitantId: number, eventId: number, nextMode: DinnerMode) => {
-  const key = `${inhabitantId}-${eventId}`
-  const serverMode = getOrderMode(inhabitantId, eventId)
-
-  if (nextMode === serverMode) {
-    draftChanges.value.delete(key)  // Back to server state = no change
-  } else {
-    draftChanges.value.set(key, nextMode)
-  }
-}
-
-// Save: convert draft to changes array, call workhorse
-const handleSave = async () => {
-  const changes = Array.from(draftChanges.value.entries()).map(([key, mode]) => {
-    const [inhabitantId, eventId] = key.split('-').map(Number)
-    return { inhabitantId: inhabitantId!, dinnerEventId: eventId!, dinnerMode: mode }
-  })
-
-  await bookingsStore.processGridBooking(changes, ...)
-  draftChanges.value.clear()
-}
-
-// Cancel: discard all pending changes
-const handleCancel = () => {
-  draftChanges.value.clear()
-}
+// Component emits orders with orderId from existing
+const desiredOrders = selectedInhabitants.map(inhabitant => ({
+  inhabitantId: inhabitant.id,
+  dinnerEventId: event.id,
+  dinnerMode: selectedMode,
+  ticketPriceId: ticketPrice.id,
+  isGuestTicket: false,
+  state: OrderState.BOOKED,
+  orderId: existingOrder?.id  // Key: include orderId for updates
+}))
 ```
-
-### Power Mode in Grid
-
-Power mode (set all inhabitants to same mode for one event) adds entries to draft:
-
-```typescript
-const handlePowerToggle = (eventId: number, nextMode: DinnerMode) => {
-  inhabitants.forEach(inhabitant => {
-    const key = `${inhabitant.id}-${eventId}`
-    const serverMode = getOrderMode(inhabitant.id, eventId)
-
-    if (nextMode === serverMode) {
-      draftChanges.value.delete(key)
-    } else {
-      draftChanges.value.set(key, nextMode)
-    }
-  })
-}
-```
-
-### UI Requirements
-
-| State | Visual Indicator |
-|-------|------------------|
-| Unchanged | Normal cell styling |
-| Modified (in draft) | Ring/highlight showing pending change |
-| Saving | Loading spinner on Save button |
-| Error | Toast notification, draft preserved for retry |
 
 ### Compliance
 
-1. `processGridBooking` is the single workhorse for all booking mutations
-2. `processBooking` MUST delegate to `processGridBooking` (no duplicate logic)
-3. Grid views MUST accumulate changes in draft state before calling workhorse
-4. Cancel MUST discard ALL pending changes
-5. Modified cells MUST be visually distinguishable from unchanged
-6. Same reconciliation logic (`reconcilePreBookings`) used throughout
+1. Generator MUST set `state` and `dinnerMode` - scaffolder doesn't re-derive
+2. Scaffolder ONLY enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`)
+3. UI MUST include `orderId` from existing orders for updates
+4. Guest orders preserved (not managed by preferences)
+5. User cancellations tracked in `cancelledKeys` set
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
+| `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema` |
+| `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms and executes |
 
 ### Related ADRs
 
-- **ADR-008**: useEntityFormManager for single-entity forms (grid is multi-entity)
+- **ADR-011**: Booking system schema (three-state order model)
 - **ADR-014**: Batch operations and D1 limits
 - **ADR-015**: Idempotent operations with pruneAndCreate pattern
 

@@ -21,28 +21,29 @@ const OrderState = OrderStateSchema.enum
  * - Single inhabitant mode change
  * - Power mode (family) change
  * - Guest ticket addition
+ *
+ * Note: Order cleanup happens automatically via CASCADE when singleton season is deleted
  */
 test.describe('DinnerBookingForm - User Booking Interactions', () => {
     let householdId: number
     let inhabitantId: number
-    let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
-    let testDinnerEvent: {id: number, date: Date}
 
     test.use({storageState: memberUIFile})
 
     test.beforeAll(async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
 
         // Get member's household info
         const sessionInfo = await getSessionUserInfo(memberContext)
         householdId = sessionInfo.householdId
         inhabitantId = sessionInfo.inhabitantId
+    })
 
-        // Use singleton active season
-        activeSeason = await SeasonFactory.createActiveSeason(adminContext)
-
-        // Get first future dinner event
+    /**
+     * Helper to get next future dinner event fresh from the API
+     */
+    const getNextFutureDinnerEvent = async (adminContext: Awaited<ReturnType<typeof validatedBrowserContext>>) => {
+        const activeSeason = await SeasonFactory.createActiveSeason(adminContext)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, activeSeason.id!)
@@ -51,42 +52,25 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
         expect(futureEvents.length, 'Should have future dinner events').toBeGreaterThan(0)
-        testDinnerEvent = {id: futureEvents[0]!.id, date: new Date(futureEvents[0]!.date)}
-    })
+        return {id: futureEvents[0]!.id, date: new Date(futureEvents[0]!.date)}
+    }
 
-    // Helper to navigate to dinner page for specific date
+    // Helper to navigate to dinner page and wait for table
     const goToDinnerPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
         await page.goto(`/dinner?date=${dateParam}`)
-
-        // Wait for booking form to load
-        await pollUntil(
-            async () => {
-                const table = page.locator('table')
-                return await table.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('table')).toBeVisible({timeout: 15000})
     }
-
-    test.afterEach(async ({browser}) => {
-        // Clean up any orders created during test
-        const adminContext = await validatedBrowserContext(browser)
-        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, testDinnerEvent.id)
-        const householdOrders = orders.filter(o => o.inhabitant?.householdId === householdId)
-        await OrderFactory.cleanupOrders(adminContext, householdOrders.map(o => o.id))
-    })
 
     test('GIVEN inhabitant row WHEN user changes mode to TAKEAWAY THEN order is updated', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
+        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
 
         // GIVEN: Navigate to dinner page
-        const dateParam = formatDate(testDinnerEvent.date)
-        await page.goto(`/dinner?date=${dateParam}`)
+        await goToDinnerPage(page, testDinnerEvent.date)
 
-        // Wait for table to be visible
-        await expect(page.locator('table')).toBeVisible({timeout: 15000})
+        // Debug screenshot to see the page state
+        await doScreenshot(page, 'dinner/debug-booking-form-loaded')
 
         // Debug: collect testids for assertion message
         const allTestIds = await page.locator('[data-testid]').evaluateAll(
@@ -132,6 +116,7 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
 
     test('GIVEN power mode row WHEN user selects DINEIN THEN all inhabitants get orders', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
+        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
 
         // Get household details to know how many inhabitants
         const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
@@ -143,11 +128,7 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
 
         // GIVEN: Find and expand the power mode row
         const powerToggle = page.getByTestId('power-power-mode-toggle')
-        await pollUntil(
-            async () => await powerToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(powerToggle).toBeVisible({timeout: 10000})
         await powerToggle.click()
 
         // WHEN: Wait for mode selector and select DINEIN
@@ -186,17 +167,14 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
 
     test('GIVEN guest row WHEN user adds guest ticket THEN guest order is created', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
+        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
 
         // GIVEN: Navigate to dinner page
         await goToDinnerPage(page, testDinnerEvent.date)
 
         // GIVEN: Find and expand the add guest row
         const guestToggle = page.getByTestId('guest-add-guest-toggle')
-        await pollUntil(
-            async () => await guestToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(guestToggle).toBeVisible({timeout: 10000})
         await guestToggle.click()
 
         // WHEN: Wait for guest form and select ticket type

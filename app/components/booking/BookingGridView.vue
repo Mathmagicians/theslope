@@ -99,6 +99,10 @@ const emit = defineEmits<{
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
+// Billing (for ticket count format) and ticket (for price format)
+const {formatTicketCounts} = useBilling()
+const {formatPrice} = useTicket()
+
 // Validation schemas
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
@@ -155,8 +159,8 @@ const handleSave = () => {
   emit('update:formMode', FORM_MODES.VIEW)
 }
 
-// Handle mode change from FormModeSelector
-const handleModeChange = (mode: FormMode) => {
+// Handle mode change from FormModeSelector (reserved for future use)
+const _handleModeChange = (mode: FormMode) => {
   if (mode === FORM_MODES.VIEW && hasPendingChanges.value) {
     // If switching back to VIEW with pending changes, clear them
     draftChanges.value.clear()
@@ -181,14 +185,18 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 
 const columns = computed(() => {
   const fixedColumns = [
-    {id: 'name', header: 'Beboer', size: 150},
-    {id: 'count', header: 'Antal', size: 60}
+    {id: 'name', header: 'Beboer', footer: () => 'Sum', size: 150},
+    {id: 'count', header: 'Antal', footer: () => '', size: 60}
   ]
 
-  // Dynamic columns for each dinner event
+  // Dynamic columns for each dinner event (footer shows ticket counts + price)
   const eventColumns = flatEvents.value.map((event, idx) => ({
     id: `event-${event.id}`,
     header: formatCompactWeekdayDate(event.date),
+    footer: () => {
+      const summary = getEventSummary(event.id)
+      return `${summary.ticketCounts} · ${formatPrice(summary.totalPrice)} kr`
+    },
     size: 50,
     meta: {
       eventId: event.id,
@@ -264,7 +272,7 @@ const tableData = computed((): GridRow[] => {
 const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
   props.orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === eventId)
 
-const getDinnerModeForCell = (inhabitantId: number, eventId: number): DinnerMode =>
+const _getDinnerModeForCell = (inhabitantId: number, eventId: number): DinnerMode =>
   getOrderForCell(inhabitantId, eventId)?.dinnerMode ?? DinnerModeEnum.NONE
 
 // Order counts for inhabitant in visible range
@@ -281,8 +289,8 @@ const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, rel
   }
 }
 
-// Check if order is released (for cell visual indicator)
-const isOrderReleased = (inhabitantId: number, eventId: number): boolean =>
+// Check if order is released (for cell visual indicator - reserved for future use)
+const _isOrderReleased = (inhabitantId: number, eventId: number): boolean =>
   getOrderForCell(inhabitantId, eventId)?.state === OrderStateEnum.RELEASED
 
 // Consensus for power row - check if all inhabitants have same mode for an event
@@ -306,6 +314,13 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
   return eventsByWeek.value[weekIndex]?.[0]?.id === event.id
 }
 
+// Week boundary lookup by eventId (for template use)
+const weekBoundaryIds = computed(() => new Set(
+  flatEvents.value
+    .filter((e, idx) => isFirstEventOfWeek(e, idx))
+    .map(e => e.id)
+))
+
 // ============================================================================
 // DEADLINE LOGIC (same pattern as DinnerBookingForm)
 // ============================================================================
@@ -325,9 +340,9 @@ const getDisabledModesForEvent = (event: DinnerEventDisplay): DinnerMode[] => {
 }
 
 // Lock status for column header chips (reuse calendar pattern)
-const {BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
+const {BOOKING_LOCK_STATUS: _BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
-const getEventLockStatus = (event: DinnerEventDisplay): { config: typeof BOOKING_LOCK_STATUS.locked, count: number } | null => {
+const getEventLockStatus = (event: DinnerEventDisplay): { config: typeof _BOOKING_LOCK_STATUS.locked, count: number } | null => {
   if (canBookEvent(event)) return null // Not locked
   if (isEventPast(event)) return null // Past events don't show lock chip
   // Count released orders for this event
@@ -370,6 +385,22 @@ const getWeekNumber = (date: Date): number => {
 const guestOrders = computed(() =>
   props.orders.filter(o => o.inhabitantId === null || !props.household.inhabitants.some(i => i.id === o.inhabitantId))
 )
+
+// ============================================================================
+// EVENT SUMMARIES (for footer - matches economy view format)
+// ============================================================================
+
+const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: number } => {
+  const eventOrders = props.orders.filter(o =>
+    o.dinnerEventId === eventId &&
+    o.dinnerMode !== DinnerModeEnum.NONE &&
+    (o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED)
+  )
+  return {
+    ticketCounts: formatTicketCounts(eventOrders),
+    totalPrice: eventOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+  }
+}
 </script>
 
 <template>
@@ -381,7 +412,7 @@ const guestOrders = computed(() =>
           :icon="ICONS.arrowLeft"
           :color="COLOR.neutral"
           variant="ghost"
-          :size="SIZES.xs"
+          :size="SIZES.sm"
           data-testid="grid-nav-prev"
           @click="emit('navigate', 'prev')"
         />
@@ -390,7 +421,7 @@ const guestOrders = computed(() =>
           :icon="ICONS.arrowRight"
           :color="COLOR.neutral"
           variant="ghost"
-          :size="SIZES.xs"
+          :size="SIZES.sm"
           data-testid="grid-nav-next"
           @click="emit('navigate', 'next')"
         />
@@ -401,7 +432,7 @@ const guestOrders = computed(() =>
         :icon="ICONS.edit"
         :color="COLOR.neutral"
         variant="ghost"
-        :size="SIZES.xs"
+        :size="SIZES.sm"
         data-testid="grid-edit"
         @click="emit('update:formMode', FORM_MODES.EDIT)"
       />
@@ -409,16 +440,17 @@ const guestOrders = computed(() =>
 
     <!-- Grid Table -->
     <UTable
+      v-model:column-pinning="columnPinning"
       sticky
       :data="tableData"
       :columns="columns"
-      v-model:column-pinning="columnPinning"
       row-key="id"
       :ui="{
         tbody: '[&_tr:first-child]:bg-warning/10',
         th: 'px-1 py-1 md:px-2 md:py-2',
         td: 'px-1 py-1 md:px-2',
-        tfoot: 'sticky bottom-0 bg-default'
+        tfoot: 'sticky bottom-0 bg-default',
+        tf: 'px-1 py-1 md:px-2 text-center text-xs'
       }"
     >
       <!-- Empty state -->
@@ -438,7 +470,13 @@ const guestOrders = computed(() =>
 
       <!-- Dynamic event column headers: M / 29/1 / chip (fixed height) -->
       <template v-for="event in flatEvents" :key="`header-${event.id}`" #[`event-${event.id}-header`]>
-        <div class="flex flex-col items-center" :class="{ 'text-muted': isEventPast(event) }">
+        <div
+          class="flex flex-col items-center"
+          :class="[
+            { 'text-muted': isEventPast(event) },
+            weekBoundaryIds.has(event.id) ? 'border-l-2 border-primary pl-1' : ''
+          ]"
+        >
           <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
           <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
           <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets -->
@@ -473,13 +511,13 @@ const guestOrders = computed(() =>
         />
         <!-- Guest order row -->
         <div v-else-if="row.original.rowType === 'guest-order'" class="flex items-center gap-1">
-          <UIcon :name="ICONS.ticket" class="size-4 text-info" />
-          <span class="text-sm">{{ row.original.name }}</span>
+          <UIcon :name="COMPONENTS.guestRow.orderIcon" :class="COMPONENTS.guestRow.iconClass" />
+          <span :class="TYPOGRAPHY.body">{{ row.original.name }}</span>
         </div>
         <!-- Guest add row -->
         <div v-else-if="row.original.rowType === 'guest-add'" class="flex items-center gap-1">
-          <UIcon :name="ICONS.userPlus" class="size-4 text-info" />
-          <span class="text-sm text-muted">{{ row.original.name }}</span>
+          <UIcon :name="COMPONENTS.guestRow.addIcon" :class="COMPONENTS.guestRow.iconClass" />
+          <span :class="[TYPOGRAPHY.body, 'text-muted']">{{ row.original.name }}</span>
         </div>
       </template>
 
@@ -501,67 +539,58 @@ const guestOrders = computed(() =>
 
       <!-- Dynamic event columns - cells -->
       <template v-for="event in flatEvents" :key="event.id" #[`event-${event.id}-cell`]="{row}">
-        <!-- Power row: consensus mode or ? -->
-        <template v-if="row.original.rowType === 'power'">
+        <div :class="weekBoundaryIds.has(event.id) ? 'border-l-2 border-primary pl-1' : ''">
+          <!-- Power row: consensus mode or ? (DinnerModeSelector handles both) -->
           <DinnerModeSelector
-            v-if="getEventConsensus(event.id).hasConsensus"
+            v-if="row.original.rowType === 'power'"
             :model-value="getEventConsensus(event.id).mode"
             :form-mode="isEventPast(event) ? FORM_MODES.VIEW : formMode"
             :interaction="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
             :disabled-modes="getDisabledModesForEvent(event)"
+            :consensus="getEventConsensus(event.id).hasConsensus"
             :size="SIZES.xs"
             :name="`power-${event.id}`"
             @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
           />
+
+          <!-- Inhabitant row -->
+          <DinnerModeSelector
+            v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
+            :model-value="getCellMode(row.original.inhabitant.id, event.id)"
+            :form-mode="isEventPast(event) ? FORM_MODES.VIEW : formMode"
+            :interaction="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
+            :disabled-modes="getDisabledModesForEvent(event)"
+            :size="SIZES.xs"
+            :name="`cell-${row.original.inhabitant.id}-${event.id}`"
+            :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
+            @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
+          />
+
+          <!-- Guest order row -->
+          <DinnerModeSelector
+            v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrder?.dinnerEventId === event.id"
+            :model-value="row.original.guestOrder.dinnerMode"
+            :form-mode="FORM_MODES.VIEW"
+            :size="SIZES.xs"
+            :name="`guest-${row.original.guestOrder.id}-${event.id}`"
+          />
+
+          <!-- Guest add row: + button for future events -->
           <UButton
-            v-else
-            :color="COMPONENTS.powerMode.color"
+            v-else-if="row.original.rowType === 'guest-add' && !isEventPast(event) && canBookEvent(event)"
+            :icon="ICONS.plusCircle"
+            :color="COMPONENTS.guestRow.color"
             variant="ghost"
             :size="SIZES.xs"
-            icon="i-heroicons-question-mark-circle"
-            :class="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'animate-pulse' : ''"
-            :disabled="isEventPast(event)"
-            @click="!isEventPast(event) && formMode === FORM_MODES.EDIT && handlePowerUpdate(event.id, DinnerModeEnum.DINEIN)"
+            :data-testid="`guest-add-${event.id}`"
+            @click="emit('addGuest', event.id)"
           />
-        </template>
-
-        <!-- Inhabitant row -->
-        <DinnerModeSelector
-          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
-          :model-value="getCellMode(row.original.inhabitant.id, event.id)"
-          :form-mode="isEventPast(event) ? FORM_MODES.VIEW : formMode"
-          :interaction="formMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
-          :disabled-modes="getDisabledModesForEvent(event)"
-          :size="SIZES.xs"
-          :name="`cell-${row.original.inhabitant.id}-${event.id}`"
-          :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
-          @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
-        />
-
-        <!-- Guest order row -->
-        <DinnerModeSelector
-          v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrder?.dinnerEventId === event.id"
-          :model-value="row.original.guestOrder.dinnerMode"
-          :form-mode="FORM_MODES.VIEW"
-          :size="SIZES.xs"
-          :name="`guest-${row.original.guestOrder.id}-${event.id}`"
-        />
-
-        <!-- Guest add row: + button for future events -->
-        <UButton
-          v-else-if="row.original.rowType === 'guest-add' && !isEventPast(event) && canBookEvent(event)"
-          :icon="ICONS.plusCircle"
-          :color="COLOR.info"
-          variant="ghost"
-          :size="SIZES.xs"
-          :data-testid="`guest-add-${event.id}`"
-          @click="emit('addGuest', event.id)"
-        />
+        </div>
       </template>
 
-      <!-- Footer: Cancel/Save buttons (ADR-016) -->
-      <template #tfoot>
-        <tr v-if="formMode === FORM_MODES.EDIT">
+      <!-- Footer: Cancel/Save buttons (ADR-016) - using body-bottom slot per NuxtUI docs -->
+      <template v-if="formMode === FORM_MODES.EDIT" #body-bottom>
+        <tr>
           <td :colspan="columns.length" class="px-2 py-2 border-t border-default">
             <div class="flex items-center gap-2">
               <UBadge v-if="hasPendingChanges" :color="COLOR.warning" variant="soft" :size="SIZES.xs">
@@ -571,7 +600,7 @@ const guestOrders = computed(() =>
               <UButton
                 :color="COLOR.neutral"
                 variant="ghost"
-                :size="SIZES.xs"
+                :size="SIZES.sm"
                 data-testid="grid-cancel"
                 @click="handleCancel"
               >
@@ -579,7 +608,7 @@ const guestOrders = computed(() =>
               </UButton>
               <UButton
                 :color="COLOR.primary"
-                :size="SIZES.xs"
+                :size="SIZES.sm"
                 :disabled="!hasPendingChanges"
                 data-testid="grid-save"
                 @click="handleSave"
@@ -591,5 +620,30 @@ const guestOrders = computed(() =>
         </tr>
       </template>
     </UTable>
+
+    <!-- Legend: DinnerModeSelector in VIEW mode with labels (DRY) -->
+    <UAlert
+      :color="COLOR.neutral"
+      variant="subtle"
+      :icon="ICONS.info"
+      class="mt-4"
+    >
+      <template #title>Forklaring</template>
+      <template #description>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEINLATE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.TAKEAWAY" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.NONE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
+          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" :consensus="false" />
+          <!-- Modified indicator: show border accent with custom label -->
+          <div class="flex flex-col items-center gap-0.5">
+            <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" :size="SIZES.xs" :is-modified="true" />
+            <span :class="TYPOGRAPHY.finePrint">Ændret</span>
+          </div>
+        </div>
+        <p :class="[TYPOGRAPHY.finePrint, 'mt-2 text-muted']">Klik på en celle for at ændre din booking, den cykler igennem mulighederne. Når du er færdig, husk at trykke gem.</p>
+      </template>
+    </UAlert>
   </div>
 </template>

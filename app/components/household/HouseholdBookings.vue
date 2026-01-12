@@ -7,6 +7,7 @@
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
+import type {DesiredOrder, DinnerMode} from '~/composables/useBookingValidation'
 
 interface Props {
   household: HouseholdDetail
@@ -71,8 +72,8 @@ const gridFormMode = ref<'view' | 'edit'>('view')
 
 // Handle grid save - build DesiredOrders and call scaffold endpoint
 const {getTicketPriceForInhabitant} = useTicket()
-const {DinnerModeSchema} = useBookingValidation()
-type DinnerMode = typeof DinnerModeSchema.enum[keyof typeof DinnerModeSchema.enum]
+const {OrderStateSchema} = useBookingValidation()
+const OrderState = OrderStateSchema.enum
 
 const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]) => {
   if (!selectedSeason.value) return
@@ -81,48 +82,51 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
     const inhabitant = household.value.inhabitants.find(i => i.id === change.inhabitantId)
     const event = dinnerEvents.value.find(e => e.id === change.dinnerEventId)
     const ticketPrice = getTicketPriceForInhabitant(inhabitant?.birthDate ?? null, ticketPrices.value, event?.date ?? new Date())
+    const existingOrder = orders.value.find(o => o.inhabitantId === change.inhabitantId && o.dinnerEventId === change.dinnerEventId)
+
+    // Existing order: preserve ticketPriceId. New booking: compute from age.
+    const resolvedTicketPriceId = existingOrder?.ticketPriceId ?? ticketPrice?.id
+    if (!resolvedTicketPriceId) {
+      throw new Error(`Cannot resolve ticketPriceId for inhabitant ${change.inhabitantId}`)
+    }
 
     return {
       inhabitantId: change.inhabitantId,
       dinnerEventId: change.dinnerEventId,
       dinnerMode: change.dinnerMode,
-      ticketPriceId: ticketPrice?.id ?? ticketPrices.value[0]?.id ?? 1,
-      isGuestTicket: false
+      ticketPriceId: resolvedTicketPriceId,
+      isGuestTicket: false,
+      orderId: existingOrder?.id,
+      state: OrderState.BOOKED
     }
   })
 
-  await bookingsStore.processBookings({
-    householdId: household.value.id,
-    seasonId: selectedSeason.value.id,
-    dinnerEventIds: visibleDinnerEventIds.value,
-    orders: desiredOrders
-  })
+  await bookingsStore.processMultipleEventsBookings(
+    household.value.id,
+    visibleDinnerEventIds.value,
+    desiredOrders
+  )
 }
 
-// Guest booking modal
-const authStore = useAuthStore()
-const {buildGuestOrder} = useBooking()
-const guestModalOpen = ref(false)
-const guestEventId = ref<number | null>(null)
+// Day view save handler - DinnerBookingForm emits DesiredOrder[]
+const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
+  const dinnerEventId = selectedDinnerEvent.value?.id
+  if (!dinnerEventId || desiredOrders.length === 0) return
 
+  await bookingsStore.processSingleEventBookings(
+    household.value.id,
+    dinnerEventId,
+    desiredOrders
+  )
+}
+
+// Grid view guest booking - TODO: implement after day view is done
 const handleAddGuest = (eventId: number) => {
-  guestEventId.value = eventId
-  guestModalOpen.value = true
-}
-
-const handleGuestSave = async (data: { ticketPriceId: number, dinnerMode: DinnerMode, allergyTypeIds?: number[] }) => {
-  if (!selectedSeason.value || !guestEventId.value) return
-  const bookerId = authStore.inhabitant?.id
-  if (!bookerId) return
-
-  const guestOrder = buildGuestOrder(bookerId, guestEventId.value, data.ticketPriceId, data.dinnerMode, data.allergyTypeIds)
-  await bookingsStore.processBookings({
-    householdId: household.value.id,
-    seasonId: selectedSeason.value.id,
-    dinnerEventIds: [guestEventId.value],
-    orders: [guestOrder]
-  })
-  guestModalOpen.value = false
+  // For now, switch to day view for that event
+  const event = dinnerEvents.value.find(e => e.id === eventId)
+  if (event) {
+    setDate(new Date(event.date))
+  }
 }
 </script>
 
@@ -137,6 +141,7 @@ const handleGuestSave = async (data: { ticketPriceId: number, dinnerMode: Dinner
         <BookingViewSwitcher v-model="view" />
       </div>
       <BookingGridView
+        v-model:form-mode="gridFormMode"
         :view="view"
         :date-range="dateRange"
         :household="household"
@@ -144,9 +149,9 @@ const handleGuestSave = async (data: { ticketPriceId: number, dinnerMode: Dinner
         :orders="orders"
         :ticket-prices="ticketPrices"
         :deadlines="deadlines"
-        v-model:form-mode="gridFormMode"
         @save="handleGridSave"
         @navigate="handleNavigate"
+        @add-guest="handleAddGuest"
       />
     </template>
 
@@ -182,6 +187,7 @@ const handleGuestSave = async (data: { ticketPriceId: number, dinnerMode: Dinner
               :orders="orders"
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
+              @save-bookings="handleDayViewSave"
             />
             <UAlert
               v-else
