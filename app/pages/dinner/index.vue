@@ -47,7 +47,7 @@
 
 import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES} from '~/types/form'
-import type {DinnerMode, OrderDisplay, ProcessBookingResult, BookingAction} from '~/composables/useBookingValidation'
+import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
 
 // Design system
 const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -66,143 +66,7 @@ const {user} = storeToRefs(authStore)
 const calendarOpen = ref(true)
 
 // Booking validation and helpers
-const {DinnerModeSchema} = useBookingValidation()
-const {computeLockStatus} = useBooking()
-
-// Helper: Format feedback result for toast message
-const ACTION_LABELS: Record<BookingAction, string> = {
-  created: 'tilmeldt',
-  updated: 'opdateret',
-  released: 'frigivet',
-  deleted: 'frameldt',
-  skipped: 'uændret'
-}
-
-const DINNERMODE_LABELS: Record<DinnerMode, string> = {
-  DINEIN: 'Spiser her',
-  DINEINLATE: 'Spiser sent',
-  TAKEAWAY: 'Takeaway',
-  NONE: 'Afmeldt'
-}
-
-const formatBookingToast = (result: ProcessBookingResult, dinnerMode: DinnerMode): { title: string; description?: string } => {
-  const {feedback, summary} = result
-
-  // Filter out skipped items for display
-  const meaningfulFeedback = feedback.filter(f => f.action !== 'skipped')
-
-  if (meaningfulFeedback.length === 0) {
-    return {title: 'Ingen ændringer'}
-  }
-
-  // Group by action for clean display
-  const names = meaningfulFeedback.map(f => f.inhabitantName)
-  const actions = [...new Set(meaningfulFeedback.map(f => f.action))]
-
-  // Single action type - simple message
-  if (actions.length === 1) {
-    const action = actions[0]!
-    const actionLabel = ACTION_LABELS[action]
-    const modeLabel = dinnerMode === DinnerModeSchema.enum.NONE ? '' : ` til ${DINNERMODE_LABELS[dinnerMode]}`
-    return {
-      title: `${names.join(', ')} ${actionLabel}${modeLabel}`
-    }
-  }
-
-  // Multiple action types - summarize
-  const parts: string[] = []
-  if (summary.created > 0) parts.push(`${summary.created} tilmeldt`)
-  if (summary.updated > 0) parts.push(`${summary.updated} opdateret`)
-  if (summary.released > 0) parts.push(`${summary.released} frigivet`)
-  if (summary.deleted > 0) parts.push(`${summary.deleted} frameldt`)
-
-  return {
-    title: 'Tilmeldinger opdateret',
-    description: parts.join(', ')
-  }
-}
-
-// Type for inhabitant data from DinnerBookingForm emit
-type BookingInhabitant = { id: number; name: string; birthDate: Date | null }
-
-// Unified booking handler using processBooking
-const handleBookingUpdate = async (inhabitant: BookingInhabitant, dinnerMode: DinnerMode, isGuestTicket: boolean) => {
-  const householdId = user.value?.Inhabitant?.household?.id
-  const userId = user.value?.id
-
-  if (!selectedDinnerId.value || !selectedDinnerEvent.value || !householdId || !userId) {
-    console.warn('Missing data for booking:', {dinnerId: selectedDinnerId.value, householdId, userId})
-    return
-  }
-
-  // For guest tickets, fall back to simple update (processBooking is for household members)
-  if (isGuestTicket) {
-    const order = householdOrders.value?.find(o => o.inhabitantId === inhabitant.id && o.isGuestTicket)
-    if (order?.id) {
-      try {
-        await bookingsStore.updateOrder(order.id, {dinnerMode})
-        await refreshBookingData()
-        toast.add({title: `${inhabitant.name} ${ACTION_LABELS.updated}`, color: 'success', icon: ICONS.checkCircle})
-      } catch (e) {
-        console.error('Failed to update guest booking:', e)
-        toast.add({title: 'Kunne ikke opdatere gæstebillet', color: 'error', icon: ICONS.exclamationCircle})
-      }
-    }
-    return
-  }
-
-  try {
-    const result = await bookingsStore.processBooking(
-      [inhabitant],
-      householdOrders.value ?? [],
-      dinnerMode,
-      selectedDinnerId.value,
-      selectedDinnerEvent.value.date,
-      selectedSeason.value?.ticketPrices ?? [],
-      householdId,
-      userId
-    )
-
-    await refreshBookingData()
-    const toastContent = formatBookingToast(result, dinnerMode)
-    toast.add({...toastContent, color: 'success', icon: ICONS.checkCircle})
-  } catch (e) {
-    console.error('Failed to process booking:', e)
-    toast.add({title: 'Kunne ikke opdatere tilmelding', color: 'error', icon: ICONS.exclamationCircle})
-  }
-}
-
-// Power mode: update all inhabitants at once
-const handleAllBookingsUpdate = async (inhabitants: BookingInhabitant[], dinnerMode: DinnerMode) => {
-  const householdId = user.value?.Inhabitant?.household?.id
-  const userId = user.value?.id
-
-  if (inhabitants.length === 0 || !selectedDinnerId.value || !selectedDinnerEvent.value || !householdId || !userId) {
-    console.warn('Missing data for power booking:', {inhabitants: inhabitants.length, dinnerId: selectedDinnerId.value, householdId, userId})
-    return
-  }
-
-  try {
-    const result = await bookingsStore.processBooking(
-      inhabitants,
-      householdOrders.value ?? [],
-      dinnerMode,
-      selectedDinnerId.value,
-      selectedDinnerEvent.value.date,
-      selectedSeason.value?.ticketPrices ?? [],
-      householdId,
-      userId
-    )
-
-    await refreshBookingData()
-    const toastContent = formatBookingToast(result, dinnerMode)
-    toast.add({...toastContent, color: 'success', icon: ICONS.checkCircle})
-  } catch (e) {
-    console.error('Failed to process power booking:', e)
-    toast.add({title: 'Kunne ikke opdatere tilmeldinger', color: 'error', icon: ICONS.exclamationCircle})
-  }
-}
-
+const {computeLockStatus, formatScaffoldResult} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -317,6 +181,37 @@ const refreshBookingData = async () => {
   await Promise.all([_refreshDinnerEventDetail(), _refreshHouseholdOrders()])
 }
 
+// ADR-016: Unified booking handler via scaffold endpoint
+const handleSaveBookings = async (orders: DesiredOrder[]) => {
+  const householdId = user.value?.Inhabitant?.household?.id
+
+  if (orders.length === 0 || !householdId) {
+    console.warn('Missing data for booking:', {orders: orders.length, householdId})
+    return
+  }
+
+  // Extract unique dinner event IDs from the orders
+  const dinnerEventIds = [...new Set(orders.map(o => o.dinnerEventId))]
+
+  try {
+    const response = await bookingsStore.processBookings({
+      householdId,
+      dinnerEventIds,
+      orders
+    })
+
+    await refreshBookingData()
+    toast.add({
+      title: formatScaffoldResult(response.scaffoldResult),
+      color: 'success',
+      icon: ICONS.checkCircle
+    })
+  } catch (e) {
+    console.error('Failed to process bookings:', e)
+    toast.add({title: 'Kunne ikke gemme bookinger', color: 'error', icon: ICONS.exclamationCircle})
+  }
+}
+
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
 const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
 
@@ -412,8 +307,7 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            @update-booking="handleBookingUpdate"
-            @update-all-bookings="handleAllBookingsUpdate"
+            @save-bookings="handleSaveBookings"
           />
 
         </ChefMenuCard>

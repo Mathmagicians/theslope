@@ -29,6 +29,7 @@ export type BookingView = z.infer<typeof BookingViewSchema>
  */
 export const useBookingView = (options?: {
     syncWhen?: () => boolean
+    seasonDates?: () => DateRange | null
 }) => {
     // View type param (day/week/month)
     const {value: view, setValue: setView} = useQueryParam<BookingView>('view', {
@@ -101,10 +102,12 @@ export const useBookingView = (options?: {
 
     /**
      * Navigate to adjacent period based on view type
+     * Clamps to season bounds if provided
      * @param direction - 1 for next, -1 for previous
      */
     const navigate = async (direction: 1 | -1) => {
         const date = selectedDate.value
+        const bounds = options?.seasonDates?.()
         let newDate: Date
 
         switch (view.value) {
@@ -118,6 +121,12 @@ export const useBookingView = (options?: {
                 newDate = new Date(date)
                 newDate.setMonth(newDate.getMonth() + direction)
                 break
+        }
+
+        // Clamp to season bounds
+        if (bounds) {
+            if (newDate < bounds.start) newDate = bounds.start
+            if (newDate > bounds.end) newDate = bounds.end
         }
 
         await setDate(newDate)

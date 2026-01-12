@@ -1,4 +1,4 @@
-import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type BookingAction, type ProcessBookingResult, type DinnerMode, type OrderCreateWithPrice, type DesiredOrder} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
@@ -575,6 +575,28 @@ export const useBooking = () => {
     }
 
     // ============================================================================
+    // Guest Booking - Build guest order for scaffold
+    // ============================================================================
+
+    /**
+     * Build a DesiredOrder for a guest ticket
+     */
+    const buildGuestOrder = (
+        bookerId: number,
+        dinnerEventId: number,
+        ticketPriceId: number,
+        dinnerMode: DinnerMode = DinnerModeSchema.enum.DINEIN,
+        allergyTypeIds?: number[]
+    ): DesiredOrder => ({
+        inhabitantId: bookerId,
+        dinnerEventId,
+        dinnerMode,
+        ticketPriceId,
+        isGuestTicket: true,
+        allergyTypeIds
+    })
+
+    // ============================================================================
     // Scaffold Result Formatting - Consistent display across UI and logs
     // ============================================================================
 
@@ -664,6 +686,8 @@ export const useBooking = () => {
         // Single Dinner User Booking
         reconcileSingleDinnerUserBooking,
         buildBookingFeedback,
+        // Guest Booking
+        buildGuestOrder,
         // Scaffold Result Formatting
         formatScaffoldResult,
         // Lock Status

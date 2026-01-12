@@ -31,11 +31,13 @@ const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
 
-const {view, selectedDate, dateRange, setDate} = useBookingView({
-  syncWhen: () => isSelectedSeasonInitialized.value
+const {view, selectedDate, dateRange, setDate, navigate} = useBookingView({
+  syncWhen: () => isSelectedSeasonInitialized.value,
+  seasonDates: () => selectedSeason.value?.seasonDates ?? null
 })
 
 const handleDateSelected = (date: Date) => setDate(date)
+const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
 
 // Find dinner event for selected date
 const selectedDinnerEvent = computed(() => {
@@ -63,6 +65,65 @@ watchEffect(() => {
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
+
+// Grid view form mode
+const gridFormMode = ref<'view' | 'edit'>('view')
+
+// Handle grid save - build DesiredOrders and call scaffold endpoint
+const {getTicketPriceForInhabitant} = useTicket()
+const {DinnerModeSchema} = useBookingValidation()
+type DinnerMode = typeof DinnerModeSchema.enum[keyof typeof DinnerModeSchema.enum]
+
+const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]) => {
+  if (!selectedSeason.value) return
+
+  const desiredOrders = changes.map(change => {
+    const inhabitant = household.value.inhabitants.find(i => i.id === change.inhabitantId)
+    const event = dinnerEvents.value.find(e => e.id === change.dinnerEventId)
+    const ticketPrice = getTicketPriceForInhabitant(inhabitant?.birthDate ?? null, ticketPrices.value, event?.date ?? new Date())
+
+    return {
+      inhabitantId: change.inhabitantId,
+      dinnerEventId: change.dinnerEventId,
+      dinnerMode: change.dinnerMode,
+      ticketPriceId: ticketPrice?.id ?? ticketPrices.value[0]?.id ?? 1,
+      isGuestTicket: false
+    }
+  })
+
+  await bookingsStore.processBookings({
+    householdId: household.value.id,
+    seasonId: selectedSeason.value.id,
+    dinnerEventIds: visibleDinnerEventIds.value,
+    orders: desiredOrders
+  })
+}
+
+// Guest booking modal
+const authStore = useAuthStore()
+const {buildGuestOrder} = useBooking()
+const guestModalOpen = ref(false)
+const guestEventId = ref<number | null>(null)
+
+const handleAddGuest = (eventId: number) => {
+  guestEventId.value = eventId
+  guestModalOpen.value = true
+}
+
+const handleGuestSave = async (data: { ticketPriceId: number, dinnerMode: DinnerMode, allergyTypeIds?: number[] }) => {
+  if (!selectedSeason.value || !guestEventId.value) return
+  const bookerId = authStore.inhabitant?.id
+  if (!bookerId) return
+
+  const guestOrder = buildGuestOrder(bookerId, guestEventId.value, data.ticketPriceId, data.dinnerMode, data.allergyTypeIds)
+  await bookingsStore.processBookings({
+    householdId: household.value.id,
+    seasonId: selectedSeason.value.id,
+    dinnerEventIds: [guestEventId.value],
+    orders: [guestOrder]
+  })
+  guestModalOpen.value = false
+}
 </script>
 
 <template>
@@ -83,6 +144,9 @@ const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selec
         :orders="orders"
         :ticket-prices="ticketPrices"
         :deadlines="deadlines"
+        v-model:form-mode="gridFormMode"
+        @save="handleGridSave"
+        @navigate="handleNavigate"
       />
     </template>
 

@@ -423,12 +423,17 @@ const guestOrders = computed(() =>
     >
       <!-- Empty state -->
       <template #empty-state>
-        <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon :name="ICONS.calendar" class="w-8 h-8 text-gray-400"/>
-          <p class="text-sm text-gray-500">
+        <UAlert
+          variant="soft"
+          :color="COLOR.neutral"
+          :avatar="{ text: emptyState.emoji, size: SIZES.emptyStateAvatar }"
+          :ui="COMPONENTS.emptyStateAlert"
+        >
+          <template #title>{{ emptyState.text }}</template>
+          <template #description>
             {{ view === 'week' ? 'Ingen middage denne uge' : 'Ingen middage denne måned' }}
-          </p>
-        </div>
+          </template>
+        </UAlert>
       </template>
 
       <!-- Dynamic event column headers: M / 29/1 / chip (fixed height) -->
@@ -455,14 +460,9 @@ const guestOrders = computed(() =>
         <!-- Power row -->
         <div v-if="row.original.rowType === 'power'" class="flex items-center gap-1">
           <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.powerMode.iconClass" />
-          <UserListItem
-            v-if="row.original.inhabitants"
-            :inhabitants="row.original.inhabitants"
-            :show-names="false"
-            :link-to-profile="false"
-            compact
-            label="beboere"
-          />
+          <UBadge :color="COMPONENTS.powerMode.color" variant="subtle" :size="SIZES.xs">
+            Powermode!
+          </UBadge>
         </div>
         <!-- Inhabitant row -->
         <UserListItem

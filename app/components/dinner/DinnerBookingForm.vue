@@ -42,7 +42,7 @@
  * └──────────────────────────────────────────────────────────┘
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import {FORM_MODES} from '~/types/form'
@@ -64,11 +64,13 @@ interface TableRow {
   inhabitants?: InhabitantDisplay[] // For UserListItem in group mode (power)
   ticketConfig: TicketConfig
   order: OrderDisplay | null
+  orders?: OrderDisplay[] // For grouped guest orders
   orderState: OrderState | undefined
   dinnerMode: DinnerMode
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number
+  guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   provenanceHousehold?: string
   provenanceAllergies?: string[]
 }
@@ -89,12 +91,8 @@ const props = withDefaults(defineProps<Props>(), {
   ticketPrices: () => []
 })
 
-type BookingInhabitant = { id: number; name: string; birthDate: Date | null }
-
 const emit = defineEmits<{
-  updateBooking: [inhabitant: BookingInhabitant, dinnerMode: DinnerMode, isGuestTicket: boolean]
-  updateAllBookings: [inhabitants: BookingInhabitant[], dinnerMode: DinnerMode]
-  addGuest: [dinnerMode: DinnerMode, allergies: number[]]
+  saveBookings: [orders: DesiredOrder[]]
   cancel: []
 }>()
 
@@ -145,10 +143,16 @@ const {allergyTypes} = storeToRefs(allergiesStore)
 
 // Draft state for editing
 const draftMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
-const draftGuestTicketPriceId = ref<number | undefined>(undefined)
-const draftGuestAllergies = ref<number[]>([])
 const editingRowId = ref<number | string | null>(null)
 const isSaving = ref(false)
+
+// Guest draft state as object for cleaner reset
+const defaultGuestDraft = () => ({
+  ticketPriceId: undefined as number | undefined,
+  allergies: [] as number[],
+  count: 1
+})
+const guestDraft = ref(defaultGuestDraft())
 
 // Expandable row with callbacks
 const {expanded} = useExpandableRow({
@@ -158,24 +162,15 @@ const {expanded} = useExpandableRow({
       editingRowId.value = row.id
       draftMode.value = row.dinnerMode
       if (row.rowType === 'guest') {
-        draftGuestAllergies.value = []
+        guestDraft.value = defaultGuestDraft()
       }
     }
   },
   onCollapse: () => {
     editingRowId.value = null
-    draftGuestAllergies.value = []
+    guestDraft.value = defaultGuestDraft()
   }
 })
-
-// Initialize guest ticket price when ticket prices available
-watch(() => props.ticketPrices, (prices) => {
-  if (prices.length > 0 && !draftGuestTicketPriceId.value) {
-    // Default to adult ticket
-    const adultPrice = prices.find(p => p.ticketType === 'ADULT')
-    draftGuestTicketPriceId.value = adultPrice?.id ?? prices[0]?.id ?? undefined
-  }
-}, {immediate: true})
 
 // ============================================================================
 // DEADLINE COMPUTEDS
@@ -283,21 +278,37 @@ const tableData = computed((): TableRow[] => {
     }
   })
 
-  const guestOrderRows: TableRow[] = guestOrders.value.map(order => ({
-    rowType: 'guest-order' as RowType,
-    id: `guest-${order.id}`,
-    name: 'Gæst',
-    lastName: '',
-    inhabitant: bookerInhabitant.value ?? undefined,
-    ticketConfig: order.ticketType ? ticketTypeConfig[order.ticketType] : null,
-    order,
-    orderState: order.state as OrderState,
-    dinnerMode: order.dinnerMode,
-    price: order.priceAtBooking,
-    ticketPriceId: order.ticketPriceId ?? 0,
-    provenanceHousehold: order.provenanceHousehold,
-    provenanceAllergies: order.provenanceAllergies
-  }))
+  // Group guest orders by (booker, ticketType)
+  const guestOrderGroups = guestOrders.value.reduce((acc, order) => {
+    const key = `${order.inhabitantId}-${order.ticketType}`
+    if (!acc[key]) acc[key] = []
+    acc[key].push(order)
+    return acc
+  }, {} as Record<string, OrderDisplay[]>)
+
+  const guestOrderRows: TableRow[] = Object.entries(guestOrderGroups)
+    .filter(([, orders]) => orders.length > 0)
+    .map(([key, orders]) => {
+      const firstOrder = orders[0]!
+      const booker = allInhabitants.find(i => i.id === firstOrder.inhabitantId)
+      return {
+        rowType: 'guest-order' as RowType,
+        id: `guest-group-${key}`,
+        name: 'Gæst',
+        lastName: '',
+        inhabitant: booker,
+        ticketConfig: firstOrder.ticketType ? ticketTypeConfig[firstOrder.ticketType] : null,
+        order: firstOrder,
+        orders,
+        orderState: firstOrder.state as OrderState,
+        dinnerMode: firstOrder.dinnerMode,
+        price: firstOrder.priceAtBooking,
+        ticketPriceId: firstOrder.ticketPriceId ?? 0,
+        guestCount: orders.length,
+        provenanceHousehold: firstOrder.provenanceHousehold,
+        provenanceAllergies: firstOrder.provenanceAllergies
+      }
+    })
 
   // Compute consensus from inhabitant dinnerModes
   const inhabitantModes = inhabitantRows.map(r => r.dinnerMode)
@@ -345,28 +356,61 @@ const handleSave = async (row: TableRow) => {
   isSaving.value = true
 
   try {
+    const dinnerEventId = props.dinnerEvent.id
+    let orders: DesiredOrder[] = []
+
     if (row.rowType === 'power') {
-      // Power mode: update all inhabitants
-      const inhabitants = (household.value?.inhabitants ?? []).map(i => ({
-        id: i.id,
-        name: i.name,
-        birthDate: i.birthDate ?? null
-      }))
-      emit('updateAllBookings', inhabitants, draftMode.value)
+      // Power mode: all inhabitants with same mode
+      orders = tableData.value
+        .filter((r: TableRow) => r.rowType === 'inhabitant')
+        .map((r: TableRow) => ({
+          inhabitantId: r.id as number,
+          dinnerEventId,
+          dinnerMode: draftMode.value,
+          ticketPriceId: r.ticketPriceId,
+          isGuestTicket: false
+        }))
     } else if (row.rowType === 'guest') {
-      // Add new guest
-      emit('addGuest', draftMode.value, draftGuestAllergies.value)
+      // Add new guest ticket(s) - linked to the booker (user's inhabitant)
+      const bookerId = bookerInhabitant.value?.id
+      const {ticketPriceId, allergies, count} = guestDraft.value
+      if (bookerId && ticketPriceId) {
+        orders = Array.from({length: count}, () => ({
+          inhabitantId: bookerId,
+          dinnerEventId,
+          dinnerMode: draftMode.value,
+          ticketPriceId,
+          isGuestTicket: true,
+          allergyTypeIds: allergies.length > 0 ? allergies : undefined
+        }))
+      }
     } else if (row.rowType === 'guest-order') {
       // Update existing guest
       const inhabitantId = row.order?.inhabitantId
       if (inhabitantId) {
-        emit('updateBooking', {id: inhabitantId, name: row.name, birthDate: null}, draftMode.value, true)
+        orders = [{
+          inhabitantId,
+          dinnerEventId,
+          dinnerMode: draftMode.value,
+          ticketPriceId: row.ticketPriceId,
+          isGuestTicket: true
+        }]
       }
     } else {
-      // Update inhabitant
+      // Update single inhabitant
       if (typeof row.id === 'number') {
-        emit('updateBooking', {id: row.id, name: row.name, birthDate: row.birthDate ?? null}, draftMode.value, false)
+        orders = [{
+          inhabitantId: row.id,
+          dinnerEventId,
+          dinnerMode: draftMode.value,
+          ticketPriceId: row.ticketPriceId,
+          isGuestTicket: false
+        }]
       }
+    }
+
+    if (orders.length > 0) {
+      emit('saveBookings', orders)
     }
 
     // Collapse row after save (onCollapse callback handles cleanup)
@@ -404,16 +448,6 @@ const deadlineStatusBadges = computed(() => [
     closedText: 'Du kan ikke længere ændre, hvordan I spiser'
   }
 ])
-
-// Guest ticket type options for dropdown
-const guestTicketOptions = computed(() =>
-  props.ticketPrices
-    .filter(p => p.ticketType !== 'BABY') // Guests are typically adults/children
-    .map(p => ({
-      label: `${ticketTypeConfig[p.ticketType]?.label ?? p.ticketType} (${p.price / 100} kr)`,
-      value: p.id
-    }))
-)
 
 // Allergy type options for multi-select
 const allergyOptions = computed(() =>
@@ -595,7 +629,7 @@ const allergyOptions = computed(() =>
               :dinner-mode="row.original.dinnerMode"
               :is-released="isOrderReleased(row.original.orderState)"
               :is-claimed="isTicketClaimed(row.original)"
-              :is-guest="row.original.rowType === 'guest-order'"
+              :guest-count="row.original.guestCount"
               :allergies="row.original.provenanceAllergies"
               :provenance-household="row.original.provenanceHousehold"
             />
@@ -622,7 +656,7 @@ const allergyOptions = computed(() =>
             :dinner-mode="row.original.dinnerMode"
             :is-released="isOrderReleased(row.original.orderState)"
             :is-claimed="isTicketClaimed(row.original)"
-            :is-guest="row.original.rowType === 'guest-order'"
+            :guest-count="row.original.guestCount"
             :allergies="row.original.provenanceAllergies"
             :provenance-household="row.original.provenanceHousehold"
           />
@@ -664,16 +698,15 @@ const allergyOptions = computed(() =>
             :description="`Ændringer påvirker alle ${household?.inhabitants?.length ?? 0} medlemmer.`"
           />
 
-          <!-- Guest ticket type selector -->
-          <UFormField v-if="row.original.rowType === 'guest'" label="Billettype" :size="SIZES.small">
-            <USelect
-              v-model="draftGuestTicketPriceId"
-              :items="guestTicketOptions"
-              value-key="value"
-              :size="SIZES.small"
-              name="guest-ticket-type"
-            />
-          </UFormField>
+          <!-- Guest booking fields -->
+          <GuestBookingFields
+            v-if="row.original.rowType === 'guest'"
+            v-model:ticket-price-id="guestDraft.ticketPriceId"
+            v-model:allergies="guestDraft.allergies"
+            v-model:guest-count="guestDraft.count"
+            :ticket-prices="ticketPrices"
+            :allergy-options="allergyOptions"
+          />
 
           <!-- Provenance allergies (read-only for existing guest) -->
           <div v-if="row.original.rowType === 'guest-order' && row.original.provenanceAllergies?.length" class="flex flex-wrap gap-2">
@@ -681,19 +714,6 @@ const allergyOptions = computed(() =>
               🥜 {{ allergy }}
             </UBadge>
           </div>
-
-          <!-- Guest allergy selector -->
-          <UFormField v-if="row.original.rowType === 'guest'" label="Allergier (valgfrit)" :size="SIZES.small">
-            <USelectMenu
-              v-model="draftGuestAllergies"
-              :items="allergyOptions"
-              value-key="value"
-              multiple
-              placeholder="Vælg allergier..."
-              :size="SIZES.small"
-              name="guest-allergies"
-            />
-          </UFormField>
 
           <!-- Mode selector -->
           <DinnerModeSelector

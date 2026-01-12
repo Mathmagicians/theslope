@@ -792,8 +792,18 @@ describe('useBookingValidation', () => {
 
     describe('ScaffoldOrdersResponseSchema', () => {
       const validResponse = {
-        result: {seasonId: 1, created: 2, deleted: 0, released: 0, unchanged: 5, households: 1},
-        orders: []
+        householdId: 1,
+        scaffoldResult: {
+          seasonId: 1,
+          created: 2,
+          deleted: 0,
+          released: 0,
+          priceUpdated: 0,
+          modeUpdated: 0,
+          unchanged: 5,
+          households: 1,
+          errored: 0
+        }
       }
 
       it('GIVEN valid response WHEN parsing THEN succeeds', () => {

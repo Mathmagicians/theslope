@@ -47,7 +47,7 @@ interface Props {
   dinnerMode: DinnerMode
   isReleased?: boolean
   isClaimed?: boolean
-  isGuest?: boolean
+  guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: string[] // Inhabitant's own allergies (shown on ticket)
   provenanceHousehold?: string // Source household if claimed
@@ -56,11 +56,13 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   isReleased: false,
   isClaimed: false,
-  isGuest: false,
+  guestCount: undefined,
   consensus: undefined,
   allergies: () => [],
   provenanceHousehold: undefined
 })
+
+const isGuest = computed(() => props.guestCount !== undefined)
 
 const {TYPOGRAPHY, ICONS, SIZES, COLOR, getOrderStateColor} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
@@ -80,11 +82,13 @@ const hasAllergies = computed(() => props.allergies && props.allergies.length > 
 // Has extra info row (provenance or allergy names)
 const hasExtraRow = computed(() => props.provenanceHousehold || hasAllergies.value)
 
-// Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · Gæst" or "Powermode!" (no price for power mode)
+// Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · 2 Gæster" or "Powermode!" (no price for power mode)
 const badgeText = computed(() => {
   const parts = [props.ticketConfig?.label ?? '']
   if (props.consensus === undefined) parts.push(`${formatPrice(props.price)} kr`) // Only show price for regular tickets
-  if (props.isGuest) parts.push('Gæst')
+  if (isGuest.value) {
+    parts.push(props.guestCount === 1 ? 'Gæst' : `${props.guestCount} Gæster`)
+  }
   return parts.join(' · ')
 })
 </script>
@@ -103,7 +107,7 @@ const badgeText = computed(() => {
     <div class="relative z-10 space-y-1">
       <!-- ROW 1: [State] [Badge] ... [Allergy icon] [Mode] [Label] -->
       <div class="flex items-center justify-between gap-2">
-        <!-- Left: State icon + Combined badge -->
+        <!-- Left: State/Guest icon + Combined badge -->
         <div class="flex items-center gap-2">
           <!-- State icon (same color as accent) -->
           <UIcon
@@ -118,8 +122,14 @@ const badgeText = computed(() => {
             class="size-5 md:size-6 flex-shrink-0"
             :class="stateIconColor"
           />
+          <!-- Guest icon -->
+          <UIcon
+            v-else-if="isGuest"
+            :name="ICONS.userPlus"
+            class="size-5 md:size-6 flex-shrink-0 text-info"
+          />
 
-          <!-- Combined badge: Type · Price · Gæst -->
+          <!-- Combined badge: Type · Price · Gæst(er) -->
           <UBadge
             v-if="ticketConfig"
             :color="ticketConfig.color"

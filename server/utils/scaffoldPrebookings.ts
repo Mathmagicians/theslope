@@ -2,7 +2,7 @@ import type {D1Database} from "@cloudflare/workers-types"
 import {fetchOrders, createOrders, deleteOrder, updateOrder, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderCreateWithPrice, type OrderDisplay} from "~/composables/useBookingValidation"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
@@ -12,19 +12,16 @@ const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
  */
 const getAuditAction = (
     isUserTriggered: boolean,
-    actionType: 'create' | 'update' | 'delete',
-    OrderAuditActionSchema: { enum: Record<string, string> }
-): string => {
+    actionType: 'create' | 'update' | 'delete'
+): OrderAuditAction => {
     if (isUserTriggered) {
-        return actionType === 'delete'
-            ? OrderAuditActionSchema.enum.USER_CANCELLED
-            : OrderAuditActionSchema.enum.USER_BOOKED
+        return actionType === 'delete' ? AuditActions.USER_CANCELLED : AuditActions.USER_BOOKED
     }
-    return actionType === 'create'
-        ? OrderAuditActionSchema.enum.SYSTEM_CREATED
-        : actionType === 'delete'
-            ? OrderAuditActionSchema.enum.SYSTEM_DELETED
-            : OrderAuditActionSchema.enum.SYSTEM_UPDATED
+    switch (actionType) {
+        case 'create': return AuditActions.SYSTEM_CREATED
+        case 'delete': return AuditActions.SYSTEM_DELETED
+        case 'update': return AuditActions.SYSTEM_UPDATED
+    }
 }
 
 /**
@@ -78,7 +75,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {createOrderGeneratorFactory, createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch, reconcilePreBookings} = useSeason()
-    const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds} = useBookingValidation()
+    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds} = useBookingValidation()
 
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
@@ -162,7 +159,7 @@ export async function scaffoldPrebookings(
             // Create new orders
             for (const batch of chunkOrderBatch(result.create)) {
                 await createOrders(d1Client, household.id, batch, {
-                    action: getAuditAction(isUserTriggered, 'create', OrderAuditActionSchema),
+                    action: getAuditAction(isUserTriggered, 'create'),
                     performedByUserId: options.userId ?? null,
                     source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings')
                 })
@@ -193,7 +190,7 @@ export async function scaffoldPrebookings(
                         ticketPriceId: incoming.ticketPriceId,
                         priceAtBooking: incoming.priceAtBooking
                     }, {
-                        action: getAuditAction(isUserTriggered, 'update', OrderAuditActionSchema),
+                        action: getAuditAction(isUserTriggered, 'update'),
                         performedByUserId: options.userId ?? null
                     })
                 } else if (isReleaseIntent) {
@@ -204,7 +201,7 @@ export async function scaffoldPrebookings(
                         state: OrderStateSchema.enum.RELEASED,
                         releasedAt: new Date()
                     }, {
-                        action: getAuditAction(isUserTriggered, 'update', OrderAuditActionSchema),
+                        action: getAuditAction(isUserTriggered, 'update'),
                         performedByUserId: options.userId ?? null
                     })
                 } else {
@@ -213,7 +210,7 @@ export async function scaffoldPrebookings(
                     await updateOrder(d1Client, existing.id, {
                         dinnerMode: incoming.dinnerMode
                     }, {
-                        action: getAuditAction(isUserTriggered, 'update', OrderAuditActionSchema),
+                        action: getAuditAction(isUserTriggered, 'update'),
                         performedByUserId: options.userId ?? null
                     })
                 }

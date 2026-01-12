@@ -1,4 +1,4 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, ProcessBookingResult} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, DinnerMode, ProcessBookingResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -227,11 +227,27 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return feedback
     }
 
-    /** ADR-016: Grid booking workhorse - handles multiple dinners with per-inhabitant modes */
-    const processGridBooking = async (
-        _changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]
-    ): Promise<ProcessBookingResult> => {
-        throw new Error('processGridBooking not implemented - ADR-016')
+    /**
+     * ADR-016: Unified booking mutation via scaffold endpoint.
+     * Replaces direct order mutations with atomic reconciliation.
+     *
+     * @param request - Desired orders + dinner event scope
+     * @returns ScaffoldResult with created/deleted/released counts
+     */
+    const processBookings = async (request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse> => {
+        const {ScaffoldOrdersResponseSchema} = useBookingValidation()
+        try {
+            const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
+                method: 'POST',
+                body: request
+            })
+            console.info(CTX, `processBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
+            await refreshOrders()
+            return ScaffoldOrdersResponseSchema.parse(result)
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke gemme bookinger')
+            throw e
+        }
     }
 
     // DINNER EVENT ACTIONS
@@ -411,8 +427,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
     return {
         // state
         orders,
-        selectedDinnerEventId,
-        selectedInhabitantId,
 
         // computed state
         isOrdersLoading,
@@ -436,7 +450,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         claimOrder,
         fetchReleasedOrders,
         processBooking,
-        processGridBooking,
+        processBookings,
 
         // dinner event actions
         isDinnerUpdating,
