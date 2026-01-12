@@ -3,15 +3,14 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, type DesiredOrder, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {type HouseholdDisplay, type InhabitantDisplay, useCoreValidation} from '~/composables/useCoreValidation'
-import {useTicket} from '~/composables/useTicket'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, dateToWeekDay, isBeforeDeadline} from "~/utils/season"
+    selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
@@ -223,8 +222,9 @@ export const useSeason = () => {
     // ========================================================================
 
     const {maskWeekDayMap} = useCoreValidation()
-    const {DinnerModeSchema} = useBookingValidation()
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
 
     /**
      * Curried preference clipper factory.
@@ -263,265 +263,6 @@ export const useSeason = () => {
     // Preference update batching (D1 rate limit safe)
     const PREFERENCE_BATCH_SIZE = 50
     const chunkPreferenceUpdates = chunkArray<PreferenceUpdate>(PREFERENCE_BATCH_SIZE)
-
-    // ========================================================================
-    // PRE-BOOKING SCAFFOLDING - Create/prune orders based on preferences
-    // ========================================================================
-
-    const {OrderStateSchema, OrderCreateWithPriceSchema, chunkOrderBatch} = useBookingValidation()
-    const OrderState = OrderStateSchema.enum
-    const {determineTicketType} = useTicket()
-
-    /**
-     * Configure pruneAndCreate for pre-bookings.
-     * E = OrderDisplay (existing orders from DB, has id for deletion)
-     * I = OrderCreateWithPrice (incoming orders from generator, no id)
-     * Key: composite inhabitantId-dinnerEventId
-     * Equal: same dinnerMode AND ticketPriceId (detects preference changes AND price category changes)
-     *
-     * Price category changes occur when:
-     * - Birthdate added/changed (Heynabo import) → NULL→Date changes ticket type
-     * - Birthday passed during season → CHILD→ADULT on specific dinner dates
-     */
-    const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
-        (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
-        (existing, incoming) =>
-            existing.dinnerMode === incoming.dinnerMode &&
-            existing.ticketPriceId === incoming.ticketPriceId
-    )
-
-    /**
-     * Order generator factory - creates generators for both system scaffolding and user booking.
-     *
-     * Two entry points, shared core logic:
-     * - fromPreferences: System scaffolding from inhabitant preferences (respects excludedKeys)
-     * - fromDesiredOrders: User booking from explicit orders (no excludedKeys)
-     *
-     * Shared logic:
-     * - State determination: NONE + before deadline = skip, NONE + after deadline = RELEASED, else = BOOKED
-     * - Mode deadline enforcement: past deadline = keep existing mode
-     * - OrderCreateWithPrice construction
-     *
-     * @param season - Season with ticketPrices, dinnerEvents, and deadline config
-     * @param householdId - Household ID for order tracking
-     * @param existingOrdersByKey - Map of "inhabitantId-dinnerEventId" keys to existing order info
-     *
-     * @example
-     * const factory = createOrderGeneratorFactory(season, householdId, existingOrdersByKey)
-     * // System scaffolding:
-     * const desired = factory.fromPreferences(inhabitants, cancelledKeys)
-     * // User booking:
-     * const desired = factory.fromDesiredOrders(desiredOrders, bookedByUserId)
-     */
-    const createOrderGeneratorFactory = (
-        season: Season,
-        householdId: number,
-        existingOrdersByKey: Map<string, { dinnerMode: DinnerMode }>
-    ) => {
-        const { canModifyOrders, canEditDiningMode } = deadlinesForSeason(season)
-        const ticketPrices = season.ticketPrices
-        const dinnerEvents = season.dinnerEvents ?? []
-
-        // Lookups
-        const ticketPriceByType = new Map(ticketPrices.filter(tp => tp.id).map(tp => [tp.ticketType, tp]))
-        const ticketPriceById = new Map(ticketPrices.filter(tp => tp.id).map(tp => [tp.id!, tp]))
-        const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
-
-        /**
-         * Shared: Handle NONE mode (cancellation/release)
-         * NONE is handled separately from mode deadline - it's about cancellation, not mode change.
-         * Returns: { skip: true } | { state: RELEASED, mode: NONE } | null (not NONE)
-         */
-        const resolveNoneMode = (key: string, requestedMode: DinnerMode, dinnerDate: Date):
-            { skip: true } | { state: typeof OrderState.RELEASED, mode: typeof DinnerMode.NONE } | null => {
-            if (requestedMode !== DinnerMode.NONE) return null  // Not NONE, handle normally
-
-            // Before cancellation deadline: skip (will delete existing if any)
-            if (canModifyOrders(dinnerDate)) return { skip: true }
-            // After deadline: release only if order exists
-            if (!existingOrdersByKey.has(key)) return { skip: true }
-            return { state: OrderState.RELEASED, mode: DinnerMode.NONE }
-        }
-
-        /**
-         * Shared: Resolve effective eating mode considering deadline enforcement
-         * Only applies to eating modes (DINEIN/TAKEAWAY/DINEINLATE), NOT to NONE.
-         */
-        const resolveEffectiveEatingMode = (key: string, requestedMode: DinnerMode, dinnerDate: Date): DinnerMode => {
-            const existing = existingOrdersByKey.get(key)
-            if (existing && existing.dinnerMode !== requestedMode && !canEditDiningMode(dinnerDate)) {
-                return existing.dinnerMode  // Past deadline: enforce existing mode
-            }
-            return requestedMode
-        }
-
-        return {
-            /**
-             * Generate orders from inhabitant preferences (system scaffolding)
-             * - Respects excludedKeys (user cancellations not recreated)
-             * - Derives ticketPrice from inhabitant age
-             * - bookedByUserId = null (system action)
-             */
-            fromPreferences: (inhabitants: InhabitantDisplay[], excludedKeys: Set<string> = new Set()): OrderCreateWithPrice[] =>
-                inhabitants.flatMap(inhabitant => {
-                    if (!inhabitant.dinnerPreferences) return []
-                    const prefs = inhabitant.dinnerPreferences
-
-                    return dinnerEvents
-                        .map(de => {
-                            const key = `${inhabitant.id}-${de.id}`
-
-                            // Skip if user previously cancelled this booking
-                            if (excludedKeys.has(key)) return null
-
-                            const weekDay = dateToWeekDay(de.date)
-                            const requestedMode = prefs[weekDay]
-
-                            // Handle NONE first (cancellation/release) - separate from mode deadline
-                            const noneResult = resolveNoneMode(key, requestedMode, de.date)
-                            if (noneResult) {
-                                if ('skip' in noneResult) return null
-                                // RELEASED order - need ticket price for schema validation
-                                const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
-                                const ticketPrice = ticketPriceByType.get(ticketType)
-                                if (!ticketPrice?.id) {
-                                    throw new Error(`No ticket price for type ${ticketType} - cannot release order for ${inhabitant.name}`)
-                                }
-                                return OrderCreateWithPriceSchema.parse({
-                                    dinnerEventId: de.id,
-                                    inhabitantId: inhabitant.id,
-                                    householdId,
-                                    bookedByUserId: null,
-                                    ticketPriceId: ticketPrice.id,
-                                    priceAtBooking: ticketPrice.price,
-                                    dinnerMode: noneResult.mode,
-                                    state: noneResult.state
-                                })
-                            }
-
-                            // Eating mode - apply mode deadline enforcement
-                            const effectiveMode = resolveEffectiveEatingMode(key, requestedMode, de.date)
-
-                            // Derive ticket price from age
-                            const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
-                            const ticketPrice = ticketPriceByType.get(ticketType)
-                            if (!ticketPrice?.id) {
-                                throw new Error(`No ticket price for type ${ticketType} - inhabitant ${inhabitant.name}`)
-                            }
-
-                            return OrderCreateWithPriceSchema.parse({
-                                dinnerEventId: de.id,
-                                inhabitantId: inhabitant.id,
-                                householdId,
-                                bookedByUserId: null,
-                                ticketPriceId: ticketPrice.id,
-                                priceAtBooking: ticketPrice.price,
-                                dinnerMode: effectiveMode,
-                                state: OrderState.BOOKED
-                            })
-                        })
-                        .filter((o): o is OrderCreateWithPrice => o !== null)
-                }),
-
-            /**
-             * Generate orders from explicit desired orders (user booking)
-             * - NO excludedKeys (user explicitly choosing to book)
-             * - Uses ticketPriceId from order (UI already showed price)
-             * - bookedByUserId = provided (user action)
-             */
-            fromDesiredOrders: (desiredOrders: DesiredOrder[], bookedByUserId: number): OrderCreateWithPrice[] =>
-                desiredOrders
-                    .map(desired => {
-                        const de = dinnerEventById.get(desired.dinnerEventId)
-                        if (!de) {
-                            throw new Error(`Invalid dinnerEventId ${desired.dinnerEventId} - not in season`)
-                        }
-
-                        const key = `${desired.inhabitantId}-${desired.dinnerEventId}`
-
-                        // Look up price from provided ticketPriceId
-                        const ticketPrice = ticketPriceById.get(desired.ticketPriceId)
-                        if (!ticketPrice) {
-                            throw new Error(`Invalid ticketPriceId ${desired.ticketPriceId} - not in season`)
-                        }
-
-                        // Handle NONE first (cancellation/release) - separate from mode deadline
-                        const noneResult = resolveNoneMode(key, desired.dinnerMode, de.date)
-                        if (noneResult) {
-                            if ('skip' in noneResult) return null
-                            return OrderCreateWithPriceSchema.parse({
-                                dinnerEventId: desired.dinnerEventId,
-                                inhabitantId: desired.inhabitantId,
-                                householdId,
-                                bookedByUserId,
-                                ticketPriceId: desired.ticketPriceId,
-                                priceAtBooking: ticketPrice.price,
-                                dinnerMode: noneResult.mode,
-                                state: noneResult.state
-                            })
-                        }
-
-                        // Eating mode - apply mode deadline enforcement
-                        const effectiveMode = resolveEffectiveEatingMode(key, desired.dinnerMode, de.date)
-
-                        return OrderCreateWithPriceSchema.parse({
-                            dinnerEventId: desired.dinnerEventId,
-                            inhabitantId: desired.inhabitantId,
-                            householdId,
-                            bookedByUserId,
-                            ticketPriceId: desired.ticketPriceId,
-                            priceAtBooking: ticketPrice.price,
-                            dinnerMode: effectiveMode,
-                            state: OrderState.BOOKED
-                        })
-                    })
-                    .filter((o): o is OrderCreateWithPrice => o !== null)
-        }
-    }
-
-    /**
-     * @deprecated Use createOrderGeneratorFactory().fromPreferences() instead
-     * Kept for backward compatibility during migration
-     */
-    const createPreBookingGenerator = (
-        season: Season,
-        householdId: number,
-        existingOrdersByKey: Map<string, { dinnerMode: DinnerMode }>,
-        excludedKeys: Set<string> = new Set()
-    ) => {
-        const factory = createOrderGeneratorFactory(season, householdId, existingOrdersByKey)
-        return (inhabitants: InhabitantDisplay[]) => factory.fromPreferences(inhabitants, excludedKeys)
-    }
-
-    /**
-     * Curried household order scaffolder factory.
-     *
-     * Given a season, returns a function that generates the reconciliation result
-     * for a household - what orders to create, update, delete, or leave unchanged.
-     * Uses the season's deadline configuration for before/after deadline behavior.
-     *
-     * @param season - Season with ticketPrices, dinnerEvents, and deadline config
-     * @returns Function that takes household data and returns reconciliation result
-     *
-     * @example
-     * const scaffolder = createHouseholdOrderScaffold(season)
-     * const result = scaffolder(household, existingOrders, cancelledKeys)
-     * // result.create = orders to insert
-     * // result.delete = orders to remove (existing orders with id)
-     * // result.idempotent = orders unchanged
-     */
-    const createHouseholdOrderScaffold = (season: Season) => (
-        household: HouseholdDisplay,
-        existingOrders: OrderDisplay[],
-        cancelledKeys: Set<string> = new Set()
-    ) => {
-        const existingOrdersByKey = new Map(
-            existingOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, { dinnerMode: o.dinnerMode }])
-        )
-        const generator = createPreBookingGenerator(season, household.id, existingOrdersByKey, cancelledKeys)
-        const desiredOrders = generator(household.inhabitants)
-        return reconcilePreBookings(existingOrders)(desiredOrders)
-    }
 
     /**
      * Filter dinner events to those within the prebooking window (today → today + N days).
@@ -771,12 +512,7 @@ export const useSeason = () => {
         chunkPreferenceUpdates,
 
         // Pre-booking scaffolding (season activation)
-        reconcilePreBookings,
-        createOrderGeneratorFactory,
-        createPreBookingGenerator, // @deprecated - use createOrderGeneratorFactory
-        createHouseholdOrderScaffold,
         getScaffoldableDinnerEvents,
-        chunkOrderBatch,
 
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,

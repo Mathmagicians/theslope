@@ -3,6 +3,7 @@ import {fetchOrders, createOrders, deleteOrder, updateOrder, fetchUserCancellati
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
@@ -74,8 +75,8 @@ export async function scaffoldPrebookings(
     d1Client: D1Database,
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
-    const {createOrderGeneratorFactory, createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch, reconcilePreBookings} = useSeason()
-    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds} = useBookingValidation()
+    const {getScaffoldableDinnerEvents, deadlinesForSeason} = useSeason()
+    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch} = useBookingValidation()
 
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
@@ -127,6 +128,7 @@ export async function scaffoldPrebookings(
     let totalPriceUpdated = 0
     let totalModeUpdated = 0
     let totalUnchanged = 0
+    let totalOrderErrors = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
 
@@ -135,29 +137,53 @@ export async function scaffoldPrebookings(
             const householdInhabitantIds = new Set(household.inhabitants.map(i => i.id))
             const householdOrders = existingOrders.filter(o => householdInhabitantIds.has(o.inhabitantId))
 
-            // Build lookup: key → existing order (for updates and mode deadline enforcement)
-            const orderByKey = new Map(
-                householdOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, o])
-            )
-            const existingOrdersByKey = new Map(
-                householdOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, { dinnerMode: o.dinnerMode }])
-            )
+            // Build lookup: orderId → existing order (for updates)
+            const orderById = new Map(householdOrders.map(o => [o.id, o]))
+            const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
+            const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
 
-            // Generate desired orders using the appropriate generator
-            let result: ReturnType<ReturnType<typeof reconcilePreBookings>>
-            if (isUserMode) {
-                // User mode: use factory.fromDesiredOrders()
-                const factory = createOrderGeneratorFactory({ ...season, dinnerEvents }, household.id, existingOrdersByKey)
-                const desiredOrders = factory.fromDesiredOrders(options.desiredOrders!, options.userId!)
-                result = reconcilePreBookings(householdOrders)(desiredOrders)
-            } else {
-                // System mode: use createHouseholdOrderScaffold (which uses factory.fromPreferences internally)
-                const scaffolder = createHouseholdOrderScaffold({ ...season, dinnerEvents })
-                result = scaffolder(household, householdOrders, cancelledKeys)
-            }
+            // Build ticket price lookup (needed for creates and price change detection)
+            const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
+
+            // Resolve desired orders to buckets
+            const result = isUserMode
+                ? resolveDesiredOrdersToBuckets(
+                    options.desiredOrders!,
+                    householdOrders,
+                    dinnerEventById,
+                    canModifyOrders,
+                    canEditDiningMode,
+                    DinnerModeSchema.enum,
+                    OrderStateSchema.enum
+                )
+                : resolveOrdersFromPreferencesToBuckets(
+                    { ...season, dinnerEvents },
+                    household,
+                    householdOrders,
+                    cancelledKeys
+                )
+
+            // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
+            const ordersToCreate = result.create.map(desired => {
+                const ticketPrice = ticketPriceById.get(desired.ticketPriceId)
+                if (!ticketPrice) {
+                    throw new Error(`${LOG} Missing ticket price ${desired.ticketPriceId} for order`)
+                }
+                return {
+                    dinnerEventId: desired.dinnerEventId,
+                    inhabitantId: desired.inhabitantId,
+                    bookedByUserId: options.userId ?? null,
+                    ticketPriceId: desired.ticketPriceId,
+                    priceAtBooking: ticketPrice.price,
+                    dinnerMode: desired.dinnerMode,
+                    state: desired.state,
+                    isGuestTicket: desired.isGuestTicket,
+                    householdId: household.id
+                }
+            })
 
             // Create new orders
-            for (const batch of chunkOrderBatch(result.create)) {
+            for (const batch of chunkOrderBatch(ordersToCreate)) {
                 await createOrders(d1Client, household.id, batch, {
                     action: getAuditAction(isUserTriggered, 'create'),
                     performedByUserId: options.userId ?? null,
@@ -165,60 +191,62 @@ export async function scaffoldPrebookings(
                 })
             }
 
-            // Update changed orders: price changes, mode changes, or releases (NONE after deadline)
+            // Execute updates - generator already decided state/mode, scaffolder just executes
             let householdPriceUpdates = 0
             let householdModeUpdates = 0
             let householdReleased = 0
+            let householdUpdateErrors = 0
             for (const incoming of result.update) {
-                const key = `${incoming.inhabitantId}-${incoming.dinnerEventId}`
-                const existing = orderByKey.get(key)
-                if (!existing) continue
+                // Validate orderId present (generator contract)
+                if (!incoming.orderId) {
+                    throw new Error(`${LOG} Data integrity: update bucket order missing orderId for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
+                }
+                const existing = orderById.get(incoming.orderId)
+                if (!existing) {
+                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - skipping`)
+                    householdUpdateErrors++
+                    continue
+                }
 
+                // Build update payload from generator's decision
+                const updateData: Record<string, unknown> = {
+                    dinnerMode: incoming.dinnerMode,
+                    state: incoming.state
+                }
+
+                // Enrich with priceAtBooking if price changed (scaffolder responsibility)
                 const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
-                const isReleaseIntent = incoming.state === OrderStateSchema.enum.RELEASED
-
-                // Fail-early: generator must set dinnerMode=NONE for released orders
-                if (isReleaseIntent && incoming.dinnerMode !== DinnerModeSchema.enum.NONE) {
-                    throw new Error(`${LOG} Data integrity violation: released order must have dinnerMode=NONE, got ${incoming.dinnerMode} for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
-                }
-
                 if (isPriceChange) {
-                    // Price category changed (birthdate added/changed) - update fields, keep BOOKED
+                    const newTicketPrice = ticketPriceById.get(incoming.ticketPriceId)
+                    if (!newTicketPrice) {
+                        throw new Error(`${LOG} Ticket price ${incoming.ticketPriceId} not found in season`)
+                    }
+                    updateData.ticketPriceId = incoming.ticketPriceId
+                    updateData.priceAtBooking = newTicketPrice.price
                     householdPriceUpdates++
-                    await updateOrder(d1Client, existing.id, {
-                        dinnerMode: incoming.dinnerMode,
-                        ticketPriceId: incoming.ticketPriceId,
-                        priceAtBooking: incoming.priceAtBooking
-                    }, {
-                        action: getAuditAction(isUserTriggered, 'update'),
-                        performedByUserId: options.userId ?? null
-                    })
-                } else if (isReleaseIntent) {
-                    // NONE after deadline - release order (user charged, ticket claimable)
-                    householdReleased++
-                    await updateOrder(d1Client, existing.id, {
-                        dinnerMode: incoming.dinnerMode,
-                        state: OrderStateSchema.enum.RELEASED,
-                        releasedAt: new Date()
-                    }, {
-                        action: getAuditAction(isUserTriggered, 'update'),
-                        performedByUserId: options.userId ?? null
-                    })
-                } else {
-                    // Mode change between eating modes (DINEIN/TAKEAWAY/DINEINLATE) - update mode, keep BOOKED
-                    householdModeUpdates++
-                    await updateOrder(d1Client, existing.id, {
-                        dinnerMode: incoming.dinnerMode
-                    }, {
-                        action: getAuditAction(isUserTriggered, 'update'),
-                        performedByUserId: options.userId ?? null
-                    })
                 }
+
+                // Enrich with releasedAt if transitioning to RELEASED (scaffolder responsibility)
+                const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
+                if (isNewRelease) {
+                    updateData.releasedAt = new Date()
+                    householdReleased++
+                } else if (!isPriceChange) {
+                    householdModeUpdates++
+                }
+
+                await updateOrder(d1Client, existing.id, updateData, {
+                    action: getAuditAction(isUserTriggered, 'update'),
+                    performedByUserId: options.userId ?? null
+                })
             }
 
             // Delete orders (only before-deadline NONE orders - generator returns them in delete bucket)
             for (const toDelete of result.delete) {
-                await deleteOrder(d1Client, [toDelete.id], options.userId ?? null)
+                if (!toDelete.orderId) {
+                    throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${toDelete.inhabitantId} dinnerEvent ${toDelete.dinnerEventId}`)
+                }
+                await deleteOrder(d1Client, [toDelete.orderId], options.userId ?? null)
             }
 
             totalCreated += result.create.length
@@ -227,6 +255,7 @@ export async function scaffoldPrebookings(
             totalPriceUpdated += householdPriceUpdates
             totalModeUpdated += householdModeUpdates
             totalUnchanged += result.idempotent.length
+            totalOrderErrors += householdUpdateErrors
             processedHouseholds++
         } catch (error) {
             // Household may have been deleted during scaffolding (FK constraint error)
@@ -240,7 +269,7 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, households=${processedHouseholds}, errored=${erroredHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
@@ -251,6 +280,6 @@ export async function scaffoldPrebookings(
         modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,
         households: processedHouseholds,
-        errored: erroredHouseholds
+        errored: erroredHouseholds + totalOrderErrors
     })
 }

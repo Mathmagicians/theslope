@@ -613,43 +613,22 @@ export const useBookingValidation = () => {
     // ============================================================================
 
     /**
-     * Desired order - unified schema for all booking types (DRY: picked from OrderBaseSchema)
-     * - ticketPriceId required: UI sends the price shown to user (no server derivation)
+     * Desired order - unified schema for all booking types
+     * - orderId: Present for updates (existing order), absent for creates (new order)
+     * - state: Generator sets based on intent (BOOKED for eating, RELEASED for release)
+     * - ticketPriceId: Required, UI sends the price shown to user
      * - allergyTypeIds: guest allergies (inhabitants have allergies via Allergy table)
      */
-    const DesiredOrderSchema = OrderBaseSchema.pick({
+    const DesiredOrderSchema = OrderDisplaySchema.pick({
         inhabitantId: true,
         dinnerEventId: true,
         dinnerMode: true,
-        isGuestTicket: true
+        isGuestTicket: true,
+        state: true
     }).extend({
+        orderId: z.number().int().positive().optional(),
         ticketPriceId: z.number().int().positive(),
         allergyTypeIds: z.array(z.number().int().positive()).optional()
-    })
-
-    // Local type for conversion (avoids circular reference)
-    type _DesiredOrder = z.infer<typeof DesiredOrderSchema>
-    type _OrderState = z.infer<typeof OrderStateSchema>
-
-    /**
-     * Convert DesiredOrder to OrderCreateWithPrice
-     * Service provides context: householdId, bookedByUserId, priceAtBooking, state
-     */
-    const convertDesiredToOrderCreate = (
-        desired: _DesiredOrder,
-        householdId: number,
-        bookedByUserId: number,
-        priceAtBooking: number,
-        state: _OrderState
-    ): _OrderCreateWithPrice => OrderCreateWithPriceSchema.parse({
-        dinnerEventId: desired.dinnerEventId,
-        inhabitantId: desired.inhabitantId,
-        bookedByUserId,
-        ticketPriceId: desired.ticketPriceId,
-        priceAtBooking,
-        dinnerMode: desired.dinnerMode,
-        state,
-        householdId
     })
 
     /**
@@ -865,7 +844,6 @@ export const useBookingValidation = () => {
         DesiredOrderSchema,
         ScaffoldOrdersRequestSchema,
         ScaffoldOrdersResponseSchema,
-        convertDesiredToOrderCreate,
 
         // Daily Maintenance
         ConsumeResultSchema,

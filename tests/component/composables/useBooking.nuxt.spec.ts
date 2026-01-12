@@ -1,15 +1,21 @@
 import {describe, it, expect} from 'vitest'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES} from '~/composables/useBooking'
+import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, type OrderDecisionInput} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {useBookingValidation, type OrderDisplay, type OrderCreateWithPrice, type DinnerMode} from '~/composables/useBookingValidation'
-import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import testHelpers from '~~/tests/e2e/testHelpers'
-import type {PruneAndCreateResult} from '~/utils/batchUtils'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 
-const {saltedId} = testHelpers
+// Shared test constant: days offset for dinners before cancellation deadline
+const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+
+// Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
+const today = new Date()
+const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
+    differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
 
 describe('useBooking', () => {
     const {
@@ -18,9 +24,7 @@ describe('useBooking', () => {
         HEYNABO_EVENT_TEMPLATE,
         canCancelDinner,
         getStepConfig,
-        getDinnerStepState,
-        reconcileSingleDinnerUserBooking,
-        buildBookingFeedback
+        getDinnerStepState
     } = useBooking()
 
     const {deadlinesForSeason} = useSeason()
@@ -415,244 +419,607 @@ describe('useBooking', () => {
         })
     })
 
-    describe('reconcileSingleDinnerUserBooking', () => {
-        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-        const {TicketTypeSchema} = useTicketPriceValidation()
+})
 
-        // Shared test data generators
-        const dinnerDate = new Date(2025, 5, 15) // June 15, 2025
-        const dinnerId = 42
-        const householdId = 1
-        const userId = 99
+// =============================================================================
+// decideOrderAction - Pure decision function tests
+// =============================================================================
 
-        const defaultTicketPrices: TicketPrice[] = [
-            {id: 1, seasonId: 1, ticketType: TicketTypeSchema.enum.ADULT, price: 4500, description: null, maximumAgeLimit: null},
-            {id: 2, seasonId: 1, ticketType: TicketTypeSchema.enum.CHILD, price: 2500, description: null, maximumAgeLimit: 12},
-            {id: 3, seasonId: 1, ticketType: TicketTypeSchema.enum.BABY, price: 0, description: null, maximumAgeLimit: 2}
-        ]
+describe('decideOrderAction', () => {
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
 
-        const adultInhabitant = {id: 10, birthDate: new Date(1985, 0, 1)} // 40 years old
-        const childInhabitant = {id: 11, birthDate: new Date(2015, 0, 1)} // 10 years old
+    // Helper to create desired order
+    const createDesired = (overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
+        inhabitantId: 1,
+        dinnerEventId: 101,
+        dinnerMode: DinnerMode.DINEIN,
+        ticketPriceId: 1,
+        isGuestTicket: false,
+        ...overrides
+    })
 
-        // ticketPriceId must match age-based lookup: adult=1, child=2
-        const ticketPriceForInhabitant = (inhabitantId: number) =>
-            inhabitantId === adultInhabitant.id ? 1 : 2
-
-        const existingOrder = (inhabitantId: number, overrides?: Partial<OrderDisplay>): OrderDisplay =>
-            OrderFactory.defaultOrder('test', {
-                id: saltedId(inhabitantId),
-                dinnerEventId: dinnerId,
-                inhabitantId,
-                ticketPriceId: ticketPriceForInhabitant(inhabitantId),
-                dinnerMode: DinnerModeSchema.enum.DINEIN,
-                state: OrderStateSchema.enum.BOOKED,
-                ...overrides
-            })
-
-        describe.each([
-            {mode: 'NONE', expectedCreate: 0, expectedDelete: 0}, // nothing to delete when no orders exist
-            {mode: 'DINEIN', expectedCreate: 2, expectedDelete: 0},
-            {mode: 'TAKEAWAY', expectedCreate: 2, expectedDelete: 0},
-            {mode: 'DINEINLATE', expectedCreate: 2, expectedDelete: 0}
-        ])('$mode mode without existing orders', ({mode, expectedCreate, expectedDelete}) => {
-            it(`creates ${expectedCreate} orders and deletes ${expectedDelete}`, () => {
-                const result = reconcileSingleDinnerUserBooking(
-                    [adultInhabitant, childInhabitant],
-                    [], // no existing orders
-                    mode as DinnerMode,
-                    dinnerId,
-                    dinnerDate,
-                    defaultTicketPrices,
-                    householdId,
-                    userId
-                )
-
-                expect(result.create).toHaveLength(expectedCreate)
-                expect(result.delete).toHaveLength(expectedDelete)
-                expect(result.update).toHaveLength(0)
-                expect(result.idempotent).toHaveLength(0)
-            })
+    // Helper to create existing order
+    const createExisting = (overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {
+            id: 42,
+            inhabitantId: 1,
+            dinnerEventId: 101,
+            ticketPriceId: 1,
+            dinnerMode: DinnerMode.DINEIN,
+            state: OrderState.BOOKED,
+            ...overrides
         })
 
-        describe.each([
-            {mode: 'NONE', expectedCreate: 0, expectedDelete: 2, expectedIdempotent: 0},
-            {mode: 'DINEIN', expectedCreate: 0, expectedDelete: 0, expectedIdempotent: 2},
-            {mode: 'TAKEAWAY', expectedCreate: 0, expectedDelete: 0, expectedIdempotent: 0, expectedUpdate: 2}
-        ])('$mode mode with existing DINEIN orders', ({mode, expectedCreate, expectedDelete, expectedIdempotent, expectedUpdate = 0}) => {
-            it(`creates ${expectedCreate}, deletes ${expectedDelete}, idempotent ${expectedIdempotent}, update ${expectedUpdate}`, () => {
-                const existingOrders = [
-                    existingOrder(adultInhabitant.id),
-                    existingOrder(childInhabitant.id)
-                ]
+    // Helper to create decision input
+    const createInput = (
+        desired: DesiredOrder,
+        existing: OrderDisplay | null,
+        beforeCancellationDeadline = true,
+        canEditMode = true
+    ): OrderDecisionInput => ({ desired, existing, beforeCancellationDeadline, canEditMode })
 
-                const result = reconcileSingleDinnerUserBooking(
-                    [adultInhabitant, childInhabitant],
-                    existingOrders,
-                    mode as DinnerMode,
-                    dinnerId,
-                    dinnerDate,
-                    defaultTicketPrices,
-                    householdId,
-                    userId
-                )
+    describe('decision matrix (7 cases)', () => {
+        it.each([
+            // Case 1: No orderId + eating mode → create (state: BOOKED)
+            {
+                desc: 'no orderId + DINEIN → create BOOKED',
+                desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
+                existing: null,
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: 'create',
+                expectedState: OrderState.BOOKED
+            },
+            // Case 2: No orderId + NONE → null (skip)
+            {
+                desc: 'no orderId + NONE → skip (null)',
+                desired: createDesired({ dinnerMode: DinnerMode.NONE }),
+                existing: null,
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: null,
+                expectedState: null
+            },
+            // Case 3: orderId + NONE + before deadline → delete
+            {
+                desc: 'orderId + NONE + before deadline → delete',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE }),
+                existing: createExisting(),
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: 'delete',
+                expectedState: undefined  // delete doesn't set state
+            },
+            // Case 4: orderId + NONE + after deadline → update (RELEASED)
+            {
+                desc: 'orderId + NONE + after deadline → update RELEASED',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE }),
+                existing: createExisting(),
+                beforeDeadline: false,
+                canEditMode: false,
+                expectedBucket: 'update',
+                expectedState: OrderState.RELEASED
+            },
+            // Case 5: orderId + RELEASED + eating mode → update (BOOKED, reclaim)
+            {
+                desc: 'orderId + existing RELEASED + DINEIN → update BOOKED (reclaim)',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.DINEIN }),
+                existing: createExisting({ state: OrderState.RELEASED }),
+                beforeDeadline: false,
+                canEditMode: false,
+                expectedBucket: 'update',
+                expectedState: OrderState.BOOKED
+            },
+            // Case 6a: orderId + eating mode + unchanged BOOKED → idempotent (preserves state)
+            {
+                desc: 'orderId + same mode + same price + BOOKED → idempotent preserves BOOKED',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1 }),
+                existing: createExisting({ dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1, state: OrderState.BOOKED }),
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: 'idempotent',
+                expectedState: OrderState.BOOKED  // preserved from existing
+            },
+            // Case 6b: orderId + NONE unchanged on RELEASED → idempotent (preserves RELEASED state)
+            {
+                desc: 'orderId + NONE + RELEASED → idempotent preserves RELEASED',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE, ticketPriceId: 1 }),
+                existing: createExisting({ dinnerMode: DinnerMode.NONE, ticketPriceId: 1, state: OrderState.RELEASED }),
+                beforeDeadline: false,  // after deadline
+                canEditMode: false,
+                expectedBucket: 'idempotent',
+                expectedState: OrderState.RELEASED  // preserved from existing
+            },
+            // Case 7a: orderId + mode changed → update
+            {
+                desc: 'orderId + mode changed (DINEIN→TAKEAWAY) → update BOOKED',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.TAKEAWAY }),
+                existing: createExisting({ dinnerMode: DinnerMode.DINEIN }),
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: 'update',
+                expectedState: OrderState.BOOKED
+            },
+            // Case 7b: orderId + price changed → update
+            {
+                desc: 'orderId + price changed → update BOOKED',
+                desired: createDesired({ orderId: 42, ticketPriceId: 2 }),
+                existing: createExisting({ ticketPriceId: 1 }),
+                beforeDeadline: true,
+                canEditMode: true,
+                expectedBucket: 'update',
+                expectedState: OrderState.BOOKED
+            }
+        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, expectedBucket, expectedState }) => {
+            const input = createInput(desired, existing, beforeDeadline, canEditMode)
+            const result = decideOrderAction(input, DinnerMode, OrderState)
 
-                expect(result.create).toHaveLength(expectedCreate)
-                expect(result.delete).toHaveLength(expectedDelete)
-                expect(result.idempotent).toHaveLength(expectedIdempotent)
-                expect(result.update).toHaveLength(expectedUpdate)
-            })
-        })
-
-        it('filters by dinnerId - ignores orders for other dinners', () => {
-            const ordersForOtherDinner = [
-                existingOrder(adultInhabitant.id, {dinnerEventId: 999})
-            ]
-
-            const result = reconcileSingleDinnerUserBooking(
-                [adultInhabitant],
-                ordersForOtherDinner,
-                DinnerModeSchema.enum.DINEIN,
-                dinnerId,
-                dinnerDate,
-                defaultTicketPrices,
-                householdId,
-                userId
-            )
-
-            // Should create since existing order is for different dinner
-            expect(result.create).toHaveLength(1)
-            expect(result.delete).toHaveLength(0)
-        })
-
-        it('uses correct ticket price based on inhabitant age', () => {
-            const result = reconcileSingleDinnerUserBooking(
-                [adultInhabitant, childInhabitant],
-                [],
-                DinnerModeSchema.enum.DINEIN,
-                dinnerId,
-                dinnerDate,
-                defaultTicketPrices,
-                householdId,
-                userId
-            )
-
-            const adultOrder = result.create.find(o => o.inhabitantId === adultInhabitant.id)
-            const childOrder = result.create.find(o => o.inhabitantId === childInhabitant.id)
-
-            expect(adultOrder?.priceAtBooking).toBe(4500)
-            expect(childOrder?.priceAtBooking).toBe(2500)
-        })
-
-        it('throws when no matching ticket price for inhabitant', () => {
-            const emptyTicketPrices: TicketPrice[] = []
-
-            expect(() => reconcileSingleDinnerUserBooking(
-                [adultInhabitant],
-                [],
-                DinnerModeSchema.enum.DINEIN,
-                dinnerId,
-                dinnerDate,
-                emptyTicketPrices,
-                householdId,
-                userId
-            )).toThrow('No ticket price for inhabitant')
+            if (expectedBucket === null) {
+                expect(result).toBeNull()
+            } else {
+                expect(result).not.toBeNull()
+                expect(result!.bucket).toBe(expectedBucket)
+                if (expectedState !== undefined) {
+                    expect(result!.order.state).toBe(expectedState)
+                }
+            }
         })
     })
 
-    describe('buildBookingFeedback', () => {
-        const {DinnerModeSchema} = useBookingValidation()
-        const testSalt = testHelpers.temporaryAndRandom()
+    describe('mode deadline enforcement', () => {
+        it('preserves existing mode when canEditMode=false', () => {
+            const desired = createDesired({ orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })
+            const existing = createExisting({ dinnerMode: DinnerMode.DINEIN })
+            const input = createInput(desired, existing, false, false)  // after mode deadline
 
-        const inhabitantNames = new Map<number, string>([
-            [10, 'Anna Hansen'],
-            [11, 'Peter Hansen'],
-            [12, 'Mette Hansen']
-        ])
+            const result = decideOrderAction(input, DinnerMode, OrderState)
 
-        // Helper to create reconcile result using factories
-        const createResult = (
-            create: number[] = [],
-            update: number[] = [],
-            del: number[] = [],
-            idempotent: number[] = []
-        ): PruneAndCreateResult<OrderDisplay, OrderCreateWithPrice> => ({
-            create: create.map(id => OrderFactory.defaultOrderCreateWithPrice(1, {inhabitantId: id})),
-            update: update.map(id => OrderFactory.defaultOrderCreateWithPrice(1, {inhabitantId: id})),
-            delete: del.map(id => OrderFactory.defaultOrder(testSalt, {inhabitantId: id})),
-            idempotent: idempotent.map(id => OrderFactory.defaultOrderCreateWithPrice(1, {inhabitantId: id}))
+            expect(result!.order.dinnerMode).toBe(DinnerMode.DINEIN)  // preserved
         })
+
+        it('allows mode change when canEditMode=true', () => {
+            const desired = createDesired({ orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })
+            const existing = createExisting({ dinnerMode: DinnerMode.DINEIN })
+            const input = createInput(desired, existing, true, true)  // before mode deadline
+
+            const result = decideOrderAction(input, DinnerMode, OrderState)
+
+            expect(result!.order.dinnerMode).toBe(DinnerMode.TAKEAWAY)  // changed
+        })
+    })
+
+    describe('error cases', () => {
+        it('throws when orderId provided but existing not found', () => {
+            const desired = createDesired({ orderId: 999 })
+            const input = createInput(desired, null, true, true)
+
+            expect(() => decideOrderAction(input, DinnerMode, OrderState))
+                .toThrow('Order 999 not found in existing orders')
+        })
+    })
+})
+
+// =============================================================================
+// resolveDesiredOrdersToBuckets - Batch processor tests
+// =============================================================================
+
+describe('resolveDesiredOrdersToBuckets', () => {
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+
+    // Helper functions
+    const createDesired = (inhabitantId: number, dinnerEventId: number, overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
+        inhabitantId,
+        dinnerEventId,
+        dinnerMode: DinnerMode.DINEIN,
+        ticketPriceId: 1,
+        isGuestTicket: false,
+        ...overrides
+    })
+
+    const createExisting = (id: number, inhabitantId: number, dinnerEventId: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {
+            id,
+            inhabitantId,
+            dinnerEventId,
+            ticketPriceId: 1,
+            dinnerMode: DinnerMode.DINEIN,
+            state: OrderState.BOOKED,
+            ...overrides
+        })
+
+    // Far future date - before all deadlines
+    const farFutureDate = new Date()
+    farFutureDate.setDate(farFutureDate.getDate() + 30)
+
+    const dinnerEventById = new Map([[101, { date: farFutureDate }]])
+    const canModifyOrders = () => true
+    const canEditDiningMode = () => true
+
+    it.each([
+        {
+            desc: 'all new orders (no existing)',
+            desired: [createDesired(1, 101)],
+            existing: [],
+            expected: { create: 1, update: 0, delete: 0, idempotent: 0 }
+        },
+        {
+            desc: 'existing matches incoming (idempotent)',
+            desired: [createDesired(1, 101, { orderId: 42 })],
+            existing: [createExisting(42, 1, 101)],
+            expected: { create: 0, update: 0, delete: 0, idempotent: 1 }
+        },
+        {
+            desc: 'mode change → update',
+            desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })],
+            existing: [createExisting(42, 1, 101, { dinnerMode: DinnerMode.DINEIN })],
+            expected: { create: 0, update: 1, delete: 0, idempotent: 0 }
+        },
+        {
+            desc: 'price change → update',
+            desired: [createDesired(1, 101, { orderId: 42, ticketPriceId: 2 })],
+            existing: [createExisting(42, 1, 101, { ticketPriceId: 1 })],
+            expected: { create: 0, update: 1, delete: 0, idempotent: 0 }
+        },
+        {
+            desc: 'NONE before deadline → delete',
+            desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.NONE })],
+            existing: [createExisting(42, 1, 101)],
+            expected: { create: 0, update: 0, delete: 1, idempotent: 0 }
+        },
+        {
+            desc: 'mixed: create + idempotent',
+            desired: [
+                createDesired(1, 101, { orderId: 42 }),
+                createDesired(2, 101)  // no orderId = new
+            ],
+            existing: [createExisting(42, 1, 101)],
+            expected: { create: 1, update: 0, delete: 0, idempotent: 1 }
+        }
+    ])('$desc', ({ desired, existing, expected }) => {
+        const result = resolveDesiredOrdersToBuckets(
+            desired,
+            existing,
+            dinnerEventById,
+            canModifyOrders,
+            canEditDiningMode,
+            DinnerMode,
+            OrderState
+        )
+
+        expect(result.create).toHaveLength(expected.create)
+        expect(result.update).toHaveLength(expected.update)
+        expect(result.delete).toHaveLength(expected.delete)
+        expect(result.idempotent).toHaveLength(expected.idempotent)
+    })
+
+    it('throws for unknown dinnerEventId', () => {
+        const desired = [createDesired(1, 999)]  // unknown event
+
+        expect(() => resolveDesiredOrdersToBuckets(
+            desired,
+            [],
+            dinnerEventById,
+            canModifyOrders,
+            canEditDiningMode,
+            DinnerMode,
+            OrderState
+        )).toThrow('Dinner event 999 not found')
+    })
+})
+
+// =============================================================================
+// generateDesiredOrdersFromPreferences - System mode generator tests
+// =============================================================================
+
+describe('generateDesiredOrdersFromPreferences', () => {
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    // Helper to create preferences
+    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
+
+    // Helper to create inhabitant
+    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+        ...HouseholdFactory.defaultInhabitantData(),
+        id,
+        dinnerPreferences: prefs ? createPreferences(prefs) : null
+    })
+
+    // Test dinner events (Mon=101, Wed=102, Fri=103)
+    const dinnerEvents = [
+        DinnerEventFactory.dinnerEventAt(101, 30),  // Far future Monday
+        DinnerEventFactory.dinnerEventAt(102, 32),  // Far future Wednesday
+        DinnerEventFactory.dinnerEventAt(103, 34)   // Far future Friday
+    ]
+
+    // Mon, Wed, Fri DINEIN preferences
+    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
+    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+
+    const ticketPrices = SeasonFactory.defaultSeason().ticketPrices
+
+    it('generates orders for all dinner events matching preferences', () => {
+        const inhabitants = [createInhabitant(1, allDineIn)]
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [],
+            new Set(),
+            ticketPrices
+        )
+
+        expect(result).toHaveLength(3)
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
+    })
+
+    it('excludes orders for excluded keys (user cancellations)', () => {
+        const inhabitants = [createInhabitant(1, allDineIn)]
+        const excludedKeys = new Set(['1-102'])  // Exclude dinner 102
+
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [],
+            excludedKeys,
+            ticketPrices
+        )
+
+        expect(result).toHaveLength(2)
+        expect(result.map(o => o.dinnerEventId)).toEqual([101, 103])
+    })
+
+    it('preserves guest orders (not managed by preferences)', () => {
+        const inhabitants = [createInhabitant(1, allNone)]  // NONE preferences
+        const existingGuestOrder = OrderFactory.defaultOrder(undefined, {
+            id: 99,
+            inhabitantId: 1,
+            dinnerEventId: 101,
+            isGuestTicket: true
+        })
+
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [existingGuestOrder],
+            new Set(),
+            ticketPrices
+        )
+
+        // Should preserve guest order even with NONE preferences
+        const guestOrders = result.filter(o => o.isGuestTicket)
+        expect(guestOrders).toHaveLength(1)
+        expect(guestOrders[0]!.orderId).toBe(99)
+    })
+
+    it('enriches with orderId when existing order found', () => {
+        const inhabitants = [createInhabitant(1, allDineIn)]
+        const existingOrder = OrderFactory.defaultOrder(undefined, {
+            id: 42,
+            inhabitantId: 1,
+            dinnerEventId: 101
+        })
+
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [existingOrder],
+            new Set(),
+            ticketPrices
+        )
+
+        const order101 = result.find(o => o.dinnerEventId === 101)
+        expect(order101?.orderId).toBe(42)
+    })
+
+    it('defaults to DINEIN when preferences are null', () => {
+        const inhabitants = [createInhabitant(1, null)]
+
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [],
+            new Set(),
+            ticketPrices
+        )
+
+        expect(result).toHaveLength(3)
+        result.forEach(o => expect(o.dinnerMode).toBe(DinnerMode.DINEIN))
+    })
+
+    describe('state field assignment', () => {
+        const {OrderStateSchema} = useBookingValidation()
+        const OrderState = OrderStateSchema.enum
 
         it.each([
-            {bucket: 'create', ids: [10, 11], expectedAction: 'created'},
-            {bucket: 'update', ids: [10], expectedAction: 'updated'},
-            {bucket: 'delete', ids: [10, 11, 12], expectedAction: 'deleted'},
-            {bucket: 'idempotent', ids: [10], expectedAction: 'skipped'}
-        ])('maps $bucket bucket to $expectedAction action', ({bucket, ids, expectedAction}) => {
-            const result = createResult(
-                bucket === 'create' ? ids : [],
-                bucket === 'update' ? ids : [],
-                bucket === 'delete' ? ids : [],
-                bucket === 'idempotent' ? ids : []
+            {desc: 'new orders get BOOKED state', existingOrders: [], expectedState: OrderState.BOOKED},
+            {desc: 'preserves RELEASED state from existing order', existingOrders: [
+                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 101, state: OrderState.RELEASED})
+            ], expectedState: OrderState.RELEASED}
+        ])('$desc', ({existingOrders, expectedState}) => {
+            const inhabitants = [createInhabitant(1, allDineIn)]
+            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), ticketPrices)
+
+            const order101 = result.find(o => o.dinnerEventId === 101)
+            expect(order101?.state).toBe(expectedState)
+        })
+    })
+})
+
+// =============================================================================
+// resolveOrdersFromPreferencesToBuckets - Full scaffolding flow tests
+// =============================================================================
+
+describe('resolveOrdersFromPreferencesToBuckets', () => {
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+
+    // Helper to create preferences
+    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
+        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
+
+    // Helper to create inhabitant
+    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+        ...HouseholdFactory.defaultInhabitantData(),
+        id,
+        householdId: 1,
+        dinnerPreferences: prefs ? createPreferences(prefs) : null
+    })
+
+    // Helper to create household
+    const createHousehold = (id: number, inhabitants: ReturnType<typeof createInhabitant>[]) => ({
+        ...HouseholdFactory.defaultHouseholdData(),
+        id,
+        shortName: `H${id}`,
+        inhabitants
+    })
+
+    // Helper to create existing order (with far future date matching season)
+    const createOrder = (id: number, inhabitantId: number, dinnerEventId: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {
+            id,
+            inhabitantId,
+            dinnerEventId,
+            ticketPriceId: 4,  // ADULT matches default inhabitant birthDate
+            dinnerMode: DinnerMode.DINEIN,
+            state: OrderState.BOOKED,
+            ...overrides
+        })
+
+    // Helper to create season with specific dinner events
+    const seasonWith = (dinnerEvents: ReturnType<typeof DinnerEventFactory.dinnerEventAt>[]) => ({
+        ...SeasonFactory.defaultSeason(),
+        dinnerEvents
+    })
+
+    // Mon, Wed, Fri DINEIN preferences (WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])
+    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
+    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+
+    // Test season with far future dinner events on Mon(1), Wed(3), Fri(5) - matches allDineIn preference
+    const testSeason = seasonWith([
+        DinnerEventFactory.dinnerEventAt(101, daysToWeekday(1)),  // Monday
+        DinnerEventFactory.dinnerEventAt(102, daysToWeekday(3)),  // Wednesday
+        DinnerEventFactory.dinnerEventAt(103, daysToWeekday(5))   // Friday
+    ])
+
+    it.each([
+        {
+            desc: 'creates all orders for household with no existing',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [],
+            cancelled: new Set<string>(),
+            expected: {create: 3, delete: 0, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'recognizes matching orders as idempotent',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [createOrder(1, 1, 101), createOrder(2, 1, 102), createOrder(3, 1, 103)],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, update: 0, idempotent: 3}
+        },
+        {
+            desc: 'marks orders for deletion when preferences change to NONE',
+            inhabitants: [createInhabitant(1, allNone)],
+            existing: [createOrder(1, 1, 101), createOrder(2, 1, 102)],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 2, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'excludes user-cancelled bookings',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [],
+            cancelled: new Set(['1-102']),  // User cancelled dinner 102
+            expected: {create: 2, delete: 0, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'handles empty household (no inhabitants)',
+            inhabitants: [],
+            existing: [],
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'deletes orphan orders when inhabitants leave',
+            inhabitants: [],
+            existing: [createOrder(1, 99, 101), createOrder(2, 99, 102)],  // Orders for non-existent inhabitant
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 2, update: 0, idempotent: 0}
+        }
+    ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
+        const result = resolveOrdersFromPreferencesToBuckets(
+            testSeason,
+            createHousehold(1, inhabitants),
+            existing,
+            cancelled
+        )
+
+        expect(result.create).toHaveLength(expected.create)
+        expect(result.delete).toHaveLength(expected.delete)
+        expect(result.update).toHaveLength(expected.update)
+        expect(result.idempotent).toHaveLength(expected.idempotent)
+    })
+
+    describe('deadline behavior', () => {
+        it.each([
+            {
+                desc: 'far future dinner (before deadline) → delete',
+                daysFromToday: FAR_FUTURE_DAYS,
+                expected: {delete: 1, update: 0}
+            },
+            {
+                desc: 'tomorrow dinner (after deadline) → update (release)',
+                daysFromToday: 1,
+                expected: {delete: 0, update: 1}
+            },
+            {
+                desc: 'today dinner (after deadline) → update (release)',
+                daysFromToday: 0,
+                expected: {delete: 0, update: 1}
+            }
+        ])('$desc', ({daysFromToday, expected}) => {
+            const season = seasonWith([DinnerEventFactory.dinnerEventAt(201, daysFromToday)])
+            const household = createHousehold(1, [createInhabitant(1, allNone)])
+            const existingOrder = createOrder(42, 1, 201)
+
+            const result = resolveOrdersFromPreferencesToBuckets(
+                season,
+                household,
+                [existingOrder],
+                new Set()
             )
 
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.DINEIN)
+            expect(result.delete).toHaveLength(expected.delete)
+            expect(result.update).toHaveLength(expected.update)
 
-            expect(feedback.feedback).toHaveLength(ids.length)
-            feedback.feedback.forEach(f => expect(f.action).toBe(expectedAction))
+            // Verify release-intent orders have correct state
+            if (expected.update > 0) {
+                result.update.forEach(order => {
+                    expect(order.state).toBe(OrderState.RELEASED)
+                    expect(order.dinnerMode).toBe(DinnerMode.NONE)
+                })
+            }
         })
+    })
 
-        it('includes inhabitant names from map', () => {
-            const result = createResult([10, 11])
+    it('preserves guest orders (not managed by preferences)', () => {
+        const household = createHousehold(1, [createInhabitant(1, allNone)])  // NONE preferences
+        const guestOrder = createOrder(99, 1, 101, { isGuestTicket: true })
 
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.TAKEAWAY)
+        const result = resolveOrdersFromPreferencesToBuckets(
+            testSeason,
+            household,
+            [guestOrder],
+            new Set()
+        )
 
-            expect(feedback.feedback[0]!.inhabitantName).toBe('Anna Hansen')
-            expect(feedback.feedback[1]!.inhabitantName).toBe('Peter Hansen')
-        })
-
-        it('falls back to Ukendt for unknown inhabitant IDs', () => {
-            const result = createResult([999])
-
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.DINEIN)
-
-            expect(feedback.feedback[0]!.inhabitantName).toBe('Ukendt')
-        })
-
-        it('includes dinnerMode in all feedback items', () => {
-            const result = createResult([10], [11], [12])
-
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.DINEINLATE)
-
-            feedback.feedback.forEach(f => expect(f.dinnerMode).toBe(DinnerModeSchema.enum.DINEINLATE))
-        })
-
-        it('summary counts match bucket lengths', () => {
-            const result = createResult([10, 11], [12], [10], [11, 12])
-
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.DINEIN)
-
-            expect(feedback.summary).toEqual({
-                created: 2,
-                updated: 1,
-                released: 0,
-                deleted: 1,
-                skipped: 2
-            })
-        })
-
-        it('handles empty result', () => {
-            const result = createResult()
-
-            const feedback = buildBookingFeedback(result, inhabitantNames, DinnerModeSchema.enum.NONE)
-
-            expect(feedback.feedback).toHaveLength(0)
-            expect(feedback.summary).toEqual({
-                created: 0,
-                updated: 0,
-                released: 0,
-                deleted: 0,
-                skipped: 0
-            })
-        })
+        // Guest order should be idempotent, not deleted
+        expect(result.idempotent).toHaveLength(1)
+        expect(result.delete).toHaveLength(0)
     })
 })

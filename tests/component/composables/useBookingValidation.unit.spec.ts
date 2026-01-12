@@ -719,7 +719,6 @@ describe('useBookingValidation', () => {
       DesiredOrderSchema,
       ScaffoldOrdersRequestSchema,
       ScaffoldOrdersResponseSchema,
-      convertDesiredToOrderCreate,
       OrderStateSchema,
       DinnerModeSchema
     } = useBookingValidation()
@@ -733,7 +732,8 @@ describe('useBookingValidation', () => {
         dinnerEventId: 10,
         dinnerMode: DinnerMode.DINEIN,
         isGuestTicket: false,
-        ticketPriceId: 5
+        ticketPriceId: 5,
+        state: OrderState.BOOKED
       }
 
       it('GIVEN valid desired order WHEN parsing THEN succeeds', () => {
@@ -750,10 +750,11 @@ describe('useBookingValidation', () => {
       })
 
       it.each([
-        {desc: 'missing inhabitantId', data: {dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
-        {desc: 'missing dinnerEventId', data: {inhabitantId: 1, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
-        {desc: 'missing dinnerMode', data: {inhabitantId: 1, dinnerEventId: 10, ticketPriceId: 5}},
-        {desc: 'missing ticketPriceId', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN}},
+        {desc: 'missing inhabitantId', data: {dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing dinnerEventId', data: {inhabitantId: 1, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing dinnerMode', data: {inhabitantId: 1, dinnerEventId: 10, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing ticketPriceId', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED}},
+        {desc: 'missing state', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
         {desc: 'invalid dinnerMode', data: {...validDesiredOrder, dinnerMode: 'INVALID'}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
         expect(() => DesiredOrderSchema.parse(data)).toThrow()
@@ -769,7 +770,8 @@ describe('useBookingValidation', () => {
           dinnerEventId: 10,
           dinnerMode: DinnerMode.DINEIN,
           isGuestTicket: false,
-          ticketPriceId: 5
+          ticketPriceId: 5,
+          state: OrderState.BOOKED
         }]
       }
 
@@ -808,37 +810,6 @@ describe('useBookingValidation', () => {
 
       it('GIVEN valid response WHEN parsing THEN succeeds', () => {
         expect(() => ScaffoldOrdersResponseSchema.parse(validResponse)).not.toThrow()
-      })
-    })
-
-    describe('convertDesiredToOrderCreate', () => {
-      const desired = {
-        inhabitantId: 1,
-        dinnerEventId: 10,
-        dinnerMode: DinnerMode.DINEIN,
-        isGuestTicket: false,
-        ticketPriceId: 5
-      }
-
-      it('GIVEN desired order WHEN converting THEN returns OrderCreateWithPrice', () => {
-        const result = convertDesiredToOrderCreate(desired, 100, 42, 55, OrderState.BOOKED)
-
-        expect(result.inhabitantId).toBe(1)
-        expect(result.dinnerEventId).toBe(10)
-        expect(result.dinnerMode).toBe(DinnerMode.DINEIN)
-        expect(result.ticketPriceId).toBe(5)
-        expect(result.householdId).toBe(100)
-        expect(result.bookedByUserId).toBe(42)
-        expect(result.priceAtBooking).toBe(55)
-        expect(result.state).toBe(OrderState.BOOKED)
-      })
-
-      it.each([
-        {state: OrderState.BOOKED, desc: 'before deadline'},
-        {state: OrderState.RELEASED, desc: 'after deadline with NONE'}
-      ])('GIVEN $desc WHEN converting THEN uses provided state', ({state}) => {
-        const result = convertDesiredToOrderCreate(desired, 100, 42, 55, state)
-        expect(result.state).toBe(state)
       })
     })
   })

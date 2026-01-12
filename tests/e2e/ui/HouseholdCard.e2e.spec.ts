@@ -298,13 +298,23 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         await powerModeToggle.click()
 
         // WHEN: Wait for power mode edit buttons to appear
-        await pollUntil(
+        const powerModeButtonFound = await pollUntil(
             async () => {
                 const button = page.getByTestId('power-mode-preferences-edit-mandag-DINEIN')
                 return await button.count() > 0
             },
-            (count) => count
-        )
+            (count) => count,
+            5  // Reduced to 5 retries to stay within test timeout
+        ).catch(() => false)
+
+        // Debug: if button not found, show what testids ARE present
+        if (!powerModeButtonFound) {
+            const allTestIds = await page.locator('[data-testid]').evaluateAll(
+                els => els.map(el => el.getAttribute('data-testid'))
+            )
+            const relevantTestIds = allTestIds.filter(id => id?.includes('power-mode') || id?.includes('preferences'))
+            throw new Error(`Power mode button not found. Found testids: [${relevantTestIds.join(', ')}]`)
+        }
 
         // WHEN: Change all cooking days to DINEIN via power mode (Mon, Wed, Fri)
         await page.getByTestId('power-mode-preferences-edit-mandag-DINEIN').click()
