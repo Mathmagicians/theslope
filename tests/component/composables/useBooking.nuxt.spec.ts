@@ -798,6 +798,27 @@ describe('generateDesiredOrdersFromPreferences', () => {
         expect(guestOrders[0]!.orderId).toBe(99)
     })
 
+    it('throws on orphaned guest order (missing ticketPriceId) - fail early', () => {
+        const inhabitants = [createInhabitant(1, allDineIn)]
+        const orphanedGuestOrder = {
+            ...OrderFactory.defaultOrder(undefined, {
+                id: 99,
+                inhabitantId: 1,
+                dinnerEventId: 101,
+                isGuestTicket: true
+            }),
+            ticketPriceId: null  // Orphaned: TicketPrice was deleted
+        } as OrderDisplay
+
+        expect(() => generateDesiredOrdersFromPreferences(
+            inhabitants,
+            dinnerEvents,
+            [orphanedGuestOrder],
+            new Set(),
+            ticketPrices
+        )).toThrow('Guest order 99 missing ticketPriceId')
+    })
+
     it('enriches with orderId when existing order found', () => {
         const inhabitants = [createInhabitant(1, allDineIn)]
         const existingOrder = OrderFactory.defaultOrder(undefined, {

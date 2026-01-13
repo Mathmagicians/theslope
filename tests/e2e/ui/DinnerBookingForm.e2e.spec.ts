@@ -29,6 +29,8 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
     let inhabitantId: number
     let householdShortname: string
 
+    // Increase timeout for parallel execution (30s default isn't enough)
+    test.setTimeout(60000)
     test.use({storageState: memberUIFile})
 
     test.beforeAll(async ({browser}) => {
