@@ -1,12 +1,13 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
+    const requestFetch = useRequestFetch()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
 
@@ -36,7 +37,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         error: ordersError, refresh: refreshOrders
     } = useAsyncData<OrderDisplay[]>(
         ordersKey,
-        () => $fetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`),
+        () => requestFetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`, {
+            onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente bookinger') }
+        }),
         {
             default: () => [],
             transform: (data: unknown[]) => {
@@ -246,9 +249,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isDinnerUpdating = ref(false)
 
     const updateDinner = async (id: number, updates: DinnerUpdate): Promise<DinnerEventDetail> => {
-        const updated = await $fetch<DinnerEventDetail>(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
-        console.info(CTX, `Updated dinner ${id}:`, Object.keys(updates).join(', '))
-        return updated
+        const updated = await $fetch(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
+        const parsed = DinnerEventDetailSchema.parse(updated)
+        console.info(CTX, `Updated dinner ${id}:`, updates, '→ state:', parsed.state)
+        return parsed
     }
 
     const withLoadingAndErrorHandler = <T extends unknown[]>(fn: (...args: T) => Promise<DinnerEventDetail>, msg: string) =>
@@ -263,6 +267,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const updateDinnerEventField = withLoadingAndErrorHandler((id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates), 'Kunne ikke gemme ændringer til menuen')
     const announceDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}), 'Kunne ikke annoncere fællesspisningen')
     const cancelDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}), 'Kunne ikke aflyse fællesspisningen')
+    const undoCancelDinner = withLoadingAndErrorHandler((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}), 'Kunne ikke annullere aflysningen')
 
     // ========================================
     // DAILY MAINTENANCE JOB (ADR-007)
@@ -441,6 +446,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateDinnerEventAllergens,
         announceDinner,
         cancelDinner,
+        undoCancelDinner,
 
         // daily maintenance
         dailyMaintenanceResult,

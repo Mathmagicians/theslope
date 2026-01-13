@@ -59,7 +59,9 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonKey,
             () => {
                 if (!selectedSeasonId.value) return Promise.resolve(null)
-                return $fetch<Season>(`/api/admin/season/${selectedSeasonId.value}`)
+                return useRequestFetch()<Season>(`/api/admin/season/${selectedSeasonId.value}`, {
+                    onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente sæson') }
+                })
             },
             {
                 default: () => null,

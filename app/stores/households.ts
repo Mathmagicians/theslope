@@ -51,7 +51,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
         selectedHouseholdKey,
         () => {
             if (!selectedHouseholdId.value) return Promise.resolve(null)
-            return $fetch<HouseholdDetail>(`/api/admin/household/${selectedHouseholdId.value}`)
+            return useRequestFetch()<HouseholdDetail>(`/api/admin/household/${selectedHouseholdId.value}`, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente husstand') }
+            })
         },
         {
             default: () => null,

@@ -53,6 +53,7 @@ const ticketOptions = computed(() =>
       value-key="value"
       :size="SIZES.small"
       name="guest-ticket-type"
+      data-testid="guest-ticket-type-select"
     />
   </UFormField>
 

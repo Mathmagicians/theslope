@@ -104,6 +104,7 @@ const emit = defineEmits<{
   'update:allergens': [allergenIds: number[]]
   'advance-state': [newState: string]
   'cancel-dinner': []
+  'undo-cancel-dinner': []
   'show-calendar': []
   select: [dinnerEventId: number]
 }>()
@@ -336,6 +337,11 @@ const handleCancelConfirm = () => {
   emit('cancel-dinner')
 }
 
+// Undo cancel handler (DangerButton with undo=true handles 2-step confirmation)
+const handleUndoCancelConfirm = () => {
+  emit('undo-cancel-dinner')
+}
+
 const handleCardClick = () => {
   if (props.isCompact) {
     emit('select', props.dinnerEvent.id)
@@ -468,6 +474,19 @@ const handleCardClick = () => {
                   :disabled="isUpdating"
                   :initial-color="HERO_BUTTON.primaryButton"
                   @confirm="handleCancelConfirm"
+                />
+
+                <!-- Undo cancel button (2-step confirmation with success colors) -->
+                <DangerButton
+                  v-if="isCancelled"
+                  :label="isUpdating ? 'Arbejder...' : 'Annuller aflysning'"
+                  :confirm-label="`Tryk igen for at genåbne ${formattedShortDate}...`"
+                  :loading="isUpdating"
+                  :disabled="isUpdating"
+                  :initial-color="HERO_BUTTON.primaryButton"
+                  :icon="ICONS.undo"
+                  undo
+                  @confirm="handleUndoCancelConfirm"
                 />
               </div>
             </div>

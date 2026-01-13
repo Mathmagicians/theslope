@@ -71,6 +71,7 @@ interface TableRow {
   price: number
   ticketPriceId: number
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
+  ticketCount?: number // DEBUG: total orders for this inhabitant (should be 1)
   provenanceHousehold?: string
   provenanceAllergies?: string[]
 }
@@ -258,7 +259,10 @@ const tableData = computed((): TableRow[] => {
   const allInhabitants = household.value.inhabitants as InhabitantDisplay[]
 
   const inhabitantRows: TableRow[] = allInhabitants.map(inhabitant => {
-    const order = regularOrders.value.find(o => o.inhabitantId === inhabitant.id)
+    // Find ALL orders for this inhabitant (to detect duplicates)
+    const ordersForInhabitant = regularOrders.value.filter(o => o.inhabitantId === inhabitant.id)
+    const order = ordersForInhabitant[0] ?? null
+    const ticketCount = ordersForInhabitant.length
     const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
     const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, props.ticketPrices)
 
@@ -276,11 +280,12 @@ const tableData = computed((): TableRow[] => {
       birthDate: inhabitant.birthDate,
       inhabitant,
       ticketConfig,
-      order: order ?? null,
+      order,
       orderState: order?.state as OrderState | undefined,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: resolvedTicketPriceId,
+      ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
       provenanceHousehold: order?.provenanceHousehold,
       provenanceAllergies: order?.provenanceAllergies
     }

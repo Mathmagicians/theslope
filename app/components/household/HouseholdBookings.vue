@@ -17,15 +17,16 @@ const props = defineProps<Props>()
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {computeLockStatus} = useBooking()
+const {computeLockStatus, formatScaffoldResult} = useBooking()
 const {ICONS, COLOR} = useTheSlopeDesignSystem()
+const toast = useToast()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
 planStore.initPlanStore()
 
 const bookingsStore = useBookingsStore()
-const {orders} = storeToRefs(bookingsStore)
+const {orders, isProcessingBookings} = storeToRefs(bookingsStore)
 
 const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
@@ -56,10 +57,10 @@ const visibleDinnerEventIds = computed(() =>
   getEventsForGridView(dinnerEvents.value, dateRange.value).flat().map(e => e.id)
 )
 
-// Load orders for visible dinner events
+// Load orders for visible dinner events (grid view doesn't need provenance)
 watchEffect(() => {
   if (visibleDinnerEventIds.value.length > 0) {
-    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, true)
+    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value)
   }
 })
 
@@ -76,7 +77,10 @@ const {OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 
 const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]) => {
-  if (!selectedSeason.value) return
+  if (!selectedSeason.value || changes.length === 0) return
+
+  // Only process dinner events that have changes (not all visible events!)
+  const changedEventIds = [...new Set(changes.map(c => c.dinnerEventId))]
 
   const desiredOrders = changes.map(change => {
     const inhabitant = household.value.inhabitants.find(i => i.id === change.inhabitantId)
@@ -101,11 +105,16 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
     }
   })
 
-  await bookingsStore.processMultipleEventsBookings(
+  const result = await bookingsStore.processMultipleEventsBookings(
     household.value.id,
-    visibleDinnerEventIds.value,
+    changedEventIds,
     desiredOrders
   )
+  toast.add({
+    title: 'Bookinger gemt',
+    description: formatScaffoldResult(result.scaffoldResult, 'compact'),
+    color: 'success'
+  })
 }
 
 // Day view save handler - DinnerBookingForm emits DesiredOrder[]
@@ -149,6 +158,7 @@ const handleAddGuest = (eventId: number) => {
         :orders="orders"
         :ticket-prices="ticketPrices"
         :deadlines="deadlines"
+        :is-saving="isProcessingBookings"
         @save="handleGridSave"
         @navigate="handleNavigate"
         @add-guest="handleAddGuest"

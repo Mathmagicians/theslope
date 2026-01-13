@@ -1,7 +1,7 @@
 import type {DateRange} from '~/types/dateTypes'
 import {createDateRange, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import type {TransactionDisplay} from '~/composables/useBillingValidation'
 
@@ -32,13 +32,14 @@ export const useBilling = () => {
 
     /**
      * Format ticket counts for display (e.g., "2V 1B")
+     * Generic: accepts any array of objects with ticketType (TransactionDisplay, OrderDisplay, etc.)
      */
-    const formatTicketCounts = (transactions: TransactionDisplay[]): string => {
+    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(items: T[]): string => {
         const counts = {adult: 0, child: 0, baby: 0}
-        for (const tx of transactions) {
-            if (tx.ticketType === TicketType.ADULT) counts.adult++
-            else if (tx.ticketType === TicketType.CHILD) counts.child++
-            else if (tx.ticketType === TicketType.BABY) counts.baby++
+        for (const item of items) {
+            if (item.ticketType === TicketType.ADULT) counts.adult++
+            else if (item.ticketType === TicketType.CHILD) counts.child++
+            else if (item.ticketType === TicketType.BABY) counts.baby++
         }
         const parts: string[] = []
         if (counts.adult > 0) parts.push(`${counts.adult}V`)

@@ -555,6 +555,7 @@ export const ICONS = {
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
     arrowUp: 'i-heroicons-arrow-up',
+    undo: 'i-heroicons-arrow-uturn-left',
     sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',

@@ -183,6 +183,10 @@ export const generateDesiredOrdersFromPreferences = (
 
             // Guest order: preserve (not managed by preferences)
             if (existing?.isGuestTicket) {
+                // ticketPriceId should always exist for valid guest orders (null only if TicketPrice deleted)
+                if (!existing.ticketPriceId) {
+                    throw new Error(`Guest order ${existing.id} missing ticketPriceId`)
+                }
                 result.push({
                     inhabitantId: existing.inhabitantId,
                     dinnerEventId: existing.dinnerEventId,
@@ -205,7 +209,7 @@ export const generateDesiredOrdersFromPreferences = (
             const requestedMode = inhabitant.dinnerPreferences?.[weekDay] ?? DinnerMode.DINEIN
 
             // Derive ticket price from age
-            const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate, ticketPrices, de.date)
+            const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, ticketPrices, de.date)
             if (!ticketPrice?.id) {
                 throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
             }
@@ -273,14 +277,15 @@ export const resolveOrdersFromPreferencesToBuckets = (
     for (const existing of existingOrders) {
         if (processedOrderIds.has(existing.id)) continue
 
-        // Orphan order - add to delete bucket
+        // Orphan order - add to delete bucket (ticketPriceId/state not used for deletes)
         result.delete.push({
             inhabitantId: existing.inhabitantId,
             dinnerEventId: existing.dinnerEventId,
             dinnerMode: existing.dinnerMode,
-            ticketPriceId: existing.ticketPriceId,
+            ticketPriceId: existing.ticketPriceId ?? 0,
             isGuestTicket: existing.isGuestTicket ?? false,
-            orderId: existing.id
+            orderId: existing.id,
+            state: existing.state
         })
     }
 

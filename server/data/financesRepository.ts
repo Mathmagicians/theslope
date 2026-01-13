@@ -910,12 +910,13 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 }
 
 export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`, dinnerEventData)
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDetailSchema, deserializeDinnerEventDetail} = useBookingValidation()
 
     // Exclude relation fields that Prisma doesn't accept in update data
     const {allergens, ...updateData} = dinnerEventData
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] updateData:`, updateData)
 
     try {
         const updatedDinnerEvent = await prisma.dinnerEvent.update({

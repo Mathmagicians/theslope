@@ -267,6 +267,24 @@ const handleCancelDinner = async () => {
   await usersStore.loadMyTeams()
 }
 
+const handleUndoCancelDinner = async () => {
+  if (!selectedDinnerId.value || !dinnerEventDetail.value) return
+  // Restore to ANNOUNCED if menu title exists, otherwise SCHEDULED
+  const targetState = dinnerEventDetail.value.menuTitle?.trim()
+    ? DinnerState.ANNOUNCED
+    : DinnerState.SCHEDULED
+  const result = await bookingsStore.undoCancelDinner(selectedDinnerId.value, targetState)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Aflysning annulleret',
+    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er genåbnet`,
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
+  await usersStore.loadMyTeams()
+}
+
 useHead({
   title: '👨‍🍳 Madlavning',
   meta: [
@@ -385,6 +403,7 @@ useHead({
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
+              @undo-cancel-dinner="handleUndoCancelDinner"
           />
         </template>
 

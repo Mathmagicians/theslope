@@ -55,11 +55,11 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
         return {id: futureEvents[0]!.id, date: new Date(futureEvents[0]!.date)}
     }
 
-    // Helper to navigate to dinner page and wait for table
+    // Helper to navigate to dinner page and wait for booking table
     const goToDinnerPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
         await page.goto(`/dinner?date=${dateParam}`)
-        await expect(page.locator('table')).toBeVisible({timeout: 15000})
+        await expect(page.getByTestId('booking-table')).toBeVisible({timeout: 15000})
     }
 
     test('GIVEN inhabitant row WHEN user changes mode to TAKEAWAY THEN order is updated', async ({page, browser}) => {
@@ -144,12 +144,12 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
         const saveButton = page.getByTestId('power-power-mode-save')
         await saveButton.click()
 
-        // THEN: Verify orders created for all inhabitants
+        // THEN: Verify all inhabitants have DINEIN orders
         const orders = await pollUntil(
             async () => await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, testDinnerEvent.id),
             (orders) => {
                 const householdOrders = orders.filter(o => o.inhabitant?.householdId === householdId && !o.isGuestTicket)
-                return householdOrders.length === inhabitantCount
+                return householdOrders.length === inhabitantCount && householdOrders.every(o => o.dinnerMode === DinnerMode.DINEIN)
             },
             15
         )
