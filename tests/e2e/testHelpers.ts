@@ -180,6 +180,28 @@ async function getSessionUserInfo(context: BrowserContext): Promise<{ householdI
     return { householdId, inhabitantId, householdShortname }
 }
 
+/**
+ * Assert no orders have orphaned prices (all orders have valid ticketPriceId)
+ * Use after any operation that creates/updates orders to verify data integrity
+ *
+ * @param orders - Array of orders to check (OrderDetail or OrderDisplay)
+ * @param context - Optional context message for assertion failure
+ *
+ * @example
+ * const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, eventIds)
+ * assertNoOrdersWithOrphanPrices(orders, 'after scaffolding')
+ */
+function assertNoOrdersWithOrphanPrices(
+    orders: Array<{ ticketPriceId: number | null | undefined }>,
+    context: string = ''
+): void {
+    const orphans = orders.filter(o => o.ticketPriceId === null || o.ticketPriceId === undefined)
+    const message = context
+        ? `All orders should have valid ticketPriceId ${context}`
+        : 'All orders should have valid ticketPriceId'
+    expect(orphans, message).toHaveLength(0)
+}
+
 const testHelpers = {
     salt,
     saltedId,
@@ -190,7 +212,8 @@ const testHelpers = {
     pollUntil,
     doScreenshot,
     selectDropdownOption,
-    getSessionUserInfo
+    getSessionUserInfo,
+    assertNoOrdersWithOrphanPrices
 }
 
 export default testHelpers

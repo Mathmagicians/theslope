@@ -72,18 +72,30 @@ export const useTicketPriceValidation = () => {
     const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
 
     /**
-     * Curried reconcile function for ticket prices
-     * Reconciles on functional content of ticket price (ticketType, price, description, maximumAgeLimit)
+     * Reconcile ticket prices - never deletes, only creates/updates
      *
-     * NOTE: Order.ticketPriceId has onDelete: SetNull - deleting orphans orders (not expected in practice)
+     * Business logic:
+     * - Identity: (ticketType, price) - same type+price = same price entity
+     * - Description/ageLimit change → update
+     * - Price change → create new (preserves order references to old price)
+     * - Never delete (orders reference ticketPriceId, SET NULL on delete orphans them)
      */
     const ticketPriceKey = (tp: TicketPrice): string =>
-        `${tp.ticketType}:${tp.price}:${tp.description ?? ''}:${tp.maximumAgeLimit ?? ''}`
+        `${tp.ticketType}:${tp.price}`
 
-    const reconcileTicketPrices = pruneAndCreate<TicketPrice, TicketPrice, string>(
+    const ticketPriceEquals = (existing: TicketPrice, incoming: TicketPrice): boolean =>
+        existing.description === incoming.description &&
+        existing.maximumAgeLimit === incoming.maximumAgeLimit
+
+    const baseReconcile = pruneAndCreate<TicketPrice, TicketPrice, string>(
         ticketPriceKey,
-        () => true
+        ticketPriceEquals
     )
+
+    const reconcileTicketPrices = (existing: TicketPrice[]) => (incoming: TicketPrice[]) => {
+        const result = baseReconcile(existing)(incoming)
+        return {...result, delete: []}  // Never delete ticket prices
+    }
 
     return {
         TicketTypeSchema,

@@ -163,7 +163,7 @@ const {
 } = useAsyncData(
   computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
   () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventId=${selectedDinnerId.value}`)
+    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}`)
     : Promise.resolve([]),
   {
     default: () => [],

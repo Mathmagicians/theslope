@@ -84,11 +84,18 @@ export const useOrder = () => {
   }
 
   /**
-   * Group orders by ticket type with counts and portions
-   * Uses order.ticketType (priceAtBooking preserves the price)
+   * Group orders by ticket type with counts, portions, and revenue
+   * Uses order.ticketType and priceAtBooking (frozen at booking time)
    */
   const groupByTicketType = (orders: OrderDetail[]) => {
-    const groups = new Map<string, { ticketType: string, count: number, portions: number, descriptions: Map<string, number> }>()
+    const groups = new Map<string, {
+      ticketType: string
+      count: number
+      portions: number
+      unitPrice: number
+      revenue: number
+      descriptions: Map<string, number>
+    }>()
 
     orders.forEach(order => {
       const ticketType = order.ticketType
@@ -101,6 +108,8 @@ export const useOrder = () => {
           ticketType,
           count: 0,
           portions: 0,
+          unitPrice: order.priceAtBooking,
+          revenue: 0,
           descriptions: new Map()
         })
       }
@@ -108,6 +117,7 @@ export const useOrder = () => {
       const group = groups.get(ticketType)!
       group.count++
       group.portions += getPortionsForTicketType(ticketType)
+      group.revenue += order.priceAtBooking
 
       const currentCount = group.descriptions.get(description) || 0
       group.descriptions.set(description, currentCount + 1)

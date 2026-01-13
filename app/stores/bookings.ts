@@ -166,7 +166,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
         try {
             const released = await $fetch<OrderDisplay[]>('/api/order', {
-                query: {dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
+                query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
             })
             console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
             return released.map(order => OrderDisplaySchema.parse(order))

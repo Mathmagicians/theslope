@@ -73,11 +73,7 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 1. Gå til **Husstanden** (fanen med hus-ikon)
 2. Find den person du vil redigere
 3. Klik på **blyant-ikonet** (✏️) ud for personen
-4. Vælg for hver dag:
-   - 🍽️ **Spis** - Spis i fællessalen
-   - 🕐 **Sen** - Spis sent (efter kl. 18:30)
-   - 🛍️ **Take** - Hent mad og spis hjemme
-   - ❌ **Ingen** - Ikke tilmeldt
+4. Vælg spisningsform for hver dag (se [Spisningsformer](#spisningsformer) nedenfor)
 5. Klik **Gem** - dine bookinger opdateres automatisk
 
 ![Præferencer i redigeringstilstand](screenshots/household/household-card-preferences-editing.png)
@@ -99,12 +95,39 @@ Vil du sætte samme præferencer for hele familien?
 Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan altid ændre enkeltdage:
 
 1. Gå til **Tilmeldinger** (kalenderikonet)
-2. Find datoen i kalenderen
-3. Klik på datoen for at se detaljer
-4. Klik **Tilmeld** eller **Afmeld** for at ændre
+2. Vælg visning: **Dag**, **Uge** eller **Måned**
+3. Klik på en dag for at se/ændre tilmeldinger
+4. Brug **✏️ Redigér** for at ændre tilmeldinger
 
 ![Tilmeldingskalender](screenshots/household/household-bookings.png)
-*Kalenderen viser dine tilmeldinger - klik på en dato for at ændre*
+*Kalenderen viser dine tilmeldinger - vælg dag/uge/måned visning*
+
+#### Uge- og månedsvisning (Grid booking)
+
+I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
+
+1. Klik **✏️ Redigér** for at aktivere redigeringstilstand
+2. Klik på en celle for at skifte mellem spisningsmåder (🍽️ → 🛍️ → ❌)
+3. Brug **⚡ Power-rækken** øverst til at ændre alle medlemmer på én gang
+4. Klik **Gem** når du er færdig - eller **Annullér** for at fortryde
+
+> **Tip:** Ændringer gemmes først når du klikker Gem. Du kan frit eksperimentere og annullere.
+
+![Grid booking](screenshots/dinner/booking-form-power-mode.png)
+*Power mode: Ændr alle familiemedlemmer på én gang*
+
+### Spisningsformer
+
+I appen bruges følgende symboler til at vise spisningsform:
+
+| Symbol | Navn | Betydning |
+|:------:|------|-----------|
+| ![Spisesal](https://api.iconify.design/streamline:food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
+| ![Sen](https://api.iconify.design/heroicons:moon.svg?height=20&color=%2322c55e) | **Sen** | Spis i fællessalen til sen spisning |
+| ![Takeaway](https://api.iconify.design/heroicons:shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
+| ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
+
+I redigeringstilstand klikker du på symbolerne for at skifte mellem tilstandene.
 
 ### Sådan framelder du dig fællesspisning
 

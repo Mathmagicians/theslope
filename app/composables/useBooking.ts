@@ -164,7 +164,7 @@ export const generateDesiredOrdersFromPreferences = (
     excludedKeys: Set<string>,
     ticketPrices: TicketPrice[]
 ): DesiredOrder[] => {
-    const {getTicketPriceForInhabitant} = useTicket()
+    const {resolveTicketPrice} = useTicket()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
@@ -183,15 +183,17 @@ export const generateDesiredOrdersFromPreferences = (
 
             // Guest order: preserve (not managed by preferences)
             if (existing?.isGuestTicket) {
-                // ticketPriceId should always exist for valid guest orders (null only if TicketPrice deleted)
-                if (!existing.ticketPriceId) {
-                    throw new Error(`Guest order ${existing.id} missing ticketPriceId`)
+                // Resolve ticketPriceId: existing → priceAtBooking fallback → 0 (idempotent)
+                const resolvedId = existing.ticketPriceId
+                    ?? resolveTicketPrice(null, existing.priceAtBooking, ticketPrices)?.id
+                if (!resolvedId) {
+                    console.warn(`⚠️ > BOOKING > Order ${existing.id} has orphaned price (no matching ticketPrice)`)
                 }
                 result.push({
                     inhabitantId: existing.inhabitantId,
                     dinnerEventId: existing.dinnerEventId,
                     dinnerMode: existing.dinnerMode,
-                    ticketPriceId: existing.ticketPriceId,
+                    ticketPriceId: resolvedId ?? 0,
                     isGuestTicket: true,
                     orderId: existing.id,
                     state: existing.state
@@ -209,7 +211,7 @@ export const generateDesiredOrdersFromPreferences = (
             const requestedMode = inhabitant.dinnerPreferences?.[weekDay] ?? DinnerMode.DINEIN
 
             // Derive ticket price from age
-            const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, ticketPrices, de.date)
+            const ticketPrice = resolveTicketPrice(inhabitant.birthDate ?? null, null, ticketPrices, de.date)
             if (!ticketPrice?.id) {
                 throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
             }

@@ -3,6 +3,15 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
 /**
+ * UI configuration for ticket type display
+ */
+export interface TicketTypeConfig {
+    label: string
+    color: 'primary' | 'success' | 'neutral'
+    icon: string
+}
+
+/**
  * Business logic for working with tickets and ticket types
  *
  * Handles:
@@ -96,21 +105,44 @@ export const useTicket = () => {
     }
 
     /**
-     * Get ticket type configuration for an inhabitant
-     * Convenience function combining determineTicketType + config lookup
+     * Get ticket type configuration for display (label, color, icon)
+     * Uses resolveTicketPrice internally for DRY code path.
      *
-     * @param birthDate - Date of birth
+     * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
      * @param referenceDate - Date to calculate age on (default: today)
+     * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
      * @returns Ticket type display config (label, color, icon)
      */
     const getTicketTypeConfig = (
         birthDate: Date | null,
         ticketPrices?: TicketPrice[],
-        referenceDate?: Date
+        referenceDate?: Date,
+        priceAtBooking?: number | null
     ) => {
-        const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
+        const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
+        const ticketType = resolved?.ticketType ?? TicketType.ADULT
         return ticketTypeConfig[ticketType]
+    }
+
+    /**
+     * Find ticket price by explicit type (cheapest if multiple exist)
+     *
+     * Use when you KNOW the ticket type and need to find the price.
+     * For deriving type from context (birthDate, priceAtBooking), use resolveTicketPrice.
+     *
+     * NOTE: Returns first match from sorted list (sorted by price asc = cheapest first).
+     *
+     * @param ticketType - Explicit ticket type to find
+     * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
+     * @returns Matching TicketPrice or undefined if not found
+     */
+    const findTicketPriceByType = (
+        ticketType: typeof TicketType[keyof typeof TicketType],
+        ticketPrices?: TicketPrice[]
+    ): TicketPrice | undefined => {
+        if (!ticketPrices?.length) return undefined
+        return ticketPrices.find(tp => tp.ticketType === ticketType)
     }
 
     /**
@@ -139,10 +171,10 @@ export const useTicket = () => {
     ): TicketPrice | undefined => {
         if (!ticketPrices?.length) return undefined
 
-        // Priority 1: birthDate → ticketType → cheapest price for type (.find on sorted = first = cheapest)
+        // Priority 1: birthDate → ticketType → cheapest price for type
         if (birthDate) {
             const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
-            const match = ticketPrices.find(tp => tp.ticketType === ticketType)
+            const match = findTicketPriceByType(ticketType, ticketPrices)
             if (match) return match
         }
 
@@ -152,8 +184,8 @@ export const useTicket = () => {
             if (match) return match
         }
 
-        // Fallback: cheapest ADULT price (.find on sorted = first = cheapest)
-        return ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)
+        // Fallback: ADULT price, then last available price
+        return findTicketPriceByType(TicketType.ADULT, ticketPrices) ?? ticketPrices.at(-1)
     }
 
     /**
@@ -186,6 +218,7 @@ export const useTicket = () => {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        findTicketPriceByType,
         resolveTicketPrice,
         getTicketPriceForInhabitant,
         convertPriceToDecimalFormat,

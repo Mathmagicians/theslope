@@ -1,9 +1,10 @@
 import {test, expect} from '@playwright/test'
 import {SeasonImportFactory} from '~~/tests/e2e/testDataFactories/seasonImportFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, assertNoOrdersWithOrphanPrices} = testHelpers
 
 test.describe('Season Import API', () => {
 
@@ -49,5 +50,14 @@ test.describe('Season Import API', () => {
         expect(secondBody.teamsCreated).toBe(0)
         expect(secondBody.teamAssignmentsCreated).toBe(0)
         expect(secondBody.dinnerEventsCreated).toBe(0)
+
+        // Verify no orphan orders (all orders have valid ticketPriceId)
+        if (season.dinnerEvents && season.dinnerEvents.length > 0) {
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(
+                context,
+                season.dinnerEvents.map(e => e.id)
+            )
+            assertNoOrdersWithOrphanPrices(orders, 'after import')
+        }
     })
 })

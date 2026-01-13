@@ -1,97 +1,38 @@
 # Feature: BookingGridView
-
-**ADR Reference:** [ADR-016: Grid Booking Pattern with Draft State](./adr.md#adr-016-grid-booking-pattern-with-draft-state)
+**Status:** ✅ SHIPPED | **Updated:** 2026-01-13
 
 ## Overview
-Unified week/month grid for household booking management. Reuses display logic from DinnerBookingForm. Uses **draft state pattern** with Cancel/Save, and `processGridBooking` workhorse.
+Week/month grid for household booking management. Uses ADR-016 scaffold pattern with draft state.
 
-**ASCII layouts:** See `BookingGridView.vue` component header for VIEW/EDIT mode layouts.
+## Implementation Complete
 
-## Row Types (same as DinnerBookingForm)
-| Row Type | When Shown | Description |
-|----------|------------|-------------|
-| `power` | Edit mode | Updates ALL inhabitants for clicked column |
-| `inhabitant` | Always | Regular household member |
-| `guest` | Edit mode | Add new guest ticket for a day |
-| `guest-order` | Always (if exists) | Existing guest bookings |
+| Feature | Status |
+|---------|--------|
+| Grid view component | ✅ `BookingGridView.vue` |
+| View switcher (day/week/month) | ✅ `BookingViewSwitcher.vue` |
+| URL-synced view state | ✅ `useBookingView()` |
+| Draft state pattern | ✅ Cancel/Save workflow |
+| Power row (all inhabitants) | ✅ |
+| Inhabitant rows | ✅ |
+| Guest order rows | ✅ |
+| Mode toggle per cell | ✅ `DinnerModeSelector` |
+| Week navigation (◀ ▶) | ✅ |
+| Store integration | ✅ `processMultipleEventsBookings` |
+| E2E tests | ✅ Indirect via scaffold tests |
 
-## Cell Display
-Reuse existing components:
-- **DinnerModeSelector** with `interaction="toggle"` for mode cycling
-- Released/claimed status: icon + accent color (from DinnerTicket pattern)
-- Compact: just mode icon + status icon (no full ticket in grid)
+## Remaining Polish
 
-| State | Icon | Accent |
-|-------|------|--------|
-| Normal | mode icon | primary |
-| Released | 📤 + mode | error |
-| Claimed | 🎟️ + mode | info |
+| Item | Notes |
+|------|-------|
+| Component unit tests | Currently E2E only |
+| `useBookingView` unit tests | URL sync composable |
+| Guest add UX in grid | Currently day view only |
 
-## Architecture (ADR-016)
+## Key Files
 
-### Workhorse: processGridBooking
-Single function handles ALL booking mutations:
-
-```typescript
-type GridBookingChange = {
-  inhabitantId: number
-  dinnerEventId: number
-  dinnerMode: DinnerMode
-}
-
-const processGridBooking = async (
-  changes: GridBookingChange[],
-  existingOrders: OrderDisplay[],
-  inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
-  ticketPrices: TicketPrice[],
-  dinnerEventDates: Map<number, Date>,
-  householdId: number,
-  userId: number
-): Promise<GridBookingResult>
-```
-
-### Specialization: processBooking
-Single-dinner API delegates to workhorse:
-
-```typescript
-const processBooking = async (...) => {
-  const changes = inhabitants.map(i => ({
-    inhabitantId: i.id,
-    dinnerEventId: dinnerId,
-    dinnerMode
-  }))
-  return processGridBooking(changes, ...)
-}
-```
-
-## Files
-| File | Action | Status |
-|------|--------|--------|
-| `dinner/DinnerModeSelector.vue` | Reuse (`interaction="toggle"`) | ✅ Done |
-| `dinner/DinnerTicket.vue` | Reuse patterns (released/claimed) | ✅ Done |
-| `dinner/DinnerBookingForm.vue` | Reference for row types | ✅ Done |
-| `booking/BookingGridView.vue` | Create with draft state | ⚠️ Partial |
-| `stores/bookings.ts` | Add `processGridBooking` | ❌ TODO |
-
-## Implementation Checklist
-
-### Phase 1: Workhorse Function
-- [ ] Add `GridBookingChange`, `GridBookingResult` types
-- [ ] Implement `processGridBooking` in bookingsStore
-- [ ] Refactor `processBooking` to delegate
-- [ ] Tests
-
-### Phase 2: Grid View
-- [ ] Draft state Map
-- [ ] Cell display with released/claimed status
-- [ ] Mode toggle (DinnerModeSelector)
-- [ ] Power row
-- [ ] Guest rows (add + existing)
-- [ ] Cancel/Save buttons
-- [ ] Amount column
-
-### Phase 3: Polish
-- [ ] Week boundary styling
-- [ ] Navigation (◀ ▶)
-- [ ] Error handling
-- [ ] E2E tests
+| File | Role |
+|------|------|
+| `app/components/booking/BookingGridView.vue` | Grid UI component |
+| `app/components/booking/BookingViewSwitcher.vue` | Day/week/month toggle |
+| `app/composables/useBookingView.ts` | URL-synced view/date state |
+| `app/stores/bookings.ts` | `processMultipleEventsBookings()` |

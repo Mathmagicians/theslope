@@ -19,13 +19,12 @@ const allergies = defineModel<number[]>('allergies', {default: () => []})
 const guestCount = defineModel<number>('guestCount', {default: 1})
 
 const {SIZES} = useTheSlopeDesignSystem()
-const {TicketTypeSchema} = useTicketPriceValidation()
+const {resolveTicketPrice} = useTicket()
 
-// Default to adult ticket
+// Default to adult ticket (resolveTicketPrice with no birthDate falls back to ADULT)
 watch(() => props.ticketPrices, (prices) => {
   if (prices.length > 0 && !ticketPriceId.value) {
-    const adultPrice = prices.find(p => p.ticketType === TicketTypeSchema.enum.ADULT)
-    ticketPriceId.value = adultPrice?.id ?? prices[0]?.id
+    ticketPriceId.value = resolveTicketPrice(null, null, prices)?.id
   }
 }, {immediate: true})
 

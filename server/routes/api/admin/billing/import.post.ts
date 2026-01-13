@@ -3,6 +3,7 @@ import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {BillingImportResponse} from '~/composables/useBillingValidation'
 import type {OrderCreateWithPrice, AuditContext} from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
 
     const {BillingImportRequestSchema, parseCSV, TicketType, DinnerMode, OrderState} = useBillingValidation()
     const {chunkOrderBatch} = useBookingValidation()
+    const {findTicketPriceByType} = useTicket()
 
     const LOG = '📦 > BILLING > [IMPORT] > '
 
@@ -78,8 +80,8 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
                 .map(h => [h.shortName, h])
         )
 
-        const adultPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketType.ADULT)
-        const childPrice = season.ticketPrices?.find(tp => tp.ticketType === TicketType.CHILD)
+        const adultPrice = findTicketPriceByType(TicketType.ADULT, season.ticketPrices)
+        const childPrice = findTicketPriceByType(TicketType.CHILD, season.ticketPrices)
 
         if (!adultPrice) {
             return throwH3Error(LOG, createError({statusCode: 400, message: 'Season has no ADULT ticket price'}))
@@ -108,7 +110,8 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
                 bookedByUserId: firstInhabitant.userId ?? null,
                 householdId: household.id!,
                 dinnerMode: DinnerMode.DINEIN,
-                state: OrderState.BOOKED
+                state: OrderState.BOOKED,
+                isGuestTicket: false
             }
 
             const orders: OrderCreateWithPrice[] = [

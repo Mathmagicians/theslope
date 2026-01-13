@@ -798,25 +798,58 @@ describe('generateDesiredOrdersFromPreferences', () => {
         expect(guestOrders[0]!.orderId).toBe(99)
     })
 
-    it('throws on orphaned guest order (missing ticketPriceId) - fail early', () => {
+    it('preserves orphaned guest order with ticketPriceId 0 when no prices available', () => {
+        const inhabitants = [createInhabitant(1, allNone)]
+        const singleEvent = [dinnerEvents[0]!]  // Only event 101 (guest order's event)
+        const orphanedGuestOrder = {
+            ...OrderFactory.defaultOrder(undefined, {
+                id: 99,
+                inhabitantId: 1,
+                dinnerEventId: 101,
+                isGuestTicket: true,
+                priceAtBooking: 9999
+            }),
+            ticketPriceId: null
+        } as OrderDisplay
+
+        const result = generateDesiredOrdersFromPreferences(
+            inhabitants,
+            singleEvent,
+            [orphanedGuestOrder],
+            new Set(),
+            []  // Empty ticketPrices
+        )
+
+        const guestOrders = result.filter(o => o.isGuestTicket)
+        expect(guestOrders).toHaveLength(1)
+        expect(guestOrders[0]!.ticketPriceId).toBe(0)  // Fallback to 0 for idempotent
+        expect(guestOrders[0]!.orderId).toBe(99)
+    })
+
+    it('resolves orphaned guest order using priceAtBooking fallback', () => {
         const inhabitants = [createInhabitant(1, allDineIn)]
         const orphanedGuestOrder = {
             ...OrderFactory.defaultOrder(undefined, {
                 id: 99,
                 inhabitantId: 1,
                 dinnerEventId: 101,
-                isGuestTicket: true
+                isGuestTicket: true,
+                priceAtBooking: 5000  // Matches ADULT price
             }),
-            ticketPriceId: null  // Orphaned: TicketPrice was deleted
+            ticketPriceId: null
         } as OrderDisplay
 
-        expect(() => generateDesiredOrdersFromPreferences(
+        const result = generateDesiredOrdersFromPreferences(
             inhabitants,
             dinnerEvents,
             [orphanedGuestOrder],
             new Set(),
             ticketPrices
-        )).toThrow('Guest order 99 missing ticketPriceId')
+        )
+
+        const guestOrders = result.filter(o => o.isGuestTicket)
+        expect(guestOrders).toHaveLength(1)
+        expect(guestOrders[0]!.ticketPriceId).toBe(ticketPrices.find(tp => tp.price === 5000)!.id)
     })
 
     it('enriches with orderId when existing order found', () => {

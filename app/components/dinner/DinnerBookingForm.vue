@@ -123,7 +123,7 @@ const {COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage} = use
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
-const {getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
+const {resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
@@ -261,9 +261,8 @@ const tableData = computed((): TableRow[] => {
     const ordersForInhabitant = regularOrders.value.filter(o => o.inhabitantId === inhabitant.id)
     const order = ordersForInhabitant[0] ?? null
     const ticketCount = ordersForInhabitant.length
-    const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
 
-    // Resolve ticket price: birthDate first, then priceAtBooking fallback, then ADULT
+    // Single DRY code path: resolveTicketPrice → ticketTypeConfig lookup
     const ticketPrice = resolveTicketPrice(
       inhabitant.birthDate ?? null,
       order?.priceAtBooking,
@@ -277,7 +276,7 @@ const tableData = computed((): TableRow[] => {
       lastName: inhabitant.lastName,
       birthDate: inhabitant.birthDate,
       inhabitant,
-      ticketConfig,
+      ticketConfig: ticketPrice ? ticketTypeConfig[ticketPrice.ticketType] : null,
       order,
       orderState: order?.state as OrderState | undefined,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,

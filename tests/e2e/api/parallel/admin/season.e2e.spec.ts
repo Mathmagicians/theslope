@@ -5,7 +5,6 @@ import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidatio
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {WEEKDAYS} from '~~/app/types/dateTypes'
@@ -683,142 +682,8 @@ test.describe('Season API Tests', () => {
         })
     })
 
-    test.describe('Scaffold Pre-bookings', () => {
-        // Uses outer createdSeasonIds - cleaned by outer afterAll
-
-        test('POST /api/admin/season/[id]/scaffold-prebookings should create orders for inhabitants with preferences', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-            createdSeasonIds.push(season.id!)
-
-            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                context, HouseholdFactory.defaultHouseholdData(testSalt), 2
-            )
-            createdHouseholdIds.push(household.id)
-
-            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            for (const inhabitant of inhabitants) {
-                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
-            }
-
-            const result = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-            expect(result.seasonId).toBe(season.id)
-            expect(result.created).toBeGreaterThan(0)
-
-            // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
-            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            const householdOrders = orders.filter(o => inhabitants.some(i => i.id === o.inhabitantId))
-            expect(householdOrders.length).toBeGreaterThan(0)
-        })
-
-        test('POST /api/admin/season/[id]/scaffold-prebookings should be idempotent', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-            createdSeasonIds.push(season.id!)
-
-            // Season uses default Mon/Wed/Fri cooking days, 7-day window has 3-4 events depending on start day
-            expect(dinnerEvents.length, 'Season should have 3-4 dinner events').toBeGreaterThanOrEqual(3)
-            expect(dinnerEvents.length, 'Season should have 3-4 dinner events').toBeLessThanOrEqual(4)
-
-            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-            )
-            createdHouseholdIds.push(household.id)
-            const inhabitant = inhabitants[0]!
-
-            // Set DINEIN for all days - even if clipped to Mon/Wed/Fri by parallel tests,
-            // the cooking days will still have DINEIN which is what matters for scaffolding
-            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
-
-            const scaffoldResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-            expect(scaffoldResult.seasonId, 'Scaffold should return correct seasonId').toBe(season.id)
-
-            // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
-            const ordersAfterFirst = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
-            expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
-
-            // Second scaffold should be idempotent for THIS test's inhabitant
-            // Note: Other parallel tests may create households, so we check our inhabitant's orders, not global created count
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-            const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
-
-            // Verify idempotency: same orders, same count, no duplicates
-            expect(inhabitantOrdersAfterSecond.length, `Second scaffold: expected ${dinnerEvents.length} orders`).toBe(dinnerEvents.length)
-            expect(inhabitantOrdersAfterSecond.map(o => o.id).sort()).toEqual(inhabitantOrdersAfterFirst.map(o => o.id).sort())
-        })
-
-        test('POST /api/admin/season/[id]/scaffold-prebookings should return 404 for non-existent season', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, 9999999, 404)
-        })
-
-        test('POST /api/admin/season/[id]/scaffold-prebookings should skip inhabitants with NONE preferences', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-            createdSeasonIds.push(season.id!)
-
-            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-            )
-            createdHouseholdIds.push(household.id)
-
-            const allDaysNone = createDefaultDinnerModeMap(DinnerMode.NONE)
-            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysNone}, 200, season.id!)
-
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-            // Use admin endpoint - user-facing /api/order filters by session household
-            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-            const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
-            expect(inhabitantOrders.length).toBe(0)
-        })
-
-        test('POST /api/admin/season/[id]/scaffold-prebookings should not recreate user-cancelled orders', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-            createdSeasonIds.push(season.id!)
-            const firstEvent = dinnerEvents[0]!
-
-            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-            )
-            createdHouseholdIds.push(household.id)
-            const inhabitant = inhabitants[0]!
-
-            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
-
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-            // Use admin endpoint - user-facing /api/order filters by session household
-            const ordersBeforeCancel = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
-            const orderToCancel = ordersBeforeCancel.find(o => o.inhabitantId === inhabitant.id)
-            expect(orderToCancel).toBeDefined()
-
-            // User cancels their order
-            await OrderFactory.deleteOrder(context, orderToCancel!.id)
-
-            // Re-scaffold
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-            // User-cancelled order should NOT be recreated
-            const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
-            const recreatedOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
-            expect(recreatedOrder).toBeUndefined()
-        })
-    })
+    // NOTE: Scaffold Pre-bookings tests moved to tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts
+    // because the admin scaffold endpoint processes ALL households, causing timeouts in parallel
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)

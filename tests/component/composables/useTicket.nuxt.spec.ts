@@ -56,6 +56,37 @@ describe('useTicket', () => {
         })
     })
 
+    describe('findTicketPriceByType', () => {
+        const {TicketTypeSchema} = useBookingValidation()
+        const TicketType = TicketTypeSchema.enum
+
+        it.each([
+            [TicketType.ADULT, TicketType.ADULT, 5000],
+            [TicketType.CHILD, TicketType.CHILD, 3000],
+            [TicketType.BABY, TicketType.BABY, 0]  // Returns first/cheapest BABY
+        ])('GIVEN %s THEN returns ticketType=%s price=%i',
+            (type, expectedType, expectedPrice) => {
+                const {findTicketPriceByType} = useTicket()
+                const result = findTicketPriceByType(type, ticketPrices)
+                expect(result).toBeDefined()
+                expect(result!.ticketType).toBe(expectedType)
+                expect(result!.price).toBe(expectedPrice)
+            }
+        )
+
+        it('GIVEN no ticketPrices THEN returns undefined', () => {
+            const {findTicketPriceByType} = useTicket()
+            expect(findTicketPriceByType(TicketType.ADULT, undefined)).toBeUndefined()
+            expect(findTicketPriceByType(TicketType.ADULT, [])).toBeUndefined()
+        })
+
+        it('GIVEN type not in prices THEN returns undefined', () => {
+            const {findTicketPriceByType} = useTicket()
+            const adultsOnly = ticketPrices.filter(tp => tp.ticketType === TicketType.ADULT)
+            expect(findTicketPriceByType(TicketType.CHILD, adultsOnly)).toBeUndefined()
+        })
+    })
+
     describe('getTicketTypeConfig', () => {
         it.each([
             ['1 year old', new Date('2024-01-01'), 'Baby', 'neutral', 'i-heroicons-face-smile'],
@@ -71,6 +102,30 @@ describe('useTicket', () => {
                 expect(config.icon).toBe(expectedIcon)
             }
         )
+
+        it.each([
+            // priceAtBooking fallback when no birthDate (guest/orphan orders)
+            ['priceAtBooking 0 (baby)', 0, 'Baby', 'neutral'],
+            ['priceAtBooking 1500 (hungry baby)', 1500, 'Baby', 'neutral'],
+            ['priceAtBooking 3000 (child)', 3000, 'Barn', 'success'],
+            ['priceAtBooking 5000 (adult)', 5000, 'Voksen', 'primary'],
+            ['priceAtBooking unmatched', 9999, 'Voksen', 'primary']  // Falls back to ADULT
+        ])('GIVEN no birthDate with %s THEN returns label=%s color=%s',
+            (_, priceAtBooking, expectedLabel, expectedColor) => {
+                const {getTicketTypeConfig} = useTicket()
+                const config = getTicketTypeConfig(null, ticketPrices, referenceDate, priceAtBooking)
+                expect(config.label).toBe(expectedLabel)
+                expect(config.color).toBe(expectedColor)
+            }
+        )
+
+        it('GIVEN birthDate takes priority over priceAtBooking', () => {
+            const {getTicketTypeConfig} = useTicket()
+            // 25yo = ADULT, but priceAtBooking is 0 (baby price) - birthDate wins
+            const config = getTicketTypeConfig(new Date('2000-01-01'), ticketPrices, referenceDate, 0)
+            expect(config.label).toBe('Voksen')
+            expect(config.color).toBe('primary')
+        })
     })
 
     describe('getTicketPriceForInhabitant', () => {
@@ -134,6 +189,14 @@ describe('useTicket', () => {
             const {resolveTicketPrice} = useTicket()
             expect(resolveTicketPrice(new Date('2020-01-01'), undefined, undefined, referenceDate)).toBeUndefined()
             expect(resolveTicketPrice(new Date('2020-01-01'), undefined, [], referenceDate)).toBeUndefined()
+        })
+
+        it('GIVEN no ADULT price AND unmatched priceAtBooking THEN returns last available price', () => {
+            const {resolveTicketPrice} = useTicket()
+            const childAndBabyOnly = TicketFactory.defaultTicketPrices().filter(tp => tp.ticketType !== 'ADULT')
+            const result = resolveTicketPrice(null, 9999, childAndBabyOnly, referenceDate)
+            expect(result).toBeDefined()
+            expect(result!.ticketType).toBe('CHILD')  // Last in the filtered array
         })
 
         it('GIVEN birthDate takes priority over priceAtBooking', () => {

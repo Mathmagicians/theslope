@@ -97,7 +97,8 @@ describe('useBookingView', () => {
 
     it('defaults to today for missing/invalid date', () => {
       const today = new Date()
-      for (const query of [{}, {date: 'invalid'}, {date: ''}]) {
+      const invalidQueries: Record<string, string>[] = [{}, {date: 'invalid'}, {date: ''}]
+      for (const query of invalidQueries) {
         const {selectedDate} = createBookingView(query)
         expect(selectedDate.value.toDateString()).toBe(today.toDateString())
       }

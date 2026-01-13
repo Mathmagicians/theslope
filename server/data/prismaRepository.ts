@@ -1217,14 +1217,13 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
         // Handle ticket prices using reconcileTicketPrices
-        // NOTE: Order.ticketPriceId has onDelete: SetNull - deleting a TicketPrice orphans orders (ticketPriceId becomes null)
-        // We don't expect ticket prices to be deleted in practice, but if they are, orders become orphaned
+        // Business logic: (ticketType, price) = identity, description change = update, never delete
         if (ticketPrices && ticketPrices.length > 0) {
             const existingPrices = await prisma.ticketPrice.findMany({
                 where: { seasonId: validatedSeasonData.id! }
             })
 
-            const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
+            const { create, update } = reconcileTicketPrices(existingPrices)(ticketPrices)
 
             for (const tp of create) {
                 await prisma.ticketPrice.create({
@@ -1232,7 +1231,6 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                         seasonId: validatedSeasonData.id!,
                         ticketType: tp.ticketType,
                         price: tp.price,
-                        // ADR-012: Use Prisma.skip for optional fields that may be undefined
                         description: tp.description === undefined ? Prisma.skip : tp.description,
                         maximumAgeLimit: tp.maximumAgeLimit === undefined ? Prisma.skip : tp.maximumAgeLimit
                     }
@@ -1242,16 +1240,6 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
             for (const tp of update) {
                 const { id: tpId, seasonId: _seasonId, ...priceData } = tp
                 if (tpId) await prisma.ticketPrice.update({ where: { id: tpId }, data: priceData })
-            }
-
-            for (const tp of toDelete) {
-                if (tp.id) {
-                    try {
-                        await prisma.ticketPrice.delete({ where: { id: tp.id } })
-                    } catch {
-                        console.warn(`🌞 > SEASON > [UPDATE] Cannot delete ticket price ${tp.id} - referenced by orders`)
-                    }
-                }
             }
         }
 

@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {SeasonFactory} from "../testDataFactories/seasonFactory"
+import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 

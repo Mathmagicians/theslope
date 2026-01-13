@@ -216,6 +216,7 @@ export class OrderFactory {
     householdId,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: overrides?.isGuestTicket ?? false,
     ...overrides
   })
 

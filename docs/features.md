@@ -52,7 +52,9 @@ User (Bruger)
 | **Cooking Teams** | Create teams, assign members, set affinities | [Admin Guide](admin-guide.md#cooking-teams) |
 | **Weekly Preferences** | Set DINEIN/TAKEAWAY/NONE per weekday per person | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
 | **Preference Auto-Scaffolding** | Bookings auto-update when preferences change (ADR-015) | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
-| **Meal Booking** | Book/cancel dinners, view calendar | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
+| **Meal Booking** | Book/cancel dinners, day/week/month views (ADR-016) | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
+| **Grid Booking** | Week/month grid with draft state, power mode | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
+| **Guest Tickets** | Add guest tickets with allergy tracking | [User Guide](user-guide.md#sådan-inviterer-du-en-gæst) |
 | **Allergy Management** | Track allergies per inhabitant | [User Guide](user-guide.md#sådan-tilføjer-du-allergier) |
 | **Chef Dashboard** | View team, menu planning, allergen tracking | [Chef Guide](chef-guide.md) |
 | **Heynabo Event Sync** | Announce menus to Heynabo calendar | [Chef Guide](chef-guide.md#annoncér-menu) |
@@ -68,14 +70,14 @@ User (Bruger)
 
 | Feature | Remaining Work |
 |---------|----------------|
-| **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel, ChefCalendarDisplay, AllergenMultiSelector |
+| **Ticket Claim UI** | Backend done, need UI for claiming released tickets |
+| **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel |
 
 ### Planned
 
 | Feature | Description |
 |---------|-------------|
-| **Ticket Swap** | Sell unused tickets to other households |
-| **Guest Tickets** | Buy extra tickets for guests |
+| **Ticket Claim UI** | Claim released tickets from other households (backend ready) |
 | **PBS Export** | Direct PBS file generation |
 | **Chef Budget View** | Calculate budget from ticket counts |
 

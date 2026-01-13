@@ -32,10 +32,13 @@
 import {h, resolveComponent} from 'vue'
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
-import type {TicketType} from '~/composables/useBookingValidation'
+import type {TicketTypeConfig} from '~/composables/useTicket'
 
-// Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
-const {determineTicketType} = useTicket()
+// Design system
+const {SIZES} = useTheSlopeDesignSystem()
+
+// Ticket type config for display (label, color, icon)
+const {getTicketTypeConfig} = useTicket()
 
 interface Props {
   household: HouseholdDetail
@@ -117,7 +120,7 @@ interface TableDataRow {
   lastName: string
   pictureUrl: string | null | undefined
   birthDate: Date | null | undefined
-  ticketType: TicketType
+  ticketConfig: TicketTypeConfig
   allergies: AllergyDisplay[]
 }
 
@@ -158,9 +161,6 @@ const tableData = computed((): TableDataRow[] => {
   if (!props.household?.inhabitants) return []
 
   return props.household.inhabitants.map((inhabitant: InhabitantDisplay) => {
-    // Use ticket composable to determine type (respects maximumAgeLimit from ticket prices)
-    const ticketType = determineTicketType(inhabitant.birthDate ?? null)
-
     // Get allergies for this inhabitant from allergy store
     const inhabitantAllergies = allergies.value.filter((a: AllergyDisplay) => a.inhabitantId === inhabitant.id)
 
@@ -172,7 +172,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      ticketType,
+      ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null),
       allergies: inhabitantAllergies
     }
   })
@@ -273,7 +273,17 @@ const columns = [
             <UserListItem
                 :inhabitants="row.original"
                 compact
-            />
+            >
+              <template #badge>
+                <UBadge
+                    :color="row.original.ticketConfig.color"
+                    variant="subtle"
+                    :size="SIZES.xs"
+                >
+                  {{ row.original.ticketConfig.label }}
+                </UBadge>
+              </template>
+            </UserListItem>
           </template>
 
           <!-- Allergies column (collapsed state) -->
