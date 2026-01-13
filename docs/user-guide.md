@@ -35,11 +35,16 @@ Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdat
 
 | Sektion | Link | Beskrivelse |
 |---------|------|-------------|
-| **Forside** | [skraaningen.dk](https://www.skraaningen.dk) | Log ind og se overblik |
-| **Tilmeldinger** | [skraaningen.dk/household/[din-husstand]/bookings](https://www.skraaningen.dk/household) | Se og book middage |
-| **Husstanden** | [skraaningen.dk/household/[din-husstand]](https://www.skraaningen.dk/household) | Se medlemmer og præferencer |
-| **Middagskalender** | [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner) | Se kommende middage |
-| **Chef-side** | [skraaningen.dk/chef](https://www.skraaningen.dk/chef) | Administrer madlavningsdage |
+| **Forside** | [skraaningen.dk](https://www.skraaningen.dk) | Log ind for at se kommende middage, booke pladser og administrere din husstand |
+| **Middagskalender** | [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner) | Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem spisesal, takeaway og sen spisning, ændre tilmelding for en dato, tilmelde en gæst, eller købe andres billetter som er sat til salg |
+| **Chef-side** | [skraaningen.dk/chef](https://www.skraaningen.dk/chef) | Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier |
+| | | |
+| **Husstand** | | |
+| › Medlemmer | [.../members](https://www.skraaningen.dk/household) | Power mode opdaterer alle medlemmer samtidigt. Klik på blyanten for at redigere enkeltpersoner. Udvid rækken for at se valgmuligheder. Ændringer gemmes når du trykker Gem |
+| › Bookinger | [.../bookings](https://www.skraaningen.dk/household) | Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer |
+| › Allergier | [.../allergies](https://www.skraaningen.dk/household) | Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer |
+| › Økonomi | [.../economy](https://www.skraaningen.dk/household) | Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer |
+| › Indstillinger | [.../settings](https://www.skraaningen.dk/household) | Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer |
 
 ---
 
@@ -55,6 +60,9 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
 | ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
 | ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
+| ![Frigiv](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%23f59e0b) | **Frigiv** | Sæt din billet til salg efter deadline |
+| ![Låst](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Låst** | Deadline passeret - kun frigiv mulig |
+| ![Overtag](https://api.iconify.design/heroicons:hand-raised.svg?height=20&color=%2322c55e) | **Overtag** | Køb en frigivet billet fra en anden |
 
 ---
 
