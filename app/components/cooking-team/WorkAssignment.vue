@@ -33,6 +33,10 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const emit = defineEmits<{
+  (e: 'role-assigned'): void
+}>()
+
 // Design system
 const { COMPONENTS, ICONS } = useTheSlopeDesignSystem()
 
@@ -68,7 +72,8 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
       currentInhabitant.value.id,
       role
     )
-    // Success feedback could be added here
+    // Notify parent to refresh data (chef icon in ChefMenuCard)
+    emit('role-assigned')
   } catch (error) {
     console.error('Failed to assign role:', error)
     // Error feedback could be added here

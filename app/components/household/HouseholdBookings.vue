@@ -143,55 +143,46 @@ const handleAddGuest = (eventId: number) => {
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <div v-else-if="isSelectedSeasonInitialized && selectedSeason" data-testid="household-bookings">
-    <!-- Grid view (week/month): Full-width without calendar -->
-    <template v-if="isGridView && deadlines">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold">Familiens bookinger</h3>
-        <BookingViewSwitcher v-model="view" />
+    <!-- Layout: Calendar sidebar for day/week views, full-width for month -->
+    <div :class="view === 'month' ? '' : 'grid grid-cols-1 lg:grid-cols-3 gap-6'">
+      <!-- Calendar sidebar (day/week views only) -->
+      <div v-if="view !== 'month'" class="lg:col-span-1">
+        <DinnerCalendarDisplay
+          :season-dates="seasonDates"
+          :holidays="holidays"
+          :dinner-events="dinnerEvents"
+          :lock-status="lockStatus"
+          :selected-date="selectedDate"
+          :number-of-months="1"
+          @date-selected="handleDateSelected"
+        />
       </div>
-      <BookingGridView
-        v-model:form-mode="gridFormMode"
-        :view="view"
-        :date-range="dateRange"
-        :household="household"
-        :dinner-events="dinnerEvents"
-        :orders="orders"
-        :ticket-prices="ticketPrices"
-        :deadlines="deadlines"
-        :is-saving="isProcessingBookings"
-        @save="handleGridSave"
-        @navigate="handleNavigate"
-        @add-guest="handleAddGuest"
-      />
-    </template>
 
-    <!-- Day view: Master-detail with calendar -->
-    <template v-else>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Master: Calendar -->
-        <div class="lg:col-span-1">
-          <DinnerCalendarDisplay
-            :season-dates="seasonDates"
-            :holidays="holidays"
-            :dinner-events="dinnerEvents"
-            :lock-status="lockStatus"
-            :selected-date="selectedDate"
-            :number-of-months="1"
-            @date-selected="handleDateSelected"
-          />
+      <!-- Booking panel (all views) -->
+      <div :class="view === 'month' ? '' : 'lg:col-span-2'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold">Familiens bookinger</h3>
+          <BookingViewSwitcher v-model="view" />
         </div>
-
-        <!-- Detail: Familiens bookinger -->
-        <div class="lg:col-span-2">
-          <UCard>
-            <template #header>
-              <div class="flex items-center justify-between">
-                <h3 class="text-sm font-semibold">Familiens bookinger</h3>
-                <BookingViewSwitcher v-model="view" />
-              </div>
-            </template>
+        <BookingGridView
+          v-if="deadlines"
+          v-model:form-mode="gridFormMode"
+          :view="view"
+          :date-range="dateRange"
+          :household="household"
+          :dinner-events="dinnerEvents"
+          :orders="orders"
+          :ticket-prices="ticketPrices"
+          :deadlines="deadlines"
+          :is-saving="isProcessingBookings"
+          @save="handleGridSave"
+          @navigate="handleNavigate"
+          @add-guest="handleAddGuest"
+        >
+          <!-- Day view content via slot -->
+          <template #day-content>
             <DinnerBookingForm
-              v-if="selectedDinnerEvent && deadlines"
+              v-if="selectedDinnerEvent"
               :household="household"
               :dinner-event="selectedDinnerEvent"
               :orders="orders"
@@ -207,10 +198,10 @@ const handleAddGuest = (eventId: number) => {
               title="Vælg en dato"
               description="Klik på en dato i kalenderen for at se og redigere bookinger"
             />
-          </UCard>
-        </div>
+          </template>
+        </BookingGridView>
       </div>
-    </template>
+    </div>
   </div>
   <UAlert
     v-else

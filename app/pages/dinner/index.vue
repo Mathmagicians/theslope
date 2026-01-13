@@ -133,7 +133,7 @@ const { DinnerEventDetailSchema, OrderDisplaySchema } = useBookingValidation()
 const {
   data: dinnerEventDetail,
   status: dinnerEventDetailStatus,
-  refresh: _refreshDinnerEventDetail
+  refresh: refreshDinnerEventDetail
 } = useAsyncData(
   computed(() => `dinner-detail-${selectedDinnerId.value || 'null'}`),
   () => selectedDinnerId.value
@@ -178,7 +178,7 @@ const {
 
 // Helper to refresh both data sources after booking changes
 const refreshBookingData = async () => {
-  await Promise.all([_refreshDinnerEventDetail(), _refreshHouseholdOrders()])
+  await Promise.all([refreshDinnerEventDetail(), _refreshHouseholdOrders()])
 }
 
 // ADR-016: Unified booking handler via scaffold endpoint
@@ -322,7 +322,7 @@ useHead({
           >
             <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
           </UAlert>
-          <WorkAssignment :dinner-event="dinnerEventDetail"/>
+          <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
         </template>
       </template>
 

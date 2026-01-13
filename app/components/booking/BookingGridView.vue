@@ -363,23 +363,12 @@ const getEventLockStatus = (event: DinnerEventDisplay): { config: typeof _BOOKIN
 const navigationLabel = computed(() => {
   if (!props.dateRange.start || !props.dateRange.end) return ''
 
-  if (props.view === 'week') {
-    const weekNum = getWeekNumber(props.dateRange.start)
-    const startDay = props.dateRange.start.getDate()
-    const endDay = props.dateRange.end.getDate()
-    const monthName = props.dateRange.start.toLocaleDateString('da-DK', { month: 'short' })
-    return `Uge ${weekNum} (${startDay}-${endDay} ${monthName})`
+  switch (props.view) {
+    case 'day': return formatFullWeekdayDate(props.dateRange.start)
+    case 'week': return formatWeekRange(props.dateRange.start, props.dateRange.end)
+    default: return formatMonthYear(props.dateRange.start)
   }
-  return props.dateRange.start.toLocaleDateString('da-DK', { month: 'long', year: 'numeric' })
 })
-
-const getWeekNumber = (date: Date): number => {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-}
 
 // ============================================================================
 // GUEST ORDERS
@@ -444,8 +433,14 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
       />
     </div>
 
-    <!-- Grid Table -->
+    <!-- Day view: slot for DinnerBookingForm -->
+    <template v-if="view === 'day'">
+      <slot name="day-content" />
+    </template>
+
+    <!-- Grid Table (week/month only) -->
     <UTable
+      v-else
       v-model:column-pinning="columnPinning"
       sticky
       :data="tableData"

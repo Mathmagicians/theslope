@@ -648,11 +648,19 @@ export const calculateDeadlineUrgency = (
 /**
  * Get dinner events for a grid view grouped by week.
  * Single pass reduce over sorted events.
+ *
+ * For single-day ranges: returns only events on that exact day (no week completion).
  */
 export const getEventsForGridView = <T extends { date: Date }>(
     events: T[],
     range: DateRange
 ): T[][] => {
+    // Single day range = return only that day's events (no week completion)
+    if (isSameDay(range.start, range.end)) {
+        const dayEvents = events.filter(e => isSameDay(e.date, range.start))
+        return dayEvents.length > 0 ? [dayEvents] : []
+    }
+
     type Acc = { weeks: T[][], firstDate: Date | null, lastDate: Date | null }
 
     const addToWeeks = (weeks: T[][], event: T): T[][] => {

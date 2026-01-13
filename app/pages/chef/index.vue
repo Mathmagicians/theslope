@@ -424,7 +424,7 @@ useHead({
             >
               <template #title>Intet madhold tildelt endnu</template>
             </UAlert>
-            <WorkAssignment :dinner-event="dinnerEventDetail"/>
+            <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
           </template>
         </template>
 

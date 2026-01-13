@@ -276,6 +276,35 @@ export function formatCompactWeekdayDate(date: Date): string {
 }
 
 /**
+ * Format date with full weekday and dd/MM (for day view navigation)
+ * @param date - Date to format
+ * @returns Formatted string like "Tirsdag 14/01"
+ */
+export function formatFullWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEEE dd/MM')
+}
+
+/**
+ * Format month and year (for month view navigation)
+ * @param date - Date to format
+ * @returns Formatted string like "Januar 2026"
+ */
+export function formatMonthYear(date: Date): string {
+    return formatDate(date, 'MMMM yyyy')
+}
+
+/**
+ * Format week range (for week view navigation)
+ * @param start - Start of week
+ * @param end - End of week
+ * @returns Formatted string like "Uge 3: 13/01-19/01"
+ */
+export function formatWeekRange(start: Date, end: Date): string {
+    const weekNum = getISOWeek(start)
+    return `Uge ${weekNum}: ${formatDate(start, 'dd/MM')}-${formatDate(end, 'dd/MM')}`
+}
+
+/**
  * Calculate countdown from current time to target time
  * Shows days when >24h away, hours and minutes when <24h away
  * @param targetDate - Target date/time (e.g., dinner time)

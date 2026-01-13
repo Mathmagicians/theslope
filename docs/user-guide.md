@@ -113,8 +113,8 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 
 > **Tip:** Ændringer gemmes først når du klikker Gem. Du kan frit eksperimentere og annullere.
 
-![Grid booking](screenshots/dinner/booking-form-power-mode.png)
-*Power mode: Ændr alle familiemedlemmer på én gang*
+![Ugevisning](screenshots/dinner/booking-grid-week.png)
+*Ugevisning: Overblik over hele ugens tilmeldinger*
 
 ### Forklaring
 

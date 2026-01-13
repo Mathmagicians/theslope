@@ -32,14 +32,23 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const ordersKey = computed(() => `/api/order?${buildOrdersQuery()}`)
 
+    // Only fetch when filters are explicitly set (prevents fetching ALL orders on init)
+    const hasFilters = computed(() =>
+        selectedDinnerEventIds.value.length > 0 || selectedInhabitantId.value !== null
+    )
+
     const {
         data: orders, status: ordersStatus,
         error: ordersError, refresh: refreshOrders
     } = useAsyncData<OrderDisplay[]>(
         ordersKey,
-        () => requestFetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`, {
-            onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente bookinger') }
-        }),
+        () => {
+            // Skip fetch until filters are set (prevents initial "fetch all" on store init)
+            if (!hasFilters.value) return Promise.resolve([])
+            return requestFetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente bookinger') }
+            })
+        },
         {
             default: () => [],
             transform: (data: unknown[]) => {
@@ -94,13 +103,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         selectedDinnerEventIds.value = []
         includeProvenance.value = withProvenance
         console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}${withProvenance ? ' (with provenance)' : ''}`)
-    }
-
-    const loadAllOrders = (withProvenance = false) => {
-        selectedDinnerEventIds.value = []
-        selectedInhabitantId.value = null
-        includeProvenance.value = withProvenance
-        console.info(CTX, `Loading all orders${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
@@ -429,7 +431,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // actions
         loadOrdersForDinners,
         loadOrdersForInhabitant,
-        loadAllOrders,
         createOrder,
         deleteOrder,
         updateOrder,

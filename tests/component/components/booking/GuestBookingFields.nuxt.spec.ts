@@ -33,14 +33,15 @@ describe('GuestBookingFields', () => {
 
   it.each(allergyCases)('allergy select visible=$visible when options=$options.length', async ({options, visible}) => {
     const wrapper = await mount({allergyOptions: options})
-    expect(wrapper.find('[name="guest-allergies"]').exists()).toBe(visible)
+    expect(wrapper.find('[data-testid="guest-allergies"]').exists()).toBe(visible)
   })
 
   it('defaults to adult ticket and count=1', async () => {
     const wrapper = await mount()
     await flushPromises()
     expect(wrapper.emitted('update:ticketPriceId')?.[0]).toEqual([adultPrice?.id])
-    expect(wrapper.find('input[name="guest-count"]').element.value).toBe('1')
+    const input = wrapper.find('input[name="guest-count"]').element as HTMLInputElement
+    expect(input.value).toBe('1')
   })
 
   it('emits guestCount on change', async () => {

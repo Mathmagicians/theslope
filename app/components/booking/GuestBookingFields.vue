@@ -64,7 +64,7 @@ const ticketOptions = computed(() =>
       multiple
       placeholder="Vælg allergier..."
       :size="SIZES.small"
-      name="guest-allergies"
+      data-testid="guest-allergies"
     />
   </UFormField>
 </template>

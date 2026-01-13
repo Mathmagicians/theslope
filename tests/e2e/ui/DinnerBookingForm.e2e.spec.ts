@@ -203,4 +203,26 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
         // Documentation screenshot
         await doScreenshot(page, 'dinner/booking-form-guest-added', true)
     })
+
+    for (const view of ['week', 'month'] as const) {
+        test(`GIVEN bookings page WHEN user switches to ${view} view THEN grid displays`, async ({page, browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const testDinnerEvent = await getFutureDinnerEvent(adminContext, 0)
+
+            // GIVEN: Navigate to household bookings page (defaults to day view)
+            await goToBookingsPage(page, testDinnerEvent.date)
+
+            // WHEN: Click view button
+            const viewButton = page.getByTestId(`booking-view-${view}`)
+            await expect(viewButton).toBeVisible({timeout: 5000})
+            await viewButton.click()
+
+            // THEN: Grid view should be visible
+            const gridView = page.getByTestId('booking-grid-view')
+            await expect(gridView).toBeVisible({timeout: 10000})
+
+            // Documentation screenshot
+            await doScreenshot(page, `dinner/booking-grid-${view}`, true)
+        })
+    }
 })

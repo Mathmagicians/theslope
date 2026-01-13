@@ -153,9 +153,12 @@ d1-list-tables:
 d1-list-tables-local:
 	$(call d1_exec,theslope,PRAGMA table_list,--local)
 
-d1-nuke-seasons:
-	$(call d1_exec,theslope,DELETE FROM Season WHERE ShortName LIKE 'Test%',)
-	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
+d1-nuke-seasons: ## Delete test seasons (local) - any season with 'Test' in name
+	@echo "🔍 Seasons to delete:"
+	$(call d1_exec,theslope,SELECT COUNT(id) as count FROM Season WHERE shortName LIKE '%Test%',--local)
+	$(call d1_exec,theslope,DELETE FROM Season WHERE shortName LIKE '%Test%',--local)
+	@echo "✅ Remaining test seasons:"
+	$(call d1_exec,theslope,SELECT COUNT(id) as count FROM Season WHERE shortName LIKE '%Test%',--local)
 
 d1-nuke-households: ## Delete test households (local)
 	@echo "🧹 Cleaning up test households..."
