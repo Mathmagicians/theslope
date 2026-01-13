@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -11,6 +11,9 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 const { headers, salt, temporaryAndRandom } = testHelpers
+
+// API endpoints
+const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
@@ -490,4 +493,121 @@ export class OrderFactory {
       }
     }))
   }
+
+  // === SCAFFOLD ORDERS (ADR-016 Unified Booking) ===
+
+  /**
+   * Default DesiredOrder for scaffold operations
+   * @param overrides - Override any field
+   * @returns DesiredOrder with defaults for a BOOKED order
+   */
+  static readonly defaultDesiredOrder = (overrides?: Partial<DesiredOrder>): DesiredOrder => ({
+    inhabitantId: 1,
+    dinnerEventId: 1,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    ticketPriceId: 1,
+    isGuestTicket: false,
+    state: OrderStateSchema.enum.BOOKED,
+    ...overrides
+  })
+
+  /**
+   * Default ScaffoldOrdersRequest
+   * @param overrides - Override any field
+   */
+  static readonly defaultScaffoldRequest = (overrides?: Partial<ScaffoldOrdersRequest>): ScaffoldOrdersRequest => ({
+    householdId: 1,
+    dinnerEventIds: [1],
+    orders: [OrderFactory.defaultDesiredOrder()],
+    ...overrides
+  })
+
+  /**
+   * Scaffold orders via household endpoint (POST /api/household/order/scaffold)
+   * ADR-016: Unified booking mutation - creates, updates, releases, and deletes orders
+   *
+   * @param context - Browser context for API requests
+   * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @returns ScaffoldOrdersResponse with householdId and scaffoldResult
+   */
+  static readonly scaffoldOrders = async (
+    context: BrowserContext,
+    request: ScaffoldOrdersRequest,
+    expectedStatus: number = 200
+  ): Promise<ScaffoldOrdersResponse | null> => {
+    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
+
+    const response = await context.request.post(HOUSEHOLD_SCAFFOLD_ENDPOINT, {
+      headers,
+      data: request
+    })
+
+    const status = response.status()
+    const responseBody = await response.text()
+
+    expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      const parsed = JSON.parse(responseBody)
+      return ScaffoldOrdersResponseSchema.parse(parsed)
+    }
+
+    return null
+  }
+
+  /**
+   * Create a DesiredOrder for booking (BOOKED state, specific mode)
+   * Uses defaultDesiredOrder with booking-specific overrides
+   */
+  static readonly createBookingOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    orderId?: number
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    orderId
+  })
+
+  /**
+   * Create a DesiredOrder for release (RELEASED state, NONE mode)
+   * Uses defaultDesiredOrder with release-specific overrides
+   */
+  static readonly createReleaseOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    orderId: number
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode: DinnerModeSchema.enum.NONE,
+    state: OrderStateSchema.enum.RELEASED,
+    orderId
+  })
+
+  /**
+   * Create a guest DesiredOrder
+   * Uses defaultDesiredOrder with guest-specific overrides
+   */
+  static readonly createGuestOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    allergyTypeIds?: number[]
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    isGuestTicket: true,
+    allergyTypeIds
+  })
 }

@@ -119,14 +119,33 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 
 ### Sådan bestiller du takeaway
 
-1. Gå til **Tilmeldinger**
+1. Gå til [Tilmeldinger](https://www.skraaningen.dk/household)
 2. Find datoen og klik på den
 3. Skift til **🛍️ Takeaway** i stedet for Spis/Sen
 4. Hent maden i køkkenet på middagstidspunktet
 
-> **Tip:** Du kan også sætte takeaway som standard i dine ugentlige præferencer.
+> **Tip:** Du kan også sætte takeaway som standard under [Præferencer](https://www.skraaningen.dk/household).
 
 ![Takeaway valg](screenshots/household/household-bookings.png)
+
+### Sådan inviterer du en gæst
+
+Du kan tilmelde gæster til fællesspisning - de tilknyttes dig som vært.
+
+1. Gå til [Tilmeldinger](https://www.skraaningen.dk/household)
+2. Find datoen i kalenderen og klik på den
+3. Klik på **+** ud for **Tilføj gæst**
+4. Vælg billettype (Voksen, Barn eller Baby)
+5. Tilføj evt. gæstens allergier
+6. Vælg antal gæster (hvis flere af samme type)
+7. Vælg spisningsform (Spisesal, Sen eller Takeaway)
+8. Klik **Tilføj gæst**
+
+Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
+
+![Tilføj gæst](screenshots/dinner/booking-form-after-save.png)
+
+> **Bemærk:** Gæstebilletter faktureres til din husstand via PBS.
 
 ### Sådan ser du din PBS-faktura
 

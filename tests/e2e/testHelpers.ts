@@ -167,15 +167,17 @@ async function selectDropdownOption(
  * @example
  * const { householdId, inhabitantId } = await getSessionUserInfo(context)
  */
-async function getSessionUserInfo(context: BrowserContext): Promise<{ householdId: number, inhabitantId: number }> {
+async function getSessionUserInfo(context: BrowserContext): Promise<{ householdId: number, inhabitantId: number, householdShortname: string }> {
     const response = await context.request.get('/api/_auth/session', { headers })
     expect(response.status()).toBe(200)
     const session = await response.json()
     const householdId = session.user?.Inhabitant?.householdId
     const inhabitantId = session.user?.Inhabitant?.id
+    const householdShortname = session.user?.Inhabitant?.household?.shortName
     expect(householdId, 'Session user must have householdId').toBeDefined()
     expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
-    return { householdId, inhabitantId }
+    expect(householdShortname, 'Session user must have householdShortname').toBeDefined()
+    return { householdId, inhabitantId, householdShortname }
 }
 
 const testHelpers = {

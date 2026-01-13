@@ -215,12 +215,16 @@ export async function createOrders(
     auditContext: AuditContext
 ): Promise<CreateOrdersResult> {
     console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household ${householdId}`)
+    const {OrderCreateWithPriceSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+
+    // Parse through schema to apply defaults (e.g., isGuestTicket: false)
+    const validatedOrders = ordersData.map(order => OrderCreateWithPriceSchema.parse(order))
 
     try {
         // Insert orders with createManyAndReturn (Prisma 5.14+, returns IDs)
         const createdOrders = await prisma.order.createManyAndReturn({
-            data: ordersData.map(order => ({
+            data: validatedOrders.map(order => ({
                 dinnerEventId: order.dinnerEventId,
                 inhabitantId: order.inhabitantId,
                 bookedByUserId: order.bookedByUserId,
@@ -244,7 +248,7 @@ export async function createOrders(
                 performedByUserId: auditContext.performedByUserId,
                 auditData: JSON.stringify({
                     source: auditContext.source,
-                    orderData: ordersData[index]
+                    orderData: validatedOrders[index]
                 })
             }))
         })

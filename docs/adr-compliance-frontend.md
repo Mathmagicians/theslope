@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-01-03 (Added TableSearchPagination, updated households.ts with preference actions)
+**Last Updated:** 2026-01-13 (ADR-016 booking components: BookingGridView, GuestBookingFields, useBookingView)
 
 ## Legend
 
@@ -110,7 +110,11 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useOrderValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
+| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
+| `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
+| `GuestBookingFields.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** - Guest ticket form |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings` | `useBookingsStore()` | `useBooking()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** - ADR-016 booking form |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
@@ -133,10 +137,10 @@
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - Added `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()` actions |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
-| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks |
+| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `tickets.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
-| `bookings.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **✅ COMPLIANT** - ADR-016 scaffold methods, `useRequestFetch()` for SSR |
 
 ## Composable Compliance
 
@@ -152,7 +156,8 @@
 | `useOrderValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useDinnerEventValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Dinner step states, Heynabo payload, deadline labels |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, deadline labels |
+| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ❌ | **⚠️ MISSING TESTS** - ADR-006 URL-synced view/date for booking calendar |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -482,6 +487,7 @@ Reference these components for correct ADR implementation:
 - ✅ `useSeasonValidation()` - ADR-001 three-layer architecture (imports from generated, re-exports enums, defines validation schemas)
 - ✅ `useOrderValidation()` - ADR-001 validation layer pattern with ADR-010 domain types
 - ✅ `useCookingTeam()` - Business logic composable with tests (imports from validation layer)
+- ✅ `useBooking()` - ADR-016 order decision logic (`decideOrderAction`, bucket resolvers)
 - ✅ `useEntityFormManager()` - Form management pattern
 - ✅ `useTabNavigation()` - URL navigation pattern
 

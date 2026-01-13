@@ -27,6 +27,7 @@ const OrderState = OrderStateSchema.enum
 test.describe('DinnerBookingForm - User Booking Interactions', () => {
     let householdId: number
     let inhabitantId: number
+    let householdShortname: string
 
     test.use({storageState: memberUIFile})
 
@@ -37,12 +38,15 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
         const sessionInfo = await getSessionUserInfo(memberContext)
         householdId = sessionInfo.householdId
         inhabitantId = sessionInfo.inhabitantId
+        householdShortname = sessionInfo.householdShortname
     })
 
     /**
-     * Helper to get next future dinner event fresh from the API
+     * Helper to get a future dinner event by index (for parallel test isolation)
+     * @param adminContext - Authenticated browser context
+     * @param eventIndex - Index of future event to use (0 = first, 1 = second, etc.)
      */
-    const getNextFutureDinnerEvent = async (adminContext: Awaited<ReturnType<typeof validatedBrowserContext>>) => {
+    const getFutureDinnerEvent = async (adminContext: Awaited<ReturnType<typeof validatedBrowserContext>>, eventIndex: number = 0) => {
         const activeSeason = await SeasonFactory.createActiveSeason(adminContext)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
@@ -51,26 +55,23 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
             .filter(e => new Date(e.date) >= today)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-        expect(futureEvents.length, 'Should have future dinner events').toBeGreaterThan(0)
-        return {id: futureEvents[0]!.id, date: new Date(futureEvents[0]!.date)}
+        expect(futureEvents.length, `Should have at least ${eventIndex + 1} future dinner events`).toBeGreaterThan(eventIndex)
+        return {id: futureEvents[eventIndex]!.id, date: new Date(futureEvents[eventIndex]!.date)}
     }
 
-    // Helper to navigate to dinner page and wait for booking table
-    const goToDinnerPage = async (page: import('@playwright/test').Page, date: Date) => {
+    // Helper to navigate to household bookings page and wait for booking table
+    const goToBookingsPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
-        await page.goto(`/dinner?date=${dateParam}`)
+        await page.goto(`/household/${householdShortname}/bookings?date=${dateParam}`)
         await expect(page.getByTestId('booking-table')).toBeVisible({timeout: 15000})
     }
 
     test('GIVEN inhabitant row WHEN user changes mode to TAKEAWAY THEN order is updated', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
+        const testDinnerEvent = await getFutureDinnerEvent(adminContext, 0) // Uses first future event
 
-        // GIVEN: Navigate to dinner page
-        await goToDinnerPage(page, testDinnerEvent.date)
-
-        // Debug screenshot to see the page state
-        await doScreenshot(page, 'dinner/debug-booking-form-loaded')
+        // GIVEN: Navigate to household bookings page
+        await goToBookingsPage(page, testDinnerEvent.date)
 
         // Debug: collect testids for assertion message
         const allTestIds = await page.locator('[data-testid]').evaluateAll(
@@ -116,15 +117,15 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
 
     test('GIVEN power mode row WHEN user selects DINEIN THEN all inhabitants get orders', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
+        const testDinnerEvent = await getFutureDinnerEvent(adminContext, 1) // Uses second future event
 
         // Get household details to know how many inhabitants
         const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
         const inhabitantCount = household?.inhabitants?.length ?? 0
         expect(inhabitantCount, 'Household should have inhabitants').toBeGreaterThan(0)
 
-        // GIVEN: Navigate to dinner page
-        await goToDinnerPage(page, testDinnerEvent.date)
+        // GIVEN: Navigate to household bookings page
+        await goToBookingsPage(page, testDinnerEvent.date)
 
         // GIVEN: Find and expand the power mode row
         const powerToggle = page.getByTestId('power-power-mode-toggle')
@@ -167,10 +168,10 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
 
     test('GIVEN guest row WHEN user adds guest ticket THEN guest order is created', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        const testDinnerEvent = await getNextFutureDinnerEvent(adminContext)
+        const testDinnerEvent = await getFutureDinnerEvent(adminContext, 2) // Uses third future event
 
-        // GIVEN: Navigate to dinner page
-        await goToDinnerPage(page, testDinnerEvent.date)
+        // GIVEN: Navigate to household bookings page
+        await goToBookingsPage(page, testDinnerEvent.date)
 
         // GIVEN: Find and expand the add guest row
         const guestToggle = page.getByTestId('guest-add-guest-toggle')

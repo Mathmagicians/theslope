@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-05 (Consolidated chef dinner endpoint, household preferences endpoint)
+**Last Updated:** 2026-01-13 (ADR-016 unified booking scaffold endpoint)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -78,6 +78,8 @@
 | `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Consolidated: menu, state (announce/cancel), allergens. Heynabo: user token for announce, fallback to system token for menu sync |
 | **Household - Preferences** | | | | | **✅ FULLY COMPLIANT (2026-01-05)**                                                               |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
+| **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -123,3 +125,4 @@ Reference these endpoints for correct ADR-002 implementation:
 - ✅ `/api/order/[id].delete.ts` - DELETE pattern with validation
 - ✅ `/api/team/cooking/[id]/assign-role.post.ts` - Full ADR-001 & ADR-010 compliance with repository pattern
 - ✅ `/api/chef/dinner/[id].post.ts` - Consolidated chef endpoint with ADR-013 Heynabo token pattern
+- ✅ `/api/household/order/scaffold.post.ts` - ADR-016 unified booking with ADR-002 error handling

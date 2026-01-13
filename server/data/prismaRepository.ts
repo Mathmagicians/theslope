@@ -1216,7 +1216,9 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     // Exclude id and read-only relation fields from update
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
-        // Handle ticket prices using reconcileTicketPrices to respect FK constraint (Order.ticketPriceId onDelete: Restrict)
+        // Handle ticket prices using reconcileTicketPrices
+        // NOTE: Order.ticketPriceId has onDelete: SetNull - deleting a TicketPrice orphans orders (ticketPriceId becomes null)
+        // We don't expect ticket prices to be deleted in practice, but if they are, orders become orphaned
         if (ticketPrices && ticketPrices.length > 0) {
             const existingPrices = await prisma.ticketPrice.findMany({
                 where: { seasonId: validatedSeasonData.id! }

@@ -73,16 +73,16 @@ export const useTicketPriceValidation = () => {
 
     /**
      * Curried reconcile function for ticket prices
-     * Used to compare existing vs incoming ticket prices and categorize into create/update/idempotent/delete
+     * Reconciles on functional content of ticket price (ticketType, price, description, maximumAgeLimit)
      *
-     * Respects FK constraint: Order.ticketPriceId has onDelete: Restrict
+     * NOTE: Order.ticketPriceId has onDelete: SetNull - deleting orphans orders (not expected in practice)
      */
-    const reconcileTicketPrices = pruneAndCreate<TicketPrice, TicketPrice, number>(
-        tp => tp.id,
-        (a, b) => a.price === b.price &&
-                  a.ticketType === b.ticketType &&
-                  a.description === b.description &&
-                  a.maximumAgeLimit === b.maximumAgeLimit
+    const ticketPriceKey = (tp: TicketPrice): string =>
+        `${tp.ticketType}:${tp.price}:${tp.description ?? ''}:${tp.maximumAgeLimit ?? ''}`
+
+    const reconcileTicketPrices = pruneAndCreate<TicketPrice, TicketPrice, string>(
+        ticketPriceKey,
+        () => true
     )
 
     return {
