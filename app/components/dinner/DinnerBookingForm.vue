@@ -661,6 +661,7 @@ const allergyOptions = computed(() =>
               :is-released="isOrderReleased(row.original.orderState)"
               :is-claimed="isTicketClaimed(row.original)"
               :guest-count="row.original.guestCount"
+              :ticket-count="row.original.ticketCount"
               :allergies="row.original.provenanceAllergies"
               :provenance-household="row.original.provenanceHousehold"
             />
@@ -688,6 +689,7 @@ const allergyOptions = computed(() =>
             :is-released="isOrderReleased(row.original.orderState)"
             :is-claimed="isTicketClaimed(row.original)"
             :guest-count="row.original.guestCount"
+            :ticket-count="row.original.ticketCount"
             :allergies="row.original.provenanceAllergies"
             :provenance-household="row.original.provenanceHousehold"
           />

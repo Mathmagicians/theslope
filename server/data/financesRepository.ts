@@ -227,7 +227,8 @@ export async function createOrders(
                 ticketPriceId: order.ticketPriceId,
                 priceAtBooking: order.priceAtBooking,
                 dinnerMode: order.dinnerMode,
-                state: order.state
+                state: order.state,
+                isGuestTicket: order.isGuestTicket
             })),
             select: { id: true }
         })

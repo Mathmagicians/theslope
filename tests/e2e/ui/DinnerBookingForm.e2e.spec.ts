@@ -177,18 +177,9 @@ test.describe('DinnerBookingForm - User Booking Interactions', () => {
         await expect(guestToggle).toBeVisible({timeout: 10000})
         await guestToggle.click()
 
-        // WHEN: Wait for guest form and select ticket type
+        // WHEN: Wait for guest form to expand (ticket type auto-defaults to ADULT)
         const ticketSelect = page.getByTestId('guest-ticket-type-select')
-        await pollUntil(
-            async () => await ticketSelect.isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            5
-        )
-        await ticketSelect.click()
-
-        // Select first available ticket type (ADULT)
-        const adultOption = page.getByRole('option', {name: /voksen/i}).first()
-        await adultOption.click()
+        await expect(ticketSelect).toBeVisible({timeout: 10000})
 
         // WHEN: Save the guest booking
         const saveButton = page.getByTestId('guest-add-guest-save')

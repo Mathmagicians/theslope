@@ -167,7 +167,8 @@ export const useBookingValidation = () => {
         ticketPriceId: z.number().int().positive(),
         priceAtBooking: z.number().int().optional(),
         dinnerMode: DinnerModeSchema,
-        state: OrderStateSchema
+        state: OrderStateSchema,
+        isGuestTicket: z.boolean().default(false)
     })
 
     // ============================================================================
