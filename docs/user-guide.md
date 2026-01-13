@@ -116,9 +116,9 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 ![Grid booking](screenshots/dinner/booking-form-power-mode.png)
 *Power mode: Ændr alle familiemedlemmer på én gang*
 
-### Spisningsformer
+### Forklaring
 
-I appen bruges følgende symboler til at vise spisningsform:
+I appen bruges følgende symboler:
 
 | Symbol | Navn | Betydning |
 |:------:|------|-----------|
@@ -126,8 +126,10 @@ I appen bruges følgende symboler til at vise spisningsform:
 | ![Sen](https://api.iconify.design/heroicons:moon.svg?height=20&color=%2322c55e) | **Sen** | Spis i fællessalen til sen spisning |
 | ![Takeaway](https://api.iconify.design/heroicons:shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
 | ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
+| ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
+| ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
 
-I redigeringstilstand klikker du på symbolerne for at skifte mellem tilstandene.
+Klik på en celle for at ændre din booking - den cykler igennem mulighederne. Når du er færdig, husk at trykke **Gem**.
 
 ### Sådan framelder du dig fællesspisning
 
