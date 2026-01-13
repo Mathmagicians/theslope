@@ -33,11 +33,15 @@ const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
 
-const {view, selectedDate, dateRange, setDate, navigate} = useBookingView({
+const {view, selectedDate, dateRange, hasPrev, hasNext, setDate, navigate} = useBookingView({
   syncWhen: () => isSelectedSeasonInitialized.value,
   seasonDates: () => selectedSeason.value?.seasonDates ?? null,
   dinnerDates: () => dinnerEvents.value.map(e => new Date(e.date))
 })
+
+// Calendar collapsed by default on mobile
+const isMd = inject<Ref<boolean>>('isMd')
+const calendarOpen = ref(isMd?.value ?? false)
 
 const handleDateSelected = (date: Date) => setDate(date)
 const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
@@ -144,10 +148,10 @@ const handleAddGuest = (eventId: number) => {
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <div v-else-if="isSelectedSeasonInitialized && selectedSeason" data-testid="household-bookings">
-    <!-- Layout: Calendar sidebar for day/week views, full-width for month -->
-    <div :class="view === 'month' ? '' : 'grid grid-cols-1 lg:grid-cols-3 gap-6'">
-      <!-- Calendar sidebar (day/week views only) -->
-      <div v-if="view !== 'month'" class="lg:col-span-1">
+    <!-- Layout: Flex row on desktop, stack on mobile -->
+    <div class="flex flex-col md:flex-row gap-6">
+      <!-- Calendar sidebar (day/week views only, collapsible) -->
+      <div v-if="view !== 'month' && calendarOpen" class="md:basis-1/3">
         <DinnerCalendarDisplay
           :season-dates="seasonDates"
           :holidays="holidays"
@@ -159,8 +163,8 @@ const handleAddGuest = (eventId: number) => {
         />
       </div>
 
-      <!-- Booking panel (all views) -->
-      <div :class="view === 'month' ? '' : 'lg:col-span-2'">
+      <!-- Booking panel (grows to fill) -->
+      <div class="flex-1">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-semibold">Familiens bookinger</h3>
           <BookingViewSwitcher v-model="view" />
@@ -168,6 +172,7 @@ const handleAddGuest = (eventId: number) => {
         <BookingGridView
           v-if="deadlines"
           v-model:form-mode="gridFormMode"
+          v-model:calendar-open="calendarOpen"
           :view="view"
           :date-range="dateRange"
           :household="household"
@@ -176,6 +181,8 @@ const handleAddGuest = (eventId: number) => {
           :ticket-prices="ticketPrices"
           :deadlines="deadlines"
           :is-saving="isProcessingBookings"
+          :has-prev="hasPrev"
+          :has-next="hasNext"
           @save="handleGridSave"
           @navigate="handleNavigate"
           @add-guest="handleAddGuest"

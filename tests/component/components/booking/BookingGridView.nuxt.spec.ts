@@ -23,8 +23,8 @@ const mockHousehold = {
   moveOutDate: null,
   shortName: 'T1',
   inhabitants: [
-    {id: 1, name: 'Anna', lastName: 'Test', birthDate: new Date('1990-01-01'), heynaboPictureUrl: null, householdId: 1, diningDefaults: {}},
-    {id: 2, name: 'Lars', lastName: 'Test', birthDate: new Date('1988-05-15'), heynaboPictureUrl: null, householdId: 1, diningDefaults: {}}
+    {id: 1, name: 'Anna', lastName: 'Test', birthDate: new Date('1990-01-01'), heynaboId: 101, householdId: 1, dinnerPreferences: null},
+    {id: 2, name: 'Lars', lastName: 'Test', birthDate: new Date('1988-05-15'), heynaboId: 102, householdId: 1, dinnerPreferences: null}
   ]
 }
 

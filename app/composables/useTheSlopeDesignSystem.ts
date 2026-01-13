@@ -683,6 +683,11 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
         return isMd.value ? '3xl' : '2xl'
     },
 
+    // Lock chip: lg on mobile, 3xl on desktop (for booking calendar lock indicators)
+    get lockChip(): NuxtUISize {
+        return isMd.value ? '3xl' : 'lg'
+    },
+
     // Static sizes (for when you need non-responsive)
     xs: 'xs' as const,
     sm: 'sm' as const,

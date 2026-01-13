@@ -123,13 +123,15 @@ const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
 }
 
 // Get lock status config for a day (null if not locked or no lockStatus provided)
-const getLockStatusForDay = (day: DateValue) => {
+// Returns both config and count (same pattern as BookingGridView.getEventLockStatus)
+const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<typeof getLockStatusConfig>>, count: number } | null => {
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(day)
   if (!dinner) return null
   const releasedCount = props.lockStatus.get(dinner.id)
   if (releasedCount === undefined) return null
-  return getLockStatusConfig(releasedCount)
+  const config = getLockStatusConfig(releasedCount)
+  return config ? { config, count: releasedCount } : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
@@ -149,7 +151,7 @@ const getDayColorClass = (type: DayType): string => {
 // Legend item types
 type LegendItem =
   | { label: string; type: 'circle'; circleClass: string }
-  | { label: string; type: 'chip'; chipColor: NuxtUIColor }
+  | { label: string; type: 'chip'; chipColor: NuxtUIColor; showCount: boolean }
 
 // Legend items using design system classes
 const legendItems = computed((): LegendItem[] => {
@@ -163,8 +165,8 @@ const legendItems = computed((): LegendItem[] => {
 
   if (props.lockStatus) {
     items.push(
-      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color },
-      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color }
+      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, showCount: false },
+      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, showCount: true }
     )
   }
 
@@ -239,8 +241,9 @@ const isSelected = (day: DateValue): boolean => {
               <UChip
                 v-else-if="getLockStatusForDay(day) && getDayType(eventLists) !== 'past'"
                 show
-                size="md"
-                :color="getLockStatusForDay(day)!.color"
+                :size="SIZES.lockChip"
+                :color="getLockStatusForDay(day)!.config.color"
+                :text="getLockStatusForDay(day)!.count > 0 ? String(getLockStatusForDay(day)!.count) : undefined"
                 :data-testid="`calendar-dinner-date-${day.day}`"
               >
                 <div
@@ -274,9 +277,9 @@ const isSelected = (day: DateValue): boolean => {
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <!-- Chip for lock indicators -->
-                  <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor">
-                    1
+                  <!-- Chip for lock indicators (text shows released count badge only for "ledige billetter") -->
+                  <UChip v-if="legendItem.type === 'chip'" show :size="SIZES.lockChip" :color="legendItem.chipColor" :text="legendItem.showCount ? '1' : undefined">
+                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, DINNER_CALENDAR.day.future]">1</div>
                   </UChip>
                   <!-- Circle for other indicators -->
                   <div v-else :class="legendItem.circleClass">

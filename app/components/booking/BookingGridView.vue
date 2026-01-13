@@ -88,12 +88,19 @@ interface Props {
   deadlines: SeasonDeadlines
   formMode?: FormMode
   isSaving?: boolean
+  hasPrev?: boolean
+  hasNext?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   formMode: FORM_MODES.VIEW,
-  isSaving: false
+  isSaving: false,
+  hasPrev: true,
+  hasNext: true
 })
+
+// Calendar open state (for toggle in header)
+const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
 
 const emit = defineEmits<{
   save: [changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]]
@@ -417,30 +424,17 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
     <!-- Navigation Header (3-column: spacer | centered nav | edit button) -->
     <div class="flex items-center px-2 py-2 border-b border-default">
       <div class="flex-1" />
-      <div class="flex items-center gap-2">
-        <UButton
-          :icon="ICONS.arrowLeft"
-          :color="COLOR.neutral"
-          variant="ghost"
-          :size="SIZES.md"
-          :disabled="props.isSaving"
-          data-testid="grid-nav-prev"
-          @click="emit('navigate', 'prev')"
-        />
-        <UBadge :color="COLOR.neutral" variant="subtle" :size="SIZES.lg">
-          <UIcon :name="ICONS.calendar" class="size-4 mr-1" />
-          {{ navigationLabel }}
-        </UBadge>
-        <UButton
-          :icon="ICONS.arrowRight"
-          :color="COLOR.neutral"
-          variant="ghost"
-          :size="SIZES.md"
-          :disabled="props.isSaving"
-          data-testid="grid-nav-next"
-          @click="emit('navigate', 'next')"
-        />
-      </div>
+      <CalendarDateNav
+        :open="calendarOpen"
+        :has-prev="props.hasPrev"
+        :has-next="props.hasNext"
+        :disabled="props.isSaving"
+        @prev="emit('navigate', 'prev')"
+        @next="emit('navigate', 'next')"
+        @toggle="calendarOpen = !calendarOpen"
+      >
+        {{ navigationLabel }}
+      </CalendarDateNav>
       <div class="flex-1 flex justify-end">
         <!-- Pencil button to enter edit mode (VIEW only) -->
         <UButton

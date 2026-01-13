@@ -3,6 +3,7 @@ import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 // Mock stores
 const mockHouseholdsStore = {
@@ -18,9 +19,9 @@ mockNuxtImport('storeToRefs', () => (store: typeof mockHouseholdsStore) => ({
 mockNuxtImport('useAllergiesStore', () => () => ({allergyTypes: []}))
 
 const baseProps = {
-  dinnerEvent: {id: 1, date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), seasonId: 1, state: 'SCHEDULED'},
+  dinnerEvent: DinnerEventFactory.defaultDinnerEventDisplay(),
   ticketPrices: TicketFactory.defaultTicketPrices(),
-  deadlines: {canModifyOrders: () => true, canEditDiningMode: () => true}
+  deadlines: {canModifyOrders: () => true, canEditDiningMode: () => true, getOrderCancellationAction: () => null, isAnnounceMenuPastDeadline: () => false}
 }
 
 describe('DinnerBookingForm', () => {
