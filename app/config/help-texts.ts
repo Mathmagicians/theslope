@@ -50,25 +50,25 @@ export const HELP_TEXTS = {
         }
     },
     household: {
-        members: {
-            title: 'Medlemmer',
-            content: '⚡ Power mode opdaterer alle medlemmer samtidigt. ✏️ Klik på blyanten for at redigere enkeltpersoner. ▼ Udvid rækken for at se valgmuligheder. 💾 Ændringer gemmes når du trykker GEM.'
-        },
         bookings: {
-            title: 'Bookinger',
+            title: 'Tilmeldinger',
             content: '🎫 Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer.'
+        },
+        members: {
+            title: 'Præferencer',
+            content: '⚡ Power mode opdaterer alle medlemmer samtidigt. ✏️ Klik på blyanten for at redigere enkeltpersoner. ▼ Udvid rækken for at se valgmuligheder. 💾 Ændringer gemmes når du trykker Gem.'
         },
         allergies: {
             title: 'Allergier',
             content: '⚠️ Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer.'
         },
-        settings: {
-            title: 'Indstillinger',
-            content: '⚙️ Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer.'
-        },
         economy: {
             title: 'Økonomi',
             content: '💰 Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer.'
+        },
+        settings: {
+            title: 'Indstillinger',
+            content: '⚙️ Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer.'
         }
     },
     login : {

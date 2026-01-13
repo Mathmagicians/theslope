@@ -1,6 +1,7 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {chunkArray, groupBy} from '~/utils/batchUtils'
 
 import type {
     OrderCreate,
@@ -915,13 +916,13 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 }
 
 export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`, dinnerEventData)
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}, fields: ${Object.keys(dinnerEventData).join(', ')}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDetailSchema, deserializeDinnerEventDetail} = useBookingValidation()
 
     // Exclude relation fields that Prisma doesn't accept in update data
     const {allergens, ...updateData} = dinnerEventData
-    console.info(`🍽️ > DINNER_EVENT > [UPDATE] updateData:`, updateData)
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] updateData fields: ${Object.keys(updateData).join(', ')}`)
 
     try {
         const updatedDinnerEvent = await prisma.dinnerEvent.update({
@@ -1021,7 +1022,7 @@ export async function deleteDinnerEvent(
             const heynaboDeletes = eventsToDelete
                 .filter(e => e.heynaboEventId)
                 .map(e => deleteHeynaboEvent(e.heynaboEventId!)
-                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}:`, err))
+                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}: ${err instanceof Error ? err.message : String(err)}`))
                 )
             await Promise.all(heynaboDeletes)
         }
@@ -1195,6 +1196,88 @@ export async function updateOrdersToState(
 
     return result.count
 }
+
+/**
+ * Batch update data for scaffold operations
+ * Groups orders by their update signature (state + dinnerMode + ticketPriceId)
+ */
+export type OrderBatchUpdate = {
+    orderId: number
+    state: OrderState
+    dinnerMode: DinnerMode
+    ticketPriceId: number | null  // null = no change
+    priceAtBooking: number | null // null = no change
+    isNewRelease: boolean  // true = set releasedAt
+}
+
+/**
+ * Build update signature key for grouping
+ * Pure function - can be unit tested via groupBy
+ */
+export const getOrderUpdateSignature = (update: OrderBatchUpdate): string =>
+    `${update.state}-${update.dinnerMode}-${update.ticketPriceId ?? 'same'}-${update.isNewRelease}`
+
+/**
+ * Build update data from first item in group (all items in group have same signature)
+ */
+const buildUpdateData = (update: OrderBatchUpdate, now: Date): Record<string, unknown> => {
+    const data: Record<string, unknown> = {
+        state: update.state,
+        dinnerMode: update.dinnerMode
+    }
+    if (update.ticketPriceId !== null) {
+        data.ticketPriceId = update.ticketPriceId
+        data.priceAtBooking = update.priceAtBooking
+    }
+    if (update.isNewRelease) {
+        data.releasedAt = now
+    }
+    return data
+}
+
+/**
+ * Curried order batch update executor.
+ * ADR-014: Groups by update signature, chunks IDs within groups to stay within D1 limits.
+ *
+ * @param chunkSize - Max IDs per updateMany call (default 90 for D1's 100 param limit minus data params)
+ * @returns Async function that executes grouped batch updates
+ *
+ * @example
+ * const executeBatch = updateOrdersBatch(90)
+ * const count = await executeBatch(d1Client, updates)
+ */
+export const updateOrdersBatch = (chunkSize: number = 90) =>
+    async (d1Client: D1Database, updates: OrderBatchUpdate[]): Promise<number> => {
+        if (updates.length === 0) return 0
+
+        const LOG = '🎟️ > ORDER > [BATCH_UPDATE]'
+        const prisma = await getPrismaClientConnection(d1Client)
+        const now = new Date()
+        const chunkIds = chunkArray<number>(chunkSize)
+
+        // Group by update signature using pure utility
+        const groupBySignature = groupBy<OrderBatchUpdate, string>(getOrderUpdateSignature)
+        const groups = groupBySignature(updates)
+
+        console.info(`${LOG} Batching ${updates.length} updates into ${groups.size} groups`)
+
+        // Execute batch updates, chunking IDs within each group
+        let totalCount = 0
+        for (const [, groupUpdates] of groups) {
+            const data = buildUpdateData(groupUpdates[0]!, now)
+            const orderIds = groupUpdates.map(u => u.orderId)
+
+            for (const idChunk of chunkIds(orderIds)) {
+                const result = await prisma.order.updateMany({
+                    where: { id: { in: idChunk } },
+                    data
+                })
+                totalCount += result.count
+            }
+        }
+
+        return totalCount
+    }
 
 /**
  * Fetch all CLOSED orders in active season without a transaction.

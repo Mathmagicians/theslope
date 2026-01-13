@@ -193,9 +193,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
         releasedCountsKey,
         async () => {
             if (releasedCountsDinnerIds.value.length === 0) return new Map()
-            const released = await $fetch<OrderDisplay[]>('/api/order', {
-                query: {dinnerEventIds: releasedCountsDinnerIds.value, state: 'RELEASED', allHouseholds: true}
-            })
+            const params = new URLSearchParams()
+            releasedCountsDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
+            params.append('state', 'RELEASED')
+            params.append('allHouseholds', 'true')
+            const released = await $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
             const counts = new Map<number, number>()
             for (const order of released) {
                 counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)

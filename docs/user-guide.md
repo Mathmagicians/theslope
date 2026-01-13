@@ -40,8 +40,8 @@ Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdat
 | **Chef-side** | [skraaningen.dk/chef](https://www.skraaningen.dk/chef) | Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier |
 | | | |
 | **Husstand** | | |
-| › Medlemmer | [.../members](https://www.skraaningen.dk/household) | Power mode opdaterer alle medlemmer samtidigt. Klik på blyanten for at redigere enkeltpersoner. Udvid rækken for at se valgmuligheder. Ændringer gemmes når du trykker Gem |
-| › Bookinger | [.../bookings](https://www.skraaningen.dk/household) | Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer |
+| › Tilmeldinger | [.../bookings](https://www.skraaningen.dk/household) | Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer |
+| › Præferencer | [.../members](https://www.skraaningen.dk/household) | Power mode opdaterer alle medlemmer samtidigt. Klik på blyanten for at redigere enkeltpersoner. Udvid rækken for at se valgmuligheder. Ændringer gemmes når du trykker Gem |
 | › Allergier | [.../allergies](https://www.skraaningen.dk/household) | Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer |
 | › Økonomi | [.../economy](https://www.skraaningen.dk/household) | Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer |
 | › Indstillinger | [.../settings](https://www.skraaningen.dk/household) | Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer |

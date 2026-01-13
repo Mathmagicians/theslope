@@ -1557,7 +1557,8 @@ describe('getEventsForGridView', () => {
 
         // Combined start and end
         { scenario: 'both: complete start and end weeks', events: [7, 8, 14, 16, 17], range: [8, 16], expectedWeekSizes: [2, 3] },
-        { scenario: 'single day range with week completion', events: [6, 8, 10], range: [8, 8], expectedWeekSizes: [3] },
+        // Single-day ranges return only that day's events (no week completion)
+        { scenario: 'single day range (no week completion)', events: [6, 8, 10], range: [8, 8], expectedWeekSizes: [1] },
 
         // Edge cases
         { scenario: 'no events in range', events: [3, 20], range: [6, 12], expectedWeekSizes: [] },

@@ -1,5 +1,5 @@
 import type {D1Database} from "@cloudflare/workers-types"
-import {fetchOrders, createOrders, deleteOrder, updateOrder, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, type OrderBatchUpdate, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
@@ -191,11 +191,14 @@ export async function scaffoldPrebookings(
                 })
             }
 
-            // Execute updates - generator already decided state/mode, scaffolder just executes
+            // Build batch updates - collect all updates for efficient batching
+            // ADR-014: Groups by (state, dinnerMode, ticketPriceId) to minimize queries
             let householdPriceUpdates = 0
             let householdModeUpdates = 0
             let householdReleased = 0
             let householdUpdateErrors = 0
+            const batchUpdates: OrderBatchUpdate[] = []
+
             for (const incoming of result.update) {
                 // Validate orderId present (generator contract)
                 if (!incoming.orderId) {
@@ -208,45 +211,52 @@ export async function scaffoldPrebookings(
                     continue
                 }
 
-                // Build update payload from generator's decision
-                const updateData: Record<string, unknown> = {
-                    dinnerMode: incoming.dinnerMode,
-                    state: incoming.state
-                }
-
-                // Enrich with priceAtBooking if price changed (scaffolder responsibility)
+                // Categorize for stats
                 const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
+                const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
+
                 if (isPriceChange) {
                     const newTicketPrice = ticketPriceById.get(incoming.ticketPriceId)
                     if (!newTicketPrice) {
                         throw new Error(`${LOG} Ticket price ${incoming.ticketPriceId} not found in season`)
                     }
-                    updateData.ticketPriceId = incoming.ticketPriceId
-                    updateData.priceAtBooking = newTicketPrice.price
                     householdPriceUpdates++
+                    batchUpdates.push({
+                        orderId: incoming.orderId,
+                        state: incoming.state,
+                        dinnerMode: incoming.dinnerMode,
+                        ticketPriceId: incoming.ticketPriceId,
+                        priceAtBooking: newTicketPrice.price,
+                        isNewRelease
+                    })
+                } else {
+                    if (isNewRelease) householdReleased++
+                    else householdModeUpdates++
+                    batchUpdates.push({
+                        orderId: incoming.orderId,
+                        state: incoming.state,
+                        dinnerMode: incoming.dinnerMode,
+                        ticketPriceId: null,
+                        priceAtBooking: null,
+                        isNewRelease
+                    })
                 }
-
-                // Enrich with releasedAt if transitioning to RELEASED (scaffolder responsibility)
-                const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
-                if (isNewRelease) {
-                    updateData.releasedAt = new Date()
-                    householdReleased++
-                } else if (!isPriceChange) {
-                    householdModeUpdates++
-                }
-
-                await updateOrder(d1Client, existing.id, updateData, {
-                    action: getAuditAction(isUserTriggered, 'update'),
-                    performedByUserId: options.userId ?? null
-                })
             }
 
-            // Delete orders (only before-deadline NONE orders - generator returns them in delete bucket)
-            for (const toDelete of result.delete) {
-                if (!toDelete.orderId) {
-                    throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${toDelete.inhabitantId} dinnerEvent ${toDelete.dinnerEventId}`)
-                }
-                await deleteOrder(d1Client, [toDelete.orderId], options.userId ?? null)
+            // Execute batch updates (grouped by signature, chunked within groups)
+            const executeBatchUpdates = updateOrdersBatch(90)
+            await executeBatchUpdates(d1Client, batchUpdates)
+
+            // Batch delete orders (single call with all IDs)
+            const deleteIds = result.delete
+                .map(toDelete => {
+                    if (!toDelete.orderId) {
+                        throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${toDelete.inhabitantId} dinnerEvent ${toDelete.dinnerEventId}`)
+                    }
+                    return toDelete.orderId
+                })
+            if (deleteIds.length > 0) {
+                await deleteOrder(d1Client, deleteIds, options.userId ?? null)
             }
 
             totalCreated += result.create.length

@@ -51,8 +51,9 @@ describe('BookingGridView', () => {
 
   it('renders navigation buttons', async () => {
     const wrapper = await mount()
-    expect(wrapper.find('[data-testid="grid-nav-prev"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="grid-nav-next"]').exists()).toBe(true)
+    // Navigation is handled by CalendarDateNav component
+    expect(wrapper.find('[data-testid="date-nav-prev"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="date-nav-next"]').exists()).toBe(true)
   })
 
   it('renders edit button in view mode', async () => {
@@ -66,12 +67,13 @@ describe('BookingGridView', () => {
   })
 
   const navCases: {button: string, event: string}[] = [
-    {button: 'grid-nav-prev', event: 'prev'},
-    {button: 'grid-nav-next', event: 'next'}
+    {button: 'date-nav-prev', event: 'prev'},
+    {button: 'date-nav-next', event: 'next'}
   ]
 
   it.each(navCases)('emits navigate $event when $button clicked', async ({button, event}) => {
     const wrapper = await mount()
+    // Navigation is handled by CalendarDateNav component
     await wrapper.find(`[data-testid="${button}"]`).trigger('click')
     expect(wrapper.emitted('navigate')?.[0]).toEqual([event])
   })
