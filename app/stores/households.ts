@@ -93,6 +93,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return authStore.user?.Inhabitant?.household ?? null
     })
 
+    const myInhabitant = computed(() => authStore.user?.Inhabitant ?? null)
+
     // ========================================
     // Store Actions
     // ========================================
@@ -236,6 +238,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         lastPreferenceResult,
         // Computed
         myHousehold,
+        myInhabitant,
         isHouseholdsLoading,
         isNoHouseholds,
         isHouseholdsErrored,

@@ -248,10 +248,8 @@ const columns = computed(() => [
   {id: 'ticket', class: 'hidden md:table-cell'}  // No header - ticket inline on mobile
 ])
 
-// Find the booker (inhabitant with userId) to show who invited guests
-const bookerInhabitant = computed(() =>
-  (household.value?.inhabitants as InhabitantDisplay[] | undefined)?.find(i => i.userId !== null) ?? null
-)
+// Current user's inhabitant - the booker for guest tickets
+const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
