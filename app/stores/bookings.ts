@@ -178,6 +178,59 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
+    // ========================================
+    // Lock Status (reactive, watches planStore)
+    // ========================================
+    const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
+    const {deadlinesForSeason, splitDinnerEvents, getNextDinnerDate, getDefaultDinnerStartTime} = useSeason()
+    const planStore = usePlanStore()
+
+    // Released counts fetch (internal)
+    const releasedCountsDinnerIds = ref<number[]>([])
+    const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
+
+    const {data: releasedCounts, status: releasedCountsStatus} = useAsyncData<Map<number, number>>(
+        releasedCountsKey,
+        async () => {
+            if (releasedCountsDinnerIds.value.length === 0) return new Map()
+            const released = await $fetch<OrderDisplay[]>('/api/order', {
+                query: {dinnerEventIds: releasedCountsDinnerIds.value.join(','), state: 'RELEASED', allHouseholds: true}
+            })
+            const counts = new Map<number, number>()
+            for (const order of released) {
+                counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)
+            }
+            return counts
+        },
+        {default: () => new Map()}
+    )
+
+    // Watch season → compute locked IDs → fetch released counts
+    watchEffect(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents?.length) return
+
+        const dinnerDates = season.dinnerEvents.map(e => e.date)
+        const nextDinnerRange = getNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
+        const {nextDinner, futureDinnerDates} = splitDinnerEvents(season.dinnerEvents, nextDinnerRange)
+        const futureDinners = season.dinnerEvents.filter(e => futureDinnerDates.some(d => d.getTime() === e.date.getTime()))
+        const deadlines = deadlinesForSeason(season)
+
+        const lockedIds = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
+        if (lockedIds.length > 0 && lockedIds.join(',') !== releasedCountsDinnerIds.value.join(',')) {
+            releasedCountsDinnerIds.value = lockedIds
+        }
+    })
+
+    // Exposed computed: lockStatus map for calendar display
+    const lockStatus = computed(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents) return new Map<number, number | null>()
+        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value)
+    })
+
+    const isReleasedCountsLoading = computed(() => releasedCountsStatus.value === 'pending')
+
     const isProcessingBookings = ref(false)
 
     /**
@@ -436,6 +489,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateOrder,
         claimOrder,
         fetchReleasedOrders,
+        // Lock status (calendar display)
+        lockStatus,
+        isReleasedCountsLoading,
         isProcessingBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,

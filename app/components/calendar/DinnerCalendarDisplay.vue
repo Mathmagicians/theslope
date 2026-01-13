@@ -128,8 +128,8 @@ const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<t
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(day)
   if (!dinner) return null
-  const releasedCount = props.lockStatus.get(dinner.id)
-  if (releasedCount === undefined) return null
+  const releasedCount = props.lockStatus.get(dinner.id) ?? null
+  if (releasedCount === null) return null
   const config = getLockStatusConfig(releasedCount)
   return config ? { config, count: releasedCount } : null
 }

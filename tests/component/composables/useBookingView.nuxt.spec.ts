@@ -2,11 +2,15 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {useBookingView, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {useBookingView, useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 /**
- * Unit tests for useBookingView composable
+ * Unit tests for useBookingView composable (curried pattern)
  * ADR-006: URL-synced view type and date for booking calendar
+ *
+ * Architecture:
+ * - useDinnerDateParam: creates date query param with dinner validation
+ * - useBookingView: takes refs, provides navigation logic (hasPrev, hasNext, navigate)
  */
 
 const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
@@ -32,16 +36,22 @@ const setupQuery = (query: Record<string, string>) => {
   Object.assign(mockRouteData.query, query)
 }
 
-const createBookingView = (
-  query: Record<string, string> = {},
-  options?: { seasonDates?: { start: Date, end: Date }, dinnerDates?: Date[] }
+// Helper to create refs for useBookingView (simulates what pages do)
+const createMockRefs = (
+  initialDate: Date = new Date(),
+  initialView: BookingView = 'day'
 ) => {
-  setupQuery(query)
-  return useBookingView({
-    syncWhen: () => false,
-    seasonDates: options?.seasonDates ? () => options.seasonDates! : undefined,
-    dinnerDates: options?.dinnerDates ? () => options.dinnerDates! : undefined
-  })
+  const dateRef = ref(initialDate)
+  const viewRef = ref(initialView)
+  const setDate = vi.fn(async (d: Date) => { dateRef.value = d })
+  const setView = vi.fn(async (v: BookingView) => { viewRef.value = v })
+
+  return {
+    selectedDate: computed(() => dateRef.value),
+    setDate,
+    view: computed(() => viewRef.value),
+    setView
+  }
 }
 
 describe('useBookingView', () => {
@@ -60,91 +70,35 @@ describe('useBookingView', () => {
     })
   })
 
-  describe('View Parameter', () => {
-    const viewCases: { query: Record<string, string>, expected: BookingView }[] = [
-      {query: {}, expected: 'day'},
-      {query: {view: 'day'}, expected: 'day'},
-      {query: {view: 'week'}, expected: 'week'},
-      {query: {view: 'month'}, expected: 'month'},
-      {query: {view: 'invalid'}, expected: 'day'}
-    ]
-
-    it.each(viewCases)('returns $expected for query $query', ({query, expected}) => {
-      const {view} = createBookingView(query)
-      expect(view.value).toBe(expected)
-    })
-
-    it('updates URL on setView', async () => {
-      const {setView} = createBookingView()
-      await setView('week')
-      await flushPromises()
-      expect(mockNavigateTo).toHaveBeenCalledWith(
-        expect.objectContaining({query: expect.objectContaining({view: 'week'})}),
-        {replace: true}
-      )
-    })
-  })
-
-  describe('Date Parameter', () => {
-    const dateCases: { query: Record<string, string>, expectedDay: number, expectedMonth: number, expectedYear: number }[] = [
-      {query: {date: '15/01/2025'}, expectedDay: 15, expectedMonth: 0, expectedYear: 2025},
-      {query: {date: '28/02/2025'}, expectedDay: 28, expectedMonth: 1, expectedYear: 2025},
-      {query: {date: '31/12/2024'}, expectedDay: 31, expectedMonth: 11, expectedYear: 2024}
-    ]
-
-    it.each(dateCases)('parses $query.date correctly', ({query, expectedDay, expectedMonth, expectedYear}) => {
-      const {selectedDate} = createBookingView(query)
-      expect(selectedDate.value.getDate()).toBe(expectedDay)
-      expect(selectedDate.value.getMonth()).toBe(expectedMonth)
-      expect(selectedDate.value.getFullYear()).toBe(expectedYear)
-    })
-
-    it('defaults to today for missing/invalid date', () => {
-      const today = new Date()
-      const invalidQueries: Record<string, string>[] = [{}, {date: 'invalid'}, {date: ''}]
-      for (const query of invalidQueries) {
-        const {selectedDate} = createBookingView(query)
-        expect(selectedDate.value.toDateString()).toBe(today.toDateString())
-      }
-    })
-
-    it('updates URL on setDate', async () => {
-      const {setDate} = createBookingView()
-      await setDate(new Date('2025-03-20'))
-      await flushPromises()
-      expect(mockNavigateTo).toHaveBeenCalledWith(
-        expect.objectContaining({query: expect.objectContaining({date: '20/03/2025'})}),
-        {replace: true}
-      )
-    })
-  })
-
   describe('dateRange Computed', () => {
-    const rangeCases: { view: BookingView, date: string, expectedStart: number, expectedEnd: number }[] = [
+    const rangeCases: { view: BookingView, date: Date, expectedStartDay: number, expectedEndDay: number }[] = [
       // Day view: same start/end
-      {view: 'day', date: '15/01/2025', expectedStart: 15, expectedEnd: 15},
+      {view: 'day', date: new Date('2025-01-15'), expectedStartDay: 15, expectedEndDay: 15},
       // Week view: Monday-Sunday (15th is Wednesday → 13-19)
-      {view: 'week', date: '15/01/2025', expectedStart: 13, expectedEnd: 19},
+      {view: 'week', date: new Date('2025-01-15'), expectedStartDay: 13, expectedEndDay: 19},
       // Month view: 1st to last day
-      {view: 'month', date: '15/01/2025', expectedStart: 1, expectedEnd: 31},
-      {view: 'month', date: '15/02/2025', expectedStart: 1, expectedEnd: 28}
+      {view: 'month', date: new Date('2025-01-15'), expectedStartDay: 1, expectedEndDay: 31},
+      {view: 'month', date: new Date('2025-02-15'), expectedStartDay: 1, expectedEndDay: 28}
     ]
 
-    it.each(rangeCases)('$view view on $date → days $expectedStart-$expectedEnd', ({view, date, expectedStart, expectedEnd}) => {
-      const {dateRange} = createBookingView({view, date})
-      expect(dateRange.value.start.getDate()).toBe(expectedStart)
-      expect(dateRange.value.end.getDate()).toBe(expectedEnd)
+    it.each(rangeCases)('$view view → days $expectedStartDay-$expectedEndDay', ({view, date, expectedStartDay, expectedEndDay}) => {
+      const refs = createMockRefs(date, view)
+      const {dateRange} = useBookingView({...refs})
+      expect(dateRange.value.start.getDate()).toBe(expectedStartDay)
+      expect(dateRange.value.end.getDate()).toBe(expectedEndDay)
     })
   })
 
   describe('weeks Computed', () => {
     it.each(['day', 'week'] as const)('returns empty for %s view', (view) => {
-      const {weeks} = createBookingView({view, date: '15/01/2025'})
+      const refs = createMockRefs(new Date('2025-01-15'), view)
+      const {weeks} = useBookingView({...refs})
       expect(weeks.value).toEqual([])
     })
 
     it('returns weeks for month view with Monday-Sunday spans', () => {
-      const {weeks} = createBookingView({view: 'month', date: '15/01/2025'})
+      const refs = createMockRefs(new Date('2025-01-15'), 'month')
+      const {weeks} = useBookingView({...refs})
       expect(weeks.value.length).toBeGreaterThan(0)
       weeks.value.forEach(week => {
         expect(week.start.getDay()).toBe(1) // Monday
@@ -155,29 +109,40 @@ describe('useBookingView', () => {
     })
   })
 
-  describe('navigate()', () => {
-    // Week and month tests don't need dinner dates
-    const weekMonthCases: { view: BookingView, date: string, direction: 1 | -1, expected: string }[] = [
-      // Week: ±7 days
-      {view: 'week', date: '15/01/2025', direction: 1, expected: '22/01/2025'},
-      {view: 'week', date: '15/01/2025', direction: -1, expected: '08/01/2025'},
-      // Month: ±1 month
-      {view: 'month', date: '15/01/2025', direction: 1, expected: '15/02/2025'},
-      {view: 'month', date: '15/01/2025', direction: -1, expected: '15/12/2024'}
+  describe('hasPrev / hasNext', () => {
+    const dinnerDates = [
+      new Date('2025-01-13'),
+      new Date('2025-01-15'),
+      new Date('2025-01-17'),
+      new Date('2025-01-20')
     ]
 
-    it.each(weekMonthCases)('$view $direction from $date → $expected', async ({view, date, direction, expected}) => {
-      const {navigate} = createBookingView({view, date})
-      await navigate(direction)
-      await flushPromises()
-      expect(mockNavigateTo).toHaveBeenCalledWith(
-        expect.objectContaining({query: expect.objectContaining({date: expected})}),
-        {replace: true}
-      )
+    const boundsCases: { date: Date, hasPrev: boolean, hasNext: boolean }[] = [
+      {date: new Date('2025-01-13'), hasPrev: false, hasNext: true},  // First dinner
+      {date: new Date('2025-01-15'), hasPrev: true, hasNext: true},   // Middle
+      {date: new Date('2025-01-20'), hasPrev: true, hasNext: false}   // Last dinner
+    ]
+
+    it.each(boundsCases)('date $date → hasPrev=$hasPrev, hasNext=$hasNext', ({date, hasPrev, hasNext}) => {
+      const refs = createMockRefs(date, 'day')
+      const result = useBookingView({
+        ...refs,
+        dinnerDates: () => dinnerDates
+      })
+      expect(result.hasPrev.value).toBe(hasPrev)
+      expect(result.hasNext.value).toBe(hasNext)
     })
 
-    describe('Day View Navigation (cooking days only)', () => {
-      // Dinner dates: Mon/Wed/Fri pattern (13, 15, 17 Jan 2025)
+    it('returns false when no dinner dates', () => {
+      const refs = createMockRefs(new Date('2025-01-15'), 'day')
+      const {hasPrev, hasNext} = useBookingView({...refs})
+      expect(hasPrev.value).toBe(false)
+      expect(hasNext.value).toBe(false)
+    })
+  })
+
+  describe('navigate()', () => {
+    describe('Day View (cooking days only)', () => {
       const dinnerDates = [
         new Date('2025-01-13'),
         new Date('2025-01-15'),
@@ -185,44 +150,57 @@ describe('useBookingView', () => {
         new Date('2025-01-20')
       ]
 
-      const dayCases: { date: string, direction: 1 | -1, expected: string }[] = [
-        // Navigate from 15th → 17th (skips 16th - not a cooking day)
-        {date: '15/01/2025', direction: 1, expected: '17/01/2025'},
-        // Navigate from 15th → 13th (skips 14th - not a cooking day)
-        {date: '15/01/2025', direction: -1, expected: '13/01/2025'}
+      const dayCases: { date: Date, direction: 1 | -1, expectedDate: Date }[] = [
+        // Navigate from 15th → 17th (skips 16th)
+        {date: new Date('2025-01-15'), direction: 1, expectedDate: new Date('2025-01-17')},
+        // Navigate from 15th → 13th (skips 14th)
+        {date: new Date('2025-01-15'), direction: -1, expectedDate: new Date('2025-01-13')}
       ]
 
-      it.each(dayCases)('day $direction from $date → $expected (skips non-cooking days)', async ({date, direction, expected}) => {
-        const {navigate} = createBookingView({view: 'day', date}, {dinnerDates})
+      it.each(dayCases)('day $direction from date → skips non-cooking days', async ({date, direction, expectedDate}) => {
+        const refs = createMockRefs(date, 'day')
+        const {navigate} = useBookingView({...refs, dinnerDates: () => dinnerDates})
         await navigate(direction)
-        await flushPromises()
-        expect(mockNavigateTo).toHaveBeenCalledWith(
-          expect.objectContaining({query: expect.objectContaining({date: expected})}),
-          {replace: true}
-        )
+        expect(refs.setDate).toHaveBeenCalledWith(expectedDate)
       })
 
-      it('does not navigate when no adjacent dinner day exists', async () => {
-        const {navigate} = createBookingView(
-          {view: 'day', date: '20/01/2025'}, // Last dinner date
-          {dinnerDates}
-        )
-        await navigate(1) // Try to go forward
-        await flushPromises()
-        expect(mockNavigateTo).not.toHaveBeenCalled()
-      })
-
-      it('does not navigate when no dinner dates provided', async () => {
-        const {navigate} = createBookingView({view: 'day', date: '15/01/2025'})
+      it('does not navigate when at boundary', async () => {
+        const refs = createMockRefs(new Date('2025-01-20'), 'day') // Last dinner
+        const {navigate} = useBookingView({...refs, dinnerDates: () => dinnerDates})
         await navigate(1)
-        await flushPromises()
-        expect(mockNavigateTo).not.toHaveBeenCalled()
+        expect(refs.setDate).not.toHaveBeenCalled()
+      })
+
+      it('does not navigate when no dinner dates', async () => {
+        const refs = createMockRefs(new Date('2025-01-15'), 'day')
+        const {navigate} = useBookingView({...refs})
+        await navigate(1)
+        expect(refs.setDate).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('Week/Month View', () => {
+      const weekMonthCases: { view: BookingView, date: Date, direction: 1 | -1, expectedDay: number }[] = [
+        // Week: ±7 days
+        {view: 'week', date: new Date('2025-01-15'), direction: 1, expectedDay: 22},
+        {view: 'week', date: new Date('2025-01-15'), direction: -1, expectedDay: 8},
+        // Month: ±1 month (same day)
+        {view: 'month', date: new Date('2025-01-15'), direction: 1, expectedDay: 15},
+        {view: 'month', date: new Date('2025-01-15'), direction: -1, expectedDay: 15}
+      ]
+
+      it.each(weekMonthCases)('$view $direction from date', async ({view, date, direction, expectedDay}) => {
+        const refs = createMockRefs(date, view)
+        const {navigate} = useBookingView({...refs})
+        await navigate(direction)
+        expect(refs.setDate).toHaveBeenCalled()
+        const calledDate = refs.setDate.mock.calls[0]?.[0] as Date
+        expect(calledDate.getDate()).toBe(expectedDay)
       })
     })
 
     describe('Season Bounds Clamping', () => {
       const bounds = {start: new Date('2025-01-10'), end: new Date('2025-01-20')}
-      // Dinner dates within the bounds
       const dinnerDates = [
         new Date('2025-01-10'),
         new Date('2025-01-11'),
@@ -230,42 +208,64 @@ describe('useBookingView', () => {
         new Date('2025-01-20')
       ]
 
-      const clampCases: { date: string, direction: 1 | -1, expected: string }[] = [
-        {date: '11/01/2025', direction: -1, expected: '10/01/2025'}, // Clamp to start
-        {date: '19/01/2025', direction: 1, expected: '20/01/2025'}   // Clamp to end
-      ]
+      it('clamps to start bound', async () => {
+        const refs = createMockRefs(new Date('2025-01-11'), 'day')
+        const {navigate} = useBookingView({
+          ...refs,
+          seasonDates: () => bounds,
+          dinnerDates: () => dinnerDates
+        })
+        await navigate(-1)
+        expect(refs.setDate).toHaveBeenCalledWith(new Date('2025-01-10'))
+      })
 
-      it.each(clampCases)('clamps $date $direction to $expected', async ({date, direction, expected}) => {
-        const {navigate} = createBookingView({view: 'day', date}, {seasonDates: bounds, dinnerDates})
-        await navigate(direction)
-        await flushPromises()
-        expect(mockNavigateTo).toHaveBeenCalledWith(
-          expect.objectContaining({query: expect.objectContaining({date: expected})}),
-          {replace: true}
-        )
+      it('clamps to end bound', async () => {
+        const refs = createMockRefs(new Date('2025-01-19'), 'day')
+        const {navigate} = useBookingView({
+          ...refs,
+          seasonDates: () => bounds,
+          dinnerDates: () => dinnerDates
+        })
+        await navigate(1)
+        expect(refs.setDate).toHaveBeenCalledWith(new Date('2025-01-20'))
       })
     })
   })
+})
 
-  describe('URL Preservation', () => {
-    it('preserves view when changing date', async () => {
-      const {setDate} = createBookingView({view: 'week', date: '15/01/2025'})
-      await setDate(new Date('2025-02-01'))
-      await flushPromises()
-      expect(mockNavigateTo).toHaveBeenCalledWith(
-        expect.objectContaining({query: expect.objectContaining({view: 'week', date: '01/02/2025'})}),
-        {replace: true}
-      )
-    })
+describe('useDinnerDateParam', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupQuery({})
+  })
 
-    it('preserves date when changing view', async () => {
-      const {setView} = createBookingView({view: 'day', date: '15/01/2025'})
-      await setView('month')
-      await flushPromises()
-      expect(mockNavigateTo).toHaveBeenCalledWith(
-        expect.objectContaining({query: expect.objectContaining({view: 'month', date: '15/01/2025'})}),
-        {replace: true}
-      )
+  const dinnerDates = [
+    new Date('2025-01-13'),
+    new Date('2025-01-15'),
+    new Date('2025-01-17')
+  ]
+
+  it('parses valid dinner date from URL', () => {
+    setupQuery({date: '15/01/2025'})
+    const {value} = useDinnerDateParam({
+      dinnerDates: () => dinnerDates,
+      syncWhen: () => true
     })
+    expect(value.value.getDate()).toBe(15)
+    expect(value.value.getMonth()).toBe(0)
+    expect(value.value.getFullYear()).toBe(2025)
+  })
+
+  it('updates URL on setValue', async () => {
+    const {setValue} = useDinnerDateParam({
+      dinnerDates: () => dinnerDates,
+      syncWhen: () => false
+    })
+    await setValue(new Date('2025-01-17'))
+    await flushPromises()
+    expect(mockNavigateTo).toHaveBeenCalledWith(
+      expect.objectContaining({query: expect.objectContaining({date: '17/01/2025'})}),
+      {replace: true}
+    )
   })
 })

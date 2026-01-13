@@ -875,6 +875,37 @@ export const useBooking = () => {
     // Lock Status - Compute booking lock status for calendar display
     // ============================================================================
 
+    /** Count released orders by dinner ID */
+    const countReleasedOrdersByDinner = (orders: OrderDisplay[]): Map<number, number> => {
+        const {OrderStateSchema} = useBookingValidation()
+        const counts = new Map<number, number>()
+        for (const order of orders) {
+            if (order.state === OrderStateSchema.enum.RELEASED) {
+                counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)
+            }
+        }
+        return counts
+    }
+
+    /**
+     * Get IDs of locked future dinners from split result
+     * Takes [nextDinner, ...futureDinners], reduces until first non-locked
+     */
+    const getLockedFutureDinnerIds = <T extends { id: number; date: Date }>(
+        nextDinner: T | null,
+        futureDinners: T[],
+        deadlines: { canModifyOrders: (date: Date) => boolean }
+    ): number[] => [nextDinner, ...futureDinners]
+        .filter((e): e is T => e !== null)
+        .reduce<{ ids: number[]; done: boolean }>(
+            (acc, event) => {
+                if (acc.done) return acc
+                if (deadlines.canModifyOrders(event.date)) return { ...acc, done: true }
+                return { ids: [...acc.ids, event.id], done: false }
+            },
+            { ids: [], done: false }
+        ).ids
+
     /**
      * Compute lock status map for dinner events
      *
@@ -927,6 +958,8 @@ export const useBooking = () => {
         // Scaffold Result Formatting
         formatScaffoldResult,
         // Lock Status
+        countReleasedOrdersByDinner,
+        getLockedFutureDinnerIds,
         computeLockStatus
     }
 }

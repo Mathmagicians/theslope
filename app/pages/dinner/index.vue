@@ -45,9 +45,9 @@
  * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 
-import {useQueryParam} from '~/composables/useQueryParam'
 import {FORM_MODES} from '~/types/form'
 import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
+import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 
 // Design system
 const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -67,7 +67,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const calendarOpen = ref(isMd?.value ?? false)
 
 // Booking validation and helpers
-const {computeLockStatus, formatScaffoldResult} = useBooking()
+const {formatScaffoldResult} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -79,41 +79,32 @@ planStore.initPlanStore()
 const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
+// Bookings store (lock status)
+const bookingsStore = useBookingsStore()
+const {lockStatus} = storeToRefs(bookingsStore)
+
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-const {getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
-const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
-const dinnerStartTime = getDefaultDinnerStartTime()
+const {deadlinesForSeason} = useSeason()
 
-// Season-specific deadline functions (computed to react to season changes)
-
-// Date selection via URL query parameter
+// Date selection via URL query parameter (curried pattern)
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
-const getDefaultDate = (): Date => {
-    const nextDinner = getNextDinnerDate(dinnerDates.value, dinnerStartTime)
-    return nextDinner?.start ?? new Date()
-}
+const syncWhen = () => isPlanStoreReady.value && dinnerDates.value.length > 0
 
-const {value: selectedDate, setValue} = useQueryParam<Date>('date', {
-    serialize: formatDate,
-    deserialize: (s) => {
-        const parsed = parseDate(s)
-        return parsed && !isNaN(parsed.getTime()) ? parsed : null
-    },
-    validate: (date) => {
-        // Check if this date has a dinner event
-        return dinnerEvents.value.some(e => {
-            const eventDate = new Date(e.date)
-            return eventDate.toDateString() === date.toDateString()
-        })
-    },
-    defaultValue: getDefaultDate,
-    // Auto-sync URL when store is ready and events are loaded
-    syncWhen: () => isPlanStoreReady.value && dinnerEvents.value.length > 0
+const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
+    dinnerDates: () => dinnerDates.value,
+    syncWhen
+})
+
+// Navigation logic (hasPrev, hasNext, navigate)
+const {hasPrev, hasNext, navigate} = useBookingView({
+    selectedDate,
+    setDate,
+    dinnerDates: () => dinnerDates.value
 })
 
 // Selected dinner event based on URL date
@@ -128,7 +119,6 @@ const selectedDinnerEvent = computed(() => {
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
 // Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
-const bookingsStore = useBookingsStore()
 const { DinnerEventDetailSchema, OrderDisplaySchema } = useBookingValidation()
 
 const {
@@ -271,7 +261,7 @@ useHead({
             :show-countdown="true"
             :color="COLOR.peach"
             :selected-date="selectedDate"
-            @date-selected="setValue"
+            @date-selected="setDate"
           />
         </template>
       </CalendarMasterPanel>
@@ -293,7 +283,12 @@ useHead({
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
-          @show-calendar="calendarOpen = true"
+          :has-prev="hasPrev"
+          :has-next="hasNext"
+          :calendar-open="calendarOpen"
+          @prev="navigate(-1)"
+          @next="navigate(1)"
+          @toggle-calendar="calendarOpen = !calendarOpen"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm

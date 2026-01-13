@@ -10,28 +10,33 @@
  * - Emits prev/next/toggle
  * - hasPrev/hasNext control arrow visibility
  * - disabled disables all buttons (e.g. during save)
+ * - color configures button color (default: neutral)
  */
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+
 interface Props {
   hasPrev?: boolean
   hasNext?: boolean
   disabled?: boolean
   open?: boolean
+  color?: NuxtUIColor
 }
 
 withDefaults(defineProps<Props>(), {
   hasPrev: true,
   hasNext: true,
   disabled: false,
-  open: true
+  open: true,
+  color: 'neutral'
 })
+
+const {ICONS, SIZES} = useTheSlopeDesignSystem()
 
 const emit = defineEmits<{
   prev: []
   next: []
   toggle: []
 }>()
-
-const {ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -39,7 +44,7 @@ const {ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
     <UButton
       v-if="hasPrev"
       :icon="ICONS.arrowLeft"
-      :color="COLOR.neutral"
+      :color="color"
       variant="ghost"
       :size="SIZES.md"
       :disabled="disabled"
@@ -48,21 +53,22 @@ const {ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
       @click="emit('prev')"
     />
     <UButton
-      :color="COLOR.neutral"
-      :variant="open ? 'soft' : 'ghost'"
+      color="mocha"
+      :variant="open ? 'outline' : 'ghost'"
       :size="SIZES.md"
       :disabled="disabled"
+      :leading-icon="ICONS.calendar"
+      :trailing-icon="open ? ICONS.chevronUp : ICONS.chevronDown"
+      class="!text-[inherit]"
       data-testid="date-nav-toggle"
       @click="emit('toggle')"
     >
-      <UIcon :name="ICONS.calendar" class="size-4" />
       <slot />
-      <UIcon :name="open ? ICONS.chevronUp : ICONS.chevronDown" class="size-3" />
     </UButton>
     <UButton
       v-if="hasNext"
       :icon="ICONS.arrowRight"
-      :color="COLOR.neutral"
+      :color="color"
       variant="ghost"
       :size="SIZES.md"
       :disabled="disabled"

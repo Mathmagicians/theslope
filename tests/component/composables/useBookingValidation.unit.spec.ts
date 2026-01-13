@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {addDays} from 'date-fns'
+import {useBookingValidation, type OrderDisplay} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} from '~~/prisma/generated/zod'
@@ -810,6 +811,147 @@ describe('useBookingValidation', () => {
 
       it('GIVEN valid response WHEN parsing THEN succeeds', () => {
         expect(() => ScaffoldOrdersResponseSchema.parse(validResponse)).not.toThrow()
+      })
+    })
+  })
+})
+
+// ============================================================================
+// useBooking - Business Logic
+// ============================================================================
+
+describe('useBooking', () => {
+  const {getLockedFutureDinnerIds, computeLockStatus, countReleasedOrdersByDinner} = useBooking()
+  const {OrderStateSchema} = useBookingValidation()
+  const OrderState = OrderStateSchema.enum
+
+  // Test helpers
+  const makeEvent = (id: number, daysFromNow: number) => ({
+    id,
+    date: addDays(new Date(), daysFromNow)
+  })
+
+  const makeDeadlines = (lockedDaysAhead: number) => ({
+    canModifyOrders: (date: Date) => {
+      const daysAhead = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      return daysAhead > lockedDaysAhead
+    }
+  })
+
+  describe('getLockedFutureDinnerIds', () => {
+    describe.each([
+      {
+        name: 'all dinners locked when within deadline',
+        nextDinner: makeEvent(1, 1),
+        futureDinners: [makeEvent(2, 3), makeEvent(3, 5)],
+        lockedDays: 7,
+        expected: [1, 2, 3]
+      },
+      {
+        name: 'stops at first non-locked dinner',
+        nextDinner: makeEvent(1, 1),
+        futureDinners: [makeEvent(2, 3), makeEvent(3, 10), makeEvent(4, 15)],
+        lockedDays: 5,
+        expected: [1, 2]
+      },
+      {
+        name: 'no locked dinners when all beyond deadline',
+        nextDinner: makeEvent(1, 10),
+        futureDinners: [makeEvent(2, 12)],
+        lockedDays: 5,
+        expected: []
+      },
+      {
+        name: 'handles null nextDinner',
+        nextDinner: null,
+        futureDinners: [makeEvent(1, 2), makeEvent(2, 4)],
+        lockedDays: 3,
+        expected: [1]
+      },
+      {
+        name: 'handles empty futureDinners with locked nextDinner',
+        nextDinner: makeEvent(1, 2),
+        futureDinners: [],
+        lockedDays: 5,
+        expected: [1]
+      },
+      {
+        name: 'handles both null/empty',
+        nextDinner: null,
+        futureDinners: [],
+        lockedDays: 5,
+        expected: []
+      }
+    ])('$name', ({nextDinner, futureDinners, lockedDays, expected}) => {
+      it(`returns ${JSON.stringify(expected)}`, () => {
+        const deadlines = makeDeadlines(lockedDays)
+        const result = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
+        expect(result).toEqual(expected)
+      })
+    })
+  })
+
+  describe('countReleasedOrdersByDinner', () => {
+    describe.each([
+      {
+        name: 'counts released orders by dinner',
+        orders: [
+          {dinnerEventId: 1, state: OrderState.RELEASED},
+          {dinnerEventId: 1, state: OrderState.RELEASED},
+          {dinnerEventId: 2, state: OrderState.RELEASED},
+          {dinnerEventId: 1, state: OrderState.BOOKED}
+        ],
+        expected: new Map([[1, 2], [2, 1]])
+      },
+      {
+        name: 'returns empty map when no released orders',
+        orders: [
+          {dinnerEventId: 1, state: OrderState.BOOKED},
+          {dinnerEventId: 2, state: OrderState.CLOSED}
+        ],
+        expected: new Map()
+      },
+      {
+        name: 'handles empty array',
+        orders: [],
+        expected: new Map()
+      }
+    ])('$name', ({orders, expected}) => {
+      it('returns correct counts', () => {
+        const result = countReleasedOrdersByDinner(orders as OrderDisplay[])
+        expect(result).toEqual(expected)
+      })
+    })
+  })
+
+  describe('computeLockStatus', () => {
+    describe.each([
+      {
+        name: 'marks locked dinners with released count',
+        dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
+        lockedDays: 7,
+        releasedCounts: new Map([[1, 3], [2, 1]]),
+        expected: new Map([[1, 3], [2, 1]])
+      },
+      {
+        name: 'defaults to 0 when no released count provided',
+        dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5)],
+        lockedDays: 7,
+        releasedCounts: undefined,
+        expected: new Map([[1, 0], [2, 0]])
+      },
+      {
+        name: 'excludes non-locked dinners',
+        dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
+        lockedDays: 5,
+        releasedCounts: new Map([[1, 2], [2, 5]]),
+        expected: new Map([[1, 2]])
+      }
+    ])('$name', ({dinnerEvents, lockedDays, releasedCounts, expected}) => {
+      it('returns correct lock status map', () => {
+        const deadlines = makeDeadlines(lockedDays)
+        const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts)
+        expect(result).toEqual(expected)
       })
     })
   })

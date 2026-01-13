@@ -1,9 +1,10 @@
 import type {WeekDay} from '~/types/dateTypes'
-import type {AvatarProps, ButtonProps, BadgeProps} from '@nuxt/ui'
+import type {AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
 export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUIChipSize = NonNullable<ChipProps['size']>
 export type NuxtUIBadgeColor = NonNullable<BadgeProps['color']>
 export type NuxtUIBadgeVariant = NonNullable<BadgeProps['variant']>
 export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
@@ -541,6 +542,7 @@ export const ICONS = {
     clipboard: 'i-heroicons-clipboard-document-list',
     edit: 'i-heroicons-pencil',
     chevronDown: 'i-heroicons-chevron-down',
+    chevronUp: 'i-heroicons-chevron-up',
     chevronRight: 'i-heroicons-chevron-right',
     sortAscending: 'i-lucide-arrow-up-narrow-wide',
     sortDescending: 'i-lucide-arrow-down-wide-narrow',
@@ -684,7 +686,7 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
     },
 
     // Lock chip: lg on mobile, 3xl on desktop (for booking calendar lock indicators)
-    get lockChip(): NuxtUISize {
+    get lockChip(): NuxtUIChipSize {
         return isMd.value ? '3xl' : 'lg'
     },
 

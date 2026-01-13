@@ -10,50 +10,73 @@ export const BookingViewSchema = z.enum(['day', 'week', 'month'])
 export type BookingView = z.infer<typeof BookingViewSchema>
 
 /**
- * useBookingView - URL-synced view type and date for booking calendar
+ * useDinnerDateParam - Reusable date query param for dinner navigation
  *
- * Reuses existing useQueryParam composable and date utilities (formatDate, parseDate).
- * URL format: ?view=week&date=15/01/2025
+ * Validates that selected date is a dinner date, defaults to next upcoming dinner.
+ * Used by dinner page, chef page, household bookings.
+ */
+export const useDinnerDateParam = (options: {
+  dinnerDates: () => Date[]
+  syncWhen: () => boolean
+}) => {
+  const {getNextDinnerDate, getDefaultDinnerStartTime} = useSeason()
+  const dinnerStartTime = getDefaultDinnerStartTime()
+
+  return useQueryParam<Date>('date', {
+    serialize: formatDate,
+    deserialize: (s) => {
+      const parsed = parseDate(s)
+      return parsed && !isNaN(parsed.getTime()) ? parsed : null
+    },
+    validate: (date) => options.dinnerDates().some(d => d.toDateString() === date.toDateString()),
+    defaultValue: () => {
+      const nextDinner = getNextDinnerDate(options.dinnerDates(), dinnerStartTime)
+      return nextDinner?.start ?? options.dinnerDates()[0] ?? new Date()
+    },
+    syncWhen: options.syncWhen
+  })
+}
+
+/**
+ * useBookingView - Navigation and date range logic for booking calendars
+ *
+ * Curried composable: caller provides date/view state (from useQueryParam),
+ * this composable provides navigation logic (hasPrev, hasNext, navigate, dateRange).
  *
  * @example
  * ```ts
- * const { view, selectedDate, dateRange, weeks, setView, setDate } = useBookingView({
- *   syncWhen: () => store.isReady
+ * // Page creates its own query params with custom validation
+ * const {value: selectedDate, setValue: setDate} = useQueryParam<Date>('date', {
+ *   validate: (d) => dinnerDates.value.some(...),
+ *   defaultValue: getNextDinner
  * })
  *
- * // Month view with weeks
- * if (view.value === 'month') {
- *   weeks.value.forEach(week => ...)
- * }
+ * // Pass to useBookingView for navigation
+ * const { hasPrev, hasNext, navigate, dateRange } = useBookingView({
+ *   selectedDate,
+ *   setDate,
+ *   dinnerDates: () => dinnerDates.value
+ * })
  * ```
  */
-export const useBookingView = (options?: {
-    syncWhen?: () => boolean
+export const useBookingView = (options: {
+    /** Date ref from useQueryParam */
+    selectedDate: ComputedRef<Date>
+    /** Date setter from useQueryParam */
+    setDate: (date: Date) => Promise<void>
+    /** View ref from useQueryParam (optional - defaults to 'day') */
+    view?: ComputedRef<BookingView>
+    /** View setter from useQueryParam (optional) */
+    setView?: (view: BookingView) => Promise<void>
+    /** Season bounds for week/month navigation */
     seasonDates?: () => DateRange | null
     /** Dinner event dates - used for day view navigation to skip to next/prev cooking day */
     dinnerDates?: () => Date[]
 }) => {
-    // View type param (day/week/month)
-    const {value: view, setValue: setView} = useQueryParam<BookingView>('view', {
-        serialize: (v) => v,
-        deserialize: (s) => {
-            const parsed = BookingViewSchema.safeParse(s)
-            return parsed.success ? parsed.data : null
-        },
-        defaultValue: 'day',
-        syncWhen: options?.syncWhen
-    })
-
-    // Date param - reuses existing formatDate/parseDate from utils
-    const {value: selectedDate, setValue: setDate} = useQueryParam<Date>('date', {
-        serialize: formatDate,
-        deserialize: (s) => {
-            const parsed = parseDate(s)
-            return parsed && !isNaN(parsed.getTime()) ? parsed : null
-        },
-        defaultValue: () => new Date(),
-        syncWhen: options?.syncWhen
-    })
+    // Default to 'day' view if not provided
+    const view = options.view ?? computed(() => 'day' as BookingView)
+    const selectedDate = options.selectedDate
+    const setDate = options.setDate
 
     /**
      * Date range for current view
@@ -112,7 +135,7 @@ export const useBookingView = (options?: {
         const dinnerDates = options?.dinnerDates?.() ?? []
 
         switch (view.value) {
-            case 'day':
+            case 'day': {
                 if (dinnerDates.length === 0) return false
                 const currentIndex = dinnerDates.findIndex(d => isSameDay(d, date))
                 if (direction === 1) {
@@ -124,13 +147,15 @@ export const useBookingView = (options?: {
                         ? currentIndex > 0
                         : dinnerDates.some(d => d < date)
                 }
+            }
             case 'week':
-            case 'month':
+            case 'month': {
                 if (!bounds) return true
                 const newDate = view.value === 'week'
                     ? addDays(date, direction * 7)
                     : new Date(date.getFullYear(), date.getMonth() + direction, date.getDate())
                 return direction === 1 ? newDate <= bounds.end : newDate >= bounds.start
+            }
         }
     }
 
@@ -195,17 +220,15 @@ export const useBookingView = (options?: {
     }
 
     return {
-        // View state
+        // View state (passthrough for convenience)
         view,
         selectedDate,
+        // Computed ranges
         dateRange,
         weeks,
-        // Navigation bounds
+        // Navigation
         hasPrev,
         hasNext,
-        // Actions
-        setView,
-        setDate,
         navigate
     }
 }

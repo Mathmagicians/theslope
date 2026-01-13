@@ -35,6 +35,7 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
+import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
@@ -60,9 +61,8 @@ const {isDinnerUpdating} = storeToRefs(bookingsStore)
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
+const {isChefFor, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
-const dinnerStartTime = getDefaultDinnerStartTime()
 
 // Responsive breakpoint for mobile-collapsed calendar
 const isMd = inject<Ref<boolean>>('isMd')
@@ -119,26 +119,17 @@ const calendarAccordionOpen = computed({
 })
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
-const getDefaultDate = (): Date => {
-  const nextDinner = getNextDinnerDate(teamDinnerDates.value, dinnerStartTime)
-  return nextDinner?.start ?? new Date()
-}
-
-const {value: selectedDate, setValue: setSelectedDate} = useQueryParam<Date>('date', {
-  serialize: formatDate,
-  deserialize: (s) => {
-    const parsed = parseDate(s)
-    return parsed && !isNaN(parsed.getTime()) ? parsed : null
-  },
-  validate: (date) => {
-    // Check if this date has a dinner event for this team
-    return teamDinnerEvents.value.some((e: DinnerEventDisplay) => {
-      const eventDate = new Date(e.date)
-      return eventDate.toDateString() === date.toDateString()
-    })
-  },
-  defaultValue: getDefaultDate,
+// Date selection via URL query parameter using curried pattern
+const {value: selectedDate, setValue: setSelectedDate} = useDinnerDateParam({
+  dinnerDates: () => teamDinnerDates.value,
   syncWhen: () => isPageReady.value && teamDinnerEvents.value.length > 0
+})
+
+// Navigation logic from useBookingView
+const {hasPrev, hasNext, navigate} = useBookingView({
+  selectedDate,
+  setDate: setSelectedDate,
+  dinnerDates: () => teamDinnerDates.value
 })
 
 const selectedDinnerEvent = computed(() => {
@@ -402,11 +393,17 @@ useHead({
               :show-state-controls="true"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
+              :has-prev="hasPrev"
+              :has-next="hasNext"
+              :calendar-open="calendarAccordionOpen"
               @update:form="handleFormUpdate"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
               @undo-cancel-dinner="handleUndoCancelDinner"
+              @prev="navigate(-1)"
+              @next="navigate(1)"
+              @toggle-calendar="calendarAccordionOpen = !calendarAccordionOpen"
           />
         </template>
 

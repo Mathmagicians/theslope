@@ -58,18 +58,44 @@ Selvom du er på et madhold, skal du aktivt **melde dig som chefkok** for de mid
    - **Menubeskrivelse** - Detaljer om maden
 3. Gem ændringer
 
-### Sådan annoncerer du menuen
+### Sådan publicerer du menuen
 
-Når du annoncerer, synkroniseres menuen til Heynabo-kalenderen.
+Når du publicerer, synkroniseres menuen automatisk til Heynabo-kalenderen, så alle beboere kan se den i Heynabo-appen.
 
-1. Gå til madlavningsdagen
-2. Udfyld menutitel og -beskrivelse
-3. Klik **Annoncér**
+1. Gå til [skraaningen.dk/chef](https://www.skraaningen.dk/chef)
+2. Vælg din madlavningsdag fra listen
+3. Udfyld menutitel og -beskrivelse
+4. Klik **Publicer**
 
-**Hvad sker der:**
-- Begivenheden oprettes i Heynabo med menuen
-- Et standardbillede uploades
-- Beboere kan se menuen i Heynabo-appen
+**Hvad sker der ved publicering:**
+- En begivenhed oprettes i Heynabo med menuens titel og beskrivelse
+- Begivenheden viser tidspunkt, chefkokkens navn, og et link tilbage til Skrånerappen
+- Beboere får besked i Heynabo-appen og kan se menuen
+
+> **Bemærk:** Når middagen først er publiceret, kan du opdatere menuen i Skrånerappen - ændringerne synkroniseres automatisk til Heynabo.
+
+### Sådan aflyser du en middag
+
+Hvis middagen ikke kan afholdes, kan du aflyse den. Aflysning bruger en **2-trins bekræftelse** for at undgå uheld:
+
+1. Gå til [skraaningen.dk/chef](https://www.skraaningen.dk/chef) og vælg middagen
+2. Klik **Aflys** - knappen skifter farve til rød og viser "Tryk igen for at aflyse..."
+3. Klik igen inden for 3 sekunder for at bekræfte aflysningen
+
+**Hvad sker der ved aflysning:**
+- Middagen markeres som AFLYST
+- Beboerne får deres penge tilbage (ordrer refunderes)
+- Heynabo-begivenheden opdateres hvis den var publiceret
+
+### Sådan fortryder du en aflysning
+
+Har du aflyst ved en fejl? Du kan genåbne middagen:
+
+1. Gå til den aflyste middag
+2. Klik **Annuller aflysning** - knappen viser "Tryk igen for at genåbne..."
+3. Klik igen for at bekræfte
+
+Middagen genåbnes og beboere kan tilmelde sig igen.
 
 ### Sådan tjekker du allergier
 

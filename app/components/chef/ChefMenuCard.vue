@@ -74,6 +74,7 @@
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
+import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { FormSubmitEvent } from '#ui/types'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
@@ -87,6 +88,10 @@ interface Props {
   budget?: number               // Budget in øre (optional override)
   selected?: boolean            // For compact mode selection state
   isUpdating?: boolean          // Loading state for all edit buttons
+  hasPrev?: boolean             // Navigation: has previous dinner
+  hasNext?: boolean             // Navigation: has next dinner
+  calendarOpen?: boolean        // Calendar accordion state
+  navColor?: NuxtUIColor        // Navigation button color
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -96,7 +101,11 @@ const props = withDefaults(defineProps<Props>(), {
   isCompact: false,
   budget: undefined,
   selected: false,
-  isUpdating: false
+  isUpdating: false,
+  hasPrev: false,
+  hasNext: false,
+  calendarOpen: false,
+  navColor: undefined
 })
 
 const emit = defineEmits<{
@@ -105,7 +114,9 @@ const emit = defineEmits<{
   'advance-state': [newState: string]
   'cancel-dinner': []
   'undo-cancel-dinner': []
-  'show-calendar': []
+  'toggle-calendar': []
+  prev: []
+  next: []
   select: [dinnerEventId: number]
 }>()
 
@@ -417,7 +428,16 @@ const handleCardClick = () => {
     </div>
 
     <template #header>
-      <DinnerDetailHeader :dinner-event="dinnerEvent" @show-calendar="emit('show-calendar')" />
+      <DinnerDetailHeader
+        :dinner-event="dinnerEvent"
+        :has-prev="hasPrev"
+        :has-next="hasNext"
+        :calendar-open="calendarOpen"
+        :nav-color="navColor"
+        @prev="emit('prev')"
+        @next="emit('next')"
+        @toggle-calendar="emit('toggle-calendar')"
+      />
     </template>
 
     <div class="space-y-6">

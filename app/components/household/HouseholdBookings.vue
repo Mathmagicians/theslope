@@ -8,6 +8,8 @@
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder, DinnerMode} from '~/composables/useBookingValidation'
+import {useQueryParam} from '~/composables/useQueryParam'
+import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 interface Props {
   household: HouseholdDetail
@@ -17,7 +19,7 @@ const props = defineProps<Props>()
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {computeLockStatus, formatScaffoldResult} = useBooking()
+const {formatScaffoldResult} = useBooking()
 const {ICONS, COLOR} = useTheSlopeDesignSystem()
 const toast = useToast()
 
@@ -26,17 +28,39 @@ const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isS
 planStore.initPlanStore()
 
 const bookingsStore = useBookingsStore()
-const {orders, isProcessingBookings} = storeToRefs(bookingsStore)
+const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
 
 const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
+const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
-const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinnerEvents.value, deadlinesForSeason(selectedSeason.value)) : new Map())
 
-const {view, selectedDate, dateRange, hasPrev, hasNext, setDate, navigate} = useBookingView({
-  syncWhen: () => isSelectedSeasonInitialized.value,
+// URL-synced view and date (curried pattern)
+const syncWhen = () => isSelectedSeasonInitialized.value && dinnerDates.value.length > 0
+
+const {value: view, setValue: setView} = useQueryParam<BookingView>('view', {
+  serialize: (v) => v,
+  deserialize: (s) => {
+    const parsed = BookingViewSchema.safeParse(s)
+    return parsed.success ? parsed.data : null
+  },
+  defaultValue: 'day',
+  syncWhen
+})
+
+const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
+  dinnerDates: () => dinnerDates.value,
+  syncWhen
+})
+
+// Navigation logic (curried with our refs)
+const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
+  selectedDate,
+  setDate,
+  view,
+  setView,
   seasonDates: () => selectedSeason.value?.seasonDates ?? null,
-  dinnerDates: () => dinnerEvents.value.map(e => new Date(e.date))
+  dinnerDates: () => dinnerDates.value
 })
 
 // Calendar collapsed by default on mobile
