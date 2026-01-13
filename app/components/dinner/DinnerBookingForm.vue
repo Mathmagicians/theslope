@@ -224,17 +224,13 @@ const releasedTicketCount = computed(() => releasedTicketsFromOthers.value.lengt
 const hasReleasedTickets = computed(() => releasedTicketCount.value > 0)
 
 // ============================================================================
-// ORDER PARTITIONING
+// ORDER PARTITIONING (uses useBooking helpers)
 // ============================================================================
 
-const partitionedOrders = computed(() =>
-  (props.orders ?? [])
-    .filter(o => o.dinnerEventId === props.dinnerEvent.id)
-    .reduce((acc, o) => {
-      (o.isGuestTicket ? acc.guestOrders : acc.regularOrders).push(o)
-      return acc
-    }, {guestOrders: [] as OrderDisplay[], regularOrders: [] as OrderDisplay[]})
+const eventOrders = computed(() =>
+  (props.orders ?? []).filter(o => o.dinnerEventId === props.dinnerEvent.id)
 )
+const partitionedOrders = computed(() => partitionGuestOrders(eventOrders.value))
 const guestOrders = computed(() => partitionedOrders.value.guestOrders)
 const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 
@@ -288,13 +284,8 @@ const tableData = computed((): TableRow[] => {
     }
   })
 
-  // Group guest orders by (booker, ticketType)
-  const guestOrderGroups = guestOrders.value.reduce((acc, order) => {
-    const key = `${order.inhabitantId}-${order.ticketType}`
-    if (!acc[key]) acc[key] = []
-    acc[key].push(order)
-    return acc
-  }, {} as Record<string, OrderDisplay[]>)
+  // Group guest orders by (booker, ticketType, eventId) using composable
+  const guestOrderGroups = groupGuestOrders(guestOrders.value)
 
   const guestOrderRows: TableRow[] = Object.entries(guestOrderGroups)
     .filter(([, orders]) => orders.length > 0)
@@ -466,7 +457,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {DEADLINE_LABELS} = useBooking()
+const {DEADLINE_LABELS, partitionGuestOrders, groupGuestOrders} = useBooking()
 
 const deadlineStatusBadges = computed(() => [
   {

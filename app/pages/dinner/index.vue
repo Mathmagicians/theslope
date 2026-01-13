@@ -62,8 +62,9 @@ const toast = useToast()
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 
-// Calendar accordion state (open by default, toggled by date badge click)
-const calendarOpen = ref(true)
+// Calendar accordion state (collapsed on mobile, open on desktop)
+const isMd = inject<Ref<boolean>>('isMd')
+const calendarOpen = ref(isMd?.value ?? false)
 
 // Booking validation and helpers
 const {computeLockStatus, formatScaffoldResult} = useBooking()

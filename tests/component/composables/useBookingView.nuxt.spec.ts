@@ -32,11 +32,15 @@ const setupQuery = (query: Record<string, string>) => {
   Object.assign(mockRouteData.query, query)
 }
 
-const createBookingView = (query: Record<string, string> = {}, seasonDates?: { start: Date, end: Date }) => {
+const createBookingView = (
+  query: Record<string, string> = {},
+  options?: { seasonDates?: { start: Date, end: Date }, dinnerDates?: Date[] }
+) => {
   setupQuery(query)
   return useBookingView({
     syncWhen: () => false,
-    seasonDates: seasonDates ? () => seasonDates : undefined
+    seasonDates: options?.seasonDates ? () => options.seasonDates! : undefined,
+    dinnerDates: options?.dinnerDates ? () => options.dinnerDates! : undefined
   })
 }
 
@@ -152,10 +156,8 @@ describe('useBookingView', () => {
   })
 
   describe('navigate()', () => {
-    const navCases: { view: BookingView, date: string, direction: 1 | -1, expected: string }[] = [
-      // Day: ±1 day
-      {view: 'day', date: '15/01/2025', direction: 1, expected: '16/01/2025'},
-      {view: 'day', date: '15/01/2025', direction: -1, expected: '14/01/2025'},
+    // Week and month tests don't need dinner dates
+    const weekMonthCases: { view: BookingView, date: string, direction: 1 | -1, expected: string }[] = [
       // Week: ±7 days
       {view: 'week', date: '15/01/2025', direction: 1, expected: '22/01/2025'},
       {view: 'week', date: '15/01/2025', direction: -1, expected: '08/01/2025'},
@@ -164,7 +166,7 @@ describe('useBookingView', () => {
       {view: 'month', date: '15/01/2025', direction: -1, expected: '15/12/2024'}
     ]
 
-    it.each(navCases)('$view $direction from $date → $expected', async ({view, date, direction, expected}) => {
+    it.each(weekMonthCases)('$view $direction from $date → $expected', async ({view, date, direction, expected}) => {
       const {navigate} = createBookingView({view, date})
       await navigate(direction)
       await flushPromises()
@@ -174,8 +176,59 @@ describe('useBookingView', () => {
       )
     })
 
+    describe('Day View Navigation (cooking days only)', () => {
+      // Dinner dates: Mon/Wed/Fri pattern (13, 15, 17 Jan 2025)
+      const dinnerDates = [
+        new Date('2025-01-13'),
+        new Date('2025-01-15'),
+        new Date('2025-01-17'),
+        new Date('2025-01-20')
+      ]
+
+      const dayCases: { date: string, direction: 1 | -1, expected: string }[] = [
+        // Navigate from 15th → 17th (skips 16th - not a cooking day)
+        {date: '15/01/2025', direction: 1, expected: '17/01/2025'},
+        // Navigate from 15th → 13th (skips 14th - not a cooking day)
+        {date: '15/01/2025', direction: -1, expected: '13/01/2025'}
+      ]
+
+      it.each(dayCases)('day $direction from $date → $expected (skips non-cooking days)', async ({date, direction, expected}) => {
+        const {navigate} = createBookingView({view: 'day', date}, {dinnerDates})
+        await navigate(direction)
+        await flushPromises()
+        expect(mockNavigateTo).toHaveBeenCalledWith(
+          expect.objectContaining({query: expect.objectContaining({date: expected})}),
+          {replace: true}
+        )
+      })
+
+      it('does not navigate when no adjacent dinner day exists', async () => {
+        const {navigate} = createBookingView(
+          {view: 'day', date: '20/01/2025'}, // Last dinner date
+          {dinnerDates}
+        )
+        await navigate(1) // Try to go forward
+        await flushPromises()
+        expect(mockNavigateTo).not.toHaveBeenCalled()
+      })
+
+      it('does not navigate when no dinner dates provided', async () => {
+        const {navigate} = createBookingView({view: 'day', date: '15/01/2025'})
+        await navigate(1)
+        await flushPromises()
+        expect(mockNavigateTo).not.toHaveBeenCalled()
+      })
+    })
+
     describe('Season Bounds Clamping', () => {
       const bounds = {start: new Date('2025-01-10'), end: new Date('2025-01-20')}
+      // Dinner dates within the bounds
+      const dinnerDates = [
+        new Date('2025-01-10'),
+        new Date('2025-01-11'),
+        new Date('2025-01-19'),
+        new Date('2025-01-20')
+      ]
 
       const clampCases: { date: string, direction: 1 | -1, expected: string }[] = [
         {date: '11/01/2025', direction: -1, expected: '10/01/2025'}, // Clamp to start
@@ -183,7 +236,7 @@ describe('useBookingView', () => {
       ]
 
       it.each(clampCases)('clamps $date $direction to $expected', async ({date, direction, expected}) => {
-        const {navigate} = createBookingView({view: 'day', date}, bounds)
+        const {navigate} = createBookingView({view: 'day', date}, {seasonDates: bounds, dinnerDates})
         await navigate(direction)
         await flushPromises()
         expect(mockNavigateTo).toHaveBeenCalledWith(

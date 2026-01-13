@@ -3,7 +3,7 @@ import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
 import GuestBookingFields from '~/components/booking/GuestBookingFields.vue'
-import {TicketFactory} from '../../../e2e/testDataFactories/ticketFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()

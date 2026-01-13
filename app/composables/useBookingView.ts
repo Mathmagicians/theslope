@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays} from 'date-fns'
+import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays, isSameDay} from 'date-fns'
 import type {DateRange} from '~/types/dateTypes'
 
 /**
@@ -30,6 +30,8 @@ export type BookingView = z.infer<typeof BookingViewSchema>
 export const useBookingView = (options?: {
     syncWhen?: () => boolean
     seasonDates?: () => DateRange | null
+    /** Dinner event dates - used for day view navigation to skip to next/prev cooking day */
+    dinnerDates?: () => Date[]
 }) => {
     // View type param (day/week/month)
     const {value: view, setValue: setView} = useQueryParam<BookingView>('view', {
@@ -102,17 +104,40 @@ export const useBookingView = (options?: {
 
     /**
      * Navigate to adjacent period based on view type
+     * - Day view: navigates to next/previous cooking day (skips non-dinner days)
+     * - Week/Month view: navigates by period
      * Clamps to season bounds if provided
      * @param direction - 1 for next, -1 for previous
      */
     const navigate = async (direction: 1 | -1) => {
         const date = selectedDate.value
         const bounds = options?.seasonDates?.()
-        let newDate: Date
+        const dinnerDates = options?.dinnerDates?.() ?? []
+        let newDate: Date | null = null
 
         switch (view.value) {
             case 'day':
-                newDate = addDays(date, direction)
+                // Find next/previous dinner date
+                if (dinnerDates.length > 0) {
+                    const sortedDates = [...dinnerDates].sort((a, b) => a.getTime() - b.getTime())
+                    const currentIndex = sortedDates.findIndex(d => isSameDay(d, date))
+
+                    if (direction === 1) {
+                        // Next: find first date after current
+                        const nextDate = currentIndex >= 0
+                            ? sortedDates[currentIndex + 1]
+                            : sortedDates.find(d => d > date)
+                        newDate = nextDate ?? null
+                    } else {
+                        // Previous: find last date before current
+                        const prevDate = currentIndex >= 0
+                            ? sortedDates[currentIndex - 1]
+                            : sortedDates.filter(d => d < date).pop()
+                        newDate = prevDate ?? null
+                    }
+                }
+                // If no dinner dates or no adjacent found, don't navigate
+                if (!newDate) return
                 break
             case 'week':
                 newDate = addDays(date, direction * 7)
@@ -124,12 +149,14 @@ export const useBookingView = (options?: {
         }
 
         // Clamp to season bounds
-        if (bounds) {
+        if (bounds && newDate) {
             if (newDate < bounds.start) newDate = bounds.start
             if (newDate > bounds.end) newDate = bounds.end
         }
 
-        await setDate(newDate)
+        if (newDate) {
+            await setDate(newDate)
+        }
     }
 
     return {

@@ -64,6 +64,9 @@ const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeas
 const authStore = useAuthStore()
 const dinnerStartTime = getDefaultDinnerStartTime()
 
+// Responsive breakpoint for mobile-collapsed calendar
+const isMd = inject<Ref<boolean>>('isMd')
+
 // Season-specific deadline functions
 
 // Team selection via query parameter
@@ -101,7 +104,7 @@ const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('vie
     }
     return null
   },
-  defaultValue: () => ({ mode: 'calendar', open: true }),
+  defaultValue: () => ({ mode: 'calendar', open: isMd?.value ?? false }),
   syncWhen: () => isPageReady.value
 })
 

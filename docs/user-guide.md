@@ -116,6 +116,9 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 ![Ugevisning](screenshots/dinner/booking-grid-week.png)
 *Ugevisning: Overblik over hele ugens tilmeldinger*
 
+![Månedsvisning](screenshots/dinner/booking-grid-month.png)
+*Månedsvisning: Se og redigér hele månedens tilmeldinger*
+
 ### Forklaring
 
 I appen bruges følgende symboler:

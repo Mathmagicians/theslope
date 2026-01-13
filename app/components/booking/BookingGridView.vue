@@ -57,18 +57,24 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
 type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
 
+// Ticket config type (same as DinnerBookingForm)
+type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
+
 interface GridRow {
   rowType: RowType
   id: number | string
   name: string
-  inhabitant?: InhabitantDisplay
+  inhabitant?: InhabitantDisplay // For inhabitant row, or booker for guest-order
   inhabitants?: InhabitantDisplay[] // For power mode
-  guestOrder?: OrderDisplay // For existing guest bookings
+  guestOrders?: OrderDisplay[] // For grouped guest bookings (by booker+ticketType+event)
+  ticketConfig?: TicketConfig // For guest rows - ticket type config with color
+  guestCount?: number // Number of guest tickets in group
   isSynthetic: boolean
 }
 
@@ -103,7 +109,10 @@ const emptyState = getRandomEmptyMessage('noDinners')
 
 // Billing (for ticket count format) and ticket (for price format)
 const {formatTicketCounts} = useBilling()
-const {formatPrice, getTicketTypeConfig} = useTicket()
+const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
+
+// Guest order helpers (same as DinnerBookingForm)
+const {groupGuestOrders, partitionGuestOrders} = useBooking()
 
 // Validation schemas
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
@@ -251,13 +260,22 @@ const tableData = computed((): GridRow[] => {
     })
   })
 
-  // Guest order rows (existing guest bookings)
-  guestOrders.value.forEach((order, idx) => {
+  // Guest order rows - grouped by (booker, ticketType, eventId) - same pattern as DinnerBookingForm
+  const guestGroups = groupGuestOrders(guestOrders.value)
+  Object.entries(guestGroups).forEach(([key, orders]) => {
+    const firstOrder = orders[0]!
+    const booker = inhabitants.find(i => i.id === firstOrder.inhabitantId)
+    // Resolve ticket price for guest: no birthDate, use priceAtBooking
+    const resolvedTicketPrice = resolveTicketPrice(null, firstOrder.priceAtBooking, props.ticketPrices)
+
     rows.push({
       rowType: 'guest-order',
-      id: `guest-${order.id}`,
-      name: `Gæst ${idx + 1}`,
-      guestOrder: order,
+      id: `guest-group-${key}`,
+      name: 'Gæst',
+      inhabitant: booker, // The booker
+      guestOrders: orders,
+      ticketConfig: resolvedTicketPrice ? ticketTypeConfig[resolvedTicketPrice.ticketType] : null,
+      guestCount: orders.length,
       isSynthetic: false
     })
   })
@@ -374,9 +392,8 @@ const navigationLabel = computed(() => {
 // GUEST ORDERS
 // ============================================================================
 
-const guestOrders = computed(() =>
-  props.orders.filter(o => o.inhabitantId === null || !props.household.inhabitants.some(i => i.id === o.inhabitantId))
-)
+// Use partitionGuestOrders (same as DinnerBookingForm) - filters by isGuestTicket
+const guestOrders = computed(() => partitionGuestOrders(props.orders).guestOrders)
 
 // ============================================================================
 // EVENT SUMMARIES (for footer - matches economy view format)
@@ -397,46 +414,52 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
 
 <template>
   <div data-testid="booking-grid-view" class="flex flex-col">
-    <!-- Navigation Header -->
-    <div class="flex items-center justify-between px-2 py-2 border-b border-default">
+    <!-- Navigation Header (3-column: spacer | centered nav | edit button) -->
+    <div class="flex items-center px-2 py-2 border-b border-default">
+      <div class="flex-1" />
       <div class="flex items-center gap-2">
         <UButton
           :icon="ICONS.arrowLeft"
           :color="COLOR.neutral"
           variant="ghost"
-          :size="SIZES.sm"
+          :size="SIZES.md"
           :disabled="props.isSaving"
           data-testid="grid-nav-prev"
           @click="emit('navigate', 'prev')"
         />
-        <span class="text-sm font-medium">{{ navigationLabel }}</span>
+        <UBadge :color="COLOR.neutral" variant="subtle" :size="SIZES.lg">
+          <UIcon :name="ICONS.calendar" class="size-4 mr-1" />
+          {{ navigationLabel }}
+        </UBadge>
         <UButton
           :icon="ICONS.arrowRight"
           :color="COLOR.neutral"
           variant="ghost"
-          :size="SIZES.sm"
+          :size="SIZES.md"
           :disabled="props.isSaving"
           data-testid="grid-nav-next"
           @click="emit('navigate', 'next')"
         />
       </div>
-      <!-- Pencil button to enter edit mode (VIEW only) -->
-      <UButton
-        v-if="formMode === FORM_MODES.VIEW"
-        :icon="ICONS.edit"
-        :color="COLOR.neutral"
-        variant="ghost"
-        :size="SIZES.sm"
-        :disabled="props.isSaving"
-        data-testid="grid-edit"
-        @click="emit('update:formMode', FORM_MODES.EDIT)"
-      />
+      <div class="flex-1 flex justify-end">
+        <!-- Pencil button to enter edit mode (VIEW only) -->
+        <UButton
+          v-if="formMode === FORM_MODES.VIEW"
+          :icon="ICONS.edit"
+          :color="COLOR.neutral"
+          variant="ghost"
+          :size="SIZES.md"
+          :disabled="props.isSaving"
+          data-testid="grid-edit"
+          @click="emit('update:formMode', FORM_MODES.EDIT)"
+        />
+      </div>
     </div>
 
     <!-- Day view: slot for DinnerBookingForm -->
-    <template v-if="view === 'day'">
+    <div v-if="view === 'day'" class="pt-2 md:pt-4">
       <slot name="day-content" />
-    </template>
+    </div>
 
     <!-- Grid Table (week/month only) -->
     <UTable
@@ -517,10 +540,29 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
             </UBadge>
           </template>
         </UserListItem>
-        <!-- Guest order row -->
-        <div v-else-if="row.original.rowType === 'guest-order'" class="flex items-center gap-1">
-          <UIcon :name="COMPONENTS.guestRow.orderIcon" :class="COMPONENTS.guestRow.iconClass" />
-          <span :class="TYPOGRAPHY.bodyText">{{ row.original.name }}</span>
+        <!-- Guest order row - show who invited using UserListItem (same as DinnerBookingForm) -->
+        <div v-else-if="row.original.rowType === 'guest-order'" class="flex items-center gap-2">
+          <UIcon :name="ICONS.userPlus" class="size-4 text-info flex-shrink-0" />
+          <span class="text-sm text-muted">Gæst af</span>
+          <UserListItem
+            v-if="row.original.inhabitant"
+            :inhabitants="row.original.inhabitant"
+            :link-to-profile="false"
+            compact
+            :show-names="true"
+          >
+            <template #badge>
+              <UBadge
+                v-if="row.original.ticketConfig"
+                :color="row.original.ticketConfig.color"
+                variant="subtle"
+                :size="SIZES.xs"
+              >
+                {{ row.original.ticketConfig.label }}{{ row.original.guestCount && row.original.guestCount > 1 ? ` ×${row.original.guestCount}` : '' }}
+              </UBadge>
+            </template>
+          </UserListItem>
+          <span v-else class="text-sm">ukendt</span>
         </div>
         <!-- Guest add row -->
         <div v-else-if="row.original.rowType === 'guest-add'" class="flex items-center gap-1">
@@ -571,13 +613,13 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
           @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
         />
-        <!-- Guest order row -->
+        <!-- Guest order row - show mode for orders in this event -->
         <DinnerModeSelector
-          v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrder?.dinnerEventId === event.id"
-          :model-value="row.original.guestOrder.dinnerMode"
+          v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrders?.some(o => o.dinnerEventId === event.id)"
+          :model-value="row.original.guestOrders.find(o => o.dinnerEventId === event.id)!.dinnerMode"
           :form-mode="FORM_MODES.VIEW"
           :size="SIZES.xs"
-          :name="`guest-${row.original.guestOrder.id}-${event.id}`"
+          :name="`guest-${row.original.id}-${event.id}`"
         />
         <!-- Guest add row: + button for future events -->
         <UButton
@@ -634,8 +676,9 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
       </template>
     </UTable>
 
-    <!-- Legend: DinnerModeSelector in VIEW mode with labels (DRY) -->
+    <!-- Legend: hidden in day view (DinnerBookingForm has its own) -->
     <UAlert
+      v-if="view !== 'day'"
       :color="COLOR.neutral"
       variant="subtle"
       :icon="ICONS.info"

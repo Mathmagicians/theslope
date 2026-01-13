@@ -1,0 +1,84 @@
+// @vitest-environment nuxt
+import {describe, it, expect} from 'vitest'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
+import BookingGridView from '~/components/booking/BookingGridView.vue'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+
+const ticketPrices = TicketFactory.defaultTicketPrices()
+const deadlines = {
+  canModifyOrders: () => true,
+  canEditDiningMode: () => true,
+  getOrderCancellationAction: () => null,
+  isAnnounceMenuPastDeadline: () => false
+}
+
+// Mock household with inhabitants (inline to avoid type imports)
+const mockHousehold = {
+  id: 1,
+  heynaboId: 1001,
+  pbsId: 2001,
+  name: 'Test Household',
+  address: 'Testvej 1',
+  movedInDate: new Date('2020-01-01'),
+  moveOutDate: null,
+  shortName: 'T1',
+  inhabitants: [
+    {id: 1, name: 'Anna', lastName: 'Test', birthDate: new Date('1990-01-01'), heynaboPictureUrl: null, householdId: 1, diningDefaults: {}},
+    {id: 2, name: 'Lars', lastName: 'Test', birthDate: new Date('1988-05-15'), heynaboPictureUrl: null, householdId: 1, diningDefaults: {}}
+  ]
+}
+
+const baseProps = {
+  view: 'day' as const,
+  dateRange: {start: new Date('2025-01-15'), end: new Date('2025-01-15')},
+  household: mockHousehold,
+  dinnerEvents: [],
+  orders: [],
+  ticketPrices,
+  deadlines
+}
+
+const mount = (props = {}) => mountSuspended(BookingGridView, {
+  props: {...baseProps, ...props},
+  slots: {'day-content': '<div data-testid="day-slot">Day content</div>'}
+})
+
+describe('BookingGridView', () => {
+  it('renders with data-testid', async () => {
+    const wrapper = await mount()
+    expect(wrapper.find('[data-testid="booking-grid-view"]').exists()).toBe(true)
+  })
+
+  it('renders navigation buttons', async () => {
+    const wrapper = await mount()
+    expect(wrapper.find('[data-testid="grid-nav-prev"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="grid-nav-next"]').exists()).toBe(true)
+  })
+
+  it('renders edit button in view mode', async () => {
+    const wrapper = await mount()
+    expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(true)
+  })
+
+  it('renders day-content slot for day view', async () => {
+    const wrapper = await mount({view: 'day'})
+    expect(wrapper.find('[data-testid="day-slot"]').exists()).toBe(true)
+  })
+
+  const navCases: {button: string, event: string}[] = [
+    {button: 'grid-nav-prev', event: 'prev'},
+    {button: 'grid-nav-next', event: 'next'}
+  ]
+
+  it.each(navCases)('emits navigate $event when $button clicked', async ({button, event}) => {
+    const wrapper = await mount()
+    await wrapper.find(`[data-testid="${button}"]`).trigger('click')
+    expect(wrapper.emitted('navigate')?.[0]).toEqual([event])
+  })
+
+  it('emits update:formMode EDIT when edit button clicked', async () => {
+    const wrapper = await mount()
+    await wrapper.find('[data-testid="grid-edit"]').trigger('click')
+    expect(wrapper.emitted('update:formMode')?.[0]).toEqual(['edit'])
+  })
+})

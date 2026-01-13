@@ -806,6 +806,33 @@ export const useBooking = () => {
         }
     }
 
+    /**
+     * Group guest orders by (booker, ticketType, dinnerEventId)
+     * Returns a map from group key to array of orders
+     */
+    const groupGuestOrders = <T extends { inhabitantId: number | null, ticketType?: string | null, dinnerEventId: number }>(
+        orders: T[]
+    ): Record<string, T[]> => {
+        return orders.reduce((acc, order) => {
+            const key = `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}`
+            if (!acc[key]) acc[key] = []
+            acc[key].push(order)
+            return acc
+        }, {} as Record<string, T[]>)
+    }
+
+    /**
+     * Partition orders into guest and regular (inhabitant) orders
+     */
+    const partitionGuestOrders = <T extends { isGuestTicket?: boolean }>(
+        orders: T[]
+    ): { guestOrders: T[], regularOrders: T[] } => {
+        return orders.reduce((acc, order) => {
+            (order.isGuestTicket ? acc.guestOrders : acc.regularOrders).push(order)
+            return acc
+        }, { guestOrders: [] as T[], regularOrders: [] as T[] })
+    }
+
     // ============================================================================
     // Scaffold Result Formatting - Consistent display across UI and logs
     // ============================================================================
@@ -895,6 +922,8 @@ export const useBooking = () => {
         DEADLINE_LABELS,
         // Guest Booking
         buildGuestOrder,
+        groupGuestOrders,
+        partitionGuestOrders,
         // Scaffold Result Formatting
         formatScaffoldResult,
         // Lock Status

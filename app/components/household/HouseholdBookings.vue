@@ -35,7 +35,8 @@ const lockStatus = computed(() => selectedSeason.value ? computeLockStatus(dinne
 
 const {view, selectedDate, dateRange, setDate, navigate} = useBookingView({
   syncWhen: () => isSelectedSeasonInitialized.value,
-  seasonDates: () => selectedSeason.value?.seasonDates ?? null
+  seasonDates: () => selectedSeason.value?.seasonDates ?? null,
+  dinnerDates: () => dinnerEvents.value.map(e => new Date(e.date))
 })
 
 const handleDateSelected = (date: Date) => setDate(date)
