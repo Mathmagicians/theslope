@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { SeasonFactory } from '../testDataFactories/seasonFactory'
-import { HouseholdFactory } from '../testDataFactories/householdFactory'
-import { DinnerEventFactory } from '../testDataFactories/dinnerEventFactory'
-import testHelpers from '../testHelpers'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 

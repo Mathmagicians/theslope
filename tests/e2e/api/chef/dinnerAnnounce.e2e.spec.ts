@@ -1,10 +1,10 @@
 import {test, expect} from '@playwright/test'
-import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {getDinnerTimeRange} from '~/utils/season'
-import testHelpers from '../../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const DEFAULT_DINNER_START_TIME = 18
 

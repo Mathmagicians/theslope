@@ -69,7 +69,7 @@ interface TableRow {
   dinnerMode: DinnerMode
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
-  ticketPriceId: number
+  ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   ticketCount?: number // DEBUG: total orders for this inhabitant (should be 1)
   provenanceHousehold?: string
@@ -123,7 +123,7 @@ const {COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage} = use
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
-const {getTicketTypeConfig, getTicketPriceForInhabitant, ticketTypeConfig} = useTicket()
+const {getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
@@ -262,13 +262,13 @@ const tableData = computed((): TableRow[] => {
     const order = ordersForInhabitant[0] ?? null
     const ticketCount = ordersForInhabitant.length
     const ticketConfig = getTicketTypeConfig(inhabitant.birthDate ?? null, props.ticketPrices)
-    const ticketPrice = getTicketPriceForInhabitant(inhabitant.birthDate ?? null, props.ticketPrices)
 
-    // Existing order: preserve ticketPriceId. New booking: compute from age.
-    const resolvedTicketPriceId = order?.ticketPriceId ?? ticketPrice?.id
-    if (!resolvedTicketPriceId) {
-      throw new Error(`Cannot resolve ticketPriceId for inhabitant ${inhabitant.id}`)
-    }
+    // Resolve ticket price: birthDate first, then priceAtBooking fallback, then ADULT
+    const ticketPrice = resolveTicketPrice(
+      inhabitant.birthDate ?? null,
+      order?.priceAtBooking,
+      props.ticketPrices
+    )
 
     return {
       rowType: 'inhabitant' as RowType,
@@ -282,7 +282,7 @@ const tableData = computed((): TableRow[] => {
       orderState: order?.state as OrderState | undefined,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
-      ticketPriceId: resolvedTicketPriceId,
+      ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
       provenanceHousehold: order?.provenanceHousehold,
       provenanceAllergies: order?.provenanceAllergies
@@ -303,10 +303,8 @@ const tableData = computed((): TableRow[] => {
       const firstOrder = orders[0]!
       const booker = allInhabitants.find(i => i.id === firstOrder.inhabitantId)
 
-      // Guest order must have ticketPriceId
-      if (!firstOrder.ticketPriceId) {
-        throw new Error(`Guest order ${firstOrder.id} missing ticketPriceId`)
-      }
+      // Resolve ticket price for guest: no birthDate, use priceAtBooking
+      const resolvedTicketPrice = resolveTicketPrice(null, firstOrder.priceAtBooking, props.ticketPrices)
 
       return {
         rowType: 'guest-order' as RowType,
@@ -314,13 +312,13 @@ const tableData = computed((): TableRow[] => {
         name: 'Gæst',
         lastName: '',
         inhabitant: booker,
-        ticketConfig: firstOrder.ticketType ? ticketTypeConfig[firstOrder.ticketType] : null,
+        ticketConfig: resolvedTicketPrice ? ticketTypeConfig[resolvedTicketPrice.ticketType] : null,
         order: firstOrder,
         orders,
         orderState: firstOrder.state as OrderState,
         dinnerMode: firstOrder.dinnerMode,
         price: firstOrder.priceAtBooking,
-        ticketPriceId: firstOrder.ticketPriceId,
+        ticketPriceId: firstOrder.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
         guestCount: orders.length,
         provenanceHousehold: firstOrder.provenanceHousehold,
         provenanceAllergies: firstOrder.provenanceAllergies
@@ -379,17 +377,20 @@ const handleSave = async (row: TableRow) => {
     if (row.rowType === 'power') {
       // Power mode: all inhabitants with same mode
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
-      orders = tableData.value
-        .filter((r: TableRow) => r.rowType === 'inhabitant')
-        .map((r: TableRow) => ({
-          inhabitantId: r.id as number,
-          dinnerEventId,
-          dinnerMode: draftMode.value,
-          ticketPriceId: r.ticketPriceId,
-          isGuestTicket: false,
-          orderId: r.order?.id,
-          state: OrderStateEnum.BOOKED
-        }))
+      const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
+      const missingPrice = inhabitantRows.find(r => r.ticketPriceId === null)
+      if (missingPrice) {
+        throw new Error(`Kan ikke booke: mangler billetpris for ${missingPrice.name}`)
+      }
+      orders = inhabitantRows.map((r: TableRow) => ({
+        inhabitantId: r.id as number,
+        dinnerEventId,
+        dinnerMode: draftMode.value,
+        ticketPriceId: r.ticketPriceId!,
+        isGuestTicket: false,
+        orderId: r.order?.id,
+        state: OrderStateEnum.BOOKED
+      }))
     } else if (row.rowType === 'guest') {
       // Add new guest ticket(s) - linked to the booker (user's inhabitant)
       // No orderId - these are creates, state = BOOKED
@@ -410,6 +411,9 @@ const handleSave = async (row: TableRow) => {
       // Update existing guest
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
       const inhabitantId = row.order?.inhabitantId
+      if (!row.ticketPriceId) {
+        throw new Error('Kan ikke booke: mangler billetpris for gæst')
+      }
       if (inhabitantId) {
         orders = [{
           inhabitantId,
@@ -424,6 +428,9 @@ const handleSave = async (row: TableRow) => {
     } else {
       // Update single inhabitant
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
+      if (!row.ticketPriceId) {
+        throw new Error(`Kan ikke booke: mangler billetpris for ${row.name}`)
+      }
       if (typeof row.id === 'number') {
         orders = [{
           inhabitantId: row.id,

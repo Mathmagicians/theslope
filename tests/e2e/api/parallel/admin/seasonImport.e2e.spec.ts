@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test'
-import {SeasonImportFactory} from '../../testDataFactories/seasonImportFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
-import testHelpers from '../../testHelpers'
+import {SeasonImportFactory} from '~~/tests/e2e/testDataFactories/seasonImportFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext} = testHelpers
 

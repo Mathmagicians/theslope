@@ -95,6 +95,57 @@ describe('useTicket', () => {
         })
     })
 
+    describe('resolveTicketPrice', () => {
+        // Sorted by price asc (as from DB): BABY 0, BABY 1500, CHILD 3000, ADULT 5000
+        const sortedPrices = TicketFactory.defaultTicketPrices()
+
+        it.each([
+            // Priority 1: birthDate → ticketType → cheapest for type
+            ['1yo with birthDate', new Date('2024-01-01'), undefined, 'BABY', 0],
+            ['8yo with birthDate', new Date('2017-01-01'), undefined, 'CHILD', 3000],
+            ['25yo with birthDate', new Date('2000-01-01'), undefined, 'ADULT', 5000],
+            // Priority 2: priceAtBooking (no birthDate)
+            ['priceAtBooking 0 (free baby)', null, 0, 'BABY', 0],
+            ['priceAtBooking 1500 (hungry baby)', null, 1500, 'BABY', 1500],
+            ['priceAtBooking 3000 (child)', null, 3000, 'CHILD', 3000],
+            ['priceAtBooking 5000 (adult)', null, 5000, 'ADULT', 5000],
+            // Fallback: ADULT when no birthDate and no matching price
+            ['no birthDate, no priceAtBooking', null, undefined, 'ADULT', 5000],
+            ['no birthDate, unmatched price', null, 9999, 'ADULT', 5000],
+        ])('GIVEN %s THEN returns ticketType=%s price=%i',
+            (_, birthDate, priceAtBooking, expectedType, expectedPrice) => {
+                const {resolveTicketPrice} = useTicket()
+                const result = resolveTicketPrice(birthDate, priceAtBooking, sortedPrices, referenceDate)
+                expect(result).toBeDefined()
+                expect(result!.ticketType).toBe(expectedType)
+                expect(result!.price).toBe(expectedPrice)
+            }
+        )
+
+        it('GIVEN birthDate for BABY THEN returns cheapest BABY (free, not hungry)', () => {
+            const {resolveTicketPrice} = useTicket()
+            // 1yo = BABY, sorted prices have BABY at 0 and 1500, should return 0 (cheapest)
+            const result = resolveTicketPrice(new Date('2024-01-01'), undefined, sortedPrices, referenceDate)
+            expect(result!.ticketType).toBe('BABY')
+            expect(result!.price).toBe(0) // Cheapest BABY, not 1500
+        })
+
+        it('GIVEN no ticketPrices THEN returns undefined', () => {
+            const {resolveTicketPrice} = useTicket()
+            expect(resolveTicketPrice(new Date('2020-01-01'), undefined, undefined, referenceDate)).toBeUndefined()
+            expect(resolveTicketPrice(new Date('2020-01-01'), undefined, [], referenceDate)).toBeUndefined()
+        })
+
+        it('GIVEN birthDate takes priority over priceAtBooking', () => {
+            const {resolveTicketPrice} = useTicket()
+            // 25yo = ADULT, but priceAtBooking is 0 (baby price)
+            // birthDate should win → ADULT 5000
+            const result = resolveTicketPrice(new Date('2000-01-01'), 0, sortedPrices, referenceDate)
+            expect(result!.ticketType).toBe('ADULT')
+            expect(result!.price).toBe(5000)
+        })
+    })
+
     describe('formatPrice', () => {
         it.each([
             [0, '0'],

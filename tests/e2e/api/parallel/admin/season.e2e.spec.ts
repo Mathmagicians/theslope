@@ -24,11 +24,16 @@ test.describe('Season API Tests', () => {
     let createdSeasonIds: number[] = []
     const createdHouseholdIds: number[] = []
 
-    // Helper: Verify ticket prices exist
+    // Helper: Verify ticket prices exist and are sorted by price ascending (cheapest first)
     const assertTicketPrices = (season: Season, expectedCount = 4) => {
         expect(season.ticketPrices).toBeDefined()
         expect(Array.isArray(season.ticketPrices)).toBe(true)
         expect(season.ticketPrices.length).toBe(expectedCount)
+
+        // Verify prices are sorted ascending (cheapest first) - enables resolveTicketPrice to use .find()
+        const prices = season.ticketPrices.map(tp => tp.price)
+        const sortedPrices = [...prices].sort((a, b) => a - b)
+        expect(prices, 'ticketPrices should be sorted by price ascending').toEqual(sortedPrices)
     }
 
     // Helper: Track season for cleanup

@@ -1,9 +1,9 @@
 import {test, expect} from '@playwright/test'
-import testHelpers from '../../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
 import type {UserDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const {validatedBrowserContext, saltedId, headers} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()

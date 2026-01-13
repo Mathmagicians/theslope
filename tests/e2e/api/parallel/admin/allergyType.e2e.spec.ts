@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test'
-import {AllergyFactory} from '../../testDataFactories/allergyFactory'
-import testHelpers from '../../testHelpers'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 const {validatedBrowserContext} = testHelpers
@@ -142,7 +142,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
     test('GIVEN allergies assigned to inhabitants WHEN fetching all types THEN includes inhabitants data', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const {HouseholdFactory} = await import('../../testDataFactories/householdFactory')
+        const {HouseholdFactory} = await import('~~/tests/e2e/testDataFactories/householdFactory')
 
         // GIVEN: Create allergy type
         const allergyType = await AllergyFactory.createAllergyType(context, {

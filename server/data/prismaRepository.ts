@@ -1026,7 +1026,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
                     },
                     orderBy: {name: 'asc'}
                 },
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1059,7 +1059,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                     },
                     orderBy: {name: 'asc'}
                 },
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1092,7 +1092,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     try {
         const seasons = await prisma.season.findMany({
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             },
             orderBy: {
                 seasonDates: 'desc'
@@ -1134,7 +1134,7 @@ export async function deleteSeason(
         const deletedSeason = await prisma.season.delete({
             where: {id},
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1185,7 +1185,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
                 ticketPrices: {create: ticketPricesForCreate}
             },
             include: {
-                ticketPrices: true,
+                ticketPrices: { orderBy: { price: 'asc' } },
                 dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 CookingTeams: true
             }
@@ -1259,7 +1259,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
             where: {id: validatedSeasonData.id},
             data: updateData,
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 

@@ -1,9 +1,9 @@
 import {test, expect} from '@playwright/test'
-import {BillingFactory} from '../../testDataFactories/billingFactory'
-import {HouseholdFactory} from '../../testDataFactories/householdFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
-import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
-import testHelpers from '../../testHelpers'
+import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext, headers, salt, temporaryAndRandom} = testHelpers
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'

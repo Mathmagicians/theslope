@@ -65,19 +65,19 @@ export default defineConfig({
       grep: /Authenticate member for UI/,
       dependencies: ['setup-member-api']
     },
-    // API tests - parallel (excludes serial tests like heynabo)
+    // API tests - parallel
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/api\/.*\.spec\.ts/,
-      testIgnore: /heynabo\.e2e\.spec\.ts/,
+      testMatch: /tests\/e2e\/api\/parallel\/.*\.spec\.ts/,
       dependencies: ['setup-api', 'setup-member-api'],
     },
-    // API serial tests (heynabo imports/deletes data) - runs after parallel API tests
+    // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
+    // Runs after parallel API tests to avoid interference
     {
       name: 'chromium-api-serial',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /heynabo\.e2e\.spec\.ts/,
+      testMatch: /tests\/e2e\/api\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       dependencies: ['chromium-api'],
     },

@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test'
-import {UserFactory} from '../../testDataFactories/userFactory'
-import testHelpers from '../../testHelpers'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import type {UserDisplay} from '~/composables/useCoreValidation'
 

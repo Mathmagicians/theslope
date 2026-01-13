@@ -114,21 +114,58 @@ export const useTicket = () => {
     }
 
     /**
-     * Get the matching TicketPrice for an inhabitant based on their age
-     * Returns the full TicketPrice object including id and price
+     * Resolve a TicketPrice using available information in priority order:
+     * 1. birthDate → determineTicketType → find cheapest price for that type
+     * 2. priceAtBooking → find price with matching amount
+     * 3. Fallback → cheapest ADULT price
      *
-     * @param birthDate - Date of birth
-     * @param ticketPrices - Season ticket prices with age limits
+     * Works for both inhabitants (birthDate known) and guests (use priceAtBooking).
+     * Also handles orphaned orders where TicketPrice was deleted but priceAtBooking preserved.
+     *
+     * NOTE: Relies on ticketPrices being sorted by price ascending (from DB).
+     * .find() returns first match = cheapest price (favors user).
+     *
+     * @param birthDate - Date of birth (preferred, determines ticket type by age)
+     * @param priceAtBooking - Frozen price from existing order (fallback when no birthDate)
+     * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
      * @param referenceDate - Date to calculate age on (default: today)
-     * @returns TicketPrice object or undefined if not found
+     * @returns Matching TicketPrice or undefined if no prices available
+     */
+    const resolveTicketPrice = (
+        birthDate: Date | null | undefined,
+        priceAtBooking: number | null | undefined,
+        ticketPrices?: TicketPrice[],
+        referenceDate?: Date
+    ): TicketPrice | undefined => {
+        if (!ticketPrices?.length) return undefined
+
+        // Priority 1: birthDate → ticketType → cheapest price for type (.find on sorted = first = cheapest)
+        if (birthDate) {
+            const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
+            const match = ticketPrices.find(tp => tp.ticketType === ticketType)
+            if (match) return match
+        }
+
+        // Priority 2: priceAtBooking → exact price match
+        if (priceAtBooking !== null && priceAtBooking !== undefined) {
+            const match = ticketPrices.find(tp => tp.price === priceAtBooking)
+            if (match) return match
+        }
+
+        // Fallback: cheapest ADULT price (.find on sorted = first = cheapest)
+        return ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)
+    }
+
+    /**
+     * @deprecated Use resolveTicketPrice instead
+     * Get the matching TicketPrice for an inhabitant based on their age
      */
     const getTicketPriceForInhabitant = (
         birthDate: Date | null,
         ticketPrices?: TicketPrice[],
         referenceDate?: Date
     ): TicketPrice | undefined => {
-        const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
-        return ticketPrices?.find(tp => tp.ticketType === ticketType)
+        return resolveTicketPrice(birthDate, undefined, ticketPrices, referenceDate)
     }
 
     /**
@@ -149,6 +186,7 @@ export const useTicket = () => {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        resolveTicketPrice,
         getTicketPriceForInhabitant,
         convertPriceToDecimalFormat,
         formatPrice

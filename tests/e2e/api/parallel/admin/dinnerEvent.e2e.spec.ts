@@ -1,11 +1,11 @@
 import {test, expect} from '@playwright/test'
-import {DinnerEventFactory} from '../../testDataFactories/dinnerEventFactory'
-import {SeasonFactory} from '../../testDataFactories/seasonFactory'
-import {OrderFactory} from '../../testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
-import testHelpers from '../../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
 const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()

@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test'
 import {SeasonFactory} from "../testDataFactories/seasonFactory"
-import testHelpers from '../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {validatedBrowserContext} = testHelpers
