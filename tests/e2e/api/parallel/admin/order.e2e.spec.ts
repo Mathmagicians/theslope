@@ -14,9 +14,9 @@ const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 const ORDER_ENDPOINT = '/api/order'
 
 const testOrderIds: number[] = []
+const testSeasonIds: number[] = []  // Track all created seasons for cleanup
 let testHouseholdId: number
 let testInhabitantId: number
-let testSeasonId: number
 let testDinnerEventId: number
 let testAdultTicketPriceId: number
 let testChildTicketPriceId: number

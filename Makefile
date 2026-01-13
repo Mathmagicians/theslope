@@ -190,10 +190,10 @@ d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytyp
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod
 
 deploy-dev: ## Deploy to dev with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy
+	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy && "Released version with commit ID $(GITHUB_SHA) to dev environment."
 
 deploy-prod: ## Deploy to prod with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy:prod
+	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy:prod && "Released version with commit ID $(GITHUB_SHA) to prod environment."
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty

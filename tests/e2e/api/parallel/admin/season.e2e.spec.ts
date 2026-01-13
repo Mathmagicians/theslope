@@ -141,6 +141,7 @@ test.describe('Season API Tests', () => {
                 ...newSeason,
                 id: seasonId,
                 seasonDates: created.seasonDates,
+                ticketPrices: created.ticketPrices,  // Use IDs from created season
                 holidays: [
                     ...newSeason.holidays,
                     {
