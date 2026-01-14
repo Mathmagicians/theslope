@@ -277,14 +277,30 @@ export class SeasonFactory {
      * Returns cached instance if already created, otherwise creates and activates new season
      * If singleton season exists in DB, uses it (parallel-safe across workers)
      * Remembers the previously active season to restore after cleanup
+     *
+     * ENV-AWARE: When SHOULD_NOT_MUTATE=true (dev/prod smoke tests), skips test data
+     * scaffolding and uses whatever active season exists in the deployed environment.
+     *
      * @param context BrowserContext for API requests
      * @param aSeason Partial season data (merged with defaults, shortName always overridden to E2E_SINGLETON_NAME)
-     * @returns Active Season (singleton)
+     * @returns Active Season (singleton in local/CI, existing in dev/prod)
      */
     static readonly createActiveSeason = async (
         context: BrowserContext,
         aSeason: Partial<Season> = {}
     ): Promise<Season> => {
+        // In deployed env (dev/prod), just use the existing active season - don't look for test singleton
+        if (process.env.SHOULD_NOT_MUTATE) {
+            const activeId = await this.getActiveSeasonId(context)
+            if (!activeId) {
+                throw new Error('SHOULD_NOT_MUTATE is set but no active season exists in deployed environment')
+            }
+            const season = await this.getSeason(context, activeId)
+            this.activeSeason = season
+            console.info('🌞 > SEASON_FACTORY > Using existing active season (SHOULD_NOT_MUTATE):', season.shortName)
+            return season
+        }
+
         // Return cached active season if it exists
         if (this.activeSeason) {
             console.info('🌞 > SEASON_FACTORY > Returning cached active season:', this.activeSeason.shortName)

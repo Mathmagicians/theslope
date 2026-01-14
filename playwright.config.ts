@@ -88,12 +88,13 @@ export default defineConfig({
       testMatch: /tests\/e2e\/ui\/.*\.spec\.ts/,
       dependencies: ['setup-ui', 'setup-member-ui'],
     },
-    // Smoke tests - admin auth only (no member auth required)
+    // Smoke tests - run serially (shared active season state)
     {
       name: 'chromium-smoke',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/.*\.spec\.ts/,
       grep: /@smoke/,
+      fullyParallel: false,
       dependencies: ['setup-api', 'setup-ui'],
     },
 

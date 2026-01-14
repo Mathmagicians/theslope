@@ -110,6 +110,9 @@ jobs:
           BASE_URL: ${{ vars.BASE_URL }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
           HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
+          HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
+          SHOULD_NOT_MUTATE: true
+          EXPECTED_VERSION: ${{ github.sha }}
         run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

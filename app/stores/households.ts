@@ -216,8 +216,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             ? households.value.find(h => h.shortName === shortName)?.id
             : (selectedHouseholdId.value ?? myHousehold.value?.id)
 
-        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName:', shortName ?? 'none',
-            'current:', selectedHouseholdId.value, 'resolved:', householdId)
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName: ${shortName ?? 'none'}, current: ${selectedHouseholdId.value}, resolved: ${householdId}`)
 
         if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }

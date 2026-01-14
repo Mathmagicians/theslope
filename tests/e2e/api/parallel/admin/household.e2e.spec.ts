@@ -48,7 +48,7 @@ function verifyLightweightInhabitant(inhabitant: InhabitantDisplay, context: str
 
 test.describe('Household /api/admin/household CRUD operations', () => {
 
-    test('@smoke PUT can create household with valid structure', async ({browser}) => {
+    test('PUT can create household with valid structure', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // Create household (factory validates 201 and id exists)
