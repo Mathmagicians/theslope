@@ -13,6 +13,11 @@ dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
 const isLocalhost = process.env.BASE_URL?.includes('localhost') ?? true
 
+// Cloudflare bypass token for smoke tests on deployed environments
+const extraHTTPHeaders = process.env.CLOUDFLARE_BYPASS_TOKEN
+  ? { 'x-bypass-token': process.env.CLOUDFLARE_BYPASS_TOKEN }
+  : {}
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -37,6 +42,9 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Cloudflare bypass for smoke tests on deployed environments */
+    extraHTTPHeaders,
   },
 
   /* Configure projects for major browsers */
