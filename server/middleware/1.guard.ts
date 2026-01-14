@@ -25,11 +25,11 @@ export default defineEventHandler(async (event) => {
     const shouldNotBeProtected = pathname === "/" || unprotectedRoutes.find((r) => (pathname.startsWith(r)))
 
     if (shouldNotBeProtected) {
-        console.info("🔒 > [GUARD] > Unprotected route: ", pathname)
+        console.info(`🔒 > [GUARD] > Unprotected route: ${pathname}`)
         return // Continue to next handler
     }
 
-    console.info("🔒 > [GUARD] > Protected route: ", pathname)
+    console.info(`🔒 > [GUARD] > Protected route: ${pathname}`)
 
     // Check for user session - getUserSession returns empty object if no session exists
     const session = await getUserSession(event)

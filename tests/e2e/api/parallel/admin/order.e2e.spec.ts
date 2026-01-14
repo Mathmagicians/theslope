@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
@@ -14,7 +15,7 @@ const { createDefaultWeekdayMap } = useWeekDayMapValidation()
 const ORDER_ENDPOINT = '/api/order'
 
 const testOrderIds: number[] = []
-const testSeasonIds: number[] = []  // Track all created seasons for cleanup
+let testSeasonId: number
 let testHouseholdId: number
 let testInhabitantId: number
 let testDinnerEventId: number
@@ -427,10 +428,17 @@ test.describe('Order API', () => {
   test('GIVEN no RELEASED orders WHEN claiming THEN fails with 409', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create order (state=BOOKED, not released)
+    // Create isolated dinner event to avoid race conditions with other tests that release orders
+    const isolatedEvent = await DinnerEventFactory.createDinnerEvent(context, {
+      seasonId: testSeasonId,
+      date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
+      menuTitle: salt('IsolatedClaimTest')
+    })
+
+    // Create order on isolated event (state=BOOKED, not released)
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
+      dinnerEventId: isolatedEvent.id,
       orders: [OrderFactory.defaultOrderItem({
         inhabitantId: testInhabitantId,
         ticketPriceId: testAdultTicketPriceId
@@ -438,8 +446,8 @@ test.describe('Order API', () => {
     })
     testOrderIds.push(result!.createdIds[0]!)
 
-    // Claim without releasing - should fail (no RELEASED tickets available)
-    await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId, false, 409)
+    // Claim without releasing - should fail (no RELEASED tickets available on this isolated event)
+    await OrderFactory.claimOrder(context, isolatedEvent.id, testAdultTicketPriceId, testInhabitantId, false, 409)
   })
 
   test('GIVEN non-existent dinner event WHEN claiming THEN fails with 409', async ({ browser }) => {

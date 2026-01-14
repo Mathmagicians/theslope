@@ -308,7 +308,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const updateDinner = async (id: number, updates: DinnerUpdate): Promise<DinnerEventDetail> => {
         const updated = await $fetch(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
         const parsed = DinnerEventDetailSchema.parse(updated)
-        console.info(CTX, `Updated dinner ${id}:`, updates, '→ state:', parsed.state)
+        console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
         return parsed
     }
 
