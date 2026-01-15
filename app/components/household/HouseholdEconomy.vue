@@ -130,9 +130,7 @@ const columns = {
             <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
               <div v-for="tx in row.original.transactions" :key="tx.id" class="space-y-1">
                 <div class="flex justify-between items-center" :class="TYPOGRAPHY.bodyTextSmall">
-                  <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                   <div class="flex items-center gap-2">
-                    <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
                     <UButton
                         color="neutral"
                         variant="ghost"
@@ -141,7 +139,9 @@ const columns = {
                         :size="SIZES.xSmall"
                         @click="toggleHistory(tx.orderId)"
                     />
+                    <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                   </div>
+                  <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
                 </div>
                 <OrderHistoryDisplay v-if="historyOrderId === tx.orderId" :order-id="tx.orderId"/>
               </div>
@@ -195,9 +195,7 @@ const columns = {
                 <div class="space-y-1 pl-2">
                   <div v-for="tx in group.transactions" :key="tx.id" class="space-y-1">
                     <div class="flex justify-between items-center" :class="TYPOGRAPHY.finePrint">
-                      <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                       <div class="flex items-center gap-2">
-                        <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
                         <UButton
                             color="neutral"
                             variant="ghost"
@@ -206,7 +204,9 @@ const columns = {
                             :size="SIZES.xSmall"
                             @click="toggleHistory(tx.orderId)"
                         />
+                        <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
                       </div>
+                      <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
                     </div>
                     <OrderHistoryDisplay v-if="historyOrderId === tx.orderId" :order-id="tx.orderId"/>
                   </div>

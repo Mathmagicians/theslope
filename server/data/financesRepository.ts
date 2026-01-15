@@ -313,7 +313,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                     }
                 },
                 // ADR-011: Full order history audit trail for detail endpoint
-                OrderHistory: {
+                orderHistory: {
                     select: {
                         id: true,
                         orderId: true,
@@ -341,13 +341,13 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
             return null
         }
 
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id} with ${order.OrderHistory?.length ?? 0} history entries`)
+        console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id} with ${order.orderHistory?.length ?? 0} history entries`)
 
-        // Transform: flatten ticketType (ADR-009), rename OrderHistory to history
+        // Transform: flatten ticketType (ADR-009)
         return OrderDetailSchema.parse({
             ...order,
             ticketType: order.ticketPrice?.ticketType ?? null,
-            history: order.OrderHistory
+            history: order.orderHistory
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)

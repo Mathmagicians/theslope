@@ -36,13 +36,13 @@ const isLoading = computed(() => status.value === 'pending')
 // Action config for timeline items
 interface ActionConfig { icon: string; color: NuxtUIColor; label: string }
 const ACTION_CONFIG: Record<string, ActionConfig> = {
-    [OrderAuditActionSchema.enum.BOOKED]: {icon: ICONS.check, color: COLOR.success, label: 'Booket'},
+    [OrderAuditActionSchema.enum.BOOKED]: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
     [OrderAuditActionSchema.enum.RELEASED]: {icon: ICONS.released, color: COLOR.warning, label: 'Frigivet'},
     [OrderAuditActionSchema.enum.CLOSED]: {icon: ICONS.lockClosed, color: COLOR.neutral, label: 'Lukket'},
     [OrderAuditActionSchema.enum.DELETED]: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
-    [OrderAuditActionSchema.enum.SYSTEM_SCAFFOLDED]: {icon: ICONS.calendar, color: COLOR.info, label: 'Auto-booket'},
-    [OrderAuditActionSchema.enum.USER_CLAIMED]: {icon: ICONS.claim, color: COLOR.info, label: 'Clamet'},
-    [OrderAuditActionSchema.enum.RECLAIMED]: {icon: ICONS.sync, color: COLOR.info, label: 'Gen-booket'},
+    [OrderAuditActionSchema.enum.SYSTEM_SCAFFOLDED]: {icon: ICONS.calendar, color: COLOR.info, label: 'Automatisk bestilling'},
+    [OrderAuditActionSchema.enum.USER_CLAIMED]: {icon: ICONS.claim, color: COLOR.info, label: 'Købt fra anden'},
+    [OrderAuditActionSchema.enum.RECLAIMED]: {icon: ICONS.sync, color: COLOR.info, label: 'Genbestilt'},
     [OrderAuditActionSchema.enum.MODE_CHANGED]: {icon: ICONS.edit, color: COLOR.neutral, label: 'Mode ændret'}
 }
 

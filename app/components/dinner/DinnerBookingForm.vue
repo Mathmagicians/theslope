@@ -68,6 +68,7 @@ interface TableRow {
   orderState: OrderState | undefined
   dinnerMode: DinnerMode
   disabledModes: DinnerMode[] // Computed via getBookingOptions per row
+  bookingAction: 'process' | 'claim' | null // What action is possible for this row
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
@@ -195,9 +196,9 @@ const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !
 // All dinner modes for computing disabled from enabled
 const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
-// Compute disabled modes for a row using getBookingOptions
-const getDisabledModesForRow = (orderState: OrderState | undefined, isGuestAddRow: boolean): DinnerMode[] => {
-  const {enabledModes} = getBookingOptions(
+// Compute booking state for a row using getBookingOptions
+const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: boolean): { disabledModes: DinnerMode[], bookingAction: 'process' | 'claim' | null } => {
+  const {enabledModes, action} = getBookingOptions(
     orderState ?? null,
     canBook.value,
     canChangeDiningMode.value,
@@ -208,7 +209,10 @@ const getDisabledModesForRow = (orderState: OrderState | undefined, isGuestAddRo
   const hasNoExistingOrder = orderState === undefined
   const shouldDisableNone = isGuestAddRow || hasNoExistingOrder
   const effectiveEnabled = shouldDisableNone ? enabledModes.filter(m => m !== DinnerModeEnum.NONE) : enabledModes
-  return ALL_MODES.filter(m => !effectiveEnabled.includes(m))
+  return {
+    disabledModes: ALL_MODES.filter(m => !effectiveEnabled.includes(m)),
+    bookingAction: action
+  }
 }
 
 // ============================================================================
@@ -280,7 +284,7 @@ const tableData = computed((): TableRow[] => {
       order,
       orderState,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
-      disabledModes: getDisabledModesForRow(orderState, false),
+      ...getRowBookingState(orderState, false),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
@@ -313,7 +317,7 @@ const tableData = computed((): TableRow[] => {
         orders,
         orderState,
         dinnerMode: firstOrder.dinnerMode,
-        disabledModes: getDisabledModesForRow(orderState, false),
+        ...getRowBookingState(orderState, false),
         price: firstOrder.priceAtBooking,
         ticketPriceId: firstOrder.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
         guestCount: orders.length,
@@ -334,11 +338,12 @@ const tableData = computed((): TableRow[] => {
     orderState: undefined as OrderState | undefined,
     price: 0,
     ticketPriceId: 0,
-    disabledModes: [] as DinnerMode[]
+    disabledModes: [] as DinnerMode[],
+    bookingAction: null as 'process' | 'claim' | null
   }
 
   // Power row with consensus (shown in both VIEW and EDIT modes)
-  // Power row uses first inhabitant's disabled modes (they all share same deadline constraints)
+  // Power row uses first inhabitant's booking state (they all share same deadline constraints)
   const powerRow: TableRow = {
     ...defaultSyntheticRow,
     rowType: 'power' as RowType,
@@ -348,6 +353,7 @@ const tableData = computed((): TableRow[] => {
     ticketConfig: COMPONENTS.powerMode.ticketConfig,
     dinnerMode: consensusMode,
     disabledModes: inhabitantRows[0]?.disabledModes ?? [],
+    bookingAction: inhabitantRows[0]?.bookingAction ?? null,
     consensus: hasConsensus
   }
 
@@ -372,7 +378,7 @@ const tableData = computed((): TableRow[] => {
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, disabledModes: getDisabledModesForRow(undefined, true)}
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, ...getRowBookingState(undefined, true)}
   ]
 })
 
@@ -751,6 +757,12 @@ const allergyOptions = computed(() =>
             </UBadge>
           </div>
 
+          <!-- Deadline badges (contextual: booking + dining mode) -->
+          <div class="flex flex-col md:flex-row gap-2">
+            <DeadlineBadge :badge="badges.booking" compact />
+            <DeadlineBadge :badge="badges.diningMode" compact />
+          </div>
+
           <!-- Mode selector -->
           <DinnerModeSelector
             v-model="draftMode"
@@ -763,8 +775,25 @@ const allergyOptions = computed(() =>
             show-label
           />
 
+          <!-- Order history display -->
+          <OrderHistoryDisplay v-if="row.original.order?.id && historyOrderId === row.original.order.id" :order-id="row.original.order.id"/>
+
           <template #footer>
-            <div class="flex justify-start md:justify-end gap-2">
+            <div class="flex justify-between items-center">
+              <!-- History button (left) -->
+              <UButton
+                  v-if="row.original.order?.id"
+                  color="neutral"
+                  variant="ghost"
+                  :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
+                  :size="getIsMd ? 'md' : 'sm'"
+                  @click="toggleHistory(row.original.order.id)"
+              >
+                Historik
+              </UButton>
+              <span v-else />
+              <!-- Cancel/Save buttons (right) -->
+              <div class="flex gap-2">
               <UButton
                 :color="COLOR.neutral"
                 variant="ghost"
@@ -780,6 +809,7 @@ const allergyOptions = computed(() =>
                 variant="solid"
                 :size="getIsMd ? 'md' : 'sm'"
                 :loading="isSaving"
+                :disabled="row.original.bookingAction === null"
                 :data-testid="`${row.original.rowType}-${row.original.id}-save`"
                 @click="handleSave(row.original)"
               >
@@ -788,6 +818,7 @@ const allergyOptions = computed(() =>
                 </template>
                 {{ row.original.rowType === 'power' ? 'Gem for alle' : (row.original.rowType === 'guest' ? 'Tilføj gæst' : 'Gem') }}
               </UButton>
+              </div>
             </div>
           </template>
         </UCard>
