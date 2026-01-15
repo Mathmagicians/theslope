@@ -18,13 +18,27 @@ import type {TransactionCreateData} from '~~/server/data/financesRepository'
 // ============================================================================
 
 /**
+ * Bucket types for order decisions.
+ * Extends standard CRUD buckets with 'claim' for marketplace claiming.
+ */
+export type OrderBucket = 'create' | 'update' | 'delete' | 'idempotent' | 'claim'
+
+/**
  * Result of order decision: which bucket and the order with state set.
- * null = skip (no action needed, e.g., no orderId + NONE)
+ * null = skip (no action needed, e.g., no orderId + NONE, or no capacity)
  */
 export type OrderDecision = {
-    bucket: keyof PruneAndCreateResult<DesiredOrder>
+    bucket: OrderBucket
     order: DesiredOrder
 } | null
+
+/**
+ * Extended bucket result for order resolution.
+ * Extends PruneAndCreateResult with 'claim' bucket for marketplace claiming.
+ */
+export type OrderBucketResult<T = DesiredOrder> = PruneAndCreateResult<T> & {
+    claim: T[]
+}
 
 /**
  * Input for order decision: the desired order plus context for deadline enforcement
@@ -34,18 +48,39 @@ export type OrderDecisionInput = {
     existing: OrderDisplay | null
     beforeCancellationDeadline: boolean
     canEditMode: boolean
+    /** Released tickets available for this event+price (for claim past deadline) */
+    hasReleasedTickets: boolean
 }
 
 /**
- * Pure decision function for categorizing user booking intent into C/U/D/I buckets.
+ * Determine action for new booking (no existing order).
+ * Shared logic used by both getBookingOptions (UI) and decideOrderAction (generator).
+ *
+ * @param canModifyOrders - Before booking deadline (can create new orders)
+ * @param hasReleasedTickets - Released tickets available to claim
+ * @returns 'process' (create), 'claim', or null (no capacity)
+ */
+export const getNewOrderAction = (
+    canModifyOrders: boolean,
+    hasReleasedTickets: boolean
+): 'process' | 'claim' | null => {
+    if (canModifyOrders) return 'process'
+    if (hasReleasedTickets) return 'claim'
+    return null
+}
+
+/**
+ * Pure decision function for categorizing user booking intent into buckets.
  * Generator decides bucket AND sets state. Scaffolder just executes.
  *
  * Decision matrix:
- * - No orderId + eating mode → create (state: BOOKED)
  * - No orderId + NONE → null (skip)
+ * - No orderId + eating + before deadline → create (state: BOOKED)
+ * - No orderId + eating + after deadline + released available → claim (state: BOOKED)
+ * - No orderId + eating + after deadline + no released → null (no capacity)
  * - orderId + NONE + before deadline → delete
  * - orderId + NONE + after deadline → update (state: RELEASED)
- * - orderId + RELEASED + eating mode → update (state: BOOKED, reclaim)
+ * - orderId + RELEASED + eating mode → update (state: BOOKED, reclaim own)
  * - orderId + eating mode + unchanged → idempotent (state: BOOKED)
  * - orderId + eating mode + changed → update (state: BOOKED)
  */
@@ -54,13 +89,17 @@ export const decideOrderAction = (
     DinnerMode: { NONE: DinnerMode },
     OrderState: { BOOKED: OrderState; RELEASED: OrderState }
 ): OrderDecision => {
-    const { desired, existing, beforeCancellationDeadline, canEditMode } = input
+    const { desired, existing, beforeCancellationDeadline, canEditMode, hasReleasedTickets } = input
     const isNone = desired.dinnerMode === DinnerMode.NONE
 
     // No orderId = new order intent
     if (!desired.orderId) {
         if (isNone) return null // Skip: no order to create for NONE
-        return { bucket: 'create', order: { ...desired, state: OrderState.BOOKED } }
+
+        const action = getNewOrderAction(beforeCancellationDeadline, hasReleasedTickets)
+        if (action === 'process') return { bucket: 'create', order: { ...desired, state: OrderState.BOOKED } }
+        if (action === 'claim') return { bucket: 'claim', order: { ...desired, state: OrderState.BOOKED } }
+        return null
     }
 
     // Has orderId but no existing = data integrity error
@@ -99,7 +138,7 @@ export const decideOrderAction = (
 }
 
 /**
- * Resolve desired orders into C/U/D/I buckets with expected states.
+ * Resolve desired orders into C/U/D/I/claim buckets with expected states.
  * Uses decideOrderAction for each order to determine bucket and state.
  *
  * @param desiredOrders - Orders with intent (may or may not have orderId)
@@ -107,6 +146,7 @@ export const decideOrderAction = (
  * @param dinnerEventById - Lookup for dinner event dates
  * @param canModifyOrders - Deadline check for cancellation
  * @param canEditDiningMode - Deadline check for mode changes
+ * @param releasedByEventAndPrice - Set of "eventId-priceId" keys where released tickets exist
  */
 export const resolveDesiredOrdersToBuckets = (
     desiredOrders: DesiredOrder[],
@@ -115,15 +155,17 @@ export const resolveDesiredOrdersToBuckets = (
     canModifyOrders: (date: Date) => boolean,
     canEditDiningMode: (date: Date) => boolean,
     DinnerMode: { NONE: DinnerMode },
-    OrderState: { BOOKED: OrderState; RELEASED: OrderState }
-): PruneAndCreateResult<DesiredOrder> => {
+    OrderState: { BOOKED: OrderState; RELEASED: OrderState },
+    releasedByEventAndPrice: Set<string> = new Set()
+): OrderBucketResult<DesiredOrder> => {
     const existingById = new Map(existingOrders.map(o => [o.id, o]))
 
-    const result: PruneAndCreateResult<DesiredOrder> = {
+    const result: OrderBucketResult<DesiredOrder> = {
         create: [],
         update: [],
         delete: [],
-        idempotent: []
+        idempotent: [],
+        claim: []
     }
 
     for (const desired of desiredOrders) {
@@ -133,13 +175,15 @@ export const resolveDesiredOrdersToBuckets = (
         }
 
         const existing = desired.orderId ? existingById.get(desired.orderId) ?? null : null
+        const key = `${desired.dinnerEventId}-${desired.ticketPriceId}`
 
         const decision = decideOrderAction(
             {
                 desired,
                 existing,
                 beforeCancellationDeadline: canModifyOrders(de.date),
-                canEditMode: canEditDiningMode(de.date)
+                canEditMode: canEditDiningMode(de.date),
+                hasReleasedTickets: releasedByEventAndPrice.has(key)
             },
             DinnerMode,
             OrderState
@@ -240,8 +284,9 @@ export const resolveOrdersFromPreferencesToBuckets = (
     season: Season,
     household: HouseholdDisplay,
     existingOrders: OrderDisplay[],
-    cancelledKeys: Set<string> = new Set()
-): PruneAndCreateResult<DesiredOrder> => {
+    cancelledKeys: Set<string> = new Set(),
+    releasedByEventAndPrice: Set<string> = new Set()
+): OrderBucketResult<DesiredOrder> => {
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const {deadlinesForSeason} = useSeason()
     const DinnerMode = DinnerModeSchema.enum
@@ -265,7 +310,8 @@ export const resolveOrdersFromPreferencesToBuckets = (
         canModifyOrders,
         canEditDiningMode,
         DinnerMode,
-        OrderState
+        OrderState,
+        releasedByEventAndPrice
     )
 
     // Detect orphan orders: existing orders not matched by any desired order
@@ -954,13 +1000,10 @@ export const useBooking = () => {
                 : { enabledModes: [DinnerModeEnum.DINEIN, DinnerModeEnum.NONE], action: 'process' }
         }
 
-        // No order
-        if (canModifyOrders) {
-            return { enabledModes: ALL_MODES, action: 'process' }
-        }
-        if (hasReleasedTickets) {
-            return { enabledModes: [DinnerModeEnum.DINEIN], action: 'claim' }
-        }
+        // No order - use shared decision logic
+        const action = getNewOrderAction(canModifyOrders, hasReleasedTickets)
+        if (action === 'process') return { enabledModes: ALL_MODES, action }
+        if (action === 'claim') return { enabledModes: [DinnerModeEnum.DINEIN], action }
         return { enabledModes: [], action: null }
     }
 

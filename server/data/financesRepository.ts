@@ -311,6 +311,27 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                         price: true,
                         description: true
                     }
+                },
+                // ADR-011: Full order history audit trail for detail endpoint
+                OrderHistory: {
+                    select: {
+                        id: true,
+                        orderId: true,
+                        action: true,
+                        performedByUserId: true,
+                        performedByUser: {
+                            select: {
+                                id: true,
+                                email: true
+                            }
+                        },
+                        auditData: true,
+                        timestamp: true,
+                        inhabitantId: true,
+                        dinnerEventId: true,
+                        seasonId: true
+                    },
+                    orderBy: {timestamp: 'desc'}
                 }
             }
         })
@@ -320,12 +341,13 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
             return null
         }
 
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
+        console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id} with ${order.OrderHistory?.length ?? 0} history entries`)
 
-        // Transform to flatten ticketType from ticketPrice (ADR-009)
+        // Transform: flatten ticketType (ADR-009), rename OrderHistory to history
         return OrderDetailSchema.parse({
             ...order,
-            ticketType: order.ticketPrice?.ticketType ?? null
+            ticketType: order.ticketPrice?.ticketType ?? null,
+            history: order.OrderHistory
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
@@ -486,6 +508,7 @@ export async function claimOrder(
     ticketPriceId: number,
     newInhabitantId: number,
     claimedByUserId: number,
+    dinnerMode: DinnerMode,
     isGuestTicket: boolean = false,
     maxRetries: number = 3
 ): Promise<OrderDetail | null> {
@@ -533,6 +556,7 @@ export async function claimOrder(
                     inhabitantId: newInhabitantId,
                     bookedByUserId: claimedByUserId,
                     state: OrderStateSchema.enum.BOOKED,
+                    dinnerMode,
                     isGuestTicket,
                     releasedAt: null
                 },
@@ -710,11 +734,21 @@ export async function deleteOrder(
 /**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
  *
+ * WORKAROUND: Uses raw SQL instead of Prisma nested includes because Prisma D1 adapter
+ * doesn't support relationJoins, and nested includes with WHERE clauses exceed D1's
+ * 100 SQL variable limit when fetching many orders.
+ *
+ * Prisma issues tracking this limitation:
+ * - https://github.com/prisma/prisma/issues/23348 (relationJoins for SQLite - not supported)
+ * - https://github.com/prisma/prisma/issues/24545 (D1 variable limit with nested includes)
+ *
+ * See ADR-014 for the raw SQL workaround pattern.
+ *
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
  * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
- * @param includeProvenance - Include orderHistory for claimed ticket provenance (default: false)
+ * @param includeProvenance - Include provenance for claimed tickets (default: false)
  */
 export async function fetchOrders(
     d1Client: D1Database,
@@ -739,39 +773,104 @@ export async function fetchOrders(
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const orders = await prisma.order.findMany({
-            where: {
-                ...(ids && { dinnerEventId: { in: ids } }),
-                ...(householdId && { inhabitant: { householdId } }),
-                ...(state && { state })
-            },
-            include: {
-                ticketPrice: { select: { ticketType: true } },
-                ...(includeProvenance && {
-                    orderHistory: {
-                        where: { action: OrderAuditActionSchema.enum.USER_CLAIMED },
-                        orderBy: { timestamp: 'desc' },
-                        take: 1
-                    }
-                })
-            },
-            orderBy: { [sortBy]: 'asc' }
-        })
+        // Build WHERE clauses dynamically
+        const whereClauses: string[] = []
+        const params: (string | number)[] = []
 
-        console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)
+        if (ids && ids.length > 0) {
+            whereClauses.push(`o.dinnerEventId IN (${ids.map(() => '?').join(',')})`)
+            params.push(...ids)
+        }
+        if (householdId) {
+            whereClauses.push('i.householdId = ?')
+            params.push(householdId)
+        }
+        if (state) {
+            whereClauses.push('o.state = ?')
+            params.push(state)
+        }
 
-        return orders.map(order => {
-            const {ticketPrice, orderHistory, ...rest} = order as typeof order & { orderHistory?: { auditData: string }[] }
+        const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
+        const orderByColumn = sortBy === 'releasedAt' ? 'o.releasedAt' : 'o.createdAt'
 
-            // Extract provenance from USER_CLAIMED history if present
-            const claimHistory = orderHistory?.[0]
-            const provenance = claimHistory ? deserializeOrderAuditData(claimHistory.auditData).orderSnapshot : null
+        // Raw SQL with proper JOINs - avoids D1 100 variable limit
+        // LEFT JOIN to latest USER_CLAIMED history entry per order (for provenance)
+        const sql = `
+            SELECT
+                o.id, o.dinnerEventId, o.inhabitantId, o.bookedByUserId, o.ticketPriceId,
+                o.priceAtBooking, o.dinnerMode, o.state, o.isGuestTicket,
+                o.releasedAt, o.closedAt, o.createdAt, o.updatedAt,
+                tp.ticketType,
+                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'}
+            FROM "Order" o
+            JOIN Inhabitant i ON i.id = o.inhabitantId
+            LEFT JOIN TicketPrice tp ON tp.id = o.ticketPriceId
+            ${includeProvenance ? `
+            LEFT JOIN (
+                SELECT orderId, auditData, ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
+                FROM OrderHistory
+                WHERE action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
+            ) oh ON oh.orderId = o.id AND oh.rn = 1
+            ` : ''}
+            ${whereClause}
+            ORDER BY ${orderByColumn} ASC
+        `
+
+        // Type for raw query result
+        type RawOrderRow = {
+            id: number
+            dinnerEventId: number
+            inhabitantId: number
+            bookedByUserId: number | null
+            ticketPriceId: number | null
+            priceAtBooking: number
+            dinnerMode: string
+            state: string
+            isGuestTicket: number // SQLite returns 0/1 for boolean
+            releasedAt: string | null
+            closedAt: string | null
+            createdAt: string
+            updatedAt: string
+            ticketType: string | null
+            provenanceData: string | null
+        }
+
+        const rawOrders = await prisma.$queryRawUnsafe<RawOrderRow[]>(sql, ...params)
+
+        console.info(`🎟️ > ORDER > [GET] Found ${rawOrders.length} orders for ${filterDesc}`)
+
+        return rawOrders.map(row => {
+            // Extract provenance from audit data if present
+            let provenanceHousehold: string | undefined
+            let provenanceAllergies: string[] | undefined
+
+            if (row.provenanceData && row.provenanceData !== 'null') {
+                try {
+                    const provenance = deserializeOrderAuditData(row.provenanceData).orderSnapshot
+                    provenanceHousehold = provenance?.householdShortname
+                    provenanceAllergies = provenance?.allergies
+                } catch {
+                    // Invalid provenance data - skip
+                }
+            }
 
             return OrderDisplaySchema.parse({
-                ...rest,
-                ticketType: ticketPrice?.ticketType ?? null,
-                provenanceHousehold: provenance?.householdShortname,
-                provenanceAllergies: provenance?.allergies
+                id: row.id,
+                dinnerEventId: row.dinnerEventId,
+                inhabitantId: row.inhabitantId,
+                bookedByUserId: row.bookedByUserId,
+                ticketPriceId: row.ticketPriceId,
+                priceAtBooking: row.priceAtBooking,
+                dinnerMode: row.dinnerMode,
+                state: row.state,
+                isGuestTicket: Boolean(row.isGuestTicket),
+                releasedAt: row.releasedAt ? new Date(row.releasedAt) : null,
+                closedAt: row.closedAt ? new Date(row.closedAt) : null,
+                createdAt: new Date(row.createdAt),
+                updatedAt: new Date(row.updatedAt),
+                ticketType: row.ticketType,
+                provenanceHousehold,
+                provenanceAllergies
             })
         })
     } catch (error) {
@@ -1547,9 +1646,11 @@ export async function fetchHouseholdBilling(
     // Transform transaction to domain type
     const toTransactionDisplay = (tx: typeof unbilledTransactions[0]): TransactionDisplay => {
         if (!tx.order) {
+            // Order deleted - orderId null, component will show snapshot with warning
             const snapshot = JSON.parse(tx.orderSnapshot)
             return TransactionDisplaySchema.parse({
                 id: tx.id,
+                orderId: null,
                 amount: tx.amount,
                 createdAt: tx.createdAt,
                 orderSnapshot: tx.orderSnapshot,
@@ -1560,6 +1661,7 @@ export async function fetchHouseholdBilling(
         }
         return TransactionDisplaySchema.parse({
             id: tx.id,
+            orderId: tx.order.id, // For lazy-loading order history
             amount: tx.amount,
             createdAt: tx.createdAt,
             orderSnapshot: tx.orderSnapshot,

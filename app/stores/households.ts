@@ -208,12 +208,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 created: acc.created + r.scaffoldResult.created,
                 deleted: acc.deleted + r.scaffoldResult.deleted,
                 released: acc.released + r.scaffoldResult.released,
+                claimed: acc.claimed + r.scaffoldResult.claimed,
+                claimRejected: acc.claimRejected + r.scaffoldResult.claimRejected,
                 priceUpdated: acc.priceUpdated + r.scaffoldResult.priceUpdated,
                 modeUpdated: acc.modeUpdated + r.scaffoldResult.modeUpdated,
                 unchanged: acc.unchanged + r.scaffoldResult.unchanged,
                 households: 1,  // Power mode updates single household
                 errored: acc.errored + r.scaffoldResult.errored
-            }), { seasonId: null, created: 0, deleted: 0, released: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0 } as ScaffoldResult)
+            }), { seasonId: null, created: 0, deleted: 0, released: 0, claimed: 0, claimRejected: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0 } as ScaffoldResult)
 
             // Store result for persistent UI display
             lastPreferenceResult.value = aggregatedResult

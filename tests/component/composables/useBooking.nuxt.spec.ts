@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, type OrderDecisionInput} from '~/composables/useBooking'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, type OrderDecisionInput} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -422,6 +422,21 @@ describe('useBooking', () => {
 })
 
 // =============================================================================
+// getNewOrderAction - Shared decision logic for new bookings
+// =============================================================================
+
+describe('getNewOrderAction', () => {
+    it.each([
+        { canModify: true, hasReleased: false, expected: 'process' },
+        { canModify: true, hasReleased: true, expected: 'process' },  // before deadline always wins
+        { canModify: false, hasReleased: true, expected: 'claim' },
+        { canModify: false, hasReleased: false, expected: null }
+    ])('canModify=$canModify, hasReleased=$hasReleased → $expected', ({ canModify, hasReleased, expected }) => {
+        expect(getNewOrderAction(canModify, hasReleased)).toBe(expected)
+    })
+})
+
+// =============================================================================
 // decideOrderAction - Pure decision function tests
 // =============================================================================
 
@@ -458,18 +473,20 @@ describe('decideOrderAction', () => {
         desired: DesiredOrder,
         existing: OrderDisplay | null,
         beforeCancellationDeadline = true,
-        canEditMode = true
-    ): OrderDecisionInput => ({ desired, existing, beforeCancellationDeadline, canEditMode })
+        canEditMode = true,
+        hasReleasedTickets = false
+    ): OrderDecisionInput => ({ desired, existing, beforeCancellationDeadline, canEditMode, hasReleasedTickets })
 
-    describe('decision matrix (7 cases)', () => {
+    describe('decision matrix (9 cases)', () => {
         it.each([
-            // Case 1: No orderId + eating mode → create (state: BOOKED)
+            // Case 1: No orderId + eating mode + before deadline → create (state: BOOKED)
             {
-                desc: 'no orderId + DINEIN → create BOOKED',
+                desc: 'no orderId + DINEIN + before deadline → create BOOKED',
                 desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: 'create',
                 expectedState: OrderState.BOOKED
             },
@@ -480,81 +497,111 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: null,
                 expectedState: null
             },
-            // Case 3: orderId + NONE + before deadline → delete
+            // Case 3: No orderId + eating mode + after deadline + released available → claim
+            {
+                desc: 'no orderId + DINEIN + after deadline + hasReleased → claim BOOKED',
+                desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
+                existing: null,
+                beforeDeadline: false,
+                canEditMode: false,
+                hasReleased: true,
+                expectedBucket: 'claim',
+                expectedState: OrderState.BOOKED
+            },
+            // Case 4: No orderId + eating mode + after deadline + no released → null (no capacity)
+            {
+                desc: 'no orderId + DINEIN + after deadline + !hasReleased → skip (null)',
+                desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
+                existing: null,
+                beforeDeadline: false,
+                canEditMode: false,
+                hasReleased: false,
+                expectedBucket: null,
+                expectedState: null
+            },
+            // Case 5: orderId + NONE + before deadline → delete
             {
                 desc: 'orderId + NONE + before deadline → delete',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE }),
                 existing: createExisting(),
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: 'delete',
                 expectedState: undefined  // delete doesn't set state
             },
-            // Case 4: orderId + NONE + after deadline → update (RELEASED)
+            // Case 6: orderId + NONE + after deadline → update (RELEASED)
             {
                 desc: 'orderId + NONE + after deadline → update RELEASED',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE }),
                 existing: createExisting(),
                 beforeDeadline: false,
                 canEditMode: false,
+                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.RELEASED
             },
-            // Case 5: orderId + RELEASED + eating mode → update (BOOKED, reclaim)
+            // Case 7: orderId + RELEASED + eating mode → update (BOOKED, reclaim own)
             {
                 desc: 'orderId + existing RELEASED + DINEIN → update BOOKED (reclaim)',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.DINEIN }),
                 existing: createExisting({ state: OrderState.RELEASED }),
                 beforeDeadline: false,
                 canEditMode: false,
+                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             },
-            // Case 6a: orderId + eating mode + unchanged BOOKED → idempotent (preserves state)
+            // Case 8a: orderId + eating mode + unchanged BOOKED → idempotent (preserves state)
             {
                 desc: 'orderId + same mode + same price + BOOKED → idempotent preserves BOOKED',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1 }),
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1, state: OrderState.BOOKED }),
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: 'idempotent',
                 expectedState: OrderState.BOOKED  // preserved from existing
             },
-            // Case 6b: orderId + NONE unchanged on RELEASED → idempotent (preserves RELEASED state)
+            // Case 8b: orderId + NONE unchanged on RELEASED → idempotent (preserves RELEASED state)
             {
                 desc: 'orderId + NONE + RELEASED → idempotent preserves RELEASED',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE, ticketPriceId: 1 }),
                 existing: createExisting({ dinnerMode: DinnerMode.NONE, ticketPriceId: 1, state: OrderState.RELEASED }),
                 beforeDeadline: false,  // after deadline
                 canEditMode: false,
+                hasReleased: false,
                 expectedBucket: 'idempotent',
                 expectedState: OrderState.RELEASED  // preserved from existing
             },
-            // Case 7a: orderId + mode changed → update
+            // Case 9a: orderId + mode changed → update
             {
                 desc: 'orderId + mode changed (DINEIN→TAKEAWAY) → update BOOKED',
                 desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.TAKEAWAY }),
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN }),
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             },
-            // Case 7b: orderId + price changed → update
+            // Case 9b: orderId + price changed → update
             {
                 desc: 'orderId + price changed → update BOOKED',
                 desired: createDesired({ orderId: 42, ticketPriceId: 2 }),
                 existing: createExisting({ ticketPriceId: 1 }),
                 beforeDeadline: true,
                 canEditMode: true,
+                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             }
-        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, expectedBucket, expectedState }) => {
-            const input = createInput(desired, existing, beforeDeadline, canEditMode)
+        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, hasReleased, expectedBucket, expectedState }) => {
+            const input = createInput(desired, existing, beforeDeadline, canEditMode, hasReleased)
             const result = decideOrderAction(input, DinnerMode, OrderState)
 
             if (expectedBucket === null) {
@@ -646,31 +693,36 @@ describe('resolveDesiredOrdersToBuckets', () => {
             desc: 'all new orders (no existing)',
             desired: [createDesired(1, 101)],
             existing: [],
-            expected: { create: 1, update: 0, delete: 0, idempotent: 0 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 1, update: 0, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'existing matches incoming (idempotent)',
             desired: [createDesired(1, 101, { orderId: 42 })],
             existing: [createExisting(42, 1, 101)],
-            expected: { create: 0, update: 0, delete: 0, idempotent: 1 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 0, update: 0, delete: 0, idempotent: 1, claim: 0 }
         },
         {
             desc: 'mode change → update',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })],
             existing: [createExisting(42, 1, 101, { dinnerMode: DinnerMode.DINEIN })],
-            expected: { create: 0, update: 1, delete: 0, idempotent: 0 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'price change → update',
             desired: [createDesired(1, 101, { orderId: 42, ticketPriceId: 2 })],
             existing: [createExisting(42, 1, 101, { ticketPriceId: 1 })],
-            expected: { create: 0, update: 1, delete: 0, idempotent: 0 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'NONE before deadline → delete',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.NONE })],
             existing: [createExisting(42, 1, 101)],
-            expected: { create: 0, update: 0, delete: 1, idempotent: 0 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 0, update: 0, delete: 1, idempotent: 0, claim: 0 }
         },
         {
             desc: 'mixed: create + idempotent',
@@ -679,9 +731,10 @@ describe('resolveDesiredOrdersToBuckets', () => {
                 createDesired(2, 101)  // no orderId = new
             ],
             existing: [createExisting(42, 1, 101)],
-            expected: { create: 1, update: 0, delete: 0, idempotent: 1 }
+            releasedKeys: new Set<string>(),
+            expected: { create: 1, update: 0, delete: 0, idempotent: 1, claim: 0 }
         }
-    ])('$desc', ({ desired, existing, expected }) => {
+    ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
         const result = resolveDesiredOrdersToBuckets(
             desired,
             existing,
@@ -689,13 +742,66 @@ describe('resolveDesiredOrdersToBuckets', () => {
             canModifyOrders,
             canEditDiningMode,
             DinnerMode,
-            OrderState
+            OrderState,
+            releasedKeys
         )
 
         expect(result.create).toHaveLength(expected.create)
         expect(result.update).toHaveLength(expected.update)
         expect(result.delete).toHaveLength(expected.delete)
         expect(result.idempotent).toHaveLength(expected.idempotent)
+        expect(result.claim).toHaveLength(expected.claim)
+    })
+
+    describe('claim bucket (after deadline with released tickets)', () => {
+        // Past date - after all deadlines
+        const pastDate = new Date()
+        pastDate.setDate(pastDate.getDate() + 1)  // Tomorrow = after deadline
+
+        const pastEventById = new Map([[201, { date: pastDate }]])
+        const cannotModify = () => false
+        const cannotEdit = () => false
+
+        it.each([
+            {
+                desc: 'new order after deadline + released → claim',
+                desired: [createDesired(1, 201)],
+                existing: [],
+                releasedKeys: new Set(['201-1']),  // eventId-priceId
+                expected: { create: 0, claim: 1 }
+            },
+            {
+                desc: 'new order after deadline + no released → skip',
+                desired: [createDesired(1, 201)],
+                existing: [],
+                releasedKeys: new Set<string>(),
+                expected: { create: 0, claim: 0 }
+            },
+            {
+                desc: 'multiple new orders + released for one price → claim only matching',
+                desired: [
+                    createDesired(1, 201, { ticketPriceId: 1 }),
+                    createDesired(2, 201, { ticketPriceId: 2 })
+                ],
+                existing: [],
+                releasedKeys: new Set(['201-1']),  // Only price 1 has released
+                expected: { create: 0, claim: 1 }
+            }
+        ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
+            const result = resolveDesiredOrdersToBuckets(
+                desired,
+                existing,
+                pastEventById,
+                cannotModify,
+                cannotEdit,
+                DinnerMode,
+                OrderState,
+                releasedKeys
+            )
+
+            expect(result.create).toHaveLength(expected.create)
+            expect(result.claim).toHaveLength(expected.claim)
+        })
     })
 
     it('throws for unknown dinnerEventId', () => {
@@ -1077,6 +1183,48 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         // Guest order should be idempotent, not deleted
         expect(result.idempotent).toHaveLength(1)
         expect(result.delete).toHaveLength(0)
+    })
+
+    describe('claim bucket (preference change after deadline with released tickets)', () => {
+        // Tomorrow = after deadline. Use DINEIN for ALL days so weekday doesn't matter
+        const tomorrowDinner = DinnerEventFactory.dinnerEventAt(301, 1)
+        const pastDeadlineSeason = seasonWith([tomorrowDinner])
+        const allDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.DINEIN)
+        const noDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+
+        it.each([
+            {
+                desc: 'preference change to DINEIN + released tickets → claim',
+                prefs: allDaysPrefs,
+                releasedKeys: new Set(['301-4']),  // eventId-priceId (4 = ADULT)
+                expected: { create: 0, claim: 1 }
+            },
+            {
+                desc: 'preference change to DINEIN + no released tickets → skip (no capacity)',
+                prefs: allDaysPrefs,
+                releasedKeys: new Set<string>(),
+                expected: { create: 0, claim: 0 }
+            },
+            {
+                desc: 'preference stays NONE + released tickets → no action',
+                prefs: noDaysPrefs,
+                releasedKeys: new Set(['301-4']),
+                expected: { create: 0, claim: 0 }
+            }
+        ])('$desc', ({ prefs, releasedKeys, expected }) => {
+            const household = createHousehold(1, [createInhabitant(1, prefs)])
+
+            const result = resolveOrdersFromPreferencesToBuckets(
+                pastDeadlineSeason,
+                household,
+                [],  // No existing orders
+                new Set(),  // No cancelled keys
+                releasedKeys
+            )
+
+            expect(result.create).toHaveLength(expected.create)
+            expect(result.claim).toHaveLength(expected.claim)
+        })
     })
 })
 

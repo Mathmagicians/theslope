@@ -57,17 +57,15 @@ const pastInvoicesData = computed((): InvoiceRow[] =>
     })) ?? []
 )
 
-// Expanded row tracking
-const expandedCurrent = ref<Record<number, boolean>>({})
-const expandedInvoice = ref<Record<number, boolean>>({})
+// Single-expansion for tables
+const {expanded: expandedCurrent} = useExpandableRow()
+const {expanded: expandedInvoice} = useExpandableRow()
 
-const getExpandedData = <T,>(expanded: Record<number, boolean>, data: T[]): T | null => {
-    const idx = Object.keys(expanded).find(k => expanded[Number(k)])
-    return idx !== undefined ? data[Number(idx)] ?? null : null
+// Single history visible at a time
+const historyOrderId = ref<number | null>(null)
+const toggleHistory = (orderId: number | null) => {
+    historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
-
-const expandedCurrentGroup = computed(() => getExpandedData(expandedCurrent.value, currentPeriodData.value))
-const expandedInvoiceData = computed(() => getExpandedData(expandedInvoice.value, pastInvoicesData.value))
 
 // Table columns
 const columns = {
@@ -128,11 +126,24 @@ const columns = {
           </template>
           <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
-          <template #expanded>
-            <div v-if="expandedCurrentGroup" class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-1">
-              <div v-for="tx in expandedCurrentGroup.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.bodyTextSmall">
-                <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
-                <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
+          <template #expanded="{ row }">
+            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
+              <div v-for="tx in row.original.transactions" :key="tx.id" class="space-y-1">
+                <div class="flex justify-between items-center" :class="TYPOGRAPHY.bodyTextSmall">
+                  <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
+                  <div class="flex items-center gap-2">
+                    <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
+                    <UButton
+                        color="neutral"
+                        variant="ghost"
+                        :icon="historyOrderId === tx.orderId ? ICONS.chevronUp : ICONS.clipboard"
+                        square
+                        :size="SIZES.xSmall"
+                        @click="toggleHistory(tx.orderId)"
+                    />
+                  </div>
+                </div>
+                <OrderHistoryDisplay v-if="historyOrderId === tx.orderId" :order-id="tx.orderId"/>
               </div>
             </div>
           </template>
@@ -174,17 +185,30 @@ const columns = {
             />
           </template>
           <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
-          <template #expanded>
-            <div v-if="expandedInvoiceData" class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
-              <div v-for="group in expandedInvoiceData.groups" :key="group.dinnerEventId" class="border rounded p-2 bg-white dark:bg-neutral-800">
+          <template #expanded="{ row }">
+            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
+              <div v-for="group in row.original.groups" :key="group.dinnerEventId" class="border rounded p-2 bg-white dark:bg-neutral-800">
                 <div class="flex justify-between mb-1" :class="TYPOGRAPHY.bodyTextMedium">
                   <span>{{ formatDate(group.date) }} - {{ group.menuTitle }}</span>
                   <span>{{ formatPrice(group.totalAmount) }} kr</span>
                 </div>
-                <div class="space-y-0.5 pl-2">
-                  <div v-for="tx in group.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.finePrint">
-                    <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
-                    <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
+                <div class="space-y-1 pl-2">
+                  <div v-for="tx in group.transactions" :key="tx.id" class="space-y-1">
+                    <div class="flex justify-between items-center" :class="TYPOGRAPHY.finePrint">
+                      <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
+                        <UButton
+                            color="neutral"
+                            variant="ghost"
+                            :icon="historyOrderId === tx.orderId ? ICONS.chevronUp : ICONS.clipboard"
+                            square
+                            :size="SIZES.xSmall"
+                            @click="toggleHistory(tx.orderId)"
+                        />
+                      </div>
+                    </div>
+                    <OrderHistoryDisplay v-if="historyOrderId === tx.orderId" :order-id="tx.orderId"/>
                   </div>
                 </div>
               </div>

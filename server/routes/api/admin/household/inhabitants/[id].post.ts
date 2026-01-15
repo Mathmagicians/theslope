@@ -23,6 +23,8 @@ const noScaffoldResult = (): ScaffoldResult => ({
     created: 0,
     deleted: 0,
     released: 0,
+    claimed: 0,
+    claimRejected: 0,
     priceUpdated: 0,
     modeUpdated: 0,
     unchanged: 0,

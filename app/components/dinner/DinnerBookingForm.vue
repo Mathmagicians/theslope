@@ -120,7 +120,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, TYPOGRAPHY, ICONS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -156,6 +156,12 @@ const defaultGuestDraft = () => ({
 })
 const guestDraft = ref(defaultGuestDraft())
 
+// Single history visible at a time
+const historyOrderId = ref<number | null>(null)
+const toggleHistory = (orderId: number | null) => {
+    historyOrderId.value = historyOrderId.value === orderId ? null : orderId
+}
+
 // Expandable row with callbacks
 const {expanded} = useExpandableRow({
   onExpand: (rowIndex) => {
@@ -167,10 +173,12 @@ const {expanded} = useExpandableRow({
         guestDraft.value = defaultGuestDraft()
       }
     }
+    historyOrderId.value = null
   },
   onCollapse: () => {
     editingRowId.value = null
     guestDraft.value = defaultGuestDraft()
+    historyOrderId.value = null
   }
 })
 

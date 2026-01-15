@@ -51,7 +51,7 @@ import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, SIZES, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -319,6 +319,7 @@ useHead({
             :team-id="dinnerEventDetail.cookingTeamId"
             :team-number="dinnerEventDetail.cookingTeamId"
             mode="monitor"
+            use-short-name
           />
           <UAlert
             v-else

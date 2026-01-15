@@ -216,7 +216,7 @@ seasonDates: { start: tomorrow, end: threeDaysFromNow }
 
 ## ADR-014: Batch Operations and Utility Functions
 
-**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2025-12-13
+**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2026-01-15
 
 ### Decision
 
@@ -238,6 +238,47 @@ Since Prisma 5.15.0, the D1 adapter automatically chunks certain queries to stay
 | `deleteMany` with `WHERE IN` | ❌ No | **Yes** - must chunk IDs |
 
 **Production evidence:** `updateMany` with 100 IDs + 2 data params failed with `D1_ERROR: too many SQL variables`. Reduced to 90 IDs to stay under limit.
+
+### Raw SQL Workaround for Nested Includes
+
+**Problem (2026-01-15):** Prisma's nested includes with large result sets exceed D1's 100 variable limit.
+
+```
+Query 1: SELECT orders WHERE dinnerEventId = ? (returns 139 orders) ✅
+Query 2: SELECT orderHistory WHERE orderId IN (?,?,?...139 IDs...) ❌ D1_ERROR
+```
+
+Prisma D1 adapter does NOT support `relationJoins` (uses query splitting instead). When a parent query returns many rows, nested includes generate `WHERE IN (?,?,?...)` with too many variables.
+
+**Solution:** Use raw SQL with proper JOINs for high-cardinality relations:
+
+```typescript
+// ❌ Prisma nested include - fails with 100+ parent rows
+const orders = await prisma.order.findMany({
+    where: { dinnerEventId },
+    include: { OrderHistory: true }  // Generates WHERE orderId IN (?,?,?...)
+})
+
+// ✅ Raw SQL with JOIN - no variable limit issue
+const sql = `
+    SELECT o.*, oh.auditData
+    FROM "Order" o
+    LEFT JOIN (
+        SELECT orderId, auditData,
+            ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
+        FROM OrderHistory WHERE action = 'USER_CLAIMED'
+    ) oh ON oh.orderId = o.id AND oh.rn = 1
+    WHERE o.dinnerEventId = ?
+`
+const results = await d1Client.prepare(sql).bind(dinnerEventId).all()
+```
+
+**When to use raw SQL:**
+- Nested includes on relations with unbounded cardinality
+- Parent query may return 50+ rows with 2+ nested relations
+- Performance-critical bulk reads
+
+**Reference:** `fetchOrders()` in `financesRepository.ts` uses this pattern for provenance data.
 
 ### Prisma Bulk Operations
 

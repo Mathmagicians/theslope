@@ -142,6 +142,7 @@ export class OrderFactory {
     orderId: 1,
     action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
+    performedByUser: {id: 1, email: 'test@example.com'},
     auditData: JSON.stringify({
       inhabitantId: 10,
       bookedByUserId: 1,
@@ -172,6 +173,7 @@ export class OrderFactory {
     orderId: 1,
     action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
+    performedByUser: {id: 1, email: 'test@example.com'},
     auditData: JSON.stringify({
       inhabitantId: 10,
       bookedByUserId: 1,

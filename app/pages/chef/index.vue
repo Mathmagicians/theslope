@@ -415,6 +415,7 @@ useHead({
                 :team-id="dinnerEventDetail.cookingTeamId"
                 :team-number="dinnerEventDetail.cookingTeamId"
                 mode="monitor"
+                use-short-name
             />
             <UAlert
                 v-else

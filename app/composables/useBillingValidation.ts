@@ -264,6 +264,8 @@ export const useBillingValidation = () => {
      */
     const TransactionDisplaySchema = z.object({
         id: z.number().int(),
+        // orderId for lazy-loading order history - nullable (order may be deleted, SET NULL)
+        orderId: z.number().int().nullable(),
         amount: z.number().int(),
         createdAt: z.coerce.date(),
         orderSnapshot: z.string(),
@@ -458,6 +460,7 @@ export const useBillingValidation = () => {
         createdAt: Date
         orderSnapshot: string
         order: {
+            id: number
             dinnerEvent: {id: number, date: Date, menuTitle: string}
             inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
             ticketPrice: {ticketType: string} | null
@@ -469,6 +472,7 @@ export const useBillingValidation = () => {
         if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
             return TransactionDisplaySchema.parse({
                 ...base,
+                orderId: tx.order.id,
                 dinnerEvent: tx.order.dinnerEvent,
                 inhabitant: tx.order.inhabitant,
                 ticketType: tx.order.ticketPrice.ticketType
@@ -476,10 +480,11 @@ export const useBillingValidation = () => {
         }
 
         // Any relation deleted - use frozen snapshot (strict parsing)
-        // Set household.id to 0 to indicate deleted (not valid as FK)
+        // Set household.id to 0 to indicate deleted (not valid as FK), orderId null
         const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
         return TransactionDisplaySchema.parse({
             ...base,
+            orderId: null,
             dinnerEvent: snapshot.dinnerEvent,
             inhabitant: {
                 ...snapshot.inhabitant,

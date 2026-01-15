@@ -105,6 +105,13 @@ export default defineConfig({
       fullyParallel: false,
       dependencies: ['setup-api', 'setup-ui'],
     },
+    // Exploratory tests - only run when explicitly targeted
+    {
+      name: 'exploratory',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /tests\/e2e\/exploratory\/.*\.ts/,
+      dependencies: ['setup-api'],
+    },
 
     /* Test against mobile viewports. */
     // {

@@ -121,6 +121,30 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * OrderHistory Display - lightweight for lists (ADR-009)
+     * Scalars only, no nested Order relation
+     * Includes denormalized fields for cancellation queries (orderId becomes NULL after deletion)
+     * NOTE: Defined here (before OrderDetailSchema) so it can be referenced in OrderDetailSchema.history
+     */
+    const OrderHistoryDisplaySchema = z.object({
+        id: z.number().int().positive(),
+        orderId: z.number().int().positive().nullable(),
+        action: OrderAuditActionSchema,
+        performedByUserId: z.number().int().positive().nullable(),
+        // User relation for meaningful display (e.g., "Anna booked at 14:30")
+        performedByUser: z.object({
+            id: z.number().int().positive(),
+            email: z.string()
+        }).nullable(),
+        auditData: z.string(),
+        timestamp: z.coerce.date(),
+        // Denormalized fields for cancellation queries
+        inhabitantId: z.number().int().positive().nullable(),
+        dinnerEventId: z.number().int().positive().nullable(),
+        seasonId: z.number().int().positive().nullable()
+    })
+
+    /**
      * Order Detail - Display + comprehensive relations (GET /api/order/[id])
      * ADR-009: Operation-ready with full nested objects
      */
@@ -140,7 +164,10 @@ export const useBookingValidation = () => {
             ticketType: TicketTypeSchema,
             price: z.number().int(),
             description: z.string().nullable()
-        }).nullable()
+        }).nullable(),
+        // Order history - audit trail (ADR-011), optional for backwards compatibility
+        // Populated by fetchOrder() for detail endpoint, not included in DinnerEventDetail.tickets
+        history: z.array(OrderHistoryDisplaySchema).optional()
     })
 
     // ============================================================================
@@ -298,24 +325,6 @@ export const useBookingValidation = () => {
         state: OrderStateSchema.optional(),
         fromDate: z.coerce.date().optional(),
         toDate: z.coerce.date().optional()
-    })
-
-    /**
-     * OrderHistory Display - lightweight for lists (ADR-009)
-     * Scalars only, no nested Order relation
-     * Includes denormalized fields for cancellation queries (orderId becomes NULL after deletion)
-     */
-    const OrderHistoryDisplaySchema = z.object({
-        id: z.number().int().positive(),
-        orderId: z.number().int().positive().nullable(),
-        action: OrderAuditActionSchema,
-        performedByUserId: z.number().int().positive().nullable(),
-        auditData: z.string(),
-        timestamp: z.coerce.date(),
-        // Denormalized fields for cancellation queries
-        inhabitantId: z.number().int().positive().nullable(),
-        dinnerEventId: z.number().int().positive().nullable(),
-        seasonId: z.number().int().positive().nullable()
     })
 
     /**
@@ -591,8 +600,10 @@ export const useBookingValidation = () => {
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
         released: z.number().int().nonnegative().default(0),
-        priceUpdated: z.number().int().nonnegative().default(0),  // Price category changes (birthdate added/changed or birthday passed)
-        modeUpdated: z.number().int().nonnegative().default(0),   // Dining mode changes (before deadline)
+        claimed: z.number().int().nonnegative().default(0),         // Tickets claimed from marketplace (past deadline)
+        claimRejected: z.number().int().nonnegative().default(0),   // Claim attempts that failed (race condition)
+        priceUpdated: z.number().int().nonnegative().default(0),    // Price category changes (birthdate added/changed or birthday passed)
+        modeUpdated: z.number().int().nonnegative().default(0),     // Dining mode changes (before deadline)
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
         errored: z.number().int().nonnegative().default(0)

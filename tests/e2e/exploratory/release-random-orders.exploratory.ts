@@ -1,28 +1,35 @@
 /**
- * EXPLORATORY TEST: Release 100 random BOOKED orders via scaffold endpoint
+ * EXPLORATORY TEST: Release orders by updating inhabitant preferences to NONE
  *
  * NOT part of default test suite - only runs when explicitly targeted.
  *
  * Usage:
- *   npx playwright test tests/e2e/exploratory/release-random-orders.exploratory.ts --project=chromium-api
+ *   npm run test:exploratory
+ *
+ * Flow:
+ * 1. Find inhabitants with BOOKED orders in next 10 days
+ * 2. Update their preferences to NONE (all days)
+ * 3. Scaffold triggers → orders get released
  */
 import {test, expect} from '@playwright/test'
 import testHelpers from '../testHelpers'
-import {OrderFactory} from '../testDataFactories/orderFactory'
-import type {DesiredOrder, OrderDisplay} from '~/composables/useBookingValidation'
+import {HouseholdFactory} from '../testDataFactories/householdFactory'
+import type {OrderDisplay} from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {validatedBrowserContext, headers} = testHelpers
+const {DinnerModeSchema} = useBookingValidation()
+const DinnerMode = DinnerModeSchema.enum
+const {createDefaultWeekdayMap} = useWeekDayMapValidation({valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE})
 const ORDER_ENDPOINT = '/api/order'
-const SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
-const ORDERS_TO_RELEASE = 100
+const INHABITANTS_TO_UPDATE = 20
 
-test('Release 100 random BOOKED orders via scaffold', async ({browser}) => {
+test('Release orders by setting inhabitant preferences to NONE', async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 
-    // 1. Fetch all BOOKED orders
+    // 1. Fetch BOOKED orders (next 10 days implied by active season window)
     console.log('📋 Fetching BOOKED orders...')
     const response = await context.request.get(
         `${ORDER_ENDPOINT}?allHouseholds=true&state=BOOKED`,
@@ -37,48 +44,25 @@ test('Release 100 random BOOKED orders via scaffold', async ({browser}) => {
         return
     }
 
-    // 2. Shuffle and pick up to 100
-    const selected = [...allBooked]
+    // 2. Get unique inhabitant IDs and shuffle
+    const inhabitantIds = [...new Set(allBooked.map(o => o.inhabitantId))]
         .sort(() => Math.random() - 0.5)
-        .slice(0, Math.min(ORDERS_TO_RELEASE, allBooked.length))
-    console.log(`🎯 Selected ${selected.length} orders to release`)
+        .slice(0, INHABITANTS_TO_UPDATE)
+    console.log(`🎯 Selected ${inhabitantIds.length} inhabitants to update`)
 
-    // 3. Group by household (scaffold works per-household)
-    const byHousehold = new Map<number, OrderDisplay[]>()
-    for (const order of selected) {
-        // Need to fetch order detail to get householdId
-        const detail = await OrderFactory.getOrder(context, order.id)
-        if (!detail) continue
-        const hid = detail.inhabitant.householdId
-        if (!byHousehold.has(hid)) byHousehold.set(hid, [])
-        byHousehold.get(hid)!.push(order)
-    }
-
-    // 4. Call scaffold per household with release orders
+    // 3. Update each inhabitant's preferences to NONE
     let totalReleased = 0
-    for (const [householdId, orders] of byHousehold) {
-        const dinnerEventIds = [...new Set(orders.map(o => o.dinnerEventId))]
-        const desiredOrders: DesiredOrder[] = orders.map(o => ({
-            inhabitantId: o.inhabitantId,
-            dinnerEventId: o.dinnerEventId,
-            dinnerMode: DinnerModeSchema.enum.NONE,
-            ticketPriceId: o.ticketPriceId,
-            isGuestTicket: o.isGuestTicket,
-            state: OrderStateSchema.enum.RELEASED,
-            orderId: o.id
-        }))
-
-        const res = await context.request.post(SCAFFOLD_ENDPOINT, {
-            headers,
-            data: {householdId, dinnerEventIds, orders: desiredOrders}
+    for (const inhabitantId of inhabitantIds) {
+        const res = await HouseholdFactory.updateInhabitant(context, inhabitantId, {
+            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
         })
 
-        if (res.status() === 200) {
-            const result = await res.json()
-            totalReleased += result.scaffoldResult.released
-            console.log(`  ✅ Household ${householdId}: released ${result.scaffoldResult.released}`)
+        if (res) {
+            const released = res.scaffoldResult?.released ?? 0
+            totalReleased += released
+            console.log(`  ✅ Inhabitant ${inhabitantId}: released ${released}`)
         } else {
-            console.log(`  ❌ Household ${householdId}: ${res.status()} - ${await res.text()}`)
+            console.log(`  ❌ Inhabitant ${inhabitantId}: update failed`)
         }
     }
 

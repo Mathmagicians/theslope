@@ -96,6 +96,7 @@ export class BillingFactory {
         }
 
         const liveOrder = {
+            id: 50,  // orderId for lazy-loading order history
             dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Live Dinner', testSalt)},
             inhabitant: {id: 2, name: salt('Live Name', testSalt), household: {id: 3, pbsId: 1111, address: salt('Live Street', testSalt)}},
             ticketPrice: {ticketType: 'ADULT'}

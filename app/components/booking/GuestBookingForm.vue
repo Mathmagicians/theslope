@@ -62,21 +62,27 @@ const formState = reactive({
 })
 const isSaving = ref(false)
 
-// Contextual schema with closure - validates count against released tickets when claiming
-const formSchema = computed(() =>
-  GuestBookingFormSchema.refine(
-    (data) => {
-      if (bookingOptions.value.action === 'claim') {
-        return data.count <= props.releasedTicketCount
-      }
-      return true
-    },
-    {
-      message: `Kun ${props.releasedTicketCount} billet${props.releasedTicketCount === 1 ? '' : 'ter'} ledig${props.releasedTicketCount === 1 ? '' : 'e'}`,
-      path: ['count']
-    }
-  )
-)
+// Contextual validation via :validate prop (has closure access to props/computed)
+const validateForm = (state: typeof formState) => {
+  const errors: {name: string, message: string}[] = []
+  const {action} = bookingOptions.value
+
+  // No action available
+  if (!action) {
+    errors.push({name: 'count', message: 'Kan desværre ikke tilmelde dine gæster'})
+    return errors
+  }
+
+  // Claiming: count must not exceed released tickets
+  if (action === 'claim' && state.count > props.releasedTicketCount) {
+    errors.push({
+      name: 'count',
+      message: `Kun ${props.releasedTicketCount} billet${props.releasedTicketCount === 1 ? '' : 'ter'} ledig${props.releasedTicketCount === 1 ? '' : 'e'}`
+    })
+  }
+
+  return errors
+}
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
@@ -102,16 +108,16 @@ watch(enabledModesForGuest, (modes) => {
   }
 }, {immediate: true})
 
-// UForm submit handler - validates with Zod schema before emitting
-const handleSubmit = async () => {
+// UForm submit handler - receives validated data from FormSubmitEvent
+const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
+  const {ticketPriceId, allergyTypeIds, count, dinnerMode} = event.data
+  const {action} = bookingOptions.value
+
+  if (!ticketPriceId || !action) return
+
   isSaving.value = true
 
   try {
-    const {ticketPriceId, allergyTypeIds, count, dinnerMode} = formState
-    const {action} = bookingOptions.value
-
-    if (!ticketPriceId || !action) return
-
     const orders: DesiredOrder[] = Array.from({length: count}, () => ({
       inhabitantId: props.bookerId,
       dinnerEventId: props.dinnerEvent.id,
@@ -156,8 +162,9 @@ const handleCancel = () => emit('cancel')
     <!-- Form fields when booking is available -->
     <UForm
       v-if="bookingOptions.action"
-      :schema="GuestBookingFormSchema"
       :state="formState"
+      :schema="GuestBookingFormSchema"
+      :validate="validateForm"
       class="flex flex-col gap-4"
       @submit="handleSubmit"
     >

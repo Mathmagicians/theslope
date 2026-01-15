@@ -56,6 +56,7 @@ interface Props {
   teamId: number           // Database ID - component fetches detail from store
   teamNumber: number       // Logical number 1..N in season (for display/color)
   mode?: DisplayMode       // Display mode
+  useShortName?: boolean   // If true, display "Madhold X" instead of full name with season
   // EDIT mode only props:
   seasonId?: number
   seasonCookingDays?: WeekDayMap | null
@@ -66,6 +67,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
+  useShortName: false,
   seasonId: undefined,
   seasonCookingDays: undefined,
   seasonDates: undefined,
@@ -102,7 +104,11 @@ const isErrored = computed(() => status.value === 'error')
 const isNoTeam = computed(() => status.value === 'success' && team.value === null)
 
 // All data from fetched team Detail entity
-const teamName = computed(() => team.value?.name ?? `Madhold ${props.teamNumber}`)
+const { getTeamShortName } = useCookingTeam()
+const teamName = computed(() => {
+  const fullName = team.value?.name ?? `Madhold ${props.teamNumber}`
+  return props.useShortName ? getTeamShortName(fullName) : fullName
+})
 const assignments = computed(() => team.value?.assignments ?? [])
 const affinity = computed(() => team.value?.affinity ?? null)
 const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])  // From Detail entity

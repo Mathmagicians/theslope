@@ -1,5 +1,5 @@
 import type {D1Database} from "@cloudflare/workers-types"
-import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, type OrderBatchUpdate, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
@@ -52,6 +52,8 @@ const skippedResult = (): ScaffoldResult => ({
     created: 0,
     deleted: 0,
     released: 0,
+    claimed: 0,
+    claimRejected: 0,
     priceUpdated: 0,
     modeUpdated: 0,
     unchanged: 0,
@@ -119,12 +121,22 @@ export async function scaffoldPrebookings(
     ])
     const existingOrders = orderBatches.flat()
 
-    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events`)
+    // Build set of "eventId-priceId" keys where released tickets exist (for claim decisions)
+    const releasedByEventAndPrice = new Set<string>()
+    for (const order of existingOrders) {
+        if (order.state === OrderStateSchema.enum.RELEASED && order.ticketPriceId) {
+            releasedByEventAndPrice.add(`${order.dinnerEventId}-${order.ticketPriceId}`)
+        }
+    }
+
+    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${releasedByEventAndPrice.size} event-price combos with released tickets`)
 
     // Process each household and accumulate results
     let totalCreated = 0
     let totalDeleted = 0
     let totalReleased = 0
+    let totalClaimed = 0
+    let totalClaimRejected = 0
     let totalPriceUpdated = 0
     let totalModeUpdated = 0
     let totalUnchanged = 0
@@ -154,13 +166,15 @@ export async function scaffoldPrebookings(
                     canModifyOrders,
                     canEditDiningMode,
                     DinnerModeSchema.enum,
-                    OrderStateSchema.enum
+                    OrderStateSchema.enum,
+                    releasedByEventAndPrice
                 )
                 : resolveOrdersFromPreferencesToBuckets(
                     { ...season, dinnerEvents },
                     household,
                     householdOrders,
-                    cancelledKeys
+                    cancelledKeys,
+                    releasedByEventAndPrice
                 )
 
             // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
@@ -259,9 +273,31 @@ export async function scaffoldPrebookings(
                 await deleteOrder(d1Client, deleteIds, options.userId ?? null)
             }
 
+            // Process claims (try to claim released tickets from marketplace)
+            let householdClaimed = 0
+            let householdClaimRejected = 0
+            for (const toClaim of result.claim) {
+                const claimed = await claimOrder(
+                    d1Client,
+                    toClaim.dinnerEventId,
+                    toClaim.ticketPriceId,
+                    toClaim.inhabitantId,
+                    options.userId ?? 0,  // Claims require userId
+                    toClaim.dinnerMode,
+                    toClaim.isGuestTicket
+                )
+                if (claimed) {
+                    householdClaimed++
+                } else {
+                    householdClaimRejected++
+                }
+            }
+
             totalCreated += result.create.length
             totalDeleted += result.delete.length
             totalReleased += householdReleased
+            totalClaimed += householdClaimed
+            totalClaimRejected += householdClaimRejected
             totalPriceUpdated += householdPriceUpdates
             totalModeUpdated += householdModeUpdates
             totalUnchanged += result.idempotent.length
@@ -279,13 +315,15 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, claimed=${totalClaimed}, claimRejected=${totalClaimRejected}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
         created: totalCreated,
         deleted: totalDeleted,
         released: totalReleased,
+        claimed: totalClaimed,
+        claimRejected: totalClaimRejected,
         priceUpdated: totalPriceUpdated,
         modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,

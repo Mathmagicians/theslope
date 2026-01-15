@@ -472,6 +472,79 @@ describe('useQueryParam.ts', () => {
       // URL already matches, no need to sync
       expect(mockNavigateTo).not.toHaveBeenCalled()
     })
+
+    it('should only auto-sync ONCE per ready transition (cascade prevention)', async () => {
+      // This test verifies that when syncWhen transitions to true,
+      // the auto-sync only fires once even if dependencies change afterward.
+      // This prevents cascading URL updates when multiple useQueryParam instances
+      // are on the same page and each triggers navigateTo independently.
+      setupQuery({})
+
+      const isReady = ref(false)
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => isReady.value
+      })
+
+      expect(value.value).toBe('view')
+      await flushPromises()
+
+      // Not ready yet, no sync
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+
+      // Transition to ready - should sync once
+      isReady.value = true
+      await flushPromises()
+
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+
+      // Reset navigateTo mock to verify no more calls
+      mockNavigateTo.mockClear()
+
+      // Simulate what happens when another useQueryParam updates the route:
+      // This would normally trigger the watchPostEffect again, but our guard prevents re-sync
+      mockRouteData.query = {mode: 'view', other: 'param'}
+      await flushPromises()
+
+      // Should NOT sync again (already synced this ready cycle)
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('should allow re-sync after ready transitions false then true again', async () => {
+      setupQuery({})
+
+      const isReady = ref(false)
+
+      useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => isReady.value
+      })
+
+      // First ready transition
+      isReady.value = true
+      await flushPromises()
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+
+      // Reset for next cycle
+      mockNavigateTo.mockClear()
+      mockRouteData.query = {} // Simulate URL being cleared
+
+      // Transition back to not ready
+      isReady.value = false
+      await flushPromises()
+
+      // Then ready again - should allow sync again
+      isReady.value = true
+      await flushPromises()
+
+      // Should sync again after ready cycle reset
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('Edge Cases', () => {
