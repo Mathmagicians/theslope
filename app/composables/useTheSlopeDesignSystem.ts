@@ -983,57 +983,62 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
+    /** Completed - check circle (green) */
+    COMPLETED: {
+        color: COLOR.success,
+        label: 'Færdig',
+        icon: 'i-heroicons-check-circle'
+    },
+    /** On track - ellipsis circle (green) */
     SUCCESS: {
         color: COLOR.success,
         label: 'OK',
-        icon: 'i-heroicons-check-circle',
-        emoji: '🟢'
+        icon: 'i-heroicons-ellipsis-horizontal-circle'
     },
+    /** Warning - exclamation circle (orange) */
     WARNING: {
         color: COLOR.warning,
         label: 'Snart',
-        icon: 'i-heroicons-clock',
-        emoji: '🟡'
+        icon: 'i-heroicons-exclamation-circle'
     },
+    /** Critical - exclamation circle (red) */
     CRITICAL: {
         color: COLOR.error,
         label: 'Kritisk',
-        icon: 'i-heroicons-exclamation-circle',
-        emoji: '🔴'
+        icon: 'i-heroicons-exclamation-circle'
     },
+    /** Overdue - exclamation circle (black) */
     OVERDUE: {
-        color: COLOR.error,
-        label: 'Forsinket',
-        icon: ICONS.dangerConfirm,
-        emoji: '⚫'
-    },
-    NEUTRAL: {
         color: COLOR.neutral,
-        label: 'Neutral',
-        icon: 'i-heroicons-minus-circle',
-        emoji: '⚪'
+        label: 'Forsinket',
+        icon: 'i-heroicons-exclamation-circle'
     },
-    // Legacy aliases for backwards compatibility
+    /** @deprecated Use COMPLETED for completed steps */
+    NEUTRAL: {
+        color: COLOR.success,
+        label: 'Neutral',
+        icon: 'i-heroicons-check-circle'
+    },
+    /** @deprecated Use COMPLETED */
     DONE: {
         color: COLOR.success,
         label: 'Færdig',
-        icon: 'i-heroicons-check-circle',
-        emoji: '🟢'
+        icon: 'i-heroicons-check-circle'
     },
+    /** @deprecated Use SUCCESS */
     ON_TRACK: {
-        color: COLOR.neutral,
+        color: COLOR.success,
         label: 'OK',
-        icon: 'i-heroicons-clock',
-        emoji: '⚪'
+        icon: 'i-heroicons-ellipsis-horizontal-circle'
     }
 } as const
 
 /**
  * Maps AlarmLevel to DEADLINE_BADGES
- * -1 = Neutral, 0 = Success/Green, 1 = Warning, 2 = Critical, 3 = Overdue/💀
+ * -1 = Completed (check), 0 = On track (ellipsis), 1 = Warning, 2 = Critical, 3 = Overdue
  */
 export const ALARM_TO_BADGE = {
-    [-1]: DEADLINE_BADGES.NEUTRAL,
+    [-1]: DEADLINE_BADGES.COMPLETED,
     0: DEADLINE_BADGES.SUCCESS,
     1: DEADLINE_BADGES.WARNING,
     2: DEADLINE_BADGES.CRITICAL,

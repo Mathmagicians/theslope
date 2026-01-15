@@ -21,7 +21,7 @@
  *
  * Features:
  * - Compact vertical layout for narrow sidebar
- * - Uses DinnerDeadlineBadges for status/deadline display
+ * - Uses createChefBadges factory for status/deadline display
  * - Click to select dinner
  * - Visual selection state (ring accent)
  * - Temporal color coding (consistent with calendar)
@@ -30,8 +30,7 @@
  * - ChefCalendarDisplay agenda view
  *
  * ADR Compliance:
- * - ADR-001: Types from validation composables
- * - Uses DinnerDeadlineBadges for shared deadline logic
+ * - ADR-001: Types from validation composables, badge factory in useBooking
  * - Uses design system for card styling (CALENDAR, CHEF_CALENDAR)
  * - Mobile-first responsive design
  */
@@ -54,8 +53,12 @@ const emit = defineEmits<{
   select: [dinnerEventId: number]
 }>()
 
-// Design system
+// Design system & badge factory
 const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { createChefBadges } = useBooking()
+
+// Chef workflow badges
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines))
 
 // Get color class based on temporal category (matches calendar view)
 // Use past styling for cancelled dinners
@@ -110,9 +113,9 @@ const handleClick = () => {
         {{ menuTitle }}
       </div>
 
-      <!-- Status/deadline badges (standalone mode for agenda) - hidden for past events and cancelled -->
-      <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1">
-        <DinnerDeadlineBadges :dinner-event="dinnerEvent" :deadlines="deadlines" mode="standalone" />
+      <!-- Status/deadline badges - hidden for past events and cancelled -->
+      <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1 space-y-0.5">
+        <DeadlineBadge v-for="badge in badges.values()" :key="badge.step" :badge="badge" />
       </div>
     </div>
   </UCard>

@@ -135,6 +135,10 @@ export const useMaintenance = () => {
         {
             label: 'Linked',
             value: `${result.usersLinked}`
+        },
+        {
+            label: 'Admins',
+            value: `+${result.adminsAdded ?? 0} -${result.adminsRemoved ?? 0}`
         }
     ]
 

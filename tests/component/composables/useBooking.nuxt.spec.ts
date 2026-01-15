@@ -1220,3 +1220,48 @@ describe('Lock Status Utilities', () => {
         })
     })
 })
+
+// =============================================================================
+// getBookingOptions - UI counterpart to decideOrderAction
+// =============================================================================
+
+describe('getBookingOptions', () => {
+    const {getBookingOptions} = useBooking()
+    const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
+    const DM = DinnerModeSchema.enum
+    const OS = OrderStateSchema.enum
+    const DS = DinnerStateSchema.enum
+
+    const ALL = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY, DM.NONE]
+    const DINEIN_NONE = [DM.DINEIN, DM.NONE]
+    const DINEIN_ONLY = [DM.DINEIN]
+    const NONE_ONLY = [DM.NONE]
+    const EMPTY: typeof ALL = []
+
+    it.each([
+        // Cancelled/consumed dinner - no booking possible
+        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+
+        // BOOKED order
+        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: NONE_ONLY, expectedAction: 'process'},
+
+        // RELEASED order (reclaim own)
+        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+
+        // No order
+        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'null + canModify=false + hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
+        {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+
+        // Edge: existing order ignores hasReleased (uses process, not claim)
+        {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'RELEASED ignores hasReleased', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, hasReleased, expectedModes, expectedAction}) => {
+        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased)
+        expect(result.enabledModes).toEqual(expectedModes)
+        expect(result.action).toBe(expectedAction)
+    })
+})

@@ -150,6 +150,102 @@ test('GET /api/admin/users/by-role/[role] should return users with multiple role
     expect(foundInAllergyManagerList!.systemRoles).toEqual(expect.arrayContaining([SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]))
 })
 
+// POST /api/admin/users/[id] - Role update tests (ADR: TS owns ALLERGYMANAGER, HN owns ADMIN)
+test.describe('POST /api/admin/users/[id] role updates', () => {
+    test('should add ALLERGYMANAGER role (TS-owned)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Create user with no roles
+        const user = await UserFactory.createUser(context, UserFactory.defaultUser())
+        createdUserIds.push(user.id as number)
+        expect(user.systemRoles).toEqual([])
+
+        // Add ALLERGYMANAGER via POST
+        const response = await context.request.post(`/api/admin/users/${user.id}`, {
+            data: { systemRoles: [SystemRole.ALLERGYMANAGER] }
+        })
+        expect(response.status()).toBe(200)
+
+        const updated = await response.json()
+        expect(updated.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
+    })
+
+    test('should remove ALLERGYMANAGER role (TS-owned)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Create user with ALLERGYMANAGER
+        const user = await UserFactory.createUser(context, UserFactory.createAllergyManager())
+        createdUserIds.push(user.id as number)
+        expect(user.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
+
+        // Remove by sending empty roles
+        const response = await context.request.post(`/api/admin/users/${user.id}`, {
+            data: { systemRoles: [] }
+        })
+        expect(response.status()).toBe(200)
+
+        const updated = await response.json()
+        expect(updated.systemRoles).not.toContain(SystemRole.ALLERGYMANAGER)
+    })
+
+    test('should preserve ADMIN role (HN-owned) when updating TS-owned roles', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Create user with ADMIN (HN-owned)
+        const user = await UserFactory.createUser(context, UserFactory.createAdmin())
+        createdUserIds.push(user.id as number)
+        expect(user.systemRoles).toContain(SystemRole.ADMIN)
+
+        // Try to add ALLERGYMANAGER - ADMIN should be preserved
+        const response = await context.request.post(`/api/admin/users/${user.id}`, {
+            data: { systemRoles: [SystemRole.ALLERGYMANAGER] }
+        })
+        expect(response.status()).toBe(200)
+
+        const updated = await response.json()
+        expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
+        expect(updated.systemRoles).toContain(SystemRole.ALLERGYMANAGER) // TS-owned added
+    })
+
+    test('should not remove ADMIN role (HN-owned) via TS caller', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Create user with both roles
+        const user = await UserFactory.createUser(context, UserFactory.createAdminAndAllergyManager())
+        createdUserIds.push(user.id as number)
+        expect(user.systemRoles).toContain(SystemRole.ADMIN)
+        expect(user.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
+
+        // Send empty roles - should only remove ALLERGYMANAGER, preserve ADMIN
+        const response = await context.request.post(`/api/admin/users/${user.id}`, {
+            data: { systemRoles: [] }
+        })
+        expect(response.status()).toBe(200)
+
+        const updated = await response.json()
+        expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
+        expect(updated.systemRoles).not.toContain(SystemRole.ALLERGYMANAGER) // TS-owned removed
+    })
+
+    test('should return 400 for invalid user ID', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        const response = await context.request.post('/api/admin/users/invalid', {
+            data: { systemRoles: [] }
+        })
+        expect(response.status()).toBe(400)
+    })
+
+    test('should return 500 for non-existent user ID', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        const response = await context.request.post('/api/admin/users/999999', {
+            data: { systemRoles: [] }
+        })
+        expect(response.status()).toBe(500)
+    })
+})
+
 // Cleanup after all tests
 test.afterAll(async ({browser}) => {
     if (createdUserIds.length > 0) {

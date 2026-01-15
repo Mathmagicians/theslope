@@ -296,6 +296,7 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
+            :released-ticket-count="lockStatus.get(dinnerEventDetail.id) ?? 0"
             @save-bookings="handleSaveBookings"
           />
 

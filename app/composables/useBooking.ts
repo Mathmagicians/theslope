@@ -1,6 +1,6 @@
-import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {useSeason} from '~/composables/useSeason'
+import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
 import {useTicket} from '~/composables/useTicket'
 import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
@@ -319,7 +319,8 @@ export const DEADLINE_LABELS = {
         label: 'Framelding',
         openText: 'Man kan ændre sin tilmelding',
         closedText: 'Man kan ikke længere framelde sig',
-        deadlinePrefix: 'åben de næste'
+        deadlinePrefix: 'åben de næste',
+        availableText: (count: number) => `Lukket for ændringer, men der er ${count} billetter til salg`
     },
     GROCERIES_DONE: {
         label: 'Indkøb',
@@ -332,8 +333,70 @@ export const DEADLINE_LABELS = {
         openText: 'Fællesspisning forude',
         closedText: 'Vi har spist den dejlige mad',
         deadlinePrefix: 'om'
+    },
+    // Booking view labels (reused by DinnerBookingForm and GuestBookingForm)
+    DINING_MODE: {
+        label: 'Hvordan spiser I',
+        openText: 'Du kan ændre til spisesal, sen spisning eller takeaway',
+        closedText: 'Du kan ikke længere ændre, hvordan I spiser'
     }
 } as const
+
+// ============================================================================
+// Deadline Badge Factories - Create badge data for display
+// ============================================================================
+
+export interface DeadlineBadgeData {
+    label: string
+    icon: string
+    color: 'success' | 'error' | 'warning' | 'neutral'
+    value: string       // Badge text
+    helpText: string
+    step?: number       // Chef stepper: which step this badge belongs to
+    alarm?: AlarmLevel  // Chef stepper: alarm level for conditional display
+}
+
+/**
+ * Create booking deadline badge data
+ * @param isOpen - Whether booking is still open (canModifyOrders)
+ * @param releasedCount - Number of released tickets available (optional)
+ */
+export const createBookingBadge = (isOpen: boolean, releasedCount?: number): DeadlineBadgeData => {
+    const hasTickets = !isOpen && releasedCount !== undefined && releasedCount > 0
+    return {
+        label: DEADLINE_LABELS.BOOKING_CLOSED.label,
+        icon: isOpen ? 'i-heroicons-lock-open' : (hasTickets ? ICONS.released : 'i-heroicons-lock-closed'),
+        color: isOpen ? 'success' : (hasTickets ? 'warning' : 'error'),
+        value: isOpen ? 'Åben' : (hasTickets ? `${releasedCount} ledig${releasedCount === 1 ? '' : 'e'}` : 'Lukket'),
+        helpText: isOpen
+            ? DEADLINE_LABELS.BOOKING_CLOSED.openText
+            : (hasTickets ? DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedCount!) : DEADLINE_LABELS.BOOKING_CLOSED.closedText)
+    }
+}
+
+/**
+ * Create dining mode deadline badge data
+ * @param isOpen - Whether dining mode can be changed (canEditDiningMode)
+ */
+export const createDiningModeBadge = (isOpen: boolean): DeadlineBadgeData => ({
+    label: DEADLINE_LABELS.DINING_MODE.label,
+    icon: isOpen ? 'i-heroicons-lock-open' : 'i-heroicons-lock-closed',
+    color: isOpen ? 'success' : 'error',
+    value: isOpen ? 'Åben' : 'Lukket',
+    helpText: isOpen ? DEADLINE_LABELS.DINING_MODE.openText : DEADLINE_LABELS.DINING_MODE.closedText
+})
+
+/**
+ * Create booking view badges (for DinnerBookingForm, BookingGridView)
+ */
+export const createBookingBadges = (
+    dinnerEvent: DinnerEventDisplay,
+    deadlines: SeasonDeadlines,
+    releasedCount?: number
+): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => ({
+    booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCount),
+    diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date))
+})
 
 // ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)
@@ -438,7 +501,7 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
     },
     [DinnerStepState.BOOKING_CLOSED]: {
         step: 2,
-        title: 'Lukket for ændringer',
+        title: 'Framelding',
         icon: ICONS.ticket,
         text: DEADLINE_LABELS.BOOKING_CLOSED.closedText,
         getDeadline: systemDeadline(DEADLINE_LABELS.BOOKING_CLOSED.deadlinePrefix)
@@ -595,7 +658,7 @@ export const useBooking = () => {
 
     /**
      * Get max alarm level for chef tasks (menu + groceries) - for calendar chips.
-     * Reuses DINNER_STEP_MAP.getDeadline() logic from DinnerDeadlineBadges.
+     * Uses DINNER_STEP_MAP.getDeadline() logic (same as createChefBadges).
      *
      * @returns AlarmLevel: -1 (all done), 0 (on track), 1 (warning), 2 (critical), 3 (overdue)
      */
@@ -611,14 +674,14 @@ export const useBooking = () => {
 
         const alarms: AlarmLevel[] = []
 
-        // Menu badge - same logic as DinnerDeadlineBadges.menuBadge
+        // Menu badge
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
                         (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
         if (!menuDone) {
             alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(countdown, isPastDeadline, thresholds).alarm)
         }
 
-        // Groceries badge - same logic as DinnerDeadlineBadges.groceriesDoneBadge
+        // Groceries badge
         const groceriesDone = dinnerEvent.totalCost > 0
         if (!groceriesDone) {
             alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(countdown, isPastDeadline, thresholds).alarm)
@@ -833,6 +896,74 @@ export const useBooking = () => {
         }, { guestOrders: [] as T[], regularOrders: [] as T[] })
     }
 
+    /**
+     * Get booking options: enabled dinner modes and which action to take.
+     * UI counterpart to decideOrderAction - determines available paths of action.
+     *
+     * Decision matrix:
+     * | orderState | canModify | canEditMode | releasedAvail | enabledModes        | action    |
+     * |------------|-----------|-------------|---------------|---------------------|-----------|
+     * | BOOKED     | -         | true        | -             | [ALL]               | 'process' |
+     * | BOOKED     | -         | false       | -             | [NONE]              | 'process' |
+     * | RELEASED   | -         | true        | -             | [ALL]               | 'process' |
+     * | RELEASED   | -         | false       | -             | [DINEIN, NONE]      | 'process' |
+     * | null       | true      | -           | -             | [ALL]               | 'process' |
+     * | null       | false     | -           | true          | [DINEIN]            | 'claim'   |
+     * | null       | false     | -           | false         | []                  | null      |
+     * | CANCELLED/CONSUMED dinner          | []                  | null      |
+     *
+     * For "add new" (guest) context: caller filters out NONE from enabledModes.
+     *
+     * @param orderState - Current order state (null if no order exists)
+     * @param canModifyOrders - Before booking deadline
+     * @param canEditDiningMode - Before dining mode deadline
+     * @param dinnerState - Dinner event state (CANCELLED/CONSUMED blocks booking)
+     * @param hasReleasedTickets - Released tickets available to claim
+     */
+    const getBookingOptions = (
+        orderState: OrderState | null,
+        canModifyOrders: boolean,
+        canEditDiningMode: boolean,
+        dinnerState: DinnerState,
+        hasReleasedTickets: boolean
+    ): { enabledModes: DinnerMode[], action: 'process' | 'claim' | null } => {
+        const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
+        const DinnerModeEnum = DinnerModeSchema.enum
+        const DinnerStateEnum = DinnerStateSchema.enum
+        const {OrderStateSchema} = useBookingValidation()
+        const OrderStateEnum = OrderStateSchema.enum
+
+        const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
+
+        // Cancelled/consumed dinner - no booking possible
+        if (dinnerState === DinnerStateEnum.CANCELLED || dinnerState === DinnerStateEnum.CONSUMED) {
+            return { enabledModes: [], action: null }
+        }
+
+        // BOOKED order
+        if (orderState === OrderStateEnum.BOOKED) {
+            return canEditDiningMode
+                ? { enabledModes: ALL_MODES, action: 'process' }
+                : { enabledModes: [DinnerModeEnum.NONE], action: 'process' }
+        }
+
+        // RELEASED order (can reclaim own)
+        if (orderState === OrderStateEnum.RELEASED) {
+            return canEditDiningMode
+                ? { enabledModes: ALL_MODES, action: 'process' }
+                : { enabledModes: [DinnerModeEnum.DINEIN, DinnerModeEnum.NONE], action: 'process' }
+        }
+
+        // No order
+        if (canModifyOrders) {
+            return { enabledModes: ALL_MODES, action: 'process' }
+        }
+        if (hasReleasedTickets) {
+            return { enabledModes: [DinnerModeEnum.DINEIN], action: 'claim' }
+        }
+        return { enabledModes: [], action: null }
+    }
+
     // ============================================================================
     // Scaffold Result Formatting - Consistent display across UI and logs
     // ============================================================================
@@ -931,6 +1062,55 @@ export const useBooking = () => {
         return result
     }
 
+    /**
+     * Create chef workflow badges for a dinner event
+     * Returns badges for: Menu (1), Booking (2), Groceries (3), Consumed (4)
+     */
+    const createChefBadges = (
+        dinnerEvent: DinnerEventDisplay,
+        deadlines: SeasonDeadlines,
+        releasedTicketCount?: number
+    ): Map<number, DeadlineBadgeData> => {
+        const {ALARM_TO_BADGE} = useTheSlopeDesignSystem()
+        const {getDinnerTimeRange, getCookingDeadlineThresholds} = useSeason()
+        const thresholds = getCookingDeadlineThresholds()
+        const countdown = calculateCountdown(getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0).start)
+        const isPastDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
+
+        const badge = (step: number, key: keyof typeof DEADLINE_LABELS, state: DinnerStepState, done: boolean): DeadlineBadgeData => {
+            const labels = DEADLINE_LABELS[key]
+            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastDeadline, thresholds)
+            const alarm = done ? -1 : result.alarm
+            const b = ALARM_TO_BADGE[alarm]
+            const text = done ? labels.closedText : labels.openText
+            return {
+                step, alarm,
+                label: 'label' in labels ? labels.label : '',
+                icon: b.icon,
+                value: done ? text : (result.description || text),
+                color: b.color as 'success' | 'error' | 'warning' | 'neutral',
+                helpText: text
+            }
+        }
+
+        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
+            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        const bookingClosed = !deadlines.canModifyOrders(dinnerEvent.date)
+        const hasTickets = bookingClosed && releasedTicketCount !== undefined && releasedTicketCount > 0
+
+        let bookingBadge = badge(2, 'BOOKING_CLOSED', DinnerStepState.BOOKING_CLOSED, bookingClosed)
+        if (hasTickets) {
+            bookingBadge = { ...bookingBadge, value: `(${releasedTicketCount})`, helpText: DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedTicketCount!), color: 'warning', alarm: 1 }
+        }
+
+        return new Map([
+            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone)],
+            [2, bookingBadge],
+            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0)],
+            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED)]
+        ])
+    }
+
     return {
         // Order Snapshot
         buildOrderSnapshot,
@@ -951,6 +1131,9 @@ export const useBooking = () => {
         CONSUMABLE_DINNER_STATES,
         CLOSABLE_ORDER_STATES,
         DEADLINE_LABELS,
+        // Deadline Badge Factories
+        createBookingBadges,
+        createChefBadges,
         // Guest Booking
         buildGuestOrder,
         groupGuestOrders,
@@ -960,6 +1143,8 @@ export const useBooking = () => {
         // Lock Status
         countReleasedOrdersByDinner,
         getLockedFutureDinnerIds,
-        computeLockStatus
+        computeLockStatus,
+        // Booking Options (UI counterpart to decideOrderAction)
+        getBookingOptions
     }
 }

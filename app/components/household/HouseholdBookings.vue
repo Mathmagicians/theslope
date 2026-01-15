@@ -30,6 +30,16 @@ planStore.initPlanStore()
 const bookingsStore = useBookingsStore()
 const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
 
+// Allergies store for guest booking form
+const allergiesStore = useAllergiesStore()
+const {allergyTypes} = storeToRefs(allergiesStore)
+allergiesStore.initAllergiesStore()
+
+// Households store for booker ID (current user's inhabitant)
+const householdsStore = useHouseholdsStore()
+const {myInhabitant} = storeToRefs(householdsStore)
+const bookerId = computed(() => myInhabitant.value?.id)
+
 const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
@@ -158,13 +168,26 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   )
 }
 
-// Grid view guest booking - TODO: implement after day view is done
-const handleAddGuest = (eventId: number) => {
-  // For now, switch to day view for that event
+// Grid view guest booking - receives DesiredOrder[] from GuestBookingForm
+const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
+  if (guestOrders.length === 0) return
+
+  const eventId = guestOrders[0]?.dinnerEventId
+  if (!eventId) return
+
   const event = dinnerEvents.value.find(e => e.id === eventId)
-  if (event) {
-    setDate(new Date(event.date))
-  }
+  const count = guestOrders.length
+
+  await bookingsStore.processSingleEventBookings(
+    household.value.id,
+    eventId,
+    guestOrders
+  )
+  toast.add({
+    title: 'Du får gæster til middag',
+    description: `${count} gæst${count > 1 ? 'er' : ''} tilføjet d. ${event ? formatDate(new Date(event.date)) : ''}`,
+    color: 'success'
+  })
 }
 </script>
 
@@ -204,6 +227,8 @@ const handleAddGuest = (eventId: number) => {
           :orders="orders"
           :ticket-prices="ticketPrices"
           :deadlines="deadlines"
+          :allergy-types="allergyTypes"
+          :booker-id="bookerId"
           :is-saving="isProcessingBookings"
           :has-prev="hasPrev"
           :has-next="hasNext"
@@ -220,6 +245,7 @@ const handleAddGuest = (eventId: number) => {
               :orders="orders"
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
+              :released-ticket-count="lockStatus.get(selectedDinnerEvent.id) ?? 0"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

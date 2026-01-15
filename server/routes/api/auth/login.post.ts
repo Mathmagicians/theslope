@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
 
     // Database operations
     try {
-        const theSlopeUser = await fetchUser(heynaboLoggedIn.email, d1Client)
+        const theSlopeUser = await fetchUser(d1Client, { email: heynaboLoggedIn.email })
         if (!theSlopeUser) {
             throw createError({ statusCode: 404, statusMessage: '🔐 > LOGIN > UNKNOWN USER' })
         }

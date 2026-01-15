@@ -67,6 +67,7 @@ interface TableRow {
   orders?: OrderDisplay[] // For grouped guest orders
   orderState: OrderState | undefined
   dinnerMode: DinnerMode
+  disabledModes: DinnerMode[] // Computed via getBookingOptions per row
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
@@ -80,16 +81,16 @@ interface Props {
   household?: HouseholdDetail
   dinnerEvent: DinnerEventDisplay
   orders?: OrderDisplay[]
-  allOrders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]
   deadlines: SeasonDeadlines
+  releasedTicketCount?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   household: undefined,
   orders: () => [],
-  allOrders: () => [],
-  ticketPrices: () => []
+  ticketPrices: () => [],
+  releasedTicketCount: 0
 })
 
 const emit = defineEmits<{
@@ -183,45 +184,39 @@ const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
 // Edit allowed if: permission-based formMode is EDIT AND dinner hasn't passed
 const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value)
 
-// Disabled modes based on deadline
-const disabledModes = computed(() =>
-  canChangeDiningMode.value ? [] : [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
-)
+// All dinner modes for computing disabled from enabled
+const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
-// Guest can't select NONE (must eat if adding)
-const guestDisabledModes = computed(() => {
-  const base = [DinnerModeEnum.NONE]
-  if (!canChangeDiningMode.value) {
-    return [...base, DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
-  }
-  return base
-})
+// Compute disabled modes for a row using getBookingOptions
+const getDisabledModesForRow = (orderState: OrderState | undefined, isGuestAddRow: boolean): DinnerMode[] => {
+  const {enabledModes} = getBookingOptions(
+    orderState ?? null,
+    canBook.value,
+    canChangeDiningMode.value,
+    props.dinnerEvent.state,
+    hasReleasedTickets.value
+  )
+  // Disable NONE for: guest add row OR inhabitants without existing order (can't select "nothing" when no ticket exists)
+  const hasNoExistingOrder = orderState === undefined
+  const shouldDisableNone = isGuestAddRow || hasNoExistingOrder
+  const effectiveEnabled = shouldDisableNone ? enabledModes.filter(m => m !== DinnerModeEnum.NONE) : enabledModes
+  return ALL_MODES.filter(m => !effectiveEnabled.includes(m))
+}
 
 // ============================================================================
 // RELEASED TICKETS COMPUTEDS
 // ============================================================================
 
-const householdInhabitantIds = computed(() =>
-  new Set(household.value?.inhabitants?.map(i => i.id) ?? [])
-)
-
-const releasedTicketsFromOthers = computed(() =>
-  (props.allOrders ?? []).filter(o =>
-    o.state === OrderStateEnum.RELEASED &&
-    o.dinnerEventId === props.dinnerEvent.id &&
-    !householdInhabitantIds.value.has(o.inhabitantId)
-  )
-)
-
-const userReleasedTickets = computed(() =>
+// Household's own released tickets (for warning message)
+const householdReleasedTickets = computed(() =>
   (props.orders ?? []).filter(o =>
     o.state === OrderStateEnum.RELEASED &&
     o.dinnerEventId === props.dinnerEvent.id
   )
 )
 
-const releasedTicketCount = computed(() => releasedTicketsFromOthers.value.length)
-const hasReleasedTickets = computed(() => releasedTicketCount.value > 0)
+// Released tickets from all households (passed from store's lockStatus)
+const hasReleasedTickets = computed(() => props.releasedTicketCount > 0)
 
 // ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
@@ -257,6 +252,7 @@ const tableData = computed((): TableRow[] => {
     const ordersForInhabitant = regularOrders.value.filter(o => o.inhabitantId === inhabitant.id)
     const order = ordersForInhabitant[0] ?? null
     const ticketCount = ordersForInhabitant.length
+    const orderState = order?.state as OrderState | undefined
 
     // Single DRY code path: resolveTicketPrice → ticketTypeConfig lookup
     const ticketPrice = resolveTicketPrice(
@@ -274,8 +270,9 @@ const tableData = computed((): TableRow[] => {
       inhabitant,
       ticketConfig: ticketPrice ? ticketTypeConfig[ticketPrice.ticketType] : null,
       order,
-      orderState: order?.state as OrderState | undefined,
+      orderState,
       dinnerMode: order?.dinnerMode ?? DinnerModeEnum.NONE,
+      disabledModes: getDisabledModesForRow(orderState, false),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
@@ -292,6 +289,7 @@ const tableData = computed((): TableRow[] => {
     .map(([key, orders]) => {
       const firstOrder = orders[0]!
       const booker = allInhabitants.find(i => i.id === firstOrder.inhabitantId)
+      const orderState = firstOrder.state as OrderState
 
       // Resolve ticket price for guest: no birthDate, use priceAtBooking
       const resolvedTicketPrice = resolveTicketPrice(null, firstOrder.priceAtBooking, props.ticketPrices)
@@ -305,8 +303,9 @@ const tableData = computed((): TableRow[] => {
         ticketConfig: resolvedTicketPrice ? ticketTypeConfig[resolvedTicketPrice.ticketType] : null,
         order: firstOrder,
         orders,
-        orderState: firstOrder.state as OrderState,
+        orderState,
         dinnerMode: firstOrder.dinnerMode,
+        disabledModes: getDisabledModesForRow(orderState, false),
         price: firstOrder.priceAtBooking,
         ticketPriceId: firstOrder.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
         guestCount: orders.length,
@@ -326,10 +325,12 @@ const tableData = computed((): TableRow[] => {
     order: null,
     orderState: undefined as OrderState | undefined,
     price: 0,
-    ticketPriceId: 0
+    ticketPriceId: 0,
+    disabledModes: [] as DinnerMode[]
   }
 
   // Power row with consensus (shown in both VIEW and EDIT modes)
+  // Power row uses first inhabitant's disabled modes (they all share same deadline constraints)
   const powerRow: TableRow = {
     ...defaultSyntheticRow,
     rowType: 'power' as RowType,
@@ -338,6 +339,7 @@ const tableData = computed((): TableRow[] => {
     inhabitants: allInhabitants,
     ticketConfig: COMPONENTS.powerMode.ticketConfig,
     dinnerMode: consensusMode,
+    disabledModes: inhabitantRows[0]?.disabledModes ?? [],
     consensus: hasConsensus
   }
 
@@ -345,11 +347,12 @@ const tableData = computed((): TableRow[] => {
   if (!isEditModeAllowed.value) return [powerRow, ...inhabitantRows, ...guestOrderRows]
 
   // EDIT mode: power + inhabitants + guest orders + add guest
+  // Guest add row: isGuestAddRow=true to disable NONE
   return [
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', dinnerMode: DinnerModeEnum.DINEIN}
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', dinnerMode: DinnerModeEnum.DINEIN, disabledModes: getDisabledModesForRow(undefined, true)}
   ]
 })
 
@@ -457,22 +460,10 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {DEADLINE_LABELS, partitionGuestOrders, groupGuestOrders} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions} = useBooking()
 
-const deadlineStatusBadges = computed(() => [
-  {
-    label: DEADLINE_LABELS.BOOKING_CLOSED.label,
-    isOpen: canBook.value,
-    openText: DEADLINE_LABELS.BOOKING_CLOSED.openText,
-    closedText: DEADLINE_LABELS.BOOKING_CLOSED.closedText
-  },
-  {
-    label: 'Hvordan spiser I',
-    isOpen: canChangeDiningMode.value,
-    openText: 'Du kan ændre til spisesal, sen spisning eller takeaway',
-    closedText: 'Du kan ikke længere ændre, hvordan I spiser'
-  }
-])
+// Deadline badges
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
 
 // Allergy type options for multi-select
 const allergyOptions = computed(() =>
@@ -500,36 +491,26 @@ const allergyOptions = computed(() =>
   <div v-else class="space-y-4">
     <!-- Deadline Status Badges -->
     <div class="flex flex-wrap gap-4">
-      <div v-for="badge in deadlineStatusBadges" :key="badge.label" class="flex flex-col items-start">
-        <UBadge
-          :color="badge.isOpen ? COLOR.success : COLOR.error"
-          variant="soft"
-          :size="SIZES.small"
-          :icon="badge.isOpen ? ICONS.lockOpen : ICONS.lockClosed"
-        >
-          {{ badge.label }}: {{ badge.isOpen ? 'Åben' : 'Lukket' }}
-        </UBadge>
-        <span :class="[TYPOGRAPHY.finePrint, 'text-gray-500 dark:text-gray-400 mt-0.5']">
-          {{ badge.isOpen ? badge.openText : badge.closedText }}
-        </span>
-      </div>
+      <DeadlineBadge :badge="badges.booking" />
+      <DeadlineBadge :badge="badges.diningMode" />
     </div>
 
     <!-- Released Ticket Warnings -->
     <div v-if="!canBook" class="space-y-2">
       <UAlert
-        v-if="userReleasedTickets.length > 0"
+        v-if="householdReleasedTickets.length > 0"
         color="warning"
         variant="soft"
         :icon="ICONS.released"
       >
         <template #title>
-          Du har frigivet {{ userReleasedTickets.length }} billet{{ userReleasedTickets.length === 1 ? '' : 'ter' }}
+          Husstanden har frigivet {{ householdReleasedTickets.length }} billet{{ householdReleasedTickets.length === 1 ? '' : 'ter' }}
         </template>
         <template #description>Du betaler, medmindre andre køber</template>
       </UAlert>
-      <UAlert v-if="hasReleasedTickets" color="info" variant="soft" icon="i-heroicons-ticket">
-        <template #title>🎟️ {{ releasedTicketCount }} ledig{{ releasedTicketCount === 1 ? ' billet' : 'e billetter' }}</template>
+      <UAlert v-if="hasReleasedTickets" color="info" variant="soft" icon="i-heroicons-arrows-right-left">
+        <template #title>Har du brug for flere billetter?</template>
+        <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCount }} ledig{{ props.releasedTicketCount === 1 ? ' billet' : 'e billetter' }} til salg.</template>
       </UAlert>
     </div>
 
@@ -587,7 +568,7 @@ const allergyOptions = computed(() =>
             <UIcon :name="ICONS.userPlus" class="size-4 md:size-5 text-info" />
             <span :class="TYPOGRAPHY.bodyTextMedium">{{ row.original.name }}</span>
             <UBadge v-if="hasReleasedTickets" :color="COLOR.info" variant="subtle" :size="SIZES.small">
-              🎟️ {{ releasedTicketCount }} ledige
+              🎟️ {{ props.releasedTicketCount }} ledige
             </UBadge>
           </div>
 
@@ -747,7 +728,7 @@ const allergyOptions = computed(() =>
           <DinnerModeSelector
             v-model="draftMode"
             :form-mode="FORM_MODES.EDIT"
-            :disabled-modes="row.original.rowType === 'guest' ? guestDisabledModes : disabledModes"
+            :disabled-modes="row.original.disabledModes"
             :consensus="row.original.consensus"
             :size="SIZES.standard"
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"

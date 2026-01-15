@@ -52,8 +52,9 @@
  * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
@@ -86,6 +87,8 @@ interface Props {
   orders: OrderDisplay[]
   ticketPrices: TicketPrice[]
   deadlines: SeasonDeadlines
+  allergyTypes?: AllergyTypeDisplay[]
+  bookerId?: number // Current user's inhabitant ID for guest booking
   formMode?: FormMode
   isSaving?: boolean
   hasPrev?: boolean
@@ -93,6 +96,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  allergyTypes: () => [],
+  bookerId: undefined,
   formMode: FORM_MODES.VIEW,
   isSaving: false,
   hasPrev: true,
@@ -107,7 +112,7 @@ const emit = defineEmits<{
   cancel: []
   'update:formMode': [mode: FormMode]
   navigate: [direction: 'prev' | 'next']
-  addGuest: [eventId: number]
+  addGuest: [orders: DesiredOrder[]]
 }>()
 
 // Design system
@@ -178,6 +183,59 @@ const handleSave = () => {
   emit('save', changes)
   draftChanges.value.clear()
   emit('update:formMode', FORM_MODES.VIEW)
+}
+
+// ============================================================================
+// GUEST BOOKING EXPANDABLE ROW
+// ============================================================================
+
+// Track which event's + button was clicked (for GuestBookingForm context)
+const activeGuestEventId = ref<number | null>(null)
+
+// Expandable row state (single row at a time)
+const {expanded} = useExpandableRow({
+  onExpand: (rowIndex) => {
+    // Row expanded - activeGuestEventId already set by handleGuestAdd
+    const row = tableData.value[rowIndex]
+    if (row?.rowType !== 'guest-add') {
+      activeGuestEventId.value = null // Safety: only guest-add row should expand
+    }
+  },
+  onCollapse: () => {
+    activeGuestEventId.value = null
+  }
+})
+
+// Get the row index for guest-add row (needed to toggle expansion)
+const guestAddRowIndex = computed(() =>
+  tableData.value.findIndex(r => r.rowType === 'guest-add')
+)
+
+// Handle + button click: set event context and expand row
+const handleGuestAdd = (eventId: number) => {
+  activeGuestEventId.value = eventId
+  // Toggle expansion - if already expanded for same event, collapse
+  const rowIdx = guestAddRowIndex.value
+  if (rowIdx >= 0) {
+    if (expanded.value[rowIdx] && activeGuestEventId.value === eventId) {
+      expanded.value = {}
+    } else {
+      expanded.value = {[rowIdx]: true}
+    }
+  }
+}
+
+// Get active event for GuestBookingForm
+const activeGuestEvent = computed(() =>
+  activeGuestEventId.value
+    ? props.dinnerEvents.find(e => e.id === activeGuestEventId.value)
+    : null
+)
+
+// Handle GuestBookingForm save
+const handleGuestSave = (orders: DesiredOrder[]) => {
+  emit('addGuest', orders)
+  expanded.value = {}
 }
 
 // Handle mode change from FormModeSelector (reserved for future use)
@@ -459,12 +517,14 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
     <UTable
       v-else
       v-model:column-pinning="columnPinning"
+      v-model:expanded="expanded"
       sticky
       :data="tableData"
       :columns="columns"
       row-key="id"
       :ui="{
         tbody: '[&_tr:first-child]:bg-warning/10',
+        tr: 'data-[expanded=true]:bg-elevated/50',
         th: 'px-1 py-1 md:px-2 md:py-2',
         td: 'px-1 py-1 md:px-2',
         tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs'
@@ -618,12 +678,14 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
         <!-- Guest add row: + button for future events -->
         <UButton
           v-else-if="row.original.rowType === 'guest-add' && !isEventPast(event) && canBookEvent(event)"
-          :icon="ICONS.plusCircle"
+          :icon="activeGuestEventId === event.id ? ICONS.chevronDown : ICONS.plusCircle"
           :color="COMPONENTS.guestRow.color"
           variant="ghost"
           :size="SIZES.xs"
           :data-testid="`guest-add-${event.id}`"
-          @click="emit('addGuest', event.id)"
+          :class="activeGuestEventId === event.id ? 'rotate-45' : ''"
+          class="transition-transform duration-200"
+          @click="handleGuestAdd(event.id)"
         />
       </template>
 
@@ -633,6 +695,21 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
           <span>{{ getEventSummary(event.id).ticketCounts }}</span>
           <span class="text-muted">{{ formatPrice(getEventSummary(event.id).totalPrice) }} kr</span>
         </div>
+      </template>
+
+      <!-- Expanded row: GuestBookingForm for guest-add row -->
+      <template #expanded="{row}">
+        <GuestBookingForm
+          v-if="row.original.rowType === 'guest-add' && activeGuestEvent && props.bookerId"
+          :dinner-event="activeGuestEvent"
+          :ticket-prices="props.ticketPrices"
+          :allergy-types="props.allergyTypes"
+          :deadlines="props.deadlines"
+          :booker-id="props.bookerId"
+          :released-ticket-count="0"
+          @save-bookings="handleGuestSave"
+          @cancel="expanded = {}"
+        />
       </template>
 
       <!-- Footer: Cancel/Save buttons (ADR-016) - using body-bottom slot per NuxtUI docs -->

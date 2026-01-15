@@ -16,18 +16,16 @@
  *  (no badge)   [🟢 om 2d]   [🟢 åben..]  [🟢 om 1d]   [🟢 om..]
  *               g/y/r/💀     g/y/r/⚪     g/y/r/💀     g/⚪
  *
- * Badges are rendered UNDER each step using DinnerDeadlineBadges data.
+ * Badges are rendered UNDER each step using createChefBadges factory.
  *
  * ADR Compliance:
- * - ADR-001: Business logic in useBooking composable (DINNER_STEP_MAP, getStepConfig)
+ * - ADR-001: Business logic in useBooking composable (DINNER_STEP_MAP, getStepConfig, createChefBadges)
  * - Mobile-first responsive design
  * - Uses NuxtUI UStepper component
- * - Uses DinnerDeadlineBadges for shared deadline logic
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import type { DeadlineBadge } from '~/components/chef/DinnerDeadlineBadges.vue'
 import type { SeasonDeadlines } from '~/composables/useSeason'
-import DinnerDeadlineBadges from '~/components/chef/DinnerDeadlineBadges.vue'
+import type { DeadlineBadgeData } from '~/composables/useBooking'
 import { DINNER_STEP_MAP } from '~/composables/useBooking'
 
 interface Props {
@@ -46,12 +44,12 @@ const props = withDefaults(defineProps<Props>(), {
 const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
-const { getStepConfig } = useBooking()
+const { getStepConfig, createChefBadges } = useBooking()
 const { DinnerStateSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-// Template ref for DinnerDeadlineBadges to get badge data
-const deadlineBadgesRef = ref<InstanceType<typeof DinnerDeadlineBadges> | null>(null)
+// Badges from factory
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines))
 
 // Current step (using season-specific deadlines from props)
 const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.deadlines))
@@ -63,10 +61,8 @@ const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCE
 // Is past/consumed event? (only show overdue badges for past events - user actions that were never completed)
 const isPastEvent = computed(() => props.dinnerEvent.state === DinnerState.CONSUMED)
 
-// Get badge for a specific step (from DinnerDeadlineBadges via ref)
-const getBadgeForStep = (step: number): DeadlineBadge | null => {
-  return deadlineBadgesRef.value?.getBadgeForStep(step) ?? null
-}
+// Get badge for a specific step
+const getBadgeForStep = (step: number): DeadlineBadgeData | null => badges.value.get(step) ?? null
 
 // Build stepper items from DINNER_STEP_MAP
 const steps = computed(() => {
@@ -92,15 +88,6 @@ const steps = computed(() => {
 
 <template>
   <div>
-    <!-- Data provider for deadline badges (hidden in stepper mode) -->
-    <DinnerDeadlineBadges
-      ref="deadlineBadgesRef"
-      :dinner-event="dinnerEvent"
-      :deadlines="deadlines"
-      mode="stepper"
-      class="hidden"
-    />
-
     <!-- Cancelled: Empty state -->
     <UAlert
       v-if="isCancelled"

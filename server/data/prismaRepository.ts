@@ -2,6 +2,7 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {maskPassword} from '~/utils/utils'
 import type {PreferenceUpdate} from '~/composables/useSeason'
 
 import type {Season} from "~/composables/useSeasonValidation"
@@ -39,29 +40,18 @@ const {throwH3Error} = eventHandlerHelper
 /*** USERS ***/
 
 // Get serialization utilities
-const {serializeUserInput, deserializeUser, mergeUserRoles} = useCoreValidation()
+const {serializeUserInput, deserializeUser} = useCoreValidation()
 
+/**
+ * Save user - upserts by email
+ * NOTE: Callers must reconcile roles BEFORE calling (use reconcileUserRoles from useUserRoles)
+ */
 export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserDetail> {
-    console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
+    console.info(`🪪 > USER > [SAVE] Saving user ${user.email} with roles [${user.systemRoles}]`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Check if user exists to merge roles
-        const existingUser = await prisma.user.findUnique({
-            where: {email: user.email}
-        })
-
-        let userToSave = user
-
-        // If user exists, merge systemRoles instead of overwriting
-        if (existingUser) {
-            const existingDomain = deserializeUser(existingUser)
-            userToSave = mergeUserRoles(existingDomain, user)
-            console.info(`🪪 > USER > [SAVE] Merging roles for existing user ${user.email}: [${existingDomain.systemRoles}] + [${user.systemRoles}] = [${userToSave.systemRoles}]`)
-        }
-
-        // Serialize before writing to DB (ADR-010 pattern)
-        const serializedUser = serializeUserInput(userToSave)
+        const serializedUser = serializeUserInput(user)
         const newUser = await prisma.user.upsert({
             where: {email: user.email},
             create: serializedUser,
@@ -69,7 +59,6 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         })
         console.info(`🪪 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
 
-        // ADR-009: Return UserDetail with Inhabitant: null (no relation fetched for mutation)
         const deserialized = deserializeUser(newUser)
         return {
             ...deserialized,
@@ -250,14 +239,17 @@ export async function linkUsersToInhabitants(
     return linked
 }
 
-export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
-    console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
+export async function fetchUser(d1Client: D1Database, filter: { email?: string; id?: number }): Promise<UserDetail | null> {
+    const filterDesc = filter.email ? `email ${maskPassword(filter.email)}` : `ID ${filter.id}`
+    console.info(`🪪 > USER > [GET] Fetching user by ${filterDesc}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeUserDetail} = useCoreValidation()
 
+    const where = filter.email ? { email: filter.email } : { id: filter.id }
+
     try {
         const user = await prisma.user.findUnique({
-            where: {email},
+            where,
             include: {
                 Inhabitant: {
                     include: {household: true}
@@ -266,22 +258,13 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         })
 
         if (user) {
-            console.info(`🪪 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
-
-            // Log inhabitant info (simplified to avoid nested template literals)
-            const inhabitantInfo = user.Inhabitant
-                ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household?.id ?? 'NULL'}`
-                : 'NULL'
-            console.info(`🪪 > USER > [GET] Inhabitant: ${inhabitantInfo}`)
-
-            // Use composable deserialization function (ADR-010)
+            console.info(`🪪 > USER > [GET] Found user ID ${user.id}`)
             return deserializeUserDetail(user)
-        } else {
-            console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
+        console.info(`🪪 > USER > [GET] No user found for ${filterDesc}`)
         return null
     } catch (error) {
-        return throwH3Error(`🪪 > USER > [GET]: Error fetching user for email ${email}`, error)
+        return throwH3Error(`🪪 > USER > [GET]: Error fetching user by ${filterDesc}`, error)
     }
 }
 

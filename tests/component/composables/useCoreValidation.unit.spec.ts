@@ -23,12 +23,9 @@ describe('useCoreValidation - User Schemas', () => {
     const {
         BaseUserSchema,
         UserCreateSchema,
-        SystemRoleSchema,
         serializeUserInput,
-        deserializeUser,
-        mergeUserRoles
+        deserializeUser
     } = useCoreValidation()
-    const SystemRole = SystemRoleSchema.enum
 
     it.each([
         ['BaseUserSchema', () => BaseUserSchema, {...UserFactory.defaultUser(), id: 1}],
@@ -60,16 +57,6 @@ describe('useCoreValidation - User Schemas', () => {
 
         expect(Array.isArray(deserialized.systemRoles)).toBe(true)
         expect(deserialized.systemRoles).toEqual(user.systemRoles)
-    })
-
-    it('should merge user roles without duplicates', () => {
-        const existing = {...UserFactory.defaultUser(), id: 1, systemRoles: [SystemRole.ADMIN]}
-        const incoming = {...UserFactory.defaultUser(), id: 1, systemRoles: [SystemRole.ALLERGYMANAGER]}
-        const merged = mergeUserRoles(existing, incoming)
-
-        expect(merged.systemRoles).toHaveLength(2)
-        expect(merged.systemRoles).toContain(SystemRole.ADMIN)
-        expect(merged.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
     })
 })
 

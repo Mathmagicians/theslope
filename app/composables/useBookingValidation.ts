@@ -663,6 +663,20 @@ export const useBookingValidation = () => {
         scaffoldResult: ScaffoldResultSchema
     })
 
+    /**
+     * Guest booking form - UI form validation schema
+     * Used by GuestBookingForm component for UForm validation
+     */
+    const GuestBookingFormSchema = z.object({
+        count: z.number().int().positive().min(1).max(10),
+        ticketPriceId: z.number().int().positive(),
+        allergyTypeIds: z.array(z.number().int().positive()).default([]),
+        dinnerMode: DinnerModeSchema.refine(
+            mode => mode !== DinnerModeSchema.enum.NONE,
+            {message: 'Gæster skal vælge en spisemåde'}
+        )
+    })
+
     // ============================================================================
     // Query Parameter Normalization
     // ============================================================================
@@ -845,6 +859,7 @@ export const useBookingValidation = () => {
         DesiredOrderSchema,
         ScaffoldOrdersRequestSchema,
         ScaffoldOrdersResponseSchema,
+        GuestBookingFormSchema,
 
         // Daily Maintenance
         ConsumeResultSchema,
@@ -918,6 +933,7 @@ export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValid
 export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['DesiredOrderSchema']>
 export type ScaffoldOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersRequestSchema']>
 export type ScaffoldOrdersResponse = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersResponseSchema']>
+export type GuestBookingFormData = z.infer<ReturnType<typeof useBookingValidation>['GuestBookingFormSchema']>
 
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>

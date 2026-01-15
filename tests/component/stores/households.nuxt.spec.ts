@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { registerEndpoint } from '@nuxt/test-utils/runtime'
+import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import type {
   HouseholdDisplay,
   HouseholdDetail
@@ -10,6 +10,17 @@ import { useBookingValidation } from '~/composables/useBookingValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 import { useHouseholdsStore } from '~/stores/households'
+
+// Mock useUserSession to return loggedIn: true
+// This prevents the store from skipping fetch due to auth check
+const { mockLoggedIn } = vi.hoisted(() => ({ mockLoggedIn: { value: true } }))
+mockNuxtImport('useUserSession', () => () => ({
+  loggedIn: mockLoggedIn,
+  user: { value: null },
+  session: { value: null },
+  clear: vi.fn(),
+  fetch: vi.fn()
+}))
 
 // Schema for validating mock responses
 const { InhabitantUpdateResponseSchema, ScaffoldResultSchema } = useBookingValidation()

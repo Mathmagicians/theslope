@@ -23,19 +23,40 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
 
     // ========================================
-    // State - useFetch with status exposed internally
+    // State - useAsyncData with useRequestFetch for SSR-safe auth context
+    // Using useRequestFetch ensures cookies are properly forwarded during both SSR and CSR
     // ========================================
+    const requestFetch = useRequestFetch()
+
+    // Get auth state to gate fetching - prevents 401 race condition
+    // PageHeader instantiates this store before session is hydrated
+    const {loggedIn} = useUserSession()
+
     const {
         data: households,
         status: householdsStatus,
         error: householdsError,
         refresh: refreshHouseholds
-    } = useFetch<HouseholdDisplay[]>('/api/admin/household', {
-        key: 'households-store-households',
-        immediate: true,
-        watch: false,
-        default: () => []
-    })
+    } = useAsyncData<HouseholdDisplay[]>(
+        'households-store-households',
+        () => {
+            // Don't fetch until session is ready - prevents 401 on initial load
+            if (!loggedIn.value) {
+                console.info('🏠 > HOUSEHOLDS_STORE > Skipping fetch - not logged in yet')
+                return Promise.resolve([])
+            }
+            return requestFetch<HouseholdDisplay[]>('/api/admin/household', {
+                onResponseError: ({response}) => {
+                    console.error(`🏠 > HOUSEHOLDS_STORE > fetchHouseholds failed: ${response.status} ${response.statusText}`)
+                    handleApiError(response._data, 'Kunne ikke hente husstande')
+                }
+            })
+        },
+        {
+            default: () => [],
+            watch: [loggedIn]  // Re-fetch when login state changes
+        }
+    )
 
     // Use useAsyncData for detail endpoint - allows manual execute() without context issues
     const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
@@ -109,10 +130,11 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Fetch single household with inhabitants
+     * Setting selectedHouseholdId triggers reactive useAsyncData fetch
      */
     const loadHousehold = (id: number) => {
         selectedHouseholdId.value = id
-        console.info(LOG_CTX, `🏠 > HOUSEHOLDS_STORE > Loaded household ${selectedHousehold.value?.shortName} (ID: ${id})`)
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household ID: ${id}`)
     }
 
 
