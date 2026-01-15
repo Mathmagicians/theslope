@@ -148,6 +148,29 @@ export const useUsersStore = defineStore("Users", () => {
         console.info(`🪪 > USERS_STORE > loadMyTeams > Loaded ${myTeams.value.length} teams`)
     }
 
+    /**
+     * Update user roles via POST /api/admin/users/[id]
+     * Refreshes users list after successful update
+     */
+    const updateUserRoles = async (userId: number, systemRoles: string[]) => {
+        console.info(`🪪 > USERS_STORE > updateUserRoles > Updating user ${userId} with roles [${systemRoles}]`)
+        try {
+            await $fetch(`/api/admin/users/${userId}`, {
+                method: 'POST',
+                body: { systemRoles }
+            })
+            toast.add({
+                title: 'Roller opdateret',
+                description: `Brugerens roller er blevet opdateret`,
+                color: 'success'
+            })
+            await refreshUsers()
+        } catch (error) {
+            handleApiError(error, 'updateUserRoles')
+            throw error
+        }
+    }
+
     return {
         importHeynaboData,
         isImportHeynaboLoading,
@@ -168,7 +191,8 @@ export const useUsersStore = defineStore("Users", () => {
         isMyTeamsLoading,
         isMyTeamsErrored,
         isMyTeamsInitialized,
-        myTeamsError
+        myTeamsError,
+        updateUserRoles
     };
 });
 

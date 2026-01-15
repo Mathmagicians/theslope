@@ -47,14 +47,17 @@
 -->
 <script setup lang="ts">
 import type {UserDetail, UserDisplay} from '~/composables/useCoreValidation'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
   user: UserDetail | UserDisplay
   showActions?: boolean
+  showRoleManager?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  showActions: false
+  showActions: false,
+  showRoleManager: false
 })
 
 const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS} = useTheSlopeDesignSystem()
@@ -93,6 +96,59 @@ const shouldShowActions = computed(() => {
 const handleLogout = () => {
   authStore.clear()
 }
+
+// =============================================================================
+// Role Management (when showRoleManager=true)
+// =============================================================================
+const {SystemRoleSchema} = useCoreValidation()
+const allRoles = Object.values(SystemRoleSchema.enum)
+
+const usersStore = useUsersStore()
+const roleFormMode = ref<FormMode>(FORM_MODES.VIEW)
+const isSavingRoles = ref(false)
+const draftRoles = ref<Set<string>>(new Set())
+
+// ADMIN is HN-owned, read-only in this UI
+const isRoleDisabled = (role: string) => role === 'ADMIN'
+
+// Only admins can edit roles
+const canEditRoles = computed(() => authStore.isAdmin)
+
+const startEditingRoles = () => {
+  if (!canEditRoles.value) return
+  draftRoles.value = new Set(systemRoles.value)
+  roleFormMode.value = FORM_MODES.EDIT
+}
+
+const cancelEditingRoles = () => {
+  roleFormMode.value = FORM_MODES.VIEW
+}
+
+const toggleRole = (role: string) => {
+  if (isRoleDisabled(role)) return
+  if (draftRoles.value.has(role)) {
+    draftRoles.value.delete(role)
+  } else {
+    draftRoles.value.add(role)
+  }
+}
+
+const saveRoles = async () => {
+  if (!props.user.id) return
+
+  isSavingRoles.value = true
+  try {
+    await usersStore.updateUserRoles(props.user.id, Array.from(draftRoles.value))
+    roleFormMode.value = FORM_MODES.VIEW
+  } catch (error) {
+    console.error('Failed to update roles:', error)
+  } finally {
+    isSavingRoles.value = false
+  }
+}
+
+const isViewMode = computed(() => roleFormMode.value === FORM_MODES.VIEW)
+const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
 </script>
 
 <template>
@@ -184,6 +240,111 @@ const handleLogout = () => {
           <span :class="TYPOGRAPHY.bodyTextMuted">{{ householdAddress }}</span>
         </template>
       </div>
+
     </div>
+
+    <!-- Role Management Section (footer) -->
+    <template v-if="showRoleManager" #footer>
+      <!-- Header: Title + Edit/Save/Cancel buttons -->
+      <div class="flex items-center justify-between mb-3">
+        <span :class="TYPOGRAPHY.labelText">Systemroller</span>
+
+        <!-- View mode: Edit button (admin only) -->
+        <UButton
+          v-if="isViewMode && canEditRoles"
+          :icon="ICONS.edit"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          data-testid="edit-roles-btn"
+          @click="startEditingRoles"
+        >
+          Rediger
+        </UButton>
+
+        <!-- Edit mode: Save/Cancel buttons -->
+        <div v-if="isEditMode" class="flex gap-2">
+          <UButton
+            :icon="ICONS.check"
+            color="primary"
+            variant="soft"
+            size="sm"
+            :loading="isSavingRoles"
+            data-testid="save-roles-btn"
+            @click="saveRoles"
+          >
+            Gem
+          </UButton>
+          <UButton
+            :icon="ICONS.close"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :disabled="isSavingRoles"
+            data-testid="cancel-roles-btn"
+            @click="cancelEditingRoles"
+          >
+            Annuller
+          </UButton>
+        </div>
+      </div>
+
+      <!-- View mode: Role badges -->
+      <div v-if="isViewMode" class="flex flex-wrap gap-2">
+        <UBadge
+          v-for="role in visibleRoles"
+          :key="role"
+          :color="roleLabels[role]?.color || 'neutral'"
+          variant="soft"
+          size="md"
+        >
+          <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
+          {{ roleLabels[role]?.label || role }}
+        </UBadge>
+        <span v-if="visibleRoles.length === 0" :class="TYPOGRAPHY.bodyTextMuted">Ingen roller</span>
+      </div>
+
+      <!-- Edit mode: Role toggles -->
+      <div v-if="isEditMode" class="space-y-3">
+        <div
+          v-for="role in allRoles"
+          :key="role"
+          class="flex items-center justify-between"
+        >
+          <div class="flex items-center gap-2">
+            <UIcon
+              :name="roleLabels[role]?.icon || 'i-heroicons-user'"
+              :class="isRoleDisabled(role) ? 'opacity-40' : ''"
+            />
+            <span :class="[TYPOGRAPHY.bodyText, isRoleDisabled(role) ? 'opacity-40' : '']">
+              {{ roleLabels[role]?.label || role }}
+            </span>
+            <span v-if="isRoleDisabled(role)" :class="TYPOGRAPHY.bodyTextMuted">(Heynabo)</span>
+          </div>
+          <USwitch
+            :model-value="draftRoles.has(role)"
+            :disabled="isRoleDisabled(role)"
+            :data-testid="`role-toggle-${role}`"
+            @update:model-value="toggleRole(role)"
+          />
+        </div>
+
+        <!-- Info alert -->
+        <UAlert
+          icon="i-heroicons-shield-check"
+          color="info"
+          variant="soft"
+          title="Om systemroller"
+          :ui="{ description: 'text-sm' }"
+        >
+          <template #description>
+            <ul class="list-disc list-inside space-y-1 mt-1">
+              <li><strong>Admin</strong> - Synkroniseres fra Heynabo, kan ikke ændres her</li>
+              <li><strong>Allergichef</strong> - Giver adgang til at administrere allergidata</li>
+            </ul>
+          </template>
+        </UAlert>
+      </div>
+    </template>
   </UCard>
 </template>

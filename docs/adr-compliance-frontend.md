@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-01-13 (ADR-016 booking components: BookingGridView, GuestBookingFields, useBookingView)
+**Last Updated:** 2026-01-15 (Role management: UserProfileCard, users E2E tests)
 
 ## Legend
 
@@ -27,7 +27,7 @@
 | `/admin/teams` | `admin/[tab].vue` → `AdminTeams.vue` | ✅ `usePlanStore()` | ✅ Partial usage | ✅ `?mode=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ⚠️ | **⚠️ REVIEW** |
-| `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | ❓ | ✅ `?mode=` | ❌ | ❌ | **❌ NO TESTS** |
+| `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
 | `/admin/chefs` | `admin/[tab].vue` → `AdminChefs.vue` | ✅ `usePlanStore()` | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
@@ -305,7 +305,7 @@ All components and stores work with domain types:
    - All tests passing (262 tests across 8 validation composables)
 
 3. **Core Component Tests** - Add component tests for high-risk components
-   - `AdminUsers.vue` (CRUD with no tests)
+   - `UserProfileCard.vue` (role management UI needs component tests)
    - `HouseholdAllergies.vue` (complex state management)
    - `HouseholdBookings.vue` (booking flow)
 

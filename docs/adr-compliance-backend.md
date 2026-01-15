@@ -35,8 +35,9 @@
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamAssignment() → CookingTeamAssignment                                                   |
-| **Admin - Users** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| **Admin - Users** | | | | | **✅ FULLY COMPLIANT (2026-01-15)** - Added role management endpoint                             |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteUser() validates with UserResponseSchema                                                   |
+| `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateUser roles with reconcileUserRoles() - TS owns ALLERGYMANAGER, preserves HN-owned ADMIN    |
 | `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema                                                    |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveUser() validates with UserResponseSchema                                                     |
 | `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema                                              |

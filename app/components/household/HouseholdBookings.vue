@@ -20,6 +20,7 @@ const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
 const {formatScaffoldResult} = useBooking()
+const {handleApiError} = useApiHandler()
 const {ICONS, COLOR} = useTheSlopeDesignSystem()
 const toast = useToast()
 
@@ -168,8 +169,8 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   )
 }
 
-// Grid view guest booking - receives DesiredOrder[] from GuestBookingForm
-const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
+// Grid view guest booking - receives DesiredOrder[] and action from GuestBookingForm
+const handleAddGuest = async (guestOrders: DesiredOrder[], action: 'process' | 'claim') => {
   if (guestOrders.length === 0) return
 
   const eventId = guestOrders[0]?.dinnerEventId
@@ -177,17 +178,31 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
 
   const event = dinnerEvents.value.find(e => e.id === eventId)
   const count = guestOrders.length
+  const dateStr = event ? formatDate(new Date(event.date)) : ''
 
-  await bookingsStore.processSingleEventBookings(
-    household.value.id,
-    eventId,
-    guestOrders
-  )
-  toast.add({
-    title: 'Du får gæster til middag',
-    description: `${count} gæst${count > 1 ? 'er' : ''} tilføjet d. ${event ? formatDate(new Date(event.date)) : ''}`,
-    color: 'success'
-  })
+  try {
+    await bookingsStore.processSingleEventBookings(
+      household.value.id,
+      eventId,
+      guestOrders
+    )
+    // Differentiate toast based on action
+    if (action === 'claim') {
+      toast.add({
+        title: 'Billet overtaget',
+        description: `${count} billet${count > 1 ? 'ter' : ''} overtaget d. ${dateStr}`,
+        color: 'info'
+      })
+    } else {
+      toast.add({
+        title: 'Du får gæster til middag',
+        description: `${count} gæst${count > 1 ? 'er' : ''} tilføjet d. ${dateStr}`,
+        color: 'success'
+      })
+    }
+  } catch (e) {
+    handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
+  }
 }
 </script>
 

@@ -112,7 +112,7 @@ const emit = defineEmits<{
   cancel: []
   'update:formMode': [mode: FormMode]
   navigate: [direction: 'prev' | 'next']
-  addGuest: [orders: DesiredOrder[]]
+  addGuest: [orders: DesiredOrder[], action: 'process' | 'claim']
 }>()
 
 // Design system
@@ -233,8 +233,8 @@ const activeGuestEvent = computed(() =>
 )
 
 // Handle GuestBookingForm save
-const handleGuestSave = (orders: DesiredOrder[]) => {
-  emit('addGuest', orders)
+const handleGuestSave = (orders: DesiredOrder[], action: 'process' | 'claim') => {
+  emit('addGuest', orders, action)
   expanded.value = {}
 }
 
@@ -494,9 +494,9 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
         {{ navigationLabel }}
       </CalendarDateNav>
       <div class="flex-1 flex justify-end">
-        <!-- Pencil button to enter edit mode (VIEW only) -->
+        <!-- Pencil button to enter edit mode (week/month grid only) -->
         <UButton
-          v-if="formMode === FORM_MODES.VIEW"
+          v-if="view !== 'day' && formMode === FORM_MODES.VIEW"
           :icon="ICONS.edit"
           :color="COLOR.neutral"
           variant="ghost"
@@ -707,7 +707,7 @@ const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: n
           :deadlines="props.deadlines"
           :booker-id="props.bookerId"
           :released-ticket-count="0"
-          @save-bookings="handleGuestSave"
+          @save="handleGuestSave"
           @cancel="expanded = {}"
         />
       </template>

@@ -348,11 +348,23 @@ const tableData = computed((): TableRow[] => {
 
   // EDIT mode: power + inhabitants + guest orders + add guest
   // Guest add row: isGuestAddRow=true to disable NONE
+  // Synthetic inhabitant for UserListItem consistency
+  const guestAddInhabitant = {
+    id: 0,
+    name: 'Tilføj gæst',
+    lastName: '',
+    heynaboId: null,
+    pictureUrl: null,
+    birthDate: null,
+    householdId: 0,
+    dinnerPreferences: null
+  } as InhabitantDisplay
+
   return [
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', dinnerMode: DinnerModeEnum.DINEIN, disabledModes: getDisabledModesForRow(undefined, true)}
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, disabledModes: getDisabledModesForRow(undefined, true)}
   ]
 })
 
@@ -508,7 +520,7 @@ const allergyOptions = computed(() =>
         </template>
         <template #description>Du betaler, medmindre andre køber</template>
       </UAlert>
-      <UAlert v-if="hasReleasedTickets" color="info" variant="soft" icon="i-heroicons-arrows-right-left">
+      <UAlert v-if="hasReleasedTickets" color="info" variant="soft" :icon="ICONS.claim">
         <template #title>Har du brug for flere billetter?</template>
         <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCount }} ledig{{ props.releasedTicketCount === 1 ? ' billet' : 'e billetter' }} til salg.</template>
       </UAlert>
@@ -563,13 +575,20 @@ const allergyOptions = computed(() =>
             </div>
           </div>
 
-          <!-- Guest Add Row -->
-          <div v-else-if="row.original.rowType === 'guest'" class="flex items-center gap-2">
-            <UIcon :name="ICONS.userPlus" class="size-4 md:size-5 text-info" />
-            <span :class="TYPOGRAPHY.bodyTextMedium">{{ row.original.name }}</span>
-            <UBadge v-if="hasReleasedTickets" :color="COLOR.info" variant="subtle" :size="SIZES.small">
-              🎟️ {{ props.releasedTicketCount }} ledige
-            </UBadge>
+          <!-- Guest Add Row - UserListItem with synthetic inhabitant -->
+          <div v-else-if="row.original.rowType === 'guest' && row.original.inhabitant">
+            <UserListItem
+              :inhabitants="row.original.inhabitant"
+              :link-to-profile="false"
+              :icon="ICONS.userPlus"
+              compact
+            >
+              <template #badge>
+                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+                  {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
+                </UBadge>
+              </template>
+            </UserListItem>
           </div>
 
           <!-- Inhabitant Row - UserListItem in SINGLE mode -->

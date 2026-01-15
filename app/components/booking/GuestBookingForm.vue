@@ -39,18 +39,9 @@ const {getBookingOptions, createBookingBadges} = useBooking()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
-
-// Form state
-const draftMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
-const guestDraft = ref({
-  ticketPriceId: undefined as number | undefined,
-  allergies: [] as number[],
-  count: 1
-})
-const isSaving = ref(false)
 
 // Booking options using getBookingOptions utility (orderState = null for new guest)
 const bookingOptions = computed(() => getBookingOptions(
@@ -60,6 +51,31 @@ const bookingOptions = computed(() => getBookingOptions(
   props.dinnerEvent.state,
   props.releasedTicketCount > 0
 ))
+
+// Form state - reactive object for UForm binding
+const formState = reactive({
+  count: 1,
+  ticketPriceId: undefined as number | undefined,
+  allergyTypeIds: [] as number[],
+  dinnerMode: DinnerModeEnum.DINEIN as DinnerMode
+})
+const isSaving = ref(false)
+
+// Contextual schema with closure - validates count against released tickets when claiming
+const formSchema = computed(() =>
+  GuestBookingFormSchema.refine(
+    (data) => {
+      if (bookingOptions.value.action === 'claim') {
+        return data.count <= props.releasedTicketCount
+      }
+      return true
+    },
+    {
+      message: `Kun ${props.releasedTicketCount} billet${props.releasedTicketCount === 1 ? '' : 'ter'} ledig${props.releasedTicketCount === 1 ? '' : 'e'}`,
+      path: ['count']
+    }
+  )
+)
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
@@ -75,31 +91,22 @@ const disabledModes = computed((): DinnerMode[] =>
   ALL_MODES.filter(m => !enabledModesForGuest.value.includes(m))
 )
 
-// Can submit if action is available and an eating mode is selected
-const canSubmit = computed(() => {
-  const {action} = bookingOptions.value
-  if (!action) return false
-  if (draftMode.value === DinnerModeEnum.NONE) return false
-  if (!guestDraft.value.ticketPriceId) return false
-  return true
-})
-
 // Allergy options for AllergySelectMenu (pass full AllergyTypeDisplay)
 const allergyOptions = computed(() => props.allergyTypes)
 
 // Default to first enabled eating mode
 watch(enabledModesForGuest, (modes) => {
-  if (modes.length > 0 && !modes.includes(draftMode.value)) {
-    draftMode.value = modes[0]!
+  if (modes.length > 0 && !modes.includes(formState.dinnerMode)) {
+    formState.dinnerMode = modes[0]!
   }
 }, {immediate: true})
 
-const handleSave = async () => {
-  if (!canSubmit.value) return
+// UForm submit handler - validates with Zod schema before emitting
+const handleSubmit = async () => {
   isSaving.value = true
 
   try {
-    const {ticketPriceId, allergies, count} = guestDraft.value
+    const {ticketPriceId, allergyTypeIds, count, dinnerMode} = formState
     const {action} = bookingOptions.value
 
     if (!ticketPriceId || !action) return
@@ -107,10 +114,10 @@ const handleSave = async () => {
     const orders: DesiredOrder[] = Array.from({length: count}, () => ({
       inhabitantId: props.bookerId,
       dinnerEventId: props.dinnerEvent.id,
-      dinnerMode: draftMode.value,
+      dinnerMode,
       ticketPriceId,
       isGuestTicket: true,
-      allergyTypeIds: allergies.length > 0 ? allergies : undefined,
+      allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
       state: OrderStateEnum.BOOKED
     }))
 
@@ -133,9 +140,8 @@ const handleCancel = () => emit('cancel')
       <div class="flex items-center gap-2">
         <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
         <h4 class="text-md font-semibold">Tilføj gæst</h4>
-        <UBadge v-if="props.releasedTicketCount > 0" :color="COLOR.info" variant="subtle" :size="SIZES.small">
-          <UIcon :name="ICONS.ticket" class="size-3 mr-1" />
-          {{ props.releasedTicketCount }} ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
+        <UBadge v-if="props.releasedTicketCount > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+          {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
         </UBadge>
       </div>
     </template>
@@ -147,51 +153,54 @@ const handleCancel = () => emit('cancel')
     </div>
 
     <!-- Form fields when booking is available -->
-    <template v-if="bookingOptions.action">
-      <UFormField label="Antal gæster" :size="SIZES.small">
+    <UForm
+      v-if="bookingOptions.action"
+      :schema="GuestBookingFormSchema"
+      :state="formState"
+      class="flex flex-col gap-4"
+      @submit="handleSubmit"
+    >
+      <UFormField label="Antal gæster" name="count" :size="SIZES.small">
         <UInput
-          v-model.number="guestDraft.count"
+          v-model="formState.count"
           type="number"
           :min="1"
           :max="10"
           :size="SIZES.small"
-          name="guest-count"
         />
       </UFormField>
 
-      <UFormField label="Billettype" :size="SIZES.small">
+      <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
         <USelect
-          v-model="guestDraft.ticketPriceId"
+          v-model="formState.ticketPriceId"
           :items="ticketPrices.map(p => ({label: p.description ?? p.ticketType, value: p.id}))"
           value-key="value"
           :size="SIZES.small"
-          name="guest-ticket-type"
           data-testid="guest-ticket-type-select"
         />
       </UFormField>
 
-      <UFormField v-if="allergyOptions.length > 0" label="Allergier (valgfrit)" :size="SIZES.small">
+      <UFormField v-if="allergyOptions.length > 0" label="Allergier (valgfrit)" name="allergyTypeIds" :size="SIZES.small">
         <AllergySelectMenu
-          v-model="guestDraft.allergies"
+          v-model="formState.allergyTypeIds"
           :allergy-types="allergyOptions"
           :multiple="true"
           placeholder="Vælg allergier..."
         />
       </UFormField>
 
-      <DinnerModeSelector
-        v-model="draftMode"
-        :form-mode="FORM_MODES.EDIT"
-        :disabled-modes="disabledModes"
-        :size="SIZES.small"
-        name="guest-dinner-mode"
-        orientation="horizontal"
-        show-label
-      />
-    </template>
+      <UFormField label="Spisemåde" name="dinnerMode" :size="SIZES.small">
+        <DinnerModeSelector
+          v-model="formState.dinnerMode"
+          :form-mode="FORM_MODES.EDIT"
+          :disabled-modes="disabledModes"
+          :size="SIZES.small"
+          name="guest-dinner-mode"
+          orientation="horizontal"
+        />
+      </UFormField>
 
-    <template #footer>
-      <div class="flex justify-end gap-2">
+      <div class="flex justify-end gap-2 pt-2">
         <UButton
           :color="COLOR.neutral"
           variant="ghost"
@@ -203,13 +212,12 @@ const handleCancel = () => emit('cancel')
           Annuller
         </UButton>
         <UButton
+          type="submit"
           color="info"
           variant="solid"
           :size="SIZES.small"
           :loading="isSaving"
-          :disabled="!canSubmit"
           data-testid="guest-form-save"
-          @click="handleSave"
         >
           <template #leading>
             <UIcon :name="ICONS.userPlus" />
@@ -217,6 +225,8 @@ const handleCancel = () => emit('cancel')
           Tilføj gæst
         </UButton>
       </div>
-    </template>
+    </UForm>
+
+    <template #footer />
   </UCard>
 </template>

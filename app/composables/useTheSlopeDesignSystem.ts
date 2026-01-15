@@ -561,6 +561,7 @@ export const ICONS = {
     sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
+    claim: 'i-heroicons-arrows-right-left',
 
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
@@ -645,6 +646,10 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
     },
     get smallIconSize(): string {
         return isMd.value ? '16' : '12'
+    },
+    // Badge icon class for small badges (inline icons in UBadge)
+    get smallBadgeIcon(): string {
+        return isMd.value ? 'size-4 mr-1' : 'size-3 mr-1'
     },
 
     // Large responsive: lg on mobile, xl on desktop

@@ -1,6 +1,5 @@
 import type {ComputedRef} from 'vue'
-import type {SystemRole, RoleOwner, ReconcileResult} from '~/composables/useCoreValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import type {SystemRole, ReconcileResult} from '~/composables/useCoreValidation'
 import {z} from 'zod'
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
@@ -14,13 +13,14 @@ import {SystemRoleSchema} from '~~/prisma/generated/zod'
  */
 export const RoleOwnerSchema = z.enum(['HN', 'TS'])
 export const RoleOwner = RoleOwnerSchema.enum
+export type RoleOwnerValue = z.infer<typeof RoleOwnerSchema>
 
 /**
  * Maps each SystemRole to its owning system
  * HN (Heynabo) owns ADMIN - synced from external system
  * TS (TheSlope) owns ALLERGYMANAGER - managed locally
  */
-export const ROLE_OWNERSHIP: Record<SystemRole, RoleOwner> = {
+export const ROLE_OWNERSHIP: Record<SystemRole, RoleOwnerValue> = {
   [SystemRoleSchema.enum.ADMIN]: RoleOwner.HN,
   [SystemRoleSchema.enum.ALLERGYMANAGER]: RoleOwner.TS
 }
@@ -38,7 +38,7 @@ export const ROLE_OWNERSHIP: Record<SystemRole, RoleOwner> = {
 export const reconcileUserRoles = (
   existing: SystemRole[],
   incoming: SystemRole[],
-  caller: RoleOwner
+  caller: RoleOwnerValue
 ): ReconcileResult => {
   // Preserve roles owned by the other system
   const preservedRoles = existing.filter(role => ROLE_OWNERSHIP[role] !== caller)

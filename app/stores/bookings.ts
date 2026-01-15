@@ -157,7 +157,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket}
             })
             console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
-            await refreshOrders()
+            await Promise.all([refreshOrders(), refreshReleasedCounts()])
             return claimedOrder
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke overtage billet')
@@ -189,7 +189,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const releasedCountsDinnerIds = ref<number[]>([])
     const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
 
-    const {data: releasedCounts, status: releasedCountsStatus} = useAsyncData<Map<number, number>>(
+    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = useAsyncData<Map<number, number>>(
         releasedCountsKey,
         async () => {
             if (releasedCountsDinnerIds.value.length === 0) return new Map()
@@ -243,7 +243,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             method: 'POST',
             body: request
         })
-        await refreshOrders()
+        await Promise.all([refreshOrders(), refreshReleasedCounts()])
         return ScaffoldOrdersResponseSchema.parse(result)
     }
 

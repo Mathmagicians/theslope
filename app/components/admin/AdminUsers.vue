@@ -7,6 +7,9 @@ const UButton = resolveComponent('UButton')
 const store = useUsersStore()
 const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
+const authStore = useAuthStore()
+const {isAdmin} = storeToRefs(authStore)
+
 // Use existing role badge definitions
 const {roleLabels} = useUserRoles()
 const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
@@ -201,7 +204,7 @@ const pagination = ref({
       </template>
 
       <template #updatedAt-cell="{ row }">
-        {{ row.original.updatedAt }} siden
+        {{ row.original.updatedAt }}
       </template>
 
       <!-- Expanded row content -->
@@ -211,6 +214,7 @@ const pagination = ref({
             v-if="expandedUser"
             :user="expandedUser"
             :show-actions="false"
+            :show-role-manager="isAdmin"
           />
           <p v-else class="text-gray-500">Ingen brugerdata tilgængelig</p>
         </div>

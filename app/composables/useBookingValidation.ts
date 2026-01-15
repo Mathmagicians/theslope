@@ -666,11 +666,12 @@ export const useBookingValidation = () => {
     /**
      * Guest booking form - UI form validation schema
      * Used by GuestBookingForm component for UForm validation
+     * Uses z.coerce for HTML input string → number conversion
      */
     const GuestBookingFormSchema = z.object({
-        count: z.number().int().positive().min(1).max(10),
-        ticketPriceId: z.number().int().positive(),
-        allergyTypeIds: z.array(z.number().int().positive()).default([]),
+        count: z.coerce.number().int().positive().min(1).max(10),
+        ticketPriceId: z.coerce.number().int().positive(),
+        allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
         dinnerMode: DinnerModeSchema.refine(
             mode => mode !== DinnerModeSchema.enum.NONE,
             {message: 'Gæster skal vælge en spisemåde'}
