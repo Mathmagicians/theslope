@@ -36,14 +36,12 @@ const isLoading = computed(() => status.value === 'pending')
 // Action config for timeline items
 interface ActionConfig { icon: string; color: NuxtUIColor; label: string }
 const ACTION_CONFIG: Record<string, ActionConfig> = {
-    [OrderAuditActionSchema.enum.BOOKED]: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
-    [OrderAuditActionSchema.enum.RELEASED]: {icon: ICONS.released, color: COLOR.warning, label: 'Frigivet'},
-    [OrderAuditActionSchema.enum.CLOSED]: {icon: ICONS.lockClosed, color: COLOR.neutral, label: 'Lukket'},
-    [OrderAuditActionSchema.enum.DELETED]: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
-    [OrderAuditActionSchema.enum.SYSTEM_SCAFFOLDED]: {icon: ICONS.calendar, color: COLOR.info, label: 'Automatisk bestilling'},
+    [OrderAuditActionSchema.enum.USER_BOOKED]: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
+    [OrderAuditActionSchema.enum.USER_CANCELLED]: {icon: ICONS.xMark, color: COLOR.warning, label: 'Afmeldt'},
     [OrderAuditActionSchema.enum.USER_CLAIMED]: {icon: ICONS.claim, color: COLOR.info, label: 'Købt fra anden'},
-    [OrderAuditActionSchema.enum.RECLAIMED]: {icon: ICONS.sync, color: COLOR.info, label: 'Genbestilt'},
-    [OrderAuditActionSchema.enum.MODE_CHANGED]: {icon: ICONS.edit, color: COLOR.neutral, label: 'Mode ændret'}
+    [OrderAuditActionSchema.enum.SYSTEM_CREATED]: {icon: ICONS.calendar, color: COLOR.neutral, label: 'Automatisk bestilling'},
+    [OrderAuditActionSchema.enum.SYSTEM_DELETED]: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
+    [OrderAuditActionSchema.enum.SYSTEM_UPDATED]: {icon: ICONS.edit, color: COLOR.neutral, label: 'Opdateret'}
 }
 
 const getActionConfig = (action: string): ActionConfig =>

@@ -367,7 +367,7 @@ const tableData = computed((): TableRow[] => {
     id: 0,
     name: 'Tilføj gæst',
     lastName: '',
-    heynaboId: null,
+    heynaboId: 0,
     pictureUrl: null,
     birthDate: null,
     householdId: 0,
