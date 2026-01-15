@@ -57,8 +57,12 @@ const emit = defineEmits<{
 const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
 const { createChefBadges } = useBooking()
 
-// Chef workflow badges
-const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines))
+// Get released ticket count from store (for booking badge)
+const bookingsStore = useBookingsStore()
+const releasedTicketCount = computed(() => bookingsStore.lockStatus.get(props.dinnerEvent.id) ?? undefined)
+
+// Chef workflow badges (pass released count for booking badge)
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, releasedTicketCount.value))
 
 // Get color class based on temporal category (matches calendar view)
 // Use past styling for cancelled dinners

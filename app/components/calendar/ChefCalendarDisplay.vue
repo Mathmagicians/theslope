@@ -267,6 +267,7 @@ const accordionValue = computed({
           :items="viewTabs"
           orientation="horizontal"
           variant="link"
+          @update:model-value="accordionOpen = true"
         />
       </template>
 

@@ -48,9 +48,10 @@
 import {FORM_MODES} from '~/types/form'
 import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
 import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
+import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, SIZES, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -62,16 +63,23 @@ const toast = useToast()
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 
-// Calendar accordion state via design system (collapsed on mobile, open on desktop)
-const {SIZES} = useTheSlopeDesignSystem()
-const calendarOpen = ref(SIZES.calendarAccordionDefault === '0')
-
 // Booking validation and helpers
 const {formatScaffoldResult} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelectedSeasonErrored} = storeToRefs(planStore)
+
+// Responsive breakpoint for calendar default state
+const isMd = inject<Ref<boolean>>('isMd')
+
+// Calendar accordion state via URL param + responsive default (ADR-006)
+const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>('cal', {
+  serialize: (v) => v ? 'open' : 'closed',
+  deserialize: (s) => s === 'open' ? true : s === 'closed' ? false : null,
+  defaultValue: () => isMd?.value ?? false,
+  syncWhen: () => isPlanStoreReady.value
+})
 // Initialize without await for SSR hydration consistency
 planStore.initPlanStore()
 
@@ -248,7 +256,7 @@ useHead({
   <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
     <!-- Master: Calendar (left slot) -->
     <template #left>
-      <CalendarMasterPanel title="Fællesspisningens kalender">
+      <CalendarMasterPanel>
         <template #calendar>
           <DinnerCalendarDisplay
             v-if="seasonDates && selectedDate"
@@ -288,7 +296,7 @@ useHead({
           :calendar-open="calendarOpen"
           @prev="navigate(-1)"
           @next="navigate(1)"
-          @toggle-calendar="calendarOpen = !calendarOpen"
+          @toggle-calendar="setCalendarOpen(!calendarOpen)"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm

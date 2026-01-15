@@ -68,7 +68,7 @@ const {
   getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {CALENDAR, DINNER_CALENDAR, SIZES, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
@@ -180,10 +180,8 @@ const emit = defineEmits<{
 // Calendar open state - parent controls via v-model:calendar-open
 const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
 
-// Accordion items with value for v-model binding
-const accordionItems = [{ label: 'Kalender', slot: 'calendar-content', value: '0' }]
-
-// Bridge between boolean model and accordion string value
+// Accordion item (no label - using custom leading slot)
+const accordionItems = [{ slot: 'calendar-content', value: '0' }]
 const accordionValue = computed({
   get: () => calendarOpen.value ? '0' : undefined,
   set: (v) => { calendarOpen.value = v === '0' }
@@ -222,8 +220,14 @@ const isSelected = (day: DateValue): boolean => {
       @select="handleCountdownClick"
     />
 
-    <!-- Calendar Accordion (parent controls open state via v-model:calendar-open) -->
+    <!-- Calendar Accordion with custom leading slot -->
     <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+      <template #leading>
+        <div class="flex items-center gap-2">
+          <UIcon :name="ICONS.calendarDays" />
+          <span>Fællesspisninger</span>
+        </div>
+      </template>
       <template #calendar-content>
         <!-- Calendar Display -->
         <div class="flex-1">

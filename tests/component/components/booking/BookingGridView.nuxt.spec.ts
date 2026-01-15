@@ -56,8 +56,9 @@ describe('BookingGridView', () => {
     expect(wrapper.find('[data-testid="date-nav-next"]').exists()).toBe(true)
   })
 
-  it('renders edit button in view mode', async () => {
-    const wrapper = await mount()
+  it('renders edit button in view mode (week/month only)', async () => {
+    // Edit button only renders for week/month views, not day view
+    const wrapper = await mount({view: 'week'})
     expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(true)
   })
 
@@ -78,8 +79,9 @@ describe('BookingGridView', () => {
     expect(wrapper.emitted('navigate')?.[0]).toEqual([event])
   })
 
-  it('emits update:formMode EDIT when edit button clicked', async () => {
-    const wrapper = await mount()
+  it('emits update:formMode EDIT when edit button clicked (week/month only)', async () => {
+    // Edit button only renders for week/month views, not day view
+    const wrapper = await mount({view: 'week'})
     await wrapper.find('[data-testid="grid-edit"]').trigger('click')
     expect(wrapper.emitted('update:formMode')?.[0]).toEqual(['edit'])
   })

@@ -48,8 +48,12 @@ const { getStepConfig, createChefBadges } = useBooking()
 const { DinnerStateSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-// Badges from factory
-const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines))
+// Get released ticket count from store (for booking badge)
+const bookingsStore = useBookingsStore()
+const releasedTicketCount = computed(() => bookingsStore.lockStatus.get(props.dinnerEvent.id) ?? undefined)
+
+// Badges from factory (pass released count for booking badge)
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, releasedTicketCount.value))
 
 // Current step (using season-specific deadlines from props)
 const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.deadlines))
@@ -115,10 +119,10 @@ const steps = computed(() => {
     >
       <!-- Custom description: text + badge below (show overdue badges even for past events) -->
       <template #description="{ item }">
-        <div>
+        <div class="flex flex-col items-center">
           <span>{{ item.description }}</span>
           <div v-if="getBadgeForStep(item.step) && (!isPastEvent || getBadgeForStep(item.step)!.alarm === 3)" class="mt-1">
-            <span>{{ getBadgeForStep(item.step)!.value }}</span>
+            <DeadlineBadge :badge="getBadgeForStep(item.step)!" compact />
           </div>
         </div>
       </template>

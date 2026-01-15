@@ -311,20 +311,20 @@ export const DEADLINE_LABELS = {
     },
     ANNOUNCED: {
         label: 'Menu',
-        openText: 'Chefkokken skal publicere sin menu',
+        openText: 'Chefkokken publicerer sin menu',
         closedText: 'Chefkokken har publiceret sin menu',
         deadlinePrefix: 'om'
     },
     BOOKING_CLOSED: {
         label: 'Framelding',
-        openText: 'Man kan ændre sin tilmelding',
-        closedText: 'Man kan ikke længere framelde sig',
+        openText: 'Booking kan ændres',
+        closedText: 'Booking kan ikke ændres',
         deadlinePrefix: 'åben de næste',
         availableText: (count: number) => `Lukket for ændringer, men der er ${count} billetter til salg`
     },
     GROCERIES_DONE: {
         label: 'Indkøb',
-        openText: 'Chefkokken skal bestille madvarer',
+        openText: 'Chefkokken bestiller madvarer',
         closedText: 'Chefkokken har bestilt madvarer',
         deadlinePrefix: 'om'
     },
@@ -365,7 +365,7 @@ export const createBookingBadge = (isOpen: boolean, releasedCount?: number): Dea
     const hasTickets = !isOpen && releasedCount !== undefined && releasedCount > 0
     return {
         label: DEADLINE_LABELS.BOOKING_CLOSED.label,
-        icon: isOpen ? 'i-heroicons-lock-open' : (hasTickets ? ICONS.released : 'i-heroicons-lock-closed'),
+        icon: isOpen ? ICONS.lockOpen : (hasTickets ? ICONS.released : ICONS.lockClosed),
         color: isOpen ? 'success' : (hasTickets ? 'warning' : 'error'),
         value: isOpen ? 'Åben' : (hasTickets ? `${releasedCount} ledig${releasedCount === 1 ? '' : 'e'}` : 'Lukket'),
         helpText: isOpen
@@ -380,7 +380,7 @@ export const createBookingBadge = (isOpen: boolean, releasedCount?: number): Dea
  */
 export const createDiningModeBadge = (isOpen: boolean): DeadlineBadgeData => ({
     label: DEADLINE_LABELS.DINING_MODE.label,
-    icon: isOpen ? 'i-heroicons-lock-open' : 'i-heroicons-lock-closed',
+    icon: isOpen ? ICONS.lockOpen : ICONS.lockClosed,
     color: isOpen ? 'success' : 'error',
     value: isOpen ? 'Åben' : 'Lukket',
     helpText: isOpen ? DEADLINE_LABELS.DINING_MODE.openText : DEADLINE_LABELS.DINING_MODE.closedText
@@ -1087,7 +1087,7 @@ export const useBooking = () => {
                 step, alarm,
                 label: 'label' in labels ? labels.label : '',
                 icon: b.icon,
-                value: done ? text : (result.description || text),
+                value: done ? '' : result.description,  // Empty when done, countdown/status otherwise
                 color: b.color as 'success' | 'error' | 'warning' | 'neutral',
                 helpText: text
             }
@@ -1095,12 +1095,16 @@ export const useBooking = () => {
 
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
             (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
-        const bookingClosed = !deadlines.canModifyOrders(dinnerEvent.date)
-        const hasTickets = bookingClosed && releasedTicketCount !== undefined && releasedTicketCount > 0
+        const bookingOpen = deadlines.canModifyOrders(dinnerEvent.date)
 
-        let bookingBadge = badge(2, 'BOOKING_CLOSED', DinnerStepState.BOOKING_CLOSED, bookingClosed)
-        if (hasTickets) {
-            bookingBadge = { ...bookingBadge, value: `(${releasedTicketCount})`, helpText: DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedTicketCount!), color: 'warning', alarm: 1 }
+        // Booking badge: reuse createBookingBadge (DRY) + add countdown when open
+        const baseBadge = createBookingBadge(bookingOpen, releasedTicketCount)
+        const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(countdown, isPastDeadline, thresholds)
+        const bookingBadge: DeadlineBadgeData = {
+            ...baseBadge,
+            step: 2,
+            alarm: bookingOpen ? bookingResult.alarm : -1,
+            value: bookingOpen ? bookingResult.description : baseBadge.value  // Countdown when open, lock status when closed
         }
 
         return new Map([

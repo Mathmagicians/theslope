@@ -403,7 +403,7 @@ useHead({
               @undo-cancel-dinner="handleUndoCancelDinner"
               @prev="navigate(-1)"
               @next="navigate(1)"
-              @toggle-calendar="calendarAccordionOpen = !calendarAccordionOpen"
+              @toggle-calendar="setViewState({ ...viewState, open: !viewState.open })"
           />
         </template>
 

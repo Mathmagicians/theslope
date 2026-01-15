@@ -9,10 +9,11 @@
  * For "add guest" context, NONE is always disabled (can't add a guest who won't eat)
  * but shown for visual consistency with other booking forms.
  */
-import type {DinnerEventDisplay, DinnerMode, DesiredOrder} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
