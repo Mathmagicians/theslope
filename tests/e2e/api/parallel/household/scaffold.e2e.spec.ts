@@ -134,6 +134,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
   // ============================================================================
   // BOOKING FLOW TESTS (parametrized)
+  // Events BEFORE deadline (>10 days) so scaffold can CREATE
   // ============================================================================
 
   test.describe('Booking Flows', () => {
@@ -146,18 +147,25 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       test(`GIVEN single inhabitant WHEN booking with ${description} THEN order created`, async ({ browser }) => {
         const context = await validatedBrowserContext(browser)
 
+        // Event 15 days from now = BEFORE 10-day deadline = scaffold can create
+        const event = await DinnerEventFactory.createDinnerEvent(context, {
+          seasonId: testSeason.id!,
+          date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+          menuTitle: salt(`Test Booking ${mode}`, temporaryAndRandom())
+        })
+
         const result = await OrderFactory.scaffoldOrders(context, {
           householdId: testHouseholdId,
           seasonId: testSeason.id!,
-          dinnerEventIds: [testDinnerEventIds[0]!],
-          orders: [OrderFactory.createBookingOrder(testInhabitantId, testDinnerEventIds[0]!, testAdultTicketPriceId, mode)]
+          dinnerEventIds: [event.id],
+          orders: [OrderFactory.createBookingOrder(testInhabitantId, event.id, testAdultTicketPriceId, mode)]
         })
 
         expect(result).not.toBeNull()
-        expect(result!.scaffoldResult.created + result!.scaffoldResult.unchanged).toBeGreaterThanOrEqual(1)
+        expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(1)
 
         // Verify order exists with correct mode
-        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, testDinnerEventIds[0]!)
+        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
         const myOrder = orders.find(o => o.inhabitantId === testInhabitantId && o.dinnerMode === DinnerModeSchema.enum[mode])
         expect(myOrder, `Order with ${mode} should exist`).toBeDefined()
       })
@@ -165,9 +173,20 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
     test('GIVEN multiple dinner events WHEN grid booking THEN orders created for all events', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
-      const eventIds = testDinnerEventIds.slice(0, 2)
 
-      // Create orders for 2 events
+      // Events 15+ days from now = BEFORE deadline
+      const event1 = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('Test Grid1', temporaryAndRandom())
+      })
+      const event2 = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 17 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('Test Grid2', temporaryAndRandom())
+      })
+      const eventIds = [event1.id, event2.id]
+
       const orders = eventIds.map(eventId =>
         OrderFactory.createBookingOrder(testInhabitantId, eventId, testAdultTicketPriceId)
       )
@@ -180,24 +199,31 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(result).not.toBeNull()
-      // Should have created/unchanged orders for both events
-      expect(result!.scaffoldResult.created + result!.scaffoldResult.unchanged).toBeGreaterThanOrEqual(2)
+      expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(2)
     })
 
     test('GIVEN guest ticket WHEN scaffolding THEN guest order created with isGuestTicket=true', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
 
+      // Event 15 days from now = BEFORE deadline
+      const event = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('Test Guest', temporaryAndRandom())
+      })
+
       const result = await OrderFactory.scaffoldOrders(context, {
         householdId: testHouseholdId,
         seasonId: testSeason.id!,
-        dinnerEventIds: [testDinnerEventIds[0]!],
-        orders: [OrderFactory.createGuestOrder(testInhabitantId, testDinnerEventIds[0]!, testChildTicketPriceId)]
+        dinnerEventIds: [event.id],
+        orders: [OrderFactory.createGuestOrder(testInhabitantId, event.id, testChildTicketPriceId)]
       })
 
       expect(result).not.toBeNull()
+      expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(1)
 
       // Verify guest order exists
-      const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, testDinnerEventIds[0]!)
+      const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
       const guestOrder = orders.find(o =>
         o.inhabitantId === testInhabitantId &&
         o.isGuestTicket === true &&
@@ -215,23 +241,30 @@ test.describe('Household Scaffold API (ADR-016)', () => {
    * RELEASED TICKET TEST STRATEGY
    * ═══════════════════════════════════════════════════════════════════════════
    *
-   * Two distinct codepaths when booking after deadline with released tickets:
+   * Deadline constraint:
+   * - CREATE via scaffold: events BEFORE deadline (>10 days away)
+   * - RELEASE (not delete): events AFTER deadline (<10 days away)
    *
-   * 1. CLAIM BUCKET (true claim from marketplace)
+   * Two distinct codepaths when reclaiming released tickets:
+   *
+   * 1. UPDATE BUCKET (reclaim own released ticket)
    *    ─────────────────────────────────────────────────────────────────────────
-   *    • Different household (C) releases ticket via admin updateInhabitant(NONE)
-   *    • Member's household scaffolds NEW booking with NO orderId
+   *    • Inhabitant A releases their ticket (state=RELEASED)
+   *    • Same inhabitant scaffolds booking WITH orderId
+   *    • Generator routes to 'update' bucket → restores ticket to BOOKED
+   *    • Same order, same inhabitant, state RELEASED→BOOKED
+   *
+   * 2. CLAIM BUCKET (claim from marketplace)
+   *    ─────────────────────────────────────────────────────────────────────────
+   *    • Inhabitant A releases ticket (state=RELEASED, goes to marketplace)
+   *    • Inhabitant B scaffolds NEW booking WITHOUT orderId
    *    • Generator routes to 'claim' bucket → claimOrder() seizes from marketplace
-   *    • Ticket transfers ownership from Household C to Member's household
+   *    • Ticket transfers from A to B (same household in tests due to auth)
    *
-   * 2. UPDATE BUCKET (reclaim own released ticket)
-   *    ─────────────────────────────────────────────────────────────────────────
-   *    • Member's inhabitant releases their own ticket (state=RELEASED)
-   *    • Member scaffolds booking WITH orderId for same inhabitant
-   *    • Generator routes to 'update' bucket → restores own ticket to BOOKED
-   *    • Same order, same inhabitant, state changes RELEASED→BOOKED
+   * Key distinction: orderId present → UPDATE, orderId absent → CLAIM
    *
-   * Key distinction: orderId present → UPDATE (reclaim), orderId absent → CLAIM
+   * Test setup: Use OrderFactory.createOrder for initial orders (bypasses
+   * deadline), isolated events 3 days away (after deadline) for release/claim.
    */
   test.describe('Order Updates', () => {
     test('GIVEN existing order WHEN updating mode via scaffold THEN mode updated', async ({ browser }) => {
@@ -356,66 +389,62 @@ test.describe('Household Scaffold API (ADR-016)', () => {
     })
 
     // -------------------------------------------------------------------------
-    // CLAIM BUCKET: True claim from marketplace (different household, NO orderId)
+    // CLAIM BUCKET: Claim released ticket from marketplace (NO orderId in request)
     // -------------------------------------------------------------------------
-    test('GIVEN different household released ticket WHEN scaffolding WITHOUT orderId THEN claims via CLAIM bucket', async ({ browser }) => {
-      const adminContext = await validatedBrowserContext(browser)
+    test('GIVEN released ticket WHEN scaffolding WITHOUT orderId THEN claims via CLAIM bucket', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
 
-      // Create isolated dinner event (3 days from now = after deadline for claiming scenario)
-      const isolatedEvent = await DinnerEventFactory.createDinnerEvent(adminContext, {
+      // Create isolated dinner event (3 days from now = after deadline)
+      const isolatedEvent = await DinnerEventFactory.createDinnerEvent(context, {
         seasonId: testSeason.id!,
         date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-        menuTitle: salt('TrueClaimTest', temporaryAndRandom())
+        menuTitle: salt('Test ClaimBucket', temporaryAndRandom())
       })
 
-      // Create a DIFFERENT household (Household C) with an inhabitant
-      // Names use 'Test' prefix for d1-nuke discoverability
-      const otherHousehold = await HouseholdFactory.createHousehold(adminContext, {
-        name: salt('Test ClaimSource', temporaryAndRandom())
-      })
-      createdHouseholdIds.push(otherHousehold.id)
-
-      const otherInhabitant = await HouseholdFactory.createInhabitantForHousehold(
-        adminContext,
-        otherHousehold.id,
-        salt('Test ClaimPerson', temporaryAndRandom())
+      // Create second inhabitant in same household for the claim target
+      const claimingInhabitant = await HouseholdFactory.createInhabitantForHousehold(
+        context,
+        testHouseholdId,
+        salt('Test ClaimTarget', temporaryAndRandom())
       )
-      createdInhabitantIds.push(otherInhabitant.id)
+      createdInhabitantIds.push(claimingInhabitant.id)
 
-      // Create order for Household C using admin order endpoint
-      const createResult = await OrderFactory.createOrder(adminContext, {
-        householdId: otherHousehold.id,
+      // Create order for testInhabitantId (will be released)
+      const createResult = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId,
         dinnerEventId: isolatedEvent.id,
         orders: [OrderFactory.defaultOrderItem({
-          inhabitantId: otherInhabitant.id,
+          inhabitantId: testInhabitantId,
           ticketPriceId: testAdultTicketPriceId
         })]
       })
-      expect(createResult, 'Order creation for other household should succeed').not.toBeNull()
-      const otherOrderId = createResult!.createdIds[0]!
+      expect(createResult).not.toBeNull()
+      const releasedOrderId = createResult!.createdIds[0]!
 
-      // Release the order (state → RELEASED)
-      const releasedOrder = await OrderFactory.updateOrder(adminContext, otherOrderId, {
+      // Release the order (state → RELEASED, goes to marketplace)
+      const releasedOrder = await OrderFactory.updateOrder(context, releasedOrderId, {
         dinnerMode: DinnerModeSchema.enum.NONE
       })
-      expect(releasedOrder?.state, 'Order should be RELEASED').toBe(OrderStateSchema.enum.RELEASED)
+      expect(releasedOrder?.state).toBe(OrderStateSchema.enum.RELEASED)
 
-      // Admin's household claims the released ticket WITHOUT orderId
-      // Key: no orderId + released tickets exist → routes to CLAIM bucket
-      const claimResult = await OrderFactory.scaffoldOrders(adminContext, {
+      // Different inhabitant claims the released ticket WITHOUT orderId
+      // Key distinction from UPDATE bucket: no orderId + released tickets exist → CLAIM bucket
+      const claimResult = await OrderFactory.scaffoldOrders(context, {
         householdId: testHouseholdId,
         seasonId: testSeason.id!,
         dinnerEventIds: [isolatedEvent.id],
-        orders: [OrderFactory.createBookingOrder(testInhabitantId, isolatedEvent.id, testAdultTicketPriceId)]
+        orders: [OrderFactory.createBookingOrder(claimingInhabitant.id, isolatedEvent.id, testAdultTicketPriceId)]
       })
 
       expect(claimResult).not.toBeNull()
-      expect(claimResult!.scaffoldResult.claimed, 'Should claim ticket via CLAIM bucket').toBeGreaterThanOrEqual(1)
+      expect(claimResult!.scaffoldResult.claimed, 'Should claim via CLAIM bucket').toBeGreaterThanOrEqual(1)
+      expect(claimResult!.scaffoldResult.created, 'Should NOT create new order').toBe(0)
 
-      // Verify ticket transferred to admin's inhabitant
-      const orderAfterClaim = await OrderFactory.getOrder(adminContext, otherOrderId)
-      expect(orderAfterClaim?.state, 'Order should be BOOKED after claim').toBe(OrderStateSchema.enum.BOOKED)
-      expect(orderAfterClaim?.inhabitantId, 'Ticket should have transferred to admin inhabitant').toBe(testInhabitantId)
+      // Verify ticket transferred to claiming inhabitant
+      const orderAfterClaim = await OrderFactory.getOrder(context, releasedOrderId)
+      expect(orderAfterClaim?.state).toBe(OrderStateSchema.enum.BOOKED)
+      expect(orderAfterClaim?.inhabitantId, 'Ticket should transfer to claiming inhabitant').toBe(claimingInhabitant.id)
+      expect(orderAfterClaim?.ticketType, 'Should be ADULT price').toBe(TicketTypeSchema.enum.ADULT)
     })
   })
 

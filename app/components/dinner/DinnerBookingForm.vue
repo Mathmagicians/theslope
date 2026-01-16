@@ -623,7 +623,7 @@ const allergyOptions = computed(() =>
                 </UBadge>
                 <!-- Provenance badges -->
                 <div v-else-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1">
-                  <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">
+                  <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
                     fra {{ row.original.provenanceHousehold }}
                   </UBadge>
                   <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
@@ -650,7 +650,7 @@ const allergyOptions = computed(() =>
             </div>
             <!-- Provenance badges -->
             <div v-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-1 ml-6">
-              <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.ticket">
+              <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
               </UBadge>
               <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">

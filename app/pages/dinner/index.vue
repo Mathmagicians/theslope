@@ -162,7 +162,7 @@ const {
 } = useAsyncData(
   computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
   () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}`)
+    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}&includeProvenance=true`)
     : Promise.resolve([]),
   {
     default: () => [],

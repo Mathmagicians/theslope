@@ -125,7 +125,7 @@ const badgeText = computed(() => {
             />
             <UIcon
               v-else-if="isClaimed"
-              :name="ICONS.ticket"
+              :name="ICONS.claim"
               class="size-5 md:size-6"
               :class="stateIconColor"
             />
