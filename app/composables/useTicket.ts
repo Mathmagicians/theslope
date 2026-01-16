@@ -201,6 +201,30 @@ export const useTicket = () => {
     }
 
     /**
+     * Get ticket prices formatted for USelectMenu display
+     * Each item includes config for styled badge rendering
+     *
+     * @param ticketPrices - Season ticket prices
+     * @param compact - If true, only label + price. If false, include description + age limit
+     * @returns Items with id, label, description, and config for styled display
+     */
+    const getTicketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false) =>
+        ticketPrices.map(p => {
+            const config = ticketTypeConfig[p.ticketType]
+            const ageLimit = p.maximumAgeLimit ? `Under ${p.maximumAgeLimit} år` : null
+            const description = compact ? null : [ageLimit, p.description].filter(Boolean).join(' · ') || null
+
+            return {
+                id: p.id,
+                ticketType: p.ticketType,
+                price: p.price,
+                config,
+                label: `${config.label} · ${formatPrice(p.price)} kr`,
+                description
+            }
+        })
+
+    /**
      * Convert price from øre to DKK (integer)
      * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Price in DKK as integer
@@ -221,6 +245,7 @@ export const useTicket = () => {
         findTicketPriceByType,
         resolveTicketPrice,
         getTicketPriceForInhabitant,
+        getTicketPriceSelectItems,
         convertPriceToDecimalFormat,
         formatPrice
     }

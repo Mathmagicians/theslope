@@ -234,12 +234,12 @@ test.describe('Admin Inhabitant API', () => {
         const ALL_DINEIN = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN])
         const ALL_NONE = createDefaultWeekdayMap([DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE])
 
-        // Cancel period longer than season span so dinners are past deadline → RELEASED
-        // ADR-015: Before deadline → DELETE (user not charged), After deadline → RELEASE (user charged)
-        // Season spans 7 days from tomorrow (day +1 to +8), so 9-day deadline ensures all dinners
-        // are past deadline even when test runs before dinner time (18:00) on day 0
-        // (8-day deadline for day +8 dinner = today at 18:00, still deletable if test runs earlier)
-        const LONG_CANCEL_PERIOD = 9
+        // Deadline constraints for preference-based scaffold:
+        // - CREATE: events must be BEFORE deadline (scaffold can create new orders)
+        // - RELEASE (not DELETE): events must be AFTER deadline
+        // Short deadline = events BEFORE deadline, Long deadline = events AFTER deadline
+        const SHORT_CANCEL_PERIOD = 0  // All events before deadline (can create/delete)
+        const LONG_CANCEL_PERIOD = 9   // All events after deadline (can only release)
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -247,84 +247,92 @@ test.describe('Admin Inhabitant API', () => {
             await SeasonFactory.cleanupSeasons(context, scaffoldTestSeasonIds)
         })
 
-        // Parametrized test for create/delete preference changes
-        const preferenceChangeTests = [
-            {name: 'NONE→DINEIN creates orders', from: ALL_NONE, to: ALL_DINEIN, expectCreated: true},
-            {name: 'DINEIN→NONE removes orders (deleted or released)', from: ALL_DINEIN, to: ALL_NONE, expectCreated: false}
-        ] as const
+        // Test NONE→DINEIN: needs events BEFORE deadline so scaffold can CREATE
+        test('GIVEN season WHEN preference changes NONE→DINEIN creates orders', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
 
-        preferenceChangeTests.forEach(({name, from, to, expectCreated}) => {
-            test(`GIVEN season WHEN preference changes ${name}`, async ({browser}) => {
-                const context = await validatedBrowserContext(browser)
-                const testSalt = temporaryAndRandom()
-
-                // GIVEN: Season with LONG_CANCEL_PERIOD to observe RELEASE behavior
-                // ADR-015: Before deadline → DELETE, After deadline → RELEASE
-                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-                    ticketIsCancellableDaysBefore: LONG_CANCEL_PERIOD
-                })
-                scaffoldTestSeasonIds.push(season.id as number)
-
-                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                    context, {name: salt('Pref-Change-Test', testSalt)}, 1
-                )
-                scaffoldTestHouseholdIds.push(household.id)
-                const inhabitant = inhabitants[0]!
-
-                // Set initial preferences
-                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: from}, 200, season.id)
-
-                const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-                const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
-
-                // Verify setup: dinner events exist, orders match initial preferences
-                expect(dinnerEvents.length, 'Season should have dinner events').toBeGreaterThan(0)
-                if (expectCreated) {
-                    // NONE→DINEIN: Starting with NONE preferences means no initial orders
-                    expect(inhabitantOrdersBefore.length, 'Starting with NONE should have no orders').toBe(0)
-                } else {
-                    // DINEIN→NONE: Starting with DINEIN preferences creates orders for all dinners
-                    expect(inhabitantOrdersBefore.length, 'Starting with DINEIN should have orders for all dinners').toBe(dinnerEvents.length)
-                }
-
-                // WHEN: Change preferences
-                await HouseholdFactory.updateInhabitant(
-                    context, inhabitant.id, {dinnerPreferences: to}, 200, season.id,
-                    ({scaffoldResult}) => {
-                        expect(scaffoldResult.seasonId).toBe(season.id)
-                        if (expectCreated) {
-                            expect(scaffoldResult.created).toBeGreaterThan(0)
-                        } else {
-                            // ADR-015: With LONG_CANCEL_PERIOD all dinners are past deadline → all RELEASED
-                            expect(scaffoldResult.deleted, `No orders should be deleted (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
-                            expect(scaffoldResult.unchanged, `No orders should be unchanged (released=${scaffoldResult.released}, deleted=${scaffoldResult.deleted}, unchanged=${scaffoldResult.unchanged})`).toBe(0)
-                            expect(scaffoldResult.released, `Expected ${inhabitantOrdersBefore.length} orders released`).toBe(inhabitantOrdersBefore.length)
-                        }
-                    }
-                )
-
-                // THEN: Verify orders state
-                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
-                const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
-
-                if (expectCreated) {
-                    expect(inhabitantOrdersAfter.length).toBeGreaterThan(0)
-                } else {
-                    // ADR-015: RELEASED orders remain in DB (user charged), no BOOKED orders remain
-                    const releasedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.RELEASED)
-                    expect(releasedOrdersAfter.length, 'All orders should be released').toBe(inhabitantOrdersBefore.length)
-                    const bookedOrdersAfter = inhabitantOrdersAfter.filter(o => o.state === OrderState.BOOKED)
-                    expect(bookedOrdersAfter.length, 'No BOOKED orders should remain').toBe(0)
-                }
+            // Season with SHORT deadline: events are BEFORE deadline (scaffold can create)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
             })
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Test Create', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // Start with NONE preferences (no orders)
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_NONE}, 200, season.id)
+
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitant.id).length).toBe(0)
+
+            // Change to DINEIN → should CREATE orders
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
+                ({scaffoldResult}) => {
+                    expect(scaffoldResult.seasonId).toBe(season.id)
+                    expect(scaffoldResult.created).toBeGreaterThan(0)
+                }
+            )
+
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersAfter.filter(o => o.inhabitantId === inhabitant.id).length).toBeGreaterThan(0)
+        })
+
+        // Test DINEIN→NONE: orders are removed (deleted before deadline, released after)
+        // Uses SHORT_CANCEL_PERIOD so admin can create orders via scaffold (preferences endpoint)
+        // Note: RELEASE behavior is tested in scaffold.e2e.spec.ts with member context
+        test('GIVEN season WHEN preference changes DINEIN→NONE removes orders (deleted or released)', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // Season with SHORT deadline: events BEFORE deadline (scaffold can create AND delete)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
+            scaffoldTestSeasonIds.push(season.id as number)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {name: salt('Test Delete', testSalt)}, 1
+            )
+            scaffoldTestHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            // Create orders via preferences (admin endpoint, scaffold can CREATE with short deadline)
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
+            expect(inhabitantOrdersBefore.length, 'Should have orders for all dinners').toBeGreaterThan(0)
+
+            // Set preferences to NONE → orders removed (deleted before deadline)
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {dinnerPreferences: ALL_NONE}, 200, season.id,
+                ({scaffoldResult}) => {
+                    expect(scaffoldResult.seasonId).toBe(season.id)
+                    // Before deadline = deleted, After deadline = released
+                    expect(scaffoldResult.deleted + scaffoldResult.released).toBe(inhabitantOrdersBefore.length)
+                }
+            )
+
+            // Verify orders are removed (no more BOOKED orders)
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const remainingBookedOrders = ordersAfter.filter(o => o.inhabitantId === inhabitant.id && o.state === OrderState.BOOKED)
+            expect(remainingBookedOrders.length).toBe(0)
         })
 
         test('GIVEN USER_CANCELLED order WHEN preferences re-saved THEN cancelled order NOT recreated', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            // GIVEN: Season + household + scaffolded orders
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            // GIVEN: Season with SHORT deadline (scaffold can CREATE orders via admin endpoint)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
             scaffoldTestSeasonIds.push(season.id as number)
 
             const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
@@ -368,8 +376,10 @@ test.describe('Admin Inhabitant API', () => {
             const {TicketTypeSchema} = useBookingValidation()
             const TicketType = TicketTypeSchema.enum
 
-            // GIVEN: Season + household with adult inhabitant (no birthdate = unknown age = ADULT pricing)
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            // GIVEN: Season with SHORT deadline (scaffold can CREATE orders via admin endpoint)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
             scaffoldTestSeasonIds.push(season.id as number)
 
             // Create inhabitant WITHOUT birthdate (will be adult by default)
@@ -416,8 +426,10 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            // GIVEN: Season + two households (both with DINEIN preferences set at creation)
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            // GIVEN: Season with SHORT deadline (scaffold can CREATE orders via admin endpoint)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
             scaffoldTestSeasonIds.push(season.id as number)
 
             const households = await Promise.all([

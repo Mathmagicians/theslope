@@ -1031,8 +1031,8 @@ export const useBooking = () => {
 
     const BOOKING_TOAST_TITLES = {
         guest: 'Du får gæster til middag',
-        booking: 'Booking gemt',
-        grid: 'Bookinger gemt',
+        booking: 'Booking processeret',
+        grid: 'Bookinger processeret',
         powerMode: 'Bookinger opdateret for hele husstanden'
     } as const
 
@@ -1071,7 +1071,7 @@ export const useBooking = () => {
                 : `${result[f.key]} ${f.label}`)
 
         if (parts.length === 0) {
-            return format === 'compact' ? '(ingen)' : 'Ingen ændringer i bookinger'
+            return format === 'compact' ? '(ingen)' : 'Der var ingen ændringer i dine bookinger'
         }
         return parts.join(format === 'compact' ? ' ' : ', ')
     }

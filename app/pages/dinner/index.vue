@@ -190,11 +190,15 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     return
   }
 
+  // Detect guest bookings for appropriate toast
+  const isGuestBooking = orders.every(o => o.isGuestTicket)
+  const toastTitle = isGuestBooking ? BOOKING_TOAST_TITLES.guest : BOOKING_TOAST_TITLES.booking
+
   try {
     const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
     await refreshBookingData()
     toast.add({
-      title: BOOKING_TOAST_TITLES.booking,
+      title: toastTitle,
       description: formatScaffoldResult(response.scaffoldResult),
       color: 'success',
       icon: ICONS.checkCircle

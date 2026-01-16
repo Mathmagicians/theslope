@@ -681,8 +681,13 @@ export const useBookingValidation = () => {
      * Uses z.coerce for HTML input string → number conversion
      */
     const GuestBookingFormSchema = z.object({
-        count: z.coerce.number().int().positive().min(1).max(10),
-        ticketPriceId: z.coerce.number().int().positive(),
+        count: z.coerce.number({invalid_type_error: 'Indtast antal gæster'})
+            .int({message: 'Skal være et helt tal'})
+            .min(1, {message: 'Minimum 1 gæst'})
+            .max(10, {message: 'Maximum 10 gæster'}),
+        ticketPriceId: z.coerce.number({invalid_type_error: 'Vælg en billettype'})
+            .int()
+            .positive({message: 'Vælg en billettype'}),
         allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
         dinnerMode: DinnerModeSchema.refine(
             mode => mode !== DinnerModeSchema.enum.NONE,

@@ -66,23 +66,34 @@ test.describe('Household Preferences API', () => {
 /**
  * Scaffold Result Count Verification Tests
  * Tests that preference transitions produce expected scaffold counts
+ *
+ * Uses dedicated season with SHORT deadline (0 days) so scaffold can CREATE orders.
+ * Deadline constraint: events must be BEFORE deadline for scaffold to CREATE.
  */
 test.describe('Preference Transition Scaffold Counts', () => {
-    let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
+    let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>['season']
     let testHouseholdId: number
     let testInhabitantId: number
     const testSalt = temporaryAndRandom()
+    const scaffoldSeasonIds: number[] = []
+
+    // Short deadline means all events are BEFORE deadline (scaffold can create)
+    const SHORT_CANCEL_PERIOD = 0
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Use singleton active season (cleaned up by global teardown)
-        activeSeason = await SeasonFactory.createActiveSeason(context)
+        // Create dedicated season with SHORT deadline so scaffold can CREATE
+        const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+            ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+        })
+        testSeason = season
+        scaffoldSeasonIds.push(season.id as number)
 
         // Create test household with 1 inhabitant starting with NONE preferences
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {name: salt('Scaffold-Test', testSalt)},
+            {name: salt('Test-Scaffold', testSalt)},
             1
         )
         testHouseholdId = household.id
@@ -91,25 +102,26 @@ test.describe('Preference Transition Scaffold Counts', () => {
         // Set initial preferences to NONE
         await HouseholdFactory.updateInhabitant(context, testInhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
-        }, 200, activeSeason.id)
+        }, 200, testSeason.id)
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await HouseholdFactory.deleteHousehold(context, testHouseholdId)
+        await SeasonFactory.cleanupSeasons(context, scaffoldSeasonIds)
     })
 
     test('NONE → DINEIN creates orders (created > 0)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // Get dinner event count for season
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
+        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeason.id!)
         const cookingDayCount = dinnerEvents.length
 
         // Set preferences to NONE first to ensure clean state
         await HouseholdFactory.updateInhabitant(context, testInhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
-        }, 200, activeSeason.id)
+        }, 200, testSeason.id)
 
         // Change to DINEIN - should create orders
         const result = await HouseholdFactory.updateInhabitant(
@@ -117,7 +129,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
             testInhabitantId,
             {dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)},
             200,
-            activeSeason.id,
+            testSeason.id,
             (response) => {
                 expect(response.scaffoldResult.created, 'Should create orders for each cooking day').toBe(cookingDayCount)
                 expect(response.scaffoldResult.released, 'Should not release any orders').toBe(0)
@@ -127,43 +139,38 @@ test.describe('Preference Transition Scaffold Counts', () => {
         expect(result).not.toBeNull()
     })
 
-    test('DINEIN → NONE releases orders (released > 0)', async ({browser}) => {
+    test('DINEIN → NONE removes orders (deleted before deadline)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const {OrderStateSchema} = useBookingValidation()
 
         // Get dinner event count for season
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
+        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeason.id!)
         const cookingDayCount = dinnerEvents.length
 
         // Set preferences to DINEIN first to create orders
         await HouseholdFactory.updateInhabitant(context, testInhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-        }, 200, activeSeason.id)
+        }, 200, testSeason.id)
 
-        // Change to NONE - should release orders
+        // Change to NONE - with SHORT deadline, orders are DELETED (not released)
         await HouseholdFactory.updateInhabitant(
             context,
             testInhabitantId,
             {dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)},
             200,
-            activeSeason.id,
+            testSeason.id,
             (response) => {
-                expect(response.scaffoldResult.released, 'Should release orders for each cooking day').toBe(cookingDayCount)
+                // Before deadline = deleted, After deadline = released
+                expect(response.scaffoldResult.deleted + response.scaffoldResult.released, 'Should remove all orders').toBe(cookingDayCount)
                 expect(response.scaffoldResult.created, 'Should not create any orders').toBe(0)
             }
         )
 
-        // Verify released orders have dinnerMode = NONE (data integrity check)
-        // Use admin endpoint - user-facing /api/order filters by session user's household
+        // Verify orders are removed (no more BOOKED orders for this inhabitant)
         const dinnerEventIds = dinnerEvents.map(de => de.id)
         const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEventIds)
-        const inhabitantOrders = orders.filter(o => o.inhabitantId === testInhabitantId)
-        const releasedOrders = inhabitantOrders.filter(o => o.state === OrderStateSchema.enum.RELEASED)
+        const bookedOrders = orders.filter(o => o.inhabitantId === testInhabitantId && o.state === 'BOOKED')
 
-        expect(releasedOrders.length, 'Should have released orders').toBe(cookingDayCount)
-        for (const order of releasedOrders) {
-            expect(order.dinnerMode, `Released order ${order.id} must have dinnerMode NONE`).toBe(DinnerMode.NONE)
-        }
+        expect(bookedOrders.length, 'Should have no BOOKED orders').toBe(0)
     })
 
     test('DINEIN → TAKEAWAY does NOT release orders (mode change only)', async ({browser}) => {
@@ -172,7 +179,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
         // Set preferences to DINEIN first
         await HouseholdFactory.updateInhabitant(context, testInhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-        }, 200, activeSeason.id)
+        }, 200, testSeason.id)
 
         // Change to TAKEAWAY - should NOT release, just update mode
         await HouseholdFactory.updateInhabitant(
@@ -180,7 +187,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
             testInhabitantId,
             {dinnerPreferences: createDefaultWeekdayMap(DinnerMode.TAKEAWAY)},
             200,
-            activeSeason.id,
+            testSeason.id,
             (response) => {
                 expect(response.scaffoldResult.released, 'Should NOT release orders for mode change').toBe(0)
                 expect(response.scaffoldResult.created, 'Should not create new orders').toBe(0)
@@ -197,7 +204,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
         // Set preferences to DINEIN
         await HouseholdFactory.updateInhabitant(context, testInhabitantId, {
             dinnerPreferences: prefs
-        }, 200, activeSeason.id)
+        }, 200, testSeason.id)
 
         // Set same preferences again - should be unchanged
         await HouseholdFactory.updateInhabitant(
@@ -205,7 +212,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
             testInhabitantId,
             {dinnerPreferences: prefs},
             200,
-            activeSeason.id,
+            testSeason.id,
             (response) => {
                 expect(response.scaffoldResult.unchanged, 'Should report unchanged orders').toBeGreaterThan(0)
                 expect(response.scaffoldResult.created, 'Should not create orders').toBe(0)

@@ -421,8 +421,8 @@ test.describe('Order API', () => {
     expect(claimedOrder!.state).toBe(OrderStateSchema.enum.BOOKED)
     expect(claimedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(claimedOrder!.releasedAt).toBeNull()
-    // Claim preserves NONE mode - user must explicitly select new mode afterward
-    expect(claimedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+    // Claim defaults to DINEIN when no mode specified (per claim endpoint schema)
+    expect(claimedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.DINEIN)
   })
 
   test('GIVEN no RELEASED orders WHEN claiming THEN fails with 409', async ({ browser }) => {

@@ -2,14 +2,12 @@
 /**
  * AllergyEditor - Complete allergy selection with add/remove
  *
- * Features:
- * - Dropdown to add allergies (shows only available/unselected)
+ * Pattern extracted from HouseholdAllergies:
+ * - USelectMenu dropdown to add allergies (shows only unselected)
  * - Badge list of selected allergies with remove buttons
- * - Compact mode for inline forms (GuestBookingForm)
  *
  * Used by:
- * - GuestBookingForm (guest allergies, no comments)
- * - HouseholdAllergies (inhabitant allergies, with comments - uses slots)
+ * - GuestBookingForm (guest allergies, simple badges)
  */
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 
@@ -21,7 +19,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   label: 'Allergier',
-  placeholder: '🥛🥐🥚🥜 Tilføj allergi...'
+  placeholder: '🥛🥐🥚🥜 Vælg en allergi...'
 })
 
 const selectedIds = defineModel<number[]>({default: () => []})
@@ -36,15 +34,6 @@ const availableTypes = computed(() =>
 // Selected allergy types (full objects for display)
 const selectedTypes = computed(() =>
   props.allergyTypes.filter(t => selectedIds.value.includes(t.id))
-)
-
-// Map for dropdown items
-const dropdownItems = computed(() =>
-  availableTypes.value.map(t => ({
-    ...t,
-    icon: t.icon ?? undefined,
-    label: t.name
-  }))
 )
 
 // Add allergy by ID
@@ -64,6 +53,33 @@ const handleRemove = (id: number) => {
   <div class="space-y-2">
     <!-- Label -->
     <label v-if="label" class="block text-sm font-medium">{{ label }}</label>
+
+    <!-- Add selector - pattern from HouseholdAllergies -->
+    <USelectMenu
+      v-if="availableTypes.length > 0"
+      :model-value="undefined"
+      :items="availableTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
+      :placeholder="placeholder"
+      value-key="id"
+      class="w-full"
+      data-testid="allergy-editor-select"
+      @update:model-value="(val: number) => val && handleAdd(val)"
+    >
+      <template #item="{ item }">
+        <span class="flex items-center gap-2">
+          <span>{{ (item as AllergyTypeDisplay).icon }}</span>
+          <span>{{ (item as AllergyTypeDisplay).name }}</span>
+        </span>
+      </template>
+      <template #empty>
+        <span class="text-muted">Ingen allergier tilgængelige</span>
+      </template>
+    </USelectMenu>
+
+    <!-- Empty state when all allergies selected -->
+    <p v-else-if="selectedTypes.length > 0" class="text-xs text-muted">
+      Alle allergityper er valgt
+    </p>
 
     <!-- Selected allergies as badges with remove -->
     <div v-if="selectedTypes.length > 0" class="flex flex-wrap gap-2">
@@ -90,32 +106,5 @@ const handleRemove = (id: number) => {
         </span>
       </UBadge>
     </div>
-
-    <!-- Add selector (only if there are available types) -->
-    <USelectMenu
-      v-if="availableTypes.length > 0"
-      :model-value="undefined"
-      :items="dropdownItems"
-      value-key="id"
-      :placeholder="placeholder"
-      :size="SIZES.small"
-      data-testid="allergy-editor-select"
-      @update:model-value="handleAdd"
-    >
-      <template #item="{ item }">
-        <span class="flex items-center gap-2">
-          <span v-if="item.icon">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
-        </span>
-      </template>
-      <template #empty>
-        <span class="text-muted">Ingen allergier tilgængelige</span>
-      </template>
-    </USelectMenu>
-
-    <!-- Empty state when all allergies selected -->
-    <p v-else-if="selectedTypes.length > 0" class="text-xs text-muted">
-      Alle allergityper er valgt
-    </p>
   </div>
 </template>

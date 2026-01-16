@@ -13,7 +13,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {FormSubmitEvent, FormErrorEvent} from '@nuxt/ui'
+import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
@@ -34,6 +34,9 @@ const emit = defineEmits<{
 
 // Design system
 const {SIZES, COLOR, ICONS, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+
+// Ticket type config for styled badges
+const {getTicketPriceSelectItems} = useTicket()
 
 // Empty state message when no booking action available
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
@@ -65,12 +68,6 @@ const formState = reactive({
 })
 const isSaving = ref(false)
 
-// Debug: Track form errors for display in footer
-const formErrors = ref<{name: string, message: string}[]>([])
-const formRef = ref<{ validate: () => Promise<void>, errors: {id: string, message: string}[] } | null>(null)
-
-// Computed: has validation errors (from formRef or local tracking)
-const _hasErrors = computed(() => formErrors.value.length > 0 || (formRef.value?.errors?.length ?? 0) > 0)
 
 // Contextual validation - business logic that needs props/computed access
 // Zod schema handles structural validation (type, min, max)
@@ -95,27 +92,6 @@ const validateForm = (state: Partial<typeof formState>) => {
   return errors
 }
 
-// Handle UForm @error event - captures both schema and custom validation errors
-const handleFormError = (event: FormErrorEvent) => {
-  const errors = event.errors ?? []
-  console.warn('🐛 [GuestBookingForm] @error event:', errors)
-  formErrors.value = errors
-    .filter(e => e.id !== undefined)
-    .map(e => ({name: e.id!, message: e.message}))
-}
-
-// Debug: validate with schema on state change to see what Zod returns
-watch(formState, (state) => {
-  const schemaResult = GuestBookingFormSchema.safeParse(state)
-  const contextErrors = validateForm(state)
-  console.info('🐛 [GuestBookingForm] state changed:', {
-    state: {...state},
-    schemaValid: schemaResult.success,
-    schemaErrors: schemaResult.success ? null : schemaResult.error.errors,
-    contextErrors
-  })
-  formErrors.value = contextErrors
-}, {deep: true})
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
@@ -184,14 +160,13 @@ const handleCancel = () => emit('cancel')
   <!-- Booking form -->
   <UForm
     v-else
-    ref="formRef"
     :state="formState"
     :schema="GuestBookingFormSchema"
     :validate="validateForm"
     @submit="handleSubmit"
-    @error="handleFormError"
   >
-    <UCard
+    <template #default="{ errors }">
+      <UCard
       color="info"
       variant="soft"
       :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
@@ -206,28 +181,59 @@ const handleCancel = () => emit('cancel')
         </div>
       </template>
 
-      <!-- Form fields -->
-      <div class="flex flex-col gap-4">
-        <UFormField label="Antal gæster" name="count" :size="SIZES.small">
-          <UInput
-            v-model.number="formState.count"
-            type="number"
-            :min="1"
-            :max="10"
-            :size="SIZES.small"
-          />
-        </UFormField>
+      <!-- Deadline badges + Dinner mode selector (top, like regular form) -->
+      <div class="flex flex-col md:flex-row md:justify-between gap-2">
+        <DeadlineBadge :badge="badges.booking" />
+        <DeadlineBadge :badge="badges.diningMode" />
+      </div>
 
-        <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
-          <USelect
-            v-model="formState.ticketPriceId"
-            :items="ticketPrices.map(p => ({label: p.description ?? p.ticketType, value: p.id}))"
-            value-key="value"
-            :size="SIZES.small"
-            data-testid="guest-ticket-type-select"
-          />
-        </UFormField>
+      <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.small">
+        <DinnerModeSelector
+          v-model="formState.dinnerMode"
+          :form-mode="FORM_MODES.EDIT"
+          :disabled-modes="disabledModes"
+          :size="SIZES.small"
+          name="guest-dinner-mode"
+          orientation="horizontal"
+        />
+      </UFormField>
 
+      <!-- Two columns: ticket info | allergies (stacked on mobile) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Left: Antal + Billettype -->
+        <div class="flex flex-col gap-4">
+          <UFormField label="Antal gæster" name="count" :size="SIZES.small">
+            <UInput
+              v-model.number="formState.count"
+              type="number"
+              :min="1"
+              :max="10"
+              :size="SIZES.small"
+            />
+          </UFormField>
+
+          <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
+            <USelectMenu
+              v-model="formState.ticketPriceId"
+              :items="getTicketPriceSelectItems(ticketPrices).toReversed()"
+              value-key="id"
+              placeholder="Vælg billettype..."
+              class="w-full"
+              data-testid="guest-ticket-type-select"
+            >
+              <template #item="{ item }">
+                <div class="flex flex-col gap-0.5">
+                  <UBadge :color="item.config.color" variant="solid" size="sm" class="uppercase w-fit">
+                    {{ item.label }}
+                  </UBadge>
+                  <span v-if="item.description" class="text-xs text-muted">{{ item.description }}</span>
+                </div>
+              </template>
+            </USelectMenu>
+          </UFormField>
+        </div>
+
+        <!-- Right: Allergies -->
         <UFormField v-if="allergyOptions.length > 0" name="allergyTypeIds" :size="SIZES.small">
           <AllergyEditor
             v-model="formState.allergyTypeIds"
@@ -235,31 +241,14 @@ const handleCancel = () => emit('cancel')
             label="Allergier (valgfrit)"
           />
         </UFormField>
-
-        <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.small">
-          <DinnerModeSelector
-            v-model="formState.dinnerMode"
-            :form-mode="FORM_MODES.EDIT"
-            :disabled-modes="disabledModes"
-            :size="SIZES.small"
-            name="guest-dinner-mode"
-            orientation="horizontal"
-          />
-        </UFormField>
-      </div>
-
-      <!-- Deadline badges -->
-      <div class="flex flex-col md:flex-row md:justify-between gap-2">
-        <DeadlineBadge :badge="badges.booking" />
-        <DeadlineBadge :badge="badges.diningMode" />
       </div>
 
       <!-- Footer: Error messages + action buttons -->
       <template #footer>
         <div class="flex flex-col gap-2">
           <!-- Error messages near buttons -->
-          <div v-if="formErrors.length > 0" class="text-sm text-error">
-            <div v-for="error in formErrors" :key="error.name" class="flex items-center gap-1">
+          <div v-if="errors.length > 0" class="text-sm text-error">
+            <div v-for="error in errors" :key="error.name" class="flex items-center gap-1">
               <UIcon :name="ICONS.xMark" class="size-4" />
               <span>{{ error.message }}</span>
             </div>
@@ -293,6 +282,7 @@ const handleCancel = () => emit('cancel')
           </div>
         </div>
       </template>
-    </UCard>
+      </UCard>
+    </template>
   </UForm>
 </template>

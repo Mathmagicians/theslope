@@ -149,14 +149,6 @@ const draftMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
 const editingRowId = ref<number | string | null>(null)
 const isSaving = ref(false)
 
-// Guest draft state as object for cleaner reset
-const defaultGuestDraft = () => ({
-  ticketPriceId: undefined as number | undefined,
-  allergies: [] as number[],
-  count: 1
-})
-const guestDraft = ref(defaultGuestDraft())
-
 // Single history visible at a time
 const historyOrderId = ref<number | null>(null)
 const toggleHistory = (orderId: number | null) => {
@@ -170,15 +162,11 @@ const {expanded} = useExpandableRow({
     if (row) {
       editingRowId.value = row.id
       draftMode.value = row.dinnerMode
-      if (row.rowType === 'guest') {
-        guestDraft.value = defaultGuestDraft()
-      }
     }
     historyOrderId.value = null
   },
   onCollapse: () => {
     editingRowId.value = null
-    guestDraft.value = defaultGuestDraft()
     historyOrderId.value = null
   }
 })
@@ -410,22 +398,6 @@ const handleSave = async (row: TableRow) => {
         orderId: r.order?.id,
         state: OrderStateEnum.BOOKED
       }))
-    } else if (row.rowType === 'guest') {
-      // Add new guest ticket(s) - linked to the booker (user's inhabitant)
-      // No orderId - these are creates, state = BOOKED
-      const bookerId = bookerInhabitant.value?.id
-      const {ticketPriceId, allergies, count} = guestDraft.value
-      if (bookerId && ticketPriceId) {
-        orders = Array.from({length: count}, () => ({
-          inhabitantId: bookerId,
-          dinnerEventId,
-          dinnerMode: draftMode.value,
-          ticketPriceId,
-          isGuestTicket: true,
-          allergyTypeIds: allergies.length > 0 ? allergies : undefined,
-          state: OrderStateEnum.BOOKED
-        }))
-      }
     } else if (row.rowType === 'guest-order') {
       // Update ALL existing guests in this group (like power mode does for inhabitants)
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
@@ -462,11 +434,10 @@ const handleSave = async (row: TableRow) => {
     }
 
     if (orders.length > 0) {
-      emit('saveBookings', orders)
+      completeBooking(orders)
+    } else {
+      expanded.value = {}
     }
-
-    // Collapse row after save (onCollapse callback handles cleanup)
-    expanded.value = {}
   } finally {
     isSaving.value = false
   }
@@ -476,6 +447,15 @@ const handleCancel = () => {
   expanded.value = {}
   emit('cancel')
 }
+
+// Shared: emit orders and collapse row
+const completeBooking = (orders: DesiredOrder[]) => {
+  emit('saveBookings', orders)
+  expanded.value = {}
+}
+
+// GuestBookingForm emits ready-made orders, forward to shared function
+const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 
 const isOrderReleased = (orderState: OrderState | undefined): boolean => orderState === OrderStateEnum.RELEASED
 const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
@@ -488,14 +468,6 @@ const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOp
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
-
-// Allergy type options for multi-select
-const allergyOptions = computed(() =>
-  (allergyTypes.value ?? []).map(a => ({
-    label: a.name,
-    value: a.id
-  }))
-)
 </script>
 
 <template>
@@ -705,8 +677,23 @@ const allergyOptions = computed(() =>
 
       <!-- Expanded Row -->
       <template #expanded="{row}">
+        <!-- Guest add row: Use standalone GuestBookingForm -->
+        <GuestBookingForm
+          v-if="row.original.rowType === 'guest' && bookerInhabitant?.id"
+          :dinner-event="dinnerEvent"
+          :ticket-prices="ticketPrices"
+          :allergy-types="allergyTypes ?? []"
+          :deadlines="deadlines"
+          :released-ticket-count="releasedTicketCount"
+          :booker-id="bookerInhabitant.id"
+          @save="handleGuestSave"
+          @cancel="handleCancel"
+        />
+
+        <!-- Other row types: UCard with form -->
         <UCard
-          :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.card.color : (row.original.rowType === 'guest' ? 'info' : 'primary')"
+          v-else
+          :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.card.color : 'primary'"
           :variant="COMPONENTS.powerMode.card.variant"
           class="max-w-full overflow-x-auto"
           :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}"
@@ -715,9 +702,6 @@ const allergyOptions = computed(() =>
             <h4 class="text-md font-semibold text-balance">
               <template v-if="row.original.rowType === 'power'">
                 Vælg for hele familien
-              </template>
-              <template v-else-if="row.original.rowType === 'guest'">
-                Tilføj gæst til middagen
               </template>
               <template v-else-if="row.original.rowType === 'guest-order'">
                 Opdater gæstebillet
@@ -736,16 +720,6 @@ const allergyOptions = computed(() =>
             :variant="COMPONENTS.powerMode.alert.variant"
             title="Du er ved at aktivere power mode"
             :description="`Ændringer påvirker alle ${household?.inhabitants?.length ?? 0} medlemmer.`"
-          />
-
-          <!-- Guest booking fields -->
-          <GuestBookingFields
-            v-if="row.original.rowType === 'guest'"
-            v-model:ticket-price-id="guestDraft.ticketPriceId"
-            v-model:allergies="guestDraft.allergies"
-            v-model:guest-count="guestDraft.count"
-            :ticket-prices="ticketPrices"
-            :allergy-options="allergyOptions"
           />
 
           <!-- Provenance allergies (read-only for existing guest) -->
