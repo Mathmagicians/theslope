@@ -13,6 +13,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {TicketPriceSelectItem} from '~/composables/useTicket'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
@@ -223,10 +224,10 @@ const handleCancel = () => emit('cancel')
             >
               <template #item="{ item }">
                 <div class="flex flex-col gap-0.5">
-                  <UBadge :color="item.config.color" variant="solid" size="sm" class="uppercase w-fit">
-                    {{ item.label }}
+                  <UBadge :color="(item as TicketPriceSelectItem).config.color" variant="solid" size="sm" class="uppercase w-fit">
+                    {{ (item as TicketPriceSelectItem).label }}
                   </UBadge>
-                  <span v-if="item.description" class="text-xs text-muted">{{ item.description }}</span>
+                  <span v-if="(item as TicketPriceSelectItem).description" class="text-xs text-muted">{{ (item as TicketPriceSelectItem).description }}</span>
                 </div>
               </template>
             </USelectMenu>

@@ -239,7 +239,7 @@ test.describe('Admin Inhabitant API', () => {
         // - RELEASE (not DELETE): events must be AFTER deadline
         // Short deadline = events BEFORE deadline, Long deadline = events AFTER deadline
         const SHORT_CANCEL_PERIOD = 0  // All events before deadline (can create/delete)
-        const LONG_CANCEL_PERIOD = 9   // All events after deadline (can only release)
+        const _LONG_CANCEL_PERIOD = 9   // All events after deadline (can only release) - reserved for future tests
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)

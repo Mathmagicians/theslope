@@ -12,6 +12,18 @@ export interface TicketTypeConfig {
 }
 
 /**
+ * Ticket price item for USelectMenu display
+ */
+export interface TicketPriceSelectItem {
+    id: number | undefined
+    ticketType: 'ADULT' | 'CHILD' | 'BABY'
+    price: number
+    config: TicketTypeConfig
+    label: string
+    description?: string
+}
+
+/**
  * Business logic for working with tickets and ticket types
  *
  * Handles:
@@ -208,11 +220,11 @@ export const useTicket = () => {
      * @param compact - If true, only label + price. If false, include description + age limit
      * @returns Items with id, label, description, and config for styled display
      */
-    const getTicketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false) =>
+    const getTicketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false): TicketPriceSelectItem[] =>
         ticketPrices.map(p => {
             const config = ticketTypeConfig[p.ticketType]
-            const ageLimit = p.maximumAgeLimit ? `Under ${p.maximumAgeLimit} år` : null
-            const description = compact ? null : [ageLimit, p.description].filter(Boolean).join(' · ') || null
+            const ageLimit = p.maximumAgeLimit ? `Under ${p.maximumAgeLimit} år` : undefined
+            const description = compact ? undefined : [ageLimit, p.description].filter(Boolean).join(' · ') || undefined
 
             return {
                 id: p.id,

@@ -127,9 +127,6 @@ const emptyStateMessage = getRandomEmptyMessage('household')
 // Ticket business logic
 const {resolveTicketPrice, ticketTypeConfig, formatPrice} = useTicket()
 
-// Billing (for ticket count format)
-const {formatTicketCounts} = useBilling()
-
 // Season business logic
 const {isDinnerPast} = useSeason()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
