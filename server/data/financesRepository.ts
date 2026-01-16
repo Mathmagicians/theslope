@@ -79,6 +79,9 @@ export async function createOrderAuditEntry(
     const created = await prisma.orderHistory.create({
         data: validatedEntry,
         include: {
+            performedByUser: {
+                select: {id: true, email: true}
+            },
             order: {
                 include: {
                     ticketPrice: {

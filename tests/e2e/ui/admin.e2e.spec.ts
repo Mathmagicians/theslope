@@ -9,7 +9,6 @@ const { validatedBrowserContext, pollUntil, doScreenshot } = testHelpers
 const tabs = [
   { name: 'Planlægning', path: 'planning', selector: '[data-testid="admin-planning"]', hasFormModes: true },
   { name: 'Madhold', path: 'teams', selector: '[data-testid="admin-teams"]', hasFormModes: true },
-  { name: 'Chefkokke', path: 'chefs', selector: '[data-testid="admin-chefs"]', hasFormModes: false },
   { name: 'Husstande', path: 'households', selector: '[data-testid="admin-households"]', hasFormModes: false },
   { name: 'Allergier', path: 'allergies', selector: '[data-testid="admin-allergies"]', hasFormModes: false },
   { name: 'Brugere', path: 'users', selector: '[data-testid="admin-users"]', hasFormModes: false },
@@ -141,7 +140,7 @@ test.describe('Admin season URL persistence', () => {
 
   const tabTransitions = [
     { fromTab: 'planning', toTab: 'teams' },
-    { fromTab: 'teams', toTab: 'chefs' }
+    { fromTab: 'teams', toTab: 'households' }
   ]
 
   const getTabSelector = (path: string) => {

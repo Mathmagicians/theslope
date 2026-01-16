@@ -113,27 +113,28 @@ const badgeText = computed(() => {
     <div class="relative z-10 space-y-1">
       <!-- ROW 1: [State] [Badge] ... [Allergy icon] [Mode] [Label] -->
       <div class="flex items-center justify-between gap-2">
-        <!-- Left: State/Guest icon + Combined badge -->
+        <!-- Left: Fixed icon slot + Combined badge -->
         <div class="flex items-center gap-2">
-          <!-- State icon (same color as accent) -->
-          <UIcon
-            v-if="isReleased"
-            :name="ICONS.released"
-            class="size-5 md:size-6 flex-shrink-0"
-            :class="stateIconColor"
-          />
-          <UIcon
-            v-else-if="isClaimed"
-            :name="ICONS.ticket"
-            class="size-5 md:size-6 flex-shrink-0"
-            :class="stateIconColor"
-          />
-          <!-- Guest icon -->
-          <UIcon
-            v-else-if="isGuest"
-            :name="ICONS.userPlus"
-            class="size-5 md:size-6 flex-shrink-0 text-info"
-          />
+          <!-- Fixed-width icon slot (reserves space even when empty for alignment) -->
+          <div class="w-5 md:w-6 flex-shrink-0 flex items-center justify-center">
+            <UIcon
+              v-if="isReleased"
+              :name="ICONS.released"
+              class="size-5 md:size-6"
+              :class="stateIconColor"
+            />
+            <UIcon
+              v-else-if="isClaimed"
+              :name="ICONS.ticket"
+              class="size-5 md:size-6"
+              :class="stateIconColor"
+            />
+            <UIcon
+              v-else-if="isGuest"
+              :name="ICONS.userPlus"
+              class="size-5 md:size-6 text-info"
+            />
+          </div>
 
           <!-- Combined badge: Type · Price · Gæst(er) -->
           <UBadge

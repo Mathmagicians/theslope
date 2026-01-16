@@ -274,10 +274,8 @@ export const useSeason = () => {
     const getScaffoldableDinnerEvents = (allDinnerEvents: DinnerEventDisplay[]): DinnerEventDisplay[] => {
         if (allDinnerEvents.length === 0) return []
 
-        const dinnerDates = allDinnerEvents.map(d => d.date)
-        const nextDinnerRange = configuredGetNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
         const prebookingWindow = getPrebookingWindowDays()
-        const {nextDinner, futureDinnerDates} = splitDinnerEvents(allDinnerEvents, nextDinnerRange, prebookingWindow)
+        const {nextDinner, futureDinnerDates} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
 
         // Build set of all scaffoldable dates: nextDinner + futureDinnerDates
         const scaffoldableDates = [...futureDinnerDates]
@@ -330,6 +328,12 @@ export const useSeason = () => {
     const getDefaultDinnerStartTime = (): number => theslope.defaultDinnerStartTime
 
     /**
+     * Get the default dinner duration in minutes from app configuration
+     * @returns Duration in minutes for dinner window
+     */
+    const getDefaultDinnerDuration = (): number => theslope.defaultDinnerDurationMinutes
+
+    /**
      * Get the prebooking window in days from app configuration
      * @returns Number of days for the rolling prebooking window
      */
@@ -348,8 +352,9 @@ export const useSeason = () => {
         return isSameDay(dayAsDate, nextDinnerDate)
     }
 
-    // Configure getNextDinnerDate with default 60 minute duration
-    const configuredGetNextDinnerDate = getNextDinnerDate(60)
+    // Pre-configured with defaults from appConfig
+    const configuredSplitDinnerEvents = splitDinnerEvents(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
+    const configuredGetNextDinnerDate = getNextDinnerDate(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
 
     /**
      * Get deadline functions configured for a specific season.
@@ -518,11 +523,12 @@ export const useSeason = () => {
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
         getDefaultDinnerStartTime,
+        getDefaultDinnerDuration,
         getPrebookingWindowDays,
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
-        splitDinnerEvents,
+        splitDinnerEvents: configuredSplitDinnerEvents,
         sortDinnerEventsByTemporal,
         deadlinesForSeason,
         isDinnerPast,

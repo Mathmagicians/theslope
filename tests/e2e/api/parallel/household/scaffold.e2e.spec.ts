@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import type { Season } from '~/composables/useSeasonValidation'
@@ -10,6 +12,8 @@ import type { ScaffoldOrdersRequest } from '~/composables/useBookingValidation'
 
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const DinnerMode = DinnerModeSchema.enum
+const { createDefaultWeekdayMap: _createDefaultWeekdayMap } = useWeekDayMapValidation({ valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE })
 
 /**
  * E2E tests for POST /api/household/order/scaffold
@@ -34,6 +38,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   // Track resources for cleanup
   const createdSeasonIds: number[] = []
   const createdHouseholdIds: number[] = []
+  const createdInhabitantIds: number[] = []
 
   test.beforeAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
@@ -64,6 +69,9 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
     // Cleanup in reverse order of creation
+    for (const id of createdInhabitantIds) {
+      await HouseholdFactory.deleteInhabitant(context, id).catch(() => {})
+    }
     for (const id of createdHouseholdIds) {
       await HouseholdFactory.deleteHousehold(context, id).catch(() => {})
     }
@@ -203,6 +211,28 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   // ORDER UPDATE TESTS
   // ============================================================================
 
+  /**
+   * RELEASED TICKET TEST STRATEGY
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Two distinct codepaths when booking after deadline with released tickets:
+   *
+   * 1. CLAIM BUCKET (true claim from marketplace)
+   *    ─────────────────────────────────────────────────────────────────────────
+   *    • Different household (C) releases ticket via admin updateInhabitant(NONE)
+   *    • Member's household scaffolds NEW booking with NO orderId
+   *    • Generator routes to 'claim' bucket → claimOrder() seizes from marketplace
+   *    • Ticket transfers ownership from Household C to Member's household
+   *
+   * 2. UPDATE BUCKET (reclaim own released ticket)
+   *    ─────────────────────────────────────────────────────────────────────────
+   *    • Member's inhabitant releases their own ticket (state=RELEASED)
+   *    • Member scaffolds booking WITH orderId for same inhabitant
+   *    • Generator routes to 'update' bucket → restores own ticket to BOOKED
+   *    • Same order, same inhabitant, state changes RELEASED→BOOKED
+   *
+   * Key distinction: orderId present → UPDATE (reclaim), orderId absent → CLAIM
+   */
   test.describe('Order Updates', () => {
     test('GIVEN existing order WHEN updating mode via scaffold THEN mode updated', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
@@ -272,6 +302,120 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         expect(releasedOrder.state).toBe(OrderStateSchema.enum.RELEASED)
         expect(releasedOrder.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
       }
+    })
+
+    // -------------------------------------------------------------------------
+    // UPDATE BUCKET: Reclaim own released ticket (same household, WITH orderId)
+    // -------------------------------------------------------------------------
+    test('GIVEN own released ticket WHEN scaffolding WITH orderId THEN reclaims via UPDATE bucket', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+
+      // Create isolated dinner event (3 days from now = after deadline)
+      const isolatedEvent = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('ReclaimOwnTest', temporaryAndRandom())
+      })
+
+      // 1. Create an order
+      const createResult = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId,
+        dinnerEventId: isolatedEvent.id,
+        orders: [OrderFactory.defaultOrderItem({
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId
+        })]
+      })
+      expect(createResult, 'Order creation should succeed').not.toBeNull()
+      const orderId = createResult!.createdIds[0]!
+
+      // 2. Release the order (state → RELEASED)
+      const releasedOrder = await OrderFactory.updateOrder(context, orderId, {
+        dinnerMode: DinnerModeSchema.enum.NONE
+      })
+      expect(releasedOrder?.state, 'Order should be RELEASED').toBe(OrderStateSchema.enum.RELEASED)
+
+      // 3. Reclaim by scaffolding WITH orderId (same inhabitant)
+      // Key: orderId present + RELEASED state → routes to UPDATE bucket
+      const reclaimResult = await OrderFactory.scaffoldOrders(context, {
+        householdId: testHouseholdId,
+        seasonId: testSeason.id!,
+        dinnerEventIds: [isolatedEvent.id],
+        orders: [OrderFactory.createBookingOrder(testInhabitantId, isolatedEvent.id, testAdultTicketPriceId, 'DINEIN', orderId)]
+      })
+
+      expect(reclaimResult).not.toBeNull()
+      // Should NOT claim (that's different bucket) - should update existing order
+      expect(reclaimResult!.scaffoldResult.claimed, 'Should NOT use claim bucket').toBe(0)
+
+      // 4. Verify order restored to BOOKED (same order ID)
+      const orderAfter = await OrderFactory.getOrder(context, orderId)
+      expect(orderAfter?.state, 'Order should be BOOKED again').toBe(OrderStateSchema.enum.BOOKED)
+      expect(orderAfter?.inhabitantId, 'Same inhabitant').toBe(testInhabitantId)
+      expect(orderAfter?.dinnerMode, 'Mode restored to DINEIN').toBe(DinnerModeSchema.enum.DINEIN)
+    })
+
+    // -------------------------------------------------------------------------
+    // CLAIM BUCKET: True claim from marketplace (different household, NO orderId)
+    // -------------------------------------------------------------------------
+    test('GIVEN different household released ticket WHEN scaffolding WITHOUT orderId THEN claims via CLAIM bucket', async ({ browser }) => {
+      const adminContext = await validatedBrowserContext(browser)
+
+      // Create isolated dinner event (3 days from now = after deadline for claiming scenario)
+      const isolatedEvent = await DinnerEventFactory.createDinnerEvent(adminContext, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('TrueClaimTest', temporaryAndRandom())
+      })
+
+      // Create a DIFFERENT household (Household C) with an inhabitant
+      // Names use 'Test' prefix for d1-nuke discoverability
+      const otherHousehold = await HouseholdFactory.createHousehold(adminContext, {
+        name: salt('Test ClaimSource', temporaryAndRandom())
+      })
+      createdHouseholdIds.push(otherHousehold.id)
+
+      const otherInhabitant = await HouseholdFactory.createInhabitantForHousehold(
+        adminContext,
+        otherHousehold.id,
+        salt('Test ClaimPerson', temporaryAndRandom())
+      )
+      createdInhabitantIds.push(otherInhabitant.id)
+
+      // Create order for Household C using admin order endpoint
+      const createResult = await OrderFactory.createOrder(adminContext, {
+        householdId: otherHousehold.id,
+        dinnerEventId: isolatedEvent.id,
+        orders: [OrderFactory.defaultOrderItem({
+          inhabitantId: otherInhabitant.id,
+          ticketPriceId: testAdultTicketPriceId
+        })]
+      })
+      expect(createResult, 'Order creation for other household should succeed').not.toBeNull()
+      const otherOrderId = createResult!.createdIds[0]!
+
+      // Release the order (state → RELEASED)
+      const releasedOrder = await OrderFactory.updateOrder(adminContext, otherOrderId, {
+        dinnerMode: DinnerModeSchema.enum.NONE
+      })
+      expect(releasedOrder?.state, 'Order should be RELEASED').toBe(OrderStateSchema.enum.RELEASED)
+
+      // Admin's household claims the released ticket WITHOUT orderId
+      // Key: no orderId + released tickets exist → routes to CLAIM bucket
+      const claimResult = await OrderFactory.scaffoldOrders(adminContext, {
+        householdId: testHouseholdId,
+        seasonId: testSeason.id!,
+        dinnerEventIds: [isolatedEvent.id],
+        orders: [OrderFactory.createBookingOrder(testInhabitantId, isolatedEvent.id, testAdultTicketPriceId)]
+      })
+
+      expect(claimResult).not.toBeNull()
+      expect(claimResult!.scaffoldResult.claimed, 'Should claim ticket via CLAIM bucket').toBeGreaterThanOrEqual(1)
+
+      // Verify ticket transferred to admin's inhabitant
+      const orderAfterClaim = await OrderFactory.getOrder(adminContext, otherOrderId)
+      expect(orderAfterClaim?.state, 'Order should be BOOKED after claim').toBe(OrderStateSchema.enum.BOOKED)
+      expect(orderAfterClaim?.inhabitantId, 'Ticket should have transferred to admin inhabitant').toBe(testInhabitantId)
     })
   })
 

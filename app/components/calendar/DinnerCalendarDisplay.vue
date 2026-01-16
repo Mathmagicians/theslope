@@ -65,18 +65,15 @@ const {createEventList} = useCalendarEvents()
 const {
   getHolidayDatesFromDateRangeList,
   getDefaultDinnerStartTime,
-  getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
 const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
-const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
 const dinnerStartHour = getDefaultDinnerStartTime()
-const nextDinnerDateRange = computed(() => getNextDinnerDate(dinnerDates.value, dinnerStartHour))
 
 const splitResult = computed(() =>
-    splitDinnerEvents<DinnerEventDisplay>(props.dinnerEvents ?? [], nextDinnerDateRange.value)
+    splitDinnerEvents<DinnerEventDisplay>(props.dinnerEvents ?? [])
 )
 
 const nextDinner = computed(() => splitResult.value.nextDinner)

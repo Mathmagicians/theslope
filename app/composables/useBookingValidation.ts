@@ -341,7 +341,8 @@ export const useBookingValidation = () => {
      */
     const OrderHistoryCreateSchema = OrderHistoryDisplaySchema.omit({
         id: true,
-        timestamp: true
+        timestamp: true,
+        performedByUser: true  // Relation object is for display only, not create (FK is performedByUserId)
     })
 
     /**

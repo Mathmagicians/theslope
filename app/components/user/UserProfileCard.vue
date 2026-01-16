@@ -247,7 +247,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
     <template v-if="showRoleManager" #footer>
       <!-- Header: Title + Edit/Save/Cancel buttons -->
       <div class="flex items-center justify-between mb-3">
-        <span :class="TYPOGRAPHY.labelText">Systemroller</span>
+        <span :class="TYPOGRAPHY.bodyTextMedium">Systemroller</span>
 
         <!-- View mode: Edit button (admin only) -->
         <UButton
@@ -276,7 +276,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
             Gem
           </UButton>
           <UButton
-            :icon="ICONS.close"
+            :icon="ICONS.xMark"
             color="neutral"
             variant="ghost"
             size="sm"

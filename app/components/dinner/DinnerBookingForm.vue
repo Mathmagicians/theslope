@@ -427,23 +427,21 @@ const handleSave = async (row: TableRow) => {
         }))
       }
     } else if (row.rowType === 'guest-order') {
-      // Update existing guest
+      // Update ALL existing guests in this group (like power mode does for inhabitants)
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
-      const inhabitantId = row.order?.inhabitantId
       if (!row.ticketPriceId) {
         throw new Error('Kan ikke booke: mangler billetpris for gæst')
       }
-      if (inhabitantId) {
-        orders = [{
-          inhabitantId,
-          dinnerEventId,
-          dinnerMode: draftMode.value,
-          ticketPriceId: row.ticketPriceId,
-          isGuestTicket: true,
-          orderId: row.order?.id,
-          state: OrderStateEnum.BOOKED
-        }]
-      }
+      const guestOrders = row.orders ?? (row.order ? [row.order] : [])
+      orders = guestOrders.map((guestOrder: OrderDisplay) => ({
+        inhabitantId: guestOrder.inhabitantId,
+        dinnerEventId,
+        dinnerMode: draftMode.value,
+        ticketPriceId: row.ticketPriceId!,
+        isGuestTicket: true,
+        orderId: guestOrder.id,
+        state: OrderStateEnum.BOOKED
+      }))
     } else {
       // Update single inhabitant
       // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
@@ -516,7 +514,7 @@ const allergyOptions = computed(() =>
   <!-- Booking form -->
   <div v-else class="space-y-4">
     <!-- Deadline Status Badges -->
-    <div class="flex flex-wrap gap-4">
+    <div class="flex flex-col md:flex-row md:justify-between gap-2">
       <DeadlineBadge :badge="badges.booking" />
       <DeadlineBadge :badge="badges.diningMode" />
     </div>
@@ -758,9 +756,9 @@ const allergyOptions = computed(() =>
           </div>
 
           <!-- Deadline badges (contextual: booking + dining mode) -->
-          <div class="flex flex-col md:flex-row gap-2">
-            <DeadlineBadge :badge="badges.booking" compact />
-            <DeadlineBadge :badge="badges.diningMode" compact />
+          <div class="flex flex-col md:flex-row md:justify-between gap-2">
+            <DeadlineBadge :badge="badges.booking" />
+            <DeadlineBadge :badge="badges.diningMode" />
           </div>
 
           <!-- Mode selector -->

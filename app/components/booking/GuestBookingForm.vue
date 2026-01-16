@@ -13,7 +13,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {FormSubmitEvent} from '@nuxt/ui'
+import type {FormSubmitEvent, FormErrorEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
@@ -28,12 +28,15 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  save: [orders: DesiredOrder[], action: 'process' | 'claim']
+  save: [orders: DesiredOrder[]]
   cancel: []
 }>()
 
 // Design system
-const {SIZES, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+
+// Empty state message when no booking action available
+const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
 // Booking logic
 const {getBookingOptions, createBookingBadges} = useBooking()
@@ -62,19 +65,27 @@ const formState = reactive({
 })
 const isSaving = ref(false)
 
-// Contextual validation via :validate prop (has closure access to props/computed)
-const validateForm = (state: typeof formState) => {
+// Debug: Track form errors for display in footer
+const formErrors = ref<{name: string, message: string}[]>([])
+const formRef = ref<{ validate: () => Promise<void>, errors: {id: string, message: string}[] } | null>(null)
+
+// Computed: has validation errors (from formRef or local tracking)
+const _hasErrors = computed(() => formErrors.value.length > 0 || (formRef.value?.errors?.length ?? 0) > 0)
+
+// Contextual validation - business logic that needs props/computed access
+// Zod schema handles structural validation (type, min, max)
+const validateForm = (state: Partial<typeof formState>) => {
   const errors: {name: string, message: string}[] = []
   const {action} = bookingOptions.value
+  const count = state.count ?? 1
 
-  // No action available
+  // No booking action available (deadlines passed, no released tickets, etc.)
   if (!action) {
     errors.push({name: 'count', message: 'Kan desværre ikke tilmelde dine gæster'})
-    return errors
   }
 
-  // Claiming: count must not exceed released tickets
-  if (action === 'claim' && state.count > props.releasedTicketCount) {
+  // Claiming: count must not exceed available released tickets
+  if (action === 'claim' && count > props.releasedTicketCount) {
     errors.push({
       name: 'count',
       message: `Kun ${props.releasedTicketCount} billet${props.releasedTicketCount === 1 ? '' : 'ter'} ledig${props.releasedTicketCount === 1 ? '' : 'e'}`
@@ -83,6 +94,28 @@ const validateForm = (state: typeof formState) => {
 
   return errors
 }
+
+// Handle UForm @error event - captures both schema and custom validation errors
+const handleFormError = (event: FormErrorEvent) => {
+  const errors = event.errors ?? []
+  console.warn('🐛 [GuestBookingForm] @error event:', errors)
+  formErrors.value = errors
+    .filter(e => e.id !== undefined)
+    .map(e => ({name: e.id!, message: e.message}))
+}
+
+// Debug: validate with schema on state change to see what Zod returns
+watch(formState, (state) => {
+  const schemaResult = GuestBookingFormSchema.safeParse(state)
+  const contextErrors = validateForm(state)
+  console.info('🐛 [GuestBookingForm] state changed:', {
+    state: {...state},
+    schemaValid: schemaResult.success,
+    schemaErrors: schemaResult.success ? null : schemaResult.error.errors,
+    contextErrors
+  })
+  formErrors.value = contextErrors
+}, {deep: true})
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
@@ -111,9 +144,8 @@ watch(enabledModesForGuest, (modes) => {
 // UForm submit handler - receives validated data from FormSubmitEvent
 const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
   const {ticketPriceId, allergyTypeIds, count, dinnerMode} = event.data
-  const {action} = bookingOptions.value
 
-  if (!ticketPriceId || !action) return
+  if (!ticketPriceId || !bookingOptions.value.action) return
 
   isSaving.value = true
 
@@ -128,7 +160,7 @@ const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
       state: OrderStateEnum.BOOKED
     }))
 
-    emit('save', orders, action)
+    emit('save', orders)
   } finally {
     isSaving.value = false
   }
@@ -138,103 +170,129 @@ const handleCancel = () => emit('cancel')
 </script>
 
 <template>
-  <UCard
-    color="info"
+  <!-- Empty state: no booking action available -->
+  <UAlert
+    v-if="!bookingOptions.action"
+    :color="COLOR.neutral"
     variant="soft"
-    :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
+    :avatar="{text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar}"
+    :ui="COMPONENTS.emptyStateAlert"
   >
-    <template #header>
-      <div class="flex items-center gap-2">
-        <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
-        <h4 class="text-md font-semibold">Tilføj gæst</h4>
-        <UBadge v-if="props.releasedTicketCount > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
-          {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
-        </UBadge>
-      </div>
-    </template>
+    <template #title>{{ emptyStateMessage.text }}</template>
+  </UAlert>
 
-    <!-- Deadline badges -->
-    <div class="flex flex-wrap gap-4">
-      <DeadlineBadge :badge="badges.booking" />
-      <DeadlineBadge :badge="badges.diningMode" />
-    </div>
-
-    <!-- Form fields when booking is available -->
-    <UForm
-      v-if="bookingOptions.action"
-      :state="formState"
-      :schema="GuestBookingFormSchema"
-      :validate="validateForm"
-      class="flex flex-col gap-4"
-      @submit="handleSubmit"
+  <!-- Booking form -->
+  <UForm
+    v-else
+    ref="formRef"
+    :state="formState"
+    :schema="GuestBookingFormSchema"
+    :validate="validateForm"
+    @submit="handleSubmit"
+    @error="handleFormError"
+  >
+    <UCard
+      color="info"
+      variant="soft"
+      :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
     >
-      <UFormField label="Antal gæster" name="count" :size="SIZES.small">
-        <UInput
-          v-model="formState.count"
-          type="number"
-          :min="1"
-          :max="10"
-          :size="SIZES.small"
-        />
-      </UFormField>
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
+          <h4 class="text-md font-semibold">Tilføj gæst</h4>
+          <UBadge v-if="props.releasedTicketCount > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+            {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
+          </UBadge>
+        </div>
+      </template>
 
-      <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
-        <USelect
-          v-model="formState.ticketPriceId"
-          :items="ticketPrices.map(p => ({label: p.description ?? p.ticketType, value: p.id}))"
-          value-key="value"
-          :size="SIZES.small"
-          data-testid="guest-ticket-type-select"
-        />
-      </UFormField>
+      <!-- Form fields -->
+      <div class="flex flex-col gap-4">
+        <UFormField label="Antal gæster" name="count" :size="SIZES.small">
+          <UInput
+            v-model.number="formState.count"
+            type="number"
+            :min="1"
+            :max="10"
+            :size="SIZES.small"
+          />
+        </UFormField>
 
-      <UFormField v-if="allergyOptions.length > 0" label="Allergier (valgfrit)" name="allergyTypeIds" :size="SIZES.small">
-        <AllergySelectMenu
-          v-model="formState.allergyTypeIds"
-          :allergy-types="allergyOptions"
-          :multiple="true"
-          placeholder="Vælg allergier..."
-        />
-      </UFormField>
+        <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
+          <USelect
+            v-model="formState.ticketPriceId"
+            :items="ticketPrices.map(p => ({label: p.description ?? p.ticketType, value: p.id}))"
+            value-key="value"
+            :size="SIZES.small"
+            data-testid="guest-ticket-type-select"
+          />
+        </UFormField>
 
-      <UFormField label="Spisemåde" name="dinnerMode" :size="SIZES.small">
-        <DinnerModeSelector
-          v-model="formState.dinnerMode"
-          :form-mode="FORM_MODES.EDIT"
-          :disabled-modes="disabledModes"
-          :size="SIZES.small"
-          name="guest-dinner-mode"
-          orientation="horizontal"
-        />
-      </UFormField>
+        <UFormField v-if="allergyOptions.length > 0" name="allergyTypeIds" :size="SIZES.small">
+          <AllergyEditor
+            v-model="formState.allergyTypeIds"
+            :allergy-types="allergyOptions"
+            label="Allergier (valgfrit)"
+          />
+        </UFormField>
 
-      <div class="flex justify-end gap-2 pt-2">
-        <UButton
-          :color="COLOR.neutral"
-          variant="ghost"
-          :icon="ICONS.xMark"
-          :size="SIZES.small"
-          data-testid="guest-form-cancel"
-          @click="handleCancel"
-        >
-          Annuller
-        </UButton>
-        <UButton
-          type="submit"
-          color="info"
-          variant="solid"
-          :size="SIZES.small"
-          :loading="isSaving"
-          data-testid="guest-form-save"
-        >
-          <template #leading>
-            <UIcon :name="ICONS.userPlus" />
-          </template>
-          Tilføj gæst
-        </UButton>
+        <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.small">
+          <DinnerModeSelector
+            v-model="formState.dinnerMode"
+            :form-mode="FORM_MODES.EDIT"
+            :disabled-modes="disabledModes"
+            :size="SIZES.small"
+            name="guest-dinner-mode"
+            orientation="horizontal"
+          />
+        </UFormField>
       </div>
-    </UForm>
 
-    <template #footer />
-  </UCard>
+      <!-- Deadline badges -->
+      <div class="flex flex-col md:flex-row md:justify-between gap-2">
+        <DeadlineBadge :badge="badges.booking" />
+        <DeadlineBadge :badge="badges.diningMode" />
+      </div>
+
+      <!-- Footer: Error messages + action buttons -->
+      <template #footer>
+        <div class="flex flex-col gap-2">
+          <!-- Error messages near buttons -->
+          <div v-if="formErrors.length > 0" class="text-sm text-error">
+            <div v-for="error in formErrors" :key="error.name" class="flex items-center gap-1">
+              <UIcon :name="ICONS.xMark" class="size-4" />
+              <span>{{ error.message }}</span>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="flex justify-end gap-2">
+            <UButton
+              :color="COLOR.neutral"
+              variant="ghost"
+              :icon="ICONS.xMark"
+              :size="SIZES.small"
+              data-testid="guest-form-cancel"
+              @click="handleCancel"
+            >
+              Annuller
+            </UButton>
+            <UButton
+              type="submit"
+              color="info"
+              variant="solid"
+              :size="SIZES.small"
+              :loading="isSaving"
+              data-testid="guest-form-save"
+            >
+              <template #leading>
+                <UIcon :name="ICONS.userPlus" />
+              </template>
+              Tilføj gæst
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UCard>
+  </UForm>
 </template>

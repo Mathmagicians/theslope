@@ -2,7 +2,7 @@
 /**
  * AllergySelectMenu - Reusable allergy type multi-select
  *
- * Simple USelectMenu wrapper for selecting allergy types with icons.
+ * USelectMenu wrapper for selecting allergy types with icons.
  * Used by:
  * - HouseholdAllergies (single select mode for adding allergies)
  * - GuestBookingForm (multiple select for guest allergies)
@@ -18,7 +18,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   multiple: false,
-  placeholder: 'Vælg allergier...',
+  placeholder: '🥛🥐🥚🥜 Vælg allergier...',
   disabled: false
 })
 
@@ -48,8 +48,13 @@ const items = computed(() =>
     data-testid="allergy-select-menu"
   >
     <template #item="{ item }">
-      <span v-if="item.icon" class="mr-1">{{ item.icon }}</span>
-      <span>{{ item.label }}</span>
+      <span class="flex items-center gap-2">
+        <span v-if="item.icon">{{ item.icon }}</span>
+        <span>{{ item.label }}</span>
+      </span>
+    </template>
+    <template #empty>
+      <span class="text-muted">Ingen allergier tilgængelige</span>
     </template>
   </USelectMenu>
 </template>

@@ -599,6 +599,30 @@ describe('decideOrderAction', () => {
                 hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
+            },
+            // Case 10: Price healing - RELEASED + NONE + price mismatch → update (not idempotent)
+            // This ensures price correction happens even when order is already released
+            {
+                desc: 'orderId + RELEASED + NONE + price mismatch → update (price healing)',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE, ticketPriceId: 2 }),
+                existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: 1 }),
+                beforeDeadline: false,
+                canEditMode: false,
+                hasReleased: false,
+                expectedBucket: 'update',
+                expectedState: OrderState.RELEASED
+            },
+            // Case 11: Price healing - RELEASED + NONE + null ticketPriceId → update
+            // Handles the production case where ticketPriceId was SET NULL by cascade
+            {
+                desc: 'orderId + RELEASED + NONE + null ticketPriceId → update (price healing)',
+                desired: createDesired({ orderId: 42, dinnerMode: DinnerMode.NONE, ticketPriceId: 2 }),
+                existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: null as unknown as number }),
+                beforeDeadline: false,
+                canEditMode: false,
+                hasReleased: false,
+                expectedBucket: 'update',
+                expectedState: OrderState.RELEASED
             }
         ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, hasReleased, expectedBucket, expectedState }) => {
             const input = createInput(desired, existing, beforeDeadline, canEditMode, hasReleased)
@@ -1381,6 +1405,7 @@ describe('getBookingOptions', () => {
     const DS = DinnerStateSchema.enum
 
     const ALL = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY, DM.NONE]
+    const EATING = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY]  // All modes except NONE (for claims)
     const DINEIN_NONE = [DM.DINEIN, DM.NONE]
     const DINEIN_ONLY = [DM.DINEIN]
     const NONE_ONLY = [DM.NONE]
@@ -1399,10 +1424,13 @@ describe('getBookingOptions', () => {
         {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
         {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: DINEIN_NONE, expectedAction: 'process'},
 
-        // No order
+        // No order - before deadline
         {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'null + canModify=false + hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
         {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+
+        // No order - claim (after booking deadline, released available)
+        {desc: 'claim + canEdit=true → all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: EATING, expectedAction: 'claim'},
+        {desc: 'claim + canEdit=false → DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
 
         // Edge: existing order ignores hasReleased (uses process, not claim)
         {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: ALL, expectedAction: 'process'},
@@ -1411,5 +1439,37 @@ describe('getBookingOptions', () => {
         const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased)
         expect(result.enabledModes).toEqual(expectedModes)
         expect(result.action).toBe(expectedAction)
+    })
+})
+
+// =============================================================================
+// groupGuestOrders - Groups by booker, ticketType, event, allergies, provenance
+// =============================================================================
+
+describe('groupGuestOrders', () => {
+    const {groupGuestOrders} = useBooking()
+
+    const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
+        inhabitantId: 1, ticketType: 'ADULT', dinnerEventId: 101,
+        provenanceAllergies: overrides.allergies ?? null,
+        provenanceHousehold: overrides.provenance ?? null
+    })
+
+    it.each([
+        {desc: 'empty input', orders: [], expected: 0},
+        {desc: 'same key → 1 group', orders: [order(), order()], expected: 1},
+        {desc: 'different allergies → 2 groups', orders: [order({allergies: ['A']}), order({allergies: ['B']})], expected: 2},
+        {desc: 'same allergies (diff order) → 1 group', orders: [order({allergies: ['A', 'B']}), order({allergies: ['B', 'A']})], expected: 1},
+        {desc: 'allergies vs none → 2 groups', orders: [order({allergies: ['A']}), order()], expected: 2},
+        {desc: 'different provenance → 2 groups', orders: [order({provenance: 'AR_1'}), order({provenance: 'S31'})], expected: 2},
+        {desc: 'provenance vs none → 2 groups', orders: [order({provenance: 'AR_1'}), order()], expected: 2},
+        {desc: 'allergies + provenance combo → 4 groups', orders: [
+            order(), order(),
+            order({allergies: ['A']}),
+            order({provenance: 'AR_1'}),
+            order({allergies: ['A'], provenance: 'AR_1'})
+        ], expected: 4},
+    ])('$desc → $expected groups', ({orders, expected}) => {
+        expect(Object.keys(groupGuestOrders(orders))).toHaveLength(expected)
     })
 })

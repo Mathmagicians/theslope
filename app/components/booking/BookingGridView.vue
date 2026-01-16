@@ -112,7 +112,7 @@ const emit = defineEmits<{
   cancel: []
   'update:formMode': [mode: FormMode]
   navigate: [direction: 'prev' | 'next']
-  addGuest: [orders: DesiredOrder[], action: 'process' | 'claim']
+  addGuest: [orders: DesiredOrder[]]
 }>()
 
 // Design system
@@ -233,8 +233,8 @@ const activeGuestEvent = computed(() =>
 )
 
 // Handle GuestBookingForm save
-const handleGuestSave = (orders: DesiredOrder[], action: 'process' | 'claim') => {
-  emit('addGuest', orders, action)
+const handleGuestSave = (orders: DesiredOrder[]) => {
+  emit('addGuest', orders)
   expanded.value = {}
 }
 

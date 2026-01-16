@@ -1147,6 +1147,13 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🍳', text: 'Panderne hviler sig' },
         { emoji: '🥄', text: 'Grydeskeerne venter på næste middag' },
         { emoji: '🧂', text: 'Saltet venter tålmodigt i skabet' }
+    ],
+    noGuestTickets: [
+        { emoji: '🌬️', text: 'Billetterne blæser om kap med vinden - se om du kan fange en derude!' },
+        { emoji: '😋', text: 'Maden er for god i dag til at vi vil dele med nogen' },
+        { emoji: '🍕', text: 'Du kan desværre ikke være med, men der er en dejlig pizzeria i Lejre Downtown' },
+        { emoji: '🎫', text: 'Du kan få en fribillet til Store Bededag i stedet for' },
+        { emoji: '🦆', text: 'Ænderne i Lejre Å har også travlt i dag - prøv igen i morgen!' }
     ]
 } as const
 

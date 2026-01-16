@@ -5,6 +5,17 @@
  */
 import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
 
+/**
+ * Statistics for one dining mode in kitchen display
+ */
+export interface DiningModeStats {
+  key: string
+  label: string
+  percentage: number  // Based on PORTIONS (cooking workload), not order count
+  portions: number
+  orderCount: number
+}
+
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
   const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -133,6 +144,79 @@ export const useOrder = () => {
     return ticketType !== TicketType.BABY
   }
 
+  // ========== KITCHEN STATISTICS ==========
+
+  /**
+   * Calculate dining mode statistics for kitchen display
+   * Percentages are based on PORTIONS (cooking workload) to match "X PORTIONER" header
+   *
+   * @param orders - All orders to analyze
+   * @returns Array of stats per dining mode + RELEASED, with portion-based percentages
+   */
+  const calculateDiningModeStats = (orders: OrderDetail[]): DiningModeStats[] => {
+    const { DinnerModeSchema } = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    const activeOrders = getActiveOrders(orders)
+    const releasedOrders = getReleasedOrders(orders)
+    const totalPortions = calculateTotalPortionsFromPrices(orders)
+
+    const modes = [
+      { key: DinnerMode.TAKEAWAY, label: 'TAKEAWAY' },
+      { key: DinnerMode.DINEIN, label: 'SPISESAL' },
+      { key: DinnerMode.DINEINLATE, label: 'SPIS SENT' }
+    ] as const
+
+    const stats: DiningModeStats[] = modes.map(({ key, label }) => {
+      const modeOrders = activeOrders.filter(o => o.dinnerMode === key)
+      const portions = calculateTotalPortionsFromPrices(modeOrders)
+      const percentage = totalPortions > 0 ? Math.round((portions / totalPortions) * 100) : 0
+
+      return {
+        key,
+        label,
+        percentage,
+        portions: Math.round(portions),
+        orderCount: modeOrders.length
+      }
+    })
+
+    // Add released tickets panel
+    const releasedPortions = calculateTotalPortionsFromPrices(releasedOrders)
+    stats.push({
+      key: 'RELEASED',
+      label: 'TIL SALG',
+      percentage: totalPortions > 0 ? Math.round((releasedPortions / totalPortions) * 100) : 0,
+      portions: Math.round(releasedPortions),
+      orderCount: releasedOrders.length
+    })
+
+    return stats
+  }
+
+  /**
+   * Calculate normalized widths for kitchen display panels
+   * Applies minimum width (10%) and scales to sum to 100%
+   *
+   * @param stats - Dining mode stats with percentages
+   * @param minWidth - Minimum width percentage (default 10%)
+   * @returns Object mapping key → normalized width percentage
+   */
+  const calculateNormalizedWidths = (
+    stats: DiningModeStats[],
+    minWidth = 10
+  ): Record<string, number> => {
+    if (stats.length === 0) return {}
+
+    // Apply minimum, track how much we've used
+    const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, minWidth) }))
+    const total = withMin.reduce((sum, s) => sum + s.width, 0)
+
+    // Scale to 100% if needed
+    const scale = total > 0 ? 100 / total : 1
+    return Object.fromEntries(withMin.map(s => [s.key, s.width * scale]))
+  }
+
   // ========== BUDGET CALCULATIONS ==========
 
   /**
@@ -191,6 +275,10 @@ export const useOrder = () => {
     calculateTotalPortionsFromPrices,
     getPortionsForTicketPrice,
     requiresChair,
+
+    // Kitchen statistics
+    calculateDiningModeStats,
+    calculateNormalizedWidths,
 
     // Budget & VAT
     calculateBudget,

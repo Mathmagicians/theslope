@@ -28,7 +28,6 @@
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ⚠️ | **⚠️ REVIEW** |
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
-| `/admin/chefs` | `admin/[tab].vue` → `AdminChefs.vue` | ✅ `usePlanStore()` | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
@@ -87,7 +86,7 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `FormModeSelector.vue` | All CRUD admin routes | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
-| `SeasonSelector.vue` | `/admin/planning`, `/admin/teams`, `/admin/chefs` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
+| `SeasonSelector.vue` | `/admin/planning`, `/admin/teams` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
 | `TableSearchPagination.vue` | `/admin/users`, `/admin/households` | None | `useTheSlopeDesignSystem()` | N/A | N/A | ✅ | ✅ Indirect | **✅ COMPLIANT** |
 | `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** |
 | `UserView.vue` | All routes (PageHeader) | `useAuthStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
@@ -103,7 +102,7 @@
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | - | N/A | N/A | ❌ | N/A | **N/A DISPLAY** |
 | `CalendarDisplay.vue` | `/dinner` | `useEventStore()` | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `TeamCalendarDisplay.vue` | `/admin/chefs` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
+| `TeamCalendarDisplay.vue` | `/admin/teams`, `/chef` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `HouseholdCalendarDisplay.vue` | `/household/[shortname]/bookings` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
 ### Household Booking Components
@@ -256,7 +255,6 @@ All components and stores work with domain types:
 **Missing E2E:**
 - ❌ Admin users
 - ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
-- ❌ Admin chefs
 - ❌ Admin economy
 - ❌ Admin settings
 - ❌ Household bookings (backend tested, UI not)

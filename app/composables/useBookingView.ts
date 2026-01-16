@@ -19,8 +19,7 @@ export const useDinnerDateParam = (options: {
   dinnerDates: () => Date[]
   syncWhen: () => boolean
 }) => {
-  const {getNextDinnerDate, getDefaultDinnerStartTime} = useSeason()
-  const dinnerStartTime = getDefaultDinnerStartTime()
+  const {getNextDinnerDate} = useSeason()
 
   return useQueryParam<Date>('date', {
     serialize: formatDate,
@@ -30,7 +29,7 @@ export const useDinnerDateParam = (options: {
     },
     validate: (date) => options.dinnerDates().some(d => d.toDateString() === date.toDateString()),
     defaultValue: () => {
-      const nextDinner = getNextDinnerDate(options.dinnerDates(), dinnerStartTime)
+      const nextDinner = getNextDinnerDate(options.dinnerDates())
       return nextDinner?.start ?? options.dinnerDates()[0] ?? new Date()
     },
     syncWhen: options.syncWhen

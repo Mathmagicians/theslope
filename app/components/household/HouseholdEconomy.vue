@@ -136,7 +136,7 @@ const columns = {
                         variant="ghost"
                         :icon="historyOrderId === tx.orderId ? ICONS.chevronUp : ICONS.clipboard"
                         square
-                        :size="SIZES.xSmall"
+                        :size="SIZES.small"
                         @click="toggleHistory(tx.orderId)"
                     />
                     <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
@@ -201,7 +201,7 @@ const columns = {
                             variant="ghost"
                             :icon="historyOrderId === tx.orderId ? ICONS.chevronUp : ICONS.clipboard"
                             square
-                            :size="SIZES.xSmall"
+                            :size="SIZES.small"
                             @click="toggleHistory(tx.orderId)"
                         />
                         <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>

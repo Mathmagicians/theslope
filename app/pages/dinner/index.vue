@@ -64,7 +64,7 @@ const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 
 // Booking validation and helpers
-const {formatScaffoldResult} = useBooking()
+const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -194,7 +194,8 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
     await refreshBookingData()
     toast.add({
-      title: formatScaffoldResult(response.scaffoldResult),
+      title: BOOKING_TOAST_TITLES.booking,
+      description: formatScaffoldResult(response.scaffoldResult),
       color: 'success',
       icon: ICONS.checkCircle
     })

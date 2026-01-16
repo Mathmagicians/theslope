@@ -1093,154 +1093,228 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('splitDinnerEvents', () => {
-        it.each([
-            {
-                scenario: 'splits events with next dinner at start',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
-                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
-                ],
-                nextDinnerDateRange: { start: new Date(2025, 0, 6, 18, 0), end: new Date(2025, 0, 6, 19, 0) },
-                expectedNextDinnerId: 1,
-                expectedOtherCount: 2
-            },
-            {
-                scenario: 'splits events with next dinner in middle',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
-                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
-                ],
-                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
-                expectedNextDinnerId: 2,
-                expectedOtherCount: 2
-            },
-            {
-                scenario: 'splits events with next dinner at end',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
-                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
-                ],
-                nextDinnerDateRange: { start: new Date(2025, 0, 10, 18, 0), end: new Date(2025, 0, 10, 19, 0) },
-                expectedNextDinnerId: 3,
-                expectedOtherCount: 2
-            },
-            {
-                scenario: 'matches by same day, ignoring time differences',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 12, 30) }
-                ],
-                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
-                expectedNextDinnerId: 2,
-                expectedOtherCount: 1
-            }
-        ])('$scenario', ({ events, nextDinnerDateRange, expectedNextDinnerId, expectedOtherCount }) => {
-            const result = splitDinnerEvents(events, nextDinnerDateRange)
+        const dinnerStartHour = 18
+        const dinnerDurationMinutes = 60
 
-            // Validate structure
-            const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
-            expect(parseResult.success, parseResult.success ? '' : JSON.stringify(parseResult.error.format(), null, 2)).toBe(true)
+        describe('identifies next dinner correctly', () => {
+            // Helper dates for test cases
+            const jan6 = new Date(2025, 0, 6)
+            const jan8 = new Date(2025, 0, 8)
+            const jan10 = new Date(2025, 0, 10)
 
-            // Verify expected values
-            expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
-            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
-            expect(allOtherDates).toHaveLength(expectedOtherCount)
-        })
-
-        it.each([
-            {
-                scenario: 'returns null nextDinner when no match',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 18, 0) }
-                ],
-                nextDinnerDateRange: { start: new Date(2025, 0, 15, 18, 0), end: new Date(2025, 0, 15, 19, 0) },
-                expectedOtherCount: 2
-            },
-            {
-                scenario: 'returns all events as others when nextDinnerDateRange is null',
-                events: [
-                    { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                    { id: 2, date: new Date(2025, 0, 8, 18, 0) },
-                    { id: 3, date: new Date(2025, 0, 10, 18, 0) }
-                ],
-                nextDinnerDateRange: null,
-                expectedOtherCount: 3
-            },
-            {
-                scenario: 'handles empty events array',
-                events: [],
-                nextDinnerDateRange: { start: new Date(2025, 0, 8, 18, 0), end: new Date(2025, 0, 8, 19, 0) },
-                expectedOtherCount: 0
-            }
-        ])('$scenario', ({ events, nextDinnerDateRange, expectedOtherCount }) => {
-            const result = splitDinnerEvents(events, nextDinnerDateRange)
-
-            expect(result.nextDinner).toBeNull()
-            const allOtherDates = [...result.pastDinnerDates, ...result.futureDinnerDates]
-            expect(allOtherDates).toHaveLength(expectedOtherCount)
-        })
-
-        describe('with maxDaysAhead parameter', () => {
-            const referenceDate = new Date(2025, 5, 15, 12, 0) // June 15, 2025 noon
-
-            beforeEach(() => {
-                vi.useFakeTimers()
-                vi.setSystemTime(referenceDate)
-            })
-
-            afterEach(() => {
-                vi.useRealTimers()
-            })
+            // Reference times: Copenhagen for boundary cases (during/after dinner)
+            const jan8DuringDinner = createDateInTimezone(jan8, 18, 30)  // 18:30 CPH
+            const jan8AfterDinner = createDateInTimezone(jan8, 19, 30)   // 19:30 CPH
 
             it.each([
                 {
-                    scenario: 'filters future events beyond maxDaysAhead',
+                    scenario: 'first future event is next dinner',
+                    referenceTime: new Date(2025, 0, 5, 12, 0),  // Jan 5, noon
                     events: [
-                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - within window
+                        { id: 1, date: jan6 },   // Jan 6 - first future
+                        { id: 2, date: jan8 },   // Jan 8
+                        { id: 3, date: jan10 }   // Jan 10
+                    ],
+                    expectedNextDinnerId: 1,
+                    expectedPastCount: 0,
+                    expectedFutureCount: 2
+                },
+                {
+                    scenario: 'middle event is next when earlier events are past',
+                    referenceTime: new Date(2025, 0, 7, 12, 0),  // Jan 7, noon (after Jan 6 dinner)
+                    events: [
+                        { id: 1, date: jan6 },   // Jan 6 - past
+                        { id: 2, date: jan8 },   // Jan 8 - next
+                        { id: 3, date: jan10 }   // Jan 10 - future
+                    ],
+                    expectedNextDinnerId: 2,
+                    expectedPastCount: 1,
+                    expectedFutureCount: 1
+                },
+                {
+                    scenario: 'last event is next when all others are past',
+                    referenceTime: new Date(2025, 0, 9, 12, 0),  // Jan 9, noon
+                    events: [
+                        { id: 1, date: jan6 },   // Jan 6 - past
+                        { id: 2, date: jan8 },   // Jan 8 - past
+                        { id: 3, date: jan10 }   // Jan 10 - next
+                    ],
+                    expectedNextDinnerId: 3,
+                    expectedPastCount: 2,
+                    expectedFutureCount: 0
+                },
+                {
+                    scenario: 'today event is next when before dinner ends',
+                    referenceTime: jan8DuringDinner,  // 18:30 CPH (during dinner)
+                    events: [
+                        { id: 1, date: jan6 },   // Jan 6 - past
+                        { id: 2, date: jan8 },   // Jan 8 - next (dinner ongoing)
+                        { id: 3, date: jan10 }   // Jan 10 - future
+                    ],
+                    expectedNextDinnerId: 2,
+                    expectedPastCount: 1,
+                    expectedFutureCount: 1
+                },
+                {
+                    scenario: 'tomorrow is next when today dinner has ended',
+                    referenceTime: jan8AfterDinner,  // 19:30 CPH (after dinner)
+                    events: [
+                        { id: 1, date: jan6 },   // Jan 6 - past
+                        { id: 2, date: jan8 },   // Jan 8 - past (dinner ended)
+                        { id: 3, date: jan10 }   // Jan 10 - next
+                    ],
+                    expectedNextDinnerId: 3,
+                    expectedPastCount: 2,
+                    expectedFutureCount: 0
+                }
+            ])('$scenario', ({ referenceTime, events, expectedNextDinnerId, expectedPastCount, expectedFutureCount }) => {
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+
+                // Validate structure
+                const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
+                expect(parseResult.success, parseResult.success ? '' : JSON.stringify(parseResult.error.format(), null, 2)).toBe(true)
+
+                // Verify expected values
+                expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
+                expect(result.pastDinnerDates).toHaveLength(expectedPastCount)
+                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+            })
+        })
+
+        describe('edge cases', () => {
+            it.each([
+                {
+                    scenario: 'returns null nextDinner when all events are past',
+                    referenceTime: new Date(2025, 0, 15, 12, 0),  // Jan 15
+                    events: [
+                        { id: 1, date: new Date(2025, 0, 6, 18, 0) },
+                        { id: 2, date: new Date(2025, 0, 8, 18, 0) }
+                    ],
+                    expectedPastCount: 2,
+                    expectedFutureCount: 0
+                },
+                {
+                    scenario: 'handles empty events array',
+                    referenceTime: new Date(2025, 0, 8, 12, 0),
+                    events: [],
+                    expectedPastCount: 0,
+                    expectedFutureCount: 0
+                },
+                {
+                    scenario: 'matches events by same day, ignoring time component',
+                    referenceTime: new Date(2025, 0, 7, 12, 0),  // Jan 7
+                    events: [
+                        { id: 1, date: new Date(2025, 0, 6, 12, 30) },  // Jan 6 at noon
+                        { id: 2, date: new Date(2025, 0, 8, 9, 0) }      // Jan 8 at 9am
+                    ],
+                    expectedPastCount: 1,
+                    expectedFutureCount: 0
+                }
+            ])('$scenario', ({ referenceTime, events, expectedPastCount, expectedFutureCount }) => {
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+
+                expect(result.nextDinner?.id).toBe(events.length > 0 && expectedPastCount < events.length ? events[expectedPastCount]?.id : undefined)
+                expect(result.pastDinnerDates).toHaveLength(expectedPastCount)
+                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+            })
+        })
+
+        describe('with maxDaysAhead parameter', () => {
+            it.each([
+                {
+                    scenario: 'filters future events beyond maxDaysAhead',
+                    referenceTime: new Date(2025, 5, 15, 12, 0),  // June 15, 2025 noon
+                    events: [
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - next
                         { id: 2, date: new Date(2025, 5, 25, 18, 0) },  // +10 days - within window
                         { id: 3, date: new Date(2025, 6, 20, 18, 0) }   // +35 days - outside 30-day window
                     ],
-                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
                     maxDaysAhead: 30,
-                    expectedFutureCount: 1  // Only event id=2 (id=1 is nextDinner)
+                    expectedNextDinnerId: 1,
+                    expectedFutureCount: 1  // Only event id=2 (id=1 is nextDinner, id=3 outside window)
                 },
                 {
                     scenario: 'includes all future events when maxDaysAhead is undefined',
+                    referenceTime: new Date(2025, 5, 15, 12, 0),
                     events: [
                         { id: 1, date: new Date(2025, 5, 20, 18, 0) },
                         { id: 2, date: new Date(2025, 11, 20, 18, 0) }  // +6 months
                     ],
-                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
                     maxDaysAhead: undefined,
+                    expectedNextDinnerId: 1,
                     expectedFutureCount: 1  // Event id=2
                 },
                 {
                     scenario: 'includes events at boundary end of day',
+                    referenceTime: new Date(2025, 5, 15, 12, 0),
                     events: [
-                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - next
                         { id: 2, date: new Date(2025, 5, 25, 18, 0) }   // +10 days - at boundary
                     ],
-                    nextDinnerDateRange: { start: new Date(2025, 5, 20, 18, 0), end: new Date(2025, 5, 20, 19, 0) },
                     maxDaysAhead: 10,
+                    expectedNextDinnerId: 1,
                     expectedFutureCount: 1  // Event id=2 is within window (end of day 10)
                 },
                 {
-                    scenario: 'works with null nextDinnerDateRange',
+                    scenario: 'all events past means no next dinner',
+                    referenceTime: new Date(2025, 6, 25, 12, 0),  // July 25, after all events
                     events: [
-                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },  // +5 days - within window
-                        { id: 2, date: new Date(2025, 6, 20, 18, 0) }   // +35 days - outside window
+                        { id: 1, date: new Date(2025, 5, 20, 18, 0) },
+                        { id: 2, date: new Date(2025, 6, 20, 18, 0) }
                     ],
-                    nextDinnerDateRange: null,
                     maxDaysAhead: 30,
-                    expectedFutureCount: 1  // Only event id=1
+                    expectedNextDinnerId: undefined,
+                    expectedFutureCount: 0
                 }
-            ])('$scenario', ({ events, nextDinnerDateRange, maxDaysAhead, expectedFutureCount }) => {
-                const result = splitDinnerEvents(events, nextDinnerDateRange, maxDaysAhead)
+            ])('$scenario', ({ referenceTime, events, maxDaysAhead, expectedNextDinnerId, expectedFutureCount }) => {
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, maxDaysAhead, referenceTime)
+                expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
                 expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+            })
+        })
+
+        describe('nextDinnerDateRange computation', () => {
+            // Expected outputs use Copenhagen time (what getDinnerTimeRange returns)
+            const jan8 = new Date(2025, 0, 8)
+            const jan8DinnerStart = createDateInTimezone(jan8, dinnerStartHour)
+            const jan8DinnerEnd = createDateInTimezone(jan8, dinnerStartHour + 1)
+
+            // Reference times: use local for "not today" cases, Copenhagen for "during dinner"
+            const jan7Noon = new Date(2025, 0, 7, 12, 0)          // Day before - local OK
+            const jan8DuringDinner = createDateInTimezone(jan8, 18, 30)  // 18:30 CPH - must be Copenhagen
+            const jan10Noon = new Date(2025, 0, 10, 12, 0)        // Day after - local OK
+
+            it.each([
+                {
+                    scenario: 'computes correct time range for next dinner',
+                    referenceTime: jan7Noon,
+                    events: [{ id: 1, date: jan8 }],
+                    expectedStart: jan8DinnerStart,
+                    expectedEnd: jan8DinnerEnd
+                },
+                {
+                    scenario: 'uses today dinner range when during dinner',
+                    referenceTime: jan8DuringDinner,
+                    events: [{ id: 1, date: jan8 }],
+                    expectedStart: jan8DinnerStart,
+                    expectedEnd: jan8DinnerEnd
+                },
+                {
+                    scenario: 'returns null range when no future events',
+                    referenceTime: jan10Noon,
+                    events: [{ id: 1, date: jan8 }],
+                    expectedStart: null,
+                    expectedEnd: null
+                }
+            ])('$scenario', ({ referenceTime, events, expectedStart, expectedEnd }) => {
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+
+                if (expectedStart === null) {
+                    expect(result.nextDinnerDateRange).toBeNull()
+                } else {
+                    expect(result.nextDinnerDateRange?.start).toEqual(expectedStart)
+                    expect(result.nextDinnerDateRange?.end).toEqual(expectedEnd)
+                }
             })
         })
     })
@@ -1292,58 +1366,86 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('getNextDinnerDate', () => {
+        const dinnerStartHour = 18
+        const dinnerDurationMinutes = 60
+
         it('should find next dinner when there are future dates', () => {
-            // GIVEN: Dinner dates with mix of past and future
-            const futureDate = new Date(2030, 10, 17)  // Nov 17, 2030 (future)
+            const futureDate = new Date(2030, 10, 17)
             const dinnerDates = [
-                new Date(2020, 10, 3),  // Nov 3, 2020 (past)
+                new Date(2020, 10, 3),
                 futureDate
             ]
-            const dinnerStartHour = 18
 
-            // WHEN: Getting next dinner
-            const getNext = getNextDinnerDate(60)
-            const result = getNext(dinnerDates, dinnerStartHour)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
 
-            // THEN: Should return the next future date with Copenhagen timezone-aware time
             expect(result).not.toBeNull()
             expect(result?.start).toEqual(createDateInTimezone(futureDate, dinnerStartHour))
         })
 
         it('should return null when all dates are in the past', () => {
-            // GIVEN: Only past dinner dates
             const dinnerDates = [
                 new Date(2020, 0, 1, 18, 0),
                 new Date(2020, 0, 3, 18, 0)
             ]
-            const dinnerStartHour = 18
 
-            // WHEN: Getting next dinner
-            const getNext = getNextDinnerDate(60)
-            const result = getNext(dinnerDates, dinnerStartHour)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
 
-            // THEN: Should return null
             expect(result).toBeNull()
         })
 
-        describe('timezone handling for Heynabo integration (ADR-013)', () => {
-            // Verifies dinner times are correctly represented when converted to ISO strings
-            // 18:00 Copenhagen should be 17:00 UTC (winter) or 16:00 UTC (summer)
+        describe('dinner time boundary cases', () => {
+            // Test strategy for timezone independence:
+            // - dinnerDates: local dates (as created by computeCookingDates)
+            // - referenceTime: Copenhagen times (test specific Copenhagen clock times)
+            // - expected: Copenhagen times (what the function returns)
+            //
+            // This ensures tests verify "at 18:57 Copenhagen" behavior regardless of test TZ
 
+            const jan15 = new Date(2026, 0, 15)
+            const jan19 = new Date(2026, 0, 19)
+
+            // Dinner dates - local midnight (how computeCookingDates creates them)
+            const todayDate = new Date(2026, 0, 15)
+            const nextDate = new Date(2026, 0, 19)
+
+            // Expected outputs - Copenhagen dinner times
+            const todayDinnerStart = createDateInTimezone(jan15, dinnerStartHour)
+            const nextDinnerStart = createDateInTimezone(jan19, dinnerStartHour)
+
+            // Reference times - Copenhagen times (absolute moments for "18:57 CPH" etc.)
+            const duringDinner = createDateInTimezone(jan15, 18, 57)  // 18:57 CPH
+            const afterDinner = createDateInTimezone(jan15, 19, 7)    // 19:07 CPH
+            const lateNight = createDateInTimezone(jan15, 23, 59)     // 23:59 CPH
+
+            it.each([
+                // 18:57 CPH is before 19:00 CPH dinner end → today's dinner
+                {scenario: 'during dinner (18:57 CPH)', refTime: duringDinner, dates: [todayDate, nextDate], expected: todayDinnerStart},
+                // 19:07 CPH is after 19:00 CPH dinner end → next dinner
+                {scenario: 'after dinner (19:07 CPH)', refTime: afterDinner, dates: [todayDate, nextDate], expected: nextDinnerStart},
+                // Late night → next dinner
+                {scenario: 'late night (23:59 CPH)', refTime: lateNight, dates: [todayDate, nextDate], expected: nextDinnerStart},
+            ])('$scenario should return correct dinner', ({refTime, dates, expected}) => {
+                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dates, refTime)
+
+                expect(result).not.toBeNull()
+                expect(result?.start).toEqual(expected)
+            })
+        })
+
+        describe('timezone handling for Heynabo integration (ADR-013)', () => {
             it.each([
                 {
                     scenario: 'winter (CET, UTC+1)',
-                    dinnerDate: new Date(2030, 0, 15), // Jan 15, 2030 (future)
-                    expectedUtcHour: 17 // 18:00 Copenhagen = 17:00 UTC
+                    dinnerDate: new Date(2030, 0, 15),
+                    expectedUtcHour: 17
                 },
                 {
                     scenario: 'summer (CEST, UTC+2)',
-                    dinnerDate: new Date(2030, 6, 15), // July 15, 2030 (future)
-                    expectedUtcHour: 16 // 18:00 Copenhagen = 16:00 UTC
+                    dinnerDate: new Date(2030, 6, 15),
+                    expectedUtcHour: 16
                 }
             ])('$scenario: 18:00 Copenhagen → $expectedUtcHour:00 UTC', ({ dinnerDate, expectedUtcHour }) => {
-                const getNext = getNextDinnerDate(60)
-                const result = getNext([dinnerDate], 18)
+                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate])
 
                 expect(result).not.toBeNull()
                 expect(result!.start.getUTCHours()).toBe(expectedUtcHour)

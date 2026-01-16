@@ -5,6 +5,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
     const {OrderDisplaySchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
     const requestFetch = useRequestFetch()
@@ -182,7 +183,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Lock Status (reactive, watches planStore)
     // ========================================
     const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
-    const {deadlinesForSeason, splitDinnerEvents, getNextDinnerDate, getDefaultDinnerStartTime} = useSeason()
+    const {deadlinesForSeason, splitDinnerEvents} = useSeason()
     const planStore = usePlanStore()
 
     // Released counts fetch (internal)
@@ -212,9 +213,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents?.length) return
 
-        const dinnerDates = season.dinnerEvents.map(e => e.date)
-        const nextDinnerRange = getNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
-        const {nextDinner, futureDinnerDates} = splitDinnerEvents(season.dinnerEvents, nextDinnerRange)
+        const {nextDinner, futureDinnerDates} = splitDinnerEvents(season.dinnerEvents)
         const futureDinners = season.dinnerEvents.filter(e => futureDinnerDates.some(d => d.getTime() === e.date.getTime()))
         const deadlines = deadlinesForSeason(season)
 
@@ -259,7 +258,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isProcessingBookings.value = true
         try {
             const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders })
-            console.info(CTX, `processSingleEventBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
+            console.info(CTX, `processSingleEventBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke gemme bookinger')
@@ -281,7 +280,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isProcessingBookings.value = true
         try {
             const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders })
-            console.info(CTX, `processMultipleEventsBookings: created=${result.scaffoldResult.created}, deleted=${result.scaffoldResult.deleted}, released=${result.scaffoldResult.released}`)
+            console.info(CTX, `processMultipleEventsBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke gemme bookinger')

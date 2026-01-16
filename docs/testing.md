@@ -363,6 +363,28 @@ await page.locator('text=TestSeason').first().click()
 
 ---
 
+## Temporal Testing (Timezone Independence)
+
+Tests must pass in both Copenhagen and UTC (CI runs in UTC).
+
+```typescript
+// ❌ WRONG: Local time differs by timezone
+const duringDinner = new Date(2025, 0, 8, 18, 30)  // 18:30 CPH ≠ 18:30 UTC
+
+// ✅ CORRECT: Use createDateInTimezone for Copenhagen-specific moments
+const duringDinner = createDateInTimezone(jan8, 18, 30)  // Always 18:30 CPH
+```
+
+**Rule:** Use `createDateInTimezone()` for reference times testing dinner boundaries and expected outputs. Use plain `new Date()` for input data (dinner dates).
+
+```bash
+# Always verify both timezones
+npx vitest run tests/component/utils/season.unit.spec.ts
+TZ=UTC npx vitest run tests/component/utils/season.unit.spec.ts
+```
+
+---
+
 ## Commands
 
 ```bash

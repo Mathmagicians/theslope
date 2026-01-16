@@ -19,7 +19,7 @@ const props = defineProps<Props>()
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {formatScaffoldResult} = useBooking()
+const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 const {handleApiError} = useApiHandler()
 const {ICONS, COLOR} = useTheSlopeDesignSystem()
 const toast = useToast()
@@ -151,7 +151,7 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
     desiredOrders
   )
   toast.add({
-    title: 'Bookinger gemt',
+    title: BOOKING_TOAST_TITLES.grid,
     description: formatScaffoldResult(result.scaffoldResult, 'compact'),
     color: 'success'
   })
@@ -169,37 +169,27 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   )
 }
 
-// Grid view guest booking - receives DesiredOrder[] and action from GuestBookingForm
-const handleAddGuest = async (guestOrders: DesiredOrder[], action: 'process' | 'claim') => {
+// Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)
+const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   if (guestOrders.length === 0) return
 
   const eventId = guestOrders[0]?.dinnerEventId
   if (!eventId) return
 
   const event = dinnerEvents.value.find(e => e.id === eventId)
-  const count = guestOrders.length
   const dateStr = event ? formatDate(new Date(event.date)) : ''
 
   try {
-    await bookingsStore.processSingleEventBookings(
+    const result = await bookingsStore.processSingleEventBookings(
       household.value.id,
       eventId,
       guestOrders
     )
-    // Differentiate toast based on action
-    if (action === 'claim') {
-      toast.add({
-        title: 'Billet overtaget',
-        description: `${count} billet${count > 1 ? 'ter' : ''} overtaget d. ${dateStr}`,
-        color: 'info'
-      })
-    } else {
-      toast.add({
-        title: 'Du får gæster til middag',
-        description: `${count} gæst${count > 1 ? 'er' : ''} tilføjet d. ${dateStr}`,
-        color: 'success'
-      })
-    }
+    toast.add({
+      title: BOOKING_TOAST_TITLES.guest,
+      description: `${formatScaffoldResult(result.scaffoldResult)} d. ${dateStr}`,
+      color: 'success'
+    })
   } catch (e) {
     handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
   }

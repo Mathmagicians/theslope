@@ -83,6 +83,7 @@ export const getNewOrderAction = (
  * - orderId + RELEASED + eating mode → update (state: BOOKED, reclaim own)
  * - orderId + eating mode + unchanged → idempotent (state: BOOKED)
  * - orderId + eating mode + changed → update (state: BOOKED)
+ * - orderId + price mismatch (any state) → update (price healing)
  */
 export const decideOrderAction = (
     input: OrderDecisionInput,
@@ -107,19 +108,27 @@ export const decideOrderAction = (
         throw new Error(`Order ${desired.orderId} not found in existing orders`)
     }
 
+    // Universal price check - runs BEFORE state-specific logic to ensure price healing
+    // This catches price mismatches on ALL existing orders (BOOKED, RELEASED, any mode)
+    const priceChanged = existing.ticketPriceId !== desired.ticketPriceId
+
     // NONE mode = cancellation
     if (isNone) {
         if (beforeCancellationDeadline) {
             return { bucket: 'delete', order: desired }
         }
-        // After deadline: release BOOKED orders, idempotent for already-RELEASED
+        // After deadline: release BOOKED orders, update RELEASED if price needs correction
         if (existing.state === OrderState.RELEASED) {
+            if (priceChanged) {
+                return { bucket: 'update', order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
+            }
             return { bucket: 'idempotent', order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
         }
         return { bucket: 'update', order: { ...desired, state: OrderState.RELEASED } }
     }
 
     // Reclaim: existing RELEASED + eating mode → update back to BOOKED
+    // Price change is handled by scaffolder since desired.ticketPriceId is correct
     if (existing.state === OrderState.RELEASED) {
         return { bucket: 'update', order: { ...desired, state: OrderState.BOOKED } }
     }
@@ -127,7 +136,6 @@ export const decideOrderAction = (
     // Eating mode on BOOKED order - check if changed
     const effectiveMode = canEditMode ? desired.dinnerMode : existing.dinnerMode
     const modeChanged = existing.dinnerMode !== effectiveMode
-    const priceChanged = existing.ticketPriceId !== desired.ticketPriceId
 
     if (modeChanged || priceChanged) {
         return { bucket: 'update', order: { ...desired, dinnerMode: effectiveMode, state: OrderState.BOOKED } }
@@ -576,8 +584,7 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
  */
 export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
-    // getNextDinnerDate is pre-configured with dinner duration
-    const {getDefaultDinnerStartTime, getNextDinnerDate} = useSeason()
+    const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
     const DinnerState = DinnerStateSchema.enum
@@ -805,9 +812,7 @@ export const useBooking = () => {
 
         const description = lines.join('<br>')
 
-        // Use pre-configured getNextDinnerDate (duration already baked in from useSeason)
-        // Same pattern as DinnerCalendarDisplay line 73
-        const dinnerTimeRange = getNextDinnerDate([dinnerEvent.date], getDefaultDinnerStartTime())!
+        const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), getDefaultDinnerDuration())
 
         return {
             name: `Fællesspisning - ${dinnerEvent.menuTitle}`,
@@ -860,10 +865,7 @@ export const useBooking = () => {
     const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[]): number[] => {
         if (pendingDinners.length === 0) return []
 
-        const {splitDinnerEvents} = useSeason()
-        const dinnerDates = pendingDinners.map(d => d.date)
-        const nextDinnerRange = getNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
-        const {pastDinnerDates} = splitDinnerEvents(pendingDinners, nextDinnerRange)
+        const {pastDinnerDates} = splitDinnerEvents(pendingDinners)
 
         return pendingDinners
             .filter(d => pastDinnerDates.some(pd => pd.getTime() === d.date.getTime()))
@@ -916,14 +918,24 @@ export const useBooking = () => {
     }
 
     /**
-     * Group guest orders by (booker, ticketType, dinnerEventId)
+     * Group guest orders by (booker, ticketType, dinnerEventId, allergies, provenance)
      * Returns a map from group key to array of orders
+     *
+     * Guests with different allergies or claimed tickets (provenanceHousehold) are separate rows.
      */
-    const groupGuestOrders = <T extends { inhabitantId: number | null, ticketType?: string | null, dinnerEventId: number }>(
+    const groupGuestOrders = <T extends {
+        inhabitantId: number | null
+        ticketType?: string | null
+        dinnerEventId: number
+        provenanceHousehold?: string | null
+        provenanceAllergies?: string[] | null
+    }>(
         orders: T[]
     ): Record<string, T[]> => {
         return orders.reduce((acc, order) => {
-            const key = `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}`
+            const allergiesKey = order.provenanceAllergies?.slice().sort().join(',') ?? ''
+            const provenanceKey = order.provenanceHousehold ?? ''
+            const key = `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
             if (!acc[key]) acc[key] = []
             acc[key].push(order)
             return acc
@@ -1003,9 +1015,26 @@ export const useBooking = () => {
         // No order - use shared decision logic
         const action = getNewOrderAction(canModifyOrders, hasReleasedTickets)
         if (action === 'process') return { enabledModes: ALL_MODES, action }
-        if (action === 'claim') return { enabledModes: [DinnerModeEnum.DINEIN], action }
+        if (action === 'claim') {
+            // Claims respect canEditDiningMode, but exclude NONE (can't claim and immediately release)
+            const EATING_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
+            return canEditDiningMode
+                ? { enabledModes: EATING_MODES, action }
+                : { enabledModes: [DinnerModeEnum.DINEIN], action }
+        }
         return { enabledModes: [], action: null }
     }
+
+    // ============================================================================
+    // Booking Toast Titles - Consistent UX across pages
+    // ============================================================================
+
+    const BOOKING_TOAST_TITLES = {
+        guest: 'Du får gæster til middag',
+        booking: 'Booking gemt',
+        grid: 'Bookinger gemt',
+        powerMode: 'Bookinger opdateret for hele husstanden'
+    } as const
 
     // ============================================================================
     // Scaffold Result Formatting - Consistent display across UI and logs
@@ -1015,8 +1044,10 @@ export const useBooking = () => {
         { key: 'created', symbol: '+', label: 'oprettet' },
         { key: 'deleted', symbol: '-', label: 'slettet' },
         { key: 'released', symbol: '~', label: 'frigivet' },
+        { key: 'claimed', symbol: '⬅', label: 'købt fra andre' },
+        { key: 'claimRejected', symbol: '✗', label: 'køb fra andre afvist' },
         { key: 'priceUpdated', symbol: '$', label: 'pris opdateret' },
-        { key: 'modeUpdated', symbol: 'm', label: 'mode opdateret' },
+        { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret' },
         { key: 'unchanged', symbol: '=', label: 'uændret' },
         { key: 'errored', symbol: '!', label: 'fejlet' },
     ] as const
@@ -1030,7 +1061,7 @@ export const useBooking = () => {
      * Only includes non-zero counts for cleaner output
      */
     const formatScaffoldResult = (
-        result: Pick<ScaffoldResult, 'created' | 'deleted' | 'released' | 'priceUpdated' | 'modeUpdated' | 'unchanged' | 'errored'>,
+        result: ScaffoldResult,
         format: ScaffoldResultFormat = 'verbose'
     ): string => {
         const parts = SCAFFOLD_FIELDS
@@ -1192,6 +1223,8 @@ export const useBooking = () => {
         getLockedFutureDinnerIds,
         computeLockStatus,
         // Booking Options (UI counterpart to decideOrderAction)
-        getBookingOptions
+        getBookingOptions,
+        // Toast Titles
+        BOOKING_TOAST_TITLES
     }
 }
