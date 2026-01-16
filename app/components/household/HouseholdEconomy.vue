@@ -11,6 +11,7 @@
  * Data: GET /api/billing?householdId=X + orders from bookingsStore + dinnerEvents from planStore
  */
 import {formatDate} from '~/utils/date'
+import {getPaginationRowModel} from '@tanstack/vue-table'
 import type {HouseholdBillingResponse, TransactionDisplay} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 
@@ -22,9 +23,10 @@ const props = defineProps<Props>()
 
 // Composables
 const {formatPrice} = useTicket()
-const {groupByCostEntry, joinOrdersWithDinnerEvents} = useBilling()
+const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod} = useBilling()
 const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
+const {HouseholdBillingResponseSchema} = useBillingValidation()
 
 // Stores for dinner events (for date/menu info)
 const planStore = usePlanStore()
@@ -47,7 +49,10 @@ const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
 const {data: billing, status, error} = useAsyncData<HouseholdBillingResponse | null>(
     `billing-${props.household.id}`,
     () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: props.household.id}}),
-    {default: () => null}
+    {
+        default: () => null,
+        transform: (data) => data ? HouseholdBillingResponseSchema.parse(data) : null
+    }
 )
 
 const isLoading = computed(() => status.value === 'pending')
@@ -155,10 +160,62 @@ const columns = {
     ]
 }
 
+// Search/filter state
+const searchQuery = ref('')
+const sortDescending = ref(false)
+
+// Pagination state
+const pagination = ref({pageIndex: 0, pageSize: 5})
+
+// Table refs for pagination control
+const upcomingTable = useTemplateRef('upcomingTable')
+const currentTable = useTemplateRef('currentTable')
+const invoiceTable = useTemplateRef('invoiceTable')
+
+// Filter upcoming orders by menu title or inhabitant name
+const filteredUpcomingData = computed(() => {
+    let result = upcomingOrdersData.value
+    if (searchQuery.value) {
+        const query = searchQuery.value.toLowerCase()
+        result = result.filter(group =>
+            group.menuTitle.toLowerCase().includes(query) ||
+            group.items.some(item => item.inhabitant.name.toLowerCase().includes(query))
+        )
+    }
+    if (sortDescending.value) {
+        result = [...result].reverse()
+    }
+    return result
+})
+
+// Filter current period by menu title or inhabitant name
+const filteredCurrentData = computed(() => {
+    let result = currentPeriodData.value
+    if (searchQuery.value) {
+        const query = searchQuery.value.toLowerCase()
+        result = result.filter(group =>
+            group.menuTitle.toLowerCase().includes(query) ||
+            group.items.some(item => item.inhabitant.name.toLowerCase().includes(query))
+        )
+    }
+    if (sortDescending.value) {
+        result = [...result].reverse()
+    }
+    return result
+})
+
 // Totals
 const upcomingTotal = computed(() =>
-    upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
+    filteredUpcomingData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
+
+// Upcoming period starts after current billing period
+const upcomingPeriodStart = computed(() => {
+    const currentPeriod = calculateCurrentBillingPeriod()
+    const startDate = new Date(currentPeriod.end)
+    startDate.setDate(startDate.getDate() + 1)
+    return startDate
+})
 </script>
 
 <template>
@@ -172,7 +229,10 @@ const upcomingTotal = computed(() =>
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize"/>
-            <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
+            <div>
+              <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDate(upcomingPeriodStart) }} → ...</p>
+            </div>
           </div>
         </template>
 
@@ -199,18 +259,20 @@ const upcomingTotal = computed(() =>
           <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
-            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
-              <EconomyCostLine
-                  v-for="order in row.original.items"
-                  :key="order.id"
-                  :inhabitant-name="order.inhabitant.name"
-                  :ticket-type="order.ticketType"
-                  :amount="order.priceAtBooking"
-                  :order-id="order.id"
-                  :history-order-id="historyOrderId"
-                  @toggle-history="toggleHistory"
-              />
-            </div>
+            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
+              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+                <CostLine
+                    v-for="order in row.original.items"
+                    :key="order.id"
+                    :inhabitant-name="order.inhabitant.name"
+                    :ticket-type="order.ticketType"
+                    :amount="order.priceAtBooking"
+                    :order-id="order.id"
+                    :history-order-id="historyOrderId"
+                    @toggle-history="toggleHistory"
+                />
+              </div>
+            </UCard>
           </template>
           <template #empty>
             <UAlert
@@ -239,8 +301,7 @@ const upcomingTotal = computed(() =>
             <div>
               <h3 :class="TYPOGRAPHY.cardTitle">Aktuel periode</h3>
               <p :class="TYPOGRAPHY.bodyTextMuted">
-                {{ formatDate(billing.currentPeriod.periodStart) }} -
-                {{ formatDate(billing.currentPeriod.periodEnd) }}
+                {{ formatDate(billing.currentPeriod.periodStart) }} - {{ formatDate(billing.currentPeriod.periodEnd) }}
               </p>
             </div>
           </div>
@@ -268,18 +329,20 @@ const upcomingTotal = computed(() =>
           <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
-            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
-              <EconomyCostLine
-                  v-for="tx in row.original.items"
-                  :key="tx.id"
-                  :inhabitant-name="tx.inhabitant.name"
-                  :ticket-type="tx.ticketType"
-                  :amount="tx.amount"
-                  :order-id="tx.orderId"
-                  :history-order-id="historyOrderId"
-                  @toggle-history="toggleHistory"
-              />
-            </div>
+            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
+              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+                <CostLine
+                    v-for="tx in row.original.items"
+                    :key="tx.id"
+                    :inhabitant-name="tx.inhabitant.name"
+                    :ticket-type="tx.ticketType"
+                    :amount="tx.amount"
+                    :order-id="tx.orderId"
+                    :history-order-id="historyOrderId"
+                    @toggle-history="toggleHistory"
+                />
+              </div>
+            </UCard>
           </template>
         </UTable>
         <p v-else :class="[TYPOGRAPHY.bodyTextMuted, 'py-4']">Ingen transaktioner i denne periode</p>
@@ -321,27 +384,29 @@ const upcomingTotal = computed(() =>
           </template>
           <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
           <template #expanded="{ row }">
-            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
-              <EconomyCostEntry
-                  v-for="group in row.original.groups"
-                  :key="group.dinnerEventId"
-                  :entry="group"
-              >
-                <template #items="{ items }">
-                  <EconomyCostLine
-                      v-for="tx in items"
-                      :key="tx.id"
-                      :inhabitant-name="tx.inhabitant.name"
-                      :ticket-type="tx.ticketType"
-                      :amount="tx.amount"
-                      :order-id="tx.orderId"
-                      :history-order-id="historyOrderId"
-                      compact
-                      @toggle-history="toggleHistory"
-                  />
-                </template>
-              </EconomyCostEntry>
-            </div>
+            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
+              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+                <CostEntry
+                    v-for="group in row.original.groups"
+                    :key="group.dinnerEventId"
+                    :entry="group"
+                >
+                  <template #items="{ items }">
+                    <CostLine
+                        v-for="tx in items"
+                        :key="tx.id"
+                        :inhabitant-name="tx.inhabitant.name"
+                        :ticket-type="tx.ticketType"
+                        :amount="tx.amount"
+                        :order-id="tx.orderId"
+                        :history-order-id="historyOrderId"
+                        compact
+                        @toggle-history="toggleHistory"
+                    />
+                  </template>
+                </CostEntry>
+              </div>
+            </UCard>
           </template>
         </UTable>
       </UCard>

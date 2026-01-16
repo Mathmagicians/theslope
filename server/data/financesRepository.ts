@@ -4,7 +4,6 @@ import {getPrismaClientConnection} from "../utils/database"
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 
 import type {
-    OrderCreate,
     OrderDisplay,
     OrderDetail,
     OrderCreateWithPrice,
@@ -159,48 +158,10 @@ export async function fetchUserCancellationKeys(
 // - Weak to User (bookedByUser) - order can exist if user is deleted (audit trail)
 // - Weak to Transaction (order can exist without transaction)
 
-export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const ticketPrice = await prisma.ticketPrice.findUnique({
-            where: { id: orderData.ticketPriceId }
-        })
-
-        if (!ticketPrice) {
-            throw createError({
-                statusCode: 404,
-                message: `Ticket price with ID ${orderData.ticketPriceId} not found`
-            })
-        }
-
-        const newOrder = await prisma.order.create({
-            data: {
-                ...orderData,
-                priceAtBooking: ticketPrice.price
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
-
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const domainOrder = {
-            ...newOrder,
-            ticketType: ticketPrice.ticketType
-        }
-
-        return OrderDisplaySchema.parse(domainOrder)
-    } catch (error) {
-        return throwH3Error(`️🎟️ > ORDER > [CREATE]: Error creating order for inhabitant ${orderData.inhabitantId}`, error)
-    }
-}
-
 /**
- * Batch create orders for a single household with audit trail.
+ * Create order(s) for a household with audit trail.
+ * Accepts single order or array (normalized internally, same pattern as deleteOrder).
  *
- * Trusts caller for validation (OrdersBatchSchema ensures same householdId, max 8 orders).
  * Uses createManyAndReturn for efficient D1 insertion.
  *
  * ADR-009: Returns IDs only (DB is source of truth)
@@ -208,22 +169,26 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
  *
  * @param d1Client - D1 database client
  * @param householdId - Household ID (for result tracking)
- * @param ordersData - Pre-validated array of orders (max 8, same householdId)
+ * @param ordersData - Single order or array of orders
  * @param auditContext - Audit context for OrderHistory entries
  * @returns CreateOrdersResult with householdId and created order IDs
  */
 export async function createOrders(
     d1Client: D1Database,
     householdId: number,
-    ordersData: OrderCreateWithPrice[],
+    ordersData: OrderCreateWithPrice | OrderCreateWithPrice[],
     auditContext: AuditContext
 ): Promise<CreateOrdersResult> {
-    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household ${householdId}`)
+    // Normalize to array (same pattern as deleteOrder)
+    const orders = [ordersData].flat()
+    if (orders.length === 0) return { householdId, createdIds: [] }
+
+    console.info(`🎟️ > ORDER > [CREATE] Creating ${orders.length} order(s) for household ${householdId}`)
     const {OrderCreateWithPriceSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     // Parse through schema to apply defaults (e.g., isGuestTicket: false)
-    const validatedOrders = ordersData.map(order => OrderCreateWithPriceSchema.parse(order))
+    const validatedOrders = orders.map(order => OrderCreateWithPriceSchema.parse(order))
 
     try {
         // Insert orders with createManyAndReturn (Prisma 5.14+, returns IDs)
@@ -1242,10 +1207,11 @@ export async function updateDinnersToConsumed(
 /**
  * Fetch all orders with closable states on CONSUMED dinners in active season.
  * Uses CLOSABLE_ORDER_STATES from useBooking for state filtering.
+ * Returns fields needed for audit trail (ADR-011).
  */
 export async function fetchPendingOrdersOnConsumedDinners(
     d1Client: D1Database
-): Promise<{id: number}[]> {
+): Promise<{id: number, inhabitantId: number, dinnerEventId: number, seasonId: number}[]> {
     const {DinnerStateSchema} = useBookingValidation()
     const {CLOSABLE_ORDER_STATES} = useBooking()
     const activeSeasonId = await fetchActiveSeasonId(d1Client)
@@ -1255,7 +1221,7 @@ export async function fetchPendingOrdersOnConsumedDinners(
     }
 
     const prisma = await getPrismaClientConnection(d1Client)
-    return prisma.order.findMany({
+    const orders = await prisma.order.findMany({
         where: {
             state: {in: [...CLOSABLE_ORDER_STATES]},
             dinnerEvent: {
@@ -1263,40 +1229,11 @@ export async function fetchPendingOrdersOnConsumedDinners(
                 state: DinnerStateSchema.enum.CONSUMED
             }
         },
-        select: {id: true}
-    })
-}
-
-/**
- * Update orders to a target state with appropriate timestamp in batch.
- * - CLOSED: sets closedAt
- * - RELEASED: sets releasedAt
- */
-export async function updateOrdersToState(
-    d1Client: D1Database,
-    orderIds: number[],
-    targetState: OrderState
-): Promise<number> {
-    if (orderIds.length === 0) return 0
-
-    const {OrderStateSchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-    const now = new Date()
-
-    // Set appropriate timestamp based on target state
-    const data: { state: OrderState, closedAt?: Date, releasedAt?: Date } = { state: targetState }
-    if (targetState === OrderStateSchema.enum.CLOSED) {
-        data.closedAt = now
-    } else if (targetState === OrderStateSchema.enum.RELEASED) {
-        data.releasedAt = now
-    }
-
-    const result = await prisma.order.updateMany({
-        where: { id: { in: orderIds } },
-        data
+        select: {id: true, inhabitantId: true, dinnerEventId: true}
     })
 
-    return result.count
+    // Add seasonId (we already know it's the active season)
+    return orders.map(o => ({...o, seasonId: activeSeasonId}))
 }
 
 /**
@@ -1334,8 +1271,12 @@ export const getOrderUpdateSignature = (update: OrderBatchUpdate): string =>
 
 /**
  * Build update data from first item in group (all items in group have same signature)
+ * Sets appropriate timestamps based on state transition:
+ * - RELEASED: sets releasedAt (when isNewRelease=true)
+ * - CLOSED: sets closedAt automatically
  */
 const buildUpdateData = (update: OrderBatchUpdate, now: Date): Record<string, unknown> => {
+    const {OrderStateSchema} = useBookingValidation()
     const data: Record<string, unknown> = {
         state: update.state,
         dinnerMode: update.dinnerMode
@@ -1346,6 +1287,9 @@ const buildUpdateData = (update: OrderBatchUpdate, now: Date): Record<string, un
     }
     if (update.isNewRelease) {
         data.releasedAt = now
+    }
+    if (update.state === OrderStateSchema.enum.CLOSED) {
+        data.closedAt = now
     }
     return data
 }

@@ -41,7 +41,7 @@ const ticketLabel = computed(() => props.ticketType ? ticketTypeConfig[props.tic
 
 <template>
   <div class="space-y-1">
-    <div class="flex justify-between items-center" :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall">
+    <div class="flex justify-between items-center max-w-sm md:max-w-md" :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall">
       <div class="flex items-center gap-2">
         <UButton
             v-if="orderId"
@@ -55,8 +55,10 @@ const ticketLabel = computed(() => props.ticketType ? ticketTypeConfig[props.tic
         />
         <span>{{ inhabitantName }} ({{ ticketLabel }})</span>
       </div>
-      <span :class="compact ? 'text-muted' : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(amount) }} kr</span>
+      <span :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(amount) }} kr</span>
     </div>
-    <OrderHistoryDisplay v-if="isHistoryExpanded" :order-id="orderId!"/>
+    <div v-if="isHistoryExpanded" class="pl-4 md:pl-8 pt-1">
+      <OrderHistoryDisplay :order-id="orderId!"/>
+    </div>
   </div>
 </template>

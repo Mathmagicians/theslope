@@ -27,15 +27,16 @@ const {TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <div class="border rounded p-2 bg-white dark:bg-neutral-800">
-    <!-- Header: Date, Menu, Total -->
-    <div v-if="showHeader" class="flex justify-between mb-1" :class="TYPOGRAPHY.bodyTextMedium">
-      <span>{{ formatDate(entry.date) }} - {{ entry.menuTitle }}</span>
-      <span>{{ formatPrice(entry.totalAmount) }} kr</span>
-    </div>
+  <UCard>
+    <template v-if="showHeader" #header>
+      <div class="flex justify-between" :class="TYPOGRAPHY.bodyTextMedium">
+        <span>{{ formatDate(entry.date) }} - {{ entry.menuTitle }}</span>
+        <span>{{ formatPrice(entry.totalAmount) }} kr</span>
+      </div>
+    </template>
 
     <!-- Items via slot (parent decides how to render each item) -->
-    <div v-if="entry.items.length > 0" class="space-y-1" :class="showHeader ? 'pl-2' : ''">
+    <div v-if="entry.items.length > 0" class="space-y-1">
       <slot name="items" :items="entry.items"/>
     </div>
 
@@ -47,7 +48,6 @@ const {TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
         variant="subtle"
         title="Tomt her!"
         description="Ingen har spist denne aften - måske var der takeaway?"
-        :class="showHeader ? 'ml-2' : ''"
     />
-  </div>
+  </UCard>
 </template>
