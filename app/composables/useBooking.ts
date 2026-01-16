@@ -253,9 +253,28 @@ export const generateDesiredOrdersFromPreferences = (
                 continue
             }
 
-            // Excluded key: skip new creation, but let existing flow through for update/release
-            if (excludedKeys.has(key) && !existing) {
-                continue
+            // Excluded key: user cancelled (USER_CANCELLED audit), respect their intent
+            // - No existing order: don't recreate deleted order
+            // - RELEASED order: preserve as-is (don't reclaim, don't delete)
+            // - BOOKED order: user re-booked after cancelling, let through (will be idempotent)
+            if (excludedKeys.has(key)) {
+                if (!existing) {
+                    continue  // Don't recreate deleted order
+                }
+                if (existing.state === OrderState.RELEASED) {
+                    // Preserve RELEASED order as-is (goes to idempotent bucket)
+                    result.push({
+                        inhabitantId: existing.inhabitantId,
+                        dinnerEventId: existing.dinnerEventId,
+                        dinnerMode: DinnerMode.NONE,
+                        ticketPriceId: existing.ticketPriceId ?? 0,
+                        isGuestTicket: false,
+                        orderId: existing.id,
+                        state: OrderState.RELEASED
+                    })
+                    continue
+                }
+                // BOOKED order: user re-booked, let through (will be idempotent)
             }
 
             // Get preference mode (default DINEIN if no preferences set)

@@ -39,7 +39,11 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+        // Use ticketIsCancellableDaysBefore: 0 so scaffold can create orders for near-future dinners
+        // Default is 10 days, but test season has dinners 1-7 days away
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+            ticketIsCancellableDaysBefore: 0
+        })
         createdSeasonIds.push(season.id!)
 
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
@@ -70,7 +74,10 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+        // Use ticketIsCancellableDaysBefore: 0 so scaffold can create orders for near-future dinners
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+            ticketIsCancellableDaysBefore: 0
+        })
         createdSeasonIds.push(season.id!)
 
         // Season uses default Mon/Wed/Fri cooking days, 7-day window has 3-4 events depending on start day

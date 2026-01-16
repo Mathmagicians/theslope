@@ -81,8 +81,8 @@ const selectedTypes = computed(() =>
   props.allergyTypes.filter(t => effectiveSelectedIds.value.includes(t.id))
 )
 
-// Get comment for a type (comments mode)
-const getComment = (typeId: number): string =>
+// Get comment for a type (comments mode) - reserved for future use
+const _getComment = (typeId: number): string =>
   props.allergies.find(a => a.allergyTypeId === typeId)?.comment || ''
 
 // Handlers - emit events, parent decides what to do

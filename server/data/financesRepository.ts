@@ -1300,6 +1300,18 @@ export async function updateOrdersToState(
 }
 
 /**
+ * Audit context for batch updates
+ * Required for creating OrderHistory entries (USER_CANCELLED, USER_BOOKED, SYSTEM_*)
+ */
+export type BatchUpdateAudit = {
+    action: OrderAuditAction
+    performedByUserId: number | null
+    inhabitantId: number
+    dinnerEventId: number
+    seasonId: number | null
+}
+
+/**
  * Batch update data for scaffold operations
  * Groups orders by their update signature (state + dinnerMode + ticketPriceId)
  */
@@ -1310,6 +1322,7 @@ export type OrderBatchUpdate = {
     ticketPriceId: number | null  // null = no change
     priceAtBooking: number | null // null = no change
     isNewRelease: boolean  // true = set releasedAt
+    audit?: BatchUpdateAudit  // Optional audit context for OrderHistory creation
 }
 
 /**
@@ -1340,6 +1353,7 @@ const buildUpdateData = (update: OrderBatchUpdate, now: Date): Record<string, un
 /**
  * Curried order batch update executor.
  * ADR-014: Groups by update signature, chunks IDs within groups to stay within D1 limits.
+ * Creates OrderHistory entries for updates with audit context (USER_CANCELLED, USER_BOOKED, etc.)
  *
  * @param chunkSize - Max IDs per updateMany call (default 90 for D1's 100 param limit minus data params)
  * @returns Async function that executes grouped batch updates
@@ -1376,6 +1390,28 @@ export const updateOrdersBatch = (chunkSize: number = 90) =>
                 })
                 totalCount += result.count
             }
+        }
+
+        // Create audit entries for updates with audit context (ADR-011)
+        const updatesWithAudit = updates.filter(u => u.audit !== undefined)
+        if (updatesWithAudit.length > 0) {
+            console.info(`${LOG} Creating ${updatesWithAudit.length} audit entries`)
+            const auditEntries = updatesWithAudit.map(u => ({
+                orderId: u.orderId,
+                action: u.audit!.action,
+                performedByUserId: u.audit!.performedByUserId,
+                inhabitantId: u.audit!.inhabitantId,
+                dinnerEventId: u.audit!.dinnerEventId,
+                seasonId: u.audit!.seasonId,
+                auditData: JSON.stringify({
+                    state: u.state,
+                    dinnerMode: u.dinnerMode,
+                    ticketPriceId: u.ticketPriceId,
+                    priceAtBooking: u.priceAtBooking
+                })
+            }))
+            // Batch create audit entries (Prisma auto-chunks for D1)
+            await prisma.orderHistory.createMany({ data: auditEntries })
         }
 
         return totalCount

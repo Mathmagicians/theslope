@@ -75,7 +75,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
     for (const id of createdHouseholdIds) {
       await HouseholdFactory.deleteHousehold(context, id).catch(() => {})
     }
-    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds).catch(() => {})
   })
 
   // ============================================================================

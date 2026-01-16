@@ -10,18 +10,29 @@ const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 
 /**
  * Determine audit action based on user vs system trigger
+ *
+ * Intent model:
+ * - USER_CANCELLED = user signals "I don't want to eat" (delete before deadline, release after)
+ * - USER_BOOKED = user books/reclaims a ticket
+ * - SYSTEM_* = automated scaffold operations
  */
 const getAuditAction = (
     isUserTriggered: boolean,
-    actionType: 'create' | 'update' | 'delete'
+    actionType: 'create' | 'update' | 'delete' | 'release'
 ): OrderAuditAction => {
     if (isUserTriggered) {
-        return actionType === 'delete' ? AuditActions.USER_CANCELLED : AuditActions.USER_BOOKED
+        // User cancellation intent (delete or release) → USER_CANCELLED
+        // User booking intent (create or reclaim) → USER_BOOKED
+        if (actionType === 'delete' || actionType === 'release') {
+            return AuditActions.USER_CANCELLED
+        }
+        return AuditActions.USER_BOOKED
     }
     switch (actionType) {
         case 'create': return AuditActions.SYSTEM_CREATED
         case 'delete': return AuditActions.SYSTEM_DELETED
         case 'update': return AuditActions.SYSTEM_UPDATED
+        case 'release': return AuditActions.SYSTEM_UPDATED
     }
 }
 
@@ -229,6 +240,16 @@ export async function scaffoldPrebookings(
                 const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
                 const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
 
+                // Determine audit action: release → USER_CANCELLED (or SYSTEM_UPDATED), other → USER_BOOKED (or SYSTEM_UPDATED)
+                const auditAction = getAuditAction(isUserTriggered, isNewRelease ? 'release' : 'update')
+                const audit = {
+                    action: auditAction,
+                    performedByUserId: options.userId ?? null,
+                    inhabitantId: incoming.inhabitantId,
+                    dinnerEventId: incoming.dinnerEventId,
+                    seasonId: season.id ?? null
+                }
+
                 if (isPriceChange) {
                     const newTicketPrice = ticketPriceById.get(incoming.ticketPriceId)
                     if (!newTicketPrice) {
@@ -241,7 +262,8 @@ export async function scaffoldPrebookings(
                         dinnerMode: incoming.dinnerMode,
                         ticketPriceId: incoming.ticketPriceId,
                         priceAtBooking: newTicketPrice.price,
-                        isNewRelease
+                        isNewRelease,
+                        audit
                     })
                 } else {
                     if (isNewRelease) householdReleased++
@@ -252,7 +274,8 @@ export async function scaffoldPrebookings(
                         dinnerMode: incoming.dinnerMode,
                         ticketPriceId: null,
                         priceAtBooking: null,
-                        isNewRelease
+                        isNewRelease,
+                        audit
                     })
                 }
             }

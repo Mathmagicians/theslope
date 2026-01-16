@@ -255,6 +255,24 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
+    // CostEntry/CostLine Schemas (Economy views)
+    // ============================================================================
+
+    /**
+     * CostEntry - grouped items by dinner event for economy display
+     * Used for both Transactions (billing) and Orders (live bookings)
+     * T must have ticketType for ticket count formatting
+     */
+    const CostEntrySchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
+        dinnerEventId: z.number().int(),
+        date: z.coerce.date(),
+        menuTitle: z.string(),
+        items: z.array(itemSchema),
+        totalAmount: z.number().int(),
+        ticketCounts: z.string()
+    })
+
+    // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
 
@@ -542,6 +560,9 @@ export const useBillingValidation = () => {
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
+        // CostEntry/CostLine (Economy views)
+        CostEntrySchema,
+
         // Serialization (ADR-010)
         OrderSnapshotSchema,
         serializeTransaction,
@@ -580,3 +601,13 @@ export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValid
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
+
+// CostEntry/CostLine types (Economy views)
+export type CostEntry<T> = {
+    dinnerEventId: number
+    date: Date
+    menuTitle: string
+    items: T[]
+    totalAmount: number
+    ticketCounts: string
+}

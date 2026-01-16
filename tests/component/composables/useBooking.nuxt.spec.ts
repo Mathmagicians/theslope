@@ -894,11 +894,11 @@ describe('generateDesiredOrdersFromPreferences', () => {
         const OrderState = OrderStateSchema.enum
 
         it.each([
-            {desc: 'no existing order', existingOrders: []},
-            {desc: 'existing RELEASED order', existingOrders: [
-                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED})
-            ]}
-        ])('respects excludedKeys when $desc', ({existingOrders}) => {
+            {desc: 'no existing → skip (dont recreate)', existingOrders: [], expectedEvents: [101, 103], expectedLength: 2},
+            {desc: 'RELEASED → preserve (no reclaim, no delete)', existingOrders: [
+                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1})
+            ], expectedEvents: [101, 102, 103], expectedLength: 3}
+        ])('$desc', ({existingOrders, expectedEvents, expectedLength}) => {
             const inhabitants = [createInhabitant(1, allDineIn)]
             const excludedKeys = new Set(['1-102'])
 
@@ -910,8 +910,28 @@ describe('generateDesiredOrdersFromPreferences', () => {
                 ticketPrices
             )
 
-            expect(result).toHaveLength(2)
-            expect(result.map(o => o.dinnerEventId)).toEqual([101, 103])
+            expect(result).toHaveLength(expectedLength)
+            expect(result.map(o => o.dinnerEventId).sort()).toEqual(expectedEvents)
+        })
+
+        it('preserves RELEASED order with correct state and orderId', () => {
+            const inhabitants = [createInhabitant(1, allDineIn)]
+            const excludedKeys = new Set(['1-102'])
+            const releasedOrder = OrderFactory.defaultOrder(undefined, {
+                id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1
+            })
+
+            const result = generateDesiredOrdersFromPreferences(
+                inhabitants,
+                dinnerEvents,
+                [releasedOrder],
+                excludedKeys,
+                ticketPrices
+            )
+
+            const preserved = result.find(o => o.dinnerEventId === 102)
+            expect(preserved?.orderId).toBe(42)
+            expect(preserved?.state).toBe(OrderState.RELEASED)
         })
     })
 
