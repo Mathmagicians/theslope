@@ -125,7 +125,10 @@ const {COMPONENTS, SIZES, COLOR, ICONS, getRandomEmptyMessage} = useTheSlopeDesi
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
-const {resolveTicketPrice, ticketTypeConfig} = useTicket()
+const {resolveTicketPrice, ticketTypeConfig, formatPrice} = useTicket()
+
+// Billing (for ticket count format)
+const {formatTicketCounts} = useBilling()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
@@ -464,10 +467,13 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions, getDayBillSummary} = useBooking()
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
+
+// Day bill summary (ticket counts + total price)
+const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 </script>
 
 <template>
@@ -485,10 +491,16 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 
   <!-- Booking form -->
   <div v-else class="space-y-4">
-    <!-- Deadline Status Badges -->
-    <div class="flex flex-col md:flex-row md:justify-between gap-2">
-      <DeadlineBadge :badge="badges.booking" />
-      <DeadlineBadge :badge="badges.diningMode" />
+    <!-- Deadline Status Badges + Day Bill Summary -->
+    <!-- Mobile: badges stacked left, day bill right | Desktop: all in row with gaps -->
+    <div class="flex justify-between items-start gap-4 md:gap-8">
+      <div class="flex flex-col md:flex-row gap-2 md:gap-8">
+        <DeadlineBadge :badge="badges.booking" />
+        <DeadlineBadge :badge="badges.diningMode" />
+      </div>
+      <div v-if="dayBillSummary" class="border-b-2 border-default px-2 pb-1">
+        <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatPrice(dayBillSummary.totalPrice) }} kr</span>
+      </div>
     </div>
 
     <!-- Released Ticket Warnings -->

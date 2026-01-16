@@ -119,12 +119,11 @@ const emit = defineEmits<{
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
-// Billing (for ticket count format) and ticket (for price format)
-const {formatTicketCounts} = useBilling()
+// Ticket price formatting
 const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
-// Guest order helpers (same as DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders} = useBooking()
+// Booking helpers (shared with DinnerBookingForm)
+const {groupGuestOrders, partitionGuestOrders, getDayBillSummary} = useBooking()
 
 // Validation schemas
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
@@ -464,16 +463,9 @@ const guestOrders = computed(() => partitionGuestOrders(props.orders).guestOrder
 // EVENT SUMMARIES (for footer - matches economy view format)
 // ============================================================================
 
-const getEventSummary = (eventId: number): { ticketCounts: string, totalPrice: number } => {
-  const eventOrders = props.orders.filter(o =>
-    o.dinnerEventId === eventId &&
-    o.dinnerMode !== DinnerModeEnum.NONE &&
-    (o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED)
-  )
-  return {
-    ticketCounts: formatTicketCounts(eventOrders),
-    totalPrice: eventOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
-  }
+const getEventSummary = (eventId: number) => {
+  const eventOrders = props.orders.filter(o => o.dinnerEventId === eventId)
+  return getDayBillSummary(eventOrders) ?? { ticketCounts: '', totalPrice: 0 }
 }
 </script>
 

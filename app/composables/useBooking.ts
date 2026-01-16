@@ -391,7 +391,7 @@ export const DEADLINE_LABELS = {
     // Booking view labels (reused by DinnerBookingForm and GuestBookingForm)
     DINING_MODE: {
         label: 'Hvordan spiser I',
-        openText: 'Du kan ændre til spisesal, sen spisning eller takeaway',
+        openText: 'Vælg mellem spisesal, sen eller takeaway',
         closedText: 'Du kan ikke længere ændre, hvordan I spiser'
     }
 } as const
@@ -1026,6 +1026,33 @@ export const useBooking = () => {
     }
 
     // ============================================================================
+    // Day Bill Summary - Shared display format for booking views
+    // ============================================================================
+
+    /**
+     * Calculate day bill summary for display
+     * Filters to active orders only (BOOKED/RELEASED, not NONE mode)
+     *
+     * @param orders - Orders for the dinner event
+     * @returns Object with ticketCounts and totalPrice, or null if no active orders
+     */
+    const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } | null => {
+        const {formatTicketCounts} = useBilling()
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+
+        const activeOrders = orders.filter(o =>
+            o.dinnerMode !== DinnerModeSchema.enum.NONE &&
+            (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED)
+        )
+        if (activeOrders.length === 0) return null
+
+        return {
+            ticketCounts: formatTicketCounts(activeOrders),
+            totalPrice: activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+        }
+    }
+
+    // ============================================================================
     // Booking Toast Titles - Consistent UX across pages
     // ============================================================================
 
@@ -1224,6 +1251,8 @@ export const useBooking = () => {
         computeLockStatus,
         // Booking Options (UI counterpart to decideOrderAction)
         getBookingOptions,
+        // Day Bill Summary
+        getDayBillSummary,
         // Toast Titles
         BOOKING_TOAST_TITLES
     }
