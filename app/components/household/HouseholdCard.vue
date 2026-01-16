@@ -60,9 +60,12 @@ import type {DinnerMode, ScaffoldResult} from '~/composables/useBookingValidatio
 
 interface Props {
   household: HouseholdDetail
+  canEdit?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: true
+})
 
 
 // Store integration
@@ -220,9 +223,10 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           row-key="id"
           :ui="{ tbody: '[&_tr:first-child]:bg-info/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4' }"
       >
-        <!-- Expand button column -->
+        <!-- Expand button column - only shown when canEdit -->
         <template #expand-cell="{ row }">
           <UButton
+              v-if="canEdit"
               color="neutral"
               variant="ghost"
               :icon="row.getIsExpanded() ? 'i-heroicons-chevron-down' : (row.original.isSynthetic ? 'i-heroicons-bolt' : 'i-heroicons-pencil')"
@@ -352,6 +356,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                     Annuller
                   </UButton>
                   <UButton
+                      v-if="canEdit"
                       :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
                       variant="solid"
                       :loading="isSaving"

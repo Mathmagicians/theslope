@@ -237,9 +237,11 @@ const handleCancel = () => emit('cancel')
         <!-- Right: Allergies -->
         <UFormField v-if="allergyOptions.length > 0" name="allergyTypeIds" :size="SIZES.small">
           <AllergyEditor
-            v-model="formState.allergyTypeIds"
             :allergy-types="allergyOptions"
+            :selected-ids="formState.allergyTypeIds"
             label="Allergier (valgfrit)"
+            @add="id => formState.allergyTypeIds.push(id)"
+            @remove="id => formState.allergyTypeIds = formState.allergyTypeIds.filter(i => i !== id)"
           />
         </UFormField>
       </div>

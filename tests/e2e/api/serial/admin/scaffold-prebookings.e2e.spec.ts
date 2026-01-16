@@ -138,39 +138,52 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         expect(inhabitantOrders.length).toBe(0)
     })
 
-    test('should not recreate user-cancelled orders', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
+    test.describe('user intent respected by system scaffold', () => {
+        const {OrderStateSchema} = useBookingValidation()
+        const OrderState = OrderStateSchema.enum
 
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-        createdSeasonIds.push(season.id!)
-        const firstEvent = dinnerEvents[0]!
+        const userActions = [
+            {action: 'delete', daysFromNow: 15, expectedStateAfterAction: null},
+            {action: 'release', daysFromNow: 3, expectedStateAfterAction: OrderState.RELEASED}
+        ] as const
 
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-            context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-        )
-        createdHouseholdIds.push(household.id)
-        const inhabitant = inhabitants[0]!
+        for (const {action, daysFromNow, expectedStateAfterAction} of userActions) {
+            test(`should not reclaim user-${action}d orders`, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
 
-        const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-        await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+                // Fixture creates season, event, order
+                // - Before deadline (delete): creates test household, scaffold creates order
+                // - After deadline (release): uses admin's session household, creates order directly
+                const {season, dinnerEvent, household, inhabitant, order, isTestHousehold} =
+                    await OrderFactory.createOrderFixture(context, daysFromNow, testSalt)
+                createdSeasonIds.push(season.id!)
+                if (isTestHousehold) {
+                    createdHouseholdIds.push(household.id)
+                }
 
-        await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+                // User performs action (delete before deadline, release after deadline)
+                if (action === 'delete') {
+                    await OrderFactory.deleteOrder(context, order.id)
+                    await OrderFactory.getOrder(context, order.id, 404)
+                } else {
+                    const released = await OrderFactory.updateOrder(context, order.id, {dinnerMode: DinnerMode.NONE})
+                    expect(released?.state).toBe(expectedStateAfterAction)
+                }
 
-        // Use admin endpoint - user-facing /api/order filters by session household
-        const ordersBeforeCancel = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
-        const orderToCancel = ordersBeforeCancel.find(o => o.inhabitantId === inhabitant.id)
-        expect(orderToCancel).toBeDefined()
+                // Re-scaffold - system should respect user intent
+                await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-        // User cancels their order
-        await OrderFactory.deleteOrder(context, orderToCancel!.id)
+                const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                const userOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
 
-        // Re-scaffold
-        await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-        // User-cancelled order should NOT be recreated
-        const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, firstEvent.id)
-        const recreatedOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
-        expect(recreatedOrder).toBeUndefined()
+                if (action === 'delete') {
+                    expect(userOrder, 'Deleted order should NOT be recreated').toBeUndefined()
+                } else {
+                    expect(userOrder, 'Released order should still exist').toBeDefined()
+                    expect(userOrder?.state, 'Released order should remain RELEASED').toBe(OrderState.RELEASED)
+                }
+            })
+        }
     })
 })

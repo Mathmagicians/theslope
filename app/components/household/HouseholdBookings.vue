@@ -13,9 +13,12 @@ import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composa
 
 interface Props {
   household: HouseholdDetail
+  canEdit?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: true
+})
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
@@ -227,6 +230,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           v-model:calendar-open="calendarOpen"
           :view="view"
           :date-range="dateRange"
+          :can-edit="canEdit"
           :household="household"
           :dinner-events="dinnerEvents"
           :orders="orders"

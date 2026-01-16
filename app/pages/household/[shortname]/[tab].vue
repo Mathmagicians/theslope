@@ -83,6 +83,12 @@ const {initHouseholdsStore} = householdStore
 
 initHouseholdsStore(shortname.value)
 
+// Access control: check if current user is member of this household
+const authStore = useAuthStore()
+const canEdit = computed(() =>
+  selectedHousehold.value ? authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
+)
+
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
 const { TYPOGRAPHY } = useTheSlopeDesignSystem()
@@ -115,10 +121,22 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ body: 'px-0 py-2 md:px-4 md:py-6' }">
       <template #header>
-        <div class="flex items-center gap-1 md:gap-2">
-          <UIcon name="i-heroicons-home" class="text-2xl"/>
-          <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
-          <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-1 md:gap-2">
+            <UIcon name="i-heroicons-home" class="text-2xl"/>
+            <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
+            <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
+          </div>
+          <!-- Visitor banner: shown when viewing another household -->
+          <UAlert
+            v-if="!canEdit"
+            data-testid="visitor-banner"
+            icon="i-heroicons-eye"
+            color="info"
+            variant="subtle"
+            title="Du besøger nu en anden husstand end din egen"
+            description="Kigge, ikke røre"
+          />
         </div>
       </template>
       <UTabs
@@ -129,7 +147,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           color="primary"
       >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold"/>
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit"/>
         </template>
       </UTabs>
     </UCard>

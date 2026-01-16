@@ -1,69 +1,123 @@
 <script setup lang="ts">
 /**
- * AllergyEditor - Complete allergy selection with add/remove
+ * AllergyEditor - Allergy selection with add/remove (and optional comments)
  *
- * Pattern extracted from HouseholdAllergies:
- * - USelectMenu dropdown to add allergies (shows only unselected)
- * - Badge list of selected allergies with remove buttons
+ * Emits events for all actions - parent decides what to do (batch or immediate save).
+ *
+ * Two display modes:
+ * - Simple (default): selectedIds prop, badges/buttons display
+ * - Comments (showComments=true): allergies prop with comments, card display with inputs
  *
  * Used by:
- * - GuestBookingForm (guest allergies, simple badges)
+ * - GuestBookingForm: simple mode, batch save on form submit
+ * - HouseholdAllergies: comments mode, immediate save to API
  */
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 
+// Allergy with comment data (for showComments mode)
+export interface AllergyItem {
+  id: number              // Allergy record ID (for API operations)
+  allergyTypeId: number   // References AllergyType
+  comment?: string | null
+}
+
 interface Props {
   allergyTypes: AllergyTypeDisplay[]
+  // Simple mode: just IDs
+  selectedIds?: number[]
+  // Comments mode: full allergy data
+  allergies?: AllergyItem[]
+  showComments?: boolean
   label?: string
   placeholder?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  selectedIds: () => [],
+  allergies: () => [],
+  showComments: false,
   label: 'Allergier',
-  placeholder: '🥛🥐🥚🥜 Vælg en allergi...'
+  placeholder: '🥛🥐🥚🥜 Vælg allergi...'
 })
 
-const selectedIds = defineModel<number[]>({default: () => []})
+const emit = defineEmits<{
+  add: [allergyTypeId: number]
+  remove: [allergyTypeId: number]  // In comments mode, parent maps typeId → allergy.id for API
+  'update:comment': [allergyTypeId: number, comment: string]
+}>()
 
 const {SIZES, COLOR, ICONS} = useTheSlopeDesignSystem()
 
-// Available allergy types (not already selected)
+// Key to force dropdown reset after selection
+const dropdownKey = ref(0)
+
+// Local comment state for editing
+const editingComments = ref<Record<number, string>>({})
+
+// Sync editingComments with allergies prop
+watch(() => props.allergies, (newAllergies) => {
+  if (props.showComments) {
+    editingComments.value = newAllergies.reduce((acc, a) => {
+      acc[a.allergyTypeId] = a.comment || ''
+      return acc
+    }, {} as Record<number, string>)
+  }
+}, {immediate: true, deep: true})
+
+// Effective selected IDs (from selectedIds or allergies)
+const effectiveSelectedIds = computed(() =>
+  props.showComments
+    ? props.allergies.map(a => a.allergyTypeId)
+    : props.selectedIds
+)
+
+// Available types (not yet selected)
 const availableTypes = computed(() =>
-  props.allergyTypes.filter(t => !selectedIds.value.includes(t.id))
+  props.allergyTypes.filter(t => !effectiveSelectedIds.value.includes(t.id))
 )
 
-// Selected allergy types (full objects for display)
+// Selected types with full display data
 const selectedTypes = computed(() =>
-  props.allergyTypes.filter(t => selectedIds.value.includes(t.id))
+  props.allergyTypes.filter(t => effectiveSelectedIds.value.includes(t.id))
 )
 
-// Add allergy by ID
-const handleAdd = (id: number | undefined) => {
-  if (id && !selectedIds.value.includes(id)) {
-    selectedIds.value = [...selectedIds.value, id]
+// Get comment for a type (comments mode)
+const getComment = (typeId: number): string =>
+  props.allergies.find(a => a.allergyTypeId === typeId)?.comment || ''
+
+// Handlers - emit events, parent decides what to do
+const handleAdd = (typeId: number | undefined) => {
+  if (typeId) {
+    emit('add', typeId)
+    dropdownKey.value++  // Force dropdown to remount and show placeholder
   }
 }
 
-// Remove allergy by ID
-const handleRemove = (id: number) => {
-  selectedIds.value = selectedIds.value.filter(i => i !== id)
+const handleRemove = (typeId: number) => {
+  emit('remove', typeId)
+}
+
+const handleCommentSave = (typeId: number) => {
+  emit('update:comment', typeId, editingComments.value[typeId] || '')
 }
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="space-y-3">
     <!-- Label -->
     <label v-if="label" class="block text-sm font-medium">{{ label }}</label>
 
-    <!-- Add selector - pattern from HouseholdAllergies -->
+    <!-- Add dropdown (key forces reset after selection) -->
     <USelectMenu
       v-if="availableTypes.length > 0"
+      :key="dropdownKey"
       :model-value="undefined"
       :items="availableTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
       :placeholder="placeholder"
       value-key="id"
       class="w-full"
       data-testid="allergy-editor-select"
-      @update:model-value="(val: number) => val && handleAdd(val)"
+      @update:model-value="handleAdd"
     >
       <template #item="{ item }">
         <span class="flex items-center gap-2">
@@ -76,13 +130,61 @@ const handleRemove = (id: number) => {
       </template>
     </USelectMenu>
 
-    <!-- Empty state when all allergies selected -->
+    <!-- All selected message -->
     <p v-else-if="selectedTypes.length > 0" class="text-xs text-muted">
       Alle allergityper er valgt
     </p>
 
-    <!-- Selected allergies as badges with remove -->
-    <div v-if="selectedTypes.length > 0" class="flex flex-wrap gap-2">
+    <!-- Selected allergies: Comments mode (cards with inputs) -->
+    <div v-if="showComments && selectedTypes.length > 0" class="space-y-2">
+      <div
+        v-for="type in selectedTypes"
+        :key="type.id"
+        class="flex flex-col md:flex-row md:items-center gap-2 p-3 rounded-lg border border-default bg-elevated"
+      >
+        <!-- Allergy type display -->
+        <div class="flex items-center gap-2 md:flex-shrink-0">
+          <AllergyTypeDisplay :allergy-type="type" show-name />
+        </div>
+
+        <!-- Comment input + actions -->
+        <div class="flex items-center gap-2 flex-1">
+          <UInput
+            v-model="editingComments[type.id]"
+            :placeholder="`Kommentar til ${type.name}...`"
+            size="sm"
+            class="flex-1"
+            @keyup.enter="handleCommentSave(type.id)"
+          >
+            <template #trailing>
+              <UButton
+                color="success"
+                variant="ghost"
+                icon="i-heroicons-check"
+                size="xs"
+                :padded="false"
+                aria-label="Gem kommentar"
+                :data-testid="`allergy-${type.id}-save-comment`"
+                @click="handleCommentSave(type.id)"
+              />
+            </template>
+          </UInput>
+          <UButton
+            color="error"
+            variant="soft"
+            icon="i-heroicons-trash"
+            size="sm"
+            square
+            aria-label="Fjern allergi"
+            :data-testid="`allergy-${type.id}-remove`"
+            @click="handleRemove(type.id)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Selected allergies: Simple mode (badges with remove buttons) -->
+    <div v-else-if="!showComments && selectedTypes.length > 0" class="flex flex-wrap gap-2">
       <UBadge
         v-for="type in selectedTypes"
         :key="type.id"
@@ -101,10 +203,14 @@ const handleRemove = (id: number) => {
             size="xs"
             :padded="false"
             class="ml-1"
+            aria-label="Fjern allergi"
             @click="handleRemove(type.id)"
           />
         </span>
       </UBadge>
     </div>
+
+    <!-- Empty state -->
+    <AllergyTypeDisplay v-if="selectedTypes.length === 0" show-name />
   </div>
 </template>

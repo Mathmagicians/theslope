@@ -1,6 +1,8 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay } from '~/composables/useBookingValidation'
+import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
@@ -10,7 +12,7 @@ import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
-const { headers, salt, temporaryAndRandom } = testHelpers
+const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
 // API endpoints
 const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
@@ -612,4 +614,108 @@ export class OrderFactory {
     isGuestTicket: true,
     allergyTypeIds
   })
+
+  /**
+   * Create complete order fixture for deadline-based tests.
+   * Uses admin context throughout for simplicity.
+   *
+   * - Before deadline (>10 days): Creates test household, scaffold creates order
+   * - After deadline (<=10 days): Uses admin's session household, creates order directly
+   *
+   * @param context - Admin browser context
+   * @param daysFromNow - Days from today for dinner event
+   *   - >10 days = BEFORE deadline (delete allowed)
+   *   - <=10 days = AFTER deadline (release only)
+   * @param testSalt - Unique salt for test data isolation
+   * @returns Fixture data including season, event, household, inhabitant, order
+   *
+   * CLEANUP NOTE:
+   * - Before deadline: household is test data, ADD to createdHouseholdIds
+   * - After deadline: household is admin's session, do NOT add to cleanup
+   */
+  static readonly createOrderFixture = async (
+    context: BrowserContext,
+    daysFromNow: number,
+    testSalt: string
+  ): Promise<{
+    season: Season
+    dinnerEvent: DinnerEventDisplay
+    household: { id: number }
+    inhabitant: { id: number }
+    order: OrderDisplay
+    ticketPriceId: number
+    isTestHousehold: boolean
+  }> => {
+    // Create season with ticket prices
+    const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(testSalt))
+
+    // Create dinner event at specified days from now
+    const eventDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)
+    const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
+      seasonId: season.id!,
+      date: eventDate,
+      menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
+    })
+
+    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === 'ADULT')?.id
+    if (!ticketPriceId) throw new Error('No ADULT ticket price found')
+
+    let order: OrderDisplay
+    let householdId: number
+    let inhabitantId: number
+    let isTestHousehold: boolean
+
+    if (daysFromNow > 10) {
+      // BEFORE deadline: Create isolated test household, scaffold creates order
+      const created = await HouseholdFactory.createHouseholdWithInhabitants(
+        context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+      )
+      householdId = created.household.id
+      inhabitantId = created.inhabitants[0]!.id
+      isTestHousehold = true
+
+      // Set DINEIN preferences so scaffold creates order
+      const {createDefaultWeekdayMap} = useCoreValidation()
+      const allDaysDineIn = createDefaultWeekdayMap(DinnerModeSchema.enum.DINEIN)
+      await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+
+      // Scaffold creates order
+      await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+      const orders = await this.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+      const found = orders.find(o => o.inhabitantId === inhabitantId)
+      if (!found) throw new Error(`Order not created by scaffold for inhabitant ${inhabitantId}`)
+      order = found
+    } else {
+      // AFTER deadline: Use admin's session household, create order directly
+      const sessionInfo = await getSessionUserInfo(context)
+      householdId = sessionInfo.householdId
+      inhabitantId = sessionInfo.inhabitantId
+      isTestHousehold = false
+
+      // Create order directly (admin has access to own household)
+      const createResult = await this.createOrder(context, {
+        householdId,
+        dinnerEventId: dinnerEvent.id,
+        orders: [this.defaultOrderItem({
+          inhabitantId,
+          ticketPriceId,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        })]
+      })
+      if (!createResult) throw new Error('Order creation failed')
+      const fetched = await this.getOrder(context, createResult.createdIds[0]!)
+      if (!fetched) throw new Error('Order fetch failed')
+      order = fetched
+    }
+
+    return {
+      season,
+      dinnerEvent,
+      household: { id: householdId },
+      inhabitant: { id: inhabitantId },
+      order,
+      ticketPriceId,
+      isTestHousehold
+    }
+  }
 }

@@ -889,20 +889,30 @@ describe('generateDesiredOrdersFromPreferences', () => {
         expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
     })
 
-    it('excludes orders for excluded keys (user cancellations)', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
-        const excludedKeys = new Set(['1-102'])  // Exclude dinner 102
+    describe('excludedKeys handling', () => {
+        const {OrderStateSchema} = useBookingValidation()
+        const OrderState = OrderStateSchema.enum
 
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            dinnerEvents,
-            [],
-            excludedKeys,
-            ticketPrices
-        )
+        it.each([
+            {desc: 'no existing order', existingOrders: []},
+            {desc: 'existing RELEASED order', existingOrders: [
+                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED})
+            ]}
+        ])('respects excludedKeys when $desc', ({existingOrders}) => {
+            const inhabitants = [createInhabitant(1, allDineIn)]
+            const excludedKeys = new Set(['1-102'])
 
-        expect(result).toHaveLength(2)
-        expect(result.map(o => o.dinnerEventId)).toEqual([101, 103])
+            const result = generateDesiredOrdersFromPreferences(
+                inhabitants,
+                dinnerEvents,
+                existingOrders,
+                excludedKeys,
+                ticketPrices
+            )
+
+            expect(result).toHaveLength(2)
+            expect(result.map(o => o.dinnerEventId)).toEqual([101, 103])
+        })
     })
 
     it('preserves guest orders (not managed by preferences)', () => {

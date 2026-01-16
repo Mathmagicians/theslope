@@ -85,4 +85,26 @@ describe('BookingGridView', () => {
     await wrapper.find('[data-testid="grid-edit"]').trigger('click')
     expect(wrapper.emitted('update:formMode')?.[0]).toEqual(['edit'])
   })
+
+  describe('canEdit prop', () => {
+    it.each(['week', 'month'] as const)('hides edit button when canEdit=false in %s view', async (view) => {
+      const wrapper = await mount({view, canEdit: false})
+      expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(false)
+    })
+
+    it.each(['week', 'month'] as const)('shows edit button when canEdit=true (default) in %s view', async (view) => {
+      const wrapper = await mount({view, canEdit: true})
+      expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(true)
+    })
+
+    it('hides save button when canEdit=false in edit mode', async () => {
+      const wrapper = await mount({view: 'week', canEdit: false, formMode: 'edit'})
+      expect(wrapper.find('[data-testid="grid-save"]').exists()).toBe(false)
+    })
+
+    it('shows save button when canEdit=true in edit mode', async () => {
+      const wrapper = await mount({view: 'week', canEdit: true, formMode: 'edit'})
+      expect(wrapper.find('[data-testid="grid-save"]').exists()).toBe(true)
+    })
+  })
 })

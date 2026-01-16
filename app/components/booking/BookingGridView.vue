@@ -90,6 +90,7 @@ interface Props {
   allergyTypes?: AllergyTypeDisplay[]
   bookerId?: number // Current user's inhabitant ID for guest booking
   formMode?: FormMode
+  canEdit?: boolean // Access control: hide edit controls when false
   isSaving?: boolean
   hasPrev?: boolean
   hasNext?: boolean
@@ -99,6 +100,7 @@ const props = withDefaults(defineProps<Props>(), {
   allergyTypes: () => [],
   bookerId: undefined,
   formMode: FORM_MODES.VIEW,
+  canEdit: true,
   isSaving: false,
   hasPrev: true,
   hasNext: true
@@ -486,9 +488,9 @@ const getEventSummary = (eventId: number) => {
         {{ navigationLabel }}
       </CalendarDateNav>
       <div class="flex-1 flex justify-end">
-        <!-- Pencil button to enter edit mode (week/month grid only) -->
+        <!-- Pencil button to enter edit mode (week/month grid only, hidden when !canEdit) -->
         <UButton
-          v-if="view !== 'day' && formMode === FORM_MODES.VIEW"
+          v-if="view !== 'day' && formMode === FORM_MODES.VIEW && canEdit"
           :icon="ICONS.edit"
           :color="COLOR.neutral"
           variant="ghost"
@@ -724,6 +726,7 @@ const getEventSummary = (eventId: number) => {
                 Annuller
               </UButton>
               <UButton
+                v-if="canEdit"
                 :color="COLOR.primary"
                 :size="SIZES.sm"
                 :disabled="!hasPendingChanges || props.isSaving"

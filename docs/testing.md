@@ -339,6 +339,29 @@ test.afterAll(async ({ browser }) => {
 })
 ```
 
+### Serial Tests
+
+Some E2E tests must run **after** parallel tests complete. These live in `tests/e2e/api/serial/`.
+
+**Why serial?** Endpoints like `scaffold-prebookings` process ALL entities in the database. When parallel tests create many test entities, these endpoints become slow and may timeout.
+
+**Project dependency:** The Playwright config sets `dependencies: ['chromium-api']` on the serial project, ensuring parallel tests run first in the full suite.
+
+**Running serial tests:**
+
+```bash
+# Full suite (parallel first, then serial) - DEFAULT
+npm run test:e2e:api
+
+# Serial tests only (skip parallel dependency)
+npm run test:e2e:api:seq
+
+# Single test independently (bypass all dependencies)
+npx playwright test tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts --no-deps --reporter=line
+```
+
+**Key:** Use `--no-deps` flag to run serial tests without waiting for parallel tests.
+
 ---
 
 ## Troubleshooting
