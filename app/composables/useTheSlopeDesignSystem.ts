@@ -743,7 +743,23 @@ const createOrientations = (isMd: Ref<boolean>) => ({
     /**
      * Always vertical (desktop/mobile)
      */
-    vertical: 'vertical' as const
+    vertical: 'vertical' as const,
+
+    /**
+     * Orientation based on item count:
+     * - At or below threshold: always horizontal (fits in a row)
+     * - Above threshold: vertical on desktop, horizontal on mobile
+     *
+     * Use case: Tab selectors where few items look better horizontal,
+     * but many items need vertical layout on desktop sidebars.
+     *
+     * @param count - Number of items
+     * @param threshold - Max count for always-horizontal (default: 2)
+     */
+    forItemCount: (count: number, threshold = 2): 'horizontal' | 'vertical' => {
+        if (count <= threshold) return 'horizontal'
+        return isMd.value ? 'vertical' : 'horizontal'
+    }
 })
 
 /**
