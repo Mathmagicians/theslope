@@ -340,6 +340,14 @@ export const useSeason = () => {
     const getPrebookingWindowDays = (): number => theslope.prebookingWindowDays
 
     /**
+     * Get the menu announcement deadline in days from app configuration
+     * This is the deadline for chefs to announce the menu (before dinner)
+     * @returns Number of days before dinner when menu must be announced
+     */
+    const getMenuAnnouncementDeadlineDays = (): number =>
+        theslope.defaultSeason?.menuIsAnnouncedDaysBefore ?? 10
+
+    /**
      * Check if a calendar day is the next upcoming dinner event
      * @param day - Calendar day to check
      * @param nextDinner - Next dinner event (or null if none)
@@ -358,14 +366,19 @@ export const useSeason = () => {
 
     /**
      * Get deadline functions configured for a specific season.
-     * All deadline checks use the season's configured values.
+     *
+     * Two distinct deadlines:
+     * - **Menu deadline** (10 days from config): When chef must announce menu
+     * - **Booking deadline** (8 days from season): When users can book/cancel
      *
      * @param season - Season with deadline configuration
      * @returns Object with all deadline-related functions configured for this season
      */
     const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>) => {
         const dinnerStartHour = getDefaultDinnerStartTime()
+        const menuDeadlineDays = getMenuAnnouncementDeadlineDays()
 
+        // Booking deadline (for users) - from season config (typically 8 days)
         const canModifyOrders = (dinnerEventDate: Date): boolean => {
             const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
             return isBeforeDeadline(season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
@@ -393,9 +406,10 @@ export const useSeason = () => {
             }
         }
 
+        // Menu deadline (for chefs) - from app config (typically 10 days)
         const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean => {
             const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-            return !isBeforeDeadline(season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
+            return !isBeforeDeadline(menuDeadlineDays, 0)(dinnerStartTime)
         }
 
         return {
@@ -525,6 +539,7 @@ export const useSeason = () => {
         getDefaultDinnerStartTime,
         getDefaultDinnerDuration,
         getPrebookingWindowDays,
+        getMenuAnnouncementDeadlineDays,
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,

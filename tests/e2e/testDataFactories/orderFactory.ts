@@ -619,13 +619,13 @@ export class OrderFactory {
    * Create complete order fixture for deadline-based tests.
    * Uses admin context throughout for simplicity.
    *
-   * - Before deadline (>10 days): Creates test household, scaffold creates order
-   * - After deadline (<=10 days): Uses admin's session household, creates order directly
+   * - Before deadline (>8 days): Creates test household, scaffold creates order
+   * - After deadline (<=8 days): Uses admin's session household, creates order directly
    *
    * @param context - Admin browser context
    * @param daysFromNow - Days from today for dinner event
-   *   - >10 days = BEFORE deadline (delete allowed)
-   *   - <=10 days = AFTER deadline (release only)
+   *   - >8 days = BEFORE deadline (delete allowed)
+   *   - <=8 days = AFTER deadline (release only)
    * @param testSalt - Unique salt for test data isolation
    * @returns Fixture data including season, event, household, inhabitant, order
    *
@@ -665,7 +665,7 @@ export class OrderFactory {
     let inhabitantId: number
     let isTestHousehold: boolean
 
-    if (daysFromNow > 10) {
+    if (daysFromNow > 8) {
       // BEFORE deadline: Create isolated test household, scaffold creates order
       const created = await HouseholdFactory.createHouseholdWithInhabitants(
         context, HouseholdFactory.defaultHouseholdData(testSalt), 1

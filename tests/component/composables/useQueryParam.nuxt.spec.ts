@@ -547,6 +547,88 @@ describe('useQueryParam.ts', () => {
     })
   })
 
+  describe('Combined State Object (ViewState pattern)', () => {
+    // This tests the pattern used in chef/index.vue where mode + accordion state
+    // are combined into a single query param like view=agenda:open
+    type ViewState = { mode: 'agenda' | 'calendar', open: boolean }
+
+    const createViewStateParam = (syncWhen = () => false) => useQueryParam<ViewState>('view', {
+      serialize: (v) => `${v.mode}:${v.open ? 'open' : 'closed'}`,
+      deserialize: (s) => {
+        const [mode, state] = s.split(':')
+        if ((mode === 'agenda' || mode === 'calendar') && (state === 'open' || state === 'closed')) {
+          return { mode, open: state === 'open' }
+        }
+        return null
+      },
+      defaultValue: () => ({ mode: 'calendar', open: false }),
+      syncWhen
+    })
+
+    const viewStateCases: {
+      initial: string,
+      action: ViewState,
+      expected: string,
+      description: string
+    }[] = [
+      // Tab clicks always open accordion
+      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'same tab click when closed opens accordion' },
+      { initial: 'calendar:open', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'different tab click opens that tab' },
+      { initial: 'agenda:closed', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'same tab click when closed opens accordion' },
+      { initial: 'agenda:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'different tab click opens that tab' },
+      // Toggle button toggles accordion, keeps mode
+      { initial: 'calendar:open', action: { mode: 'calendar', open: false }, expected: 'calendar:closed', description: 'toggle closes accordion' },
+      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'toggle opens accordion' },
+      { initial: 'agenda:open', action: { mode: 'agenda', open: false }, expected: 'agenda:closed', description: 'toggle closes agenda accordion' },
+    ]
+
+    for (const { initial, action, expected, description } of viewStateCases) {
+      it(`should update ${initial} to ${expected} when ${description}`, async () => {
+        setupQuery({ view: initial })
+        const { setValue } = createViewStateParam()
+
+        await setValue(action)
+        await flushPromises()
+
+        expect(mockNavigateTo).toHaveBeenCalledWith(
+          { path: '/test', query: { view: expected } },
+          { replace: true }
+        )
+      })
+    }
+
+    it('should NOT navigate when setting same value', async () => {
+      setupQuery({ view: 'agenda:open' })
+      const { setValue } = createViewStateParam()
+
+      await setValue({ mode: 'agenda', open: true })
+      await flushPromises()
+
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('should return default when URL has invalid format', () => {
+      setupQuery({ view: 'invalid' })
+      const { value } = createViewStateParam()
+
+      expect(value.value).toEqual({ mode: 'calendar', open: false })
+    })
+
+    it('should preserve other query params when updating', async () => {
+      setupQuery({ view: 'calendar:closed', date: '15/01/2025', team: '3' })
+      const { setValue } = createViewStateParam()
+
+      await setValue({ mode: 'agenda', open: true })
+      await flushPromises()
+
+      expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
+        view: 'agenda:open',
+        date: '15/01/2025',
+        team: '3'
+      })
+    })
+  })
+
   describe('Edge Cases', () => {
     it('should handle empty string as valid query value', () => {
       setupQuery({test: ''})

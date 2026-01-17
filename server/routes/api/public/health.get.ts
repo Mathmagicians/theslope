@@ -10,6 +10,9 @@ export default defineEventHandler(async () => {
     return {
         status: 'ok',
         timestamp: new Date().toISOString(),
-        version: config.public.COMMIT_ID || 'development'
+        version: config.public.RELEASE_VERSION || config.public.COMMIT_ID || 'development',
+        releaseDate: config.public.RELEASE_DATE || null,
+        sha: config.public.COMMIT_ID || null,
+        isRelease: !!config.public.RELEASE_VERSION
     }
 })

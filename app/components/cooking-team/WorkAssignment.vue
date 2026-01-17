@@ -26,6 +26,7 @@
  * - Mobile-first responsive design
  */
 import type { DinnerEventDetail } from '~/composables/useBookingValidation'
+import { ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -92,42 +93,56 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
     orientation="horizontal"
     data-testid="work-assignment"
   >
-    <div class="flex gap-1 md:gap-2">
+    <div class="flex flex-wrap gap-1 md:gap-2">
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-chef"
-        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
         @click="handleRoleAssignment(TeamRole.CHEF)"
       >
-        👨‍🍳 Chef
+        <template #leading>{{ ROLE_ICONS.CHEF }}</template>
+        Chefkok
+        <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-cook"
-        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
         @click="handleRoleAssignment(TeamRole.COOK)"
       >
-        👥 Kok
+        <template #leading>{{ ROLE_ICONS.COOK }}</template>
+        Kok
+        <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"
         size="md"
         name="volunteer-helper"
-        :icon="ICONS.plusCircle"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
         @click="handleRoleAssignment(TeamRole.JUNIORHELPER)"
       >
-        🌱 Spire
+        <template #leading>{{ ROLE_ICONS.JUNIORHELPER }}</template>
+        Kokkespire
+        <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
+      </UButton>
+      <UButton
+        :color="COMPONENTS.heroPanel.light.primaryButton"
+        variant="solid"
+        size="md"
+        name="swap-shift"
+        :disabled="true"
+      >
+        <template #leading><UIcon :name="ICONS.team" /></template>
+        Byt Tjans
+        <template #trailing><UIcon name="i-heroicons-arrows-right-left" /></template>
       </UButton>
     </div>
   </UFieldGroup>

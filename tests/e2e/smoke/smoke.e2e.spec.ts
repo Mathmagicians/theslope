@@ -30,7 +30,7 @@ test.beforeAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
     // Verify deployment version matches expected (CI/CD sets EXPECTED_VERSION)
-    const healthResponse = await context.request.get('/api/health')
+    const healthResponse = await context.request.get('/api/public/health')
     expect(healthResponse.status()).toBe(200)
     const health = await healthResponse.json()
     expect(health.status).toBe('ok')
@@ -38,8 +38,8 @@ test.beforeAll(async ({browser}) => {
     const expectedVersion = process.env.EXPECTED_VERSION
     if (expectedVersion) {
         // CI/CD: verify we're testing the correct deployment
-        expect(health.version, `Deployed version ${health.version} does not match expected ${expectedVersion}`).toBe(expectedVersion)
-        console.info(`✅ Version verified: ${health.version.substring(0, 7)}`)
+        expect(health.version).toBe(expectedVersion)
+        console.info(`✅ Version verified: ${health.version}`)
     } else {
         // Local: just log the version
         console.info(`ℹ️ Testing version: ${health.version}`)

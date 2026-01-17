@@ -33,14 +33,15 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
     loading: false,
     pageSize: 5,
-    searchPlaceholder: 'Søg dato...'
+    searchPlaceholder: 'Søg på dato'
 })
 
 const {COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
 
+
 // Internal state
 const search = ref('')
-const sortDesc = ref(false)
+const sortDesc = ref(true)  // Default to descending (newest first)
 const pagination = ref({pageIndex: 0, pageSize: props.pageSize})
 const {expanded} = useExpandableRow()
 
@@ -80,6 +81,17 @@ const toggleSort = () => {
 
 <template>
   <div class="space-y-2">
+    <!-- Pagination header (only when needed) -->
+    <div v-if="showPagination" class="flex justify-end">
+      <UPagination
+          :default-page="currentPage"
+          :items-per-page="pageSize"
+          :total="filteredData.length"
+          :size="SIZES.standard"
+          @update:page="handlePageChange"
+      />
+    </div>
+
     <UTable
         v-model:expanded="expanded"
         v-model:pagination="pagination"
@@ -90,21 +102,20 @@ const toggleSort = () => {
         :pagination-options="{getPaginationRowModel: getPaginationRowModel()}"
         :row-key="rowKey as string"
     >
-      <!-- Date column header with search/sort -->
-      <template #date-header>
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.calendar" class="text-neutral-500"/>
+      <!-- Expand column header with search/sort controls -->
+      <template #expand-header>
+        <div class="flex items-center gap-1">
           <UInput
               v-model="search"
               :placeholder="searchPlaceholder"
-              size="xs"
+              :size="SIZES.small"
               class="w-24 md:w-32"
               :ui="{base: 'bg-transparent'}"
           />
           <UButton
               variant="ghost"
               color="neutral"
-              size="xs"
+              :size="SIZES.standard"
               square
               :icon="sortDesc ? ICONS.sortDescending : ICONS.sortAscending"
               aria-label="Skift sortering"
@@ -156,16 +167,5 @@ const toggleSort = () => {
         <slot name="empty"/>
       </template>
     </UTable>
-
-    <!-- Pagination below table -->
-    <div v-if="showPagination" class="flex justify-end">
-      <UPagination
-          :default-page="currentPage"
-          :items-per-page="pageSize"
-          :total="filteredData.length"
-          :size="SIZES.standard"
-          @update:page="handlePageChange"
-      />
-    </div>
   </div>
 </template>

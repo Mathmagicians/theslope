@@ -178,8 +178,9 @@ const upcomingPeriodStart = computed(() => {
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize"/>
-            <div>
+            <div class="flex flex-col md:flex-row md:items-center md:gap-2">
               <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
+              <span class="hidden md:inline text-gray-400">|</span>
               <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDate(upcomingPeriodStart) }} → ...</p>
             </div>
           </div>
@@ -244,8 +245,9 @@ const upcomingPeriodStart = computed(() => {
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon :name="ICONS.shoppingCart" :size="SIZES.standardIconSize"/>
-            <div>
+            <div class="flex flex-col md:flex-row md:items-center md:gap-2">
               <h3 :class="TYPOGRAPHY.cardTitle">Aktuel periode</h3>
+              <span class="hidden md:inline text-gray-400">|</span>
               <p :class="TYPOGRAPHY.bodyTextMuted">
                 {{ formatDate(billing.currentPeriod.periodStart) }} - {{ formatDate(billing.currentPeriod.periodEnd) }}
               </p>

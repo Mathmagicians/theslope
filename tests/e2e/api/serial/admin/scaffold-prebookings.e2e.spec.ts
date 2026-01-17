@@ -40,7 +40,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const testSalt = temporaryAndRandom()
 
         // Use ticketIsCancellableDaysBefore: 0 so scaffold can create orders for near-future dinners
-        // Default is 10 days, but test season has dinners 1-7 days away
+        // Default is 8 days, but test season has dinners 1-7 days away
         const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
             ticketIsCancellableDaysBefore: 0
         })

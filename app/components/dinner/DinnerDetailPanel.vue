@@ -101,7 +101,7 @@ data-testid="dinner-detail-panel"
       <!-- #stats: Kitchen statistics section -->
       <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
         <template #title>
-          <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
+          <h3 :class="TYPOGRAPHY.cardTitle">Hvem kommer og spiser?</h3>
         </template>
 
         <slot name="stats" />

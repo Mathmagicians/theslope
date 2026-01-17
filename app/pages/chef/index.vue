@@ -25,7 +25,7 @@
  * │ Hvem laver maden?                       │
  * │ (CookingTeamCard)                       │
  * │                                         │
- * │ Køkkenstatistik                         │
+ * │ Hvem kommer og spiser?                  │
  * │ (KitchenPreparation)                    │
  * └─────────────────────────────────────────┘
  *
@@ -108,15 +108,27 @@ const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('vie
   syncWhen: () => isPageReady.value
 })
 
-// Computed getters/setters for component v-model bindings
-const calendarViewMode = computed({
-  get: () => viewState.value.mode,
-  set: (mode) => setViewState({ ...viewState.value, mode })
-})
-const calendarAccordionOpen = computed({
-  get: () => viewState.value.open,
-  set: (open) => setViewState({ ...viewState.value, open })
-})
+// Computed getters for component bindings (one-way to prevent race conditions)
+const calendarViewMode = computed(() => viewState.value.mode)
+const calendarAccordionOpen = computed(() => viewState.value.open)
+
+// Guard to prevent accordion updates immediately after tab click
+// (UAccordion may emit close when content changes during view switch)
+let ignoreAccordionUpdates = false
+
+// Handle tab click - always sets mode AND opens accordion
+const handleTabClick = (mode: 'agenda' | 'calendar') => {
+  ignoreAccordionUpdates = true
+  setViewState({ mode, open: true })
+  // Reset guard after navigateTo completes
+  setTimeout(() => { ignoreAccordionUpdates = false }, 100)
+}
+
+// Handle accordion toggle - keeps current mode, toggles open state
+const handleAccordionToggle = (open: boolean) => {
+  if (ignoreAccordionUpdates) return
+  setViewState({ mode: viewState.value.mode, open })
+}
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
 // Date selection via URL query parameter using curried pattern
@@ -361,8 +373,8 @@ useHead({
             <div v-else>
               <ChefCalendarDisplay
                   v-if="selectedSeason && selectedTeam"
-                  v-model:view-mode="calendarViewMode"
-                  v-model:accordion-open="calendarAccordionOpen"
+                  :view-mode="calendarViewMode"
+                  :accordion-open="calendarAccordionOpen"
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
@@ -370,6 +382,8 @@ useHead({
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"
                   @select="handleDinnerSelect"
+                  @tab-click="handleTabClick"
+                  @update:accordion-open="handleAccordionToggle"
               />
             </div>
           </template>

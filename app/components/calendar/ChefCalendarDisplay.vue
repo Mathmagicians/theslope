@@ -74,6 +74,8 @@ interface Props {
   deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
+  viewMode: 'agenda' | 'calendar'
+  accordionOpen: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -83,6 +85,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   select: [dinnerId: number]
+  'tab-click': [mode: 'agenda' | 'calendar']
+  'update:accordion-open': [open: boolean]
 }>()
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
@@ -97,13 +101,14 @@ const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === prop
 const focusDate = computed(() => selectedDinner.value ? new Date(selectedDinner.value.date) : null)
 
 // View state with horizontal tabs
-// Parent controls via v-model:view-mode (URL query param for persistence)
+// Both viewMode and accordionOpen are one-way props to prevent race conditions
+// Changes emit via events for atomic updates in parent
 const viewTabs = [
   { label: 'Agenda', value: 'agenda', icon: 'i-heroicons-list-bullet' },
   { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
 ]
-const viewMode = defineModel<'agenda' | 'calendar'>('viewMode', { required: true })
-const accordionOpen = defineModel<boolean>('accordionOpen', { default: true })
+const viewMode = toRef(props, 'viewMode')
+const accordionOpen = toRef(props, 'accordionOpen')
 
 // Temporal splitting using shared composable
 const {
@@ -234,12 +239,21 @@ const legendItems = computed(() => [
   }
 ])
 
-// Accordion item value: '0' = open (first item), undefined = closed
+// Accordion bridge: convert boolean prop to UAccordion's string value model
+// UAccordion uses '0' = first item open, undefined = all closed
 const accordionItems = [{ slot: 'calendar-content', value: '0' }]
 const accordionValue = computed({
   get: () => accordionOpen.value ? '0' : undefined,
-  set: (v) => { accordionOpen.value = v === '0' }
+  set: (v) => {
+    // When UAccordion changes, emit event to parent
+    emit('update:accordion-open', v === '0')
+  }
 })
+
+// Handle tab click - emit to parent which will set mode AND open accordion
+const handleTabClick = (mode: 'agenda' | 'calendar') => {
+  emit('tab-click', mode)
+}
 
 </script>
 
@@ -262,12 +276,13 @@ const accordionValue = computed({
     <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
       <!-- Custom leading slot: tabs instead of label -->
       <template #leading>
+        <!-- Tab click always emits to parent for atomic state update -->
         <UTabs
-          v-model="viewMode"
+          :model-value="viewMode"
           :items="viewTabs"
           orientation="horizontal"
           variant="link"
-          @update:model-value="accordionOpen = true"
+          @update:model-value="(m) => handleTabClick(m as 'agenda' | 'calendar')"
         />
       </template>
 
@@ -331,16 +346,25 @@ const accordionValue = computed({
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
               <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
+              <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
               <UChip
                 v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
                 show
                 size="md"
                 :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
-                :data-testid="`calendar-dinner-date-${day.day}`"
-                :class="isSelected(day) ? CHEF_CALENDAR.selection : ''"
-                @click="handleDateClick(day)"
               >
-                {{ day.day }}
+                <div
+                  :data-testid="`calendar-dinner-date-${day.day}`"
+                  :class="[
+                    SIZES.calendarCircle,
+                    CALENDAR.day.shape,
+                    getDayColorClass(getDayType(eventLists)!),
+                    isSelected(day) ? CHEF_CALENDAR.selection : ''
+                  ]"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
               </UChip>
 
               <!-- Regular day circle (on-track, past, or cancelled) -->
@@ -366,9 +390,9 @@ const accordionValue = computed({
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <!-- Chip for deadline indicators -->
+                  <!-- Chip for deadline indicators (wraps styled circle like calendar) -->
                   <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor as NuxtUIColor">
-                    1
+                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, CHEF_CALENDAR.day.future]">1</div>
                   </UChip>
                   <!-- Circle for other indicators -->
                   <div v-else :class="legendItem.circleClass">

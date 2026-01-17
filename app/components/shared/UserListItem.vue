@@ -43,7 +43,7 @@ interface Props {
   showNames?: boolean
   useFullName?: boolean
   nameFormatter?: (inhabitant: InhabitantDisplay) => string
-  label?: string
+  description?: string  // Shows after names/count (e.g., "Holdets kokke")
   linkToProfile?: boolean
   icon?: string
 }
@@ -58,7 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
   showNames: true,
   useFullName: false,
   nameFormatter: undefined,
-  label: undefined,
+  description: undefined,
   linkToProfile: true,
   icon: undefined
 })
@@ -143,17 +143,31 @@ const {getUserUrl} = useHeynabo()
 
 <template>
   <!-- GROUP MODE -->
-  <div v-if="isGroup" class="flex items-center gap-2">
-    <!-- Avatar group -->
-    <UAvatarGroup :max="maxAvatars" :size="avatarSize">
-      <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
-        <ULink
-          v-if="linkToProfile"
-          :to="getUserUrl(inhabitant.heynaboId)"
-          target="_blank"
-          class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
-        >
-          <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
+  <div v-if="isGroup" class="flex flex-col gap-1">
+    <!-- Description (shows above) -->
+    <span v-if="description && !compact" class="text-xs text-gray-500 dark:text-gray-400">{{ description }}</span>
+
+    <!-- Avatars + Names row -->
+    <div class="flex items-center gap-2">
+      <!-- Avatar group -->
+      <UAvatarGroup :max="maxAvatars" :size="avatarSize">
+        <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
+          <ULink
+            v-if="linkToProfile"
+            :to="getUserUrl(inhabitant.heynaboId)"
+            target="_blank"
+            class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
+          >
+            <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
+              <UAvatar
+                :src="inhabitant.pictureUrl ?? undefined"
+                :alt="`${inhabitant.name} ${inhabitant.lastName}`"
+                :icon="avatarIcon"
+                :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+              />
+            </UTooltip>
+          </ULink>
+          <UTooltip v-else :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
             <UAvatar
               :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
@@ -161,30 +175,19 @@ const {getUserUrl} = useHeynabo()
               :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
             />
           </UTooltip>
-        </ULink>
-        <UTooltip v-else :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
-          <UAvatar
-            :src="inhabitant.pictureUrl ?? undefined"
-            :alt="`${inhabitant.name} ${inhabitant.lastName}`"
-            :icon="avatarIcon"
-            :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
-          />
-        </UTooltip>
-      </template>
-    </UAvatarGroup>
+        </template>
+      </UAvatarGroup>
 
-    <!-- Names (when showNames=true) -->
-    <span v-if="showNames && groupNamesDisplay" class="text-sm font-medium">
-      {{ groupNamesDisplay }}
-    </span>
+      <!-- Names (when showNames=true) -->
+      <span v-if="showNames && groupNamesDisplay" class="text-sm font-medium">
+        {{ groupNamesDisplay }}
+      </span>
 
-    <!-- Count + label (when showNames=false) -->
-    <template v-else>
-      <UBadge size="sm" color="primary">
+      <!-- Count badge (when showNames=false) -->
+      <UBadge v-if="!showNames" size="sm" color="primary">
         {{ count }}
       </UBadge>
-      <span v-if="label && !compact" class="text-sm">{{ label }}</span>
-    </template>
+    </div>
   </div>
 
   <!-- SINGLE MODE -->

@@ -11,7 +11,8 @@ export default defineAppConfig({
             endWeek: 26,
             holidays: [8, 42, 52],
             cookingDays: ['mandag', 'tirsdag', 'onsdag', 'torsdag'] ,
-            ticketIsCancellableDaysBefore: 10,
+            menuIsAnnouncedDaysBefore: 10,
+            ticketIsCancellableDaysBefore: 8,
             diningModeIsEditableMinutesBefore: 90,
             ticketPrices: [
                 { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2 },

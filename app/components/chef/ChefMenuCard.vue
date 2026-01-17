@@ -121,7 +121,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -517,25 +517,32 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef display - portrait frame with chef hat -->
-        <div v-if="dinnerEvent.chef" class="flex items-center gap-3 pt-4 mt-4" data-testid="chef-display">
-          <!-- Portrait frame around avatar only -->
+        <!-- Chef display - portrait frame with chef hat (or WANTED when no chef) -->
+        <div
+          class="flex items-center gap-3 pt-4 mt-4"
+          :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+          :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
+        >
+          <!-- Portrait frame around avatar -->
           <div class="relative">
             <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
               <UserListItem
+                v-if="dinnerEvent.chef"
                 :inhabitants="dinnerEvent.chef"
                 :show-names="false"
                 :link-to-profile="false"
                 :size="SIZES.standard"
               />
+              <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
             </div>
             <!-- Chef hat on top -->
             <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
           </div>
-          <!-- Name + subtle chefkok label -->
+          <!-- Name or WANTED -->
           <div class="flex flex-col">
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-            <span :class="TYPOGRAPHY.bodyTextMuted">Chefkok</span>
+            <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
+            <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
+            <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
           </div>
         </div>
 

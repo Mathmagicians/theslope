@@ -108,6 +108,88 @@ Rate limits login attempts to prevent credential stuffing attacks.
 
 ---
 
+## Release & Deployment
+
+### Version Formats
+
+TheSlope uses semantic versioning with build metadata:
+
+| Type | Format | Example | When |
+|------|--------|---------|------|
+| **Release Candidate** | `{version}-rc.{commits}+{sha}` | `0.1.5-rc.3+a1b2c3d` | Automated dev deployments |
+| **Production Release** | `{version}+{sha}` | `0.1.5+a1b2c3d` | Tagged releases to prod |
+
+**Components:**
+- `{version}`: Next patch version (auto-calculated from last git tag)
+- `{commits}`: Commits since last tag (RC only)
+- `{sha}`: Short commit SHA (7 chars)
+
+### Version Display Locations
+
+Users can verify the deployed version:
+
+1. **PageFooter** - Visible on all pages
+   - RC: `Theslope v0.1.5-rc.3+a1b2c3d · 2026-01-17`
+   - Release: `Theslope v0.1.5+a1b2c3d · 2026-01-17`
+
+2. **Health Endpoint** - Machine-readable (`/api/public/health`)
+   ```json
+   {
+     "status": "ok",
+     "timestamp": "2026-01-17T12:00:00.000Z",
+     "version": "0.1.5+a1b2c3d",
+     "releaseDate": "2026-01-17",
+     "sha": "a1b2c3d1234567890abcdef",
+     "isRelease": true
+   }
+   ```
+
+### Triggering Releases
+
+**Development (Automated):**
+- Every push to `main` deploys RC to dev
+- Version auto-calculated: `make version`
+- GitHub Actions sets version env vars
+
+**Production (Manual):**
+1. Navigate to: Actions → Release Workflow → Run workflow
+2. Select branch (usually `main`)
+3. Enter version tag (e.g., `v0.1.5`)
+4. Workflow creates git tag → deploys to prod with release version
+
+**Makefile Targets:**
+
+```bash
+# Local deployment with version info
+make deploy-dev    # Deploy to dev with RC version
+make deploy-prod   # Deploy to prod with release version
+
+# Version information
+make version       # Output: 0.1.5-rc.3+a1b2c3d
+make version-info  # Output all version env vars
+```
+
+### Rollback Process
+
+**Via GitHub Actions:**
+1. Navigate to: Actions → Release Workflow → Run workflow
+2. Select previous release tag from branch dropdown
+3. Re-run workflow → deploys old version to prod
+
+**Via Makefile (requires Wrangler auth):**
+```bash
+git checkout v0.1.4           # Checkout old release
+make deploy-prod              # Deploy old version
+```
+
+**Verification:**
+```bash
+curl https://www.skraaningen.dk/api/health | jq '.version'
+# Should return: "0.1.4+oldsha"
+```
+
+---
+
 ## Routine Operations
 
 ### Rotate Cloudflare Bypass Token

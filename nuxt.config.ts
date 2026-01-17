@@ -112,6 +112,8 @@ export default defineNuxtConfig({
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
         // Public keys that are exposed to the client
         public: {
+            RELEASE_VERSION: "",  // Overridden by NUXT_PUBLIC_RELEASE_VERSION
+            RELEASE_DATE: "",      // Overridden by NUXT_PUBLIC_RELEASE_DATE
             apiBase: '/api',
             HEY_NABO_API: '',  // Overridden at runtime by NUXT_PUBLIC_HEY_NABO_API
             COMMIT_ID: process.env.GITHUB_SHA || 'development'

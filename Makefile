@@ -181,6 +181,42 @@ d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
 	$(call d1_exec,theslope,DELETE FROM AllergyType WHERE name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %',--local)
 	@echo "✅ Test allergy types cleaned up!"
 
+# ============================================================================
+# VERSION MANAGEMENT
+# ============================================================================
+.PHONY: version version-info
+
+# Get commit SHA (CI provides GITHUB_SHA, local uses git)
+GIT_SHA := $(or $(GITHUB_SHA),$(shell git rev-parse HEAD 2>/dev/null || echo "unknown"))
+GIT_SHA_SHORT := $(shell echo $(GIT_SHA) | cut -c1-7)
+
+# Get last version tag
+LAST_TAG := $(shell git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v0.0.0")
+LAST_VERSION := $(shell echo $(LAST_TAG) | sed 's/^v//')
+
+# Count commits since last tag
+COMMITS_SINCE_TAG := $(shell git rev-list $(LAST_TAG)..HEAD --count 2>/dev/null || echo "0")
+
+# Calculate next patch version
+NEXT_PATCH := $(shell echo $(LAST_VERSION) | awk -F. '{printf "%d.%d.%d", $$1, $$2, $$3+1}')
+
+# Build timestamp (ISO 8601 date only)
+BUILD_DATE := $(shell date -u +%Y-%m-%d)
+
+# Version logic: RELEASE_VERSION env var takes precedence, else RC
+VERSION := $(if $(RELEASE_VERSION),$(RELEASE_VERSION),$(NEXT_PATCH)-rc.$(COMMITS_SINCE_TAG))
+FULL_VERSION := $(VERSION)+$(GIT_SHA_SHORT)
+
+version: ## Output version string
+	@echo "$(FULL_VERSION)"
+
+version-info: ## Output all version components as env vars
+	@echo "RELEASE_VERSION=$(FULL_VERSION)"
+	@echo "RELEASE_DATE=$(BUILD_DATE)"
+	@echo "COMMIT_SHA=$(GIT_SHA)"
+	@echo "IS_RELEASE=$(if $(RELEASE_VERSION),true,false)"
+	@echo "SHORT_VERSION=$(VERSION)"
+
 d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
 
@@ -189,11 +225,11 @@ d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytyp
 # ============================================================================
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod
 
-deploy-dev: ## Deploy to dev with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy && "Released version with commit ID $(GITHUB_SHA) to dev environment."
+deploy-dev: ## Deploy to dev with version info
+	@eval $$(make version-info) && NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy && echo "Released version $$RELEASE_VERSION to dev environment."
 
-deploy-prod: ## Deploy to prod with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy:prod && "Released version with commit ID $(GITHUB_SHA) to prod environment."
+deploy-prod: ## Deploy to prod with version info
+	@eval $$(make version-info) && NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy:prod && echo "Released version $$RELEASE_VERSION to prod environment."
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty

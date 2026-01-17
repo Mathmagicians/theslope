@@ -134,7 +134,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
   // ============================================================================
   // BOOKING FLOW TESTS (parametrized)
-  // Events BEFORE deadline (>10 days) so scaffold can CREATE
+  // Events BEFORE deadline (>8 days) so scaffold can CREATE
   // ============================================================================
 
   test.describe('Booking Flows', () => {
@@ -147,7 +147,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       test(`GIVEN single inhabitant WHEN booking with ${description} THEN order created`, async ({ browser }) => {
         const context = await validatedBrowserContext(browser)
 
-        // Event 15 days from now = BEFORE 10-day deadline = scaffold can create
+        // Event 15 days from now = BEFORE 8-day deadline = scaffold can create
         const event = await DinnerEventFactory.createDinnerEvent(context, {
           seasonId: testSeason.id!,
           date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
@@ -242,8 +242,8 @@ test.describe('Household Scaffold API (ADR-016)', () => {
    * ═══════════════════════════════════════════════════════════════════════════
    *
    * Deadline constraint:
-   * - CREATE via scaffold: events BEFORE deadline (>10 days away)
-   * - RELEASE (not delete): events AFTER deadline (<10 days away)
+   * - CREATE via scaffold: events BEFORE deadline (>8 days away)
+   * - RELEASE (not delete): events AFTER deadline (<8 days away)
    *
    * Two distinct codepaths when reclaiming released tickets:
    *

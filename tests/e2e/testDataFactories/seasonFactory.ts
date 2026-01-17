@@ -106,7 +106,7 @@ export class SeasonFactory {
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
-        ticketIsCancellableDaysBefore: 10,
+        ticketIsCancellableDaysBefore: 8,  // Booking deadline (matches app.config.ts)
         diningModeIsEditableMinutesBefore: 90
     }
 

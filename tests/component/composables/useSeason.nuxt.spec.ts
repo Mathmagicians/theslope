@@ -380,15 +380,17 @@ describe('getHolidaysForSeason', () => {
 })
 
 describe('deadlinesForSeason', () => {
-    const { deadlinesForSeason } = useSeason()
+    const { deadlinesForSeason, getMenuAnnouncementDeadlineDays } = useSeason()
 
     // Default season config (matches app.config.ts defaults)
+    // Note: booking deadline (8 days) is from season, menu deadline (10 days) is from config
     const defaultSeasonConfig = {
-        ticketIsCancellableDaysBefore: 10,
+        ticketIsCancellableDaysBefore: 8,  // Booking deadline (from season)
         diningModeIsEditableMinutesBefore: 60
     }
+    const menuDeadlineDays = getMenuAnnouncementDeadlineDays()  // Menu deadline (from config = 10)
 
-    describe('canModifyOrders', () => {
+    describe('canModifyOrders (booking deadline from season = 8 days)', () => {
         const { canModifyOrders } = deadlinesForSeason(defaultSeasonConfig)
 
         it('should allow modifications when dinner is far in future', () => {
@@ -401,7 +403,7 @@ describe('deadlinesForSeason', () => {
             // WHEN: Checking if orders can be modified
             const result = canModifyOrders(dinnerDate)
 
-            // THEN: Should allow (15 days > 10 days deadline)
+            // THEN: Should allow (15 days > 8 days booking deadline)
             expect(result).toBe(true)
         })
 
@@ -415,7 +417,7 @@ describe('deadlinesForSeason', () => {
             // WHEN: Checking if orders can be modified
             const result = canModifyOrders(dinnerDate)
 
-            // THEN: Should not allow (1 day < 10 days deadline)
+            // THEN: Should not allow (1 day < 8 days booking deadline)
             expect(result).toBe(false)
         })
 
@@ -495,27 +497,39 @@ describe('deadlinesForSeason', () => {
         })
     })
 
-    describe('isAnnounceMenuPastDeadline', () => {
+    describe('isAnnounceMenuPastDeadline (menu deadline from config = 10 days)', () => {
         const { isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+
+        // Verify the menu deadline is correctly read from config
+        it('should use menu deadline from app config (not season)', () => {
+            // Menu deadline comes from config (10 days), not season (8 days)
+            expect(menuDeadlineDays).toBe(10)
+        })
 
         it.each([
             {
                 description: 'far in future (11 days)',
                 daysOffset: 11,
                 hoursOffset: 0,
-                expected: false  // Not past 10-day deadline
+                expected: false  // Not past 10-day menu deadline
+            },
+            {
+                description: 'at 9 days (within menu deadline but past booking deadline)',
+                daysOffset: 9,
+                hoursOffset: 0,
+                expected: true  // Past 10-day menu deadline (chef must have announced)
             },
             {
                 description: 'tomorrow',
                 daysOffset: 1,
                 hoursOffset: 0,
-                expected: true  // Past 10-day deadline
+                expected: true  // Past 10-day menu deadline
             },
             {
                 description: 'same day before dinner time',
                 daysOffset: 0,
                 hoursOffset: 6,
-                expected: true  // Past 10-day deadline
+                expected: true  // Past 10-day menu deadline
             },
             {
                 description: 'in the past (yesterday)',
@@ -541,6 +555,25 @@ describe('deadlinesForSeason', () => {
 
             // THEN: Returns expected result
             expect(result).toBe(expected)
+        })
+
+        it('should distinguish between menu deadline (10 days) and booking deadline (8 days)', () => {
+            // GIVEN: Dinner 9 days from now (between the two deadlines)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 9)
+
+            const { canModifyOrders, isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+
+            // WHEN: Checking both deadlines
+            const canBook = canModifyOrders(dinnerDate)
+            const menuDeadlinePassed = isAnnounceMenuPastDeadline(dinnerDate)
+
+            // THEN: Users CAN still book (9 > 8 booking deadline)
+            // BUT menu deadline HAS passed (9 < 10 menu deadline)
+            expect(canBook).toBe(true)
+            expect(menuDeadlinePassed).toBe(true)
         })
     })
 }) // Close deadlinesForSeason describe

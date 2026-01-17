@@ -126,7 +126,7 @@ test.describe('Order API', () => {
   test('POST cancellation AFTER deadline releases order (state=RELEASED, user pays)', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Default season events are within 7 days (< 10 day deadline) = AFTER deadline
+    // Default season events are within 7 days (< 8 day deadline) = AFTER deadline
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
@@ -161,7 +161,7 @@ test.describe('Order API', () => {
   test('POST cancellation BEFORE deadline deletes order (user not charged)', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create season with events far in the future (15+ days = BEFORE 10-day deadline)
+    // Create season with events far in the future (15+ days = BEFORE 8-day deadline)
     const futureStart = new Date()
     futureStart.setDate(futureStart.getDate() + 15)
     const futureEnd = new Date(futureStart)

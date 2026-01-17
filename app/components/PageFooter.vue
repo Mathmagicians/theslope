@@ -26,7 +26,10 @@ const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
       <span :class="TYPOGRAPHY.footerText">Copyright @themathmagician  @2025 </span>
     </template>
     <div :class="`flex flex-col md:flex-row items-center justify-between gap-4 py-4`">
-      <span :class="TYPOGRAPHY.footerText">Theslope v {{ $config.public.COMMIT_ID?.substring(0, 7) }}</span>
+      <span :class="TYPOGRAPHY.footerText">
+        Theslope {{ $config.public.RELEASE_VERSION || `v${$config.public.COMMIT_ID?.substring(0, 7)}` }}
+        <span v-if="$config.public.RELEASE_DATE"> · {{ $config.public.RELEASE_DATE }}</span>
+      </span>
       <span :class="TYPOGRAPHY.footerText">Created with  🦄 & 🌈</span>
     </div>
 

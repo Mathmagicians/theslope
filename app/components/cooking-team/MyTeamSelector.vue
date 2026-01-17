@@ -39,10 +39,14 @@ const emit = defineEmits<{
 const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
 const { getTeamColor, getTeamShortName } = useCookingTeam()
 
-// Tab orientation: vertical on desktop, horizontal on mobile (inverted from standard responsive)
-const tabOrientation = computed(() =>
-  ORIENTATIONS.responsive.value === 'horizontal' ? 'vertical' : 'horizontal'
-)
+// Tab orientation:
+// - Fewer than 3 teams: always horizontal (fits nicely in a row)
+// - 3+ teams on desktop: vertical (takes less horizontal space)
+// - 3+ teams on mobile: horizontal (standard mobile pattern)
+const tabOrientation = computed(() => {
+  if (props.teams.length < 3) return 'horizontal'
+  return ORIENTATIONS.responsive.value === 'horizontal' ? 'vertical' : 'horizontal'
+})
 
 // Find selected team index from team ID
 const selectedTeamIndex = computed({
