@@ -2,13 +2,18 @@
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
+// Props - canEdit from parent for authorization
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 const UButton = resolveComponent('UButton')
 
 const store = useUsersStore()
 const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
-
-const authStore = useAuthStore()
-const {isAdmin} = storeToRefs(authStore)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRoles()
@@ -214,7 +219,7 @@ const pagination = ref({
             v-if="expandedUser"
             :user="expandedUser"
             :show-actions="false"
-            :show-role-manager="isAdmin"
+            :show-role-manager="props.canEdit"
           />
           <p v-else class="text-gray-500">Ingen brugerdata tilgængelig</p>
         </div>

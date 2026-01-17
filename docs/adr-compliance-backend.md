@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-13 (ADR-016 unified booking scaffold endpoint)
+**Last Updated:** 2026-01-17 (Admin economy tree view endpoints)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -91,8 +91,10 @@
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |
 | `/api/calendar/feed.ts` | ❌ | ✅ | |
 | `/api/auth/login.post.ts` | ❌ | ✅ | |
-| **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2025-12-03)**                                                               |
+| **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2026-01-17)** - Added admin economy tree view endpoints                    |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
+| `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
+| `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |

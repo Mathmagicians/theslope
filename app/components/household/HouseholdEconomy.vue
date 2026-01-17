@@ -7,12 +7,11 @@
  * - Igangværende periode (Ikke faktureret): current billing period transactions
  * - Tidligere perioder (Faktureret): past invoices with grouped transactions
  *
- * Uses CostEntry/CostLine components for DRY display of grouped items.
+ * Uses EconomyTable for dinner tables, CostEntry/CostLine for grouped items.
  * Data: GET /api/billing?householdId=X + orders from bookingsStore + dinnerEvents from planStore
  */
 import {formatDate} from '~/utils/date'
-import {getPaginationRowModel} from '@tanstack/vue-table'
-import type {HouseholdBillingResponse, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 
 interface Props {
@@ -24,7 +23,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod} = useBilling()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
 
@@ -113,6 +112,7 @@ const currentPeriodData = computed(() =>
 // Past invoices with pre-grouped transactions
 interface InvoiceRow {
     id: number
+    date: Date  // paymentDate - for EconomyTable filtering/sorting
     billingPeriod: string
     amount: number
     paymentMonth: string
@@ -122,6 +122,7 @@ interface InvoiceRow {
 const pastInvoicesData = computed((): InvoiceRow[] =>
     billing.value?.pastInvoices.map(inv => ({
         id: inv.id,
+        date: new Date(inv.paymentDate),  // EconomyTable uses this
         billingPeriod: inv.billingPeriod.replace('-', ' - '),
         amount: inv.amount,
         paymentMonth: formatDate(new Date(inv.paymentDate), 'MMMM yyyy'),
@@ -129,18 +130,13 @@ const pastInvoicesData = computed((): InvoiceRow[] =>
     })) ?? []
 )
 
-// Single-expansion for tables
-const {expanded: expandedUpcoming} = useExpandableRow()
-const {expanded: expandedCurrent} = useExpandableRow()
-const {expanded: expandedInvoice} = useExpandableRow()
-
 // Single history visible at a time
 const historyOrderId = ref<number | null>(null)
 const toggleHistory = (orderId: number | null) => {
     historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
 
-// Table columns (shared for upcoming and current period)
+// Dinner columns (for EconomyTable)
 const dinnerColumns = [
     {id: 'expand'},
     {accessorKey: 'date', header: 'Dato'},
@@ -149,64 +145,17 @@ const dinnerColumns = [
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]
 
-const columns = {
-    upcoming: dinnerColumns,
-    current: dinnerColumns,
-    invoice: [
-        {id: 'expand'},
-        {accessorKey: 'billingPeriod', header: 'Forbrugsperiode'},
-        {accessorKey: 'amount', header: 'Beløb'},
-        {accessorKey: 'paymentMonth', header: 'PBS opkrævet'}
-    ]
-}
+// Invoice columns (for past invoices table)
+const invoiceColumns = [
+    {id: 'expand'},
+    {accessorKey: 'billingPeriod', header: 'Forbrugsperiode'},
+    {accessorKey: 'amount', header: 'Beløb'},
+    {accessorKey: 'paymentMonth', header: 'PBS opkrævet'}
+]
 
-// Search/filter state
-const searchQuery = ref('')
-const sortDescending = ref(false)
-
-// Pagination state
-const pagination = ref({pageIndex: 0, pageSize: 5})
-
-// Table refs for pagination control
-const upcomingTable = useTemplateRef('upcomingTable')
-const currentTable = useTemplateRef('currentTable')
-const invoiceTable = useTemplateRef('invoiceTable')
-
-// Filter upcoming orders by menu title or inhabitant name
-const filteredUpcomingData = computed(() => {
-    let result = upcomingOrdersData.value
-    if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase()
-        result = result.filter(group =>
-            group.menuTitle.toLowerCase().includes(query) ||
-            group.items.some(item => item.inhabitant.name.toLowerCase().includes(query))
-        )
-    }
-    if (sortDescending.value) {
-        result = [...result].reverse()
-    }
-    return result
-})
-
-// Filter current period by menu title or inhabitant name
-const filteredCurrentData = computed(() => {
-    let result = currentPeriodData.value
-    if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase()
-        result = result.filter(group =>
-            group.menuTitle.toLowerCase().includes(query) ||
-            group.items.some(item => item.inhabitant.name.toLowerCase().includes(query))
-        )
-    }
-    if (sortDescending.value) {
-        result = [...result].reverse()
-    }
-    return result
-})
-
-// Totals
+// Totals (using raw data - EconomyTable handles filtering internally)
 const upcomingTotal = computed(() =>
-    filteredUpcomingData.value.reduce((sum, g) => sum + g.totalAmount, 0)
+    upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
 
 // Upcoming period starts after current billing period
@@ -236,13 +185,11 @@ const upcomingPeriodStart = computed(() => {
           </div>
         </template>
 
-        <UTable
-            v-model:expanded="expandedUpcoming"
+        <EconomyTable
             :data="upcomingOrdersData"
-            :columns="columns.upcoming"
-            :ui="COMPONENTS.table.ui"
-            :loading="isOrdersLoading"
+            :columns="dinnerColumns"
             row-key="dinnerEventId"
+            :loading="isOrdersLoading"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -256,7 +203,6 @@ const upcomingPeriodStart = computed(() => {
                 @click="row.toggleExpanded()"
             />
           </template>
-          <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
             <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
@@ -283,7 +229,7 @@ const upcomingPeriodStart = computed(() => {
                 description="Du har ikke booket nogen middage endnu - hop over til Tilmeldinger!"
             />
           </template>
-        </UTable>
+        </EconomyTable>
 
         <template v-if="upcomingOrdersData.length > 0" #footer>
           <div class="flex justify-end items-center gap-2">
@@ -307,12 +253,9 @@ const upcomingPeriodStart = computed(() => {
           </div>
         </template>
 
-        <UTable
-            v-if="currentPeriodData.length > 0"
-            v-model:expanded="expandedCurrent"
+        <EconomyTable
             :data="currentPeriodData"
-            :columns="columns.current"
-            :ui="COMPONENTS.table.ui"
+            :columns="dinnerColumns"
             row-key="dinnerEventId"
         >
           <template #expand-cell="{ row }">
@@ -326,7 +269,6 @@ const upcomingPeriodStart = computed(() => {
                 @click="row.toggleExpanded()"
             />
           </template>
-          <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
             <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
@@ -344,8 +286,16 @@ const upcomingPeriodStart = computed(() => {
               </div>
             </UCard>
           </template>
-        </UTable>
-        <p v-else :class="[TYPOGRAPHY.bodyTextMuted, 'py-4']">Ingen transaktioner i denne periode</p>
+          <template #empty>
+            <UAlert
+                :icon="ICONS.robotHappy"
+                color="neutral"
+                variant="subtle"
+                title="Tomt her!"
+                description="Ingen transaktioner i denne periode - måske er alle på ferie?"
+            />
+          </template>
+        </EconomyTable>
 
         <template #footer>
           <div class="flex justify-end items-center gap-2">
@@ -364,12 +314,11 @@ const upcomingPeriodStart = computed(() => {
           </div>
         </template>
 
-        <UTable
-            v-model:expanded="expandedInvoice"
+        <EconomyTable
             :data="pastInvoicesData"
-            :columns="columns.invoice"
-            :ui="COMPONENTS.table.ui"
+            :columns="invoiceColumns"
             row-key="id"
+            search-placeholder="Søg måned..."
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -408,16 +357,16 @@ const upcomingPeriodStart = computed(() => {
               </div>
             </UCard>
           </template>
-        </UTable>
+        </EconomyTable>
       </UCard>
 
       <UAlert
           v-else
-          :icon="ICONS.clock"
+          :icon="ICONS.robotHappy"
           color="neutral"
           variant="subtle"
-          title="Ingen tidligere perioder"
-          description="Der er endnu ikke afsluttede faktureringsperioder."
+          title="Tomt her!"
+          description="Ingen fakturerede perioder endnu - PBS-robot sover stadig!"
       />
     </template>
 

@@ -3,8 +3,6 @@ import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
@@ -23,7 +21,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
     let householdId: number
     let shortName: string
     let scroogeId: number
-    let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
+    let _activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
 
     // Track all created inhabitants for cleanup
@@ -45,7 +43,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         const memberContext = await memberValidatedBrowserContext(browser)
 
         // Use singleton to prevent parallel test conflicts with active seasons
-        activeSeason = await SeasonFactory.createActiveSeason(adminContext)
+        _activeSeason = await SeasonFactory.createActiveSeason(adminContext)
 
         // Get member's household (member must access their own household)
         const {householdId: memberHouseholdId} = await getSessionUserInfo(memberContext)
@@ -175,188 +173,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         await expect(updatedViewPreferences).toBeVisible()
     })
 
-    test('ADR-015: GIVEN inhabitant with NONE prefs WHEN changing to DINEIN via UI THEN bookings are scaffolded', async ({page, browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-
-        // GIVEN: Create inhabitant with NONE preferences (using admin for setup)
-        const nonePrefs = createDefaultWeekdayMap(DinnerMode.NONE)
-        const donald = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
-            name: salt('Anders', testSalt),  // Use Anders- pattern for d1-nuke-all cleanup
-            lastName: salt('Duck', testSalt),
-            dinnerPreferences: nonePrefs
-        })
-        createdInhabitantIds.push(donald.id)
-
-        // GIVEN: Get dinner events for the singleton active season
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, activeSeason.id!)
-        expect(dinnerEvents.length, 'Season should have at least 3 dinner events').toBeGreaterThanOrEqual(3)
-
-        // Verify no orders exist for Donald initially
-        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id!))
-        const donaldInitialOrders = initialOrders.filter(o => o.inhabitantId === donald.id)
-        expect(donaldInitialOrders.length, 'Donald should have no orders initially').toBe(0)
-
-        // WHEN: Navigate to members page
-        await goToHouseholdMembers(page)
-
-        // WHEN: Click pencil icon to edit Donald's preferences
-        await pollUntil(
-            async () => {
-                const editButton = page.locator(`[data-testid="inhabitant-${donald.id}-edit-preferences"]`)
-                return await editButton.count() > 0
-            },
-            (count) => count,
-            10
-        )
-        await page.locator(`[data-testid="inhabitant-${donald.id}-edit-preferences"]`).click()
-
-        // WHEN: Wait for edit mode buttons to appear (Mon/Wed/Fri buttons visible)
-        await pollUntil(
-            async () => {
-                const button = page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`)
-                return await button.count() > 0
-            },
-            (count) => count,
-            10
-        )
-
-        // WHEN: Change all cooking days to DINEIN (Mon, Wed, Fri)
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-onsdag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-fredag-DINEIN`).click()
-
-        // WHEN: Save preferences (triggers scaffolding)
-        await page.getByTestId('save-preferences').click()
-
-        // THEN: Wait for result alert to appear (confirms save completed)
-        await pollUntil(
-            async () => await page.getByTestId('last-result-alert').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-
-        // THEN: Wait for save to complete and verify orders were scaffolded (one per cooking day)
-        const expectedOrderCount = dinnerEvents.length
-        const ordersAfter = await pollUntil(
-            async () => {
-                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id!))
-                return orders.filter(o => o.inhabitantId === donald.id)
-            },
-            (orders) => orders.length === expectedOrderCount
-        )
-
-        expect(ordersAfter.length, `Donald should have ${expectedOrderCount} scaffolded orders`).toBe(expectedOrderCount)
-    })
-
-    test('ADR-015: GIVEN household with 2+ inhabitants with NONE prefs WHEN using power mode to set DINEIN THEN all inhabitants get orders scaffolded', async ({page, browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const powerModeTestSalt = temporaryAndRandom()
-
-        // GIVEN: Create 2 inhabitants with NONE preferences in member's household
-        const today = new Date()
-        const nonePrefs = createDefaultWeekdayMap(DinnerMode.NONE)
-
-        // Use Anders- pattern for d1-nuke-all cleanup
-        const [daisy, dewey] = await Promise.all([
-            HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
-                name: salt('Anders', powerModeTestSalt),
-                lastName: 'Adult',
-                birthDate: new Date(today.getFullYear() - 25, today.getMonth(), 1),
-                dinnerPreferences: nonePrefs
-            }),
-            HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
-                name: salt('Anders', `${powerModeTestSalt}-2`),
-                lastName: 'Child',
-                birthDate: new Date(today.getFullYear() - 10, today.getMonth(), 1),
-                dinnerPreferences: nonePrefs
-            })
-        ])
-        createdInhabitantIds.push(daisy.id, dewey.id)
-
-        // GIVEN: Get dinner events
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, activeSeason.id!)
-        expect(dinnerEvents.length, 'Season should have at least 3 dinner events').toBeGreaterThanOrEqual(3)
-
-        // Verify no orders exist initially for both inhabitants
-        const allDinnerEventIds = dinnerEvents.map(e => e.id!)
-        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, allDinnerEventIds)
-        const daisyInitialOrders = initialOrders.filter(o => o.inhabitantId === daisy.id)
-        const deweyInitialOrders = initialOrders.filter(o => o.inhabitantId === dewey.id)
-        expect(daisyInitialOrders.length, 'Daisy should have no orders initially').toBe(0)
-        expect(deweyInitialOrders.length, 'Dewey should have no orders initially').toBe(0)
-
-        // WHEN: Navigate to member's household
-        await goToHouseholdMembers(page)
-
-        // WHEN: Click power mode toggle (bolt icon)
-        const powerModeToggle = page.getByTestId('power-mode-toggle')
-        await pollUntil(
-            async () => await powerModeToggle.isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-        await powerModeToggle.click()
-
-        // WHEN: Wait for power mode edit buttons to appear
-        const powerModeButtonFound = await pollUntil(
-            async () => {
-                const button = page.getByTestId('power-mode-preferences-edit-mandag-DINEIN')
-                return await button.count() > 0
-            },
-            (count) => count,
-            5  // Reduced to 5 retries to stay within test timeout
-        ).catch(() => false)
-
-        // Debug: if button not found, show what testids ARE present
-        if (!powerModeButtonFound) {
-            const allTestIds = await page.locator('[data-testid]').evaluateAll(
-                els => els.map(el => el.getAttribute('data-testid'))
-            )
-            const relevantTestIds = allTestIds.filter(id => id?.includes('power-mode') || id?.includes('preferences'))
-            throw new Error(`Power mode button not found. Found testids: [${relevantTestIds.join(', ')}]`)
-        }
-
-        // WHEN: Change all cooking days to DINEIN via power mode (Mon, Wed, Fri)
-        await page.getByTestId('power-mode-preferences-edit-mandag-DINEIN').click()
-        await page.getByTestId('power-mode-preferences-edit-onsdag-DINEIN').click()
-        await page.getByTestId('power-mode-preferences-edit-fredag-DINEIN').click()
-
-        // Documentation screenshot showing power mode editing
-        await doScreenshot(page, 'household/household-card-power-mode-editing', true)
-
-        // WHEN: Save preferences (triggers scaffolding for ALL inhabitants)
-        await page.getByTestId('save-preferences').click()
-
-        // THEN: Wait for result alert to appear (confirms save completed)
-        await pollUntil(
-            async () => await page.getByTestId('last-result-alert').isVisible(),
-            (isVisible) => isVisible,
-            15
-        )
-
-        // THEN: Verify orders scaffolded for both test inhabitants
-        const expectedOrdersPerInhabitant = dinnerEvents.length
-        const expectedTotalOrders = 2 * expectedOrdersPerInhabitant
-        const ordersAfter = await pollUntil(
-            async () => {
-                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, allDinnerEventIds)
-                return orders.filter(o => o.inhabitantId === daisy.id || o.inhabitantId === dewey.id)
-            },
-            (orders) => orders.length === expectedTotalOrders,
-            15,
-            500
-        )
-
-        const daisyOrders = ordersAfter.filter(o => o.inhabitantId === daisy.id)
-        const deweyOrders = ordersAfter.filter(o => o.inhabitantId === dewey.id)
-        expect(daisyOrders.length, `Inhabitant 1 should have ${expectedOrdersPerInhabitant} orders`).toBe(expectedOrdersPerInhabitant)
-        expect(deweyOrders.length, `Inhabitant 2 should have ${expectedOrdersPerInhabitant} orders`).toBe(expectedOrdersPerInhabitant)
-
-        // THEN: Verify last result alert appears with scaffold information
-        // Note: Power mode affects ALL household inhabitants, not just test ones
-        // So we verify the alert exists and shows "oprettet" (created) rather than exact count
-        const lastResultAlert = page.getByTestId('last-result-alert')
-        await expect(lastResultAlert).toContainText('oprettet')
-        // NOTE: Cleanup handled by afterAll
-    })
+    // NOTE: Scaffolding tests (ADR-015) moved to tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts
+    // They require a dedicated season with specific deadline settings (ticketIsCancellableDaysBefore)
+    // which conflicts with the shared singleton season used by parallel UI tests.
 })

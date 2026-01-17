@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends { ticketType: string | null }">
 /**
  * CostEntry - Grouped items by dinner event for economy display
  *
@@ -9,11 +9,10 @@
  */
 import {formatDate} from '~/utils/date'
 import type {CostEntry} from '~/composables/useBillingValidation'
-import type {TicketType} from '~/composables/useBookingValidation'
 
 interface Props {
     /** Cost entry with grouped items */
-    entry: CostEntry<{ ticketType: TicketType | null }>
+    entry: CostEntry<T>
     /** Show header with date/menu (false for flat lists) */
     showHeader?: boolean
 }

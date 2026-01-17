@@ -323,22 +323,7 @@ export class SeasonFactory {
 
             // Otherwise, activate it (this deactivates any other active season)
             console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-            const response = await context.request.post('/api/admin/season/active', {
-                headers: headers,
-                data: { seasonId: existingSingleton.id }
-            })
-
-            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-            const rawSeason = await response.json()
-
-            // Validate response
-            const {SeasonSchema} = useSeasonValidation()
-            const result = SeasonSchema.safeParse(rawSeason)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-            const activatedSeason = result.data!
-
-            expect(activatedSeason.isActive, 'Season should be active').toBe(true)
-
+            const activatedSeason = await this.activateSeason(context, existingSingleton.id!)
             this.activeSeason = activatedSeason
             return activatedSeason
         }
@@ -734,6 +719,34 @@ export class SeasonFactory {
         // 200 OK = active season ID
         expect(response.status()).toBe(200)
         return await response.json()
+    }
+
+    /**
+     * Activate an existing season by ID
+     * WARNING: This method may ONLY be used in SERIAL tests!
+     * Parallel tests MUST use createActiveSeason() which handles the singleton pattern.
+     * @param context BrowserContext for API requests
+     * @param seasonId ID of season to activate
+     * @returns Activated Season
+     */
+    static readonly activateSeason = async (
+        context: BrowserContext,
+        seasonId: number
+    ): Promise<Season> => {
+        const response = await context.request.post('/api/admin/season/active', {
+            headers: headers,
+            data: { seasonId }
+        })
+
+        expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+        const rawSeason = await response.json()
+
+        const {SeasonSchema} = useSeasonValidation()
+        const result = SeasonSchema.safeParse(rawSeason)
+        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+        expect(result.data!.isActive, 'Season should be active').toBe(true)
+        return result.data!
     }
 
     /**

@@ -1,5 +1,14 @@
 <script setup lang="ts">
 
+// AUTHORIZATION - Admin role check for edit actions (ADR pattern from household page)
+const authStore = useAuthStore()
+const {isAdmin, isAllergyManager} = storeToRefs(authStore)
+
+// canEdit: Admin can edit most tabs
+// canMutateAllergies: Admin OR AllergyManager can edit allergies tab
+const canEdit = computed(() => isAdmin.value)
+const canMutateAllergies = computed(() => isAdmin.value || isAllergyManager.value)
+
 // COMPONENT DEPENDENCIES
 const store = usePlanStore()
 const {initPlanStore} = store
@@ -141,6 +150,17 @@ useHead({
 
 <template>
   <div class="md:py-2 lg:p-4 min-h-screen">
+    <!-- Non-admin banner: shown when viewing as non-admin user -->
+    <UAlert
+      v-if="!canEdit"
+      data-testid="admin-readonly-banner"
+      icon="i-heroicons-eye"
+      color="info"
+      variant="subtle"
+      title="Hej, du er ikke administrator"
+      description="Se, men ikke røre"
+      class="mb-4"
+    />
     <UTabs
         v-model="activeTab"
         :items="tabItems"
@@ -158,7 +178,12 @@ useHead({
             :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`"
             :cause="planStoreError"/>
         <Loader v-else-if="!isPlanStoreReady && (activeTab === 'planning' || activeTab === 'teams')" :text="activeTab"/>
-        <component :is="asyncComponents[item.value]" v-else/>
+        <!-- Pass canEdit to components (allergies tab uses canMutateAllergies) -->
+        <component
+          :is="asyncComponents[item.value]"
+          v-else
+          :can-edit="item.value === 'allergies' ? canMutateAllergies : canEdit"
+        />
       </template>
     </UTabs>
   </div>

@@ -1,5 +1,5 @@
 import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState} from '~/composables/useBookingValidation'
-import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail, TransactionDisplay} from '~/composables/useBillingValidation'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -375,7 +375,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // BILLING PERIODS (ADR-007)
     // ========================================
 
-    const {MonthlyBillingResponseSchema, deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
+    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
 
     const {
         data: billingPeriods, status: billingPeriodsStatus,
@@ -417,6 +417,47 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const loadBillingPeriodDetail = (periodId: number) => {
         selectedBillingPeriodId.value = periodId
         console.info(CTX, `Loading billing period detail: ${periodId}`)
+    }
+
+    // Current period transactions (for "virtual" billing period in admin economy)
+    const {
+        data: currentPeriodTransactions, status: currentPeriodStatus,
+        error: currentPeriodError, refresh: refreshCurrentPeriodTransactions
+    } = useFetch<TransactionDisplay[]>(
+        '/api/admin/billing/current-period',
+        {
+            key: 'bookings-store-current-period',
+            default: () => [],
+            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
+        }
+    )
+
+    const isCurrentPeriodLoading = computed(() => currentPeriodStatus.value === 'pending')
+    const isCurrentPeriodErrored = computed(() => currentPeriodStatus.value === 'error')
+
+    // Invoice transactions (lazy load on invoice expand)
+    const selectedInvoiceId = ref<number | null>(null)
+    const selectedInvoiceKey = computed(() => `invoice-transactions-${selectedInvoiceId.value || 'null'}`)
+
+    const {
+        data: selectedInvoiceTransactions, status: selectedInvoiceStatus
+    } = useAsyncData<TransactionDisplay[]>(
+        selectedInvoiceKey,
+        () => {
+            if (!selectedInvoiceId.value) return Promise.resolve([])
+            return $fetch<TransactionDisplay[]>(`/api/admin/billing/invoices/${selectedInvoiceId.value}`)
+        },
+        {
+            default: () => [],
+            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
+        }
+    )
+
+    const isInvoiceTransactionsLoading = computed(() => selectedInvoiceStatus.value === 'pending')
+
+    const loadInvoiceTransactions = (invoiceId: number) => {
+        selectedInvoiceId.value = invoiceId
+        console.info(CTX, `Loading invoice transactions: ${invoiceId}`)
     }
 
     // ========================================
@@ -532,6 +573,18 @@ export const useBookingsStore = defineStore("Bookings", () => {
         selectedBillingPeriodDetail,
         selectedBillingPeriodError,
         isBillingPeriodDetailLoading,
-        loadBillingPeriodDetail
+        loadBillingPeriodDetail,
+
+        // current period (virtual billing period)
+        currentPeriodTransactions,
+        currentPeriodError,
+        isCurrentPeriodLoading,
+        isCurrentPeriodErrored,
+        refreshCurrentPeriodTransactions,
+
+        // invoice transactions (lazy load)
+        selectedInvoiceTransactions,
+        isInvoiceTransactionsLoading,
+        loadInvoiceTransactions
     }
 })

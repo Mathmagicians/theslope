@@ -180,7 +180,7 @@ export async function createOrders(
     auditContext: AuditContext
 ): Promise<CreateOrdersResult> {
     // Normalize to array (same pattern as deleteOrder)
-    const orders = [ordersData].flat()
+    const orders: OrderCreateWithPrice[] = Array.isArray(ordersData) ? ordersData : [ordersData]
     if (orders.length === 0) return { householdId, createdIds: [] }
 
     console.info(`🎟️ > ORDER > [CREATE] Creating ${orders.length} order(s) for household ${householdId}`)
@@ -226,7 +226,7 @@ export async function createOrders(
 
         return { householdId, createdIds }
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${ordersData.length} orders for household ${householdId}`, error)
+        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${orders.length} orders for household ${householdId}`, error)
     }
 }
 
@@ -1550,6 +1550,71 @@ export async function fetchInvoicesForBillingPeriod(
     })
 
     return invoices.map(inv => InvoiceDisplaySchema.parse(inv))
+}
+
+/**
+ * Fetch transactions for a specific invoice (lazy loading for admin economy tree view).
+ *
+ * ADR-009: Returns TransactionDisplay[] for groupByCostEntry() in UI
+ * ADR-010: Repository handles transformation to domain types
+ */
+export async function fetchTransactionsForInvoice(
+    d1Client: D1Database,
+    invoiceId: number
+): Promise<TransactionDisplay[]> {
+    const LOG = '💰 > INVOICE_TRANSACTIONS > [GET]'
+    console.info(`${LOG} Fetching transactions for invoice ${invoiceId}`)
+
+    const {TransactionDisplaySchema, TicketType} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const transactions = await prisma.transaction.findMany({
+        where: {invoiceId},
+        include: {
+            order: {
+                include: {
+                    inhabitant: {
+                        select: {
+                            id: true, name: true,
+                            household: {select: {id: true, pbsId: true, address: true}}
+                        }
+                    },
+                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+                    ticketPrice: {select: {ticketType: true}}
+                }
+            }
+        },
+        orderBy: {createdAt: 'desc'}
+    })
+
+    console.info(`${LOG} Found ${transactions.length} transactions for invoice ${invoiceId}`)
+
+    return transactions.map(tx => {
+        if (!tx.order) {
+            // Order deleted - use snapshot
+            const snapshot = JSON.parse(tx.orderSnapshot)
+            return TransactionDisplaySchema.parse({
+                id: tx.id,
+                orderId: null,
+                amount: tx.amount,
+                createdAt: tx.createdAt,
+                orderSnapshot: tx.orderSnapshot,
+                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
+                inhabitant: snapshot.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
+                ticketType: snapshot.ticketType ?? TicketType.ADULT
+            })
+        }
+        return TransactionDisplaySchema.parse({
+            id: tx.id,
+            orderId: tx.order.id,
+            amount: tx.amount,
+            createdAt: tx.createdAt,
+            orderSnapshot: tx.orderSnapshot,
+            dinnerEvent: tx.order.dinnerEvent!,
+            inhabitant: tx.order.inhabitant,
+            ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
+        })
+    })
 }
 
 /*** HOUSEHOLD BILLING ***/

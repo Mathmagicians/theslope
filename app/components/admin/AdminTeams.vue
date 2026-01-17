@@ -124,6 +124,14 @@ import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 
+// Props - canEdit from parent for authorization
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
 const store = usePlanStore()
 const {
@@ -421,7 +429,7 @@ const columns = [
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
               @update:model-value="handleSeasonChange"
           />
-          <FormModeSelector v-if="!isNoSeasons" v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
+          <FormModeSelector v-if="props.canEdit && !isNoSeasons" v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
         </div>
       </div>
     </template>
@@ -604,7 +612,7 @@ v-else
                   madhold
                   for at komme i gang!</p>
                 <UButton
-                    v-if="!disabledModes.includes(FORM_MODES.CREATE)"
+                    v-if="props.canEdit && !disabledModes.includes(FORM_MODES.CREATE)"
                     name="create-new-team"
                     color="secondary"
                     size="sm"

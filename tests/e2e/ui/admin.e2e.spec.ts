@@ -3,7 +3,7 @@ import { authFiles } from '../config'
 import testHelpers from '../testHelpers'
 import { SeasonFactory } from '../testDataFactories/seasonFactory'
 
-const { adminUIFile } = authFiles
+const { adminUIFile, memberUIFile } = authFiles
 const { validatedBrowserContext, pollUntil, doScreenshot } = testHelpers
 
 const tabs = [
@@ -231,4 +231,81 @@ test.describe('Admin season URL persistence', () => {
     expect(page.url()).not.toContain('invalid-123')
   })
 
+})
+
+/**
+ * Admin authorization tests - parametrized for admin vs member contexts
+ *
+ * Tests that:
+ * - Admin users can see FormModeSelector and edit controls
+ * - Member users see "admin-readonly-banner" and NO FormModeSelector
+ */
+test.describe('Admin page authorization', () => {
+  // Parametrized user contexts
+  const userContexts = [
+    {
+      role: 'admin',
+      storageState: adminUIFile,
+      expectBanner: false,
+      expectFormModeSelector: true,
+      description: 'Admin user can edit'
+    },
+    {
+      role: 'member',
+      storageState: memberUIFile,
+      expectBanner: true,
+      expectFormModeSelector: false,
+      description: 'Member user is read-only'
+    }
+  ] as const
+
+  // Tabs with edit controls to test
+  const tabsWithEditControls = [
+    { path: 'planning', selector: '[data-testid="admin-planning"]' },
+    { path: 'teams', selector: '[data-testid="admin-teams"]' }
+  ]
+
+  for (const userContext of userContexts) {
+    test.describe(`${userContext.description}`, () => {
+      test.use({ storageState: userContext.storageState })
+
+      test.beforeAll(async ({browser}) => {
+        // Ensure singleton active season exists (needed for FormModeSelector to appear)
+        const context = await validatedBrowserContext(browser)
+        await SeasonFactory.createActiveSeason(context)
+      })
+
+      for (const tab of tabsWithEditControls) {
+        test(`${tab.path} tab - banner: ${userContext.expectBanner}, FormModeSelector: ${userContext.expectFormModeSelector}`, async ({ page }) => {
+          await page.goto(`/admin/${tab.path}`)
+          await doScreenshot(page, `admin-auth-${userContext.role}-${tab.path}-initial`)
+
+          // Wait for tab content to load
+          await pollUntil(
+            async () => await page.locator(tab.selector).isVisible(),
+            (isVisible) => isVisible,
+            10
+          )
+          await doScreenshot(page, `admin-auth-${userContext.role}-${tab.path}-loaded`)
+
+          // Check readonly banner
+          const bannerLocator = page.locator('[data-testid="admin-readonly-banner"]')
+          if (userContext.expectBanner) {
+            await expect(bannerLocator).toBeVisible()
+            await expect(bannerLocator).toContainText('Hej, du er ikke administrator')
+          } else {
+            await expect(bannerLocator).not.toBeVisible()
+          }
+
+          // Check FormModeSelector (edit/create buttons)
+          const formModeSelectorLocator = page.locator('[data-testid="form-mode-edit"]')
+          if (userContext.expectFormModeSelector) {
+            await expect(formModeSelectorLocator).toBeVisible()
+          } else {
+            await expect(formModeSelectorLocator).not.toBeVisible()
+          }
+        })
+      }
+    })
+  }
 })

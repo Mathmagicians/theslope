@@ -89,12 +89,20 @@ export default defineConfig({
       fullyParallel: false,
       dependencies: ['chromium-api'],
     },
-    // UI tests need full UI auth
+    // UI tests need full UI auth (excludes serial tests)
     {
       name: 'chromium-ui',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/ui\/.*\.spec\.ts/,
+      testMatch: /tests\/e2e\/ui\/(?!serial\/).*\.spec\.ts/,
       dependencies: ['setup-ui', 'setup-member-ui'],
+    },
+    // UI serial tests (create their own season, must run after parallel UI tests)
+    {
+      name: 'chromium-ui-serial',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /tests\/e2e\/ui\/serial\/.*\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ['chromium-ui'],
     },
     // Smoke tests - run serially (shared active season state)
     {
