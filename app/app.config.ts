@@ -36,9 +36,9 @@ export default defineAppConfig({
             cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
         },
         systemJobs: {
-            heynaboImport: { cron: '0 2 * * *', description: 'Dagligt kl. 02:00' },
-            dailyMaintenance: { cron: '0 3 * * *', description: 'Dagligt kl. 03:00' },
-            monthlyBilling: { cron: '0 4 17 * *', description: 'D. 17. hver måned kl. 04:00' }
+            heynaboImport: { cron: '0 1 * * *', description: 'Dagligt kl. 02:00' },
+            dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 03:00' },
+            monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
         prebookingWindowDays: 60  // Rolling window: scaffold pre-bookings for dinners within next N days
     },

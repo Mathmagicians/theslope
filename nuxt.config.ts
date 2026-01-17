@@ -31,7 +31,7 @@ export default defineNuxtConfig({
         scheduledTasks: {
             '0 1 * * *': ['heynabo-import'],      // 01:00 UTC = 02:00/03:00 Copenhagen (runs first)
             '0 2 * * *': ['daily-maintenance'],   // 02:00 UTC = 03:00/04:00 Copenhagen (runs after import)
-            '0 3 17 * *': ['monthly-billing']     // 17th at 03:00 UTC = 04:00/05:00 Copenhagen
+            '0 3 18 * *': ['monthly-billing']     // 18th at 03:00 UTC = 04:00/05:00 Copenhagen (day after cutoff)
         }
     },
 

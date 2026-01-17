@@ -190,6 +190,36 @@ curl https://www.skraaningen.dk/api/health | jq '.version'
 
 ---
 
+## Database Seeding
+
+### Seed Structure
+
+| Target | Files | In Git | When to Run |
+|--------|-------|--------|-------------|
+| `make d1-seed-prod` | `seed.sql` + `service-accounts.sql` | ✅ Yes | CI/CD, bootstrap |
+| `make d1-seed-master-data-prod` | `prod-master-data-households.sql` | ❌ No (.theslope/) | Manual, after Heynabo import |
+
+### Bootstrap New Environment
+
+```bash
+make d1-migrate-prod           # Migrations + seeds (seed.sql + service-accounts.sql)
+make d1-seed-master-data-prod  # PBS ID mappings (confidential, manual)
+```
+
+### Re-run Seeds Only (no migrations)
+
+```bash
+make d1-seed-prod              # seed.sql + service-accounts.sql
+make d1-seed-master-data-prod  # PBS ID mappings (confidential)
+```
+
+### Service Accounts
+
+Service accounts (heynaboId 1, 212) have preferences set to NONE to prevent scaffolding.
+File: `migrations/seed/service-accounts.sql`
+
+---
+
 ## Routine Operations
 
 ### Rotate Cloudflare Bypass Token

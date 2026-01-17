@@ -102,17 +102,17 @@ prisma-flatten-migrations:
 d1-migrate-local: ## Migrate + seed local database
 	@echo "🏗️ Applying migrations to local database"
 	@npm run db:migrate:local
-	@npm run db:seed:local
+	@npm run db:seed:all:local
 
 d1-migrate-dev: ## Migrate + seed dev database
 	@echo "🏗️ Applying migrations to dev database"
-	@npm run db:migrate
-	@npm run db:seed
+	@npm run db:migrate:dev
+	@npm run db:seed:all:dev
 
 d1-migrate-prod: ## Migrate + seed production database
 	@echo "🏗️ Applying migrations to production database"
-	@npm run db_prod:migrate
-	@npm run db_prod:seed
+	@npm run db:migrate:prod
+	@npm run db:seed:all:prod
 
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
@@ -120,21 +120,32 @@ d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 # ============================================================================
 # DATABASE SEEDING
 # ============================================================================
-.PHONY: d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
+.PHONY: d1-seed-local d1-seed-dev d1-seed-prod d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
+
+d1-seed-local: ## Run all seeds (local)
+	@npm run db:seed:all:local
+
+d1-seed-dev: ## Run all seeds (dev)
+	@npm run db:seed:all:dev
+
+d1-seed-prod: ## Run all seeds (prod)
+	@npm run db:seed:all:prod
 
 d1-seed-testdata: ## Seed local with test data
 	@npx wrangler d1 execute theslope --file migrations/seed/test-data.sql --local
 	@echo "✅ Test data loaded!"
 
-d1-seed-master-data-local: ## Load master data to local
+# Master data: PBS ID mappings - CONFIDENTIAL, not in git (.theslope/)
+# Run manually after d1-migrate-* or Heynabo import. Not part of CI/CD.
+d1-seed-master-data-local: ## Load master data to local (confidential, manual)
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --local
 	@echo "✅ Master data loaded (local)!"
 
-d1-seed-master-data-dev: ## Load master data to dev
+d1-seed-master-data-dev: ## Load master data to dev (confidential, manual)
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --env dev --remote
 	@echo "✅ Master data loaded (dev)!"
 
-d1-seed-master-data-prod: ## Load master data to prod
+d1-seed-master-data-prod: ## Load master data to prod (confidential, manual)
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
