@@ -192,6 +192,9 @@ d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
 	$(call d1_exec,theslope,DELETE FROM AllergyType WHERE name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %',--local)
 	@echo "✅ Test allergy types cleaned up!"
 
+d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
+	@echo "✅ Nuked all test data!"
+
 # ============================================================================
 # VERSION MANAGEMENT
 # ============================================================================
@@ -228,19 +231,16 @@ version-info: ## Output all version components as env vars
 	@echo "IS_RELEASE=$(if $(RELEASE_VERSION),true,false)"
 	@echo "SHORT_VERSION=$(VERSION)"
 
-d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
-	@echo "✅ Nuked all test data!"
-
 # ============================================================================
 # DEPLOYMENT & LOGS
 # ============================================================================
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod
 
 deploy-dev: ## Deploy to dev with version info
-	@eval $$(make version-info) && NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy && echo "Released version $$RELEASE_VERSION to dev environment."
+	@eval $$(make version-info) && GITHUB_SHA=$$COMMIT_SHA NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy && echo "Released version $$RELEASE_VERSION to dev environment."
 
 deploy-prod: ## Deploy to prod with version info
-	@eval $$(make version-info) && NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy:prod && echo "Released version $$RELEASE_VERSION to prod environment."
+	@eval $$(make version-info) && GITHUB_SHA=$$COMMIT_SHA NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy:prod && echo "Released version $$RELEASE_VERSION to prod environment."
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty
