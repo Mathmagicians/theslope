@@ -23,9 +23,9 @@ jobs:
     outputs:
       deployed_env: ${{ steps.target.outputs.env }}
       deployed_url: ${{ steps.deploy.outputs.url }}
-      release_version: ${{ steps.version.outputs.full_version }}
-      release_date: ${{ steps.version.outputs.release_date }}
-      is_release: ${{ steps.version.outputs.is_release }}
+      release_version: ${{ steps.version.outputs.RELEASE_VERSION }}
+      release_date: ${{ steps.version.outputs.RELEASE_DATE }}
+      is_release: ${{ steps.version.outputs.IS_RELEASE }}
 
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -102,8 +102,9 @@ jobs:
       - name: Deploy to Cloudflare
         id: deploy
         env:
-          NUXT_PUBLIC_RELEASE_VERSION: ${{ steps.version.outputs.full_version }}
-          NUXT_PUBLIC_RELEASE_DATE: ${{ steps.version.outputs.release_date }}
+          NUXT_PUBLIC_RELEASE_VERSION: ${{ steps.version.outputs.RELEASE_VERSION }}
+          NUXT_PUBLIC_RELEASE_DATE: ${{ steps.version.outputs.RELEASE_DATE }}
+          GITHUB_SHA: ${{ steps.version.outputs.COMMIT_SHA }}
         run: |
           if [ "${{ steps.target.outputs.env }}" == "prod" ]; then
             OUTPUT=$(make deploy-prod 2>&1)
@@ -119,9 +120,9 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | \`${{ steps.target.outputs.env }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Version** | \`${{ steps.version.outputs.full_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Release Date** | ${{ steps.version.outputs.release_date }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Is Release** | ${{ steps.version.outputs.is_release }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ steps.version.outputs.RELEASE_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release Date** | ${{ steps.version.outputs.RELEASE_DATE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Is Release** | ${{ steps.version.outputs.IS_RELEASE }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
