@@ -472,6 +472,161 @@ describe('useQueryParam.ts', () => {
       // URL already matches, no need to sync
       expect(mockNavigateTo).not.toHaveBeenCalled()
     })
+
+    it('should only auto-sync ONCE per ready transition (cascade prevention)', async () => {
+      // This test verifies that when syncWhen transitions to true,
+      // the auto-sync only fires once even if dependencies change afterward.
+      // This prevents cascading URL updates when multiple useQueryParam instances
+      // are on the same page and each triggers navigateTo independently.
+      setupQuery({})
+
+      const isReady = ref(false)
+
+      const {value} = useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => isReady.value
+      })
+
+      expect(value.value).toBe('view')
+      await flushPromises()
+
+      // Not ready yet, no sync
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+
+      // Transition to ready - should sync once
+      isReady.value = true
+      await flushPromises()
+
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+
+      // Reset navigateTo mock to verify no more calls
+      mockNavigateTo.mockClear()
+
+      // Simulate what happens when another useQueryParam updates the route:
+      // This would normally trigger the watchPostEffect again, but our guard prevents re-sync
+      mockRouteData.query = {mode: 'view', other: 'param'}
+      await flushPromises()
+
+      // Should NOT sync again (already synced this ready cycle)
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('should allow re-sync after ready transitions false then true again', async () => {
+      setupQuery({})
+
+      const isReady = ref(false)
+
+      useQueryParam<string>('mode', {
+        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
+        validate: (v) => ['view', 'edit'].includes(v),
+        defaultValue: 'view',
+        syncWhen: () => isReady.value
+      })
+
+      // First ready transition
+      isReady.value = true
+      await flushPromises()
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+
+      // Reset for next cycle
+      mockNavigateTo.mockClear()
+      mockRouteData.query = {} // Simulate URL being cleared
+
+      // Transition back to not ready
+      isReady.value = false
+      await flushPromises()
+
+      // Then ready again - should allow sync again
+      isReady.value = true
+      await flushPromises()
+
+      // Should sync again after ready cycle reset
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Combined State Object (ViewState pattern)', () => {
+    // This tests the pattern used in chef/index.vue where mode + accordion state
+    // are combined into a single query param like view=agenda:open
+    type ViewState = { mode: 'agenda' | 'calendar', open: boolean }
+
+    const createViewStateParam = (syncWhen = () => false) => useQueryParam<ViewState>('view', {
+      serialize: (v) => `${v.mode}:${v.open ? 'open' : 'closed'}`,
+      deserialize: (s) => {
+        const [mode, state] = s.split(':')
+        if ((mode === 'agenda' || mode === 'calendar') && (state === 'open' || state === 'closed')) {
+          return { mode, open: state === 'open' }
+        }
+        return null
+      },
+      defaultValue: () => ({ mode: 'calendar', open: false }),
+      syncWhen
+    })
+
+    const viewStateCases: {
+      initial: string,
+      action: ViewState,
+      expected: string,
+      description: string
+    }[] = [
+      // Tab clicks always open accordion
+      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'same tab click when closed opens accordion' },
+      { initial: 'calendar:open', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'different tab click opens that tab' },
+      { initial: 'agenda:closed', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'same tab click when closed opens accordion' },
+      { initial: 'agenda:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'different tab click opens that tab' },
+      // Toggle button toggles accordion, keeps mode
+      { initial: 'calendar:open', action: { mode: 'calendar', open: false }, expected: 'calendar:closed', description: 'toggle closes accordion' },
+      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'toggle opens accordion' },
+      { initial: 'agenda:open', action: { mode: 'agenda', open: false }, expected: 'agenda:closed', description: 'toggle closes agenda accordion' },
+    ]
+
+    for (const { initial, action, expected, description } of viewStateCases) {
+      it(`should update ${initial} to ${expected} when ${description}`, async () => {
+        setupQuery({ view: initial })
+        const { setValue } = createViewStateParam()
+
+        await setValue(action)
+        await flushPromises()
+
+        expect(mockNavigateTo).toHaveBeenCalledWith(
+          { path: '/test', query: { view: expected } },
+          { replace: true }
+        )
+      })
+    }
+
+    it('should NOT navigate when setting same value', async () => {
+      setupQuery({ view: 'agenda:open' })
+      const { setValue } = createViewStateParam()
+
+      await setValue({ mode: 'agenda', open: true })
+      await flushPromises()
+
+      expect(mockNavigateTo).not.toHaveBeenCalled()
+    })
+
+    it('should return default when URL has invalid format', () => {
+      setupQuery({ view: 'invalid' })
+      const { value } = createViewStateParam()
+
+      expect(value.value).toEqual({ mode: 'calendar', open: false })
+    })
+
+    it('should preserve other query params when updating', async () => {
+      setupQuery({ view: 'calendar:closed', date: '15/01/2025', team: '3' })
+      const { setValue } = createViewStateParam()
+
+      await setValue({ mode: 'agenda', open: true })
+      await flushPromises()
+
+      expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
+        view: 'agenda:open',
+        date: '15/01/2025',
+        team: '3'
+      })
+    })
   })
 
   describe('Edge Cases', () => {

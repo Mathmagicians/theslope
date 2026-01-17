@@ -43,6 +43,8 @@ interface Props {
   initialColor?: NuxtUIColor
   /** Initial variant (default: outline) */
   initialVariant?: ButtonVariant
+  /** Undo mode: uses success colors instead of error (for restoring/undoing actions) */
+  undo?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -55,7 +57,8 @@ const props = withDefaults(defineProps<Props>(), {
   icon: undefined,
   confirmIcon: undefined,
   initialColor: 'neutral',
-  initialVariant: 'outline'
+  initialVariant: 'outline',
+  undo: false
 })
 
 // Defaults from design system (can't use in withDefaults as they're runtime values)
@@ -86,19 +89,22 @@ const displayIcon = computed(() => {
 })
 
 const displayColor = computed<NuxtUIColor>(() =>
-  isConfirmMode.value || props.loading ? 'error' : props.initialColor
+  isConfirmMode.value || props.loading ? (props.undo ? 'success' : 'error') : props.initialColor
 )
 
 const displayVariant = computed<ButtonVariant>(() =>
   isConfirmMode.value || props.loading ? 'solid' : props.initialVariant
 )
 
-// Gradient wipe: error color shrinks from left as countdown progresses
+// Gradient wipe: confirm color shrinks from left as countdown progresses
 const countdownGradient = computed(() => {
   if (!isConfirmMode.value || props.loading) return {}
-  const redPercent = countdownProgress.value
+  const percent = countdownProgress.value
+  const [dark, light] = props.undo
+    ? ['--color-green-900', '--color-green-400']
+    : ['--color-red-900', '--color-red-400']
   return {
-    background: `linear-gradient(to right, var(--color-red-900) ${redPercent}%, var(--color-red-400) ${redPercent}%)`
+    background: `linear-gradient(to right, var(${dark}) ${percent}%, var(${light}) ${percent}%)`
   }
 })
 
@@ -190,7 +196,7 @@ watch(() => props.loading, (newLoading) => {
       :disabled="disabled || loading"
       :loading="loading"
       :style="countdownGradient"
-      :class="isConfirmMode && !loading ? 'ring-2 ring-red-500 text-white' : ''"
+      :class="isConfirmMode && !loading ? `ring-2 ${undo ? 'ring-green-500' : 'ring-red-500'} text-white` : ''"
       @click="handleClick"
     >
       {{ displayText }}

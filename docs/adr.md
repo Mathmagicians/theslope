@@ -2,6 +2,129 @@
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 
+## ADR-016: Unified Booking Through Scaffold
+
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-01-12
+
+### Context
+
+Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
+1. NONE after deadline deletes instead of releases
+2. Single-user edit deletes other household members
+3. Guest tickets indistinguishable (same abstract key)
+
+### Decision
+
+**Use `orderId` for updates. Generator decides intent → Scaffolder executes.**
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         GENERATOR (useBooking.ts)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│ decideOrderAction(input) → { bucket, order } | null                 │
+│   - Pure function, no side effects                                  │
+│   - Returns bucket: create | update | delete | idempotent           │
+│   - Sets state (BOOKED/RELEASED) and dinnerMode                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ resolveDesiredOrdersToBuckets() - User mode (explicit orders)       │
+│ resolveOrdersFromPreferencesToBuckets() - System mode (preferences) │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SCAFFOLDER (scaffoldPrebookings.ts)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ Transform: DesiredOrder → OrderCreateWithPrice                      │
+│   - Add bookedByUserId (from context)                               │
+│   - Lookup priceAtBooking (from ticketPrices)                       │
+│   - Add householdId                                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│ Execute buckets:                                                    │
+│   - create → createOrders()                                         │
+│   - update → updateOrder() + releasedAt for releases                │
+│   - delete → deleteOrder()                                          │
+│   - idempotent → skip                                               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Decision Matrix
+
+| `orderId` | `dinnerMode` | `existing` | `deadline` | → Action |
+|-----------|--------------|------------|------------|----------|
+| absent | ≠ NONE | N/A | any | **CREATE** (state=BOOKED) |
+| absent | = NONE | N/A | any | SKIP |
+| present | = NONE | found | before | **DELETE** |
+| present | = NONE | found | after | **UPDATE** (state=RELEASED) |
+| present | ≠ NONE | RELEASED | any | **UPDATE** (state=BOOKED, reclaim) |
+| present | ≠ NONE | same | any | **IDEMPOTENT** |
+| present | ≠ NONE | diff | any | **UPDATE** (mode/price change) |
+| present | any | not found | any | SKIP (stale) |
+
+### DesiredOrder Schema
+
+```typescript
+DesiredOrderSchema = {
+  inhabitantId: number,
+  dinnerEventId: number,
+  dinnerMode: DinnerMode,
+  ticketPriceId: number,
+  isGuestTicket: boolean,
+  state: OrderState,           // Generator sets: BOOKED or RELEASED
+  orderId?: number,            // Present for updates, absent for creates
+  allergyTypeIds?: number[]    // Guest allergies
+}
+```
+
+### Two Modes
+
+| Mode | Trigger | Generator | Use Case |
+|------|---------|-----------|----------|
+| **System** | Preference change, cron | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates |
+| **User** | UI booking | `resolveDesiredOrdersToBuckets` | Grid view, single booking |
+
+### Frontend Pattern
+
+UI components emit `DesiredOrder[]` with `orderId` for existing orders:
+
+```typescript
+// Component emits orders with orderId from existing
+const desiredOrders = selectedInhabitants.map(inhabitant => ({
+  inhabitantId: inhabitant.id,
+  dinnerEventId: event.id,
+  dinnerMode: selectedMode,
+  ticketPriceId: ticketPrice.id,
+  isGuestTicket: false,
+  state: OrderState.BOOKED,
+  orderId: existingOrder?.id  // Key: include orderId for updates
+}))
+```
+
+### Compliance
+
+1. Generator MUST set `state` and `dinnerMode` - scaffolder doesn't re-derive
+2. Scaffolder ONLY enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`)
+3. UI MUST include `orderId` from existing orders for updates
+4. Guest orders preserved (not managed by preferences)
+5. User cancellations tracked in `cancelledKeys` set
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
+| `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema` |
+| `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms and executes |
+
+### Related ADRs
+
+- **ADR-011**: Booking system schema (three-state order model)
+- **ADR-014**: Batch operations and D1 limits
+- **ADR-015**: Idempotent operations with pruneAndCreate pattern
+
+---
+
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
 **Status:** Accepted | **Date:** 2025-12-12
@@ -93,7 +216,7 @@ seasonDates: { start: tomorrow, end: threeDaysFromNow }
 
 ## ADR-014: Batch Operations and Utility Functions
 
-**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2025-12-13
+**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2026-01-15
 
 ### Decision
 
@@ -115,6 +238,47 @@ Since Prisma 5.15.0, the D1 adapter automatically chunks certain queries to stay
 | `deleteMany` with `WHERE IN` | ❌ No | **Yes** - must chunk IDs |
 
 **Production evidence:** `updateMany` with 100 IDs + 2 data params failed with `D1_ERROR: too many SQL variables`. Reduced to 90 IDs to stay under limit.
+
+### Raw SQL Workaround for Nested Includes
+
+**Problem (2026-01-15):** Prisma's nested includes with large result sets exceed D1's 100 variable limit.
+
+```
+Query 1: SELECT orders WHERE dinnerEventId = ? (returns 139 orders) ✅
+Query 2: SELECT orderHistory WHERE orderId IN (?,?,?...139 IDs...) ❌ D1_ERROR
+```
+
+Prisma D1 adapter does NOT support `relationJoins` (uses query splitting instead). When a parent query returns many rows, nested includes generate `WHERE IN (?,?,?...)` with too many variables.
+
+**Solution:** Use raw SQL with proper JOINs for high-cardinality relations:
+
+```typescript
+// ❌ Prisma nested include - fails with 100+ parent rows
+const orders = await prisma.order.findMany({
+    where: { dinnerEventId },
+    include: { OrderHistory: true }  // Generates WHERE orderId IN (?,?,?...)
+})
+
+// ✅ Raw SQL with JOIN - no variable limit issue
+const sql = `
+    SELECT o.*, oh.auditData
+    FROM "Order" o
+    LEFT JOIN (
+        SELECT orderId, auditData,
+            ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
+        FROM OrderHistory WHERE action = 'USER_CLAIMED'
+    ) oh ON oh.orderId = o.id AND oh.rn = 1
+    WHERE o.dinnerEventId = ?
+`
+const results = await d1Client.prepare(sql).bind(dinnerEventId).all()
+```
+
+**When to use raw SQL:**
+- Nested includes on relations with unbounded cardinality
+- Parent query may return 50+ rows with 2+ nested relations
+- Performance-critical bulk reads
+
+**Reference:** `fetchOrders()` in `financesRepository.ts` uses this pattern for provenance data.
 
 ### Prisma Bulk Operations
 

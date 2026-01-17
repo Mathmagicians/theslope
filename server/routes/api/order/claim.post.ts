@@ -2,16 +2,18 @@ import {createError, defineEventHandler, readValidatedBody, setResponseStatus} f
 import {claimOrder} from "~~/server/data/financesRepository"
 import {getRequiredUser, requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {fetchInhabitant} from "~~/server/data/prismaRepository"
-import type {OrderDetail} from "~/composables/useBookingValidation"
+import {useBookingValidation, type OrderDetail} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
 const {throwH3Error} = eventHandlerHelper
+const {DinnerModeSchema} = useBookingValidation()
 
 const bodySchema = z.object({
     dinnerEventId: z.number().int().positive(),
     ticketPriceId: z.number().int().positive(),
     inhabitantId: z.number().int().positive(),
+    dinnerMode: DinnerModeSchema.default('DINEIN'), // Claimed tickets default to DINEIN
     isGuestTicket: z.boolean().default(false) // True when claiming for a guest
 })
 
@@ -62,6 +64,7 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
             body.ticketPriceId,
             body.inhabitantId,
             user.id,
+            body.dinnerMode,
             body.isGuestTicket
         )
 

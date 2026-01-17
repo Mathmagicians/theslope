@@ -80,6 +80,14 @@ VIEWING PAST SEASON (Efterår 2024)
 import {FORM_MODES} from "~/types/form"
 import type {Season} from "~/composables/useSeasonValidation"
 
+// Props - canEdit from parent for authorization
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const store = usePlanStore()
 const {
@@ -201,7 +209,7 @@ const handleDeactivateSeason = async () => {
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
               @update:model-value="handleSeasonChange"
           />
-          <FormModeSelector v-model="formMode" :disabled-modes="disabledModes"/>
+          <FormModeSelector v-if="props.canEdit" v-model="formMode" :disabled-modes="disabledModes"/>
         </div>
       </div>
     </template>
@@ -211,7 +219,7 @@ const handleDeactivateSeason = async () => {
         <SeasonStatusDisplay
             v-if="selectedSeason && (formMode === FORM_MODES.VIEW || formMode === FORM_MODES.EDIT)"
             :season-id="selectedSeason.id ?? null"
-            :show-activation-button="formMode === FORM_MODES.EDIT"
+            :show-activation-button="props.canEdit && formMode === FORM_MODES.EDIT"
             class="mb-6"
             @activate="handleActivateSeason"
             @deactivate="handleDeactivateSeason"

@@ -2,6 +2,14 @@
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
+// Props - canEdit from parent for authorization (unused for now - view-only component)
+interface Props {
+  canEdit?: boolean
+}
+withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 

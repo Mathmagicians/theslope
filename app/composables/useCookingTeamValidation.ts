@@ -17,9 +17,9 @@ export const ROLE_LABELS = {
  * Role icons for visual distinction
  */
 export const ROLE_ICONS = {
-    CHEF: '👨‍🍳',
-    COOK: '👥',
-    JUNIORHELPER: '🌱‍👩‍🍳'
+    CHEF: '👑👨‍🍳',
+    COOK: '👨‍🍳👨‍🍳',
+    JUNIORHELPER: '🌱👨‍🍳'
 } as const
 
 /**

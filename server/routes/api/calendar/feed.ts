@@ -1,5 +1,8 @@
 import {defineEventHandler} from 'h3';
 import ical from 'ical-generator';
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+
+const {throwH3Error} = eventHandlerHelper
 
 class Event {
     constructor(
@@ -34,8 +37,11 @@ async function generateICalFeed(from:Event[]): Promise<string> {
     return calendar.toString();
 }
 
+const LOG = '📆 > CALENDAR_FEED'
+
 export default defineEventHandler(async (event) => {
-    console.log("Received request:" , event);
+    const url = getRequestURL(event)
+    console.info(`${LOG} > Received request: ${url.pathname}`)
     try {
         const icsFeed = await generateICalFeed(events);
         return new Response(icsFeed, {
@@ -45,7 +51,6 @@ export default defineEventHandler(async (event) => {
             },
         });
     } catch (error) {
-        console.error('Error generating iCal feed:', error);
-        return new Response('Error generating iCal feed', {status: 500});
+        return throwH3Error(`${LOG} > Error generating iCal feed`, error)
     }
 })

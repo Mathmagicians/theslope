@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-05 (Consolidated chef dinner endpoint, household preferences endpoint)
+**Last Updated:** 2026-01-17 (Admin economy tree view endpoints)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -35,8 +35,9 @@
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamAssignment() → CookingTeamAssignment                                                   |
-| **Admin - Users** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| **Admin - Users** | | | | | **✅ FULLY COMPLIANT (2026-01-15)** - Added role management endpoint                             |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteUser() validates with UserResponseSchema                                                   |
+| `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateUser roles with reconcileUserRoles() - TS owns ALLERGYMANAGER, preserves HN-owned ADMIN    |
 | `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema                                                    |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveUser() validates with UserResponseSchema                                                     |
 | `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema                                              |
@@ -78,6 +79,8 @@
 | `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Consolidated: menu, state (announce/cancel), allergens. Heynabo: user token for announce, fallback to system token for menu sync |
 | **Household - Preferences** | | | | | **✅ FULLY COMPLIANT (2026-01-05)**                                                               |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
+| **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -88,8 +91,10 @@
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |
 | `/api/calendar/feed.ts` | ❌ | ✅ | |
 | `/api/auth/login.post.ts` | ❌ | ✅ | |
-| **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2025-12-03)**                                                               |
+| **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2026-01-17)** - Added admin economy tree view endpoints                    |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
+| `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
+| `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
@@ -123,3 +128,4 @@ Reference these endpoints for correct ADR-002 implementation:
 - ✅ `/api/order/[id].delete.ts` - DELETE pattern with validation
 - ✅ `/api/team/cooking/[id]/assign-role.post.ts` - Full ADR-001 & ADR-010 compliance with repository pattern
 - ✅ `/api/chef/dinner/[id].post.ts` - Consolidated chef endpoint with ADR-013 Heynabo token pattern
+- ✅ `/api/household/order/scaffold.post.ts` - ADR-016 unified booking with ADR-002 error handling

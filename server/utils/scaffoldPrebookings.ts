@@ -1,20 +1,58 @@
 import type {D1Database} from "@cloudflare/workers-types"
-import {fetchOrders, createOrders, deleteOrder, updateOrdersToState, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult} from "~/composables/useBookingValidation"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 
 /**
+ * Determine audit action based on user vs system trigger
+ *
+ * Intent model:
+ * - USER_CANCELLED = user signals "I don't want to eat" (delete before deadline, release after)
+ * - USER_BOOKED = user books/reclaims a ticket
+ * - SYSTEM_* = automated scaffold operations
+ */
+const getAuditAction = (
+    isUserTriggered: boolean,
+    actionType: 'create' | 'update' | 'delete' | 'release'
+): OrderAuditAction => {
+    if (isUserTriggered) {
+        // User cancellation intent (delete or release) → USER_CANCELLED
+        // User booking intent (create or reclaim) → USER_BOOKED
+        if (actionType === 'delete' || actionType === 'release') {
+            return AuditActions.USER_CANCELLED
+        }
+        return AuditActions.USER_BOOKED
+    }
+    switch (actionType) {
+        case 'create': return AuditActions.SYSTEM_CREATED
+        case 'delete': return AuditActions.SYSTEM_DELETED
+        case 'update': return AuditActions.SYSTEM_UPDATED
+        case 'release': return AuditActions.SYSTEM_UPDATED
+    }
+}
+
+/**
  * Options for scaffolding pre-bookings
+ *
+ * System mode (cron/preference change): uses preferences, rolling window
+ * User mode (booking): uses desiredOrders, specific dinnerEventIds, USER audit
  */
 export type ScaffoldOptions = {
     /** If provided, scaffold for this season. Otherwise uses active season. */
     seasonId?: number
     /** If provided, filter to this household. Otherwise process all households. */
     householdId?: number
+    /** If provided, filter to these dinner events. Otherwise uses rolling window. */
+    dinnerEventIds?: number[]
+    /** If provided, use these instead of generating from preferences. */
+    desiredOrders?: DesiredOrder[]
+    /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
+    userId?: number
 }
 
 /**
@@ -25,6 +63,10 @@ const skippedResult = (): ScaffoldResult => ({
     created: 0,
     deleted: 0,
     released: 0,
+    claimed: 0,
+    claimRejected: 0,
+    priceUpdated: 0,
+    modeUpdated: 0,
     unchanged: 0,
     households: 0,
     errored: 0
@@ -34,16 +76,28 @@ const skippedResult = (): ScaffoldResult => ({
  * Scaffolds pre-bookings for season's dinner events based on inhabitant preferences.
  * Core business logic shared between endpoints, activation workflow, and preference updates.
  *
+ * Two modes:
+ * - System mode: desiredOrders undefined → generates from inhabitant preferences
+ * - User mode: desiredOrders provided → uses explicit user intent (requires householdId, userId)
+ *
  * @param d1Client - D1 database client
- * @param options - Scaffold options (seasonId, householdId)
+ * @param options - Scaffold options (seasonId, householdId, dinnerEventIds, desiredOrders, userId)
  * @returns ScaffoldResult with seasonId=null if no season available
  */
 export async function scaffoldPrebookings(
     d1Client: D1Database,
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
-    const {createHouseholdOrderScaffold, getScaffoldableDinnerEvents, chunkOrderBatch} = useSeason()
-    const {OrderAuditActionSchema, OrderStateSchema, chunkIds, chunkFetchIds} = useBookingValidation()
+    const {getScaffoldableDinnerEvents, deadlinesForSeason} = useSeason()
+    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch} = useBookingValidation()
+
+    const isUserTriggered = options.userId !== undefined
+    const isUserMode = options.desiredOrders !== undefined
+
+    // User mode validation: desiredOrders requires householdId and userId
+    if (isUserMode && (!options.householdId || !options.userId)) {
+        throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
+    }
 
     // Resolve season ID - use provided or fall back to active season
     const effectiveSeasonId = options.seasonId ?? await fetchActiveSeasonId(d1Client)
@@ -59,11 +113,16 @@ export async function scaffoldPrebookings(
         return skippedResult()
     }
 
-    // Filter to scaffoldable dinner events (within prebooking window)
-    const dinnerEvents = getScaffoldableDinnerEvents(season.dinnerEvents ?? [])
-    const dinnerEventIds = dinnerEvents.map(e => e.id)
+    // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window
+    const allDinnerEvents = season.dinnerEvents ?? []
+    const dinnerEventIds = isUserMode
+        ? [...new Set(options.desiredOrders!.map(o => o.dinnerEventId))]
+        : (options.dinnerEventIds
+            ? options.dinnerEventIds
+            : getScaffoldableDinnerEvents(allDinnerEvents).map(e => e.id))
+    const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
-    // Fetch households - optionally filtered to single household
+    // Fetch households - user mode is always single household
     const households = await fetchHouseholds(d1Client, options.householdId)
 
     // Fetch orders (chunked) and cancellation keys in parallel
@@ -73,16 +132,26 @@ export async function scaffoldPrebookings(
     ])
     const existingOrders = orderBatches.flat()
 
-    console.info(`${LOG} Processing ${households.length} household(s) for ${dinnerEvents.length} events`)
+    // Build set of "eventId-priceId" keys where released tickets exist (for claim decisions)
+    const releasedByEventAndPrice = new Set<string>()
+    for (const order of existingOrders) {
+        if (order.state === OrderStateSchema.enum.RELEASED && order.ticketPriceId) {
+            releasedByEventAndPrice.add(`${order.dinnerEventId}-${order.ticketPriceId}`)
+        }
+    }
 
-    // Create scaffolder configured for this season (with filtered dinner events)
-    const scaffolder = createHouseholdOrderScaffold({ ...season, dinnerEvents })
+    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${releasedByEventAndPrice.size} event-price combos with released tickets`)
 
     // Process each household and accumulate results
     let totalCreated = 0
     let totalDeleted = 0
     let totalReleased = 0
+    let totalClaimed = 0
+    let totalClaimRejected = 0
+    let totalPriceUpdated = 0
+    let totalModeUpdated = 0
     let totalUnchanged = 0
+    let totalOrderErrors = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
 
@@ -91,40 +160,171 @@ export async function scaffoldPrebookings(
             const householdInhabitantIds = new Set(household.inhabitants.map(i => i.id))
             const householdOrders = existingOrders.filter(o => householdInhabitantIds.has(o.inhabitantId))
 
-            // Build lookup: key → existing order id (for release updates)
-            const orderIdByKey = new Map(
-                householdOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, o.id])
-            )
+            // Build lookup: orderId → existing order (for updates)
+            const orderById = new Map(householdOrders.map(o => [o.id, o]))
+            const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
+            const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
 
-            const result = scaffolder(household, householdOrders, cancelledKeys)
+            // Build ticket price lookup (needed for creates and price change detection)
+            const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
 
-            const releaseIds = result.update
-                .map(o => orderIdByKey.get(`${o.inhabitantId}-${o.dinnerEventId}`))
-                .filter((id): id is number => id !== undefined)
-            const deleteIds = result.delete.map(o => o.id)
+            // Resolve desired orders to buckets
+            const result = isUserMode
+                ? resolveDesiredOrdersToBuckets(
+                    options.desiredOrders!,
+                    householdOrders,
+                    dinnerEventById,
+                    canModifyOrders,
+                    canEditDiningMode,
+                    DinnerModeSchema.enum,
+                    OrderStateSchema.enum,
+                    releasedByEventAndPrice
+                )
+                : resolveOrdersFromPreferencesToBuckets(
+                    { ...season, dinnerEvents },
+                    household,
+                    householdOrders,
+                    cancelledKeys,
+                    releasedByEventAndPrice
+                )
+
+            // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
+            const ordersToCreate = result.create.map(desired => {
+                const ticketPrice = ticketPriceById.get(desired.ticketPriceId)
+                if (!ticketPrice) {
+                    throw new Error(`${LOG} Missing ticket price ${desired.ticketPriceId} for order`)
+                }
+                return {
+                    dinnerEventId: desired.dinnerEventId,
+                    inhabitantId: desired.inhabitantId,
+                    bookedByUserId: options.userId ?? null,
+                    ticketPriceId: desired.ticketPriceId,
+                    priceAtBooking: ticketPrice.price,
+                    dinnerMode: desired.dinnerMode,
+                    state: desired.state,
+                    isGuestTicket: desired.isGuestTicket,
+                    householdId: household.id
+                }
+            })
 
             // Create new orders
-            for (const batch of chunkOrderBatch(result.create)) {
+            for (const batch of chunkOrderBatch(ordersToCreate)) {
                 await createOrders(d1Client, household.id, batch, {
-                    action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
-                    performedByUserId: null,
-                    source: options.householdId ? 'preference-update' : 'scaffold-prebookings'
+                    action: getAuditAction(isUserTriggered, 'create'),
+                    performedByUserId: options.userId ?? null,
+                    source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings')
                 })
             }
 
-            // Release and delete orders
-            for (const batch of chunkIds(releaseIds)) {
-                await updateOrdersToState(d1Client, batch, OrderStateSchema.enum.RELEASED)
+            // Build batch updates - collect all updates for efficient batching
+            // ADR-014: Groups by (state, dinnerMode, ticketPriceId) to minimize queries
+            let householdPriceUpdates = 0
+            let householdModeUpdates = 0
+            let householdReleased = 0
+            let householdUpdateErrors = 0
+            const batchUpdates: OrderBatchUpdate[] = []
+
+            for (const incoming of result.update) {
+                // Validate orderId present (generator contract)
+                if (!incoming.orderId) {
+                    throw new Error(`${LOG} Data integrity: update bucket order missing orderId for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
+                }
+                const existing = orderById.get(incoming.orderId)
+                if (!existing) {
+                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - skipping`)
+                    householdUpdateErrors++
+                    continue
+                }
+
+                // Categorize for stats
+                const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
+                const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
+
+                // Determine audit action: release → USER_CANCELLED (or SYSTEM_UPDATED), other → USER_BOOKED (or SYSTEM_UPDATED)
+                const auditAction = getAuditAction(isUserTriggered, isNewRelease ? 'release' : 'update')
+                const audit = {
+                    action: auditAction,
+                    performedByUserId: options.userId ?? null,
+                    inhabitantId: incoming.inhabitantId,
+                    dinnerEventId: incoming.dinnerEventId,
+                    seasonId: season.id ?? null
+                }
+
+                if (isPriceChange) {
+                    const newTicketPrice = ticketPriceById.get(incoming.ticketPriceId)
+                    if (!newTicketPrice) {
+                        throw new Error(`${LOG} Ticket price ${incoming.ticketPriceId} not found in season`)
+                    }
+                    householdPriceUpdates++
+                    batchUpdates.push({
+                        orderId: incoming.orderId,
+                        state: incoming.state,
+                        dinnerMode: incoming.dinnerMode,
+                        ticketPriceId: incoming.ticketPriceId,
+                        priceAtBooking: newTicketPrice.price,
+                        isNewRelease,
+                        audit
+                    })
+                } else {
+                    if (isNewRelease) householdReleased++
+                    else householdModeUpdates++
+                    batchUpdates.push({
+                        orderId: incoming.orderId,
+                        state: incoming.state,
+                        dinnerMode: incoming.dinnerMode,
+                        ticketPriceId: null,
+                        priceAtBooking: null,
+                        isNewRelease,
+                        audit
+                    })
+                }
             }
-            for (const batch of chunkIds(deleteIds)) {
-                await deleteOrder(d1Client, batch, null)
+
+            // Execute batch updates (grouped by signature, chunked within groups)
+            const executeBatchUpdates = updateOrdersBatch(90)
+            await executeBatchUpdates(d1Client, batchUpdates)
+
+            // Batch delete orders (single call with all IDs)
+            const deleteIds = result.delete
+                .map(toDelete => {
+                    if (!toDelete.orderId) {
+                        throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${toDelete.inhabitantId} dinnerEvent ${toDelete.dinnerEventId}`)
+                    }
+                    return toDelete.orderId
+                })
+            if (deleteIds.length > 0) {
+                await deleteOrder(d1Client, deleteIds, options.userId ?? null)
+            }
+
+            // Process claims (try to claim released tickets from marketplace)
+            let householdClaimed = 0
+            let householdClaimRejected = 0
+            for (const toClaim of result.claim) {
+                const claimed = await claimOrder(
+                    d1Client,
+                    toClaim.dinnerEventId,
+                    toClaim.ticketPriceId,
+                    toClaim.inhabitantId,
+                    options.userId ?? 0,  // Claims require userId
+                    toClaim.dinnerMode,
+                    toClaim.isGuestTicket
+                )
+                if (claimed) {
+                    householdClaimed++
+                } else {
+                    householdClaimRejected++
+                }
             }
 
             totalCreated += result.create.length
-            totalReleased += releaseIds.length
-            totalDeleted += deleteIds.length
-
+            totalDeleted += result.delete.length
+            totalReleased += householdReleased
+            totalClaimed += householdClaimed
+            totalClaimRejected += householdClaimRejected
+            totalPriceUpdated += householdPriceUpdates
+            totalModeUpdated += householdModeUpdates
             totalUnchanged += result.idempotent.length
+            totalOrderErrors += householdUpdateErrors
             processedHouseholds++
         } catch (error) {
             // Household may have been deleted during scaffolding (FK constraint error)
@@ -138,15 +338,19 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, unchanged=${totalUnchanged}, households=${processedHouseholds}, errored=${erroredHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, claimed=${totalClaimed}, claimRejected=${totalClaimRejected}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
 
-    return {
+    return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
         created: totalCreated,
         deleted: totalDeleted,
         released: totalReleased,
+        claimed: totalClaimed,
+        claimRejected: totalClaimRejected,
+        priceUpdated: totalPriceUpdated,
+        modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,
         households: processedHouseholds,
-        errored: erroredHouseholds
-    }
+        errored: erroredHouseholds + totalOrderErrors
+    })
 }

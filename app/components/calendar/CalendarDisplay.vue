@@ -3,7 +3,7 @@
  * CalendarDisplay - Shows potential cooking days and actual generated events
  *
  * Displays:
- * - Holidays (green chips)
+ * - Holidays (green rings)
  * - Potential cooking days (pink rings) - days matching cookingDays pattern minus holidays
  * - Generated dinner events (pink filled) - actual events created for the season
  *
@@ -26,6 +26,7 @@ interface Props {
 const props = defineProps<Props>()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList, computeCookingDates} = useSeason()
+const {CALENDAR} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
@@ -75,10 +76,14 @@ const hasGeneratedEvent = (eventLists: DayEventList[]) => {
 <template>
   <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
     <template #day="{ day, eventLists }">
-      <!-- Holiday takes precedence -->
-      <UChip v-if="isHoliday(day)" show size="md" color="success">
+      <!-- Holiday takes precedence (green ring) -->
+      <div
+        v-if="isHoliday(day)"
+        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
+        :class="CALENDAR.holiday"
+      >
         {{ day.day }}
-      </UChip>
+      </div>
 
       <!-- Potential cooking day with optional generated event (filled vs ring) -->
       <div

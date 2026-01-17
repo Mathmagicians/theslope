@@ -2,6 +2,7 @@ import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composab
 import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useBillingValidation, type BillingGenerationResult} from '~/composables/useBillingValidation'
+import {useBooking} from '~/composables/useBooking'
 
 /**
  * Business logic for maintenance jobs
@@ -11,6 +12,7 @@ import {useBillingValidation, type BillingGenerationResult} from '~/composables/
 export const useMaintenance = () => {
     const {JobType, JobStatus} = useMaintenanceValidation()
     const {DailyMaintenanceResultSchema} = useBookingValidation()
+    const {formatScaffoldResult} = useBooking()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
     const {BillingGenerationResultSchema} = useBillingValidation()
 
@@ -133,6 +135,10 @@ export const useMaintenance = () => {
         {
             label: 'Linked',
             value: `${result.usersLinked}`
+        },
+        {
+            label: 'Admins',
+            value: `+${result.adminsAdded ?? 0} -${result.adminsRemoved ?? 0}`
         }
     ]
 
@@ -147,7 +153,7 @@ export const useMaintenance = () => {
             { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {
-            stats.push({ label: 'Bookinger', value: `+${result.scaffold.created}, -${result.scaffold.deleted}` })
+            stats.push({ label: 'Bookinger', value: formatScaffoldResult(result.scaffold, 'compact') })
         }
         return stats
     }

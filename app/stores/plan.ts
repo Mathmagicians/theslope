@@ -59,7 +59,9 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonKey,
             () => {
                 if (!selectedSeasonId.value) return Promise.resolve(null)
-                return $fetch<Season>(`/api/admin/season/${selectedSeasonId.value}`)
+                return useRequestFetch()<Season>(`/api/admin/season/${selectedSeasonId.value}`, {
+                    onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente sæson') }
+                })
             },
             {
                 default: () => null,
@@ -253,16 +255,16 @@ export const usePlanStore = defineStore("Plan", () => {
         // Helper: Get default season ID (active season or first available)
         const getDefaultSeasonId = (): number | null => {
             if (activeSeasonId.value) {
-                console.info(LOG_CTX, `🗓️ > Using active season ID: ${activeSeasonId.value}`)
+                console.info(`${LOG_CTX} 🗓️ > Using active season ID: ${activeSeasonId.value}`)
                 return activeSeasonId.value
             } else if (seasons.value.length > 0) {
                 const {sortSeasonsByActivePriority} = useSeason()
                 const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
                 const firstId = sortedSeasons[0]?.id ?? null
-                console.info(LOG_CTX, `🗓️ > No active season, using first sorted season ID: ${firstId}`)
+                console.info(`${LOG_CTX} 🗓️ > No active season, using first sorted season ID: ${firstId}`)
                 return firstId
             }
-            console.warn(LOG_CTX, '🗓️ > No seasons available, cannot determine default')
+            console.warn(`${LOG_CTX} 🗓️ > No seasons available, cannot determine default`)
             return null
         }
 
@@ -271,7 +273,7 @@ export const usePlanStore = defineStore("Plan", () => {
             if (season?.id) {
                 loadSeason(season.id)
             } else {
-                console.warn(LOG_CTX, `🗓️ > No season found with shortName "${shortName}", falling back to default`)
+                console.warn(`${LOG_CTX} 🗓️ > No season found with shortName "${shortName}", falling back to default`)
                 const defaultId = getDefaultSeasonId()
                 if (defaultId) loadSeason(defaultId)
             }
@@ -493,8 +495,7 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const initPlanStore = (shortName?: string) => {
-            console.info(LOG_CTX, '🗓️ > PLAN_STORE > initPlanStore > shortName:', shortName,
-                'selected:', selectedSeasonId.value, 'active:', activeSeasonId.value)
+            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > initPlanStore > shortName: ${shortName ?? 'none'}, selected: ${selectedSeasonId.value}, active: ${activeSeasonId.value}`)
             if (shortName) {
                 loadSeasonByShortName(shortName)  // Handles fallback if shortName is invalid
             } else {
@@ -510,7 +511,7 @@ export const usePlanStore = defineStore("Plan", () => {
             if (!isActiveSeasonIdInitialized.value) return // Wait for activeSeasonId to load
             if (selectedSeasonId.value !== null) return // Already selected
 
-            console.info(LOG_CTX, '🗓️ > PLAN_STORE > Data loaded, calling initPlanStore')
+            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > Data loaded, calling initPlanStore`)
             initPlanStore()
         }, { immediate: true }) // Check immediately in case data is already loaded
 

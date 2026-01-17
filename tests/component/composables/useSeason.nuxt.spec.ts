@@ -1,5 +1,4 @@
 import {describe, it, expect} from 'vitest'
-import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useSeason} from '~/composables/useSeason'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
@@ -7,34 +6,10 @@ import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
-
-// Shared test constant: days offset for dinners before cancellation deadline
-const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
-
-// Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
-const today = new Date()
-const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
-    differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
-
-// Shared helper: create season with specific dinner events
-const seasonWith = (dinnerEvents: ReturnType<typeof DinnerEventFactory.dinnerEventAt>[]) => ({
-    ...SeasonFactory.defaultSeason(),
-    dinnerEvents
-})
-
-// Shared test season with far future dinner events on Mon(1), Wed(3), Fri(5) - matches allDineIn preference
-const testSeasonWithFutureDinners = seasonWith([
-    DinnerEventFactory.dinnerEventAt(101, daysToWeekday(1)), // Monday
-    DinnerEventFactory.dinnerEventAt(102, daysToWeekday(3)), // Wednesday
-    DinnerEventFactory.dinnerEventAt(103, daysToWeekday(5))  // Friday
-])
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -405,15 +380,17 @@ describe('getHolidaysForSeason', () => {
 })
 
 describe('deadlinesForSeason', () => {
-    const { deadlinesForSeason } = useSeason()
+    const { deadlinesForSeason, getMenuAnnouncementDeadlineDays } = useSeason()
 
     // Default season config (matches app.config.ts defaults)
+    // Note: booking deadline (8 days) is from season, menu deadline (10 days) is from config
     const defaultSeasonConfig = {
-        ticketIsCancellableDaysBefore: 10,
+        ticketIsCancellableDaysBefore: 8,  // Booking deadline (from season)
         diningModeIsEditableMinutesBefore: 60
     }
+    const menuDeadlineDays = getMenuAnnouncementDeadlineDays()  // Menu deadline (from config = 10)
 
-    describe('canModifyOrders', () => {
+    describe('canModifyOrders (booking deadline from season = 8 days)', () => {
         const { canModifyOrders } = deadlinesForSeason(defaultSeasonConfig)
 
         it('should allow modifications when dinner is far in future', () => {
@@ -426,7 +403,7 @@ describe('deadlinesForSeason', () => {
             // WHEN: Checking if orders can be modified
             const result = canModifyOrders(dinnerDate)
 
-            // THEN: Should allow (15 days > 10 days deadline)
+            // THEN: Should allow (15 days > 8 days booking deadline)
             expect(result).toBe(true)
         })
 
@@ -440,7 +417,7 @@ describe('deadlinesForSeason', () => {
             // WHEN: Checking if orders can be modified
             const result = canModifyOrders(dinnerDate)
 
-            // THEN: Should not allow (1 day < 10 days deadline)
+            // THEN: Should not allow (1 day < 8 days booking deadline)
             expect(result).toBe(false)
         })
 
@@ -520,27 +497,39 @@ describe('deadlinesForSeason', () => {
         })
     })
 
-    describe('isAnnounceMenuPastDeadline', () => {
+    describe('isAnnounceMenuPastDeadline (menu deadline from config = 10 days)', () => {
         const { isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+
+        // Verify the menu deadline is correctly read from config
+        it('should use menu deadline from app config (not season)', () => {
+            // Menu deadline comes from config (10 days), not season (8 days)
+            expect(menuDeadlineDays).toBe(10)
+        })
 
         it.each([
             {
                 description: 'far in future (11 days)',
                 daysOffset: 11,
                 hoursOffset: 0,
-                expected: false  // Not past 10-day deadline
+                expected: false  // Not past 10-day menu deadline
+            },
+            {
+                description: 'at 9 days (within menu deadline but past booking deadline)',
+                daysOffset: 9,
+                hoursOffset: 0,
+                expected: true  // Past 10-day menu deadline (chef must have announced)
             },
             {
                 description: 'tomorrow',
                 daysOffset: 1,
                 hoursOffset: 0,
-                expected: true  // Past 10-day deadline
+                expected: true  // Past 10-day menu deadline
             },
             {
                 description: 'same day before dinner time',
                 daysOffset: 0,
                 hoursOffset: 6,
-                expected: true  // Past 10-day deadline
+                expected: true  // Past 10-day menu deadline
             },
             {
                 description: 'in the past (yesterday)',
@@ -566,6 +555,25 @@ describe('deadlinesForSeason', () => {
 
             // THEN: Returns expected result
             expect(result).toBe(expected)
+        })
+
+        it('should distinguish between menu deadline (10 days) and booking deadline (8 days)', () => {
+            // GIVEN: Dinner 9 days from now (between the two deadlines)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const dinnerDate = new Date(today)
+            dinnerDate.setDate(today.getDate() + 9)
+
+            const { canModifyOrders, isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+
+            // WHEN: Checking both deadlines
+            const canBook = canModifyOrders(dinnerDate)
+            const menuDeadlinePassed = isAnnounceMenuPastDeadline(dinnerDate)
+
+            // THEN: Users CAN still book (9 > 8 booking deadline)
+            // BUT menu deadline HAS passed (9 < 10 menu deadline)
+            expect(canBook).toBe(true)
+            expect(menuDeadlinePassed).toBe(true)
         })
     })
 }) // Close deadlinesForSeason describe
@@ -782,370 +790,6 @@ describe('createPreferenceClipper', () => {
     })
 })
 
-describe('createPreBookingGenerator', () => {
-    const {createPreBookingGenerator, reconcilePreBookings} = useSeason()
-    const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
-    const DinnerMode = DinnerModeSchema.enum
-    const TicketType = TicketTypeSchema.enum
-
-    // Reference date for age calculations (first dinner in test season)
-    const firstDinnerDate = testSeasonWithFutureDinners.dinnerEvents![0]!.date
-
-    // Helper to create preferences
-    const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
-
-    // Helper to create test inhabitant with all required fields (using factory pattern)
-    const createTestInhabitant = (id: number, birthDate: Date | null, dinnerPreferences: WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]> | null) => ({
-        ...HouseholdFactory.defaultInhabitantData(),
-        id,
-        birthDate,
-        dinnerPreferences
-    })
-
-    describe('generator function', () => {
-        it('should skip inhabitants with no dinnerPreferences', () => {
-            // GIVEN: Inhabitant with null preferences (using factory helper)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
-            const inhabitants = [createTestInhabitant(1, null, null)]
-
-            // WHEN: Generate orders
-            const result = generator(inhabitants)
-
-            // THEN: Should return empty array (skip inhabitant)
-            expect(result).toEqual([])
-        })
-
-        it('should throw if no matching ticket price for type', () => {
-            // GIVEN: Season with ticket prices missing ADULT type
-            const seasonMissingAdult = {
-                ...testSeasonWithFutureDinners,
-                ticketPrices: [{id: 2, ticketType: 'CHILD' as const, price: 2000, seasonId: 1, description: null, maximumAgeLimit: 12}]
-            }
-            const generator = createPreBookingGenerator(seasonMissingAdult, 1, new Set())
-            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
-
-            // WHEN/THEN: Should throw (no ADULT ticket price)
-            expect(() => generator(inhabitants)).toThrow('No ticket price for type')
-        })
-
-        // Factory default prices: BABY=1500 (hungry baby), CHILD=3000, ADULT=5000 (from TicketFactory)
-        // Uses TicketFactory.birthDateForTicketType() for dynamic age calculation at dinner date
-        it.each([
-            {
-                description: 'adult with DINEIN on all cooking days',
-                ticketType: TicketType.ADULT,
-                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
-                expectedCount: 3,
-                expectedPrice: 5000
-            },
-            {
-                description: 'child with TAKEAWAY on cooking days',
-                ticketType: TicketType.CHILD,
-                preferences: [DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE],
-                expectedCount: 3,
-                expectedPrice: 3000
-            },
-            {
-                description: 'baby with DINEIN on cooking days',
-                ticketType: TicketType.BABY,
-                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
-                expectedCount: 3,
-                expectedPrice: 1500  // Factory has 2 BABY prices - Map uses last one (Hungry Baby @ 1500)
-            },
-            {
-                description: 'adult with NONE on some cooking days',
-                ticketType: TicketType.ADULT,
-                preferences: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE],
-                expectedCount: 2,  // Only Mon and Fri
-                expectedPrice: 5000
-            },
-            {
-                description: 'inhabitant with NONE on all days',
-                ticketType: TicketType.ADULT,
-                preferences: [DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE],
-                expectedCount: 0,
-                expectedPrice: 5000
-            }
-        ])('should generate $expectedCount orders for $description', ({ticketType, preferences, expectedCount, expectedPrice}) => {
-            const birthDate = TicketFactory.birthDateForTicketType(ticketType, firstDinnerDate)
-            // GIVEN: Generator and inhabitant (using factory helper)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set())
-            const prefs = createPreferences(preferences)
-            const inhabitants = [createTestInhabitant(1, birthDate, prefs)]
-
-            // WHEN: Generating pre-bookings
-            const orders = generator(inhabitants)
-
-            // THEN: Returns expected count with correct price
-            expect(orders).toHaveLength(expectedCount)
-            orders.forEach(order => {
-                expect(order.priceAtBooking).toBe(expectedPrice)
-                expect(order.householdId).toBe(1)
-                expect(order.state).toBe('BOOKED')
-            })
-        })
-
-        it('should exclude orders matching excludedKeys (user cancellations)', () => {
-            // GIVEN: Inhabitant with DINEIN on all cooking days, but one dinner was cancelled
-            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
-
-            // User previously cancelled order for inhabitant 1, dinner event 102
-            const excludedKeys = new Set(['1-102'])
-
-            // WHEN: Generator with exclusion (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
-            const orders = generator(inhabitants)
-
-            // THEN: Should generate 2 orders (dinner 101 and 103), not 3
-            expect(orders).toHaveLength(2)
-            expect(orders.map(o => o.dinnerEventId)).toEqual([101, 103])
-        })
-
-        it('should generate all orders when excludedKeys is empty', () => {
-            // GIVEN: Inhabitant with DINEIN on all cooking days
-            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [createTestInhabitant(1, new Date(1990, 0, 1), preferences)]
-
-            // WHEN: Generator with empty exclusion set (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), new Set())
-            const orders = generator(inhabitants)
-
-            // THEN: Should generate all 3 orders
-            expect(orders).toHaveLength(3)
-            expect(orders.map(o => o.dinnerEventId)).toEqual([101, 102, 103])
-        })
-
-        it('should handle multiple inhabitants with different exclusions', () => {
-            // GIVEN: Two inhabitants, each with different cancelled bookings (using factory helper)
-            const preferences = createPreferences([DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE])
-            const inhabitants = [
-                createTestInhabitant(1, new Date(1990, 0, 1), preferences),
-                createTestInhabitant(2, new Date(1990, 0, 1), preferences)
-            ]
-
-            // Anna cancelled dinner 101, Bob cancelled dinner 102
-            const excludedKeys = new Set(['1-101', '2-102'])
-
-            // WHEN: Generator with exclusions (no existing orders)
-            const generator = createPreBookingGenerator(testSeasonWithFutureDinners, 1, new Set(), excludedKeys)
-            const orders = generator(inhabitants)
-
-            // THEN: Should generate 4 orders (Anna: 102,103 + Bob: 101,103)
-            expect(orders).toHaveLength(4)
-            const annaOrders = orders.filter(o => o.inhabitantId === 1)
-            const bobOrders = orders.filter(o => o.inhabitantId === 2)
-            expect(annaOrders.map(o => o.dinnerEventId)).toEqual([102, 103])
-            expect(bobOrders.map(o => o.dinnerEventId)).toEqual([101, 103])
-        })
-    })
-
-    describe('reconcilePreBookings', () => {
-        // Helper using factory for proper OrderDisplay type
-        const createExistingOrder = (inhabitantId: number, dinnerEventId: number) =>
-            OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId })
-
-        // Helper for incoming orders (OrderCreateWithPrice - does NOT have id, createdAt, updatedAt, ticketType)
-        const createIncomingOrder = (inhabitantId: number, dinnerEventId: number) =>
-            ({ inhabitantId, dinnerEventId, householdId: 1, bookedByUserId: null, ticketPriceId: 1, priceAtBooking: 4000, dinnerMode: DinnerMode.DINEIN, state: 'BOOKED' as const })
-
-        it.each([
-            {
-                description: 'all new orders (no existing)',
-                existing: [] as ReturnType<typeof createExistingOrder>[],
-                incoming: [createIncomingOrder(1, 101)],
-                expectedCreate: 1,
-                expectedDelete: 0,
-                expectedIdempotent: 0
-            },
-            {
-                description: 'existing matches incoming (idempotent)',
-                existing: [createExistingOrder(1, 101)],
-                incoming: [createIncomingOrder(1, 101)],
-                expectedCreate: 0,
-                expectedDelete: 0,
-                expectedIdempotent: 1
-            },
-            {
-                description: 'existing not in incoming (delete)',
-                existing: [createExistingOrder(1, 101)],
-                incoming: [] as ReturnType<typeof createIncomingOrder>[],
-                expectedCreate: 0,
-                expectedDelete: 1,
-                expectedIdempotent: 0
-            },
-            {
-                description: 'mixed: some new, some existing, some deleted',
-                existing: [createExistingOrder(1, 101), createExistingOrder(1, 102)],
-                incoming: [createIncomingOrder(1, 101), createIncomingOrder(1, 103)],
-                expectedCreate: 1,  // 103 is new
-                expectedDelete: 1,  // 102 is deleted
-                expectedIdempotent: 1  // 101 unchanged
-            }
-        ])('should handle $description', ({existing, incoming, expectedCreate, expectedDelete, expectedIdempotent}) => {
-            // WHEN: Reconciling pre-bookings
-            const result = reconcilePreBookings(existing)(incoming)
-
-            // THEN: Returns expected counts
-            expect(result.create).toHaveLength(expectedCreate)
-            expect(result.delete).toHaveLength(expectedDelete)
-            expect(result.idempotent).toHaveLength(expectedIdempotent)
-        })
-    })
-})
-
-describe('createHouseholdOrderScaffold', () => {
-    const {createHouseholdOrderScaffold} = useSeason()
-    const {DinnerModeSchema} = useBookingValidation()
-    const DinnerMode = DinnerModeSchema.enum
-
-    // Helper to create test inhabitant with all required fields (using factory pattern)
-    const createInhabitant = (id: number, prefs: (typeof DinnerMode)[keyof typeof DinnerMode][]) => ({
-        ...HouseholdFactory.defaultInhabitantData(),
-        id,
-        householdId: 1,
-        dinnerPreferences: WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: prefs[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
-    })
-
-    // Helper to create HouseholdDisplay with all required fields
-    type InhabitantDisplay = ReturnType<typeof createInhabitant>
-    const createHousehold = (id: number, inhabitants: InhabitantDisplay[]) => ({
-        ...HouseholdFactory.defaultHouseholdData(),
-        id,
-        shortName: `H${id}`,
-        inhabitants
-    })
-
-    // Helper to create order with all required fields (using factory)
-    const createOrder = (inhabitantId: number, dinnerEventId: number, mode = DinnerMode.DINEIN) =>
-        OrderFactory.defaultOrder(undefined, { inhabitantId, dinnerEventId, dinnerMode: mode })
-
-    // Mon, Wed, Fri preferences (matches dinner events)
-    const allDineIn = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-    const allNone = Array(7).fill(DinnerMode.NONE) as (typeof DinnerMode)[keyof typeof DinnerMode][]
-
-    it.each([
-        {
-            desc: 'creates all orders for household with no existing',
-            inhabitants: [createInhabitant(1, allDineIn)],
-            existing: [],
-            cancelled: new Set<string>(),
-            expected: {create: 3, delete: 0, idempotent: 0}
-        },
-        {
-            desc: 'recognizes matching orders as idempotent',
-            inhabitants: [createInhabitant(1, allDineIn)],
-            existing: [createOrder(1, 101), createOrder(1, 102), createOrder(1, 103)],
-            cancelled: new Set<string>(),
-            expected: {create: 0, delete: 0, idempotent: 3}
-        },
-        {
-            desc: 'marks orders for deletion when preferences change to NONE',
-            inhabitants: [createInhabitant(1, allNone)],
-            existing: [createOrder(1, 101), createOrder(1, 102)],
-            cancelled: new Set<string>(),
-            expected: {create: 0, delete: 2, idempotent: 0}
-        },
-        {
-            desc: 'excludes user-cancelled bookings',
-            inhabitants: [createInhabitant(1, allDineIn)],
-            existing: [],
-            cancelled: new Set(['1-102']),
-            expected: {create: 2, delete: 0, idempotent: 0}
-        },
-        {
-            desc: 'handles empty household (no inhabitants)',
-            inhabitants: [] as InhabitantDisplay[],
-            existing: [],
-            cancelled: new Set<string>(),
-            expected: {create: 0, delete: 0, idempotent: 0}
-        },
-        {
-            desc: 'deletes orphan orders when inhabitants leave',
-            inhabitants: [] as InhabitantDisplay[],
-            existing: [createOrder(1, 101), createOrder(1, 102)],
-            cancelled: new Set<string>(),
-            expected: {create: 0, delete: 2, idempotent: 0}
-        }
-    ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
-        const scaffolder = createHouseholdOrderScaffold(testSeasonWithFutureDinners)
-        const result = scaffolder(createHousehold(1, inhabitants), existing, cancelled)
-
-        expect(result.create).toHaveLength(expected.create)
-        expect(result.delete).toHaveLength(expected.delete)
-        expect(result.idempotent).toHaveLength(expected.idempotent)
-    })
-
-    it('applies same scaffolder to multiple households (curried pattern)', () => {
-        const scaffolder = createHouseholdOrderScaffold(testSeasonWithFutureDinners)
-        const monFri = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-
-        const result1 = scaffolder(createHousehold(1, [createInhabitant(1, allDineIn)]), [], new Set())
-        const result2 = scaffolder(createHousehold(2, [createInhabitant(2, monFri)]), [], new Set())
-
-        expect(result1.create).toHaveLength(3)
-        expect(result2.create).toHaveLength(2)
-    })
-
-    // Deadline-based delete vs release behavior
-    it.each([
-        {
-            desc: 'far future dinner (before deadline) → delete',
-            daysFromToday: testSeasonWithFutureDinners.ticketIsCancellableDaysBefore + 10,
-            expected: {delete: 1, update: 0}
-        },
-        {
-            desc: 'tomorrow dinner (after deadline) → update (release)',
-            daysFromToday: 1,
-            expected: {delete: 0, update: 1}
-        },
-        {
-            desc: 'today dinner (after deadline) → update (release)',
-            daysFromToday: 0,
-            expected: {delete: 0, update: 1}
-        }
-    ])('$desc', ({daysFromToday, expected}) => {
-        const scaffolder = createHouseholdOrderScaffold(
-            seasonWith([DinnerEventFactory.dinnerEventAt(201, daysFromToday)])
-        )
-
-        const result = scaffolder(
-            createHousehold(1, [createInhabitant(1, allNone)]),
-            [createOrder(1, 201)],
-            new Set()
-        )
-
-        expect(result.delete).toHaveLength(expected.delete)
-        expect(result.update).toHaveLength(expected.update)
-
-        // Verify release-intent orders have correct state
-        if (expected.update > 0) {
-            result.update.forEach(order => {
-                expect(order.state).toBe('RELEASED')
-                expect(order.dinnerMode).toBe(DinnerMode.NONE)
-            })
-        }
-    })
-
-    it('no RELEASED in create when no existing order (past deadline NONE)', () => {
-        // GIVEN: Past dinner (after deadline) with NONE preference and NO existing order
-        const scaffolder = createHouseholdOrderScaffold(
-            seasonWith([DinnerEventFactory.dinnerEventAt(301, -5)])
-        )
-
-        // WHEN: Scaffolding with no existing orders
-        const result = scaffolder(
-            createHousehold(1, [createInhabitant(1, allNone)]),
-            [], // No existing orders
-            new Set()
-        )
-
-        // THEN: Create bucket should be empty - generator skips RELEASED when no existing order
-        expect(result.create).toHaveLength(0)
-    })
-})
 
 describe('getScheduleChangeDesiredEvents', () => {
     const {getScheduleChangeDesiredEvents} = useSeason()

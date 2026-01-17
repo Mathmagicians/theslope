@@ -48,6 +48,31 @@ describe('useCookingTeam', () => {
     })
   })
 
+  describe('getTeamShortName', () => {
+    const { getTeamShortName } = useCookingTeam()
+
+    describe('with dash separator', () => {
+      it.each([
+        { teamName: 'Madhold 1 - 08/25-06/26', expected: 'Madhold 1', description: 'typical full format' },
+        { teamName: 'Madhold 2 - Winter 2025', expected: 'Madhold 2', description: 'season name format' },
+        { teamName: 'Team A - Season', expected: 'Team A', description: 'letter-based team' },
+        { teamName: 'Madhold 10 - Long Season Name Here', expected: 'Madhold 10', description: 'double digit with long season' }
+      ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(getTeamShortName(teamName)).toBe(expected)
+      })
+    })
+
+    describe('without dash separator (fallback to full name)', () => {
+      it.each([
+        { teamName: 'Madhold 1', expected: 'Madhold 1', description: 'already short' },
+        { teamName: 'Team A', expected: 'Team A', description: 'no season suffix' },
+        { teamName: '', expected: '', description: 'empty string' }
+      ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(getTeamShortName(teamName)).toBe(expected)
+      })
+    })
+  })
+
   describe('getDefaultCookingTeam', () => {
     it('creates default team with generated name', () => {
       const { getDefaultCookingTeam } = useCookingTeam()

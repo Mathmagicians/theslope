@@ -74,6 +74,7 @@
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
+import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { FormSubmitEvent } from '#ui/types'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
@@ -87,6 +88,10 @@ interface Props {
   budget?: number               // Budget in øre (optional override)
   selected?: boolean            // For compact mode selection state
   isUpdating?: boolean          // Loading state for all edit buttons
+  hasPrev?: boolean             // Navigation: has previous dinner
+  hasNext?: boolean             // Navigation: has next dinner
+  calendarOpen?: boolean        // Calendar accordion state
+  navColor?: NuxtUIColor        // Navigation button color
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -96,7 +101,11 @@ const props = withDefaults(defineProps<Props>(), {
   isCompact: false,
   budget: undefined,
   selected: false,
-  isUpdating: false
+  isUpdating: false,
+  hasPrev: false,
+  hasNext: false,
+  calendarOpen: false,
+  navColor: undefined
 })
 
 const emit = defineEmits<{
@@ -104,12 +113,15 @@ const emit = defineEmits<{
   'update:allergens': [allergenIds: number[]]
   'advance-state': [newState: string]
   'cancel-dinner': []
-  'show-calendar': []
+  'undo-cancel-dinner': []
+  'toggle-calendar': []
+  prev: []
+  next: []
   select: [dinnerEventId: number]
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, COLOR, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -336,6 +348,11 @@ const handleCancelConfirm = () => {
   emit('cancel-dinner')
 }
 
+// Undo cancel handler (DangerButton with undo=true handles 2-step confirmation)
+const handleUndoCancelConfirm = () => {
+  emit('undo-cancel-dinner')
+}
+
 const handleCardClick = () => {
   if (props.isCompact) {
     emit('select', props.dinnerEvent.id)
@@ -411,7 +428,16 @@ const handleCardClick = () => {
     </div>
 
     <template #header>
-      <DinnerDetailHeader :dinner-event="dinnerEvent" @show-calendar="emit('show-calendar')" />
+      <DinnerDetailHeader
+        :dinner-event="dinnerEvent"
+        :has-prev="hasPrev"
+        :has-next="hasNext"
+        :calendar-open="calendarOpen"
+        :nav-color="navColor"
+        @prev="emit('prev')"
+        @next="emit('next')"
+        @toggle-calendar="emit('toggle-calendar')"
+      />
     </template>
 
     <div class="space-y-6">
@@ -469,6 +495,19 @@ const handleCardClick = () => {
                   :initial-color="HERO_BUTTON.primaryButton"
                   @confirm="handleCancelConfirm"
                 />
+
+                <!-- Undo cancel button (2-step confirmation with success colors) -->
+                <DangerButton
+                  v-if="isCancelled"
+                  :label="isUpdating ? 'Arbejder...' : 'Annuller aflysning'"
+                  :confirm-label="`Tryk igen for at genåbne ${formattedShortDate}...`"
+                  :loading="isUpdating"
+                  :disabled="isUpdating"
+                  :initial-color="HERO_BUTTON.primaryButton"
+                  :icon="ICONS.undo"
+                  undo
+                  @confirm="handleUndoCancelConfirm"
+                />
               </div>
             </div>
           </template>
@@ -478,25 +517,32 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef display - portrait frame with chef hat -->
-        <div v-if="dinnerEvent.chef" class="flex items-center gap-3 pt-4 mt-4" data-testid="chef-display">
-          <!-- Portrait frame around avatar only -->
+        <!-- Chef display - portrait frame with chef hat (or WANTED when no chef) -->
+        <div
+          class="flex items-center gap-3 pt-4 mt-4"
+          :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+          :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
+        >
+          <!-- Portrait frame around avatar -->
           <div class="relative">
             <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
               <UserListItem
+                v-if="dinnerEvent.chef"
                 :inhabitants="dinnerEvent.chef"
                 :show-names="false"
                 :link-to-profile="false"
                 :size="SIZES.standard"
               />
+              <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
             </div>
             <!-- Chef hat on top -->
             <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
           </div>
-          <!-- Name + subtle chefkok label -->
+          <!-- Name or WANTED -->
           <div class="flex flex-col">
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-            <span :class="TYPOGRAPHY.bodyTextMuted">Chefkok</span>
+            <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
+            <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
+            <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
           </div>
         </div>
 

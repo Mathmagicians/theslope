@@ -3,6 +3,27 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
 /**
+ * UI configuration for ticket type display
+ */
+export interface TicketTypeConfig {
+    label: string
+    color: 'primary' | 'success' | 'neutral'
+    icon: string
+}
+
+/**
+ * Ticket price item for USelectMenu display
+ */
+export interface TicketPriceSelectItem {
+    id: number | undefined
+    ticketType: 'ADULT' | 'CHILD' | 'BABY'
+    price: number
+    config: TicketTypeConfig
+    label: string
+    description?: string
+}
+
+/**
  * Business logic for working with tickets and ticket types
  *
  * Handles:
@@ -96,40 +117,124 @@ export const useTicket = () => {
     }
 
     /**
-     * Get ticket type configuration for an inhabitant
-     * Convenience function combining determineTicketType + config lookup
+     * Get ticket type configuration for display (label, color, icon)
+     * Uses resolveTicketPrice internally for DRY code path.
      *
-     * @param birthDate - Date of birth
+     * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
      * @param referenceDate - Date to calculate age on (default: today)
+     * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
      * @returns Ticket type display config (label, color, icon)
      */
     const getTicketTypeConfig = (
         birthDate: Date | null,
         ticketPrices?: TicketPrice[],
-        referenceDate?: Date
+        referenceDate?: Date,
+        priceAtBooking?: number | null
     ) => {
-        const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
+        const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
+        const ticketType = resolved?.ticketType ?? TicketType.ADULT
         return ticketTypeConfig[ticketType]
     }
 
     /**
-     * Get the matching TicketPrice for an inhabitant based on their age
-     * Returns the full TicketPrice object including id and price
+     * Find ticket price by explicit type (cheapest if multiple exist)
      *
-     * @param birthDate - Date of birth
-     * @param ticketPrices - Season ticket prices with age limits
+     * Use when you KNOW the ticket type and need to find the price.
+     * For deriving type from context (birthDate, priceAtBooking), use resolveTicketPrice.
+     *
+     * NOTE: Returns first match from sorted list (sorted by price asc = cheapest first).
+     *
+     * @param ticketType - Explicit ticket type to find
+     * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
+     * @returns Matching TicketPrice or undefined if not found
+     */
+    const findTicketPriceByType = (
+        ticketType: typeof TicketType[keyof typeof TicketType],
+        ticketPrices?: TicketPrice[]
+    ): TicketPrice | undefined => {
+        if (!ticketPrices?.length) return undefined
+        return ticketPrices.find(tp => tp.ticketType === ticketType)
+    }
+
+    /**
+     * Resolve a TicketPrice using available information in priority order:
+     * 1. birthDate → determineTicketType → find cheapest price for that type
+     * 2. priceAtBooking → find price with matching amount
+     * 3. Fallback → cheapest ADULT price
+     *
+     * Works for both inhabitants (birthDate known) and guests (use priceAtBooking).
+     * Also handles orphaned orders where TicketPrice was deleted but priceAtBooking preserved.
+     *
+     * NOTE: Relies on ticketPrices being sorted by price ascending (from DB).
+     * .find() returns first match = cheapest price (favors user).
+     *
+     * @param birthDate - Date of birth (preferred, determines ticket type by age)
+     * @param priceAtBooking - Frozen price from existing order (fallback when no birthDate)
+     * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
      * @param referenceDate - Date to calculate age on (default: today)
-     * @returns TicketPrice object or undefined if not found
+     * @returns Matching TicketPrice or undefined if no prices available
+     */
+    const resolveTicketPrice = (
+        birthDate: Date | null | undefined,
+        priceAtBooking: number | null | undefined,
+        ticketPrices?: TicketPrice[],
+        referenceDate?: Date
+    ): TicketPrice | undefined => {
+        if (!ticketPrices?.length) return undefined
+
+        // Priority 1: birthDate → ticketType → cheapest price for type
+        if (birthDate) {
+            const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
+            const match = findTicketPriceByType(ticketType, ticketPrices)
+            if (match) return match
+        }
+
+        // Priority 2: priceAtBooking → exact price match
+        if (priceAtBooking !== null && priceAtBooking !== undefined) {
+            const match = ticketPrices.find(tp => tp.price === priceAtBooking)
+            if (match) return match
+        }
+
+        // Fallback: ADULT price, then last available price
+        return findTicketPriceByType(TicketType.ADULT, ticketPrices) ?? ticketPrices.at(-1)
+    }
+
+    /**
+     * @deprecated Use resolveTicketPrice instead
+     * Get the matching TicketPrice for an inhabitant based on their age
      */
     const getTicketPriceForInhabitant = (
         birthDate: Date | null,
         ticketPrices?: TicketPrice[],
         referenceDate?: Date
     ): TicketPrice | undefined => {
-        const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
-        return ticketPrices?.find(tp => tp.ticketType === ticketType)
+        return resolveTicketPrice(birthDate, undefined, ticketPrices, referenceDate)
     }
+
+    /**
+     * Get ticket prices formatted for USelectMenu display
+     * Each item includes config for styled badge rendering
+     *
+     * @param ticketPrices - Season ticket prices
+     * @param compact - If true, only label + price. If false, include description + age limit
+     * @returns Items with id, label, description, and config for styled display
+     */
+    const getTicketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false): TicketPriceSelectItem[] =>
+        ticketPrices.map(p => {
+            const config = ticketTypeConfig[p.ticketType]
+            const ageLimit = p.maximumAgeLimit ? `Under ${p.maximumAgeLimit} år` : undefined
+            const description = compact ? undefined : [ageLimit, p.description].filter(Boolean).join(' · ') || undefined
+
+            return {
+                id: p.id,
+                ticketType: p.ticketType,
+                price: p.price,
+                config,
+                label: `${config.label} · ${formatPrice(p.price)} kr`,
+                description
+            }
+        })
 
     /**
      * Convert price from øre to DKK (integer)
@@ -149,7 +254,10 @@ export const useTicket = () => {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        findTicketPriceByType,
+        resolveTicketPrice,
         getTicketPriceForInhabitant,
+        getTicketPriceSelectItems,
         convertPriceToDecimalFormat,
         formatPrice
     }

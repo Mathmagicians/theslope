@@ -28,6 +28,17 @@ export const useCookingTeam = () => {
         return match ? parseInt(match[1]!, 10) : null
     }
 
+    /**
+     * Get a compact short name for display in badges and tight UI spaces
+     * Format: "Madhold X" (e.g., "Madhold 2 - 08/25-06/26" → "Madhold 2")
+     * Cuts off everything after the first dash
+     * Fallback: Returns full name if no dash found
+     */
+    const getTeamShortName = (teamName: string): string => {
+        const dashIndex = teamName.indexOf(' - ')
+        return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
+    }
+
     const getDefaultCookingTeam = (
         seasonId: number,
         seasonShortName: string,
@@ -114,6 +125,7 @@ export const useCookingTeam = () => {
         getTeamColor,
         createDefaultTeamName,
         extractTeamNumber,
+        getTeamShortName,
         getDefaultCookingTeam,
         useInhabitantsWithAssignments,
         chunkTeamAffinities

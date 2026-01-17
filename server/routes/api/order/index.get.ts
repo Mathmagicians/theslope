@@ -2,7 +2,7 @@
  * GET /api/order - Fetch orders
  *
  * Query params:
- * - dinnerEventId: Optional filter by specific dinner event
+ * - dinnerEventIds: Optional array of dinner event IDs (0=all, 1=single, many=multiple)
  * - state: Optional filter by order state (e.g., RELEASED for claim queue)
  * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
  * - allHouseholds: false (default) = filter by session user's household
@@ -19,12 +19,12 @@ import type { OrderDisplay } from '~/composables/useBookingValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const {OrderStateSchema} = useBookingValidation()
+const {OrderStateSchema, IdOrIdsSchema} = useBookingValidation()
 
 const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
 
 const querySchema = z.object({
-    dinnerEventId: z.coerce.number().int().positive().optional(),
+    dinnerEventIds: IdOrIdsSchema,
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
     allHouseholds: z.coerce.boolean().optional().default(false),
@@ -59,7 +59,9 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
 
     // Business logic
     try {
-        const orders = await fetchOrders(d1Client, query.dinnerEventId, householdId, query.state, query.sortBy, query.includeProvenance)
+        // Pass array (empty = all events, otherwise filter by IDs)
+        const eventIds = query.dinnerEventIds.length > 0 ? query.dinnerEventIds : undefined
+        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

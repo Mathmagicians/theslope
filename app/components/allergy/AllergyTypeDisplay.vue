@@ -43,7 +43,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 // Normalize allergyType - treat null/undefined as "no allergies" object
 const normalizedAllergyType = computed(() => {
   if (!props.allergyType) {
-    return { name: 'Ingen', icon: 'emojione-v1:sun-with-face', description: 'Ingen allergier' }
+    return { name: 'Ingen', icon: 'i-heroicons-sun', description: 'Ingen allergier' }
   }
   return props.allergyType
 })
@@ -62,7 +62,7 @@ const isIconClass = computed(() => normalizedAllergyType.value.icon?.startsWith(
 // For UAvatar icon property (iconify classes only)
 const avatarIcon = computed(() => {
   if (!normalizedAllergyType.value.icon) {
-    return 'emojione-v1:sun-with-face' // Fallback if icon is missing
+    return 'i-heroicons-sun' // Fallback if icon is missing
   }
   if (isIconClass.value) {
     return normalizedAllergyType.value.icon

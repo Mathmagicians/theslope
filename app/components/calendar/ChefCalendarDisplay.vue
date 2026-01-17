@@ -40,8 +40,8 @@
  *
  * Color System (Ocean - Professional Chef):
  * - Ocean blue circles: Next (bold), Future (light), Past (mocha)
- * - Deadline rings: 🔴 Red (critical <24h), 🟡 Yellow (warning 24-72h)
- * - Visual continuity: Same colored circles + rings in both views
+ * - Deadline chips: 🔴 Red (critical <24h), 🟡 Yellow (warning 24-72h)
+ * - Visual continuity: Same colored circles + chips in both views
  *
  * Features:
  * - Countdown timer (train station style) to next cooking
@@ -63,6 +63,7 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {toDate} from '~/utils/date'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
@@ -73,6 +74,8 @@ interface Props {
   deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
+  viewMode: 'agenda' | 'calendar'
+  accordionOpen: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -82,11 +85,14 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   select: [dinnerId: number]
+  'tab-click': [mode: 'agenda' | 'calendar']
+  'update:accordion-open': [open: boolean]
 }>()
 
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {getDeadlineUrgency, sortDinnerEventsByTemporal} = useSeason()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS} = useTheSlopeDesignSystem()
+const {sortDinnerEventsByTemporal} = useSeason()
+const {getChefDeadlineAlarm} = useBooking()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, URGENCY_TO_CHIP_COLOR} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -95,13 +101,14 @@ const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === prop
 const focusDate = computed(() => selectedDinner.value ? new Date(selectedDinner.value.date) : null)
 
 // View state with horizontal tabs
-// Parent controls via v-model:view-mode (URL query param for persistence)
+// Both viewMode and accordionOpen are one-way props to prevent race conditions
+// Changes emit via events for atomic updates in parent
 const viewTabs = [
   { label: 'Agenda', value: 'agenda', icon: 'i-heroicons-list-bullet' },
   { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
 ]
-const viewMode = defineModel<'agenda' | 'calendar'>('viewMode', { required: true })
-const accordionOpen = defineModel<boolean>('accordionOpen', { default: true })
+const viewMode = toRef(props, 'viewMode')
+const accordionOpen = toRef(props, 'accordionOpen')
 
 // Temporal splitting using shared composable
 const {
@@ -181,59 +188,72 @@ const agendaColumns = [
   }
 ]
 
-// Deadline urgency ring logic (shared across calendars)
-const URGENCY_TO_RING_CLASS = {
-  0: CALENDAR.deadline.onTrack,
-  1: CALENDAR.deadline.warning,
-  2: CALENDAR.deadline.critical
-} as const
-
-const getDeadlineRingClass = (day: DateValue): string => {
+// Deadline alarm for day using chef deadline logic (menu + groceries)
+const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
   const dinner = getDinnerForDay(day)
-  if (!dinner) return ''
-
-  const urgency = getDeadlineUrgency(new Date(dinner.date))
-  return URGENCY_TO_RING_CLASS[urgency]
+  if (!dinner) return -1
+  return getChefDeadlineAlarm(dinner, props.deadlines)
 }
 
 // Legend items using design system classes
 const legendItems = computed(() => [
   {
     label: 'Næste madlavning',
+    type: 'circle' as const,
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
   },
   {
     label: 'Valgt dato',
+    type: 'circle' as const,
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
   },
   {
     label: 'Planlagt madlavning',
+    type: 'circle' as const,
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
   },
   {
     label: 'Tidligere madlavning',
+    type: 'circle' as const,
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
   },
   {
+    label: 'Deadline overskredet',
+    type: 'chip' as const,
+    chipColor: 'neutral'
+  },
+  {
     label: 'Deadline kritisk (<24t)',
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.critical}`
+    type: 'chip' as const,
+    chipColor: URGENCY_TO_CHIP_COLOR[2]
   },
   {
     label: 'Deadline snart (24-72t)',
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CALENDAR.deadline.warning}`
+    type: 'chip' as const,
+    chipColor: URGENCY_TO_CHIP_COLOR[1]
   },
   {
     label: 'Aflyst madlavning',
+    type: 'circle' as const,
     circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past} line-through`
   }
 ])
 
-// Accordion item value: '0' = open (first item), undefined = closed
+// Accordion bridge: convert boolean prop to UAccordion's string value model
+// UAccordion uses '0' = first item open, undefined = all closed
 const accordionItems = [{ slot: 'calendar-content', value: '0' }]
 const accordionValue = computed({
   get: () => accordionOpen.value ? '0' : undefined,
-  set: (v) => { accordionOpen.value = v === '0' }
+  set: (v) => {
+    // When UAccordion changes, emit event to parent
+    emit('update:accordion-open', v === '0')
+  }
 })
+
+// Handle tab click - emit to parent which will set mode AND open accordion
+const handleTabClick = (mode: 'agenda' | 'calendar') => {
+  emit('tab-click', mode)
+}
 
 </script>
 
@@ -256,11 +276,13 @@ const accordionValue = computed({
     <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
       <!-- Custom leading slot: tabs instead of label -->
       <template #leading>
+        <!-- Tab click always emits to parent for atomic state update -->
         <UTabs
-          v-model="viewMode"
+          :model-value="viewMode"
           :items="viewTabs"
           orientation="horizontal"
           variant="link"
+          @update:model-value="(m) => handleTabClick(m as 'agenda' | 'calendar')"
         />
       </template>
 
@@ -323,20 +345,44 @@ const accordionValue = computed({
         <div v-else class="flex-1">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
+              <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
+              <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
+              <UChip
+                v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
+                show
+                size="md"
+                :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
+              >
+                <div
+                  :data-testid="`calendar-dinner-date-${day.day}`"
+                  :class="[
+                    SIZES.calendarCircle,
+                    CALENDAR.day.shape,
+                    getDayColorClass(getDayType(eventLists)!),
+                    isSelected(day) ? CHEF_CALENDAR.selection : ''
+                  ]"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
+              </UChip>
+
+              <!-- Regular day circle (on-track, past, or cancelled) -->
               <div
-                v-if="getDayType(eventLists)"
+                v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="[
                   SIZES.calendarCircle,
                   CALENDAR.day.shape,
                   isCancelledDay(day) ? `${CALENDAR.day.past} line-through` : getDayColorClass(getDayType(eventLists)!),
-                  getDayType(eventLists) !== 'past' && !isCancelledDay(day) ? getDeadlineRingClass(day) : '',
                   isSelected(day) ? CHEF_CALENDAR.selection : ''
                 ]"
                 @click="handleDateClick(day)"
               >
                 {{ day.day }}
               </div>
+
+              <!-- Non-dinner day -->
               <span v-else class="text-sm">{{ day.day }}</span>
             </template>
 
@@ -344,7 +390,12 @@ const accordionValue = computed({
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <div :class="legendItem.circleClass">
+                  <!-- Chip for deadline indicators (wraps styled circle like calendar) -->
+                  <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor as NuxtUIColor">
+                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, CHEF_CALENDAR.day.future]">1</div>
+                  </UChip>
+                  <!-- Circle for other indicators -->
+                  <div v-else :class="legendItem.circleClass">
                     1
                   </div>
                   <span>{{ legendItem.label }}</span>

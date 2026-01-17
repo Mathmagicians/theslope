@@ -78,8 +78,9 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         if (targetState) {
             switch (targetState) {
                 case DinnerState.ANNOUNCED: {
-                    if (dinner.state === DinnerState.CANCELLED) {
-                        throw createError({statusCode: 400, message: PREFIX + `Cannot announce cancelled dinner event ${id}`})
+                    // Allow from SCHEDULED (normal announce) or CANCELLED (undo cancellation)
+                    if (dinner.state === DinnerState.CONSUMED) {
+                        throw createError({statusCode: 400, message: PREFIX + `Cannot announce consumed dinner event ${id}`})
                     }
 
                     if (!heynaboToken) {
@@ -140,6 +141,20 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                         state: DinnerState.CANCELLED
                     })
                     console.info(PREFIX + `Cancelled dinner ${id}`)
+                    break
+                }
+
+                case DinnerState.SCHEDULED: {
+                    // Undo cancellation - only allowed from CANCELLED state
+                    if (dinner.state !== DinnerState.CANCELLED) {
+                        throw createError({statusCode: 400, message: PREFIX + `Cannot revert to SCHEDULED: dinner ${id} is not cancelled (current state: ${dinner.state})`})
+                    }
+
+                    updatedDinner = await updateDinnerEvent(d1Client, id, {
+                        ...menuUpdates,
+                        state: DinnerState.SCHEDULED
+                    })
+                    console.info(PREFIX + `Reverted dinner ${id} to SCHEDULED (undo cancellation)`)
                     break
                 }
 

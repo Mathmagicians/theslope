@@ -18,26 +18,23 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 export const useTemporalCalendar = () => {
   const {
     getDefaultDinnerStartTime,
-    getNextDinnerDate,
     splitDinnerEvents
   } = useSeason()
   const {createEventList} = useCalendarEvents()
 
   /**
    * Split events into temporal categories (past/next/future)
+   * Uses splitDinnerEvents which computes nextDinnerDateRange internally (DRY)
    */
   const useTemporalSplit = <T extends { date: Date }>(events: T[]) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
-    const dinnerDates = computed(() => events.map(e => new Date(e.date)))
-    const nextDinnerDateRange = computed(() => getNextDinnerDate(dinnerDates.value, dinnerStartHour))
 
-    const splitResult = computed(() =>
-      splitDinnerEvents<T>(events, nextDinnerDateRange.value)
-    )
+    const splitResult = computed(() => splitDinnerEvents<T>(events))
 
     const nextDinner = computed(() => splitResult.value.nextDinner)
     const pastDinnerDates = computed(() => splitResult.value.pastDinnerDates)
     const futureDinnerDates = computed(() => splitResult.value.futureDinnerDates)
+    const nextDinnerDateRange = computed(() => splitResult.value.nextDinnerDateRange)
 
     return {
       nextDinner,

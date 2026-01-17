@@ -72,19 +72,18 @@ describe('ChefDinnerCard', () => {
         })
     })
 
-    describe('Deadline badges via DinnerDeadlineBadges', () => {
+    describe('Deadline badges', () => {
         it('should show Menu and Framelding labels', async () => {
             const dinnerEvent = createDinnerEvent()
             const wrapper = await mountCard({ dinnerEvent })
 
-            // DinnerDeadlineBadges always shows these labels in standalone mode
             expect(wrapper.text()).toContain('Menu')
             expect(wrapper.text()).toContain('Framelding')
         })
 
-        it('should show on-track badge for far future dinner', async () => {
+        it('should show countdown for far future dinner', async () => {
             // GIVEN: Reference time is Jan 11, 2025 at 18:00
-            // Dinner on Jan 26, 2025 at 18:00 (15 days away, well past warning threshold)
+            // Dinner on Jan 26, 2025 at 18:00 (15 days away)
             const dinnerDate = new Date(2025, 0, 26, 18, 0)
 
             const dinnerEvent = createDinnerEvent({
@@ -94,15 +93,13 @@ describe('ChefDinnerCard', () => {
             const wrapper = await mountCard({dinnerEvent})
 
             const text = wrapper.text()
-            // Should show green circle emoji (🟢) for on-track status
-            expect(text).toContain('🟢')
-            // Should show countdown in days
             expect(text).toContain('15')
+            expect(text).toMatch(/om\s+15\s+dage/i)
         })
 
         it('should show countdown for dinner within 72h', async () => {
             // GIVEN: Reference time is Jan 11, 2025 at 18:00
-            // Dinner on Jan 13, 2025 at 18:00 (48 hours away, within warning threshold)
+            // Dinner on Jan 13, 2025 at 18:00 (48 hours away)
             const dinnerDate = new Date(2025, 0, 13, 18, 0)
 
             const dinnerEvent = createDinnerEvent({
@@ -112,8 +109,7 @@ describe('ChefDinnerCard', () => {
             const wrapper = await mountCard({dinnerEvent})
 
             const text = wrapper.text()
-            // Should show countdown value (days, hours, or minutes)
-            expect(text).toMatch(/\d+\s*(DAGE?|T|M)/i)
+            expect(text).toMatch(/\d+\s*(dage?|timer?|minut)/i)
         })
 
         it('should show åben or lukket for framelding status', async () => {
@@ -121,7 +117,6 @@ describe('ChefDinnerCard', () => {
             const wrapper = await mountCard({ dinnerEvent })
 
             const text = wrapper.text()
-            // Should show either "åben de næste" or "lukket" for framelding status
             expect(text).toMatch(/åben|lukket/i)
         })
     })

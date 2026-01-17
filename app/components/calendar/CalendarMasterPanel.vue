@@ -18,7 +18,7 @@
  * - Full-height flex layout
  */
 interface Props {
-  title: string
+  title?: string
 }
 
 defineProps<Props>()
@@ -37,7 +37,7 @@ const { TYPOGRAPHY, LAYOUTS } = useTheSlopeDesignSystem()
 
 <template>
   <UCard :class="LAYOUTS.cardResponsive" :ui="{ root: 'flex flex-col h-full' }">
-    <template #header>
+    <template v-if="title" #header>
       <h3 :class="TYPOGRAPHY.cardTitle">{{ title }}</h3>
     </template>
 

@@ -47,7 +47,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         selectedAllergyTypeKey,
         () => {
             if (!selectedAllergyTypeId.value) return Promise.resolve(null)
-            return $fetch<AllergyTypeDetail>(`/api/admin/allergy-type/${selectedAllergyTypeId.value}`)
+            return useRequestFetch()<AllergyTypeDetail>(`/api/admin/allergy-type/${selectedAllergyTypeId.value}`, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente allergitype') }
+            })
         },
         {
             default: () => null
@@ -79,7 +81,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             if (!filterInhabitantId.value && !filterHouseholdId.value) {
                 return Promise.resolve([])
             }
-            return $fetch<AllergyDetail[]>(allergiesQueryKey.value)
+            return useRequestFetch()<AllergyDetail[]>(allergiesQueryKey.value, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente allergier') }
+            })
         },
         {
             immediate: true,

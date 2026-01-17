@@ -2,6 +2,14 @@
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
+// Props - canEdit from parent for authorization
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 const UButton = resolveComponent('UButton')
 
 const store = useUsersStore()
@@ -201,7 +209,7 @@ const pagination = ref({
       </template>
 
       <template #updatedAt-cell="{ row }">
-        {{ row.original.updatedAt }} siden
+        {{ row.original.updatedAt }}
       </template>
 
       <!-- Expanded row content -->
@@ -211,6 +219,7 @@ const pagination = ref({
             v-if="expandedUser"
             :user="expandedUser"
             :show-actions="false"
+            :show-role-manager="props.canEdit"
           />
           <p v-else class="text-gray-500">Ingen brugerdata tilgængelig</p>
         </div>

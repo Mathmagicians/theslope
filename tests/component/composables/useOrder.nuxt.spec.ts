@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { useOrder } from '~/composables/useOrder'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 
 // Get enum schemas for type-safe test data
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
@@ -8,7 +9,7 @@ const OrderState = OrderStateSchema.enum
 const TicketType = TicketTypeSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 
-// Test data factory helper - creates full OrderDisplay objects
+// Test data factory helper - uses OrderFactory for DRY test data
 let orderIdCounter = 1
 const createTestOrder = (overrides: {
   state?: typeof OrderState[keyof typeof OrderState]
@@ -16,30 +17,19 @@ const createTestOrder = (overrides: {
   ticketType?: typeof TicketType[keyof typeof TicketType]
   description?: string | null
 } = {}) => {
-  const now = new Date()
-  return {
-    // Required scalar fields
-    id: orderIdCounter++,
-    dinnerEventId: 1,
-    inhabitantId: 1,
-    bookedByUserId: 1,
-    ticketPriceId: 1,
+  const id = orderIdCounter++
+  return OrderFactory.defaultOrderDetail(`test-${id}`, {
+    id,
     priceAtBooking: overrides.priceAtBooking ?? 5000,
-    dinnerMode: DinnerMode.DINEIN,
     state: overrides.state ?? OrderState.BOOKED,
-    isGuestTicket: false,
-    releasedAt: null,
-    closedAt: null,
-    createdAt: now,
-    updatedAt: now,
-    // Flattened ticketType (ADR-009)
     ticketType: overrides.ticketType ?? TicketType.ADULT,
-    // Legacy ticketPrice object for getPortionsForTicketPrice
     ticketPrice: {
+      id: 1,
       ticketType: overrides.ticketType ?? TicketType.ADULT,
-      description: overrides.description ?? null
+      description: overrides.description ?? null,
+      price: 5000
     }
-  }
+  })
 }
 
 describe('useOrder', () => {
@@ -166,5 +156,93 @@ describe('useOrder', () => {
         expect(requiresChair(ticketType)).toBe(expected)
       }
     )
+  })
+
+  describe('calculateDiningModeStats - percentages based on PORTIONS not order count', () => {
+    const { calculateDiningModeStats } = useOrder()
+
+    // Helper to create orders with specific mode
+    const createOrderWithMode = (
+      mode: typeof DinnerMode[keyof typeof DinnerMode],
+      ticketType: typeof TicketType[keyof typeof TicketType],
+      state: typeof OrderState[keyof typeof OrderState] = OrderState.BOOKED
+    ) => ({ ...createTestOrder({ state, ticketType }), dinnerMode: mode })
+
+    describe.each([
+      {
+        scenario: 'empty orders',
+        orders: [] as ReturnType<typeof createTestOrder>[],
+        expected: { TAKEAWAY: 0, SPISESAL: 0, 'SPIS SENT': 0, 'TIL SALG': 0 }
+      },
+      {
+        scenario: 'all adults in DINEIN → SPISESAL 100%',
+        orders: [
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT),
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT)
+        ],
+        expected: { TAKEAWAY: 0, SPISESAL: 100, 'SPIS SENT': 0, 'TIL SALG': 0 }
+      },
+      {
+        scenario: 'released babies → TIL SALG 0% (not order-based)',
+        orders: [
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT),        // 1 portion
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.CHILD),        // 0.5 portion
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.BABY, OrderState.RELEASED), // 0 portions
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.BABY, OrderState.RELEASED), // 0 portions
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.BABY, OrderState.RELEASED)  // 0 portions
+        ],
+        expected: { TAKEAWAY: 0, SPISESAL: 100, 'SPIS SENT': 0, 'TIL SALG': 0 }
+      },
+      {
+        scenario: 'equal portions split → 25% each',
+        orders: [
+          createOrderWithMode(DinnerMode.TAKEAWAY, TicketType.ADULT),      // 1 portion
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT),        // 1 portion
+          createOrderWithMode(DinnerMode.DINEINLATE, TicketType.ADULT),    // 1 portion
+          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT, OrderState.RELEASED) // 1 portion released
+        ],
+        expected: { TAKEAWAY: 25, SPISESAL: 25, 'SPIS SENT': 25, 'TIL SALG': 25 }
+      }
+    ])('GIVEN $scenario', ({ orders, expected }) => {
+      it('THEN percentages reflect portion distribution', () => {
+        const stats = calculateDiningModeStats(orders)
+
+        expect(stats.find(s => s.label === 'TAKEAWAY')!.percentage).toBe(expected.TAKEAWAY)
+        expect(stats.find(s => s.label === 'SPISESAL')!.percentage).toBe(expected.SPISESAL)
+        expect(stats.find(s => s.label === 'SPIS SENT')!.percentage).toBe(expected['SPIS SENT'])
+        expect(stats.find(s => s.label === 'TIL SALG')!.percentage).toBe(expected['TIL SALG'])
+
+        // Verify sum = 100% (unless all zero)
+        const total = stats.reduce((sum, s) => sum + s.percentage, 0)
+        expect(total === 0 || total === 100).toBe(true)
+      })
+    })
+  })
+
+  describe('calculateNormalizedWidths - visual widths with minimum', () => {
+    const { calculateNormalizedWidths } = useOrder()
+
+    const makeStats = (percentages: number[]) =>
+      percentages.map((p, i) => ({ key: `K${i}`, label: `L${i}`, percentage: p, portions: p, orderCount: p }))
+
+    describe.each([
+      { scenario: 'empty', percentages: [], minWidth: 10, expectedWidths: {} },
+      { scenario: 'all zeros (4 items)', percentages: [0, 0, 0, 0], minWidth: 10, expectedWidths: { K0: 25, K1: 25, K2: 25, K3: 25 } },
+      { scenario: '100% in one', percentages: [100, 0, 0, 0], minWidth: 10, expectedWidths: { K0: 76.9, K1: 7.7, K2: 7.7, K3: 7.7 } },
+      { scenario: 'custom min 20%', percentages: [80, 0], minWidth: 20, expectedWidths: { K0: 80, K1: 20 } }
+    ])('GIVEN $scenario', ({ percentages, minWidth, expectedWidths }) => {
+      it('THEN widths are normalized correctly', () => {
+        const stats = makeStats(percentages)
+        const widths = calculateNormalizedWidths(stats, minWidth)
+
+        Object.entries(expectedWidths).forEach(([key, expected]) => {
+          expect(widths[key]).toBeCloseTo(expected, 0)
+        })
+
+        // Verify sum = 100% (unless empty)
+        const total = Object.values(widths).reduce((sum, w) => sum + w, 0)
+        if (percentages.length > 0) expect(total).toBeCloseTo(100, 1)
+      })
+    })
   })
 })

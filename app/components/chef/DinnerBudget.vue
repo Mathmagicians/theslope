@@ -62,15 +62,7 @@ const activeOrders = computed(() => getActiveOrders(props.orders))
 const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePercent, vatPercent))
 
 // Revenue by ticket type (for expanded details table)
-const revenueByType = computed(() => {
-  return groupByTicketType(activeOrders.value).map(group => ({
-    ...group,
-    unitPrice: activeOrders.value.find(o => o.ticketType === group.ticketType)?.priceAtBooking || 0,
-    revenue: activeOrders.value
-      .filter(o => o.ticketType === group.ticketType)
-      .reduce((sum, o) => sum + o.priceAtBooking, 0)
-  }))
-})
+const revenueByType = computed(() => groupByTicketType(activeOrders.value))
 </script>
 
 <template>
@@ -91,7 +83,7 @@ const revenueByType = computed(() => {
     >
       <h4 :class="TYPOGRAPHY.sectionSubheading">Budget</h4>
       <UIcon
-        :name="showDetails ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+        :name="showDetails ? 'i-heroicons-chevron-down' : 'i-heroicons-chevron-right'"
         class="w-4 h-4 opacity-50"
       />
     </button>

@@ -10,17 +10,20 @@ import {
     type BillingPeriodSummaryDisplay,
     type HouseholdBillingResponse,
     type InvoiceDisplay,
-    type MonthlyBillingResponse
+    type MonthlyBillingResponse,
+    type TransactionDisplay
 } from '~/composables/useBillingValidation'
 
 const {headers, salt} = testHelpers
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'
 const BILLING_PERIODS_ENDPOINT = '/api/admin/billing/periods'
+const BILLING_INVOICES_ENDPOINT = '/api/admin/billing/invoices'
+const BILLING_CURRENT_PERIOD_ENDPOINT = '/api/admin/billing/current-period'
 const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
 const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
 const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
-const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, parseCSV} = useBillingValidation()
+const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV} = useBillingValidation()
 
 export class BillingFactory {
 
@@ -96,6 +99,7 @@ export class BillingFactory {
         }
 
         const liveOrder = {
+            id: 50,  // orderId for lazy-loading order history
             dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Live Dinner', testSalt)},
             inhabitant: {id: 2, name: salt('Live Name', testSalt), household: {id: 3, pbsId: 1111, address: salt('Live Street', testSalt)}},
             ticketPrice: {ticketType: 'ADULT'}
@@ -301,5 +305,65 @@ Børn (2-12 år),,${childCounts}
         }
 
         return null
+    }
+
+    // ============================================================================
+    // Admin Economy Tree View API Functions
+    // ============================================================================
+
+    /**
+     * Get current period transactions (GET /api/admin/billing/current-period)
+     * Returns all unbilled transactions for the "virtual" billing period
+     */
+    static readonly getCurrentPeriodTransactions = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<TransactionDisplay[]> => {
+        const response = await context.request.get(BILLING_CURRENT_PERIOD_ENDPOINT, {headers})
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const body = await response.json()
+            return body.map((tx: unknown) => TransactionDisplaySchema.parse(tx))
+        }
+
+        return []
+    }
+
+    /**
+     * Get transactions for an invoice (GET /api/admin/billing/invoices/[id])
+     * Lazy loading for admin economy tree view
+     */
+    static readonly getInvoiceTransactions = async (
+        context: BrowserContext,
+        invoiceId: number,
+        expectedStatus: number = 200
+    ): Promise<TransactionDisplay[]> => {
+        const response = await context.request.get(`${BILLING_INVOICES_ENDPOINT}/${invoiceId}`, {headers})
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const body = await response.json()
+            return body.map((tx: unknown) => TransactionDisplaySchema.parse(tx))
+        }
+
+        return []
+    }
+
+    /**
+     * Raw request for error testing (invoice transactions)
+     */
+    static readonly getInvoiceTransactionsRaw = async (
+        context: BrowserContext,
+        invoiceId: number
+    ): Promise<{status: number, body: unknown}> => {
+        const response = await context.request.get(`${BILLING_INVOICES_ENDPOINT}/${invoiceId}`, {headers})
+        return {status: response.status(), body: await response.json().catch(() => null)}
     }
 }

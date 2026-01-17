@@ -66,6 +66,18 @@ export function useQueryParam<T>(
   // Track syncWhen result as computed so value recomputes when dependencies change
   const isSyncReady = computed(() => syncWhen())
 
+  // Guard: only auto-sync once per ready transition to prevent cascading URL updates
+  // When multiple useQueryParam instances sync independently, each triggers a route change
+  // that re-runs all watchPostEffects. This guard ensures each instance syncs only once.
+  const hasSyncedSinceReady = ref(false)
+
+  // Reset the sync guard when ready condition becomes false
+  watch(isSyncReady, (ready) => {
+    if (!ready) {
+      hasSyncedSinceReady.value = false
+    }
+  })
+
   const readFromQuery = (): T => {
     // Access isSyncReady.value to ensure computed dependency is tracked
     const canValidate = isSyncReady.value
@@ -147,8 +159,11 @@ export function useQueryParam<T>(
   })
 
   // AUTO-SYNC: Automatically sync URL when needed and conditions are met
+  // Uses hasSyncedSinceReady guard to prevent cascading syncs when multiple
+  // useQueryParam instances are on the same page
   watchPostEffect(() => {
-    if (isSyncReady.value && needsSync.value) {
+    if (isSyncReady.value && needsSync.value && !hasSyncedSinceReady.value) {
+      hasSyncedSinceReady.value = true
       setValue(value.value)
       console.info(`🔗 > Auto-synced query param '${key}' to:`, value.value)
     }

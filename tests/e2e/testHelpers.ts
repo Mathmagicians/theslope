@@ -167,15 +167,41 @@ async function selectDropdownOption(
  * @example
  * const { householdId, inhabitantId } = await getSessionUserInfo(context)
  */
-async function getSessionUserInfo(context: BrowserContext): Promise<{ householdId: number, inhabitantId: number }> {
+async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, householdId: number, inhabitantId: number, householdShortname: string }> {
     const response = await context.request.get('/api/_auth/session', { headers })
     expect(response.status()).toBe(200)
     const session = await response.json()
+    const userId = session.user?.id
     const householdId = session.user?.Inhabitant?.householdId
     const inhabitantId = session.user?.Inhabitant?.id
+    const householdShortname = session.user?.Inhabitant?.household?.shortName
+    expect(userId, 'Session user must have userId').toBeDefined()
     expect(householdId, 'Session user must have householdId').toBeDefined()
     expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
-    return { householdId, inhabitantId }
+    expect(householdShortname, 'Session user must have householdShortname').toBeDefined()
+    return { userId, householdId, inhabitantId, householdShortname }
+}
+
+/**
+ * Assert no orders have orphaned prices (all orders have valid ticketPriceId)
+ * Use after any operation that creates/updates orders to verify data integrity
+ *
+ * @param orders - Array of orders to check (OrderDetail or OrderDisplay)
+ * @param context - Optional context message for assertion failure
+ *
+ * @example
+ * const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, eventIds)
+ * assertNoOrdersWithOrphanPrices(orders, 'after scaffolding')
+ */
+function assertNoOrdersWithOrphanPrices(
+    orders: Array<{ ticketPriceId: number | null | undefined }>,
+    context: string = ''
+): void {
+    const orphans = orders.filter(o => o.ticketPriceId === null || o.ticketPriceId === undefined)
+    const message = context
+        ? `All orders should have valid ticketPriceId ${context}`
+        : 'All orders should have valid ticketPriceId'
+    expect(orphans, message).toHaveLength(0)
 }
 
 const testHelpers = {
@@ -188,7 +214,8 @@ const testHelpers = {
     pollUntil,
     doScreenshot,
     selectDropdownOption,
-    getSessionUserInfo
+    getSessionUserInfo,
+    assertNoOrdersWithOrphanPrices
 }
 
 export default testHelpers

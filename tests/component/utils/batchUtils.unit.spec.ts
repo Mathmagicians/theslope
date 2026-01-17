@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
+import {chunkArray, groupBy, pruneAndCreate} from '~/utils/batchUtils'
 
 describe('batchUtils', () => {
     describe('chunkArray', () => {
@@ -26,6 +26,110 @@ describe('batchUtils', () => {
             const chunkBy2 = chunkArray<number>(2)
             expect(typeof chunkBy2).toBe('function')
             expect(chunkBy2([1, 2, 3, 4, 5])).toEqual([[1, 2], [3, 4], [5]])
+        })
+    })
+
+    describe('groupBy', () => {
+        // Use enum-like constants matching ADR-001 pattern
+        const OrderState = { BOOKED: 'BOOKED', RELEASED: 'RELEASED' } as const
+        const DinnerMode = { DINEIN: 'DINEIN', TAKEAWAY: 'TAKEAWAY', LATE: 'LATE', NONE: 'NONE' } as const
+
+        type OrderStateType = typeof OrderState[keyof typeof OrderState]
+        type DinnerModeType = typeof DinnerMode[keyof typeof DinnerMode]
+
+        interface Order { id: number; state: OrderStateType; mode: DinnerModeType }
+
+        const groupByState = groupBy<Order, string>(o => o.state)
+        const groupByMode = groupBy<Order, string>(o => o.mode)
+
+        it.each([
+            {
+                scenario: 'empty array → empty map',
+                input: [] as Order[],
+                keyFn: (o: Order) => o.state,
+                expectedSize: 0
+            },
+            {
+                scenario: 'single item → single group',
+                input: [{ id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN }],
+                keyFn: (o: Order) => o.state,
+                expectedSize: 1
+            },
+            {
+                scenario: 'same key → single group with multiple items',
+                input: [
+                    { id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN },
+                    { id: 2, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY }
+                ],
+                keyFn: (o: Order) => o.state,
+                expectedSize: 1
+            },
+            {
+                scenario: 'different keys → multiple groups',
+                input: [
+                    { id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN },
+                    { id: 2, state: OrderState.RELEASED, mode: DinnerMode.DINEIN },
+                    { id: 3, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY }
+                ],
+                keyFn: (o: Order) => o.state,
+                expectedSize: 2
+            }
+        ])('$scenario', ({ input, keyFn, expectedSize }) => {
+            const grouper = groupBy<Order, string>(keyFn)
+            const result = grouper(input)
+            expect(result.size).toBe(expectedSize)
+        })
+
+        it('groups by state correctly', () => {
+            const orders: Order[] = [
+                { id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN },
+                { id: 2, state: OrderState.RELEASED, mode: DinnerMode.DINEIN },
+                { id: 3, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY },
+                { id: 4, state: OrderState.RELEASED, mode: DinnerMode.LATE }
+            ]
+            const result = groupByState(orders)
+
+            expect(result.get(OrderState.BOOKED)?.map(o => o.id)).toEqual([1, 3])
+            expect(result.get(OrderState.RELEASED)?.map(o => o.id)).toEqual([2, 4])
+        })
+
+        it('groups by mode correctly', () => {
+            const orders: Order[] = [
+                { id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN },
+                { id: 2, state: OrderState.RELEASED, mode: DinnerMode.DINEIN },
+                { id: 3, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY }
+            ]
+            const result = groupByMode(orders)
+
+            expect(result.get(DinnerMode.DINEIN)?.map(o => o.id)).toEqual([1, 2])
+            expect(result.get(DinnerMode.TAKEAWAY)?.map(o => o.id)).toEqual([3])
+        })
+
+        it('groups by composite key (ADR-014 order update signature)', () => {
+            interface UpdateSpec { orderId: number; state: OrderStateType; mode: DinnerModeType; priceId: number | null }
+            const getSignature = (u: UpdateSpec) => `${u.state}-${u.mode}-${u.priceId ?? 'same'}`
+            const groupBySignature = groupBy<UpdateSpec, string>(getSignature)
+
+            const updates: UpdateSpec[] = [
+                { orderId: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN, priceId: null },
+                { orderId: 2, state: OrderState.BOOKED, mode: DinnerMode.DINEIN, priceId: null },
+                { orderId: 3, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY, priceId: null },
+                { orderId: 4, state: OrderState.RELEASED, mode: DinnerMode.NONE, priceId: null },
+                { orderId: 5, state: OrderState.BOOKED, mode: DinnerMode.DINEIN, priceId: 100 }
+            ]
+
+            const result = groupBySignature(updates)
+
+            expect(result.size).toBe(4)
+            expect(result.get(`${OrderState.BOOKED}-${DinnerMode.DINEIN}-same`)?.map(u => u.orderId)).toEqual([1, 2])
+            expect(result.get(`${OrderState.BOOKED}-${DinnerMode.TAKEAWAY}-same`)?.map(u => u.orderId)).toEqual([3])
+            expect(result.get(`${OrderState.RELEASED}-${DinnerMode.NONE}-same`)?.map(u => u.orderId)).toEqual([4])
+            expect(result.get(`${OrderState.BOOKED}-${DinnerMode.DINEIN}-100`)?.map(u => u.orderId)).toEqual([5])
+        })
+
+        it('returns curried function', () => {
+            const grouper = groupBy<Order, string>(o => o.state)
+            expect(typeof grouper).toBe('function')
         })
     })
 

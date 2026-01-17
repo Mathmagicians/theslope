@@ -1,5 +1,5 @@
 import {
-    addDays, setISOWeek, startOfISOWeekYear, isSameDay, eachDayOfInterval, getISODay,
+    addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
     formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration
 } from "date-fns"
@@ -15,8 +15,13 @@ export const DATE_SETTINGS =
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
         SEASON_NAME_MASK: 'MM/yy',
-        timezone: 'Europe/Copenhagen'
+        timezone: 'Europe/Copenhagen',
+        weekStartsOn: 1 as const // Monday (ISO week)
     }
+
+/** Check if two dates are in the same week (Monday-based, ISO standard) */
+export const areSameWeek = (a: Date, b: Date): boolean =>
+    isSameWeek(a, b, {weekStartsOn: DATE_SETTINGS.weekStartsOn})
 
 // Takes an iso week number, and a year in which the week is in, and a weekday number (0-6),
 // and returns the date of that weekday in that week in that year
@@ -259,6 +264,44 @@ export function calculateAge(birthDate: Date | string | null): number | null {
  */
 export function formatDanishWeekdayDate(date: Date): string {
     return formatDate(date, 'EEE dd/MM')
+}
+
+/**
+ * Format date with single-letter weekday and day number (compact for grids)
+ * @param date - Date to format
+ * @returns Formatted string like "M 15" (Monday 15th)
+ */
+export function formatCompactWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEEEE d')
+}
+
+/**
+ * Format date with full weekday and dd/MM (for day view navigation)
+ * @param date - Date to format
+ * @returns Formatted string like "Tirsdag 14/01"
+ */
+export function formatFullWeekdayDate(date: Date): string {
+    return formatDate(date, 'EEEE dd/MM')
+}
+
+/**
+ * Format month and year (for month view navigation)
+ * @param date - Date to format
+ * @returns Formatted string like "Januar 2026"
+ */
+export function formatMonthYear(date: Date): string {
+    return formatDate(date, 'MMMM yyyy')
+}
+
+/**
+ * Format week range (for week view navigation)
+ * @param start - Start of week
+ * @param end - End of week
+ * @returns Formatted string like "Uge 3: 13/01-19/01"
+ */
+export function formatWeekRange(start: Date, end: Date): string {
+    const weekNum = getISOWeek(start)
+    return `Uge ${weekNum}: ${formatDate(start, 'dd/MM')}-${formatDate(end, 'dd/MM')}`
 }
 
 /**

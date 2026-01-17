@@ -11,6 +11,28 @@ export const chunkArray = <T>(size: number) => (arr: T[]): T[][] =>
     , [])
 
 /**
+ * Curried groupBy utility - groups array items by a key function
+ * ADR-014: Used for batch operations that need to group by update signature
+ *
+ * @param getKey - Function to extract grouping key from item
+ * @returns Curried function that groups items into a Map by key
+ *
+ * @example
+ * ```ts
+ * const groupByState = groupBy<Order, string>(o => o.state)
+ * const groups = groupByState(orders)
+ * // Map { 'BOOKED' => [...], 'RELEASED' => [...] }
+ * ```
+ */
+export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
+    (items: T[]): Map<K, T[]> =>
+        items.reduce((map, item) => {
+            const key = getKey(item)
+            const group = map.get(key) ?? []
+            return map.set(key, [...group, item])
+        }, new Map<K, T[]>())
+
+/**
  * Result of pruneAndCreate operation
  * @template E - Type of existing items (used for delete array)
  * @template I - Type of incoming items (used for create/update/idempotent arrays)

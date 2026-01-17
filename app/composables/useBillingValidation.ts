@@ -255,6 +255,24 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
+    // CostEntry/CostLine Schemas (Economy views)
+    // ============================================================================
+
+    /**
+     * CostEntry - grouped items by dinner event for economy display
+     * Used for both Transactions (billing) and Orders (live bookings)
+     * T must have ticketType for ticket count formatting
+     */
+    const CostEntrySchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
+        dinnerEventId: z.number().int(),
+        date: z.coerce.date(),
+        menuTitle: z.string(),
+        items: z.array(itemSchema),
+        totalAmount: z.number().int(),
+        ticketCounts: z.string()
+    })
+
+    // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
 
@@ -264,6 +282,8 @@ export const useBillingValidation = () => {
      */
     const TransactionDisplaySchema = z.object({
         id: z.number().int(),
+        // orderId for lazy-loading order history - nullable (order may be deleted, SET NULL)
+        orderId: z.number().int().nullable(),
         amount: z.number().int(),
         createdAt: z.coerce.date(),
         orderSnapshot: z.string(),
@@ -458,6 +478,7 @@ export const useBillingValidation = () => {
         createdAt: Date
         orderSnapshot: string
         order: {
+            id: number
             dinnerEvent: {id: number, date: Date, menuTitle: string}
             inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
             ticketPrice: {ticketType: string} | null
@@ -469,6 +490,7 @@ export const useBillingValidation = () => {
         if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
             return TransactionDisplaySchema.parse({
                 ...base,
+                orderId: tx.order.id,
                 dinnerEvent: tx.order.dinnerEvent,
                 inhabitant: tx.order.inhabitant,
                 ticketType: tx.order.ticketPrice.ticketType
@@ -476,10 +498,11 @@ export const useBillingValidation = () => {
         }
 
         // Any relation deleted - use frozen snapshot (strict parsing)
-        // Set household.id to 0 to indicate deleted (not valid as FK)
+        // Set household.id to 0 to indicate deleted (not valid as FK), orderId null
         const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
         return TransactionDisplaySchema.parse({
             ...base,
+            orderId: null,
             dinnerEvent: snapshot.dinnerEvent,
             inhabitant: {
                 ...snapshot.inhabitant,
@@ -537,6 +560,9 @@ export const useBillingValidation = () => {
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
+        // CostEntry/CostLine (Economy views)
+        CostEntrySchema,
+
         // Serialization (ADR-010)
         OrderSnapshotSchema,
         serializeTransaction,
@@ -575,3 +601,13 @@ export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValid
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
+
+// CostEntry/CostLine types (Economy views)
+export type CostEntry<T> = {
+    dinnerEventId: number
+    date: Date
+    menuTitle: string
+    items: T[]
+    totalAmount: number
+    ticketCounts: string
+}

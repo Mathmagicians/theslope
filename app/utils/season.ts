@@ -6,7 +6,8 @@ import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval,
-    createDateInTimezone
+    createDateInTimezone,
+    areSameWeek
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
 import {subDays} from "date-fns/subDays"
@@ -433,97 +434,126 @@ export const getDinnerTimeRange = (date: Date, startHour: number, durationMinute
 }
 
 /**
- * Get next dinner time range from now (accounting for dinner time window)
- * Curried function to allow pre-configuring dinner duration
+ * Result type for splitDinnerEvents
+ */
+export type SplitDinnerEventsResult<T> = {
+    nextDinner: T | null
+    nextDinnerDateRange: DateRange | null
+    pastDinnerDates: Date[]
+    futureDinnerDates: Date[]
+}
+
+/**
+ * Split dinner events into temporal categories (next, past, future).
+ * Single source of truth for temporal categorization - computes nextDinnerDateRange internally.
  *
- * - If now is within dinner time window and today has dinner → today's dinner time
- * - Otherwise → next upcoming dinner time
+ * Curried: (config) => (data) => result
  *
+ * Logic for "next dinner":
+ * - If today has dinner AND we're before dinner end time → today's dinner
+ * - Otherwise → first dinner on a future calendar day
+ *
+ * Uses isBefore/isAfter/isSameDay consistently (DRY with rest of codebase).
+ *
+ * @param dinnerStartHour - Hour when dinner starts (24h format, e.g. 18 for 6 PM)
  * @param dinnerDurationMinutes - Duration of dinner window in minutes (e.g. 60 for 1 hour)
- * @returns Function that takes dinnerDates and startHour, returns DateRange or null
+ * @returns Curried function that takes events and returns split result
  *
  * @example
- * const getNextDinner = getNextDinnerDate(60) // Configure 60 min duration
- * const nextDinnerRange = getNextDinner(dinnerDates, 18) // {start: Date, end: Date} or null
+ * const split = splitDinnerEvents(18, 60)
+ * const { nextDinner, nextDinnerDateRange, pastDinnerDates, futureDinnerDates } = split(events)
  */
-export const getNextDinnerDate = (dinnerDurationMinutes: number): (dinnerDates: Date[], dinnerStartTimeHour: number) => DateRange | null =>
-    (dinnerDates: Date[], dinnerStartTimeHour: number): DateRange | null => {
-        const now = new Date()
-        const today = new Date()
+export const splitDinnerEvents = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
+    <T extends { date: Date }>(
+        dinnerEvents: T[],
+        maxDaysAhead?: number,
+        referenceTime?: Date
+    ): SplitDinnerEventsResult<T> => {
+        const now = referenceTime ?? new Date()
+        const today = new Date(now)
         today.setHours(0, 0, 0, 0)
 
-        // Check if today has dinner
-        const todayHasDinner = dinnerDates.some(d => isSameDay(d, today))
+        // Calculate max future date if maxDaysAhead is provided
+        const maxFutureDate = maxDaysAhead !== undefined
+            ? (() => {
+                const max = new Date(now)
+                max.setDate(max.getDate() + maxDaysAhead)
+                max.setHours(23, 59, 59, 999)
+                return max
+            })()
+            : null
 
-        if (todayHasDinner) {
-            // Check if we're still within the dinner window
-            const dinnerTimeRange = getDinnerTimeRange(now, dinnerStartTimeHour, dinnerDurationMinutes)
+        const isWithinWindow = (date: Date): boolean =>
+            maxFutureDate === null || !isAfter(date, maxFutureDate)
 
-            if (now < dinnerTimeRange.end) {
-                return dinnerTimeRange
+        // Compute nextDinnerDateRange internally (single source of truth)
+        const computeNextDinnerDateRange = (): DateRange | null => {
+            const dinnerDates = dinnerEvents.map(e => e.date)
+
+            // Check if today has dinner
+            const todayHasDinner = dinnerDates.some(d => isSameDay(d, today))
+
+            if (todayHasDinner) {
+                // Check if we're still within the dinner window
+                const dinnerTimeRange = getDinnerTimeRange(now, dinnerStartHour, dinnerDurationMinutes)
+                if (isBefore(now, dinnerTimeRange.end)) {
+                    return dinnerTimeRange
+                }
             }
+
+            // Find first dinner on a future calendar day (not today - already handled above)
+            // Uses isSameDay to normalize dates (handles time components) + isAfter for DRY consistency
+            const nextDate = dinnerDates.find(d => !isSameDay(d, today) && isAfter(d, today))
+
+            return nextDate ? getDinnerTimeRange(nextDate, dinnerStartHour, dinnerDurationMinutes) : null
         }
 
-        // Dates are sorted - find first future date
-        const nextDate = dinnerDates.find(d => d > today)
+        const nextDinnerDateRange = computeNextDinnerDateRange()
 
-        return nextDate ? getDinnerTimeRange(nextDate, dinnerStartTimeHour, dinnerDurationMinutes) : null
+        // Split events into categories
+        const result = dinnerEvents.reduce(
+            (acc, event) => {
+                if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
+                    acc.nextDinner = event
+                } else if (isBefore(event.date, now)) {
+                    acc.pastDinnerDates.push(event.date)
+                } else if (isWithinWindow(event.date)) {
+                    acc.futureDinnerDates.push(event.date)
+                }
+                return acc
+            },
+            {
+                nextDinner: null as T | null,
+                pastDinnerDates: [] as Date[],
+                futureDinnerDates: [] as Date[]
+            }
+        )
+
+        return {
+            ...result,
+            nextDinnerDateRange
+        }
     }
 
 /**
- * Split dinner events into next dinner and others in a single pass
- * @param dinnerEvents - Array of dinner events to split
- * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
- * @param maxDaysAhead - Optional max days ahead to include in futureDinnerDates (for prebooking window)
- * @returns Object with nextDinner event and array of other dinner dates
+ * Get next dinner time range from a list of dates.
+ * Thin wrapper that delegates to splitDinnerEvents (DRY - no duplicate logic).
+ *
+ * Curried: (config) => (data) => result
+ *
+ * @param dinnerStartHour - Hour when dinner starts (24h format, e.g. 18 for 6 PM)
+ * @param dinnerDurationMinutes - Duration of dinner window in minutes (e.g. 60 for 1 hour)
+ * @returns Curried function that takes dinnerDates and returns DateRange or null
+ *
+ * @example
+ * const getNext = getNextDinnerDate(18, 60)
+ * const nextDinnerRange = getNext(dinnerDates) // {start: Date, end: Date} or null
  */
-export const splitDinnerEvents = <T extends { date: Date }>(
-    dinnerEvents: T[],
-    nextDinnerDateRange: DateRange | null,
-    maxDaysAhead?: number
-): { nextDinner: T | null; pastDinnerDates: Date[]; futureDinnerDates: Date[] } => {
-    const now = new Date()
-
-    // Calculate max future date if maxDaysAhead is provided
-    const maxFutureDate = maxDaysAhead !== undefined
-        ? (() => {
-            const max = new Date()
-            max.setDate(max.getDate() + maxDaysAhead)
-            max.setHours(23, 59, 59, 999)
-            return max
-        })()
-        : null
-
-    const isWithinWindow = (date: Date): boolean =>
-        maxFutureDate === null || date <= maxFutureDate
-
-    if (!nextDinnerDateRange) {
-        const allDates = dinnerEvents.map(e => e.date)
-        return {
-            nextDinner: null,
-            pastDinnerDates: allDates.filter(d => d < now),
-            futureDinnerDates: allDates.filter(d => d >= now && isWithinWindow(d))
-        }
+export const getNextDinnerDate = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
+    (dinnerDates: Date[], referenceTime?: Date): DateRange | null => {
+        const events = dinnerDates.map(d => ({ date: d }))
+        return splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime).nextDinnerDateRange
     }
-
-    return dinnerEvents.reduce(
-        (acc, event) => {
-            if (isSameDay(event.date, nextDinnerDateRange.start)) {
-                acc.nextDinner = event
-            } else if (event.date < now) {
-                acc.pastDinnerDates.push(event.date)
-            } else if (isWithinWindow(event.date)) {
-                acc.futureDinnerDates.push(event.date)
-            }
-            return acc
-        },
-        {
-            nextDinner: null as T | null,
-            pastDinnerDates: [] as Date[],
-            futureDinnerDates: [] as Date[]
-        }
-    )
-}
 
 /**
  * Temporal category for dinner events
@@ -642,4 +672,62 @@ export const calculateDeadlineUrgency = (
 
     // Critical: now > criticalFreezeTime (less than criticalHours remaining)
     return 2
+}
+
+/**
+ * Get dinner events for a grid view grouped by week.
+ * Single pass reduce over sorted events.
+ *
+ * For single-day ranges: returns only events on that exact day (no week completion).
+ */
+export const getEventsForGridView = <T extends { date: Date }>(
+    events: T[],
+    range: DateRange
+): T[][] => {
+    // Single day range = return only that day's events (no week completion)
+    if (isSameDay(range.start, range.end)) {
+        const dayEvents = events.filter(e => isSameDay(e.date, range.start))
+        return dayEvents.length > 0 ? [dayEvents] : []
+    }
+
+    type Acc = { weeks: T[][], firstDate: Date | null, lastDate: Date | null }
+
+    const addToWeeks = (weeks: T[][], event: T): T[][] => {
+        const last = weeks.at(-1)
+        if (!last || !areSameWeek(event.date, last[0]!.date)) {
+            return [...weeks, [event]]
+        }
+        last.push(event)
+        return weeks
+    }
+
+    const result = events.reduce<Acc>((acc, event) => {
+        const inRange = isWithinInterval(event.date, range)
+
+        if (!acc.firstDate && !inRange && isBefore(event.date, range.start) && areSameWeek(event.date, range.start)) {
+            // Before range but same week as range start - include for week completion
+            return {...acc, weeks: addToWeeks(acc.weeks, event)}
+        }
+
+        if (inRange) {
+            const firstDate = acc.firstDate ?? event.date
+            const weeks = !acc.firstDate
+                ? acc.weeks.filter(w => areSameWeek(w[0]!.date, event.date))
+                : acc.weeks
+            return {
+                firstDate,
+                lastDate: event.date,
+                weeks: addToWeeks(weeks, event)
+            }
+        }
+
+        if (acc.lastDate && areSameWeek(event.date, acc.lastDate)) {
+            // After range, same week as last
+            return {...acc, weeks: addToWeeks(acc.weeks, event)}
+        }
+
+        return acc
+    }, {weeks: [], firstDate: null, lastDate: null})
+
+    return result.weeks
 }

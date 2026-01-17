@@ -455,6 +455,26 @@ export class HouseholdFactory {
     }
 
     /**
+     * Release orders for an inhabitant by setting their preferences to NONE
+     * Uses admin endpoint so can release orders for ANY household (not just own)
+     *
+     * @param context - Admin browser context
+     * @param inhabitantId - Inhabitant whose orders to release
+     * @param seasonId - Season to scaffold for
+     * @returns Number of orders released
+     */
+    static readonly releaseOrdersViaPreferences = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        seasonId: number
+    ): Promise<number> => {
+        const result = await HouseholdFactory.updateInhabitant(context, inhabitantId, {
+            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
+        }, 200, seasonId)
+        return result?.scaffoldResult?.released ?? 0
+    }
+
+    /**
      * Delete inhabitant (for API test scenarios)
      */
     static readonly deleteInhabitant = async (

@@ -55,6 +55,8 @@ export default defineNuxtConfig({
                 'success',
                 'warning',
                 'error',
+                // Tailwind colors for specific use cases
+                'yellow',    // Deadline warning chips (more visible than orange)
                 // Custom Pantone team colors
                 'mocha',
                 'pink',
@@ -90,7 +92,12 @@ export default defineNuxtConfig({
         },
         // Client-side settings - automatic tree-shaking
         clientBundle: {
-            scan: true  // Only bundle icons actually used in components
+            scan: true,  // Only bundle icons actually used in components
+            // Explicitly include icons used by NuxtUI internally (not detected by scanning)
+            icons: [
+                'lucide:sun',
+                'lucide:moon'
+            ]
         },
         provider: 'server'  // Use server-side icon provider
     },
@@ -105,6 +112,8 @@ export default defineNuxtConfig({
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
         // Public keys that are exposed to the client
         public: {
+            RELEASE_VERSION: "",  // Overridden by NUXT_PUBLIC_RELEASE_VERSION
+            RELEASE_DATE: "",      // Overridden by NUXT_PUBLIC_RELEASE_DATE
             apiBase: '/api',
             HEY_NABO_API: '',  // Overridden at runtime by NUXT_PUBLIC_HEY_NABO_API
             COMMIT_ID: process.env.GITHUB_SHA || 'development'

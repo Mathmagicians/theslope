@@ -13,6 +13,11 @@ dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
 const isLocalhost = process.env.BASE_URL?.includes('localhost') ?? true
 
+// Cloudflare bypass token for smoke tests on deployed environments
+const extraHTTPHeaders = process.env.CLOUDFLARE_BYPASS_TOKEN
+  ? { 'x-bypass-token': process.env.CLOUDFLARE_BYPASS_TOKEN }
+  : {}
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -37,6 +42,9 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Cloudflare bypass for smoke tests on deployed environments */
+    extraHTTPHeaders,
   },
 
   /* Configure projects for major browsers */
@@ -65,36 +73,52 @@ export default defineConfig({
       grep: /Authenticate member for UI/,
       dependencies: ['setup-member-api']
     },
-    // API tests - parallel (excludes serial tests like heynabo)
+    // API tests - parallel
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/api\/.*\.spec\.ts/,
-      testIgnore: /heynabo\.e2e\.spec\.ts/,
+      testMatch: /tests\/e2e\/api\/parallel\/.*\.spec\.ts/,
       dependencies: ['setup-api', 'setup-member-api'],
     },
-    // API serial tests (heynabo imports/deletes data) - runs after parallel API tests
+    // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
+    // Runs after parallel API tests to avoid interference
     {
       name: 'chromium-api-serial',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /heynabo\.e2e\.spec\.ts/,
+      testMatch: /tests\/e2e\/api\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       dependencies: ['chromium-api'],
     },
-    // UI tests need full UI auth
+    // UI tests need full UI auth (excludes serial tests)
     {
       name: 'chromium-ui',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/ui\/.*\.spec\.ts/,
+      testMatch: /tests\/e2e\/ui\/(?!serial\/).*\.spec\.ts/,
       dependencies: ['setup-ui', 'setup-member-ui'],
     },
-    // Smoke tests - admin auth only (no member auth required)
+    // UI serial tests (create their own season, must run after parallel UI tests)
+    {
+      name: 'chromium-ui-serial',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /tests\/e2e\/ui\/serial\/.*\.spec\.ts/,
+      fullyParallel: false,
+      dependencies: ['chromium-ui'],
+    },
+    // Smoke tests - run serially (shared active season state)
     {
       name: 'chromium-smoke',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/.*\.spec\.ts/,
       grep: /@smoke/,
+      fullyParallel: false,
       dependencies: ['setup-api', 'setup-ui'],
+    },
+    // Exploratory tests - only run when explicitly targeted
+    {
+      name: 'exploratory',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /tests\/e2e\/exploratory\/.*\.ts/,
+      dependencies: ['setup-api'],
     },
 
     /* Test against mobile viewports. */

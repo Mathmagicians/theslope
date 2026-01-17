@@ -249,12 +249,14 @@ export const useHeynaboValidation = () => {
         inhabitantsUpdated: z.number().default(0),
         inhabitantsIdempotent: z.number().default(0),
         inhabitantsDeleted: z.number(),
-        // Users: all 4 outcomes + linked
+        // Users: all 4 outcomes + linked + admin tracking
         usersCreated: z.number(),
         usersUpdated: z.number().default(0),
         usersIdempotent: z.number().default(0),
         usersDeleted: z.number().default(0),
         usersLinked: z.number().default(0),
+        adminsAdded: z.number().default(0),
+        adminsRemoved: z.number().default(0),
         sanityCheck: SanityCheckResultSchema.default({})
     })
 

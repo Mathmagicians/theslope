@@ -14,20 +14,55 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 
 1. **Du har en Heynabo-konto** - Login bruger din Heynabo email og password
 2. **Dine børn er tilføjet med fødselsdato** - Vigtigt! Billetprisen beregnes ud fra alder:
-   - 👶 **Baby** (0-1 år) - gratis
-   - 🧒 **Barn** (2-11 år) - reduceret pris
-   - 🧑 **Voksen** (12+ år) - fuld pris
+   - **Baby** (0-1 år) - idegratis
+   - **Barn** (2-11 år) - reduceret pris
+   - **Voksen** (12+ år) - fuld pris
 
 > **Vigtigt for forældre:** Tjek at dine børn er registreret i Heynabo **med korrekt fødselsdato**. Uden fødselsdato betaler du voksenpris for alle børn! Tilføj eller ret børnenes fødselsdato i Heynabo - så synkroniseres det automatisk til Skrånerappen.
 
 ### Sådan tjekker du dine børns billettype
 
 1. Log ind på [skraaningen.dk](https://www.skraaningen.dk)
-2. Gå til **Husstanden** (fanen med hus-ikon)
+2. Gå til [Husstanden](https://www.skraaningen.dk/household) (fanen med hus-ikon)
 3. Se listen over husstandens medlemmer
-4. Hver person vises med deres billettype: 👶 Baby, 🧒 Barn, eller 🧑 Voksen
+4. Hver person vises med deres billettype: Baby, Barn eller Voksen
 
 Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdatoen i Heynabo. Ret det i Heynabo-appen, og det opdateres automatisk i Skrånerappen.
+
+---
+
+## Hurtige links
+
+| Sektion | Link | Beskrivelse |
+|---------|------|-------------|
+| **Forside** | [skraaningen.dk](https://www.skraaningen.dk) | Log ind for at se kommende middage, booke pladser og administrere din husstand |
+| **Middagskalender** | [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner) | Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem spisesal, takeaway og sen spisning, ændre tilmelding for en dato, tilmelde en gæst, eller købe andres billetter som er sat til salg |
+| **Chef-side** | [skraaningen.dk/chef](https://www.skraaningen.dk/chef) | Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier |
+| | | |
+| **Husstand** | | |
+| › Tilmeldinger | [.../bookings](https://www.skraaningen.dk/household) | Se og administrer dine bookinger til fællesspisning. Book måltider for din husstand og se kommende arrangementer |
+| › Præferencer | [.../members](https://www.skraaningen.dk/household) | Power mode opdaterer alle medlemmer samtidigt. Klik på blyanten for at redigere enkeltpersoner. Udvid rækken for at se valgmuligheder. Ændringer gemmes når du trykker Gem |
+| › Allergier | [.../allergies](https://www.skraaningen.dk/household) | Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer |
+| › Økonomi | [.../economy](https://www.skraaningen.dk/household) | Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer |
+| › Indstillinger | [.../settings](https://www.skraaningen.dk/household) | Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer |
+
+---
+
+## Symboler i appen
+
+I appen bruges følgende symboler til at vise spisningsform og status:
+
+| Symbol | Navn | Betydning |
+|:------:|------|-----------|
+| ![Spisesal](https://api.iconify.design/streamline:food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
+| ![Sen](https://api.iconify.design/heroicons:moon.svg?height=20&color=%2322c55e) | **Sen spisning** | Spis i fællessalen til sen spisning |
+| ![Takeaway](https://api.iconify.design/heroicons:shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
+| ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
+| ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
+| ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
+| ![Frigiv](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%23f59e0b) | **Frigiv** | Sæt din billet til salg efter deadline |
+| ![Låst](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Låst** | Deadline passeret - kun frigiv mulig |
+| ![Overtag](https://api.iconify.design/heroicons:hand-raised.svg?height=20&color=%2322c55e) | **Overtag** | Køb en frigivet billet fra en anden |
 
 ---
 
@@ -72,12 +107,8 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 1. Gå til **Husstanden** (fanen med hus-ikon)
 2. Find den person du vil redigere
-3. Klik på **blyant-ikonet** (✏️) ud for personen
-4. Vælg for hver dag:
-   - 🍽️ **Spis** - Spis i fællessalen
-   - 🕐 **Sen** - Spis sent (efter kl. 18:30)
-   - 🛍️ **Take** - Hent mad og spis hjemme
-   - ❌ **Ingen** - Ikke tilmeldt
+3. Klik på **blyant-ikonet** ud for personen
+4. Vælg spisningsform for hver dag (se [Spisningsformer](#spisningsformer) nedenfor)
 5. Klik **Gem** - dine bookinger opdateres automatisk
 
 ![Præferencer i redigeringstilstand](screenshots/household/household-card-preferences-editing.png)
@@ -87,46 +118,95 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 Vil du sætte samme præferencer for hele familien?
 
-1. Klik på **⚡ lynikonet** på rækken "Alle medlemmer"
+1. Klik på **lynikonet** (Power mode) på rækken "Alle medlemmer"
 2. Vælg præferencer for hver dag
 3. Klik **Gem** - alle medlemmer opdateres
 
 ![Husstandens medlemmer](screenshots/household/household-members-view-mode.png)
-*Oversigt med alle medlemmer - klik ⚡ for power mode*
+*Oversigt med alle medlemmer - klik på lynikonet for power mode*
 
 ### Sådan tilmelder du dig fællesspisning
 
 Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan altid ændre enkeltdage:
 
 1. Gå til **Tilmeldinger** (kalenderikonet)
-2. Find datoen i kalenderen
-3. Klik på datoen for at se detaljer
-4. Klik **Tilmeld** eller **Afmeld** for at ændre
+2. Vælg visning: **Dag**, **Uge** eller **Måned**
+3. Klik på en dag for at se/ændre tilmeldinger
+4. Klik på **blyanten** for at ændre tilmeldinger
 
 ![Tilmeldingskalender](screenshots/household/household-bookings.png)
-*Kalenderen viser dine tilmeldinger - klik på en dato for at ændre*
+*Kalenderen viser dine tilmeldinger - vælg dag/uge/måned visning*
 
-### Sådan framelder du dig fællesspisning
+#### Uge- og månedsvisning (Grid booking)
 
-**Før deadline (typisk kl. 12 dagen før):**
-1. Gå til **Tilmeldinger**
-2. Find datoen og klik på den
-3. Klik **Afmeld** - du slipper for at betale
+I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 
-**Efter deadline:**
-- Du kan stadig afmelde, men du betaler for maden
-- Overvej at sælge din plads til en nabo (kommer snart)
+1. Klik på **blyanten** for at aktivere redigeringstilstand
+2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen
+3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang
+4. Klik **Gem** når du er færdig - eller **Annullér** for at fortryde
+
+> **Tip:** Ændringer gemmes først når du klikker Gem. Du kan frit eksperimentere og annullere.
+
+![Ugevisning](screenshots/dinner/booking-grid-week.png)
+*Ugevisning: Overblik over hele ugens tilmeldinger*
+
+![Månedsvisning](screenshots/dinner/booking-grid-month.png)
+*Månedsvisning: Se og redigér hele månedens tilmeldinger*
+
+### Deadlines
+
+Der er to slags deadlines:
+
+- **Tilmelding/afmelding:** 10 dage før middagen
+  - Før deadline: Du kan frit tilmelde og afmelde dig
+  - Efter deadline: Du kan ikke afmelde, men du kan *frigive* din billet (se nedenfor)
+
+- **Ændring af spisemåde:** 90 minutter før middagen
+  - Du kan skifte mellem Spisesal, Sen og Takeaway indtil 90 min før
+  - Madholdet skal vide, hvor mange der spiser i salen vs. henter takeaway
+
+### Efter deadline - frigiv din billet
+
+Kan du ikke komme alligevel? Du kan **frigive** din billet, så den sættes til salg på appens markedsplads. Andre beboere kan så overtage den.
+
+| Symbol | Handling | Betydning |
+|:------:|----------|-----------|
+| ![Frigiv](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%23f59e0b) | **Frigiv** | Sæt din billet til salg - en anden kan overtage den |
+| ![Låst](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Låst** | Deadline er passeret - du kan kun frigive, ikke afmelde |
+| ![Overtag](https://api.iconify.design/heroicons:hand-raised.svg?height=20&color=%2322c55e) | **Overtag** | Køb en frigivet billet fra en anden beboer |
+
+> **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen overtager den. Bliver billetten overtaget, slipper du for at betale.
 
 ### Sådan bestiller du takeaway
 
-1. Gå til **Tilmeldinger**
+1. Gå til [Tilmeldinger](https://www.skraaningen.dk/household)
 2. Find datoen og klik på den
-3. Skift til **🛍️ Takeaway** i stedet for Spis/Sen
-4. Hent maden i køkkenet på middagstidspunktet
+3. Skift til **Takeaway** i stedet for Spisesal/Sen
+4. Hent maden ved takeaway-bordet 20 minutter før fællesspisning
 
-> **Tip:** Du kan også sætte takeaway som standard i dine ugentlige præferencer.
+> **Tip:** Du kan også sætte takeaway som standard under [Præferencer](https://www.skraaningen.dk/household).
 
 ![Takeaway valg](screenshots/household/household-bookings.png)
+
+### Sådan inviterer du en gæst
+
+Du kan tilmelde gæster til fællesspisning - de tilknyttes dig som vært.
+
+1. Gå til [Tilmeldinger](https://www.skraaningen.dk/household)
+2. Find datoen i kalenderen og klik på den
+3. Klik på **+** ud for **Tilføj gæst**
+4. Vælg billettype (Voksen, Barn eller Baby)
+5. Tilføj evt. gæstens allergier
+6. Vælg antal gæster (hvis flere af samme type)
+7. Vælg spisningsform (Spisesal, Sen eller Takeaway)
+8. Klik **Tilføj gæst**
+
+Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
+
+![Tilføj gæst](screenshots/dinner/booking-form-after-save.png)
+
+> **Bemærk:** Gæstebilletter faktureres til din husstand via PBS.
 
 ### Sådan ser du din PBS-faktura
 

@@ -79,6 +79,27 @@ export const useCoreValidation = () => {
     })
 
     // ========================================================================
+    // ROLE OWNERSHIP SCHEMA (business logic in useUserRoles.ts)
+    // ========================================================================
+
+    /**
+     * Role ownership enum - defines which system owns each role
+     * HN = Heynabo (external system, owns ADMIN)
+     * TS = TheSlope (this system, owns ALLERGYMANAGER and future roles)
+     */
+    const RoleOwnerSchema = z.enum(['HN', 'TS'])
+
+    /**
+     * Result of role reconciliation - contains reconciled roles and admin change tracking
+     * Used by reconcileUserRoles in useUserRoles.ts
+     */
+    const ReconcileResultSchema = z.object({
+        roles: z.array(SystemRoleSchema),
+        adminAdded: z.boolean(),
+        adminRemoved: z.boolean()
+    })
+
+    // ========================================================================
     // USER SCHEMAS - Extend UserFragment with domain-specific fields
     // ========================================================================
 
@@ -435,21 +456,10 @@ export const useCoreValidation = () => {
         return HouseholdDetailSchema.parse(deserialized)
     }
 
-    /**
-     * Merge new user data with existing user, preserving and combining systemRoles
-     * Used during Heynabo import to prevent overwriting manually assigned roles
-     */
-    const mergeUserRoles = (existing: User, incoming: UserCreate): UserCreate => {
-        // Merge roles: union of existing + new (no duplicates)
-        const mergedRoles = Array.from(new Set([...existing.systemRoles, ...incoming.systemRoles]))
-
-        return {
-            ...incoming,
-            systemRoles: mergedRoles
-        }
-    }
-
     return {
+        // Schemas - Role Ownership
+        RoleOwnerSchema,
+        ReconcileResultSchema,
         // Schemas - User
         SystemRoleSchema,
         BaseUserSchema,
@@ -479,7 +489,6 @@ export const useCoreValidation = () => {
         serializeUserInput,
         deserializeUser,
         deserializeUserDetail,
-        mergeUserRoles,
         // Functions - Inhabitant
         deserializeInhabitantDisplay,
         deserializeInhabitantDetail,
@@ -529,3 +538,9 @@ export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['Hous
 // Mutations
 export type HouseholdCreate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdCreateSchema']>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
+
+// ROLE OWNERSHIP TYPES
+// RoleOwner: Enum for which system owns each role (HN = Heynabo, TS = TheSlope)
+export type RoleOwner = z.infer<ReturnType<typeof useCoreValidation>['RoleOwnerSchema']>
+// ReconcileResult: Result of role reconciliation with admin change tracking
+export type ReconcileResult = z.infer<ReturnType<typeof useCoreValidation>['ReconcileResultSchema']>

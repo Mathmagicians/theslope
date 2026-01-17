@@ -3,23 +3,33 @@
  * DinnerDetailHeader - Discrete header bar for dinner detail pages
  *
  * A subtle, informational header showing:
- * - Date (formatted nicely)
+ * - Date navigation (← date →) with CalendarDateNav
  * - State badge (PLANLAGT, ANNONCERET, etc.)
  * - Heynabo external link (when available)
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ 📅 Fredag 24. januar 2025          [🟢 ANNONCERET]        [Heynabo →]  │
+ * │ [🟢 ANNONCERET]   [◀] 📅 Fredag 24. januar 2025 [▶]      [Heynabo →]  │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * Design: Subtle, not competing with the hero below. Uses muted colors.
  */
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
+  hasPrev?: boolean
+  hasNext?: boolean
+  calendarOpen?: boolean
+  navColor?: NuxtUIColor
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  hasPrev: false,
+  hasNext: false,
+  calendarOpen: false,
+  navColor: undefined
+})
 
 // Design system and validation
 const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, BACKGROUNDS} = useTheSlopeDesignSystem()
@@ -44,7 +54,9 @@ const stateBadge = computed(() => {
 })
 
 const emit = defineEmits<{
-  'show-calendar': []
+  prev: []
+  next: []
+  'toggle-calendar': []
 }>()
 </script>
 
@@ -66,18 +78,18 @@ const emit = defineEmits<{
       </UBadge>
     </div>
 
-    <!-- Date (middle on mobile, center on desktop) - clickable to show calendar -->
-    <UButton
-      variant="ghost"
-      color="neutral"
-      :size="SIZES.standard"
-      :icon="ICONS.calendar"
-      class="!text-[inherit]"
-      data-testid="show-calendar-toggle"
-      @click="emit('show-calendar')"
+    <!-- Date navigation (← date →) - CalendarDateNav for prev/next dinner navigation -->
+    <CalendarDateNav
+      :open="calendarOpen"
+      :has-prev="hasPrev"
+      :has-next="hasNext"
+      :color="navColor"
+      @prev="emit('prev')"
+      @next="emit('next')"
+      @toggle="emit('toggle-calendar')"
     >
       {{ formattedDate }}
-    </UButton>
+    </CalendarDateNav>
 
     <!-- Heynabo link (bottom on mobile, right on desktop) -->
     <div class="flex items-center md:justify-end">
