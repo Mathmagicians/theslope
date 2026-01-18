@@ -1,19 +1,11 @@
 import type {DateRange} from '~/types/dateTypes'
 import {createDateRange, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
-import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
+import type {CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
-
-/**
- * @deprecated Use CostEntry<TransactionDisplay> instead
- */
-export type DinnerTransactionGroup = CostEntry<TransactionDisplay> & {
-    /** @deprecated Use items instead */
-    transactions: TransactionDisplay[]
-}
 
 /**
  * Billing business logic composable
@@ -45,54 +37,89 @@ export const useBilling = () => {
     }
 
     /**
-     * Generic grouping by dinner event for economy display.
-     * Works with any item type (Orders, Transactions) that has ticketType.
+     * Curried generic groupBy factory for economy views.
+     * Creates specialized groupers for CostEntry (by dinner) and HouseholdEntry (by household).
      *
-     * @param items - Items to group
-     * @param getDinner - Extract dinner info from item
-     * @param getAmount - Extract amount from item (priceAtBooking for Orders, amount for Transactions)
-     * @returns CostEntry groups sorted by date descending
+     * @param config.getKey - Extract grouping key from item
+     * @param config.createBase - Create base entry fields from first item (without items/totalAmount/ticketCounts)
+     * @param config.onAccumulate - Optional extra accumulation (e.g., computedTotal for HouseholdEntry)
+     * @param config.sortBy - Optional custom sort (default: preserve insertion order)
      */
-    const groupByCostEntry = <T extends { ticketType: TicketType | null }>(
+    const createGroupBy = <T extends { ticketType: TicketType | null }, C extends { items: T[], totalAmount: number, ticketCounts: string }>(
+        config: {
+            getKey: (item: T) => number
+            createBase: (item: T) => Omit<C, 'items' | 'totalAmount' | 'ticketCounts'>
+            onAccumulate?: (entry: C, amount: number) => void
+            sortBy?: (a: C, b: C) => number
+        }
+    ) => (
         items: T[],
-        getDinner: (item: T) => { id: number, date: Date, menuTitle: string },
         getAmount: (item: T) => number
-    ): CostEntry<T>[] => {
-        const grouped = new Map<number, CostEntry<T>>()
+    ): C[] => {
+        const grouped = new Map<number, C>()
 
         for (const item of items) {
-            const dinner = getDinner(item)
-            const existing = grouped.get(dinner.id)
+            const key = config.getKey(item)
+            const amount = getAmount(item)
+            const existing = grouped.get(key)
+
             if (existing) {
                 existing.items.push(item)
-                existing.totalAmount += getAmount(item)
+                existing.totalAmount += amount
+                config.onAccumulate?.(existing, amount)
             } else {
-                grouped.set(dinner.id, {
-                    dinnerEventId: dinner.id,
-                    date: new Date(dinner.date),
-                    menuTitle: dinner.menuTitle,
+                const entry = {
+                    ...config.createBase(item),
                     items: [item],
-                    totalAmount: getAmount(item),
+                    totalAmount: amount,
                     ticketCounts: ''
-                })
+                } as C
+                config.onAccumulate?.(entry, amount)
+                grouped.set(key, entry)
             }
         }
 
-        // Map preserves insertion order - caller provides pre-sorted items
-        return Array.from(grouped.values())
+        const entries = Array.from(grouped.values())
             .map(g => ({...g, items: [...g.items], ticketCounts: formatTicketCounts(g.items)}))
+
+        return config.sortBy ? entries.sort(config.sortBy) : entries
     }
 
     /**
-     * Group transactions by dinner event for display.
-     * @deprecated Use groupByCostEntry with transaction accessors instead
+     * Group items by dinner event for economy display.
+     * Works with any item type (Orders, Transactions) that has ticketType.
+     *
+     * @param getDinner - Extract dinner info from item
+     * @returns Curried function: (items, getAmount) => CostEntry[]
      */
-    const groupTransactionsByDinner = (transactions: TransactionDisplay[]): DinnerTransactionGroup[] =>
-        groupByCostEntry(
-            transactions,
-            tx => tx.dinnerEvent,
-            tx => tx.amount
-        ).map(g => ({...g, transactions: g.items}))
+    const groupByCostEntry = <T extends { ticketType: TicketType | null }>(
+        getDinner: (item: T) => { id: number, date: Date, menuTitle: string }
+    ) => createGroupBy<T, CostEntry<T>>({
+        getKey: item => getDinner(item).id,
+        createBase: item => {
+            const dinner = getDinner(item)
+            return {dinnerEventId: dinner.id, date: new Date(dinner.date), menuTitle: dinner.menuTitle}
+        }
+    })
+
+    /**
+     * Group items by household for PBS/revisor view.
+     * Parallel to groupByCostEntry but groups by household instead of dinner.
+     *
+     * @param getHousehold - Extract household info from item
+     * @returns Curried function: (items, getAmount) => HouseholdEntry[]
+     */
+    const groupByHouseholdEntry = <T extends { ticketType: TicketType | null }>(
+        getHousehold: (item: T) => { id: number, pbsId: number, address: string }
+    ) => createGroupBy<T, HouseholdEntry<T>>({
+        getKey: item => getHousehold(item).id,
+        createBase: item => {
+            const household = getHousehold(item)
+            return {householdId: household.id, pbsId: household.pbsId, address: household.address, computedTotal: 0}
+        },
+        onAccumulate: (entry, amount) => { entry.computedTotal += amount },
+        sortBy: (a, b) => a.pbsId - b.pbsId
+    })
 
     /**
      * Calculate billing period dates relative to a reference date.
@@ -188,6 +215,91 @@ export const useBilling = () => {
 
     const chunkTransactionIds = chunkArray<number>(LINK_TRANSACTION_BATCH_SIZE)
 
+    // ========== CONTROL SUM UTILITIES ==========
+
+    /**
+     * Generic control result - parametrized by value type
+     * Used for audit/reconciliation: compare computed vs expected
+     */
+    interface ControlResult<T> {
+        computed: T
+        expected: T
+        isValid: boolean
+    }
+
+    // Specific control types
+    type ControlSumResult = ControlResult<number>
+    type TicketCountsControl = ControlResult<string>
+
+    /**
+     * Create a curried control sum calculator.
+     * Factory pattern: curry the amount extractor, then apply to items + expected.
+     *
+     * @param getAmount - Extract amount from each item
+     * @returns Curried function: (items, expected) => ControlSumResult
+     *
+     * @example
+     * // For invoices (at billing period level)
+     * const controlInvoices = createControlSum<Invoice>(inv => inv.amount)
+     * const result = controlInvoices(invoices, billingPeriod.totalAmount)
+     *
+     * // For transactions (at invoice level)
+     * const controlTransactions = createControlSum<Transaction>(tx => tx.amount)
+     * const result = controlTransactions(transactions, invoice.amount)
+     */
+    const createControlSum = <T>(getAmount: (item: T) => number) =>
+        (items: T[], expected: number): ControlSumResult => {
+            const computed = items.reduce((sum, item) => sum + getAmount(item), 0)
+            return {computed, expected, isValid: computed === expected}
+        }
+
+    /**
+     * Pre-curried control sum for invoices (billing period → invoices reconciliation)
+     * Use: controlInvoices(invoices, billingPeriod.totalAmount)
+     */
+    const controlInvoices = createControlSum<InvoiceDisplay>(inv => inv.amount)
+
+    /**
+     * Pre-curried control sum for transactions (invoice → transactions reconciliation)
+     * Use: controlTransactions(transactions, invoice.amount)
+     */
+    const controlTransactions = createControlSum<TransactionDisplay>(tx => tx.amount)
+
+    /**
+     * Order control result - verifies both ticket counts AND price sum
+     */
+    interface OrderControlResult extends ControlSumResult {
+        ticketCounts: TicketCountsControl
+    }
+
+    /**
+     * Control sum for orders (dinner → orders reconciliation)
+     * Verifies BOTH ticket type counts ("2V 5B") AND price sum match
+     *
+     * @param orders - Orders to verify (OrderDisplay type)
+     * @param expectedAmount - Expected total amount
+     * @param expectedTicketCounts - Expected ticket counts string (e.g., "2V 5B")
+     */
+    const controlOrders = (
+        orders: OrderDisplay[],
+        expectedAmount: number,
+        expectedTicketCounts: string
+    ): OrderControlResult => {
+        const computedAmount = orders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+        const computedTicketCounts = formatTicketCounts(orders)
+
+        return {
+            computed: computedAmount,
+            expected: expectedAmount,
+            isValid: computedAmount === expectedAmount && computedTicketCounts === expectedTicketCounts,
+            ticketCounts: {
+                computed: computedTicketCounts,
+                expected: expectedTicketCounts,
+                isValid: computedTicketCounts === expectedTicketCounts
+            }
+        }
+    }
+
     /**
      * Join orders with dinner events for economy display.
      * Pure function - testable without stores.
@@ -215,9 +327,28 @@ export const useBilling = () => {
         calculateCurrentBillingPeriod,
         getBillingPeriodForDate,
         groupByCostEntry,
+        groupByHouseholdEntry,
         joinOrdersWithDinnerEvents,
-        groupTransactionsByDinner, // @deprecated - use groupByCostEntry
         formatTicketCounts,
-        chunkTransactionIds
+        chunkTransactionIds,
+        // Control sums
+        createControlSum,
+        controlInvoices,
+        controlTransactions,
+        controlOrders
     }
+}
+
+// Export control types
+export type ControlResult<T> = {
+    computed: T
+    expected: T
+    isValid: boolean
+}
+
+export type ControlSumResult = ControlResult<number>
+export type TicketCountsControl = ControlResult<string>
+
+export interface OrderControlResult extends ControlSumResult {
+    ticketCounts: TicketCountsControl
 }

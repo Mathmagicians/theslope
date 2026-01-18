@@ -31,12 +31,14 @@ export const useBillingValidation = () => {
     /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
      * billingPeriod format: "dd/MM/yyyy-dd/MM/yyyy" (formatDateRange)
+     * invoiceSum is computed from invoices for control sum display
      */
     const BillingPeriodSummaryDisplaySchema = z.object({
         id: z.number().int(),
         billingPeriod: z.string(), // formatDateRange format
         shareToken: z.string(), // UUID for magic link (included for share button)
-        totalAmount: z.number().int(), // øre
+        totalAmount: z.number().int(), // øre - expected total
+        invoiceSum: z.number().int(), // øre - Σ invoice.amount for control sum
         householdCount: z.number().int(),
         ticketCount: z.number().int(),
         cutoffDate: z.coerce.date(),
@@ -415,10 +417,10 @@ export const useBillingValidation = () => {
 
     /**
      * Generate filename for CSV export
-     * Format: PBS-Opgørelse-Skrååningen-{billingPeriod}.csv
+     * Format: PBS-Opgørelse-Skråningen-{billingPeriod}.csv
      */
     const generateCsvFilename = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string =>
-        `PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`
+        `PBS-Opgørelse-Skråningen-${summary.billingPeriod}.csv`
 
     // ============================================================================
     // Transaction Serialization (ADR-010)
@@ -611,3 +613,18 @@ export type CostEntry<T> = {
     totalAmount: number
     ticketCounts: string
 }
+
+// HouseholdEntry - group by household for PBS/revisor view
+export type HouseholdEntry<T> = {
+    householdId: number
+    pbsId: number
+    address: string
+    items: T[]
+    totalAmount: number      // Stored/expected amount (invoice.amount or computed for virtual)
+    computedTotal: number    // Control sum: Σ item amounts
+    ticketCounts: string
+}
+
+// Control sum validation - UI uses this to show ✓ or ✗
+export const isControlSumValid = <T>(entry: HouseholdEntry<T>): boolean =>
+    entry.computedTotal === entry.totalAmount

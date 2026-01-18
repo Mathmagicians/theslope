@@ -16,11 +16,71 @@ export interface DiningModeStats {
   orderCount: number
 }
 
+/**
+ * Order display config structure (parallel to ticketTypeConfig in useTicket)
+ */
+export interface OrderDisplayConfig {
+  label: string
+  color: 'primary' | 'error' | 'info' | 'neutral'
+  icon: string
+}
+
+/**
+ * Formatted order display properties returned by formatOrder()
+ */
+export interface FormattedOrder {
+  guest: OrderDisplayConfig | null
+  stateText: string
+  stateColor: OrderDisplayConfig['color']
+  stateIcon: string
+  isClaimed: boolean
+}
+
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
   const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
   const OrderState = OrderStateSchema.enum
   const TicketType = TicketTypeSchema.enum
+
+  // Get icons from design system
+  const {ICONS} = useTheSlopeDesignSystem()
+
+  /**
+   * Order state display config keyed by OrderState enum + 'claimed' variant
+   * Claimed is BOOKED with provenance (overrides display)
+   */
+  const orderStateConfig = {
+    [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
+    [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
+    [OrderState.CLOSED]: { label: 'Afsluttet', color: 'neutral' as const, icon: ICONS.check },
+    claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
+  }
+
+  /**
+   * Format order for display - returns all display properties
+   * @param order - Order to format
+   * @param bookerName - Optional booker name for guest tickets
+   */
+  const formatOrder = (order: OrderDisplay, bookerName?: string): FormattedOrder => {
+    const isClaimed = !!order.provenanceHousehold
+
+    // Claimed overrides BOOKED display
+    const stateConfig = (order.state === OrderState.BOOKED && isClaimed)
+      ? orderStateConfig.claimed
+      : orderStateConfig[order.state]
+
+    return {
+      guest: order.isGuestTicket ? {
+        label: bookerName ? `Gæst af ${bookerName}` : 'Gæst',
+        color: 'info',
+        icon: ICONS.userPlus
+      } : null,
+      stateText: stateConfig.label,
+      stateColor: stateConfig.color,
+      stateIcon: stateConfig.icon,
+      isClaimed
+    }
+  }
 
   /**
    * Check if order is active (counts for kitchen preparation)
@@ -266,6 +326,10 @@ export const useOrder = () => {
   }
 
   return {
+    // Order display formatting
+    orderStateConfig,
+    formatOrder,
+
     // State filtering
     getActiveOrders,
     getReleasedOrders,

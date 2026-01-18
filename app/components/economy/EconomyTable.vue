@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T extends { date: Date }">
+<script setup lang="ts" generic="T">
 /**
  * EconomyTable - Smart table for economy views with date-column search/sort
  *
@@ -16,12 +16,14 @@ import {getPaginationRowModel} from '@tanstack/vue-table'
 type ColumnDef = { id?: string; accessorKey?: string; header?: string }
 
 interface Props {
-    /** Table data - must have date field */
+    /** Table data */
     data: T[]
     /** Column definitions - passed through to UTable */
     columns: ColumnDef[]
     /** Unique row identifier field */
     rowKey: keyof T
+    /** Extract date from item for filtering/sorting */
+    dateAccessor: (item: T) => Date
     /** Loading state */
     loading?: boolean
     /** Page size */
@@ -55,12 +57,12 @@ const filteredData = computed(() => {
     if (search.value) {
         const query = search.value.toLowerCase()
         result = result.filter(item =>
-            formatDate(item.date).toLowerCase().includes(query)
+            formatDate(props.dateAccessor(item)).toLowerCase().includes(query)
         )
     }
     // Sort by date (ascending by default, descending if toggled)
     result = [...result].sort((a, b) => {
-        const diff = a.date.getTime() - b.date.getTime()
+        const diff = props.dateAccessor(a).getTime() - props.dateAccessor(b).getTime()
         return sortDesc.value ? -diff : diff
     })
     return result
@@ -81,9 +83,27 @@ const toggleSort = () => {
 
 <template>
   <div class="space-y-2">
-    <!-- Pagination header (only when needed) -->
-    <div v-if="showPagination" class="flex justify-end">
+    <!-- Header: search/sort + pagination -->
+    <div class="flex justify-between items-center gap-2">
+      <div class="flex items-center gap-1">
+        <UInput
+            v-model="search"
+            :placeholder="searchPlaceholder"
+            :size="SIZES.small"
+            class="w-28 md:w-36"
+        />
+        <UButton
+            variant="ghost"
+            color="neutral"
+            :size="SIZES.standard"
+            square
+            :icon="sortDesc ? ICONS.sortDescending : ICONS.sortAscending"
+            aria-label="Skift sortering"
+            @click="toggleSort"
+        />
+      </div>
       <UPagination
+          v-if="showPagination"
           :default-page="currentPage"
           :items-per-page="pageSize"
           :total="filteredData.length"
@@ -102,27 +122,6 @@ const toggleSort = () => {
         :pagination-options="{getPaginationRowModel: getPaginationRowModel()}"
         :row-key="rowKey as string"
     >
-      <!-- Expand column header with search/sort controls -->
-      <template #expand-header>
-        <div class="flex items-center gap-1">
-          <UInput
-              v-model="search"
-              :placeholder="searchPlaceholder"
-              :size="SIZES.small"
-              class="w-24 md:w-32"
-              :ui="{base: 'bg-transparent'}"
-          />
-          <UButton
-              variant="ghost"
-              color="neutral"
-              :size="SIZES.standard"
-              square
-              :icon="sortDesc ? ICONS.sortDescending : ICONS.sortAscending"
-              aria-label="Skift sortering"
-              @click="toggleSort"
-          />
-        </div>
-      </template>
 
       <!-- Pass through all other slots -->
       <template #expand-cell="slotProps">
@@ -131,7 +130,7 @@ const toggleSort = () => {
 
       <template #date-cell="slotProps">
         <slot name="date-cell" v-bind="slotProps">
-          {{ formatDate(slotProps.row.original.date) }}
+          {{ formatDate(dateAccessor(slotProps.row.original)) }}
         </slot>
       </template>
 
@@ -151,8 +150,28 @@ const toggleSort = () => {
         <slot name="amount-cell" v-bind="slotProps"/>
       </template>
 
+      <template #status-cell="slotProps">
+        <slot name="status-cell" v-bind="slotProps"/>
+      </template>
+
+      <template #period-cell="slotProps">
+        <slot name="period-cell" v-bind="slotProps"/>
+      </template>
+
       <template #billingPeriod-cell="slotProps">
         <slot name="billingPeriod-cell" v-bind="slotProps"/>
+      </template>
+
+      <template #share-cell="slotProps">
+        <slot name="share-cell" v-bind="slotProps"/>
+      </template>
+
+      <template #control-cell="slotProps">
+        <slot name="control-cell" v-bind="slotProps"/>
+      </template>
+
+      <template #householdCount-cell="slotProps">
+        <slot name="householdCount-cell" v-bind="slotProps"/>
       </template>
 
       <template #paymentMonth-cell="slotProps">

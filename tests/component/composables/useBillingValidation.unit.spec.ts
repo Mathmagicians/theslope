@@ -56,7 +56,7 @@ describe('useBillingValidation', () => {
     describe('generateCsvFilename', () => {
         it('GIVEN summary WHEN generating filename THEN uses billingPeriod', () => {
             const summary = BillingFactory.defaultSummaryData('test')
-            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`)
+            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skråningen-${summary.billingPeriod}.csv`)
         })
     })
 

@@ -576,11 +576,17 @@ export const ICONS = {
 
     // Time & info
     clock: 'i-heroicons-clock',
+    ellipsisCircle: 'i-heroicons-ellipsis-horizontal-circle',
     info: 'i-heroicons-information-circle',
 
     // Status/state
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
+
+    // Actions
+    share: 'i-heroicons-share',
+    download: 'i-heroicons-arrow-down-tray',
+    externalLink: 'i-heroicons-arrow-top-right-on-square',
 
     // External links
     github: 'i-simple-icons-github',

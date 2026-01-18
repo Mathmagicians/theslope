@@ -97,16 +97,16 @@ const upcomingOrdersData = computed(() => {
         getInhabitantName
     )
 
-    return groupByCostEntry(ordersWithDinner, o => o.dinnerEvent, o => o.priceAtBooking)
+    const groupOrdersByDinner = groupByCostEntry<typeof ordersWithDinner[number]>(o => o.dinnerEvent)
+    return groupOrdersByDinner(ordersWithDinner, o => o.priceAtBooking)
 })
 
-// Transaction accessors for groupByCostEntry
-const txDinner = (tx: TransactionDisplay) => tx.dinnerEvent
-const txAmount = (tx: TransactionDisplay) => tx.amount
+// Curried grouper for transactions by dinner
+const groupTxByDinner = groupByCostEntry<TransactionDisplay>(tx => tx.dinnerEvent)
 
 // Current period grouped data
 const currentPeriodData = computed(() =>
-    billing.value ? groupByCostEntry(billing.value.currentPeriod.transactions, txDinner, txAmount) : []
+    billing.value ? groupTxByDinner(billing.value.currentPeriod.transactions, tx => tx.amount) : []
 )
 
 // Past invoices with pre-grouped transactions
@@ -126,7 +126,7 @@ const pastInvoicesData = computed((): InvoiceRow[] =>
         billingPeriod: inv.billingPeriod.replace('-', ' - '),
         amount: inv.amount,
         paymentMonth: formatDate(new Date(inv.paymentDate), 'MMMM yyyy'),
-        groups: groupByCostEntry(inv.transactions, txDinner, txAmount)
+        groups: groupTxByDinner(inv.transactions, tx => tx.amount)
     })) ?? []
 )
 
@@ -190,6 +190,7 @@ const upcomingPeriodStart = computed(() => {
             :data="upcomingOrdersData"
             :columns="dinnerColumns"
             row-key="dinnerEventId"
+            :date-accessor="(item) => item.date"
             :loading="isOrdersLoading"
         >
           <template #expand-cell="{ row }">
@@ -259,6 +260,7 @@ const upcomingPeriodStart = computed(() => {
             :data="currentPeriodData"
             :columns="dinnerColumns"
             row-key="dinnerEventId"
+            :date-accessor="(item) => item.date"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -320,6 +322,7 @@ const upcomingPeriodStart = computed(() => {
             :data="pastInvoicesData"
             :columns="invoiceColumns"
             row-key="id"
+            :date-accessor="(item) => item.date"
             search-placeholder="Søg måned..."
         >
           <template #expand-cell="{ row }">

@@ -89,7 +89,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {getScaffoldableDinnerEvents, deadlinesForSeason} = useSeason()
-    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch} = useBookingValidation()
+    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch, chunkIds} = useBookingValidation()
 
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
@@ -284,7 +284,7 @@ export async function scaffoldPrebookings(
             const executeBatchUpdates = updateOrdersBatch(90)
             await executeBatchUpdates(d1Client, batchUpdates)
 
-            // Batch delete orders (single call with all IDs)
+            // Batch delete orders - chunk to respect D1's 100 param limit (ADR-014)
             const deleteIds = result.delete
                 .map(toDelete => {
                     if (!toDelete.orderId) {
@@ -293,7 +293,9 @@ export async function scaffoldPrebookings(
                     return toDelete.orderId
                 })
             if (deleteIds.length > 0) {
-                await deleteOrder(d1Client, deleteIds, options.userId ?? null)
+                for (const idChunk of chunkIds(deleteIds)) {
+                    await deleteOrder(d1Client, idChunk, options.userId ?? null)
+                }
             }
 
             // Process claims (try to claim released tickets from marketplace)

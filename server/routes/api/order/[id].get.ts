@@ -1,5 +1,4 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {fetchOrder} from "~~/server/data/financesRepository"
 import {z} from "zod"
 import type { OrderDetail } from '~/composables/useBookingValidation'
@@ -9,6 +8,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
+/** GET /api/order/[id] - Open to any authenticated user */
 export default defineEventHandler(async (event):Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
@@ -35,7 +35,6 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
         })
     }
 
-    await requireHouseholdAccess(event, order.inhabitant.householdId)
     console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id}`)
     setResponseStatus(event, 200)
     return order

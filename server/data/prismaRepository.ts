@@ -1738,9 +1738,16 @@ export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const summaries = await prisma.billingPeriodSummary.findMany({orderBy: {cutoffDate: 'desc'}})
+        // Include invoices to compute invoiceSum for control sum display
+        const summaries = await prisma.billingPeriodSummary.findMany({
+            orderBy: {cutoffDate: 'desc'},
+            include: {invoices: {select: {amount: true}}}
+        })
         console.info(`💰 > BILLING > [GET] Returning ${summaries.length} billing period summaries`)
-        return summaries.map(s => BillingPeriodSummaryDisplaySchema.parse(s))
+        return summaries.map(s => BillingPeriodSummaryDisplaySchema.parse({
+            ...s,
+            invoiceSum: s.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        }))
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summaries', error)
     }
@@ -1753,7 +1760,10 @@ export const fetchBillingPeriodSummary = async (d1Client: D1Database, id: number
     try {
         const summary = await prisma.billingPeriodSummary.findUnique({where: {id}, include: billingPeriodDetailInclude})
         if (!summary) return null
-        return BillingPeriodSummaryDetailSchema.parse(summary)
+        return BillingPeriodSummaryDetailSchema.parse({
+            ...summary,
+            invoiceSum: summary.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        })
     } catch (error) {
         return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period summary ID ${id}`, error)
     }
@@ -1766,7 +1776,10 @@ export const fetchBillingPeriodSummaryByToken = async (d1Client: D1Database, tok
     try {
         const summary = await prisma.billingPeriodSummary.findUnique({where: {shareToken: token}, include: billingPeriodDetailInclude})
         if (!summary) return null
-        return BillingPeriodSummaryDetailSchema.parse(summary)
+        return BillingPeriodSummaryDetailSchema.parse({
+            ...summary,
+            invoiceSum: summary.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        })
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summary by token', error)
     }
