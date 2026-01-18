@@ -144,41 +144,41 @@ Users can verify the deployed version:
    }
    ```
 
-### Triggering Releases
+### Triggering Deployments
 
-**Development (Automated):**
-- Every PR to `main` deploys RC to dev
-- Every push to `main` deploys RC to prod
-- Version auto-calculated: `make version`
+All deployments bake version info into the health endpoint (`/api/public/health`).
 
-**Production Release:**
+**Automated (CI/CD):**
 
-Two equivalent methods - both trigger the same CI/CD pipeline:
+| Trigger | Deploys to | Version |
+|---------|------------|---------|
+| PR to `main` | dev | Auto-calculated (patch bump) |
+| Push to `main` | prod | Auto-calculated (patch bump) |
 
-| Method | Command |
-|--------|---------|
-| **Git CLI** | `git tag v0.1.5 && git push origin v0.1.5` |
-| **GitHub CLI** | `gh workflow run cicd.yml -f release_version=0.1.5` |
-| **GitHub UI** | Actions → CI/CD Pipeline → Run workflow → Enter version |
+**Manual (for minor/major version bumps):**
+
+| Method | Command | Deploys to |
+|--------|---------|------------|
+| **Git CLI** | `git tag v0.2.0 && git push origin v0.2.0` | prod |
+| **GitHub CLI** | `gh workflow run cicd.yml -f release_version=0.2.0` | prod |
+| **GitHub UI** | Actions → CI/CD Pipeline → Run workflow → Enter version | prod |
 
 ```bash
-# Git CLI (GitOps - preferred)
-git tag v0.1.5
-git push origin v0.1.5
+# Git CLI (GitOps)
+git tag v0.2.0
+git push origin v0.2.0
 
 # GitHub CLI
-gh workflow run cicd.yml -f release_version=0.1.5
-
-# Watch the run
+gh workflow run cicd.yml -f release_version=0.2.0
 gh run watch
 ```
 
-**Makefile Targets (local deploy):**
+**Makefile Targets (local deploy, requires Wrangler auth):**
 
 ```bash
-make deploy-dev    # Deploy to dev with RC version
-make deploy-prod   # Deploy to prod with release version
-make version       # Output: 0.1.5-rc.3+a1b2c3d
+make deploy-dev    # Deploy to dev
+make deploy-prod   # Deploy to prod
+make version       # Output current version
 make version-info  # Output all version env vars
 ```
 

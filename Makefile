@@ -236,11 +236,22 @@ version-info: ## Output all version components as env vars
 # ============================================================================
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod
 
+# Deploy macro: $(1)=npm script, $(2)=environment name
+# Uses env vars if set (CI), otherwise calculates via version-info (local)
+define deploy_to
+	@if [ -z "$$NUXT_PUBLIC_RELEASE_VERSION" ]; then eval $$(make version-info); fi && \
+	GITHUB_SHA=$${GITHUB_SHA:-$$COMMIT_SHA} \
+	NUXT_PUBLIC_RELEASE_VERSION=$${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} \
+	NUXT_PUBLIC_RELEASE_DATE=$${NUXT_PUBLIC_RELEASE_DATE:-$$RELEASE_DATE} \
+	npm run $(1) && \
+	echo "Deployed version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2)."
+endef
+
 deploy-dev: ## Deploy to dev with version info
-	@eval $$(make version-info) && GITHUB_SHA=$$COMMIT_SHA NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy && echo "Released version $$RELEASE_VERSION to dev environment."
+	$(call deploy_to,deploy,dev)
 
 deploy-prod: ## Deploy to prod with version info
-	@eval $$(make version-info) && GITHUB_SHA=$$COMMIT_SHA NUXT_PUBLIC_RELEASE_VERSION=$$RELEASE_VERSION NUXT_PUBLIC_RELEASE_DATE=$$RELEASE_DATE npm run deploy:prod && echo "Released version $$RELEASE_VERSION to prod environment."
+	$(call deploy_to,deploy:prod,prod)
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty
