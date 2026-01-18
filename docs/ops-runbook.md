@@ -147,44 +147,63 @@ Users can verify the deployed version:
 ### Triggering Releases
 
 **Development (Automated):**
-- Every push to `main` deploys RC to dev
+- Every PR to `main` deploys RC to dev
+- Every push to `main` deploys RC to prod
 - Version auto-calculated: `make version`
-- GitHub Actions sets version env vars
 
-**Production (Manual):**
-1. Navigate to: Actions → Release Workflow → Run workflow
-2. Select branch (usually `main`)
-3. Enter version tag (e.g., `v0.1.5`)
-4. Workflow creates git tag → deploys to prod with release version
+**Production Release:**
 
-**Makefile Targets:**
+Two equivalent methods - both trigger the same CI/CD pipeline:
+
+| Method | Command |
+|--------|---------|
+| **Git CLI** | `git tag v0.1.5 && git push origin v0.1.5` |
+| **GitHub CLI** | `gh workflow run cicd.yml -f release_version=0.1.5` |
+| **GitHub UI** | Actions → CI/CD Pipeline → Run workflow → Enter version |
 
 ```bash
-# Local deployment with version info
+# Git CLI (GitOps - preferred)
+git tag v0.1.5
+git push origin v0.1.5
+
+# GitHub CLI
+gh workflow run cicd.yml -f release_version=0.1.5
+
+# Watch the run
+gh run watch
+```
+
+**Makefile Targets (local deploy):**
+
+```bash
 make deploy-dev    # Deploy to dev with RC version
 make deploy-prod   # Deploy to prod with release version
-
-# Version information
 make version       # Output: 0.1.5-rc.3+a1b2c3d
 make version-info  # Output all version env vars
 ```
 
 ### Rollback Process
 
-**Via GitHub Actions:**
-1. Navigate to: Actions → Release Workflow → Run workflow
-2. Select previous release tag from branch dropdown
-3. Re-run workflow → deploys old version to prod
-
-**Via Makefile (requires Wrangler auth):**
+**Via GitHub CLI:**
 ```bash
-git checkout v0.1.4           # Checkout old release
-make deploy-prod              # Deploy old version
+gh workflow run cicd.yml -f rollback_to=abc1234
+gh run watch
+```
+
+**Via GitHub UI:**
+1. Actions → CI/CD Pipeline → Run workflow
+2. Enter commit SHA in `rollback_to` field
+3. Workflow deploys that commit to prod
+
+**Via Git CLI (local, requires Wrangler auth):**
+```bash
+git checkout v0.1.4
+make deploy-prod
 ```
 
 **Verification:**
 ```bash
-curl https://www.skraaningen.dk/api/health | jq '.version'
+curl https://www.skraaningen.dk/api/public/health | jq '.version'
 # Should return: "0.1.4+oldsha"
 ```
 

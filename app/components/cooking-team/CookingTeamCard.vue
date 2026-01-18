@@ -146,12 +146,6 @@ const roleGroups = computed(() => {
   return groups
 })
 
-// Team members (all cooks and helpers, excluding chef)
-const teamMembers = computed(() => [
-  ...roleGroups.value.COOK,
-  ...roleGroups.value.JUNIORHELPER
-])
-
 const navigateToInhabitant = (inhabitantId: number) => {
   navigateTo(`/inhabitant/${inhabitantId}`)
 }

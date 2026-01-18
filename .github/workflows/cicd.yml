@@ -3,6 +3,7 @@ name: The CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]  # GitOps: push a tag to trigger release
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -55,8 +56,13 @@ jobs:
             echo "🔄 Rollback mode to commit: ${{ inputs.rollback_to }}"
             RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
           elif [ -n "${{ inputs.release_version }}" ]; then
-            echo "🎉 Release mode: ${{ inputs.release_version }}"
+            echo "🎉 Release mode (workflow_dispatch): ${{ inputs.release_version }}"
             RELEASE_VERSION="${{ inputs.release_version }}" make version-info >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VERSION="${{ github.ref_name }}"
+            TAG_VERSION="${TAG_VERSION#v}"  # Strip 'v' prefix
+            echo "🏷️ Release mode (git tag): $TAG_VERSION"
+            RELEASE_VERSION="$TAG_VERSION" make version-info >> $GITHUB_OUTPUT
           else
             echo "🔨 RC build mode"
             RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
@@ -131,13 +137,14 @@ jobs:
 
   create-release:
     needs: CICD
-    if: github.ref == 'refs/heads/main' && needs.CICD.outputs.is_release == 'true'
+    if: needs.CICD.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Create release tag
+        if: startsWith(github.ref, 'refs/heads/')  # Only for workflow_dispatch, not tag push
         run: |
           VERSION="${{ needs.CICD.outputs.release_version }}"
           TAG="v${VERSION%%+*}"  # Strip +sha suffix for tag
@@ -151,12 +158,14 @@ jobs:
         run: |
           VERSION="${{ needs.CICD.outputs.release_version }}"
           TAG="v${VERSION%%+*}"
-          gh release create "$TAG"             --title "Release $TAG"             --notes "**Deployed:** ${{ needs.CICD.outputs.release_date }}
-          
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes "**Deployed:** ${{ needs.CICD.outputs.release_date }}
+
           **Environment:** production
           **URL:** ${{ needs.CICD.outputs.deployed_url }}
           **Commit:** ${{ github.sha }}
-          
+
           Full version: \`$VERSION\`"
 
   rollback:
