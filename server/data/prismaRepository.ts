@@ -769,7 +769,7 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         // ADR-010: Repository validates data after deserialization
         const validatedHousehold = deserializeHouseholdDetail(household)
 
-        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
+        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${validatedHousehold.shortName} with ${household.inhabitants?.length ?? 0} inhabitants`)
         return validatedHousehold
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLD > [GET]: Error fetching household with ID ${id}`, error)

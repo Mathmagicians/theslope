@@ -5,6 +5,7 @@ import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {getSystemUserId} from "~~/server/utils/systemUser"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 
@@ -113,6 +114,10 @@ export async function scaffoldPrebookings(
         return skippedResult()
     }
 
+    // Get effective user ID for audit trail: use provided userId or fall back to system admin
+    // ADR-013: System operations use getSystemUserId() (cached) to ensure valid FK
+    const effectiveUserId = options.userId ?? await getSystemUserId(d1Client)
+
     // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window
     const allDinnerEvents = season.dinnerEvents ?? []
     const dinnerEventIds = isUserMode
@@ -197,7 +202,7 @@ export async function scaffoldPrebookings(
                 return {
                     dinnerEventId: desired.dinnerEventId,
                     inhabitantId: desired.inhabitantId,
-                    bookedByUserId: options.userId ?? null,
+                    bookedByUserId: effectiveUserId,
                     ticketPriceId: desired.ticketPriceId,
                     priceAtBooking: ticketPrice.price,
                     dinnerMode: desired.dinnerMode,
@@ -211,7 +216,7 @@ export async function scaffoldPrebookings(
             for (const batch of chunkOrderBatch(ordersToCreate)) {
                 await createOrders(d1Client, household.id, batch, {
                     action: getAuditAction(isUserTriggered, 'create'),
-                    performedByUserId: options.userId ?? null,
+                    performedByUserId: effectiveUserId,
                     source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings')
                 })
             }
@@ -244,7 +249,7 @@ export async function scaffoldPrebookings(
                 const auditAction = getAuditAction(isUserTriggered, isNewRelease ? 'release' : 'update')
                 const audit = {
                     action: auditAction,
-                    performedByUserId: options.userId ?? null,
+                    performedByUserId: effectiveUserId,
                     inhabitantId: incoming.inhabitantId,
                     dinnerEventId: incoming.dinnerEventId,
                     seasonId: season.id ?? null
@@ -294,7 +299,7 @@ export async function scaffoldPrebookings(
                 })
             if (deleteIds.length > 0) {
                 for (const idChunk of chunkIds(deleteIds)) {
-                    await deleteOrder(d1Client, idChunk, options.userId ?? null)
+                    await deleteOrder(d1Client, idChunk, effectiveUserId)
                 }
             }
 
@@ -307,7 +312,7 @@ export async function scaffoldPrebookings(
                     toClaim.dinnerEventId,
                     toClaim.ticketPriceId,
                     toClaim.inhabitantId,
-                    options.userId ?? 0,  // Claims require userId
+                    effectiveUserId,
                     toClaim.dinnerMode,
                     toClaim.isGuestTicket
                 )
@@ -333,7 +338,7 @@ export async function scaffoldPrebookings(
             // Log and continue with remaining households - don't fail entire operation
             erroredHouseholds++
             const h3e = eventHandlerHelper.h3eFromCatch(
-                `${LOG} Skipping household ${household.id} (${household.name})`,
+                `${LOG} Skipping household ${household.id} (${household.shortName})`,
                 error
             )
             eventHandlerHelper.logH3Error(h3e, error)

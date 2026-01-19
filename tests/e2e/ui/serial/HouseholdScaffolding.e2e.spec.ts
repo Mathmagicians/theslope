@@ -249,7 +249,8 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
                     inhabitantId: inhabitant.id,
                     bookedByUserId: adminUserId,
                     ticketPriceId,
-                    dinnerMode: DinnerMode.DINEIN
+                    dinnerMode: DinnerMode.DINEIN,
+                    isGuestTicket: false
                 }]
             })
         }

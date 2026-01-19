@@ -28,7 +28,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
         console.info("🏠 > HOUSEHOLD > [GET] Fetching household", "id", id)
         const household = await fetchHousehold(d1Client, id)
         if (household) {
-            console.info("🏠 > HOUSEHOLD > [GET] found household", "name", household.name)
+            console.info("🏠 > HOUSEHOLD > [GET] found household", "shortName", household.shortName)
             setResponseStatus(event, 200)
             return household
         }

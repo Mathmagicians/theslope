@@ -70,7 +70,8 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             inhabitantId,
             ticketPriceId: adultPrice!.id!,
             bookedByUserId: 1, // Factory default user ID
-            dinnerMode: DinnerModeSchema.enum.DINEIN
+            dinnerMode: DinnerModeSchema.enum.DINEIN,
+            isGuestTicket: false
         }
 
         const [result1, result2] = await Promise.all([

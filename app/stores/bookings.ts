@@ -19,6 +19,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Selected context for filtering orders
     const selectedDinnerEventIds = ref<number[]>([]) // Empty = all events
     const selectedInhabitantId = ref<number | null>(null)
+    const selectedHouseholdId = ref<number | null>(null) // Explicit household (admin viewing another household)
     const includeProvenance = ref(false) // Only true for household booking view (shows "🔄 fra AR_1" on claimed tickets)
 
     // Fetch orders - reactive based on selected filters
@@ -27,6 +28,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // Array of IDs: empty=all, otherwise filter
         selectedDinnerEventIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
         if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
+        if (selectedHouseholdId.value) params.append('householdId', String(selectedHouseholdId.value))
         if (includeProvenance.value) params.append('includeProvenance', 'true')
         return params.toString()
     }
@@ -91,12 +93,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Actions
     // ========================================
 
-    const loadOrdersForDinners = (dinnerEventIds: number | number[], withProvenance = false) => {
+    const loadOrdersForDinners = (dinnerEventIds: number | number[], withProvenance = false, householdId?: number) => {
         const ids = [dinnerEventIds].flat()
         selectedDinnerEventIds.value = ids
         selectedInhabitantId.value = null
+        selectedHouseholdId.value = householdId ?? null
         includeProvenance.value = withProvenance
-        console.info(CTX, `Loading orders for ${ids.length} dinner(s)${withProvenance ? ' (with provenance)' : ''}`)
+        console.info(CTX, `Loading orders for ${ids.length} dinner(s)${householdId ? ` (household ${householdId})` : ''}${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const loadOrdersForInhabitant = (inhabitantId: number, withProvenance = false) => {

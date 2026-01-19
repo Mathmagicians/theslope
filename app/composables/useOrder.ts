@@ -53,6 +53,7 @@ export const useOrder = () => {
     [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
     [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
     [OrderState.CLOSED]: { label: 'Afsluttet', color: 'neutral' as const, icon: ICONS.check },
+    [OrderState.CANCELLED]: { label: 'Annulleret', color: 'error' as const, icon: ICONS.xMark },
     claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
   }
 

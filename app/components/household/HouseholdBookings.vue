@@ -101,9 +101,10 @@ const visibleDinnerEventIds = computed(() =>
 )
 
 // Load orders for visible dinner events (grid view doesn't need provenance)
+// Pass household.id to fetch orders for the viewed household (not session user's)
 watchEffect(() => {
-  if (visibleDinnerEventIds.value.length > 0) {
-    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value)
+  if (visibleDinnerEventIds.value.length > 0 && household.value?.id) {
+    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value, household.value.id)
   }
 })
 

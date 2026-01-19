@@ -313,7 +313,10 @@ export const useBillingValidation = () => {
                 address: z.string()
             })
         }),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        // Guest/provenance fields for CostLine display (extracted from snapshot)
+        isGuestTicket: z.boolean().optional(),
+        provenanceHousehold: z.string().nullable().optional()
     })
 
     /**
@@ -457,7 +460,10 @@ export const useBillingValidation = () => {
                 address: z.string()
             })
         }),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        // Guest/provenance fields (optional for backward compatibility with existing snapshots)
+        isGuestTicket: z.boolean().optional(),
+        provenanceHousehold: z.string().nullable().optional()
     })
 
     /**
@@ -469,6 +475,8 @@ export const useBillingValidation = () => {
         dinnerEvent: {id: number, date: Date, menuTitle: string}
         inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
         ticketType: string | null
+        isGuestTicket?: boolean
+        provenanceHousehold?: string | null
     }): string => JSON.stringify({
         dinnerEvent: order.dinnerEvent,
         inhabitant: {
@@ -476,7 +484,9 @@ export const useBillingValidation = () => {
             name: order.inhabitant.name,
             household: order.inhabitant.household
         },
-        ticketType: order.ticketType
+        ticketType: order.ticketType,
+        isGuestTicket: order.isGuestTicket,
+        provenanceHousehold: order.provenanceHousehold
     })
 
     /**
@@ -495,9 +505,14 @@ export const useBillingValidation = () => {
             dinnerEvent: {id: number, date: Date, menuTitle: string}
             inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
             ticketPrice: {ticketType: string} | null
+            isGuestTicket?: boolean
+            provenanceHousehold?: string | null  // Populated from OrderHistory USER_CLAIMED
         } | null
     }): z.infer<typeof TransactionDisplaySchema> => {
         const base = {id: tx.id, amount: tx.amount, createdAt: tx.createdAt, orderSnapshot: tx.orderSnapshot}
+
+        // Parse snapshot to get guest/provenance fields (may be absent in old snapshots)
+        const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
 
         // Use live data only if ALL required relations exist
         if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
@@ -506,13 +521,15 @@ export const useBillingValidation = () => {
                 orderId: tx.order.id,
                 dinnerEvent: tx.order.dinnerEvent,
                 inhabitant: tx.order.inhabitant,
-                ticketType: tx.order.ticketPrice.ticketType
+                ticketType: tx.order.ticketPrice.ticketType,
+                // Prefer live data, fallback to snapshot for guest/provenance
+                isGuestTicket: tx.order.isGuestTicket ?? snapshot.isGuestTicket,
+                provenanceHousehold: tx.order.provenanceHousehold ?? snapshot.provenanceHousehold
             })
         }
 
         // Any relation deleted - use frozen snapshot (strict parsing)
         // Set household.id to 0 to indicate deleted (not valid as FK), orderId null
-        const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
         return TransactionDisplaySchema.parse({
             ...base,
             orderId: null,
@@ -521,7 +538,9 @@ export const useBillingValidation = () => {
                 ...snapshot.inhabitant,
                 household: {...snapshot.inhabitant.household, id: 0}
             },
-            ticketType: snapshot.ticketType
+            ticketType: snapshot.ticketType,
+            isGuestTicket: snapshot.isGuestTicket,
+            provenanceHousehold: snapshot.provenanceHousehold
         })
     }
 
@@ -625,13 +644,6 @@ export const useBillingValidation = () => {
     const deserializeInvoice = (raw: RawInvoice): z.infer<typeof InvoiceDisplaySchema> => {
         const {transactions, ...inv} = raw
         const transactionSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
-
-        // DEBUG: Log if transactionSum doesn't match invoice amount (remove after investigation)
-        if (transactionSum !== inv.amount && transactionSum === inv.amount * 2) {
-            const withOrderId = transactions.filter(tx => tx.orderId !== null && tx.orderId !== undefined).length
-            const orphans = transactions.length - withOrderId
-            console.warn(`💰 > BILLING > [DUPLICATE_TX] Invoice ${inv.id}: txCount=${transactions.length}, withOrderId=${withOrderId}, orphans=${orphans}`)
-        }
 
         return InvoiceDisplaySchema.parse({
             ...inv,

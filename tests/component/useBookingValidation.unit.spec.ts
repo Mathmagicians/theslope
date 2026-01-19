@@ -9,7 +9,7 @@ describe('useBookingValidation - CreateOrdersRequestSchema Business Rules', () =
 
     // Helper to create order with defaults
     const order = (inhabitantId: number, ticketPriceId: number, bookedByUserId: number, dinnerMode: typeof DINEIN | typeof TAKEAWAY = DINEIN) =>
-        ({inhabitantId, ticketPriceId, bookedByUserId, dinnerMode})
+        ({inhabitantId, ticketPriceId, bookedByUserId, dinnerMode, isGuestTicket: false})
 
     it.each([
         {

@@ -18,6 +18,7 @@ export interface CostLineItem {
     orderId?: number | null      // For history lookup (transactions have this)
     isGuestTicket?: boolean      // For guest badge
     state?: string               // OrderState for live orders
+    provenanceHousehold?: string | null  // Source household if claimed from marketplace
     // Amount fields - one of these will be present
     amount?: number              // TransactionDisplay
     priceAtBooking?: number      // OrderDisplay
@@ -41,8 +42,8 @@ const emit = defineEmits<{
 }>()
 
 const {formatPrice, ticketTypeConfig} = useTicket()
-const {orderStateConfig} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
+const {formatOrder} = useOrder()
+const {TYPOGRAPHY, ICONS, SIZES} = useTheSlopeDesignSystem()
 
 // Extract fields from item
 // For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
@@ -53,14 +54,23 @@ const orderId = computed(() => {
     return props.item.id  // orders - use own id for history
 })
 const isHistoryExpanded = computed(() => orderId.value && props.historyOrderId === orderId.value)
-const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType]?.label : 'Ukendt')
-const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType]?.color : 'neutral')
+const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
+const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : 'neutral')
 
 // Amount - prefer priceAtBooking (orders) over amount (transactions)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
 
-// State config for live orders
-const stateConfig = computed(() => props.item.state ? orderStateConfig[props.item.state] : null)
+// Formatted order display (handles claimed override, released state, guest badge)
+// Cast item to OrderDisplay shape for formatOrder - only used when state is present
+const formatted = computed(() => {
+    if (!props.item.state) return null
+    // Build minimal OrderDisplay-compatible object for formatOrder
+    return formatOrder({
+        state: props.item.state,
+        provenanceHousehold: props.item.provenanceHousehold ?? null,
+        isGuestTicket: props.item.isGuestTicket ?? false
+    } as Parameters<typeof formatOrder>[0])
+})
 </script>
 
 <template>
@@ -82,13 +92,13 @@ const stateConfig = computed(() => props.item.state ? orderStateConfig[props.ite
         <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
           {{ ticketLabel }}
         </UBadge>
-        <!-- Guest badge -->
-        <UBadge v-if="item.isGuestTicket" :color="COLOR.info" variant="soft" :size="SIZES.small" :icon="ICONS.userPlus">
-          Gæst
+        <!-- Guest badge (from formatOrder) -->
+        <UBadge v-if="formatted?.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
+          {{ formatted.guest.label }}
         </UBadge>
-        <!-- Order state badge (for live orders) -->
-        <UBadge v-if="stateConfig" :color="stateConfig.color" variant="soft" :size="SIZES.small" :icon="stateConfig.icon">
-          {{ stateConfig.label }}
+        <!-- Order state badge (from formatOrder - handles claimed/released/booked) -->
+        <UBadge v-if="formatted" :color="formatted.stateColor" variant="soft" :size="SIZES.small" :icon="formatted.stateIcon">
+          {{ formatted.stateText }}
         </UBadge>
       </div>
       <span :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(itemAmount) }} kr</span>

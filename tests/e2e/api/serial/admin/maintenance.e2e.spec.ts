@@ -63,7 +63,8 @@ const createTestOrder = async (
             inhabitantId,
             bookedByUserId: 1, // Factory default
             ticketPriceId: ticketPrice.id!,
-            dinnerMode: DinnerMode.DINEIN
+            dinnerMode: DinnerMode.DINEIN,
+            isGuestTicket: false
         }]
     })
 
@@ -133,6 +134,7 @@ test.describe('Daily Maintenance API', () => {
 
     // Consolidated: Full billing pipeline in ONE test
     // Tests: closeOrders → createTransactions → generateBilling → all billing endpoints
+    // ADR-010: Also verifies isGuestTicket preserved through billing pipeline
     test('full billing pipeline: order closes, transaction created, billing generated, endpoints work', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
@@ -146,6 +148,32 @@ test.describe('Daily Maintenance API', () => {
         createdDinnerEventIds.push(dinner.id)
         const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 
+        // Setup: Create GUEST order via PUT /api/order (bypasses deadline for test setup)
+        // Note: Scaffold endpoint can't create orders for past dinners - deadline restriction
+        const ticketPrice = fullSeason.ticketPrices[0]!
+        const guestOrderResult = await OrderFactory.createOrder(context, {
+            householdId,
+            dinnerEventId: dinner.id,
+            orders: [{
+                inhabitantId,
+                bookedByUserId: 1,
+                ticketPriceId: ticketPrice.id!,
+                dinnerMode: DinnerMode.DINEIN,
+                isGuestTicket: true
+            }]
+        })
+        expect(guestOrderResult, 'Guest order creation should succeed').not.toBeNull()
+        const guestOrderId = guestOrderResult!.createdIds[0]!
+
+        // Verify guest order was created with isGuestTicket=true
+        const createdGuestOrder = await OrderFactory.getOrder(context, guestOrderId)
+        expect(createdGuestOrder?.isGuestTicket, 'Guest order should have isGuestTicket=true after creation').toBe(true)
+
+        // Verify both orders exist with different IDs
+        expect(orderId, 'Regular order ID should exist').toBeDefined()
+        expect(guestOrderId, 'Guest order ID should exist').toBeDefined()
+        expect(orderId, 'Order IDs should be different').not.toBe(guestOrderId)
+
         // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
         const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(
             context, householdId, {dinnerPreferences: null}
@@ -156,6 +184,8 @@ test.describe('Daily Maintenance API', () => {
         // Run maintenance (closes order + creates transaction + initializes NULL prefs)
         const maintenanceResult = await SeasonFactory.runDailyMaintenance(context)
         expect(maintenanceResult.initPrefs.initialized, 'Should initialize NULL preferences').toBeGreaterThanOrEqual(1)
+        expect(maintenanceResult.close.closed, 'Should close orders on CONSUMED dinner').toBeGreaterThanOrEqual(2)
+        expect(maintenanceResult.transact.created, 'Should create transactions for closed orders').toBeGreaterThanOrEqual(2)
 
         // Build expected maps: NULL→DINEIN on cooking days, existing→preserved on cooking days
         const expectedNullPrefs = Object.fromEntries(
@@ -171,15 +201,35 @@ test.describe('Daily Maintenance API', () => {
         expect(nullPrefsAfter?.dinnerPreferences).toEqual(expectedNullPrefs)
         expect(existingAfter?.dinnerPreferences).toEqual(expectedExisting)
 
-        // Verify order is CLOSED
+        // Verify orders are CLOSED
         const finalOrder = await OrderFactory.getOrder(context, orderId)
-        expect(finalOrder?.state, 'Order should be CLOSED after maintenance').toBe(OrderState.CLOSED)
+        expect(finalOrder?.state, 'Regular order should be CLOSED after maintenance').toBe(OrderState.CLOSED)
+
+        const finalGuestOrder = await OrderFactory.getOrder(context, guestOrderId)
+        expect(finalGuestOrder?.state, 'Guest order should be CLOSED after maintenance').toBe(OrderState.CLOSED)
+        expect(finalGuestOrder?.isGuestTicket, 'Guest order should retain isGuestTicket=true').toBe(true)
+
+        // ADR-010: Verify isGuestTicket preserved in transactions
+        // Check unbilled transactions to verify our orders have transactions with correct isGuestTicket
+        const unbilledTxs = await BillingFactory.getCurrentPeriodTransactions(context)
+        const ourTxs = unbilledTxs.filter(tx => tx.orderId === orderId || tx.orderId === guestOrderId)
+        expect(ourTxs.length, 'Both orders should have transactions').toBe(2)
+
+        const guestTx = ourTxs.find(tx => tx.orderId === guestOrderId)
+        const regularTx = ourTxs.find(tx => tx.orderId === orderId)
+        expect(guestTx?.isGuestTicket, 'Guest transaction should have isGuestTicket=true').toBe(true)
+        expect(regularTx?.isGuestTicket, 'Regular transaction should have isGuestTicket=false').toBeFalsy()
 
         // Generate billing - use result directly (not global getBillingPeriods which is flaky in parallel)
         const billingResponse = await BillingFactory.generateBilling(context)
         expect(billingResponse).not.toBeNull()
         expect(billingResponse!.jobRunId).toBeGreaterThan(0)
         expect(billingResponse!.results.length, 'Billing period should exist').toBeGreaterThan(0)
+
+        // Verify billing period was created with transactions
+        const billingResult = billingResponse!.results[0]!
+        expect(billingResult.billingPeriod).toBeDefined()
+        expect(billingResult.transactionCount).toBeGreaterThanOrEqual(2)
 
         // GET billing period by ID from generate response
         const createdPeriodId = billingResponse!.results[0]!.billingPeriodSummaryId
@@ -204,5 +254,8 @@ test.describe('Daily Maintenance API', () => {
         // Verify CSV has correct row count (header + invoices)
         const lines = csv.split('\n')
         expect(lines.length).toBe(1 + periodDetail.invoices.length)
+
+        // Note: isGuestTicket verification was done above via unbilled transactions
+        // The billing pipeline test verifies CSV export works, magic links work, etc.
     })
 })

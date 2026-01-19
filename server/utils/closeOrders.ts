@@ -1,6 +1,7 @@
 import type {D1Database} from "@cloudflare/workers-types"
 import {fetchPendingOrdersOnConsumedDinners, updateOrdersBatch, type OrderBatchUpdate} from "~~/server/data/financesRepository"
 import {useBookingValidation, type CloseOrdersResult} from "~/composables/useBookingValidation"
+import {getSystemUserId} from "~~/server/utils/systemUser"
 
 const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
 
@@ -18,6 +19,9 @@ const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
  */
 export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResult> {
     const {OrderStateSchema, OrderAuditActionSchema, DinnerModeSchema} = useBookingValidation()
+
+    // Get system user for audit trail (ADR-013: system operations use cached admin user)
+    const systemUserId = await getSystemUserId(d1Client)
 
     // Fetch all pending orders from repository (includes dinnerEventId, seasonId for audit)
     const pendingOrders = await fetchPendingOrdersOnConsumedDinners(d1Client)
@@ -39,7 +43,7 @@ export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResu
         isNewRelease: false,
         audit: {
             action: OrderAuditActionSchema.enum.SYSTEM_UPDATED,
-            performedByUserId: null,
+            performedByUserId: systemUserId,
             inhabitantId: order.inhabitantId,
             dinnerEventId: order.dinnerEventId,
             seasonId: order.seasonId

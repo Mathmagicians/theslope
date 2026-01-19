@@ -70,9 +70,9 @@ describe('useBillingValidation', () => {
 
     describe('serializeTransaction', () => {
         it.each([
-            ['ADULT', 'ADULT'],
-            ['CHILD', 'CHILD'],
-            ['BABY', 'BABY'],
+            [TicketType.ADULT, TicketType.ADULT],
+            [TicketType.CHILD, TicketType.CHILD],
+            [TicketType.BABY, TicketType.BABY],
             [null, null]
         ])('GIVEN ticketType=%s WHEN serializing THEN snapshot contains ticketType=%s', (input, expected) => {
             const order = BillingFactory.defaultSerializeInput('test', input)
@@ -91,6 +91,26 @@ describe('useBillingValidation', () => {
             expect(parsed.inhabitant.household.pbsId).toBe(order.inhabitant.household.pbsId)
             expect(parsed.inhabitant.household.address).toBe(order.inhabitant.household.address)
         })
+
+        it.each([
+            [true, true],
+            [false, false],
+            [undefined, undefined]
+        ])('GIVEN isGuestTicket=%s WHEN serializing THEN snapshot contains isGuestTicket=%s', (input, expected) => {
+            const order = BillingFactory.defaultSerializeInput('guest-test', TicketType.ADULT, {isGuestTicket: input})
+            const parsed = JSON.parse(serializeTransaction(order))
+            expect(parsed.isGuestTicket).toBe(expected)
+        })
+
+        it.each([
+            ['Testgade 42', 'Testgade 42'],
+            [null, null],
+            [undefined, undefined]
+        ])('GIVEN provenanceHousehold=%s WHEN serializing THEN snapshot contains provenanceHousehold=%s', (input, expected) => {
+            const order = BillingFactory.defaultSerializeInput('prov-test', TicketType.ADULT, {provenanceHousehold: input})
+            const parsed = JSON.parse(serializeTransaction(order))
+            expect(parsed.provenanceHousehold).toBe(expected)
+        })
     })
 
     describe('deserializeTransaction', () => {
@@ -105,10 +125,10 @@ describe('useBillingValidation', () => {
 
             if (expectedSource === 'live') {
                 expect(result.inhabitant.household.pbsId).toBe(1111)
-                expect(result.ticketType).toBe('ADULT')
+                expect(result.ticketType).toBe(TicketType.ADULT)
             } else {
                 expect(result.inhabitant.household.pbsId).toBe(9999)
-                expect(result.ticketType).toBe('CHILD')
+                expect(result.ticketType).toBe(TicketType.CHILD)
             }
         })
 
@@ -120,13 +140,42 @@ describe('useBillingValidation', () => {
             expect(result.amount).toBe(tx.amount)
             expect(result.orderSnapshot).toBe(tx.orderSnapshot)
         })
+
+        // isGuestTicket tests - parametrized for DRY
+        it.each<[string, 'full' | 'noOrder', boolean | undefined, boolean | undefined, boolean | undefined]>([
+            ['live preferred over snapshot', 'full', true, false, true],
+            ['snapshot fallback when live undefined', 'full', undefined, true, true],
+            ['snapshot when order deleted', 'noOrder', undefined, true, true],
+            ['undefined when neither set', 'full', undefined, undefined, undefined]
+        ])('isGuestTicket: %s', (_, liveData, liveValue, snapshotValue, expected) => {
+            const tx = BillingFactory.defaultPrismaTransaction('guest-test', liveData, {
+                liveIsGuestTicket: liveValue,
+                snapshotIsGuestTicket: snapshotValue
+            })
+            const result = deserializeTransaction(tx)
+            expect(result.isGuestTicket).toBe(expected)
+        })
+
+        // provenanceHousehold tests - parametrized for DRY
+        it.each<[string, 'full' | 'noOrder', string | null | undefined, string | null | undefined]>([
+            ['from snapshot when order exists', 'full', 'Testgade 42', 'Testgade 42'],
+            ['from snapshot when order deleted', 'noOrder', 'Birkevej 5', 'Birkevej 5'],
+            ['null preserved', 'full', null, null],
+            ['undefined when not set', 'full', undefined, undefined]
+        ])('provenanceHousehold: %s', (_, liveData, snapshotValue, expected) => {
+            const tx = BillingFactory.defaultPrismaTransaction('prov-test', liveData, {
+                snapshotProvenance: snapshotValue
+            })
+            const result = deserializeTransaction(tx)
+            expect(result.provenanceHousehold).toBe(expected)
+        })
     })
 
     describe('serialize/deserialize roundtrip', () => {
         it.each([
-            ['ADULT'],
-            ['CHILD'],
-            ['BABY'],
+            [TicketType.ADULT],
+            [TicketType.CHILD],
+            [TicketType.BABY],
             [null]
         ])('GIVEN ticketType=%s WHEN roundtrip THEN data preserved', (ticketType) => {
             const order = BillingFactory.defaultSerializeInput('roundtrip', ticketType)
@@ -141,6 +190,23 @@ describe('useBillingValidation', () => {
             expect(result.inhabitant.household.pbsId).toBe(order.inhabitant.household.pbsId)
             expect(result.inhabitant.household.address).toBe(order.inhabitant.household.address)
             expect(result.ticketType).toBe(ticketType)
+        })
+
+        it.each([
+            [true, 'Testgade 42'],
+            [false, null],
+            [undefined, undefined]
+        ])('GIVEN isGuestTicket=%s, provenanceHousehold=%s WHEN roundtrip THEN preserved', (isGuestTicket, provenanceHousehold) => {
+            const order = BillingFactory.defaultSerializeInput('roundtrip-extra', TicketType.ADULT, {
+                isGuestTicket,
+                provenanceHousehold
+            })
+            const serialized = serializeTransaction(order)
+            const tx = {id: 1, amount: 0, createdAt: new Date(), orderSnapshot: serialized, order: null}
+            const result = deserializeTransaction(tx)
+
+            expect(result.isGuestTicket).toBe(isGuestTicket)
+            expect(result.provenanceHousehold).toBe(provenanceHousehold)
         })
     })
 
@@ -158,11 +224,11 @@ describe('useBillingValidation', () => {
     describe('computeStatsFromSnapshots', () => {
         it.each([
             ['empty', [], 0, {}],
-            ['single ADULT', [[1, 'ADULT']], 1, {ADULT: 1}],
-            ['mixed types same dinner', [[1, 'ADULT'], [1, 'CHILD'], [1, 'BABY']], 1, {ADULT: 1, CHILD: 1, BABY: 1}],
-            ['same type multiple dinners', [[1, 'ADULT'], [2, 'ADULT'], [3, 'ADULT']], 3, {ADULT: 3}],
-            ['mixed all', [[1, 'ADULT'], [1, 'ADULT'], [2, 'CHILD'], [2, 'BABY'], [3, 'ADULT']], 3, {ADULT: 3, CHILD: 1, BABY: 1}],
-            ['null ticketType ignored', [[1, null], [1, 'ADULT']], 1, {ADULT: 1}],
+            ['single ADULT', [[1, TicketType.ADULT]], 1, {[TicketType.ADULT]: 1}],
+            ['mixed types same dinner', [[1, TicketType.ADULT], [1, TicketType.CHILD], [1, TicketType.BABY]], 1, {[TicketType.ADULT]: 1, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
+            ['same type multiple dinners', [[1, TicketType.ADULT], [2, TicketType.ADULT], [3, TicketType.ADULT]], 3, {[TicketType.ADULT]: 3}],
+            ['mixed all', [[1, TicketType.ADULT], [1, TicketType.ADULT], [2, TicketType.CHILD], [2, TicketType.BABY], [3, TicketType.ADULT]], 3, {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
+            ['null ticketType ignored', [[1, null], [1, TicketType.ADULT]], 1, {[TicketType.ADULT]: 1}],
         ] as const)('%s', (_, txData, expectedDinners, expectedCounts) => {
             const invoices = [{
                 transactions: txData.map(([dinnerId, type]) => ({orderSnapshot: makeSnapshot(dinnerId, type)}))
@@ -176,12 +242,12 @@ describe('useBillingValidation', () => {
         it('GIVEN invalid JSON WHEN computing stats THEN skips invalid', () => {
             const invoices = [{transactions: [
                 {orderSnapshot: 'invalid json'},
-                {orderSnapshot: makeSnapshot(1, 'ADULT')}
+                {orderSnapshot: makeSnapshot(1, TicketType.ADULT)}
             ]}]
             const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices)
 
             expect(dinnerCount).toBe(1)
-            expect(ticketCountsByType).toEqual({ADULT: 1})
+            expect(ticketCountsByType).toEqual({[TicketType.ADULT]: 1})
         })
     })
 
@@ -206,8 +272,8 @@ describe('useBillingValidation', () => {
 
         it('GIVEN period with invoices WHEN deserializing THEN computes invoiceSum', () => {
             const raw = makeRawPeriod([
-                {amount: 5000, transactions: [{amount: 5000, orderSnapshot: makeSnapshot(1, 'ADULT')}]},
-                {amount: 3000, transactions: [{amount: 3000, orderSnapshot: makeSnapshot(1, 'CHILD')}]}
+                {amount: 5000, transactions: [{amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)}]},
+                {amount: 3000, transactions: [{amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}]}
             ])
             const result = deserializeBillingPeriodDisplay(raw)
 
@@ -218,9 +284,9 @@ describe('useBillingValidation', () => {
             const raw = makeRawPeriod([{
                 amount: 10000,
                 transactions: [
-                    {amount: 5000, orderSnapshot: makeSnapshot(1, 'ADULT')},
-                    {amount: 3000, orderSnapshot: makeSnapshot(2, 'ADULT')},
-                    {amount: 2000, orderSnapshot: makeSnapshot(1, 'CHILD')} // same dinner as first
+                    {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
+                    {amount: 3000, orderSnapshot: makeSnapshot(2, TicketType.ADULT)},
+                    {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)} // same dinner as first
                 ]
             }])
             const result = deserializeBillingPeriodDisplay(raw)
@@ -232,14 +298,14 @@ describe('useBillingValidation', () => {
             const raw = makeRawPeriod([{
                 amount: 10000,
                 transactions: [
-                    {amount: 5000, orderSnapshot: makeSnapshot(1, 'ADULT')},
-                    {amount: 3000, orderSnapshot: makeSnapshot(1, 'ADULT')},
-                    {amount: 2000, orderSnapshot: makeSnapshot(1, 'CHILD')}
+                    {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
+                    {amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
+                    {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}
                 ]
             }])
             const result = deserializeBillingPeriodDisplay(raw)
 
-            expect(result.ticketCountsByType).toEqual({ADULT: 2, CHILD: 1})
+            expect(result.ticketCountsByType).toEqual({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
         })
     })
 
@@ -258,8 +324,8 @@ describe('useBillingValidation', () => {
                     billingPeriod: '01/01/2025-31/01/2025', createdAt: new Date(),
                     householdId: 1, billingPeriodSummaryId: 1, pbsId: 100, address: 'Test',
                     transactions: [
-                        {amount: 5000, orderSnapshot: makeSnapshot(1, 'ADULT')},
-                        {amount: 3000, orderSnapshot: makeSnapshot(1, 'CHILD')}
+                        {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
+                        {amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}
                     ]
                 }]
             }

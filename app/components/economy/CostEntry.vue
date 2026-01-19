@@ -2,6 +2,10 @@
 /**
  * CostEntry - Grouped items by dinner event for economy display
  *
+ * @deprecated This component is deprecated. Use nested EconomyTable pattern instead.
+ * See AdminEconomy.vue for the preferred UTable tree pattern with stat headers.
+ * This component uses UCard wrapper which doesn't fit the UTable tree pattern.
+ *
  * Displays dinner date/menu header with total, then list of CostLine items.
  * Used for both Transactions (billing) and Orders (live bookings).
  *

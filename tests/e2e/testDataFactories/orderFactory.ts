@@ -31,6 +31,7 @@ export class OrderFactory {
     ticketPriceId: 1,
     bookedByUserId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
+    isGuestTicket: false,
     ...overrides
   })
   // === DEFAULT DATA ===
@@ -108,14 +109,16 @@ export class OrderFactory {
     const defaults = {
       householdId: 1,
       dinnerEventId: 5,
-      orders: [
-        {
-          inhabitantId: 10,
-          bookedByUserId: 1,
-          ticketPriceId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [this.defaultOrderItem({})]
+    }
+
+    // Merge each order with defaultOrderItem to ensure all required fields present
+    if (overrides?.orders) {
+      return {
+        ...defaults,
+        ...overrides,
+        orders: overrides.orders.map(order => this.defaultOrderItem(order))
+      }
     }
 
     return { ...defaults, ...overrides }
@@ -412,19 +415,36 @@ export class OrderFactory {
   }
 
   /**
-   * Get orders for a dinner event
+   * Get orders with flexible query options
    * @param context - Browser context for API requests
-   * @param dinnerEventId - Dinner event ID to fetch orders for
+   * @param options - Query options (dinnerEventIds, householdId, allHouseholds, state, sortBy)
    * @param expectedStatus - Expected HTTP status (default 200)
    * @returns Array of OrderDisplay
    */
-  static readonly getOrdersForDinnerEvent = async (
+  static readonly getOrders = async (
     context: BrowserContext,
-    dinnerEventId: number,
+    options: {
+      dinnerEventIds?: number | number[]
+      householdId?: number
+      allHouseholds?: boolean
+      state?: string
+      sortBy?: 'createdAt' | 'releasedAt'
+    } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
     const { OrderDisplaySchema } = useBookingValidation()
-    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventIds=${dinnerEventId}`, { headers })
+    const params = new URLSearchParams()
+
+    if (options.dinnerEventIds !== undefined) {
+      const ids = [options.dinnerEventIds].flat()
+      ids.forEach(id => params.append('dinnerEventIds', String(id)))
+    }
+    if (options.householdId !== undefined) params.append('householdId', String(options.householdId))
+    if (options.allHouseholds) params.append('allHouseholds', 'true')
+    if (options.state) params.append('state', options.state)
+    if (options.sortBy) params.append('sortBy', options.sortBy)
+
+    const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 
     const status = response.status()
     const errorBody = status !== expectedStatus ? await response.text() : ''
@@ -436,6 +456,21 @@ export class OrderFactory {
     }
 
     return []
+  }
+
+  /**
+   * Get orders for a dinner event
+   * @param context - Browser context for API requests
+   * @param dinnerEventId - Dinner event ID to fetch orders for
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @returns Array of OrderDisplay
+   */
+  static readonly getOrdersForDinnerEvent = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    expectedStatus: number = 200
+  ): Promise<OrderDisplay[]> => {
+    return OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId }, expectedStatus)
   }
 
   /**

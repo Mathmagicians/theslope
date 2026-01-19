@@ -33,7 +33,6 @@ import {
     type InvoiceCreate,
     type InvoiceCreated,
     type BillingPeriodSummaryCreate,
-    type BillingPeriodSummaryDisplay,
     type BillingPeriodSummaryId
 } from '~/composables/useBillingValidation'
 
@@ -475,7 +474,7 @@ export async function claimOrder(
     dinnerEventId: number,
     ticketPriceId: number,
     newInhabitantId: number,
-    claimedByUserId: number,
+    claimedByUserId: number | null,
     dinnerMode: DinnerMode,
     isGuestTicket: boolean = false,
     maxRetries: number = 3
@@ -1436,12 +1435,15 @@ export async function createTransactionsBatch(
 export async function fetchBillingPeriodSummary(
     d1Client: D1Database,
     billingPeriod: string
-): Promise<BillingPeriodSummaryDisplay | null> {
-    const {BillingPeriodSummaryDisplaySchema} = useBillingValidation()
+): Promise<BillingPeriodSummaryId | null> {
+    // Use IdSchema because we only need to check existence and get id
+    // DisplaySchema requires computed fields (invoiceSum, dinnerCount, ticketCountsByType)
+    // that are derived from order snapshots - not stored in DB
+    const {BillingPeriodSummaryIdSchema} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const summary = await prisma.billingPeriodSummary.findUnique({where: {billingPeriod}})
-    return summary ? BillingPeriodSummaryDisplaySchema.parse(summary) : null
+    return summary ? BillingPeriodSummaryIdSchema.parse(summary) : null
 }
 
 /**
@@ -1572,14 +1574,16 @@ export async function fetchTransactionsForInvoice(
     const LOG = '💰 > INVOICE_TRANSACTIONS > [GET]'
     console.info(`${LOG} Fetching transactions for invoice ${invoiceId}`)
 
-    const {TransactionDisplaySchema, TicketType} = useBillingValidation()
+    const {deserializeTransaction} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const transactions = await prisma.transaction.findMany({
         where: {invoiceId},
         include: {
             order: {
-                include: {
+                select: {
+                    id: true,
+                    isGuestTicket: true,
                     inhabitant: {
                         select: {
                             id: true, name: true,
@@ -1596,32 +1600,8 @@ export async function fetchTransactionsForInvoice(
 
     console.info(`${LOG} Found ${transactions.length} transactions for invoice ${invoiceId}`)
 
-    return transactions.map(tx => {
-        if (!tx.order) {
-            // Order deleted - use snapshot
-            const snapshot = JSON.parse(tx.orderSnapshot)
-            return TransactionDisplaySchema.parse({
-                id: tx.id,
-                orderId: null,
-                amount: tx.amount,
-                createdAt: tx.createdAt,
-                orderSnapshot: tx.orderSnapshot,
-                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
-                inhabitant: snapshot.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
-                ticketType: snapshot.ticketType ?? TicketType.ADULT
-            })
-        }
-        return TransactionDisplaySchema.parse({
-            id: tx.id,
-            orderId: tx.order.id,
-            amount: tx.amount,
-            createdAt: tx.createdAt,
-            orderSnapshot: tx.orderSnapshot,
-            dinnerEvent: tx.order.dinnerEvent!,
-            inhabitant: tx.order.inhabitant,
-            ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
-        })
-    })
+    // ADR-010: Use deserializeTransaction for consistent transformation
+    return transactions.map(deserializeTransaction)
 }
 
 /*** HOUSEHOLD BILLING ***/
@@ -1640,7 +1620,7 @@ export async function fetchHouseholdBilling(
     console.info(`${LOG} Fetching billing for household ${householdId}`)
 
     const prisma = await getPrismaClientConnection(d1Client)
-    const {HouseholdBillingResponseSchema, TransactionDisplaySchema, HouseholdInvoiceSchema, TicketType} = useBillingValidation()
+    const {HouseholdBillingResponseSchema, HouseholdInvoiceSchema, deserializeTransaction} = useBillingValidation()
     const {calculateCurrentBillingPeriod} = useBilling()
 
     const household = await prisma.household.findUnique({
@@ -1655,9 +1635,18 @@ export async function fetchHouseholdBilling(
 
     const currentPeriod = calculateCurrentBillingPeriod()
 
-    const inhabitantSelect = {
-        id: true, name: true,
-        household: {select: {id: true, pbsId: true, address: true}}
+    // Order selection: id + isGuestTicket + relations (matches deserializeTransaction signature)
+    const orderSelect = {
+        id: true,
+        isGuestTicket: true,
+        inhabitant: {
+            select: {
+                id: true, name: true,
+                household: {select: {id: true, pbsId: true, address: true}}
+            }
+        },
+        dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+        ticketPrice: {select: {ticketType: true}}
     }
 
     // Fetch unbilled transactions (current period)
@@ -1667,13 +1656,7 @@ export async function fetchHouseholdBilling(
             order: {inhabitant: {householdId}}
         },
         include: {
-            order: {
-                include: {
-                    inhabitant: {select: inhabitantSelect},
-                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
-                    ticketPrice: {select: {ticketType: true}}
-                }
-            }
+            order: {select: orderSelect}
         },
         orderBy: {createdAt: 'desc'}
     })
@@ -1684,13 +1667,7 @@ export async function fetchHouseholdBilling(
         include: {
             transactions: {
                 include: {
-                    order: {
-                        include: {
-                            inhabitant: {select: inhabitantSelect},
-                            dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
-                            ticketPrice: {select: {ticketType: true}}
-                        }
-                    }
+                    order: {select: orderSelect}
                 },
                 orderBy: {createdAt: 'desc'}
             }
@@ -1698,36 +1675,9 @@ export async function fetchHouseholdBilling(
         orderBy: {cutoffDate: 'desc'}
     })
 
-    // Transform transaction to domain type
-    const toTransactionDisplay = (tx: typeof unbilledTransactions[0]): TransactionDisplay => {
-        if (!tx.order) {
-            // Order deleted - orderId null, component will show snapshot with warning
-            const snapshot = JSON.parse(tx.orderSnapshot)
-            return TransactionDisplaySchema.parse({
-                id: tx.id,
-                orderId: null,
-                amount: tx.amount,
-                createdAt: tx.createdAt,
-                orderSnapshot: tx.orderSnapshot,
-                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
-                inhabitant: snapshot.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
-                ticketType: snapshot.ticketType ?? TicketType.ADULT
-            })
-        }
-        return TransactionDisplaySchema.parse({
-            id: tx.id,
-            orderId: tx.order.id, // For lazy-loading order history
-            amount: tx.amount,
-            createdAt: tx.createdAt,
-            orderSnapshot: tx.orderSnapshot,
-            dinnerEvent: tx.order.dinnerEvent!,
-            inhabitant: tx.order.inhabitant,
-            ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
-        })
-    }
-
     console.info(`${LOG} Found ${unbilledTransactions.length} unbilled, ${pastInvoices.length} invoices for household ${householdId}`)
 
+    // ADR-010: Use deserializeTransaction for consistent transformation
     return HouseholdBillingResponseSchema.parse({
         householdId: household.id,
         pbsId: household.pbsId,
@@ -1736,7 +1686,7 @@ export async function fetchHouseholdBilling(
             periodStart: currentPeriod.start,
             periodEnd: currentPeriod.end,
             totalAmount: unbilledTransactions.reduce((sum, tx) => sum + tx.amount, 0),
-            transactions: unbilledTransactions.map(toTransactionDisplay)
+            transactions: unbilledTransactions.map(deserializeTransaction)
         },
         pastInvoices: pastInvoices.map(invoice => HouseholdInvoiceSchema.parse({
             id: invoice.id,
@@ -1744,7 +1694,7 @@ export async function fetchHouseholdBilling(
             cutoffDate: invoice.cutoffDate,
             paymentDate: invoice.paymentDate,
             amount: invoice.amount,
-            transactions: invoice.transactions.map(toTransactionDisplay)
+            transactions: invoice.transactions.map(deserializeTransaction)
         }))
     })
 }

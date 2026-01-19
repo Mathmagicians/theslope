@@ -428,6 +428,26 @@ export const COMPONENTS = {
         cellTrigger: 'data-[outside-view]:hidden'
     },
 
+    // Economy table hierarchy - ready-to-grab classes for each nesting level
+    // Used by AdminEconomy and HouseholdEconomy for consistent stat headers
+    economyTable: {
+        level1: {
+            header: 'bg-ocean-50 dark:bg-ocean-800',
+            icon: 'text-xl text-ocean-600 dark:text-ocean-400',
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg'
+        },
+        level2: {
+            header: 'bg-peach-100 dark:bg-peach-900',
+            icon: 'text-xl text-peach-600 dark:text-peach-400',
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg'
+        },
+        level3: {
+            header: 'bg-neutral-50 dark:bg-neutral-900',
+            icon: 'text-neutral-600 dark:text-neutral-400',
+            statBox: 'bg-white dark:bg-neutral-800 rounded-lg'
+        }
+    },
+
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
     // Curated defaults for maximum readability on warm hero backgrounds
     heroPanel: {

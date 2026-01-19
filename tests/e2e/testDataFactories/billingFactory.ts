@@ -98,24 +98,40 @@ export class BillingFactory {
     /**
      * Input for serializeTransaction - order data with billing-relevant fields
      */
-    static readonly defaultSerializeInput = (testSalt: string = 'default', ticketType: string | null = 'ADULT') => ({
+    static readonly defaultSerializeInput = (
+        testSalt: string = 'default',
+        ticketType: string | null = 'ADULT',
+        options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null}
+    ) => ({
         dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},
         inhabitant: {id: 2, name: salt('Anna', testSalt), household: {id: 3, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
-        ticketType
+        ticketType,
+        isGuestTicket: options?.isGuestTicket,
+        provenanceHousehold: options?.provenanceHousehold
     })
 
     /**
      * Simulated Prisma transaction result for deserializeTransaction
      * @param liveData - 'full' = all relations, 'noHousehold' = household deleted, 'noTicketPrice' = ticketPrice deleted, 'noOrder' = order deleted
+     * @param options - Optional isGuestTicket/provenanceHousehold for testing guest/claimed tickets
      */
     static readonly defaultPrismaTransaction = (
         testSalt: string = 'default',
-        liveData: 'full' | 'noHousehold' | 'noTicketPrice' | 'noOrder' = 'full'
+        liveData: 'full' | 'noHousehold' | 'noTicketPrice' | 'noOrder' = 'full',
+        options?: {
+            snapshotIsGuestTicket?: boolean,
+            snapshotProvenance?: string | null,
+            liveIsGuestTicket?: boolean
+        }
     ) => {
+        const {TicketType} = useBillingValidation()
+
         const snapshot = {
             dinnerEvent: {id: 1, date: '2025-01-15', menuTitle: salt('Snapshot Dinner', testSalt)},
             inhabitant: {id: 2, name: salt('Snapshot Name', testSalt), household: {id: 3, pbsId: 9999, address: salt('Snapshot Street', testSalt)}},
-            ticketType: 'CHILD'
+            ticketType: TicketType.CHILD,
+            isGuestTicket: options?.snapshotIsGuestTicket,
+            provenanceHousehold: options?.snapshotProvenance
         }
 
         const base = {
@@ -129,7 +145,8 @@ export class BillingFactory {
             id: 50,  // orderId for lazy-loading order history
             dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Live Dinner', testSalt)},
             inhabitant: {id: 2, name: salt('Live Name', testSalt), household: {id: 3, pbsId: 1111, address: salt('Live Street', testSalt)}},
-            ticketPrice: {ticketType: 'ADULT'}
+            ticketPrice: {ticketType: TicketType.ADULT},
+            isGuestTicket: options?.liveIsGuestTicket
         }
 
         switch (liveData) {

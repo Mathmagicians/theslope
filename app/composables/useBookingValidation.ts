@@ -284,7 +284,8 @@ export const useBookingValidation = () => {
             inhabitantId: z.number().int().positive(),
             ticketPriceId: z.number().int().positive(),
             dinnerMode: DinnerModeSchema,
-            bookedByUserId: z.number().int().positive()
+            bookedByUserId: z.number().int().positive(),
+            isGuestTicket: z.boolean().optional().default(false)
         }))
     }).refine(
         (data) => {
@@ -585,7 +586,9 @@ export const useBookingValidation = () => {
             id: z.number().int().positive(),
             date: z.coerce.date(),
             menuTitle: z.string()
-        })
+        }),
+        // Guest ticket flag - preserved in transaction snapshot for billing display
+        isGuestTicket: z.boolean().default(false)
     })
 
     // ============================================================================

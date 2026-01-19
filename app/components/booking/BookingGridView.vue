@@ -265,8 +265,7 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 
 const columns = computed(() => {
   const fixedColumns = [
-    {id: 'name', header: 'Beboer', footer: () => 'Sum', size: 150},
-    {id: 'count', header: 'Antal', footer: () => '', size: 60}
+    {id: 'name', header: 'Beboer', footer: () => 'Sum', size: 120}
   ]
 
   // Dynamic columns for each dinner event (footer via slot template)
@@ -294,7 +293,7 @@ const columns = computed(() => {
 
 // Column pinning - fixed columns on left
 const columnPinning = ref({
-  left: ['name', 'count'],
+  left: ['name'],
   right: [] as string[]
 })
 

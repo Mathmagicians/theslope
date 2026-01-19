@@ -893,6 +893,7 @@ export const useBooking = () => {
 
     /**
      * Prepare transaction data from closed orders.
+     * ADR-010: Preserves isGuestTicket in snapshot for billing display
      */
     const prepareTransactionData = (closedOrders: OrderForTransaction[]): TransactionCreateData[] => {
         const {serializeTransaction} = useBillingValidation()
@@ -902,7 +903,8 @@ export const useBooking = () => {
             orderSnapshot: serializeTransaction({
                 dinnerEvent: order.dinnerEvent,
                 inhabitant: order.inhabitant,
-                ticketType: order.ticketType
+                ticketType: order.ticketType,
+                isGuestTicket: order.isGuestTicket
             }),
             userSnapshot: JSON.stringify(order.bookedByUser || {id: null, email: ''}),
             amount: order.priceAtBooking,

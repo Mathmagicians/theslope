@@ -3,11 +3,31 @@
  * EconomyTable - Smart table for economy views with date-column search/sort
  *
  * Encapsulates:
- * - Date column header with calendar icon, search input, sort toggle
+ * - Date column header with search input, sort toggle
  * - Internal filter/sort/pagination state
  * - Single-row expansion behavior
  *
  * Used by HouseholdEconomy and AdminEconomy for consistent table UX.
+ *
+ * ## Slot Passthrough Pattern
+ * This component uses slot passthrough to allow parent components to customize
+ * individual column cells while providing sensible defaults for common columns.
+ *
+ * Available slots (pass-through to UTable):
+ * - #expand-cell: Expand/collapse button column
+ * - #date-cell: Date column (has default formatting via dateAccessor)
+ * - #totalAmount-cell: Total amount column (usually formatted with "kr")
+ * - #amount-cell: Amount column (for individual amounts)
+ * - #status-cell: Status badge column
+ * - #period-cell: Date period column
+ * - #billingPeriod-cell: Billing period string column
+ * - #share-cell: Share link column
+ * - #control-cell: Control sum column
+ * - #expanded: Expanded row content
+ * - #empty: Empty state content
+ *
+ * For columns without explicit slots (menuTitle, ticketCounts, householdCount, paymentMonth),
+ * UTable renders the value from row.original[accessorKey] automatically.
  */
 import {formatDate} from '~/utils/date'
 import {getPaginationRowModel} from '@tanstack/vue-table'
@@ -20,8 +40,8 @@ interface Props {
     data: T[]
     /** Column definitions - passed through to UTable */
     columns: ColumnDef[]
-    /** Unique row identifier field */
-    rowKey: keyof T
+    /** Unique row identifier field (string key from T) */
+    rowKey: string
     /** Extract date from item for filtering/sorting */
     dateAccessor: (item: T) => Date
     /** Loading state */
@@ -120,7 +140,7 @@ const toggleSort = () => {
         :ui="COMPONENTS.table.ui"
         :loading="loading"
         :pagination-options="{getPaginationRowModel: getPaginationRowModel()}"
-        :row-key="rowKey as string"
+        :row-key="rowKey"
     >
 
       <!-- Pass through all other slots -->

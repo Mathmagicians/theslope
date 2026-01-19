@@ -2,15 +2,15 @@
 /**
  * HouseholdEconomy - Billing view for household (Økonomi tab)
  *
- * Three sections:
+ * Two sections (unified pattern matching AdminEconomy):
  * - Kommende: upcoming orders (BOOKED/RELEASED for future dinners)
- * - Igangværende periode (Ikke faktureret): current billing period transactions
- * - Tidligere perioder (Faktureret): past invoices with grouped transactions
+ * - Faktureringsperioder: unified table with virtual (current) + closed (past) periods
  *
- * Uses EconomyTable for dinner tables, CostEntry/CostLine for grouped items.
+ * Uses EconomyTable for tables, CostEntry/CostLine for grouped items.
  * Data: GET /api/billing?householdId=X + orders from bookingsStore + dinnerEvents from planStore
  */
-import {formatDate} from '~/utils/date'
+import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
+import type {DateRange} from '~/types/dateTypes'
 import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 
@@ -23,7 +23,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
 
@@ -109,26 +109,83 @@ const currentPeriodData = computed(() =>
     billing.value ? groupTxByDinner(billing.value.currentPeriod.transactions, tx => tx.amount) : []
 )
 
-// Past invoices with pre-grouped transactions
-interface InvoiceRow {
-    id: number
-    date: Date  // paymentDate - for EconomyTable filtering/sorting
-    billingPeriod: string
-    amount: number
-    paymentMonth: string
-    groups: CostEntry<TransactionDisplay>[]
+// ========== UNIFIED BILLING PERIODS (matches AdminEconomy pattern) ==========
+
+/**
+ * UnifiedBillingPeriod - Represents both virtual (current) and closed (past) periods
+ * Same interface as AdminEconomy's unifiedBillingPeriods
+ */
+interface UnifiedBillingPeriod {
+    id: number | 'virtual'      // 'virtual' for current period, number for past invoices
+    period: DateRange           // For EconomyTable date filtering/sorting
+    billingPeriod: string       // Display string
+    totalAmount: number
+    dinnerCount: number
+    ticketCounts: string
+    isClosed: boolean           // true = past invoice, false = virtual/current
+    groups: CostEntry<TransactionDisplay>[]  // Grouped transactions by dinner
+    transactionSum: number      // Control sum: Σ transaction amounts
 }
 
-const pastInvoicesData = computed((): InvoiceRow[] =>
-    billing.value?.pastInvoices.map(inv => ({
-        id: inv.id,
-        date: new Date(inv.paymentDate),  // EconomyTable uses this
-        billingPeriod: inv.billingPeriod.replace('-', ' - '),
-        amount: inv.amount,
-        paymentMonth: formatDate(new Date(inv.paymentDate), 'MMMM yyyy'),
-        groups: groupTxByDinner(inv.transactions, tx => tx.amount)
-    })) ?? []
-)
+// Unified billing periods (virtual + closed)
+const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
+    if (!billing.value) return []
+
+    const periods: UnifiedBillingPeriod[] = []
+
+    // Virtual row (current period - not yet billed)
+    const currentPeriod = billing.value.currentPeriod
+    const currentPeriodRange = createDateRange(
+        new Date(currentPeriod.periodStart),
+        new Date(currentPeriod.periodEnd)
+    )
+    const currentGroups = currentPeriodData.value
+
+    // Control sum for virtual: Σ transaction amounts
+    const virtualTransactionSum = currentPeriod.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+    periods.push({
+        id: 'virtual',
+        period: currentPeriodRange,
+        billingPeriod: formatDateRange(currentPeriodRange),
+        totalAmount: currentPeriod.totalAmount,
+        dinnerCount: currentGroups.length,
+        ticketCounts: formatTicketCounts(currentPeriod.transactions),
+        isClosed: false,
+        groups: currentGroups,
+        transactionSum: virtualTransactionSum
+    })
+
+    // Closed rows (past invoices)
+    for (const inv of billing.value.pastInvoices) {
+        const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
+        // Control sum: Σ transaction amounts vs invoice amount
+        const invoiceTransactionSum = inv.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        periods.push({
+            id: inv.id,
+            period: createDateRange(new Date(inv.cutoffDate), new Date(inv.paymentDate)),
+            billingPeriod: inv.billingPeriod.replace('-', ' - '),
+            totalAmount: inv.amount,
+            dinnerCount: groups.length,
+            ticketCounts: formatTicketCounts(inv.transactions),
+            isClosed: true,
+            groups,
+            transactionSum: invoiceTransactionSum
+        })
+    }
+
+    return periods
+})
+
+// Unified period columns (matches AdminEconomy pattern with control column)
+const periodColumns = [
+    {id: 'expand'},
+    {accessorKey: 'status', header: 'Status'},
+    {accessorKey: 'billingPeriod', header: 'Periode'},
+    {accessorKey: 'ticketCounts', header: 'Kuverter'},
+    {accessorKey: 'totalAmount', header: 'Beløb'},
+    {accessorKey: 'control', header: 'Kontrol'}
+]
 
 // Single history visible at a time
 const historyOrderId = ref<number | null>(null)
@@ -145,24 +202,10 @@ const dinnerColumns = [
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]
 
-// Invoice columns (for past invoices table)
-const invoiceColumns = [
-    {id: 'expand'},
-    {accessorKey: 'billingPeriod', header: 'Forbrugsperiode'},
-    {accessorKey: 'amount', header: 'Beløb'},
-    {accessorKey: 'paymentMonth', header: 'PBS opkrævet'}
-]
-
 // Totals (using raw data - EconomyTable handles filtering internally)
 const upcomingTotal = computed(() =>
     upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
-
-// Helper to get ticket counts string from an invoice's groups
-const getInvoiceTicketCounts = (groups: CostEntry<TransactionDisplay>[]) => {
-    const allTx = groups.flatMap(g => g.items)
-    return formatTicketCounts(allTx)
-}
 
 // Upcoming period starts after current billing period
 const upcomingPeriodStart = computed(() => {
@@ -179,7 +222,7 @@ const upcomingPeriodStart = computed(() => {
     <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
 
     <template v-else-if="billing">
-      <!-- Kommende (Upcoming Orders) -->
+      <!-- Section 1: Kommende (Upcoming Orders) -->
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
@@ -244,29 +287,25 @@ const upcomingPeriodStart = computed(() => {
         </template>
       </UCard>
 
-      <!-- Igangværende periode (Ikke faktureret) -->
+      <!-- Section 2: Faktureringsperioder (Unified: Virtual + Closed) -->
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
-            <UIcon :name="ICONS.shoppingCart" :size="SIZES.standardIconSize"/>
-            <div class="flex flex-col md:flex-row md:items-center md:gap-2">
-              <h3 :class="TYPOGRAPHY.cardTitle">Aktuel periode</h3>
-              <span class="hidden md:inline text-gray-400">|</span>
-              <p :class="TYPOGRAPHY.bodyTextMuted">
-                {{ formatDate(billing.currentPeriod.periodStart) }} - {{ formatDate(billing.currentPeriod.periodEnd) }}
-              </p>
-            </div>
+            <UIcon :name="ICONS.economy" :size="SIZES.standardIconSize"/>
+            <h3 :class="TYPOGRAPHY.cardTitle">Faktureringsperioder</h3>
           </div>
         </template>
 
         <EconomyTable
-            :data="currentPeriodData"
-            :columns="dinnerColumns"
-            row-key="dinnerEventId"
-            :date-accessor="(item) => item.date"
+            :data="unifiedBillingPeriods"
+            :columns="periodColumns"
+            row-key="id"
+            :date-accessor="(item) => item.period.start"
+            search-placeholder="Søg periode..."
         >
           <template #expand-cell="{ row }">
             <UButton
+                v-if="row.original.groups.length > 0"
                 color="neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
@@ -275,133 +314,110 @@ const upcomingPeriodStart = computed(() => {
                 aria-label="Vis detaljer"
                 @click="row.toggleExpanded()"
             />
+          </template>
+          <template #status-cell="{ row }">
+            <UBadge v-if="!row.original.isClosed" color="success" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
+              Igangværende
+            </UBadge>
+            <UBadge v-else color="neutral" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
+              Afsluttet
+            </UBadge>
           </template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
-          <template #expanded="{ row }">
-            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
-              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
-                <CostLine
-                    v-for="tx in row.original.items"
-                    :key="tx.id"
-                    :item="tx"
-                    :history-order-id="historyOrderId"
-                    @toggle-history="toggleHistory"
-                />
-              </div>
-            </UCard>
+          <template #control-cell="{ row }">
+            <!-- Control sum: Σ transaction amounts vs stored totalAmount -->
+            <UBadge v-if="row.original.transactionSum === row.original.totalAmount" color="success" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
+              {{ formatPrice(row.original.transactionSum) }} kr
+            </UBadge>
+            <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
+              {{ formatPrice(row.original.transactionSum) }} kr ≠ {{ formatPrice(row.original.totalAmount) }} kr
+            </UBadge>
           </template>
-          <template #empty>
-            <UAlert
-                :icon="ICONS.robotHappy"
-                color="neutral"
-                variant="subtle"
-                title="Tomt her!"
-                description="Ingen transaktioner i denne periode - måske er alle på ferie?"
-            />
-          </template>
-        </EconomyTable>
-
-        <template #footer>
-          <div class="flex justify-end items-center gap-2">
-            <span :class="TYPOGRAPHY.bodyTextMedium">Total:</span>
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(billing.currentPeriod.totalAmount) }} kr</span>
-          </div>
-        </template>
-      </UCard>
-
-      <!-- Past Invoices -->
-      <UCard v-if="pastInvoicesData.length > 0">
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon :name="ICONS.clock" :size="SIZES.standardIconSize"/>
-            <h3 :class="TYPOGRAPHY.cardTitle">Tidligere perioder</h3>
-          </div>
-        </template>
-
-        <EconomyTable
-            :data="pastInvoicesData"
-            :columns="invoiceColumns"
-            row-key="id"
-            :date-accessor="(item) => item.date"
-            search-placeholder="Søg måned..."
-        >
-          <template #expand-cell="{ row }">
-            <UButton
-                color="neutral"
-                variant="ghost"
-                :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
-                square
-                :size="SIZES.small"
-                aria-label="Vis detaljer"
-                @click="row.toggleExpanded()"
-            />
-          </template>
-          <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
           <template #expanded="{ row }">
             <div class="ml-2 md:ml-8 mr-2 md:mr-4 my-2 rounded-lg overflow-hidden border border-default">
-              <!-- Stat header for invoice breakdown -->
-              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-ocean-100 dark:bg-ocean-900">
+              <!-- Stat header (Level 1 - Ocean palette) -->
+              <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level1.header]">
                 <div class="md:mr-8">
-                  <h4 :class="TYPOGRAPHY.cardTitle">PBS Opkrævet {{ row.original.paymentMonth }}</h4>
+                  <h4 :class="TYPOGRAPHY.cardTitle">{{ row.original.isClosed ? 'PBS Faktura' : 'Aktuel periode' }}</h4>
                   <p :class="TYPOGRAPHY.bodyTextMuted">{{ row.original.billingPeriod }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                    <UIcon :name="ICONS.calendar" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                    <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level1.icon"/>
                     <div class="text-center">
-                      <p class="font-semibold">{{ row.original.groups.length }}</p>
+                      <p class="font-semibold">{{ row.original.dinnerCount }}</p>
                       <p class="text-xs text-muted">Middage</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                    <UIcon :name="ICONS.dinner" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                    <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level1.icon"/>
                     <div class="text-center">
-                      <p class="font-semibold">{{ getInvoiceTicketCounts(row.original.groups) }}</p>
+                      <p class="font-semibold">{{ row.original.ticketCounts }}</p>
                       <p class="text-xs text-muted">Kuverter</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                    <UIcon :name="ICONS.shoppingCart" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                    <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level1.icon"/>
                     <div class="text-center">
-                      <p class="font-semibold">{{ formatPrice(row.original.amount) }} kr</p>
+                      <p class="font-semibold">{{ formatPrice(row.original.totalAmount) }} kr</p>
                       <p class="text-xs text-muted">Total</p>
                     </div>
                   </div>
                 </div>
               </div>
-              <UCard :ui="{ root: 'rounded-none border-none' }">
-              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
-                <CostEntry
-                    v-for="group in row.original.groups"
-                    :key="group.dinnerEventId"
-                    :entry="group"
-                >
-                  <template #items="{ items }">
+              <!-- Dinner breakdown table (same pattern as AdminEconomy) -->
+              <UTable
+                  :data="row.original.groups"
+                  :columns="dinnerColumns"
+                  :ui="{...COMPONENTS.table.ui, thead: COMPONENTS.economyTable.level2.header}"
+                  row-key="dinnerEventId"
+              >
+                <template #expand-cell="{ row: dinnerRow }">
+                  <UButton
+                      v-if="dinnerRow.original.items.length > 0"
+                      color="neutral"
+                      variant="ghost"
+                      :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                      square
+                      :size="SIZES.small"
+                      aria-label="Vis ordrer"
+                      @click="dinnerRow.toggleExpanded()"
+                  />
+                </template>
+                <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
+                <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
+
+                <!-- Expanded dinner: individual transactions with history -->
+                <template #expanded="{ row: dinnerRow }">
+                  <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
                     <CostLine
-                        v-for="tx in items"
+                        v-for="tx in dinnerRow.original.items"
                         :key="tx.id"
                         :item="tx"
                         :history-order-id="historyOrderId"
                         compact
                         @toggle-history="toggleHistory"
                     />
-                  </template>
-                </CostEntry>
-              </div>
-            </UCard>
+                  </div>
+                </template>
+              </UTable>
             </div>
+          </template>
+          <template #empty>
+            <UAlert
+                :icon="ICONS.robotHappy"
+                color="neutral"
+                variant="subtle"
+                title="Ingen faktureringsperioder"
+                description="Der er ingen transaktioner endnu - PBS-robotten sover stadig!"
+            />
           </template>
         </EconomyTable>
       </UCard>
-
-      <UAlert
-          v-else
-          :icon="ICONS.robotHappy"
-          color="neutral"
-          variant="subtle"
-          title="Tomt her!"
-          description="Ingen fakturerede perioder endnu - PBS-robot sover stadig!"
-      />
     </template>
 
     <UAlert

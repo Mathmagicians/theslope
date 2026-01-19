@@ -476,16 +476,85 @@ test.describe('Order API', () => {
     await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
 
     // Fetch with allHouseholds=true, state=RELEASED
-    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventIds=${testDinnerEventId}&state=RELEASED&allHouseholds=true&sortBy=releasedAt`, { headers })
-
-    expect(response.status()).toBe(200)
-    const orders = await response.json()
+    const orders = await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId,
+      state: OrderStateSchema.enum.RELEASED,
+      allHouseholds: true,
+      sortBy: 'releasedAt'
+    })
 
     // Should include the released order
-    const foundOrder = orders.find((o: { id: number }) => o.id === orderId)
+    const foundOrder = orders.find(o => o.id === orderId)
     expect(foundOrder).toBeDefined()
-    expect(foundOrder.state).toBe(OrderStateSchema.enum.RELEASED)
+    expect(foundOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
     // DATA INTEGRITY: RELEASED orders must have dinnerMode=NONE
-    expect(foundOrder.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+    expect(foundOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+  })
+
+  // ============================================================================
+  // householdId query param tests (cross-household viewing)
+  // ============================================================================
+
+  test('GET with householdId returns orders for that specific household only', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create order for session user's household
+    const myResult = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    testOrderIds.push(myResult!.createdIds[0]!)
+    const myOrderId = myResult!.createdIds[0]!
+
+    // GET without householdId → returns session user's household orders (default behavior)
+    const defaultOrders = await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId
+    })
+    const myOrderInDefault = defaultOrders.find(o => o.id === myOrderId)
+    expect(myOrderInDefault, 'Default GET should include our order').toBeDefined()
+
+    // GET with explicit householdId → returns orders for that specific household
+    const filteredOrders = await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId,
+      householdId: testHouseholdId
+    })
+    const myOrderInFiltered = filteredOrders.find(o => o.id === myOrderId)
+    expect(myOrderInFiltered, 'householdId filter should include our order').toBeDefined()
+
+    // GET with different householdId → should NOT include our order
+    // Use a non-existent household ID to verify filtering excludes our order
+    const otherHouseholdOrders = await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId,
+      householdId: 999999  // Non-existent household
+    })
+    const myOrderInOther = otherHouseholdOrders.find(o => o.id === myOrderId)
+    expect(myOrderInOther, 'Different householdId should NOT include our order').toBeUndefined()
+  })
+
+  test('GET with both householdId and allHouseholds=true returns 400', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Both params together should fail validation - use factory with expectedStatus=400
+    await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId,
+      householdId: testHouseholdId,
+      allHouseholds: true
+    }, 400)
+  })
+
+  test('GET with householdId for non-existent household returns empty array', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Non-existent household ID should return empty array
+    const orders = await OrderFactory.getOrders(context, {
+      dinnerEventIds: testDinnerEventId,
+      householdId: 999999
+    })
+
+    expect(orders).toEqual([])
   })
 })

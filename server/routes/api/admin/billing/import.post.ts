@@ -7,6 +7,7 @@ import {useTicket} from '~/composables/useTicket'
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {getSystemUserId} from '~~/server/utils/systemUser'
 import {isSameDay} from 'date-fns'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 
@@ -131,10 +132,13 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
             return acc.set(household.id!, [...existing, ...orders])
         }, new Map())
 
+        // Get system user for audit trail (ADR-013: system operations use cached admin user)
+        const systemUserId = await getSystemUserId(d1Client)
+
         // Audit context for batch import
         const auditContext: AuditContext = {
             action: 'SYSTEM_CREATED',
-            performedByUserId: null,
+            performedByUserId: systemUserId,
             source: 'csv_billing'
         }
 

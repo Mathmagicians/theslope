@@ -72,8 +72,12 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 
 // Fetch future orders (admin: all households)
 const futureDinnerIdsArray = computed(() => Array.from(futureDinnerIds.value))
+// CRITICAL: Use computed key for reactive refetch when season changes (ADR-007)
+const futureOrdersKey = computed(() =>
+    `admin-economy-future-orders-${futureDinnerIdsArray.value.join('-')}`
+)
 const {data: futureOrders, status: futureOrdersStatus} = useAsyncData<OrderDisplay[]>(
-    `admin-economy-future-orders-${futureDinnerIdsArray.value.join('-')}`,
+    futureOrdersKey,
     () => {
         if (futureDinnerIdsArray.value.length === 0) return Promise.resolve([])
         const params = new URLSearchParams()
@@ -84,6 +88,7 @@ const {data: futureOrders, status: futureOrdersStatus} = useAsyncData<OrderDispl
     {
         default: () => [],
         transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o))
+        // Computed key handles reactivity - no watch option needed (ADR-007)
     }
 )
 const isFutureOrdersLoading = computed(() => futureOrdersStatus.value === 'pending')
@@ -171,9 +176,14 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
 
     // Closed periods - parse DateRange from billingPeriod string "dd/MM/yyyy-dd/MM/yyyy"
     const closedRows: UnifiedBillingPeriod[] = billingPeriods.value.map(bp => {
-        const [startStr, endStr] = bp.billingPeriod.split('-')
+        const parts = bp.billingPeriod.split('-')
+        const startStr = parts[0] ?? ''
+        const endStr = parts[1] ?? ''
         const parseDate = (s: string) => {
-            const [day, month, year] = s.split('/').map(Number)
+            const dateParts = s.split('/').map(Number)
+            const day = dateParts[0] ?? 1
+            const month = dateParts[1] ?? 1
+            const year = dateParts[2] ?? 2000
             return new Date(year, month - 1, day)
         }
         return {
@@ -338,7 +348,7 @@ const dinnerBreakdownStats = computed(() => {
                 square
                 :size="SIZES.small"
                 aria-label="Vis detaljer"
-                @click="row.toggleExpanded(); !row.original.isVirtual && loadBillingPeriodDetail(row.original.id)"
+                @click="row.toggleExpanded(); !row.original.isVirtual && loadBillingPeriodDetail(row.original.id as number)"
             />
           </template>
           <template #status-cell="{ row }">
@@ -366,7 +376,7 @@ const dinnerBreakdownStats = computed(() => {
               </UBadge>
               <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
                 <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                {{ formatPrice(row.original.invoiceSum) }} kr ≠ {{ formatPrice(row.original.totalAmount) }} kr
+                {{ formatPrice(row.original.invoiceSum ?? 0) }} kr ≠ {{ formatPrice(row.original.totalAmount) }} kr
               </UBadge>
             </template>
           </template>
@@ -418,36 +428,36 @@ const dinnerBreakdownStats = computed(() => {
                 <template v-else-if="selectedBillingPeriodDetail">
                   <!-- Invoice table with integrated header -->
                   <div class="rounded-lg overflow-hidden border border-default">
-                    <!-- Header row: title + stat boxes -->
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-ocean-50 dark:bg-ocean-800">
+                    <!-- Header row: title + stat boxes (Level 1 - Ocean palette) -->
+                    <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level1.header]">
                       <div class="md:mr-8">
                         <h4 :class="TYPOGRAPHY.cardTitle">Samlet PBS Afregning</h4>
                         <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDateRange(row.original.period) }}</p>
                       </div>
                       <div class="flex flex-wrap gap-2">
-                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                          <UIcon :name="ICONS.household" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                          <UIcon :name="ICONS.household" :class="COMPONENTS.economyTable.level1.icon"/>
                           <div class="text-center">
                             <p class="font-semibold">{{ row.original.householdCount }}</p>
                             <p class="text-xs text-muted">Husstande</p>
                           </div>
                         </div>
-                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                          <UIcon :name="ICONS.calendar" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                          <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level1.icon"/>
                           <div class="text-center">
                             <p class="font-semibold">{{ row.original.dinnerCount }}</p>
                             <p class="text-xs text-muted">Middage</p>
                           </div>
                         </div>
-                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                          <UIcon :name="ICONS.dinner" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                          <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level1.icon"/>
                           <div class="text-center">
                             <p class="font-semibold">{{ row.original.ticketCounts }}</p>
                             <p class="text-xs text-muted">Kuverter</p>
                           </div>
                         </div>
-                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                          <UIcon :name="ICONS.shoppingCart" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
+                          <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level1.icon"/>
                           <div class="text-center">
                             <p class="font-semibold">{{ formatPrice(row.original.totalAmount) }} kr</p>
                             <p class="text-xs text-muted">Total</p>
@@ -474,48 +484,48 @@ const dinnerBreakdownStats = computed(() => {
                           @click="invoiceRow.toggleExpanded(); loadInvoiceTransactions(invoiceRow.original.id)"
                       />
                     </template>
-                    <template #pbsId-cell="{ row }">{{ row.original.pbsId }}</template>
-                    <template #address-cell="{ row }">{{ row.original.address }}</template>
-                    <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
-                    <template #control-cell="{ row }">
-                      <UBadge v-if="row.original.transactionSum === row.original.amount" color="success" variant="subtle" :size="SIZES.small">
+                    <template #pbsId-cell="{ row: invoiceRow }">{{ invoiceRow.original.pbsId }}</template>
+                    <template #address-cell="{ row: invoiceRow }">{{ invoiceRow.original.address }}</template>
+                    <template #amount-cell="{ row: invoiceRow }">{{ formatPrice(invoiceRow.original.amount) }} kr</template>
+                    <template #control-cell="{ row: invoiceRow }">
+                      <UBadge v-if="invoiceRow.original.transactionSum === invoiceRow.original.amount" color="success" variant="subtle" :size="SIZES.small">
                         <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(row.original.transactionSum) }} kr
+                        {{ formatPrice(invoiceRow.original.transactionSum) }} kr
                       </UBadge>
                       <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
                         <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(row.original.transactionSum) }} kr ≠ {{ formatPrice(row.original.amount) }} kr
+                        {{ formatPrice(invoiceRow.original.transactionSum) }} kr ≠ {{ formatPrice(invoiceRow.original.amount) }} kr
                       </UBadge>
                     </template>
 
                     <!-- Expanded invoice: transactions table grouped by dinner -->
                     <template #expanded="{ row: invoiceRow }">
                       <div class="p-2 bg-neutral-100 dark:bg-neutral-800">
-                        <!-- Level 2: Dinner breakdown with stat box header -->
+                        <!-- Level 2: Dinner breakdown with stat box header (Peach palette) -->
                         <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" class="rounded-lg overflow-hidden border border-default">
                           <!-- Header row: title + stat boxes -->
-                          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-peach-100 dark:bg-peach-900">
+                          <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level2.header]">
                             <div class="md:mr-8">
                               <h4 :class="TYPOGRAPHY.cardTitle">PBS Faktura for {{ formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy') }}</h4>
                               <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · PBS {{ invoiceRow.original.pbsId }}</p>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                                <UIcon :name="ICONS.calendar" class="text-xl text-peach-600 dark:text-peach-400"/>
+                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                                <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div class="text-center">
                                   <p class="font-semibold">{{ dinnerBreakdownStats.dinnerCount }}</p>
                                   <p class="text-xs text-muted">Middage</p>
                                 </div>
                               </div>
-                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                                <UIcon :name="ICONS.dinner" class="text-xl text-peach-600 dark:text-peach-400"/>
+                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                                <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div class="text-center">
                                   <p class="font-semibold">{{ dinnerBreakdownStats.ticketCounts }}</p>
                                   <p class="text-xs text-muted">Kuverter</p>
                                 </div>
                               </div>
-                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
-                                <UIcon :name="ICONS.shoppingCart" class="text-xl text-peach-600 dark:text-peach-400"/>
+                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                                <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div class="text-center">
                                   <p class="font-semibold">{{ formatPrice(dinnerBreakdownStats.total) }} kr</p>
                                   <p class="text-xs text-muted">Total</p>

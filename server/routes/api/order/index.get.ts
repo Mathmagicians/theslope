@@ -28,8 +28,12 @@ const querySchema = z.object({
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
     allHouseholds: z.coerce.boolean().optional().default(false),
-    includeProvenance: z.coerce.boolean().optional().default(false)
-})
+    includeProvenance: z.coerce.boolean().optional().default(false),
+    householdId: z.coerce.number().int().positive().optional()
+}).refine(
+    (data) => !(data.householdId && data.allHouseholds),
+    { message: 'Cannot specify both householdId and allHouseholds=true' }
+)
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
@@ -44,9 +48,14 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
 
-    // Determine household filter: skip if allHouseholds=true, otherwise use session
+    // Determine household filter: explicit householdId > session user's household
+    // Note: allHouseholds=true + householdId is rejected by schema validation
     let householdId: number | undefined
-    if (!query.allHouseholds) {
+    if (query.householdId) {
+        // Explicit household (admin viewing another household)
+        householdId = query.householdId
+    } else if (!query.allHouseholds) {
+        // Default: filter by session user's household
         const session = await getUserSession(event)
         const user = session?.user as UserDetail | undefined
         householdId = user?.Inhabitant?.householdId
@@ -56,6 +65,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             return []
         }
     }
+    // else: allHouseholds=true with no householdId → no filter (marketplace view)
 
     // Business logic
     try {

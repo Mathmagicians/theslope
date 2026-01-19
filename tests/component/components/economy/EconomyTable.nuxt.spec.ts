@@ -40,6 +40,9 @@ describe('EconomyTable', () => {
 
     type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
 
+    // Required dateAccessor for EconomyTable (typed as unknown for mountSuspended compatibility)
+    const dateAccessor = (item: unknown) => (item as TestRow).date
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const createWrapper = async (data: TestRow[] = createTestData(), pageSize = 5): Promise<any> => {
         return await mountSuspended(EconomyTable, {
@@ -47,6 +50,7 @@ describe('EconomyTable', () => {
                 data,
                 columns: defaultColumns,
                 rowKey: 'date',
+                dateAccessor,
                 pageSize
             },
             global: {
@@ -87,7 +91,8 @@ describe('EconomyTable', () => {
                 props: {
                     data: createTestData(),
                     columns: defaultColumns,
-                    rowKey: 'date' as const,
+                    rowKey: 'date',
+                    dateAccessor,
                     searchPlaceholder: customPlaceholder
                 },
                 global: {
@@ -219,6 +224,7 @@ describe('EconomyTable', () => {
                     data: createTestData(),
                     columns: defaultColumns,
                     rowKey: 'date',
+                    dateAccessor,
                     loading: true
                 },
                 global: {
@@ -242,7 +248,8 @@ describe('EconomyTable', () => {
                 props: {
                     data: [],
                     columns: defaultColumns,
-                    rowKey: 'date'
+                    rowKey: 'date',
+                    dateAccessor
                 },
                 slots: {
                     empty: '<div data-testid="custom-empty">No data</div>'

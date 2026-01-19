@@ -335,6 +335,17 @@ describe('useBooking', () => {
             expect(snapshot.inhabitant.id).toBe(order.inhabitant.id)
             expect(result.userEmailHandle).toBe(expectedEmail)
         })
+
+        // ADR-010: isGuestTicket must be preserved through billing pipeline
+        it.each([
+            {desc: 'guest ticket true', isGuestTicket: true},
+            {desc: 'guest ticket false', isGuestTicket: false}
+        ])('$desc → isGuestTicket preserved in snapshot', ({isGuestTicket}) => {
+            const order = {...OrderFactory.defaultOrderForTransaction('guest-test'), isGuestTicket}
+            const results = prepareTransactionData([order])
+            const snapshot = OrderSnapshotSchema.parse(JSON.parse(results[0]!.orderSnapshot))
+            expect(snapshot.isGuestTicket).toBe(isGuestTicket)
+        })
     })
 
     describe('buildOrderSnapshot', () => {

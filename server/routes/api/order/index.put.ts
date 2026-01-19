@@ -81,7 +81,6 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
         const priceMap = new Map(ticketPrices.map(tp => [tp.id, tp.price]))
 
         // Build OrderCreateWithPrice array
-        // Note: isGuestTicket defaults to false - guest tickets use scaffold endpoint (ADR-016)
         const ordersData: OrderCreateWithPrice[] = requestData.orders.map(orderItem => ({
             dinnerEventId: requestData.dinnerEventId,
             inhabitantId: orderItem.inhabitantId,
@@ -91,7 +90,7 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
             householdId: requestData.householdId,
             dinnerMode: orderItem.dinnerMode ?? DinnerModeSchema.enum.DINEIN,
             state: OrderStateSchema.enum.BOOKED,
-            isGuestTicket: false
+            isGuestTicket: orderItem.isGuestTicket ?? false
         }))
 
         // Create audit context for user booking
