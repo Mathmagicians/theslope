@@ -13,6 +13,7 @@ import {formatDate, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {StatBox} from '~/components/economy/CostEntry.vue'
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
@@ -158,6 +159,17 @@ interface UnifiedBillingPeriod {
     invoiceSum: number | null   // Σ invoice.amount for control sum (null for virtual)
     shareToken?: string
 }
+
+// Accessor functions for CostEntry (reusable lambdas)
+// Level 1: Billing period summary (Samlet PBS Afregning)
+const billingPeriodTitleAccessor = () => 'Samlet PBS Afregning'
+const billingPeriodSubtitleAccessor = (period: UnifiedBillingPeriod) => formatDateRange(period.period)
+const billingPeriodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
+    {icon: ICONS.household, value: period.householdCount, label: 'Husstande'},
+    {icon: ICONS.calendar, value: period.dinnerCount, label: 'Middage'},
+    {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
+    {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
+]
 
 const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     // Virtual row (current period) - use already-grouped data
@@ -368,17 +380,12 @@ const dinnerBreakdownStats = computed(() => {
           <template #control-cell="{ row }">
             <!-- Virtual: ongoing, no control -->
             <span v-if="row.original.isVirtual" class="text-neutral-400">—</span>
-            <!-- Closed: show badge with sum + robot (pre-computed from list endpoint) -->
-            <template v-else>
-              <UBadge v-if="row.original.invoiceSum === row.original.totalAmount" color="success" variant="subtle" :size="SIZES.small">
-                <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-                {{ formatPrice(row.original.invoiceSum) }} kr
-              </UBadge>
-              <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
-                <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                {{ formatPrice(row.original.invoiceSum ?? 0) }} kr ≠ {{ formatPrice(row.original.totalAmount) }} kr
-              </UBadge>
-            </template>
+            <!-- Closed: show control badge (pre-computed from list endpoint) -->
+            <ControlBadge
+                v-else
+                :computed="row.original.invoiceSum ?? 0"
+                :expected="row.original.totalAmount"
+            />
           </template>
           <template #share-cell="{ row }">
             <ShareLinksPopover
@@ -426,47 +433,17 @@ const dinnerBreakdownStats = computed(() => {
                 <Loader v-if="isBillingPeriodDetailLoading" text="Henter fakturadetaljer..."/>
 
                 <template v-else-if="selectedBillingPeriodDetail">
-                  <!-- Invoice table with integrated header -->
-                  <div class="rounded-lg overflow-hidden border border-default">
-                    <!-- Header row: title + stat boxes (Level 1 - Ocean palette) -->
-                    <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level1.header]">
-                      <div class="md:mr-8">
-                        <h4 :class="TYPOGRAPHY.cardTitle">Samlet PBS Afregning</h4>
-                        <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDateRange(row.original.period) }}</p>
-                      </div>
-                      <div class="flex flex-wrap gap-2">
-                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                          <UIcon :name="ICONS.household" :class="COMPONENTS.economyTable.level1.icon"/>
-                          <div class="text-center">
-                            <p class="font-semibold">{{ row.original.householdCount }}</p>
-                            <p class="text-xs text-muted">Husstande</p>
-                          </div>
-                        </div>
-                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                          <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level1.icon"/>
-                          <div class="text-center">
-                            <p class="font-semibold">{{ row.original.dinnerCount }}</p>
-                            <p class="text-xs text-muted">Middage</p>
-                          </div>
-                        </div>
-                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                          <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level1.icon"/>
-                          <div class="text-center">
-                            <p class="font-semibold">{{ row.original.ticketCounts }}</p>
-                            <p class="text-xs text-muted">Kuverter</p>
-                          </div>
-                        </div>
-                        <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                          <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level1.icon"/>
-                          <div class="text-center">
-                            <p class="font-semibold">{{ formatPrice(row.original.totalAmount) }} kr</p>
-                            <p class="text-xs text-muted">Total</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <!-- Invoice table -->
-                    <UTable
+                  <!-- Invoice table with stat header via CostEntry (Level 1 - Ocean palette) -->
+                  <CostEntry
+                      :entry="row.original"
+                      :level="1"
+                      :title-accessor="billingPeriodTitleAccessor"
+                      :subtitle-accessor="billingPeriodSubtitleAccessor"
+                      :stats-accessor="billingPeriodStatsAccessor"
+                  >
+                    <template #default>
+                      <!-- Invoice table -->
+                      <UTable
                         v-model:expanded="expandedInvoiceRows"
                         :data="selectedBillingPeriodDetail.invoices"
                         :columns="invoiceColumns"
@@ -488,14 +465,10 @@ const dinnerBreakdownStats = computed(() => {
                     <template #address-cell="{ row: invoiceRow }">{{ invoiceRow.original.address }}</template>
                     <template #amount-cell="{ row: invoiceRow }">{{ formatPrice(invoiceRow.original.amount) }} kr</template>
                     <template #control-cell="{ row: invoiceRow }">
-                      <UBadge v-if="invoiceRow.original.transactionSum === invoiceRow.original.amount" color="success" variant="subtle" :size="SIZES.small">
-                        <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(invoiceRow.original.transactionSum) }} kr
-                      </UBadge>
-                      <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
-                        <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(invoiceRow.original.transactionSum) }} kr ≠ {{ formatPrice(invoiceRow.original.amount) }} kr
-                      </UBadge>
+                      <ControlBadge
+                          :computed="invoiceRow.original.transactionSum"
+                          :expected="invoiceRow.original.amount"
+                      />
                     </template>
 
                     <!-- Expanded invoice: transactions table grouped by dinner -->
@@ -610,7 +583,8 @@ const dinnerBreakdownStats = computed(() => {
                       </div>
                     </template>
                   </UTable>
-                  </div>
+                    </template>
+                  </CostEntry>
 
                   <!-- Share & Download actions (closed periods only) -->
                   <div class="flex items-center gap-2 border-t pt-4">

@@ -13,6 +13,7 @@ import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {StatBox} from '~/components/economy/CostEntry.vue'
 
 interface Props {
     household: {id: number}
@@ -26,6 +27,26 @@ const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeri
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
+
+// Accessor functions for CostEntry (reusable lambdas)
+const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
+    period.isClosed ? 'PBS Faktura' : 'Aktuel periode'
+
+const periodSubtitleAccessor = (period: UnifiedBillingPeriod) =>
+    period.billingPeriod
+
+const periodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
+    {icon: ICONS.calendar, value: period.dinnerCount, label: 'Middage'},
+    {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
+    {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
+]
+
+const periodControlSumAccessor = (period: UnifiedBillingPeriod) => ({
+    computed: period.transactionSum,
+    expected: period.totalAmount
+})
+
+const periodItemsAccessor = (period: UnifiedBillingPeriod) => period.groups
 
 // Stores for dinner events (for date/menu info)
 const planStore = usePlanStore()
@@ -327,85 +348,58 @@ const upcomingPeriodStart = computed(() => {
           </template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #control-cell="{ row }">
-            <!-- Control sum: Σ transaction amounts vs stored totalAmount -->
-            <UBadge v-if="row.original.transactionSum === row.original.totalAmount" color="success" variant="subtle" :size="SIZES.small">
-              <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-              {{ formatPrice(row.original.transactionSum) }} kr
-            </UBadge>
-            <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
-              <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-              {{ formatPrice(row.original.transactionSum) }} kr ≠ {{ formatPrice(row.original.totalAmount) }} kr
-            </UBadge>
+            <ControlBadge :computed="row.original.transactionSum" :expected="row.original.totalAmount"/>
           </template>
           <template #expanded="{ row }">
-            <div class="ml-2 md:ml-8 mr-2 md:mr-4 my-2 rounded-lg overflow-hidden border border-default">
-              <!-- Stat header (Level 1 - Ocean palette) -->
-              <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level1.header]">
-                <div class="md:mr-8">
-                  <h4 :class="TYPOGRAPHY.cardTitle">{{ row.original.isClosed ? 'PBS Faktura' : 'Aktuel periode' }}</h4>
-                  <p :class="TYPOGRAPHY.bodyTextMuted">{{ row.original.billingPeriod }}</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                    <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level1.icon"/>
-                    <div class="text-center">
-                      <p class="font-semibold">{{ row.original.dinnerCount }}</p>
-                      <p class="text-xs text-muted">Middage</p>
-                    </div>
-                  </div>
-                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                    <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level1.icon"/>
-                    <div class="text-center">
-                      <p class="font-semibold">{{ row.original.ticketCounts }}</p>
-                      <p class="text-xs text-muted">Kuverter</p>
-                    </div>
-                  </div>
-                  <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level1.statBox]">
-                    <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level1.icon"/>
-                    <div class="text-center">
-                      <p class="font-semibold">{{ formatPrice(row.original.totalAmount) }} kr</p>
-                      <p class="text-xs text-muted">Total</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- Dinner breakdown table (same pattern as AdminEconomy) -->
-              <UTable
-                  :data="row.original.groups"
-                  :columns="dinnerColumns"
-                  :ui="{...COMPONENTS.table.ui, thead: COMPONENTS.economyTable.level2.header}"
-                  row-key="dinnerEventId"
-              >
-                <template #expand-cell="{ row: dinnerRow }">
-                  <UButton
-                      v-if="dinnerRow.original.items.length > 0"
-                      color="neutral"
-                      variant="ghost"
-                      :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
-                      square
-                      :size="SIZES.small"
-                      aria-label="Vis ordrer"
-                      @click="dinnerRow.toggleExpanded()"
-                  />
-                </template>
-                <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
-                <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
-
-                <!-- Expanded dinner: individual transactions with history -->
-                <template #expanded="{ row: dinnerRow }">
-                  <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
-                    <CostLine
-                        v-for="tx in dinnerRow.original.items"
-                        :key="tx.id"
-                        :item="tx"
-                        :history-order-id="historyOrderId"
-                        compact
-                        @toggle-history="toggleHistory"
+            <CostEntry
+                :entry="row.original"
+                :level="1"
+                :title-accessor="periodTitleAccessor"
+                :subtitle-accessor="periodSubtitleAccessor"
+                :stats-accessor="periodStatsAccessor"
+                :control-sum-accessor="periodControlSumAccessor"
+                :items-accessor="periodItemsAccessor"
+                class="ml-2 md:ml-8 mr-2 md:mr-4 my-2"
+            >
+              <template #default="{ items }">
+                <!-- Dinner breakdown table (ocean palette to match Level 1 header) -->
+                <UTable
+                    :data="items"
+                    :columns="dinnerColumns"
+                    :ui="{...COMPONENTS.table.ui, thead: 'bg-ocean-100 dark:bg-ocean-900'}"
+                    row-key="dinnerEventId"
+                >
+                  <template #expand-cell="{ row: dinnerRow }">
+                    <UButton
+                        v-if="dinnerRow.original.items.length > 0"
+                        color="neutral"
+                        variant="ghost"
+                        :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                        square
+                        :size="SIZES.small"
+                        aria-label="Vis ordrer"
+                        @click="dinnerRow.toggleExpanded()"
                     />
-                  </div>
-                </template>
-              </UTable>
-            </div>
+                  </template>
+                  <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
+                  <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
+
+                  <!-- Expanded dinner: individual transactions with history -->
+                  <template #expanded="{ row: dinnerRow }">
+                    <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
+                      <CostLine
+                          v-for="tx in dinnerRow.original.items"
+                          :key="tx.id"
+                          :item="tx"
+                          :history-order-id="historyOrderId"
+                          compact
+                          @toggle-history="toggleHistory"
+                      />
+                    </div>
+                  </template>
+                </UTable>
+              </template>
+            </CostEntry>
           </template>
           <template #empty>
             <UAlert
