@@ -22,7 +22,7 @@ const props = defineProps<Props>()
 
 // Composables
 const {formatPrice} = useTicket()
-const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod} = useBilling()
+const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
 const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
@@ -158,6 +158,12 @@ const upcomingTotal = computed(() =>
     upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
 
+// Helper to get ticket counts string from an invoice's groups
+const getInvoiceTicketCounts = (groups: CostEntry<TransactionDisplay>[]) => {
+    const allTx = groups.flatMap(g => g.items)
+    return formatTicketCounts(allTx)
+}
+
 // Upcoming period starts after current billing period
 const upcomingPeriodStart = computed(() => {
     const currentPeriod = calculateCurrentBillingPeriod()
@@ -212,10 +218,7 @@ const upcomingPeriodStart = computed(() => {
                 <CostLine
                     v-for="order in row.original.items"
                     :key="order.id"
-                    :inhabitant-name="order.inhabitant.name"
-                    :ticket-type="order.ticketType"
-                    :amount="order.priceAtBooking"
-                    :order-id="order.id"
+                    :item="order"
                     :history-order-id="historyOrderId"
                     @toggle-history="toggleHistory"
                 />
@@ -280,10 +283,7 @@ const upcomingPeriodStart = computed(() => {
                 <CostLine
                     v-for="tx in row.original.items"
                     :key="tx.id"
-                    :inhabitant-name="tx.inhabitant.name"
-                    :ticket-type="tx.ticketType"
-                    :amount="tx.amount"
-                    :order-id="tx.orderId"
+                    :item="tx"
                     :history-order-id="historyOrderId"
                     @toggle-history="toggleHistory"
                 />
@@ -338,7 +338,38 @@ const upcomingPeriodStart = computed(() => {
           </template>
           <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
           <template #expanded="{ row }">
-            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
+            <div class="ml-2 md:ml-8 mr-2 md:mr-4 my-2 rounded-lg overflow-hidden border border-default">
+              <!-- Stat header for invoice breakdown -->
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-ocean-100 dark:bg-ocean-900">
+                <div class="md:mr-8">
+                  <h4 :class="TYPOGRAPHY.cardTitle">PBS Opkrævet {{ row.original.paymentMonth }}</h4>
+                  <p :class="TYPOGRAPHY.bodyTextMuted">{{ row.original.billingPeriod }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                    <UIcon :name="ICONS.calendar" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                    <div class="text-center">
+                      <p class="font-semibold">{{ row.original.groups.length }}</p>
+                      <p class="text-xs text-muted">Middage</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                    <UIcon :name="ICONS.dinner" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                    <div class="text-center">
+                      <p class="font-semibold">{{ getInvoiceTicketCounts(row.original.groups) }}</p>
+                      <p class="text-xs text-muted">Kuverter</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                    <UIcon :name="ICONS.shoppingCart" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                    <div class="text-center">
+                      <p class="font-semibold">{{ formatPrice(row.original.amount) }} kr</p>
+                      <p class="text-xs text-muted">Total</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <UCard :ui="{ root: 'rounded-none border-none' }">
               <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
                 <CostEntry
                     v-for="group in row.original.groups"
@@ -349,10 +380,7 @@ const upcomingPeriodStart = computed(() => {
                     <CostLine
                         v-for="tx in items"
                         :key="tx.id"
-                        :inhabitant-name="tx.inhabitant.name"
-                        :ticket-type="tx.ticketType"
-                        :amount="tx.amount"
-                        :order-id="tx.orderId"
+                        :item="tx"
                         :history-order-id="historyOrderId"
                         compact
                         @toggle-history="toggleHistory"
@@ -361,6 +389,7 @@ const upcomingPeriodStart = computed(() => {
                 </CostEntry>
               </div>
             </UCard>
+            </div>
           </template>
         </EconomyTable>
       </UCard>

@@ -29,6 +29,12 @@ export const useBillingValidation = () => {
     // ============================================================================
 
     /**
+     * Ticket counts by type - raw data from repository
+     * Keys are TicketType enum values
+     */
+    const TicketCountsByTypeSchema = z.record(TicketTypeSchema, z.number().int())
+
+    /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
      * billingPeriod format: "dd/MM/yyyy-dd/MM/yyyy" (formatDateRange)
      * invoiceSum is computed from invoices for control sum display
@@ -41,6 +47,8 @@ export const useBillingValidation = () => {
         invoiceSum: z.number().int(), // øre - Σ invoice.amount for control sum
         householdCount: z.number().int(),
         ticketCount: z.number().int(),
+        dinnerCount: z.number().int(), // # unique dinner events
+        ticketCountsByType: TicketCountsByTypeSchema, // { ADULT: 200, CHILD: 50, BABY: 1 }
         cutoffDate: z.coerce.date(),
         paymentDate: z.coerce.date(),
         createdAt: z.coerce.date()
@@ -49,6 +57,7 @@ export const useBillingValidation = () => {
     /**
      * Invoice Display - full invoice from Prisma schema
      * pbsId and address are frozen at billing time for immutability
+     * transactionSum is computed from related transactions for control display
      */
     const InvoiceDisplaySchema = z.object({
         id: z.number().int(),
@@ -56,6 +65,7 @@ export const useBillingValidation = () => {
         paymentDate: z.coerce.date(),
         billingPeriod: z.string(),
         amount: z.number().int(),
+        transactionSum: z.number().int(), // Σ transaction.amount for control sum
         createdAt: z.coerce.date(),
         householdId: z.number().int().nullable(),
         billingPeriodSummaryId: z.number().int().nullable(),
@@ -63,7 +73,7 @@ export const useBillingValidation = () => {
         address: z.string()
     })
 
-    const InvoiceCreateSchema = InvoiceDisplaySchema.omit({id: true, createdAt: true})
+    const InvoiceCreateSchema = InvoiceDisplaySchema.omit({id: true, createdAt: true, transactionSum: true})
 
     /**
      * BillingPeriodSummary Detail - for detail endpoints (comprehensive)
@@ -344,7 +354,8 @@ export const useBillingValidation = () => {
     // ============================================================================
 
     const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
-        id: true, createdAt: true, shareToken: true
+        id: true, createdAt: true, shareToken: true,
+        invoiceSum: true, dinnerCount: true, ticketCountsByType: true  // Computed on read, not stored
     })
 
     const BillingPeriodSummaryIdSchema = BillingPeriodSummaryDisplaySchema.pick({id: true})
@@ -514,6 +525,120 @@ export const useBillingValidation = () => {
         })
     }
 
+    /**
+     * Deserialize order snapshot from JSON string.
+     */
+    const deserializeOrderSnapshot = (orderSnapshot: string) =>
+        OrderSnapshotSchema.parse(JSON.parse(orderSnapshot))
+
+    /**
+     * Raw billing period from Prisma (before transformation).
+     * Invoices contain transactions with orderSnapshot for computing derived fields.
+     */
+    type RawBillingPeriod = {
+        id: number
+        billingPeriod: string
+        shareToken: string
+        totalAmount: number
+        householdCount: number
+        ticketCount: number
+        cutoffDate: Date
+        paymentDate: Date
+        createdAt: Date
+        invoices: Array<{
+            id: number
+            amount: number
+            cutoffDate: Date
+            paymentDate: Date
+            billingPeriod: string
+            createdAt: Date
+            householdId: number | null  // Nullable per Prisma schema
+            billingPeriodSummaryId: number | null  // Nullable per Prisma schema
+            pbsId: number
+            address: string
+            transactions: Array<{amount: number, orderSnapshot: string}>
+        }>
+    }
+
+    /**
+     * Compute derived stats from order snapshots.
+     * Pure function - extracts dinnerCount and ticketCountsByType.
+     */
+    const computeStatsFromSnapshots = (invoices: Array<{transactions: Array<{orderSnapshot: string}>}>) => {
+        const snapshots = invoices
+            .flatMap(inv => inv.transactions)
+            .map(tx => { try { return deserializeOrderSnapshot(tx.orderSnapshot) } catch { return null } })
+            .filter((s): s is NonNullable<typeof s> => s !== null)
+
+        const dinnerCount = new Set(snapshots.map(s => s.dinnerEvent.id)).size
+        const ticketCountsByType: Record<string, number> = {}
+        for (const s of snapshots) {
+            if (s.ticketType) ticketCountsByType[s.ticketType] = (ticketCountsByType[s.ticketType] ?? 0) + 1
+        }
+        return {dinnerCount, ticketCountsByType}
+    }
+
+    /**
+     * Deserialize billing period display from raw Prisma data.
+     * Computes dinnerCount and ticketCountsByType from order snapshots.
+     */
+    const deserializeBillingPeriodDisplay = (raw: RawBillingPeriod): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices)
+        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        return BillingPeriodSummaryDisplaySchema.parse({...raw, invoiceSum, dinnerCount, ticketCountsByType})
+    }
+
+    /**
+     * Deserialize billing period detail from raw Prisma data.
+     * Computes all derived fields including per-invoice transactionSum.
+     */
+    const deserializeBillingPeriodDetail = (raw: RawBillingPeriod | null): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
+        if (!raw) return null
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices)
+        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoices = raw.invoices.map(inv => deserializeInvoice(inv))
+        return BillingPeriodSummaryDetailSchema.parse({...raw, invoices, invoiceSum, dinnerCount, ticketCountsByType})
+    }
+
+    /**
+     * Raw invoice from Prisma (before transformation).
+     * Includes transactions for computing transactionSum.
+     */
+    type RawInvoice = {
+        id: number
+        amount: number
+        cutoffDate: Date
+        paymentDate: Date
+        billingPeriod: string
+        createdAt: Date
+        householdId: number | null
+        billingPeriodSummaryId: number | null
+        pbsId: number
+        address: string
+        transactions: Array<{amount: number, orderId?: number | null}>
+    }
+
+    /**
+     * Deserialize invoice from raw Prisma data.
+     * Computes transactionSum from related transactions.
+     */
+    const deserializeInvoice = (raw: RawInvoice): z.infer<typeof InvoiceDisplaySchema> => {
+        const {transactions, ...inv} = raw
+        const transactionSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+        // DEBUG: Log if transactionSum doesn't match invoice amount (remove after investigation)
+        if (transactionSum !== inv.amount && transactionSum === inv.amount * 2) {
+            const withOrderId = transactions.filter(tx => tx.orderId !== null && tx.orderId !== undefined).length
+            const orphans = transactions.length - withOrderId
+            console.warn(`💰 > BILLING > [DUPLICATE_TX] Invoice ${inv.id}: txCount=${transactions.length}, withOrderId=${withOrderId}, orphans=${orphans}`)
+        }
+
+        return InvoiceDisplaySchema.parse({
+            ...inv,
+            transactionSum
+        })
+    }
+
     return {
         // Enums
         TicketTypeSchema,
@@ -526,6 +651,7 @@ export const useBillingValidation = () => {
         // BillingPeriodSummary Schemas (ADR-009)
         BillingPeriodSummaryDisplaySchema,
         BillingPeriodSummaryDetailSchema,
+        TicketCountsByTypeSchema,
         InvoiceDisplaySchema,
         InvoiceCreateSchema,
         PublicBillingViewSchema,
@@ -569,8 +695,11 @@ export const useBillingValidation = () => {
         OrderSnapshotSchema,
         serializeTransaction,
         deserializeTransaction,
-        deserializeBillingPeriodDisplay: (data: unknown) => BillingPeriodSummaryDisplaySchema.parse(data),
-        deserializeBillingPeriodDetail: (data: unknown) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
+        deserializeOrderSnapshot,
+        computeStatsFromSnapshots,
+        deserializeBillingPeriodDisplay,
+        deserializeBillingPeriodDetail,
+        deserializeInvoice
     }
 }
 
@@ -581,6 +710,7 @@ export const useBillingValidation = () => {
 // BillingPeriodSummary types (ADR-009)
 export type BillingPeriodSummaryDisplay = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDisplaySchema']>
 export type BillingPeriodSummaryDetail = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDetailSchema']>
+export type TicketCountsByType = z.infer<ReturnType<typeof useBillingValidation>['TicketCountsByTypeSchema']>
 export type InvoiceDisplay = z.infer<ReturnType<typeof useBillingValidation>['InvoiceDisplaySchema']>
 export type InvoiceCreate = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreateSchema']>
 export type PublicBillingView = z.infer<ReturnType<typeof useBillingValidation>['PublicBillingViewSchema']>

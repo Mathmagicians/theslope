@@ -1536,20 +1536,27 @@ export async function linkTransactionsToInvoice(
 }
 
 /**
- * Fetch invoices for a billing period
+ * Fetch invoices for a billing period.
+ * Used by generateBilling for reconciliation - only needs basic invoice data for lookup.
+ * Returns InvoiceDisplay with transactionSum computed from related transactions.
+ *
+ * ADR-010: Uses deserializeInvoice for consistent transformation
  */
 export async function fetchInvoicesForBillingPeriod(
     d1Client: D1Database,
     billingPeriodSummaryId: number
 ): Promise<InvoiceDisplay[]> {
-    const {InvoiceDisplaySchema} = useBillingValidation()
+    const {deserializeInvoice} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const invoices = await prisma.invoice.findMany({
-        where: {billingPeriodSummaryId}
+        where: {billingPeriodSummaryId},
+        include: {
+            transactions: {select: {amount: true}}
+        }
     })
 
-    return invoices.map(inv => InvoiceDisplaySchema.parse(inv))
+    return invoices.map(inv => deserializeInvoice(inv))
 }
 
 /**

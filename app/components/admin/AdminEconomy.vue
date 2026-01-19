@@ -15,11 +15,10 @@ import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValida
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 
 const {formatPrice} = useTicket()
-const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, controlTransactions} = useBilling()
+const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
 const {splitDinnerEvents} = useSeason()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
-const {OrderStateSchema, OrderDisplaySchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
+const {OrderDisplaySchema} = useBookingValidation()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
@@ -28,8 +27,13 @@ planStore.initPlanStore()
 
 // Households store for inhabitant name lookup
 const householdsStore = useHouseholdsStore()
-const {allInhabitants} = storeToRefs(householdsStore)
+const {households} = storeToRefs(householdsStore)
 householdsStore.initHouseholdsStore()
+
+// Derive all inhabitants from all households
+const allInhabitants = computed(() =>
+    households.value.flatMap(h => h.inhabitants)
+)
 
 // Bookings store for billing data (ADR-007)
 const bookingsStore = useBookingsStore()
@@ -143,13 +147,15 @@ interface UnifiedBillingPeriod {
     cutoffDate: Date | null     // Opgørelsesdato (null for virtual)
     paymentDate: Date | null    // PBS opkræves (null for virtual)
     householdCount: number
+    dinnerCount: number         // # unique dinner events
+    ticketCounts: string        // "2V 1B" format
     totalAmount: number
     invoiceSum: number | null   // Σ invoice.amount for control sum (null for virtual)
     shareToken?: string
 }
 
 const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
-    // Virtual row (current period)
+    // Virtual row (current period) - use already-grouped data
     const virtualRow: UnifiedBillingPeriod = {
         id: 'virtual',
         isVirtual: true,
@@ -157,6 +163,8 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
         cutoffDate: null,
         paymentDate: null,
         householdCount: currentPeriodHouseholdCount.value,
+        dinnerCount: currentPeriodGrouped.value.length,
+        ticketCounts: formatTicketCounts(currentPeriodTransactions.value),
         totalAmount: currentPeriodTotal.value,
         invoiceSum: null  // No invoices for virtual (ongoing)
     }
@@ -175,8 +183,10 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
             cutoffDate: bp.cutoffDate,
             paymentDate: bp.paymentDate,
             householdCount: bp.householdCount,
+            dinnerCount: bp.dinnerCount,
+            ticketCounts: formatTicketCounts(bp.ticketCountsByType),
             totalAmount: bp.totalAmount,
-            invoiceSum: bp.invoiceSum,  // Pre-computed for control sum display
+            invoiceSum: bp.invoiceSum,
             shareToken: bp.shareToken
         }
     })
@@ -191,6 +201,8 @@ const periodColumns = [
     {id: 'expand'},
     {accessorKey: 'status', header: 'Status'},
     {accessorKey: 'period', header: 'Periode'},
+    {accessorKey: 'dinnerCount', header: 'Middage'},
+    {accessorKey: 'ticketCounts', header: 'Kuverter'},
     {accessorKey: 'householdCount', header: 'Husstande'},
     {accessorKey: 'totalAmount', header: 'Omsætning'},
     {accessorKey: 'control', header: 'Kontrol'},
@@ -203,28 +215,11 @@ const invoiceColumns = [
     {accessorKey: 'pbsId', header: 'PBS'},
     {accessorKey: 'address', header: 'Adresse'},
     {accessorKey: 'amount', header: 'Beløb'},
-    {accessorKey: 'control', header: 'Kontrol (Σtx)'}
+    {accessorKey: 'control', header: 'Kontrol'}
 ]
 
 // Nested table expansion state (for invoices)
 const {expanded: expandedInvoiceRows} = useExpandableRow()
-
-// Track which invoice is currently loaded (for control sum display)
-const loadedInvoiceId = ref<number | null>(null)
-
-// Control sum for loaded invoice's transactions
-const invoiceControlSum = computed(() => {
-    if (!loadedInvoiceId.value) return null
-    const invoice = selectedBillingPeriodDetail.value?.invoices.find(i => i.id === loadedInvoiceId.value)
-    if (!invoice) return null
-    return controlTransactions(selectedInvoiceTransactions.value, invoice.amount)
-})
-
-// Get control sum result for an invoice (null if not loaded)
-const getInvoiceControl = (invoiceId: number) => {
-    if (loadedInvoiceId.value !== invoiceId) return null
-    return invoiceControlSum.value
-}
 
 // Control sum for billing period (Σ invoices vs period total)
 const billingPeriodControlSum = computed(() => {
@@ -237,6 +232,17 @@ const historyOrderId = ref<number | null>(null)
 const toggleHistory = (orderId: number | null) => {
     historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
+
+// Dinner breakdown stats (for caption in expanded invoice view)
+const dinnerBreakdownStats = computed(() => {
+    const groups = invoiceTransactionsGrouped.value
+    const allTx = groups.flatMap(g => g.items)
+    return {
+        dinnerCount: groups.length,
+        ticketCounts: formatTicketCounts(allTx),
+        total: groups.reduce((sum, g) => sum + g.totalAmount, 0)
+    }
+})
 
 </script>
 
@@ -281,12 +287,8 @@ const toggleHistory = (orderId: number | null) => {
                 <CostLine
                     v-for="order in row.original.items"
                     :key="order.id"
-                    :inhabitant-name="order.inhabitant.name"
-                    :ticket-type="order.ticketType"
-                    :amount="order.priceAtBooking"
-                    :order-id="order.id"
+                    :item="order"
                     :history-order-id="historyOrderId"
-                    :order="order"
                     @toggle-history="toggleHistory"
                 />
               </div>
@@ -326,7 +328,7 @@ const toggleHistory = (orderId: number | null) => {
             row-key="id"
             :date-accessor="(item) => item.period.start"
             search-placeholder="Søg periode..."
-            :loading="isCurrentPeriodLoading"
+            :loading="isBillingPeriodsLoading || isCurrentPeriodLoading"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -391,10 +393,7 @@ const toggleHistory = (orderId: number | null) => {
                       <CostLine
                           v-for="tx in items"
                           :key="tx.id"
-                          :inhabitant-name="tx.inhabitant.name"
-                          :ticket-type="tx.ticketType"
-                          :amount="tx.amount"
-                          :order-id="tx.orderId"
+                          :item="tx"
                           :history-order-id="historyOrderId"
                           compact
                           @toggle-history="toggleHistory"
@@ -417,64 +416,156 @@ const toggleHistory = (orderId: number | null) => {
                 <Loader v-if="isBillingPeriodDetailLoading" text="Henter fakturadetaljer..."/>
 
                 <template v-else-if="selectedBillingPeriodDetail">
-                  <!-- Nested UTable for invoices -->
-                  <UTable
-                      v-model:expanded="expandedInvoiceRows"
-                      :data="selectedBillingPeriodDetail.invoices"
-                      :columns="invoiceColumns"
-                      :ui="COMPONENTS.table.ui"
-                      row-key="id"
-                  >
-                    <template #expand-cell="{ row }">
+                  <!-- Invoice table with integrated header -->
+                  <div class="rounded-lg overflow-hidden border border-default">
+                    <!-- Header row: title + stat boxes -->
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-ocean-50 dark:bg-ocean-800">
+                      <div class="md:mr-8">
+                        <h4 :class="TYPOGRAPHY.cardTitle">Samlet PBS Afregning</h4>
+                        <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDateRange(row.original.period) }}</p>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                          <UIcon :name="ICONS.household" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                          <div class="text-center">
+                            <p class="font-semibold">{{ row.original.householdCount }}</p>
+                            <p class="text-xs text-muted">Husstande</p>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                          <UIcon :name="ICONS.calendar" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                          <div class="text-center">
+                            <p class="font-semibold">{{ row.original.dinnerCount }}</p>
+                            <p class="text-xs text-muted">Middage</p>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                          <UIcon :name="ICONS.dinner" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                          <div class="text-center">
+                            <p class="font-semibold">{{ row.original.ticketCounts }}</p>
+                            <p class="text-xs text-muted">Kuverter</p>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                          <UIcon :name="ICONS.shoppingCart" class="text-xl text-ocean-600 dark:text-ocean-400"/>
+                          <div class="text-center">
+                            <p class="font-semibold">{{ formatPrice(row.original.totalAmount) }} kr</p>
+                            <p class="text-xs text-muted">Total</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Invoice table -->
+                    <UTable
+                        v-model:expanded="expandedInvoiceRows"
+                        :data="selectedBillingPeriodDetail.invoices"
+                        :columns="invoiceColumns"
+                        :ui="COMPONENTS.table.ui"
+                        row-key="id"
+                    >
+                    <template #expand-cell="{ row: invoiceRow }">
                       <UButton
                           color="neutral"
                           variant="ghost"
-                          :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                          :icon="invoiceRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
                           aria-label="Vis transaktioner"
-                          @click="row.toggleExpanded(); loadedInvoiceId = row.original.id; loadInvoiceTransactions(row.original.id)"
+                          @click="invoiceRow.toggleExpanded(); loadInvoiceTransactions(invoiceRow.original.id)"
                       />
                     </template>
                     <template #pbsId-cell="{ row }">{{ row.original.pbsId }}</template>
                     <template #address-cell="{ row }">{{ row.original.address }}</template>
                     <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
                     <template #control-cell="{ row }">
-                      <span v-if="!getInvoiceControl(row.original.id)" class="text-neutral-400">—</span>
-                      <span v-else-if="getInvoiceControl(row.original.id)?.isValid" class="text-success-600 dark:text-success-400 flex items-center gap-1">
+                      <UBadge v-if="row.original.transactionSum === row.original.amount" color="success" variant="subtle" :size="SIZES.small">
                         <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(getInvoiceControl(row.original.id)!.computed) }} kr
-                      </span>
-                      <span v-else class="text-error-600 dark:text-error-400 flex items-center gap-1">
+                        {{ formatPrice(row.original.transactionSum) }} kr
+                      </UBadge>
+                      <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
                         <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                        {{ formatPrice(getInvoiceControl(row.original.id)!.computed) }} kr
-                      </span>
+                        {{ formatPrice(row.original.transactionSum) }} kr ≠ {{ formatPrice(row.original.amount) }} kr
+                      </UBadge>
                     </template>
 
-                    <!-- Expanded invoice: transactions grouped by dinner -->
-                    <template #expanded>
-                      <div class="p-3 bg-white dark:bg-neutral-950">
-                        <Loader v-if="isInvoiceTransactionsLoading" text="Henter transaktioner..."/>
-                        <div v-else-if="invoiceTransactionsGrouped.length > 0" class="space-y-2">
-                          <CostEntry
-                              v-for="group in invoiceTransactionsGrouped"
-                              :key="group.dinnerEventId"
-                              :entry="group"
+                    <!-- Expanded invoice: transactions table grouped by dinner -->
+                    <template #expanded="{ row: invoiceRow }">
+                      <div class="p-2 bg-neutral-100 dark:bg-neutral-800">
+                        <!-- Level 2: Dinner breakdown with stat box header -->
+                        <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" class="rounded-lg overflow-hidden border border-default">
+                          <!-- Header row: title + stat boxes -->
+                          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-peach-100 dark:bg-peach-900">
+                            <div class="md:mr-8">
+                              <h4 :class="TYPOGRAPHY.cardTitle">PBS Faktura for {{ formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy') }}</h4>
+                              <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · PBS {{ invoiceRow.original.pbsId }}</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                                <UIcon :name="ICONS.calendar" class="text-xl text-peach-600 dark:text-peach-400"/>
+                                <div class="text-center">
+                                  <p class="font-semibold">{{ dinnerBreakdownStats.dinnerCount }}</p>
+                                  <p class="text-xs text-muted">Middage</p>
+                                </div>
+                              </div>
+                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                                <UIcon :name="ICONS.dinner" class="text-xl text-peach-600 dark:text-peach-400"/>
+                                <div class="text-center">
+                                  <p class="font-semibold">{{ dinnerBreakdownStats.ticketCounts }}</p>
+                                  <p class="text-xs text-muted">Kuverter</p>
+                                </div>
+                              </div>
+                              <div class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-neutral-900 rounded-lg">
+                                <UIcon :name="ICONS.shoppingCart" class="text-xl text-peach-600 dark:text-peach-400"/>
+                                <div class="text-center">
+                                  <p class="font-semibold">{{ formatPrice(dinnerBreakdownStats.total) }} kr</p>
+                                  <p class="text-xs text-muted">Total</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <!-- Dinner breakdown table -->
+                          <UTable
+                              :data="invoiceTransactionsGrouped"
+                              :columns="[
+                                {id: 'expand'},
+                                {accessorKey: 'date', header: 'Dato'},
+                                {accessorKey: 'menuTitle', header: 'Menu'},
+                                {accessorKey: 'ticketCounts', header: 'Kuverter'},
+                                {accessorKey: 'totalAmount', header: 'Beløb'}
+                              ]"
+                              :ui="{...COMPONENTS.table.ui, thead: 'bg-peach-100 dark:bg-peach-900'}"
+                              :loading="isInvoiceTransactionsLoading"
+                              row-key="dinnerEventId"
                           >
-                            <template #items="{ items }">
+                          <template #expand-cell="{ row: dinnerRow }">
+                            <UButton
+                                v-if="dinnerRow.original.items.length > 0"
+                                color="neutral"
+                                variant="ghost"
+                                :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                                square
+                                :size="SIZES.small"
+                                aria-label="Vis ordrer"
+                                @click="dinnerRow.toggleExpanded()"
+                            />
+                          </template>
+                          <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
+                          <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
+
+                          <!-- Expanded dinner: individual transactions with history -->
+                          <template #expanded="{ row: dinnerRow }">
+                            <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
                               <CostLine
-                                  v-for="tx in items"
+                                  v-for="tx in dinnerRow.original.items"
                                   :key="tx.id"
-                                  :inhabitant-name="tx.inhabitant.name"
-                                  :ticket-type="tx.ticketType"
-                                  :amount="tx.amount"
-                                  :order-id="tx.orderId"
+                                  :item="tx"
                                   :history-order-id="historyOrderId"
                                   compact
                                   @toggle-history="toggleHistory"
                               />
-                            </template>
-                          </CostEntry>
+                            </div>
+                          </template>
+                        </UTable>
                         </div>
                         <UAlert
                             v-else
@@ -509,6 +600,7 @@ const toggleHistory = (orderId: number | null) => {
                       </div>
                     </template>
                   </UTable>
+                  </div>
 
                   <!-- Share & Download actions (closed periods only) -->
                   <div class="flex items-center gap-2 border-t pt-4">

@@ -20,19 +20,25 @@ export const useBilling = () => {
 
     /**
      * Format ticket counts for display (e.g., "2V 1B")
-     * Generic: accepts any array of objects with ticketType (TransactionDisplay, OrderDisplay, etc.)
+     * Accepts either:
+     * - Array of items with ticketType (TransactionDisplay, OrderDisplay, etc.)
+     * - Pre-computed counts map from repository { ADULT: 200, CHILD: 50, BABY: 1 }
      */
-    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(items: T[]): string => {
-        const counts = {adult: 0, child: 0, baby: 0}
-        for (const item of items) {
-            if (item.ticketType === TicketType.ADULT) counts.adult++
-            else if (item.ticketType === TicketType.CHILD) counts.child++
-            else if (item.ticketType === TicketType.BABY) counts.baby++
-        }
+    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
+        input: T[] | Partial<Record<TicketType, number>>
+    ): string => {
+        // Build counts map from array, or use directly if already a map
+        const counts: Partial<Record<TicketType, number>> = Array.isArray(input)
+            ? input.reduce((acc, item) => {
+                if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
+                return acc
+            }, {} as Partial<Record<TicketType, number>>)
+            : input
+
         const parts: string[] = []
-        if (counts.adult > 0) parts.push(`${counts.adult}V`)
-        if (counts.child > 0) parts.push(`${counts.child}B`)
-        if (counts.baby > 0) parts.push(`${counts.baby}b`)
+        if (counts[TicketType.ADULT]) parts.push(`${counts[TicketType.ADULT]}V`)
+        if (counts[TicketType.CHILD]) parts.push(`${counts[TicketType.CHILD]}B`)
+        if (counts[TicketType.BABY]) parts.push(`${counts[TicketType.BABY]}b`)
         return parts.join(' ') || '-'
     }
 

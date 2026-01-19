@@ -22,12 +22,26 @@ const token = computed(() => route.params.token as string)
 
 const {formatPrice} = useTicket()
 const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
-const {deserializeBillingPeriodDetail} = useBillingValidation()
+const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
+const {handleApiError} = useApiHandler()
 
 // Fetch billing data (no auth required)
+// Transform: parse schema to coerce date strings → Date objects (API returns already-deserialized data)
 const {data: billing, status, error} = useFetch<BillingPeriodSummaryDetail | null>(
     `/api/public/billing/${token.value}`,
-    {key: `public-billing-${token.value}`, default: () => null, transform: deserializeBillingPeriodDetail}
+    {
+        key: `public-billing-${token.value}`,
+        default: () => null,
+        transform: (data) => {
+            if (!data) return null
+            try {
+                return BillingPeriodSummaryDetailSchema.parse(data)
+            } catch (e) {
+                handleApiError(e, 'PUBLIC_BILLING > transform')
+                throw e
+            }
+        }
+    }
 )
 
 const isLoading = computed(() => status.value === 'pending')
@@ -129,7 +143,7 @@ const columns = [
               :ui="COMPONENTS.table.ui"
           >
             <template #amount-cell="{ row }">
-              {{ formatPrice((row.original as InvoiceDisplay).amount) }} kr
+              <div class="text-right">{{ formatPrice((row.original as InvoiceDisplay).amount) }} kr</div>
             </template>
           </UTable>
 

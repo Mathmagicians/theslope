@@ -1,8 +1,10 @@
 import {describe, it, expect} from 'vitest'
 import {isSameDay} from 'date-fns'
 import {useBilling} from '~/composables/useBilling'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
+import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 describe('useBilling', () => {
     const {
@@ -11,8 +13,11 @@ describe('useBilling', () => {
         getBillingPeriodForDate,
         controlInvoices,
         controlTransactions,
-        controlOrders
+        controlOrders,
+        formatTicketCounts
     } = useBilling()
+    const {TicketTypeSchema} = useBookingValidation()
+    const TicketType = TicketTypeSchema.enum
 
     // Cutoff day is 17 (from app.config.ts)
     // Period: 18th of month N to 17th of month N+1
@@ -78,9 +83,8 @@ describe('useBilling', () => {
 
     describe('controlInvoices', () => {
         const makeInvoice = (amount: number): InvoiceDisplay => ({
-            id: 1, amount, cutoffDate: new Date(), paymentDate: new Date(),
-            billingPeriod: '18/01-17/02', createdAt: new Date(),
-            householdId: 1, billingPeriodSummaryId: 1, pbsId: 100, address: 'Test 1'
+            ...BillingFactory.defaultInvoiceData('control-test'),
+            amount
         })
 
         it.each([
@@ -124,7 +128,7 @@ describe('useBilling', () => {
     describe('controlOrders', () => {
         const makeOrder = (priceAtBooking: number, ticketType: 'ADULT' | 'CHILD' | 'BABY'): OrderDisplay => ({
             id: 1, inhabitantId: 1, dinnerEventId: 1, ticketPriceId: 1,
-            bookedByUserId: 1, householdId: 1, dinnerMode: 'DINEIN',
+            bookedByUserId: 1, dinnerMode: 'DINEIN',
             state: 'BOOKED', priceAtBooking, isGuestTicket: false, ticketType,
             releasedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date()
         })
@@ -160,6 +164,39 @@ describe('useBilling', () => {
             expect(result.ticketCounts.computed).toBe('2V 1B 1b')
             expect(result.ticketCounts.isValid).toBe(true)
             expect(result.isValid).toBe(true)
+        })
+    })
+
+    // ========== FORMAT TICKET COUNTS TESTS ==========
+
+    describe('formatTicketCounts', () => {
+        const {ADULT, CHILD, BABY} = TicketType
+        const makeItem = (t: typeof TicketType[keyof typeof TicketType] | null) => ({ticketType: t})
+
+        describe('with array input', () => {
+            it.each([
+                ['adults only', [ADULT, ADULT, ADULT], '3V'],
+                ['children only', [CHILD, CHILD], '2B'],
+                ['babies only', [BABY], '1b'],
+                ['mixed types', [ADULT, ADULT, CHILD, BABY, BABY], '2V 1B 2b'],
+                ['empty array', [], '-'],
+                ['null ticketTypes ignored', [null, ADULT, null], '1V'],
+            ] as const)('%s → %s', (_, types, expected) => {
+                expect(formatTicketCounts(types.map(makeItem))).toBe(expected)
+            })
+        })
+
+        describe('with map input', () => {
+            it.each([
+                ['adults only', {[ADULT]: 200}, '200V'],
+                ['children only', {[CHILD]: 50}, '50B'],
+                ['babies only', {[BABY]: 5}, '5b'],
+                ['mixed types', {[ADULT]: 200, [CHILD]: 50, [BABY]: 1}, '200V 50B 1b'],
+                ['empty map', {}, '-'],
+                ['partial map', {[ADULT]: 100, [BABY]: 2}, '100V 2b'],
+            ] as const)('%s → %s', (_, counts, expected) => {
+                expect(formatTicketCounts(counts)).toBe(expected)
+            })
         })
     })
 })

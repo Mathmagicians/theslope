@@ -8,10 +8,46 @@ const {validatedBrowserContext} = testHelpers
  * Admin Billing API Tests
  *
  * Tests for admin economy tree view endpoints:
+ * - GET /api/admin/billing/periods - billing period summaries with computed control sums
+ * - GET /api/admin/billing/periods/[id] - billing period detail with invoice control sums
  * - GET /api/admin/billing/current-period - unbilled transactions
  * - GET /api/admin/billing/invoices/[id] - transactions per invoice
  */
 test.describe('Admin Billing API', () => {
+
+    test.describe('GET /api/admin/billing/periods', () => {
+
+        test('GIVEN billing period WHEN fetching THEN invoiceSum control matches totalAmount', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const periods = await BillingFactory.getBillingPeriods(context)
+
+            test.skip(periods.length === 0, 'No billing periods exist')
+
+            // Control sum: invoiceSum (Σ invoice.amount) should equal totalAmount
+            const period = periods[0]!
+            expect(period.invoiceSum).toBe(period.totalAmount)
+        })
+    })
+
+    test.describe('GET /api/admin/billing/periods/[id]', () => {
+
+        test('GIVEN billing period detail WHEN fetching THEN transactionSum equals Σ transactions', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const periods = await BillingFactory.getBillingPeriods(context)
+
+            test.skip(periods.length === 0, 'No billing periods exist')
+
+            const detail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+            test.skip(detail.invoices.length === 0, 'No invoices in billing period')
+
+            // Verify transactionSum is correctly computed from actual transactions
+            const invoice = detail.invoices[0]!
+            const transactions = await BillingFactory.getInvoiceTransactions(context, invoice.id)
+            const computedSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+            expect(invoice.transactionSum).toBe(computedSum)
+        })
+    })
 
     test.describe('GET /api/admin/billing/current-period', () => {
 

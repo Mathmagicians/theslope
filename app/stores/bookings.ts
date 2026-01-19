@@ -375,7 +375,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // BILLING PERIODS (ADR-007)
     // ========================================
 
-    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
+    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
 
     const {
         data: billingPeriods, status: billingPeriodsStatus,
@@ -385,7 +385,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             key: 'bookings-store-billing-periods',
             default: () => [],
-            transform: (data: unknown[]) => (data as unknown[]).map(deserializeBillingPeriodDisplay)
+            transform: (data: unknown[]) => (data as unknown[]).map(s => BillingPeriodSummaryDisplaySchema.parse(s))
         }
     )
 
@@ -408,7 +408,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         },
         {
             default: () => null,
-            transform: deserializeBillingPeriodDetail
+            transform: (data) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
         }
     )
 

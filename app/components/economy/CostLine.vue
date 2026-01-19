@@ -1,38 +1,39 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends CostLineItem">
 /**
  * CostLine - Individual line item in economy views
  *
- * Displays inhabitant name, ticket type, amount, and optional order history.
- * Used for both Transactions (billing) and Orders (live bookings).
+ * Generic component for both Transactions (billing) and Orders (live bookings).
+ * Shows inhabitant name, ticket type badge, amount, guest/state badges, and order history.
  *
- * Optionally shows order state (Bestilt/Frigivet/Gæst) for live order views.
- * Emits toggle-history for lazy-loading OrderHistoryDisplay.
+ * @generic T - Item type extending CostLineItem (OrderDisplay or TransactionDisplay)
  */
-import type {TicketType, OrderDisplay} from '~/composables/useBookingValidation'
+
+/**
+ * Minimal interface for CostLine items - both OrderDisplay and TransactionDisplay satisfy this
+ */
+export interface CostLineItem {
+    id: number
+    inhabitant: { name: string }
+    ticketType: string | null
+    orderId?: number | null      // For history lookup (transactions have this)
+    isGuestTicket?: boolean      // For guest badge
+    state?: string               // OrderState for live orders
+    // Amount fields - one of these will be present
+    amount?: number              // TransactionDisplay
+    priceAtBooking?: number      // OrderDisplay
+}
 
 interface Props {
-    /** Inhabitant name to display */
-    inhabitantName: string
-    /** Ticket type for label display */
-    ticketType: TicketType | null
-    /** Amount in øre */
-    amount: number
-    /** Order ID for history lookup (null if order deleted) */
-    orderId: number | null
+    /** The item to display */
+    item: T
     /** Currently expanded history order ID */
     historyOrderId: number | null
     /** Use compact typography (for nested displays) */
     compact?: boolean
-    /** Order object for state display (optional - for live order views) */
-    order?: OrderDisplay
-    /** Booker name for guest ticket display */
-    bookerName?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    compact: false,
-    order: undefined,
-    bookerName: undefined
+    compact: false
 })
 
 const emit = defineEmits<{
@@ -40,14 +41,26 @@ const emit = defineEmits<{
 }>()
 
 const {formatPrice, ticketTypeConfig} = useTicket()
-const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES} = useTheSlopeDesignSystem()
+const {orderStateConfig} = useOrder()
+const {TYPOGRAPHY, ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
 
-const isHistoryExpanded = computed(() => props.orderId && props.historyOrderId === props.orderId)
-const ticketLabel = computed(() => props.ticketType ? ticketTypeConfig[props.ticketType]?.label : 'Ukendt')
+// Extract fields from item
+// For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
+const orderId = computed(() => {
+    if (props.item.orderId !== undefined) {
+        return props.item.orderId  // transactions - use orderId (may be null)
+    }
+    return props.item.id  // orders - use own id for history
+})
+const isHistoryExpanded = computed(() => orderId.value && props.historyOrderId === orderId.value)
+const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType]?.label : 'Ukendt')
+const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType]?.color : 'neutral')
 
-// Order state display (when order prop is provided)
-const orderDisplay = computed(() => props.order ? formatOrder(props.order, props.bookerName) : null)
+// Amount - prefer priceAtBooking (orders) over amount (transactions)
+const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
+
+// State config for live orders
+const stateConfig = computed(() => props.item.state ? orderStateConfig[props.item.state] : null)
 </script>
 
 <template>
@@ -64,20 +77,21 @@ const orderDisplay = computed(() => props.order ? formatOrder(props.order, props
             aria-label="Vis ordrehistorik"
             @click="emit('toggle-history', orderId)"
         />
-        <span>{{ inhabitantName }} ({{ ticketLabel }})</span>
-        <!-- Order state badges -->
-        <template v-if="orderDisplay">
-          <UBadge v-if="orderDisplay.guest" :color="orderDisplay.guest.color" variant="subtle" :size="SIZES.small">
-            <UIcon :name="orderDisplay.guest.icon" :class="SIZES.smallBadgeIcon"/>
-            {{ orderDisplay.guest.label }}
-          </UBadge>
-          <UBadge :color="orderDisplay.stateColor" variant="subtle" :size="SIZES.small">
-            <UIcon :name="orderDisplay.stateIcon" :class="SIZES.smallBadgeIcon"/>
-            {{ orderDisplay.stateText }}
-          </UBadge>
-        </template>
+        <span>{{ item.inhabitant.name }}</span>
+        <!-- Ticket type badge -->
+        <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
+          {{ ticketLabel }}
+        </UBadge>
+        <!-- Guest badge -->
+        <UBadge v-if="item.isGuestTicket" :color="COLOR.info" variant="soft" :size="SIZES.small" :icon="ICONS.userPlus">
+          Gæst
+        </UBadge>
+        <!-- Order state badge (for live orders) -->
+        <UBadge v-if="stateConfig" :color="stateConfig.color" variant="soft" :size="SIZES.small" :icon="stateConfig.icon">
+          {{ stateConfig.label }}
+        </UBadge>
       </div>
-      <span :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(amount) }} kr</span>
+      <span :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(itemAmount) }} kr</span>
     </div>
     <div v-if="isHistoryExpanded" class="pl-4 md:pl-8 pt-1">
       <OrderHistoryDisplay :order-id="orderId!"/>

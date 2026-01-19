@@ -23,46 +23,73 @@ const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
 const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
 const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
-const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV} = useBillingValidation()
+const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV, deserializeBillingPeriodDetail, serializeTransaction} = useBillingValidation()
 
 export class BillingFactory {
 
     // ============================================================================
     // Default Test Data (for unit tests - no HTTP calls)
+    // Uses raw data with orderSnapshots, then deserializes to compute fields
     // ============================================================================
 
     /**
-     * Default invoice data for unit tests
-     * pbsId and address are denormalized (frozen at billing time)
+     * Create order snapshot JSON for test transactions
      */
-    static readonly defaultInvoiceData = (testSalt: string = 'default'): InvoiceDisplay => ({
-        id: 1,
-        cutoffDate: new Date('2025-11-17'),
-        paymentDate: new Date('2025-12-01'),
-        billingPeriod: '18/10/2025-17/11/2025',
-        amount: 116400, // 1164 DKK in øre
-        createdAt: new Date('2025-11-18'),
-        householdId: 1,
-        billingPeriodSummaryId: 1,
-        pbsId: 2053,
-        address: salt('Smedekildevej 42', testSalt)
-    })
+    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: 'ADULT' | 'CHILD' | 'BABY') =>
+        serializeTransaction({
+            dinnerEvent: {id: dinnerEventId, date: new Date('2025-11-10'), menuTitle: salt('Test Menu', testSalt)},
+            inhabitant: {id: 1, name: salt('Test Person', testSalt), household: {id: 1, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
+            ticketType
+        })
 
     /**
-     * Default billing period summary data for unit tests
+     * Default raw billing period data (before deserialization)
+     * Contains transactions with orderSnapshots for proper field computation
      */
-    static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => ({
+    private static readonly defaultRawBillingPeriod = (testSalt: string = 'default') => ({
         id: 1,
         billingPeriod: '18/10/2025-17/11/2025',
-        totalAmount: 3245000, // 32450 DKK in øre
-        householdCount: 44,
-        ticketCount: 812,
+        totalAmount: 116400, // 1164 DKK in øre (matches sum of transactions)
+        householdCount: 1,
+        ticketCount: 2,
         cutoffDate: new Date(2025, 10, 17), // Nov 17
         paymentDate: new Date(2025, 11, 1), // Dec 1
         createdAt: new Date(2025, 10, 18),
         shareToken: salt('token', testSalt),
-        invoices: [BillingFactory.defaultInvoiceData(testSalt)]
+        invoices: [{
+            id: 1,
+            cutoffDate: new Date('2025-11-17'),
+            paymentDate: new Date('2025-12-01'),
+            billingPeriod: '18/10/2025-17/11/2025',
+            amount: 116400, // Total for this invoice
+            createdAt: new Date('2025-11-18'),
+            householdId: 1,
+            billingPeriodSummaryId: 1,
+            pbsId: 2053,
+            address: salt('Smedekildevej 42', testSalt),
+            transactions: [
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 1, 'ADULT')},
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 2, 'ADULT')}
+            ]
+        }]
     })
+
+    /**
+     * Default invoice data for unit tests (with computed transactionSum)
+     */
+    static readonly defaultInvoiceData = (testSalt: string = 'default'): InvoiceDisplay => {
+        const summary = BillingFactory.defaultSummaryData(testSalt)
+        return summary.invoices[0]!
+    }
+
+    /**
+     * Default billing period summary data for unit tests
+     * Uses deserializer to compute dinnerCount, ticketCountsByType, invoiceSum, transactionSum
+     */
+    static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => {
+        const raw = BillingFactory.defaultRawBillingPeriod(testSalt)
+        return deserializeBillingPeriodDetail(raw)!
+    }
 
     // ============================================================================
     // Transaction Serialization Test Data (ADR-010)
