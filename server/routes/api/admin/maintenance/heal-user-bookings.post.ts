@@ -6,6 +6,7 @@ import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBookingValidation, type DinnerMode} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
 import {useTicket} from "~/composables/useTicket"
+import {formatDate} from "~/utils/date"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 
@@ -26,6 +27,7 @@ const HealingResultSchema = z.object({
         inhabitantName: z.string().nullable(),
         householdAddress: z.string().nullable(),
         dinnerEventId: z.number(),
+        dinnerEventDate: z.string().nullable(),
         issue: z.enum(['deleted', 'mode_changed']),
         originalMode: z.string(),
         currentMode: z.string().nullable()
@@ -153,16 +155,20 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
             { name: `${i.name} ${i.lastName}`, address: i.household?.address ?? null }
         ]))
 
+        // Build dinner event date lookup
+        const dinnerEventDateById = new Map(futureDinnerEvents.map(de => [de.id, de.date]))
+
         // Step 4: Find orders that need healing (deleted or mode changed)
         const toHeal: Array<{
             inhabitantId: number
             inhabitantName: string | null
             householdAddress: string | null
             dinnerEventId: number
+            dinnerEventDate: Date | null
             issue: 'deleted' | 'mode_changed'
             originalMode: string
             currentMode: string | null
-            ticketPriceId: number
+            ticketPriceId: number | null  // null = resolve from birthDate later
         }> = []
         const seen = new Set<string>()
         const errors: string[] = []
@@ -186,16 +192,17 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
             // Parse snapshot to get original dinnerMode
             // Formats: {orderSnapshot: {...}}, {orderData: {...}}, or {...} directly
             let originalMode: string
-            let ticketPriceId: number
+            let ticketPriceId: number | null
             try {
                 const parsed = JSON.parse(audit.auditData)
                 const snapshot = parsed.orderSnapshot ?? parsed.orderData ?? parsed
-                if (!snapshot.dinnerMode || !snapshot.ticketPriceId) {
-                    errors.push(`Missing fields in audit data for key ${key}`)
+                if (!snapshot.dinnerMode) {
+                    errors.push(`Missing dinnerMode in audit data for key ${key}`)
                     continue
                 }
                 originalMode = snapshot.dinnerMode
-                ticketPriceId = snapshot.ticketPriceId
+                // ticketPriceId can be null - we'll resolve from birthDate later
+                ticketPriceId = snapshot.ticketPriceId ?? null
             } catch (e) {
                 errors.push(`Failed to parse audit data for key ${key}: ${e}`)
                 continue
@@ -216,6 +223,7 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                     inhabitantName: info?.name ?? null,
                     householdAddress: info?.address ?? null,
                     dinnerEventId: audit.dinnerEventId!,
+                    dinnerEventDate: dinnerEventDateById.get(audit.dinnerEventId!) ?? null,
                     issue: 'deleted',
                     originalMode,
                     currentMode: null,
@@ -228,6 +236,7 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                     inhabitantName: info?.name ?? null,
                     householdAddress: info?.address ?? null,
                     dinnerEventId: audit.dinnerEventId!,
+                    dinnerEventDate: dinnerEventDateById.get(audit.dinnerEventId!) ?? null,
                     issue: 'mode_changed',
                     originalMode,
                     currentMode: currentOrder.dinnerMode,
@@ -268,8 +277,8 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
             for (const h of toHeal) {
                 let ticketPriceId = h.ticketPriceId
 
-                // If original ticket price no longer exists, resolve from birthDate
-                if (!validTicketPriceIds.has(ticketPriceId)) {
+                // If original ticket price is null or no longer exists, resolve from birthDate
+                if (ticketPriceId === null || !validTicketPriceIds.has(ticketPriceId)) {
                     const birthDate = inhabitantToBirthDate.get(h.inhabitantId)
                     const dinnerEvent = dinnerEventById.get(h.dinnerEventId)
                     const resolved = resolveTicketPrice(
@@ -282,8 +291,9 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                         errors.push(`Cannot resolve ticket price for ${h.inhabitantId}-${h.dinnerEventId}`)
                         continue
                     }
+                    const oldPriceId = ticketPriceId
                     ticketPriceId = resolved.id
-                    console.info(`${LOG} Resolved ticket price ${h.ticketPriceId} → ${ticketPriceId} for ${h.inhabitantId}-${h.dinnerEventId}`)
+                    console.info(`${LOG} Resolved ticket price ${oldPriceId} → ${ticketPriceId} for ${h.inhabitantId}-${h.dinnerEventId}`)
                 }
 
                 desiredOrders.push({
@@ -341,6 +351,7 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                 inhabitantName: h.inhabitantName,
                 householdAddress: h.householdAddress,
                 dinnerEventId: h.dinnerEventId,
+                dinnerEventDate: h.dinnerEventDate ? formatDate(h.dinnerEventDate) : null,
                 issue: h.issue,
                 originalMode: h.originalMode,
                 currentMode: h.currentMode
