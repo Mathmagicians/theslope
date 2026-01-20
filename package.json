@@ -26,15 +26,20 @@
     "test:e2e:api:seq": "npx playwright test --project=chromium-api-serial --no-deps --reporter=html,line",
     "test:e2e:ui": "npx playwright test --project=chromium-ui --reporter=html,line",
     "test:e2e:smoke": "npx playwright test --project=chromium-smoke --reporter=html,line",
+    "test:exploratory": "npx playwright test --project=exploratory --reporter=html,line",
     "test:all": "npm run test:unit && npm run test:e2e:api && npm run test:e2e:ui",
     "db:seed:local": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --local",
-    "db:seed": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env=dev --remote",
-    "db_prod:seed:local": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env=prod --local",
-    "db_prod:seed": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env=prod --remote",
+    "db:seed:dev": "npx wrangler d1 execute theslope --file migrations/seed/seed.sql --env=dev --remote",
+    "db:seed:prod": "npx wrangler d1 execute theslope-prod --file migrations/seed/seed.sql --env=prod --remote",
+    "db:seed:service-accounts:local": "npx wrangler d1 execute theslope --file migrations/seed/service-accounts.sql --local",
+    "db:seed:service-accounts:dev": "npx wrangler d1 execute theslope --file migrations/seed/service-accounts.sql --env=dev --remote",
+    "db:seed:service-accounts:prod": "npx wrangler d1 execute theslope-prod --file migrations/seed/service-accounts.sql --env=prod --remote",
+    "db:seed:all:local": "npm run db:seed:local && npm run db:seed:service-accounts:local",
+    "db:seed:all:dev": "npm run db:seed:dev && npm run db:seed:service-accounts:dev",
+    "db:seed:all:prod": "npm run db:seed:prod && npm run db:seed:service-accounts:prod",
     "db:migrate:local": "npx wrangler d1 migrations apply theslope --local",
-    "db:migrate": "npx wrangler d1 migrations apply theslope --remote --env=dev",
-    "db_prod:migrate:local": "npx wrangler d1 migrations apply theslope-prod --env=prod  --local",
-    "db_prod:migrate": "npx wrangler d1 migrations apply theslope-prod --env=prod --remote",
+    "db:migrate:dev": "npx wrangler d1 migrations apply theslope --remote --env=dev",
+    "db:migrate:prod": "npx wrangler d1 migrations apply theslope-prod --env=prod --remote",
     "db:generate-client": "npx prisma generate"
   },
   "dependencies": {
@@ -82,7 +87,7 @@
     "typescript": "^5.7.3",
     "vitest": "^3.2.4",
     "vue-tsc": "^3.2.1",
-    "wrangler": "^4.54.0",
+    "wrangler": "^4.58.0",
     "zod-prisma-types": "^3.3.10"
   }
 }

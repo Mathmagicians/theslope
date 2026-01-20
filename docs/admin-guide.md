@@ -1,8 +1,38 @@
 # Administratorguide
 
-Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN**-rollen for at få adgang.
+Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN**-rollen for at redigere.
 
 > **Se også:** [Brugerguide](user-guide.md) | [Chefkokguide](chef-guide.md) | [Systemoversigt](features.md)
+
+---
+
+## Adgangskontrol
+
+Admin-siden er tilgængelig for alle brugere, men **kun administratorer kan redigere**:
+
+| Rolle | Kan se | Kan redigere |
+|-------|--------|--------------|
+| Admin | ✅ Alle faner | ✅ Alle faner |
+| Allergi-ansvarlig | ✅ Alle faner | ✅ Kun Allergier |
+| Almindelig bruger | ✅ Alle faner | ❌ Ingen |
+
+Ikke-administratorer ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
+
+![Ikke-admin advarsel](screenshots/admin/admin-readonly-banner.png)
+
+---
+
+## Faner i administrationssiden
+
+| Fane | Formål | Kræver rolle |
+|------|--------|--------------|
+| **Planlægning** | Opret og administrer sæsoner, ferier, priser | Admin |
+| **Madhold** | Opret hold, tildel medlemmer og madlavningsdage | Admin |
+| **Husstande** | Se alle husstande og beboere | (kun visning) |
+| **Allergier** | Administrer allergi-katalog | Admin eller Allergi-ansvarlig |
+| **Brugere** | Se brugere, tildel systemroller | Admin |
+| **Økonomi** | Se fakturaer og økonomioversigt | (kun visning) |
+| **System** | Kør systemjobs, se jobhistorik | Admin |
 
 ---
 
@@ -10,11 +40,14 @@ Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN
 
 | Opgave | Hvor |
 |--------|------|
-| Opret ny sæson | `/admin/planning?mode=create` |
-| Aktivér sæson | `/admin/planning` → Sæsonvælger |
-| Administrer madhold | `/admin/teams` |
-| Se husstande | `/admin/households` |
-| Administrer allergityper | `/admin/allergies` |
+| Opret ny sæson | [Planlægning → Opret](https://www.skraaningen.dk/admin/planning?mode=create) |
+| Aktivér sæson | [Planlægning](https://www.skraaningen.dk/admin/planning) → Sæsonvælger |
+| Administrer madhold | [Madhold](https://www.skraaningen.dk/admin/teams) |
+| Se husstande | [Husstande](https://www.skraaningen.dk/admin/households) |
+| Administrer allergityper | [Allergier](https://www.skraaningen.dk/admin/allergies) |
+| Se brugere og roller | [Brugere](https://www.skraaningen.dk/admin/users) |
+| Se økonomioversigt | [Økonomi](https://www.skraaningen.dk/admin/economy) |
+| Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
 | Synkronisér fra Heynabo | `make heynabo-import-*` |
 
@@ -24,7 +57,7 @@ Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN
 
 ### Sådan opretter du en ny sæson
 
-1. Gå til `/admin/planning`
+1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
 2. Klik på **Opret**-knappen
 3. Udfyld:
    - **Sæsondatoer** - Start- og slutdato
@@ -41,7 +74,7 @@ Systemet opretter automatisk middagsbegivenheder for alle madlavningsdage i peri
 
 Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske tilmeldinger oprettes.
 
-1. Gå til `/admin/planning`
+1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
 2. Brug sæsonvælgeren til at finde sæsonen
 3. Find sæsoner med 🌱 (fremtidig) status
 4. Klik **Aktivér sæson**
@@ -70,14 +103,14 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 ### Sådan opretter du madhold
 
-1. Gå til `/admin/teams?mode=create`
+1. Gå til [Madhold → Opret](https://www.skraaningen.dk/admin/teams?mode=create)
 2. Vælg sæsonen i dropdown-menuen
 3. Indtast antal hold du vil oprette
 4. Klik **Opret madhold**
 
 ### Sådan redigerer du madhold
 
-1. Gå til `/admin/teams?mode=edit`
+1. Gå til [Madhold → Redigér](https://www.skraaningen.dk/admin/teams?mode=edit)
 2. Vælg et hold i venstre panel
 3. Redigér holdnavn, madlavningsdage eller medlemmer
 4. Ændringer gemmes automatisk
@@ -96,7 +129,7 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 ### Sådan ser du husstande
 
-1. Gå til `/admin/households`
+1. Gå til [Husstande](https://www.skraaningen.dk/admin/households)
 2. Brug søgefeltet til at filtrere på adresse eller navn
 
 ![Admin Husstande](screenshots/admin/admin-households-list.png)
@@ -109,14 +142,14 @@ Administratorer og allergi-ansvarlige kan administrere allergi-kataloget.
 
 ### Sådan opretter du en allergitype
 
-1. Gå til `/admin/allergies`
+1. Gå til [Allergier](https://www.skraaningen.dk/admin/allergies)
 2. Klik **Opret**
 3. Udfyld navn, beskrivelse og ikon (emoji)
 4. Klik **Gem**
 
 ### Sådan ser du hvem der har en allergi
 
-1. Gå til `/admin/allergies`
+1. Gå til [Allergier](https://www.skraaningen.dk/admin/allergies)
 2. Klik på en allergitype i listen
 3. Se alle beboere med denne allergi og deres kommentarer
 
@@ -128,6 +161,36 @@ Administratorer og allergi-ansvarlige kan administrere allergi-kataloget.
 4. Brug til menuoverblik (f.eks. "Ingen nødder i dag")
 
 > **Bemærk:** Sletning af en allergitype fjerner automatisk alle registreringer for den type (CASCADE).
+
+---
+
+## Brugere
+
+Brugerfanen viser alle brugere importeret fra Heynabo.
+
+### Sådan ser du brugere
+
+1. Gå til [Brugere](https://www.skraaningen.dk/admin/users)
+2. Brug søgefeltet til at finde brugere på navn eller email
+3. Klik på pilen ved en bruger for at se detaljer
+
+### Systemroller
+
+Administratorer kan tildele systemroller til brugere:
+
+| Rolle | Beskrivelse | Tildeles af |
+|-------|-------------|-------------|
+| **ADMIN** | Fuld adgang til alle administrative funktioner | Heynabo (via Bestyrelse-rolle) |
+| **ALLERGYMANAGER** | Kan redigere allergi-kataloget | Admin i TheSlope |
+
+### Sådan tildeler du Allergi-ansvarlig rollen
+
+1. Gå til [Brugere](https://www.skraaningen.dk/admin/users)
+2. Find brugeren og klik på pilen for at udvide
+3. Under "Systemroller", slå "Allergi-ansvarlig" til
+4. Ændringen gemmes automatisk
+
+> **Bemærk:** ADMIN-rollen styres af Heynabo og kan ikke ændres i TheSlope.
 
 ---
 
@@ -201,7 +264,7 @@ Fakturering kører automatisk den 17. hver måned:
 
 ### Sådan deler du fakturaoplysninger med revisor
 
-1. Gå til `/admin/economy`
+1. Gå til [Økonomi](https://www.skraaningen.dk/admin/economy)
 2. Vælg en faktureringsperiode
 3. Klik **Del** for at generere et magic link
 4. Send linket til revisor (kræver ikke login)
@@ -210,7 +273,7 @@ Fakturering kører automatisk den 17. hver måned:
 
 ## Systemvedligeholdelse
 
-### Systemjobs (`/admin/system`)
+### [Systemjobs](https://www.skraaningen.dk/admin/system)
 
 | Job | Kørsel | Beskrivelse |
 |-----|--------|-------------|
@@ -220,7 +283,7 @@ Fakturering kører automatisk den 17. hver måned:
 
 ### Sådan kører du et job manuelt
 
-1. Gå til `/admin/system`
+1. Gå til [System](https://www.skraaningen.dk/admin/system)
 2. Find jobbet i oversigten
 3. Klik **Kør nu**
 4. Se resultat i jobhistorikken nedenfor

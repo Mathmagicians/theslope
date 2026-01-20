@@ -3,13 +3,11 @@ import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {memberUIFile} = authFiles
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -23,44 +21,45 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
     let householdId: number
     let shortName: string
     let scroogeId: number
-    let activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
+    let _activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
 
-    test.use({storageState: adminUIFile})
+    // Track all created inhabitants for cleanup
+    const createdInhabitantIds: number[] = []
+
+    test.use({storageState: memberUIFile})
 
     // Helper to navigate to household members page and wait for load
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
-        await page.waitForResponse(
-            (response) => response.url().includes('/api/admin/household/') && response.status() === 200,
-            {timeout: 10000}
-        )
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
-            (isVisible) => isVisible,
-            10
+            (isVisible) => isVisible
         )
     }
 
     test.beforeAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
 
         // Use singleton to prevent parallel test conflicts with active seasons
-        // NOTE: Singleton is cleaned up by global teardown, not by this test
-        activeSeason = await SeasonFactory.createActiveSeason(context)
+        _activeSeason = await SeasonFactory.createActiveSeason(adminContext)
 
-        const household = await HouseholdFactory.createHousehold(context, {
-            name: salt('Duckburg', testSalt)
-        })
-        householdId = household.id
-        shortName = household.shortName
+        // Get member's household (member must access their own household)
+        const {householdId: memberHouseholdId} = await getSessionUserInfo(memberContext)
+        householdId = memberHouseholdId
 
+        // Get household details to get shortName
+        const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
+        shortName = household!.shortName
+
+        // Create test inhabitant in member's household (using admin for setup)
+        // Use Anders- pattern for d1-nuke-all cleanup
         const today = new Date()
-
         const scrooge = await HouseholdFactory.createInhabitantForHousehold(
-            context,
+            adminContext,
             householdId,
-            'Scrooge McDuck',
+            salt('Anders', testSalt),
             new Date(today.getFullYear() - 30, today.getMonth(), 1)
         )
         scroogeId = scrooge.id
@@ -68,40 +67,33 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        if (householdId) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        // Clean up ALL test inhabitants (not the household - it's the member's own)
+        const allInhabitantIds = [scroogeId, ...createdInhabitantIds].filter(Boolean)
+        await Promise.all(
+            allInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id).catch(() => {}))
+        )
         // NOTE: Singleton active season is cleaned up by global teardown, not here
     })
 
     test('GIVEN inhabitant with preferences WHEN editing via UI THEN changes persist and display correctly', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const adminContext = await validatedBrowserContext(browser)
 
-        // GIVEN: Set initial preferences via API - all days DINEIN
+        // GIVEN: Set initial preferences via API using member context (tests authorization)
         const initialPreferences = createDefaultWeekdayMap(DinnerMode.DINEIN)
-        await HouseholdFactory.updateInhabitant(context, scroogeId, {
-            dinnerPreferences: initialPreferences
-        })
+        await HouseholdFactory.updateInhabitantPreferences(memberContext, scroogeId, initialPreferences)
 
         // WHEN: Navigate to members page
         await goToHouseholdMembers(page)
 
-        // THEN: Verify VIEW mode shows initial preferences (all DINEIN badges visible)
+        // THEN: Verify VIEW mode shows initial preferences
         await pollUntil(
-            async () => {
-                const viewPreferences = page.locator(`[name="inhabitant-${scroogeId}-preferences-view"]`)
-                return await viewPreferences.isVisible()
-            },
-            (isVisible) => isVisible,
-            10
+            async () => await page.getByTestId(`inhabitant-${scroogeId}-preferences-view`).isVisible(),
+            (isVisible) => isVisible
         )
 
-        // THEN: Verify VIEW mode displays preferences
-        const viewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)
-        await expect(viewPreferences).toBeVisible()
-
-        // WHEN: Click pencil icon to edit
-        const editButton = page.locator('[aria-label="Rediger præferencer"]').first()
+        // WHEN: Click pencil icon to edit Scrooge's preferences (use specific testid, not .first())
+        const editButton = page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)
         await editButton.click()
 
         await pollUntil(
@@ -109,8 +101,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
                 const button = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
                 return await button.count() > 0
             },
-            (count) => count,
-            10
+            (count) => count
         )
 
         // WHEN: Change Monday to TAKEAWAY
@@ -132,9 +123,9 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         const saveButton = page.getByTestId('save-preferences')
         await saveButton.click()
 
-        // THEN: Poll until preferences are updated in database
+        // THEN: Poll until preferences are updated in database (use admin for verification)
         const household = await pollUntil(
-            async () => await HouseholdFactory.getHouseholdById(context, householdId),
+            async () => await HouseholdFactory.getHouseholdById(adminContext, householdId),
             (h) => {
                 if (!h) return false
                 const scrooge = h.inhabitants.find((i: {id: number}) => i.id === scroogeId)
@@ -182,68 +173,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         await expect(updatedViewPreferences).toBeVisible()
     })
 
-    test('ADR-015: GIVEN inhabitant with NONE prefs WHEN changing to DINEIN via UI THEN bookings are scaffolded', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // GIVEN: Create inhabitant with NONE preferences (no bookings)
-        const nonePrefs = createDefaultWeekdayMap(DinnerMode.NONE)
-        const donald = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
-            name: salt('Donald', testSalt),
-            lastName: salt('Duck', testSalt),
-            dinnerPreferences: nonePrefs
-        })
-
-        // GIVEN: Get dinner events for the singleton active season
-        // Default season has Mon/Wed/Fri cooking days over 7 days = 3 dinner events
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
-        expect(dinnerEvents.length, 'Season should have 3 dinner events (Mon/Wed/Fri over 7 days)').toBe(3)
-
-        // Verify no orders exist for Donald initially
-        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id!))
-        const donaldInitialOrders = initialOrders.filter(o => o.inhabitantId === donald.id)
-        expect(donaldInitialOrders.length, 'Donald should have no orders initially').toBe(0)
-
-        // WHEN: Navigate to members page
-        await goToHouseholdMembers(page)
-
-        // WHEN: Click pencil icon to edit Donald's preferences
-        await pollUntil(
-            async () => {
-                const editButton = page.locator(`[data-testid="inhabitant-${donald.id}-edit-preferences"]`)
-                return await editButton.count() > 0
-            },
-            (count) => count,
-            10
-        )
-        await page.locator(`[data-testid="inhabitant-${donald.id}-edit-preferences"]`).click()
-
-        // WHEN: Wait for edit mode buttons to appear (Mon/Wed/Fri buttons visible)
-        await pollUntil(
-            async () => {
-                const button = page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`)
-                return await button.count() > 0
-            },
-            (count) => count,
-            10
-        )
-
-        // WHEN: Change all cooking days to DINEIN (Mon, Wed, Fri)
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-mandag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-onsdag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${donald.id}-preferences-edit-fredag-DINEIN`).click()
-
-        // WHEN: Save preferences (triggers scaffolding)
-        await page.getByTestId('save-preferences').click()
-
-        // THEN: Wait for save to complete and verify 3 orders were scaffolded (one per cooking day)
-        const ordersAfter = await pollUntil(
-            async () => {
-                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id!))
-                return orders.filter(o => o.inhabitantId === donald.id)
-            },
-            (orders) => orders.length === 3
-        )
-
-        expect(ordersAfter.length, 'Donald should have 3 scaffolded orders (Mon/Wed/Fri)').toBe(3)
-    })
+    // NOTE: Scaffolding tests (ADR-015) moved to tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts
+    // They require a dedicated season with specific deadline settings (ticketIsCancellableDaysBefore)
+    // which conflicts with the shared singleton season used by parallel UI tests.
 })

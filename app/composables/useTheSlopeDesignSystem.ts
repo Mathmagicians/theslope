@@ -1,9 +1,13 @@
 import type {WeekDay} from '~/types/dateTypes'
-import type {AvatarProps, ButtonProps} from '@nuxt/ui'
+import type {AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
 export type NuxtUIAvatarSize = NonNullable<AvatarProps['size']>
+export type NuxtUIChipSize = NonNullable<ChipProps['size']>
+export type NuxtUIBadgeColor = NonNullable<BadgeProps['color']>
+export type NuxtUIBadgeVariant = NonNullable<BadgeProps['variant']>
+export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
 
 /**
  * Color System - TheSlope Design System
@@ -53,6 +57,7 @@ export const COLOR = {
     warning: 'warning',       // Orange - CTAs on hero backgrounds, warnings
     info: 'info',             // Violet - information messages
     neutral: 'neutral',       // Sky - neutral/disabled
+    yellow: 'yellow',         // Yellow - deadline warnings (more visible than warning)
 
     // Brand Pantone colors (custom palettes in app.config.ts)
     mocha: 'mocha',          // PRIMARY BRAND - Pantone 2025 (same as primary/amber)
@@ -363,11 +368,16 @@ export const COMPONENTS = {
         description: 'text-xs'
     },
 
+    // Responsive row icon sizing (matches birthday cake pattern)
+    rowIconClass: 'size-4 md:size-6',
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
         icon: 'i-fluent-emoji-high-contrast-woman-superhero',
         buttonIcon: 'i-heroicons-bolt',
+        iconClass: 'size-4 md:size-6 text-warning-500',
+        ticketConfig: {label: 'Powermode!', color: 'warning' as const, icon: 'i-heroicons-bolt'},
         alert: {
             color: 'warning' as const,
             variant: 'soft' as const,
@@ -377,6 +387,14 @@ export const COMPONENTS = {
             color: 'warning' as const,
             variant: 'outline' as const
         }
+    },
+
+    // Guest row - guest ticket booking patterns
+    guestRow: {
+        color: 'info' as const,
+        addIcon: 'i-heroicons-user-plus',      // For "add guest" rows
+        orderIcon: 'i-heroicons-ticket',        // For existing guest orders
+        iconClass: 'size-4 md:size-6 text-info-500'
     },
 
     // Table interactions - row selection and click patterns
@@ -405,9 +423,36 @@ export const COMPONENTS = {
         }
     },
 
+
     // Calendar UI configuration (UCalendar)
     calendar: {
         cellTrigger: 'data-[outside-view]:hidden'
+    },
+
+    // Economy table hierarchy - ready-to-grab classes for each nesting level
+    // Used by AdminEconomy and HouseholdEconomy for consistent stat headers
+    economyTable: {
+        level1: {
+            header: 'bg-ocean-50 dark:bg-ocean-800',
+            icon: 'text-xl text-ocean-600 dark:text-ocean-400',
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
+            border: 'border-ocean-50 dark:border-ocean-800',
+            footer: 'bg-ocean-50 dark:bg-ocean-800'
+        },
+        level2: {
+            header: 'bg-peach-100 dark:bg-peach-900',
+            icon: 'text-xl text-peach-600 dark:text-peach-400',
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
+            border: 'border-peach-100 dark:border-peach-900',
+            footer: 'bg-peach-100 dark:bg-peach-900'
+        },
+        level3: {
+            header: 'bg-neutral-50 dark:bg-neutral-900',
+            icon: 'text-neutral-600 dark:text-neutral-400',
+            statBox: 'bg-white dark:bg-neutral-800 rounded-lg',
+            border: 'border-neutral-50 dark:border-neutral-900',
+            footer: 'bg-neutral-50 dark:bg-neutral-900'
+        }
     },
 
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
@@ -467,6 +512,24 @@ export const TICKET_TYPE_COLORS = {
     BABY: COLOR.neutral
 } as const
 
+// ============================================================================
+// PART 5: Order State Display (for DinnerTicket accent colors)
+// ============================================================================
+
+/** Order state to accent color mapping for ticket display */
+export const ORDER_STATE_COLORS: Record<'normal' | 'released' | 'claimed', NuxtUIBadgeColor> = {
+    normal: 'primary',
+    released: 'error',
+    claimed: 'info'
+}
+
+/** Get order state accent color from isReleased/isClaimed flags */
+export const getOrderStateColor = (isReleased: boolean, isClaimed: boolean): NuxtUIBadgeColor => {
+    if (isReleased) return ORDER_STATE_COLORS.released
+    if (isClaimed) return ORDER_STATE_COLORS.claimed
+    return ORDER_STATE_COLORS.normal
+}
+
 /**
  * ICONS - Standard icon names for common UI elements
  *
@@ -484,6 +547,7 @@ export const ICONS = {
     calendar: 'i-heroicons-calendar',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
     ticket: 'i-heroicons-ticket',
@@ -492,6 +556,7 @@ export const ICONS = {
     dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
     chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     household: 'i-heroicons-home',
+    preferences: 'i-heroicons-adjustments-horizontal',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
@@ -504,6 +569,7 @@ export const ICONS = {
     clipboard: 'i-heroicons-clipboard-document-list',
     edit: 'i-heroicons-pencil',
     chevronDown: 'i-heroicons-chevron-down',
+    chevronUp: 'i-heroicons-chevron-up',
     chevronRight: 'i-heroicons-chevron-right',
     sortAscending: 'i-lucide-arrow-up-narrow-wide',
     sortDescending: 'i-lucide-arrow-down-wide-narrow',
@@ -518,12 +584,15 @@ export const ICONS = {
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
     arrowUp: 'i-heroicons-arrow-up',
+    undo: 'i-heroicons-arrow-uturn-left',
     sync: 'i-heroicons-arrow-path',
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
+    claim: 'i-heroicons-arrows-right-left',
 
-    // Empty states
+    // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
+    robotHappy: 'i-mage-robot-happy',
 
     // Danger/delete confirmations
     dangerConfirm: 'i-healthicons-death-alt',
@@ -534,11 +603,17 @@ export const ICONS = {
 
     // Time & info
     clock: 'i-heroicons-clock',
+    ellipsisCircle: 'i-heroicons-ellipsis-horizontal-circle',
     info: 'i-heroicons-information-circle',
 
     // Status/state
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
+
+    // Actions
+    share: 'i-heroicons-share',
+    download: 'i-heroicons-arrow-down-tray',
+    externalLink: 'i-heroicons-arrow-top-right-on-square',
 
     // External links
     github: 'i-simple-icons-github',
@@ -605,6 +680,10 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
     get smallIconSize(): string {
         return isMd.value ? '16' : '12'
     },
+    // Badge icon class for small badges (inline icons in UBadge)
+    get smallBadgeIcon(): string {
+        return isMd.value ? 'size-4 mr-1' : 'size-3 mr-1'
+    },
 
     // Large responsive: lg on mobile, xl on desktop
     get large(): NuxtUISize {
@@ -644,6 +723,11 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
         return isMd.value ? '3xl' : '2xl'
     },
 
+    // Lock chip: lg on mobile, 3xl on desktop (for booking calendar lock indicators)
+    get lockChip(): NuxtUIChipSize {
+        return isMd.value ? '3xl' : 'lg'
+    },
+
     // Static sizes (for when you need non-responsive)
     xs: 'xs' as const,
     sm: 'sm' as const,
@@ -670,6 +754,29 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
 })
 
 /**
+ * createResponsiveButtons - Standardized button configurations with responsive sizing
+ *
+ * Use v-bind to spread all button props at once.
+ * @example <UButton v-bind="BUTTONS.edit" @click="handleEdit" />
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Button configuration objects with responsive sizes
+ */
+const createResponsiveButtons = (isMd: Ref<boolean>) => ({
+    // Edit/pencil button - for row expand/edit actions
+    // Standard size: lg on desktop, md on mobile (same as SIZES.standard)
+    get edit() {
+        return {
+            icon: ICONS.edit,
+            color: 'neutral' as const,
+            variant: 'ghost' as const,
+            square: true,
+            size: (isMd.value ? 'lg' : 'md') as NuxtUISize
+        }
+    }
+})
+
+/**
  * createOrientations - Responsive orientation patterns for UFieldGroup
  *
  * Provides responsive orientation values for button groups and field groups.
@@ -692,7 +799,23 @@ const createOrientations = (isMd: Ref<boolean>) => ({
     /**
      * Always vertical (desktop/mobile)
      */
-    vertical: 'vertical' as const
+    vertical: 'vertical' as const,
+
+    /**
+     * Orientation based on item count:
+     * - At or below threshold: always horizontal (fits in a row)
+     * - Above threshold: vertical on desktop, horizontal on mobile
+     *
+     * Use case: Tab selectors where few items look better horizontal,
+     * but many items need vertical layout on desktop sidebars.
+     *
+     * @param count - Number of items
+     * @param threshold - Max count for always-horizontal (default: 2)
+     */
+    forItemCount: (count: number, threshold = 2): 'horizontal' | 'vertical' => {
+        if (count <= threshold) return 'horizontal'
+        return isMd.value ? 'vertical' : 'horizontal'
+    }
 })
 
 /**
@@ -727,7 +850,13 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
      * Used in table headers and weekday selector rows
      * Responsive padding, borders, background, and minimum widths
      */
-    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32'
+    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32',
+
+    /**
+     * Badge/button content size for dinner mode icons
+     * Mobile: size-4 (16px), Desktop: size-8 (32px)
+     */
+    badgeContentSize: 'size-4 md:size-8'
 })
 
 /**
@@ -873,6 +1002,7 @@ export const CALENDAR = {
         warning: 'ring-2 ring-amber-500',
         onTrack: ''
     },
+    holiday: 'ring-2 ring-green-500',
     // Base selection behavior - combine with palette-specific color
     selection: {
         base: 'ring-2 md:ring-4',
@@ -930,57 +1060,62 @@ export const DINNER_CALENDAR = {
  * Complements calendar ring indicators with specific deadline info.
  */
 export const DEADLINE_BADGES = {
+    /** Completed - check circle (green) */
+    COMPLETED: {
+        color: COLOR.success,
+        label: 'Færdig',
+        icon: 'i-heroicons-check-circle'
+    },
+    /** On track - ellipsis circle (green) */
     SUCCESS: {
         color: COLOR.success,
         label: 'OK',
-        icon: 'i-heroicons-check-circle',
-        emoji: '🟢'
+        icon: 'i-heroicons-ellipsis-horizontal-circle'
     },
+    /** Warning - exclamation circle (orange) */
     WARNING: {
         color: COLOR.warning,
         label: 'Snart',
-        icon: 'i-heroicons-clock',
-        emoji: '🟡'
+        icon: 'i-heroicons-exclamation-circle'
     },
+    /** Critical - exclamation circle (red) */
     CRITICAL: {
         color: COLOR.error,
         label: 'Kritisk',
-        icon: 'i-heroicons-exclamation-circle',
-        emoji: '🔴'
+        icon: 'i-heroicons-exclamation-circle'
     },
+    /** Overdue - exclamation circle (black) */
     OVERDUE: {
-        color: COLOR.error,
-        label: 'Forsinket',
-        icon: ICONS.dangerConfirm,
-        emoji: '⚫'
-    },
-    NEUTRAL: {
         color: COLOR.neutral,
-        label: 'Neutral',
-        icon: 'i-heroicons-minus-circle',
-        emoji: '⚪'
+        label: 'Forsinket',
+        icon: 'i-heroicons-exclamation-circle'
     },
-    // Legacy aliases for backwards compatibility
+    /** @deprecated Use COMPLETED for completed steps */
+    NEUTRAL: {
+        color: COLOR.success,
+        label: 'Neutral',
+        icon: 'i-heroicons-check-circle'
+    },
+    /** @deprecated Use COMPLETED */
     DONE: {
         color: COLOR.success,
         label: 'Færdig',
-        icon: 'i-heroicons-check-circle',
-        emoji: '🟢'
+        icon: 'i-heroicons-check-circle'
     },
+    /** @deprecated Use SUCCESS */
     ON_TRACK: {
-        color: COLOR.neutral,
+        color: COLOR.success,
         label: 'OK',
-        icon: 'i-heroicons-clock',
-        emoji: '⚪'
+        icon: 'i-heroicons-ellipsis-horizontal-circle'
     }
 } as const
 
 /**
  * Maps AlarmLevel to DEADLINE_BADGES
- * -1 = Neutral, 0 = Success/Green, 1 = Warning, 2 = Critical, 3 = Overdue/💀
+ * -1 = Completed (check), 0 = On track (ellipsis), 1 = Warning, 2 = Critical, 3 = Overdue
  */
 export const ALARM_TO_BADGE = {
-    [-1]: DEADLINE_BADGES.NEUTRAL,
+    [-1]: DEADLINE_BADGES.COMPLETED,
     0: DEADLINE_BADGES.SUCCESS,
     1: DEADLINE_BADGES.WARNING,
     2: DEADLINE_BADGES.CRITICAL,
@@ -997,6 +1132,44 @@ export const URGENCY_TO_BADGE = {
     1: DEADLINE_BADGES.WARNING,
     2: DEADLINE_BADGES.CRITICAL
 } as const
+
+/**
+ * Maps DeadlineUrgency to UChip colors for calendar display
+ * Uses 'yellow' for warning (more visible than orange 'warning')
+ * 0 = null (no chip), 1 = yellow, 2 = error (red), 3 = neutral (black/overdue)
+ */
+export const URGENCY_TO_CHIP_COLOR = {
+    [-1]: null,  // No dinner
+    0: null,     // On track
+    1: 'yellow', // Warning
+    2: 'error',  // Critical
+    3: 'neutral' // Overdue
+} as const
+
+/**
+ * BOOKING_LOCK_STATUS - Lock indicator chips for household booking calendar
+ *
+ * Shows booking deadline status based on released ticket count:
+ * - null: Not locked (deadline not yet passed) - no chip
+ * - 0: Locked, no tickets available - peach chip (matches selection ring)
+ * - >0: Locked, tickets available - yellow chip
+ */
+export const BOOKING_LOCK_STATUS = {
+    locked: {
+        color: 'peach' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    },
+    lockedWithTickets: {
+        color: 'yellow' as NuxtUIColor,
+        icon: ICONS.lockClosed
+    }
+} as const
+
+/** Get lock status config from released ticket count (null = not locked, 0 = locked, >0 = tickets available) */
+export const getLockStatusConfig = (releasedCount: number | null) => {
+    if (releasedCount === null) return null
+    return releasedCount > 0 ? BOOKING_LOCK_STATUS.lockedWithTickets : BOOKING_LOCK_STATUS.locked
+}
 
 // ============================================================================
 // PART 7: Empty State Messages (fun placeholders)
@@ -1040,6 +1213,19 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
         { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
         { emoji: '🔧', text: 'Tandhjulene er ved at blive poleret' }
+    ],
+    noDinners: [
+        { emoji: '😴', text: 'Gryderne sover i denne periode' },
+        { emoji: '🍳', text: 'Panderne hviler sig' },
+        { emoji: '🥄', text: 'Grydeskeerne venter på næste middag' },
+        { emoji: '🧂', text: 'Saltet venter tålmodigt i skabet' }
+    ],
+    noGuestTickets: [
+        { emoji: '🌬️', text: 'Billetterne blæser om kap med vinden - se om du kan fange en derude!' },
+        { emoji: '😋', text: 'Maden er for god i dag til at vi vil dele med nogen' },
+        { emoji: '🍕', text: 'Du kan desværre ikke være med, men der er en dejlig pizzeria i Lejre Downtown' },
+        { emoji: '🎫', text: 'Du kan få en fribillet til Store Bededag i stedet for' },
+        { emoji: '🦆', text: 'Ænderne i Lejre Å har også travlt i dag - prøv igen i morgen!' }
     ]
 } as const
 
@@ -1068,6 +1254,11 @@ export const useTheSlopeDesignSystem = () => {
         DEADLINE_BADGES,
         ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
+        URGENCY_TO_CHIP_COLOR,
+        BOOKING_LOCK_STATUS,
+        getLockStatusConfig,
+        ORDER_STATE_COLORS,
+        getOrderStateColor,
         ICONS,
         IMG,
 
@@ -1094,6 +1285,9 @@ export const useTheSlopeDesignSystem = () => {
 
         // Responsive icons
         RESPONSIVE_ICONS: createResponsiveIcons(isMd),
+
+        // Responsive buttons (standardized button configs with sizing)
+        BUTTONS: createResponsiveButtons(isMd),
 
         // Low-level builders (only if you need custom combinations)
         BG,

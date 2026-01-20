@@ -1,7 +1,8 @@
 /**
  * Nitro Scheduled Task: Monthly Billing
  *
- * Triggered by Cloudflare Cron on the 17th at 03:00 UTC (04:00/05:00 Copenhagen).
+ * Triggered by Cloudflare Cron on the 18th at 03:00 UTC (04:00/05:00 Copenhagen).
+ * Runs day after billing cutoff (17th) to bill the just-closed period.
  * Uses D1 directly via context.cloudflare.env.DB.
  */
 import {runMonthlyBilling} from '~~/server/utils/monthlyBillingService'

@@ -26,6 +26,14 @@ Admins can manually re-trigger jobs if they failed.
 <script setup lang="ts">
 import type {JobRunDisplay} from '~/composables/useMaintenanceValidation'
 
+// Props - canEdit from parent for authorization
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 // Design system
 const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
@@ -44,10 +52,6 @@ const {
     formatMonthlyBillingStats
 } = useMaintenance()
 const {JobRunDisplaySchema} = useMaintenanceValidation()
-
-// Auth - check admin role
-const authStore = useAuthStore()
-const { isAdmin } = storeToRefs(authStore)
 
 // Users store - for Heynabo import
 const usersStore = useUsersStore()
@@ -393,7 +397,7 @@ const jobDefinitions = computed(() => {
             :size="SIZES.standard"
             :trailing-icon="ICONS.arrowRight"
             :loading="job.isRunning"
-            :disabled="job.isRunning || !isAdmin"
+            :disabled="job.isRunning || !props.canEdit"
             :name="`trigger-${job.key.toLowerCase()}`"
             block
             @click="job.trigger"

@@ -3,6 +3,7 @@ import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/ge
 import {parse as parseDate} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 /**
  * Validation schemas for Billing domain (CSV Import/Export, BillingPeriodSummary)
@@ -29,16 +30,26 @@ export const useBillingValidation = () => {
     // ============================================================================
 
     /**
+     * Ticket counts by type - raw data from repository
+     * Keys are TicketType enum values
+     */
+    const TicketCountsByTypeSchema = z.record(TicketTypeSchema, z.number().int())
+
+    /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
      * billingPeriod format: "dd/MM/yyyy-dd/MM/yyyy" (formatDateRange)
+     * invoiceSum is computed from invoices for control sum display
      */
     const BillingPeriodSummaryDisplaySchema = z.object({
         id: z.number().int(),
         billingPeriod: z.string(), // formatDateRange format
         shareToken: z.string(), // UUID for magic link (included for share button)
-        totalAmount: z.number().int(), // øre
+        totalAmount: z.number().int(), // øre - expected total
+        invoiceSum: z.number().int(), // øre - Σ invoice.amount for control sum
         householdCount: z.number().int(),
         ticketCount: z.number().int(),
+        dinnerCount: z.number().int(), // # unique dinner events
+        ticketCountsByType: TicketCountsByTypeSchema, // { ADULT: 200, CHILD: 50, BABY: 1 }
         cutoffDate: z.coerce.date(),
         paymentDate: z.coerce.date(),
         createdAt: z.coerce.date()
@@ -47,6 +58,7 @@ export const useBillingValidation = () => {
     /**
      * Invoice Display - full invoice from Prisma schema
      * pbsId and address are frozen at billing time for immutability
+     * transactionSum is computed from related transactions for control display
      */
     const InvoiceDisplaySchema = z.object({
         id: z.number().int(),
@@ -54,6 +66,7 @@ export const useBillingValidation = () => {
         paymentDate: z.coerce.date(),
         billingPeriod: z.string(),
         amount: z.number().int(),
+        transactionSum: z.number().int(), // Σ transaction.amount for control sum
         createdAt: z.coerce.date(),
         householdId: z.number().int().nullable(),
         billingPeriodSummaryId: z.number().int().nullable(),
@@ -61,7 +74,7 @@ export const useBillingValidation = () => {
         address: z.string()
     })
 
-    const InvoiceCreateSchema = InvoiceDisplaySchema.omit({id: true, createdAt: true})
+    const InvoiceCreateSchema = InvoiceDisplaySchema.omit({id: true, createdAt: true, transactionSum: true})
 
     /**
      * BillingPeriodSummary Detail - for detail endpoints (comprehensive)
@@ -255,6 +268,24 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
+    // CostEntry/CostLine Schemas (Economy views)
+    // ============================================================================
+
+    /**
+     * CostEntry - grouped items by dinner event for economy display
+     * Used for both Transactions (billing) and Orders (live bookings)
+     * T must have ticketType for ticket count formatting
+     */
+    const CostEntrySchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
+        dinnerEventId: z.number().int(),
+        date: z.coerce.date(),
+        menuTitle: z.string(),
+        items: z.array(itemSchema),
+        totalAmount: z.number().int(),
+        ticketCounts: z.string()
+    })
+
+    // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
 
@@ -264,6 +295,8 @@ export const useBillingValidation = () => {
      */
     const TransactionDisplaySchema = z.object({
         id: z.number().int(),
+        // orderId for lazy-loading order history - nullable (order may be deleted, SET NULL)
+        orderId: z.number().int().nullable(),
         amount: z.number().int(),
         createdAt: z.coerce.date(),
         orderSnapshot: z.string(),
@@ -281,7 +314,10 @@ export const useBillingValidation = () => {
                 address: z.string()
             })
         }),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        // Guest/provenance fields for CostLine display (extracted from snapshot)
+        isGuestTicket: z.boolean().optional(),
+        provenanceHousehold: z.string().nullable().optional()
     })
 
     /**
@@ -322,7 +358,8 @@ export const useBillingValidation = () => {
     // ============================================================================
 
     const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
-        id: true, createdAt: true, shareToken: true
+        id: true, createdAt: true, shareToken: true,
+        invoiceSum: true, dinnerCount: true, ticketCountsByType: true  // Computed on read, not stored
     })
 
     const BillingPeriodSummaryIdSchema = BillingPeriodSummaryDisplaySchema.pick({id: true})
@@ -395,10 +432,10 @@ export const useBillingValidation = () => {
 
     /**
      * Generate filename for CSV export
-     * Format: PBS-Opgørelse-Skrååningen-{billingPeriod}.csv
+     * Format: PBS-Opgørelse-Skråningen-{billingPeriod}.csv
      */
     const generateCsvFilename = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string =>
-        `PBS-Opgørelse-Skrååningen-${summary.billingPeriod}.csv`
+        `PBS-Opgørelse-Skråningen-${summary.billingPeriod}.csv`
 
     // ============================================================================
     // Transaction Serialization (ADR-010)
@@ -424,7 +461,10 @@ export const useBillingValidation = () => {
                 address: z.string()
             })
         }),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        // Guest/provenance fields (optional for backward compatibility with existing snapshots)
+        isGuestTicket: z.boolean().optional(),
+        provenanceHousehold: z.string().nullable().optional()
     })
 
     /**
@@ -436,6 +476,8 @@ export const useBillingValidation = () => {
         dinnerEvent: {id: number, date: Date, menuTitle: string}
         inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
         ticketType: string | null
+        isGuestTicket?: boolean
+        provenanceHousehold?: string | null
     }): string => JSON.stringify({
         dinnerEvent: order.dinnerEvent,
         inhabitant: {
@@ -443,7 +485,9 @@ export const useBillingValidation = () => {
             name: order.inhabitant.name,
             household: order.inhabitant.household
         },
-        ticketType: order.ticketType
+        ticketType: order.ticketType,
+        isGuestTicket: order.isGuestTicket,
+        provenanceHousehold: order.provenanceHousehold
     })
 
     /**
@@ -458,34 +502,167 @@ export const useBillingValidation = () => {
         createdAt: Date
         orderSnapshot: string
         order: {
+            id: number
             dinnerEvent: {id: number, date: Date, menuTitle: string}
             inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
             ticketPrice: {ticketType: string} | null
+            isGuestTicket?: boolean
+            provenanceHousehold?: string | null  // Populated from OrderHistory USER_CLAIMED
         } | null
     }): z.infer<typeof TransactionDisplaySchema> => {
         const base = {id: tx.id, amount: tx.amount, createdAt: tx.createdAt, orderSnapshot: tx.orderSnapshot}
 
-        // Use live data only if ALL required relations exist
-        if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
-            return TransactionDisplaySchema.parse({
-                ...base,
-                dinnerEvent: tx.order.dinnerEvent,
-                inhabitant: tx.order.inhabitant,
-                ticketType: tx.order.ticketPrice.ticketType
-            })
-        }
-
-        // Any relation deleted - use frozen snapshot (strict parsing)
-        // Set household.id to 0 to indicate deleted (not valid as FK)
+        // Parse snapshot to get guest/provenance fields (may be absent in old snapshots)
         const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
+
+        // Check relations independently - use live data where available, snapshot as fallback
+        // This handles partial deletion (e.g., ticketPrice deleted but household still exists)
+        const hasOrder = tx.order !== null
+        const hasHousehold = tx.order?.inhabitant?.household != null
+        const hasTicketPrice = tx.order?.ticketPrice != null
+
+        // Build inhabitant: use live household if available (preserves valid householdId for billing)
+        const inhabitant = hasHousehold
+            ? tx.order!.inhabitant
+            : {...snapshot.inhabitant, household: {...snapshot.inhabitant.household, id: 0}}
+
         return TransactionDisplaySchema.parse({
             ...base,
-            dinnerEvent: snapshot.dinnerEvent,
-            inhabitant: {
-                ...snapshot.inhabitant,
-                household: {...snapshot.inhabitant.household, id: 0}
-            },
-            ticketType: snapshot.ticketType
+            orderId: hasOrder ? tx.order!.id : null,
+            dinnerEvent: hasOrder ? tx.order!.dinnerEvent : snapshot.dinnerEvent,
+            inhabitant,
+            ticketType: hasTicketPrice ? tx.order!.ticketPrice!.ticketType : snapshot.ticketType,
+            isGuestTicket: tx.order?.isGuestTicket ?? snapshot.isGuestTicket,
+            provenanceHousehold: tx.order?.provenanceHousehold ?? snapshot.provenanceHousehold
+        })
+    }
+
+    /**
+     * Deserialize order snapshot from JSON string.
+     */
+    const deserializeOrderSnapshot = (orderSnapshot: string) =>
+        OrderSnapshotSchema.parse(JSON.parse(orderSnapshot))
+
+    /**
+     * Raw billing period from Prisma (before transformation).
+     * Invoices contain transactions with orderSnapshot for computing derived fields.
+     */
+    type RawBillingPeriod = {
+        id: number
+        billingPeriod: string
+        shareToken: string
+        totalAmount: number
+        householdCount: number
+        ticketCount: number
+        cutoffDate: Date
+        paymentDate: Date
+        createdAt: Date
+        invoices: Array<{
+            id: number
+            amount: number
+            cutoffDate: Date
+            paymentDate: Date
+            billingPeriod: string
+            createdAt: Date
+            householdId: number | null  // Nullable per Prisma schema
+            billingPeriodSummaryId: number | null  // Nullable per Prisma schema
+            pbsId: number
+            address: string
+            transactions: Array<{amount: number, orderSnapshot: string}>
+        }>
+    }
+
+    /**
+     * Compute derived stats from order snapshots.
+     * Pure function - extracts dinnerCount and ticketCountsByType.
+     * When ticketType is null (orphaned from deleted ticketPrices), resolves from amount using active season prices.
+     */
+    const computeStatsFromSnapshots = (
+        invoices: Array<{transactions: Array<{amount: number, orderSnapshot: string}>}>,
+        ticketPrices: TicketPrice[]
+    ) => {
+        const {resolveTicketPrice} = useTicket()
+
+        const transactions = invoices.flatMap(inv => inv.transactions)
+        const parsed = transactions.map(tx => {
+            try {
+                const snapshot = deserializeOrderSnapshot(tx.orderSnapshot)
+                return {snapshot, amount: tx.amount}
+            } catch { return null }
+        }).filter((p): p is NonNullable<typeof p> => p !== null)
+
+        const dinnerCount = new Set(parsed.map(p => p.snapshot.dinnerEvent.id)).size
+        const ticketCountsByType: Record<string, number> = {}
+        for (const {snapshot, amount} of parsed) {
+            // Use snapshot ticketType, or resolve from amount if null (orphaned orders)
+            const ticketType = snapshot.ticketType
+                ?? resolveTicketPrice(null, amount, ticketPrices)?.ticketType
+            if (ticketType) {
+                ticketCountsByType[ticketType] = (ticketCountsByType[ticketType] ?? 0) + 1
+            }
+        }
+        return {dinnerCount, ticketCountsByType}
+    }
+
+    /**
+     * Deserialize billing period display from raw Prisma data.
+     * Computes dinnerCount and ticketCountsByType from order snapshots.
+     * @param ticketPrices - Active season ticket prices for resolving null ticketTypes
+     */
+    const deserializeBillingPeriodDisplay = (
+        raw: RawBillingPeriod,
+        ticketPrices: TicketPrice[]
+    ): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
+        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        return BillingPeriodSummaryDisplaySchema.parse({...raw, invoiceSum, dinnerCount, ticketCountsByType})
+    }
+
+    /**
+     * Deserialize billing period detail from raw Prisma data.
+     * Computes all derived fields including per-invoice transactionSum.
+     * @param ticketPrices - Active season ticket prices for resolving null ticketTypes
+     */
+    const deserializeBillingPeriodDetail = (
+        raw: RawBillingPeriod | null,
+        ticketPrices: TicketPrice[]
+    ): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
+        if (!raw) return null
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
+        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoices = raw.invoices.map(inv => deserializeInvoice(inv))
+        return BillingPeriodSummaryDetailSchema.parse({...raw, invoices, invoiceSum, dinnerCount, ticketCountsByType})
+    }
+
+    /**
+     * Raw invoice from Prisma (before transformation).
+     * Includes transactions for computing transactionSum.
+     */
+    type RawInvoice = {
+        id: number
+        amount: number
+        cutoffDate: Date
+        paymentDate: Date
+        billingPeriod: string
+        createdAt: Date
+        householdId: number | null
+        billingPeriodSummaryId: number | null
+        pbsId: number
+        address: string
+        transactions: Array<{amount: number, orderId?: number | null}>
+    }
+
+    /**
+     * Deserialize invoice from raw Prisma data.
+     * Computes transactionSum from related transactions.
+     */
+    const deserializeInvoice = (raw: RawInvoice): z.infer<typeof InvoiceDisplaySchema> => {
+        const {transactions, ...inv} = raw
+        const transactionSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+        return InvoiceDisplaySchema.parse({
+            ...inv,
+            transactionSum
         })
     }
 
@@ -501,6 +678,7 @@ export const useBillingValidation = () => {
         // BillingPeriodSummary Schemas (ADR-009)
         BillingPeriodSummaryDisplaySchema,
         BillingPeriodSummaryDetailSchema,
+        TicketCountsByTypeSchema,
         InvoiceDisplaySchema,
         InvoiceCreateSchema,
         PublicBillingViewSchema,
@@ -537,12 +715,18 @@ export const useBillingValidation = () => {
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
+        // CostEntry/CostLine (Economy views)
+        CostEntrySchema,
+
         // Serialization (ADR-010)
         OrderSnapshotSchema,
         serializeTransaction,
         deserializeTransaction,
-        deserializeBillingPeriodDisplay: (data: unknown) => BillingPeriodSummaryDisplaySchema.parse(data),
-        deserializeBillingPeriodDetail: (data: unknown) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
+        deserializeOrderSnapshot,
+        computeStatsFromSnapshots,
+        deserializeBillingPeriodDisplay,
+        deserializeBillingPeriodDetail,
+        deserializeInvoice
     }
 }
 
@@ -553,6 +737,7 @@ export const useBillingValidation = () => {
 // BillingPeriodSummary types (ADR-009)
 export type BillingPeriodSummaryDisplay = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDisplaySchema']>
 export type BillingPeriodSummaryDetail = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDetailSchema']>
+export type TicketCountsByType = z.infer<ReturnType<typeof useBillingValidation>['TicketCountsByTypeSchema']>
 export type InvoiceDisplay = z.infer<ReturnType<typeof useBillingValidation>['InvoiceDisplaySchema']>
 export type InvoiceCreate = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreateSchema']>
 export type PublicBillingView = z.infer<ReturnType<typeof useBillingValidation>['PublicBillingViewSchema']>
@@ -575,3 +760,28 @@ export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValid
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
+
+// CostEntry/CostLine types (Economy views)
+export type CostEntry<T> = {
+    dinnerEventId: number
+    date: Date
+    menuTitle: string
+    items: T[]
+    totalAmount: number
+    ticketCounts: string
+}
+
+// HouseholdEntry - group by household for PBS/revisor view
+export type HouseholdEntry<T> = {
+    householdId: number
+    pbsId: number
+    address: string
+    items: T[]
+    totalAmount: number      // Stored/expected amount (invoice.amount or computed for virtual)
+    computedTotal: number    // Control sum: Σ item amounts
+    ticketCounts: string
+}
+
+// Control sum validation - UI uses this to show ✓ or ✗
+export const isControlSumValid = <T>(entry: HouseholdEntry<T>): boolean =>
+    entry.computedTotal === entry.totalAmount

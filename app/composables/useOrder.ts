@@ -5,11 +5,83 @@
  */
 import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
 
+/**
+ * Statistics for one dining mode in kitchen display
+ */
+export interface DiningModeStats {
+  key: string
+  label: string
+  percentage: number  // Based on PORTIONS (cooking workload), not order count
+  portions: number
+  orderCount: number
+}
+
+/**
+ * Order display config structure (parallel to ticketTypeConfig in useTicket)
+ */
+export interface OrderDisplayConfig {
+  label: string
+  color: 'primary' | 'error' | 'info' | 'neutral'
+  icon: string
+}
+
+/**
+ * Formatted order display properties returned by formatOrder()
+ */
+export interface FormattedOrder {
+  guest: OrderDisplayConfig | null
+  stateText: string
+  stateColor: OrderDisplayConfig['color']
+  stateIcon: string
+  isClaimed: boolean
+}
+
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
   const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
   const OrderState = OrderStateSchema.enum
   const TicketType = TicketTypeSchema.enum
+
+  // Get icons from design system
+  const {ICONS} = useTheSlopeDesignSystem()
+
+  /**
+   * Order state display config keyed by OrderState enum + 'claimed' variant
+   * Claimed is BOOKED with provenance (overrides display)
+   */
+  const orderStateConfig = {
+    [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
+    [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
+    [OrderState.CLOSED]: { label: 'Afsluttet', color: 'neutral' as const, icon: ICONS.check },
+    [OrderState.CANCELLED]: { label: 'Annulleret', color: 'error' as const, icon: ICONS.xMark },
+    claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
+  }
+
+  /**
+   * Format order for display - returns all display properties
+   * @param order - Order to format
+   * @param bookerName - Optional booker name for guest tickets
+   */
+  const formatOrder = (order: OrderDisplay, bookerName?: string): FormattedOrder => {
+    const isClaimed = !!order.provenanceHousehold
+
+    // Claimed overrides BOOKED display
+    const stateConfig = (order.state === OrderState.BOOKED && isClaimed)
+      ? orderStateConfig.claimed
+      : orderStateConfig[order.state]
+
+    return {
+      guest: order.isGuestTicket ? {
+        label: bookerName ? `Gæst af ${bookerName}` : 'Gæst',
+        color: 'info',
+        icon: ICONS.userPlus
+      } : null,
+      stateText: stateConfig.label,
+      stateColor: stateConfig.color,
+      stateIcon: stateConfig.icon,
+      isClaimed
+    }
+  }
 
   /**
    * Check if order is active (counts for kitchen preparation)
@@ -84,11 +156,18 @@ export const useOrder = () => {
   }
 
   /**
-   * Group orders by ticket type with counts and portions
-   * Uses order.ticketType (priceAtBooking preserves the price)
+   * Group orders by ticket type with counts, portions, and revenue
+   * Uses order.ticketType and priceAtBooking (frozen at booking time)
    */
   const groupByTicketType = (orders: OrderDetail[]) => {
-    const groups = new Map<string, { ticketType: string, count: number, portions: number, descriptions: Map<string, number> }>()
+    const groups = new Map<string, {
+      ticketType: string
+      count: number
+      portions: number
+      unitPrice: number
+      revenue: number
+      descriptions: Map<string, number>
+    }>()
 
     orders.forEach(order => {
       const ticketType = order.ticketType
@@ -101,6 +180,8 @@ export const useOrder = () => {
           ticketType,
           count: 0,
           portions: 0,
+          unitPrice: order.priceAtBooking,
+          revenue: 0,
           descriptions: new Map()
         })
       }
@@ -108,6 +189,7 @@ export const useOrder = () => {
       const group = groups.get(ticketType)!
       group.count++
       group.portions += getPortionsForTicketType(ticketType)
+      group.revenue += order.priceAtBooking
 
       const currentCount = group.descriptions.get(description) || 0
       group.descriptions.set(description, currentCount + 1)
@@ -121,6 +203,79 @@ export const useOrder = () => {
    */
   const requiresChair = (ticketType: typeof TicketType[keyof typeof TicketType]): boolean => {
     return ticketType !== TicketType.BABY
+  }
+
+  // ========== KITCHEN STATISTICS ==========
+
+  /**
+   * Calculate dining mode statistics for kitchen display
+   * Percentages are based on PORTIONS (cooking workload) to match "X PORTIONER" header
+   *
+   * @param orders - All orders to analyze
+   * @returns Array of stats per dining mode + RELEASED, with portion-based percentages
+   */
+  const calculateDiningModeStats = (orders: OrderDetail[]): DiningModeStats[] => {
+    const { DinnerModeSchema } = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+
+    const activeOrders = getActiveOrders(orders)
+    const releasedOrders = getReleasedOrders(orders)
+    const totalPortions = calculateTotalPortionsFromPrices(orders)
+
+    const modes = [
+      { key: DinnerMode.TAKEAWAY, label: 'TAKEAWAY' },
+      { key: DinnerMode.DINEIN, label: 'SPISESAL' },
+      { key: DinnerMode.DINEINLATE, label: 'SPIS SENT' }
+    ] as const
+
+    const stats: DiningModeStats[] = modes.map(({ key, label }) => {
+      const modeOrders = activeOrders.filter(o => o.dinnerMode === key)
+      const portions = calculateTotalPortionsFromPrices(modeOrders)
+      const percentage = totalPortions > 0 ? Math.round((portions / totalPortions) * 100) : 0
+
+      return {
+        key,
+        label,
+        percentage,
+        portions: Math.round(portions),
+        orderCount: modeOrders.length
+      }
+    })
+
+    // Add released tickets panel
+    const releasedPortions = calculateTotalPortionsFromPrices(releasedOrders)
+    stats.push({
+      key: 'RELEASED',
+      label: 'TIL SALG',
+      percentage: totalPortions > 0 ? Math.round((releasedPortions / totalPortions) * 100) : 0,
+      portions: Math.round(releasedPortions),
+      orderCount: releasedOrders.length
+    })
+
+    return stats
+  }
+
+  /**
+   * Calculate normalized widths for kitchen display panels
+   * Applies minimum width (10%) and scales to sum to 100%
+   *
+   * @param stats - Dining mode stats with percentages
+   * @param minWidth - Minimum width percentage (default 10%)
+   * @returns Object mapping key → normalized width percentage
+   */
+  const calculateNormalizedWidths = (
+    stats: DiningModeStats[],
+    minWidth = 10
+  ): Record<string, number> => {
+    if (stats.length === 0) return {}
+
+    // Apply minimum, track how much we've used
+    const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, minWidth) }))
+    const total = withMin.reduce((sum, s) => sum + s.width, 0)
+
+    // Scale to 100% if needed
+    const scale = total > 0 ? 100 / total : 1
+    return Object.fromEntries(withMin.map(s => [s.key, s.width * scale]))
   }
 
   // ========== BUDGET CALCULATIONS ==========
@@ -172,6 +327,10 @@ export const useOrder = () => {
   }
 
   return {
+    // Order display formatting
+    orderStateConfig,
+    formatOrder,
+
     // State filtering
     getActiveOrders,
     getReleasedOrders,
@@ -181,6 +340,10 @@ export const useOrder = () => {
     calculateTotalPortionsFromPrices,
     getPortionsForTicketPrice,
     requiresChair,
+
+    // Kitchen statistics
+    calculateDiningModeStats,
+    calculateNormalizedWidths,
 
     // Budget & VAT
     calculateBudget,

@@ -3,8 +3,19 @@ name: The CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]  # GitOps: push a tag to trigger release
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.0.1) - Leave empty for RC build'
+        required: false
+        type: string
+      rollback_to:
+        description: 'Rollback to commit SHA (full or short) - Overrides release_version'
+        required: false
+        type: string
 
 jobs:
   CICD:
@@ -13,6 +24,9 @@ jobs:
     outputs:
       deployed_env: ${{ steps.target.outputs.env }}
       deployed_url: ${{ steps.deploy.outputs.url }}
+      release_version: ${{ steps.version.outputs.RELEASE_VERSION }}
+      release_date: ${{ steps.version.outputs.RELEASE_DATE }}
+      is_release: ${{ steps.version.outputs.IS_RELEASE }}
 
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -27,11 +41,33 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for version calculation
+          ref: ${{ inputs.rollback_to || github.sha }}
       - run: ls -la
       - uses: actions/setup-node@v5
         with:
           node-version-file: 'package.json'
       - run: npm ci
+      - name: Calculate version
+        id: version
+        run: |
+          if [ -n "${{ inputs.rollback_to }}" ]; then
+            echo "🔄 Rollback mode to commit: ${{ inputs.rollback_to }}"
+            RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.release_version }}" ]; then
+            echo "🎉 Release mode (workflow_dispatch): ${{ inputs.release_version }}"
+            RELEASE_VERSION="${{ inputs.release_version }}" make version-info >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VERSION="${{ github.ref_name }}"
+            TAG_VERSION="${TAG_VERSION#v}"  # Strip 'v' prefix
+            echo "🏷️ Release mode (git tag): $TAG_VERSION"
+            RELEASE_VERSION="$TAG_VERSION" make version-info >> $GITHUB_OUTPUT
+          else
+            echo "🔨 RC build mode"
+            RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
+          fi
+          cat $GITHUB_OUTPUT
       - name: Linting
         run: npm run lint
       - run: npx prisma validate
@@ -71,11 +107,15 @@ jobs:
           fi
       - name: Deploy to Cloudflare
         id: deploy
+        env:
+          NUXT_PUBLIC_RELEASE_VERSION: ${{ steps.version.outputs.RELEASE_VERSION }}
+          NUXT_PUBLIC_RELEASE_DATE: ${{ steps.version.outputs.RELEASE_DATE }}
+          GITHUB_SHA: ${{ steps.version.outputs.COMMIT_SHA }}
         run: |
           if [ "${{ steps.target.outputs.env }}" == "prod" ]; then
-            OUTPUT=$(npm run deploy:prod 2>&1)
+            OUTPUT=$(make deploy-prod 2>&1)
           else
-            OUTPUT=$(npm run deploy 2>&1)
+            OUTPUT=$(make deploy-dev 2>&1)
           fi
           echo "$OUTPUT"
           echo "url=$(echo "$OUTPUT" | grep 'DEPLOY_URL' | grep -oE 'https://[^")]+')" >> $GITHUB_OUTPUT
@@ -86,11 +126,60 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | \`${{ steps.target.outputs.env }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ steps.version.outputs.RELEASE_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release Date** | ${{ steps.version.outputs.RELEASE_DATE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Is Release** | ${{ steps.version.outputs.IS_RELEASE }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Commit Message** | ${{ github.event.head_commit.message }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **PR Title** | ${{ github.event.pull_request.title }} |" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    needs: CICD
+    if: needs.CICD.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release tag
+        if: startsWith(github.ref, 'refs/heads/')  # Only for workflow_dispatch, not tag push
+        run: |
+          VERSION="${{ needs.CICD.outputs.release_version }}"
+          TAG="v${VERSION%%+*}"  # Strip +sha suffix for tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.CICD.outputs.release_version }}"
+          TAG="v${VERSION%%+*}"
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes "**Deployed:** ${{ needs.CICD.outputs.release_date }}
+
+          **Environment:** production
+          **URL:** ${{ needs.CICD.outputs.deployed_url }}
+          **Commit:** ${{ github.sha }}
+
+          Full version: \`$VERSION\`"
+
+  rollback:
+    needs: CICD
+    if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rollback summary
+        run: |
+          echo "## ⏮️ Rollback Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Rolled back to commit: \`${{ inputs.rollback_to }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed to: ${{ needs.CICD.outputs.deployed_url }}" >> $GITHUB_STEP_SUMMARY
 
   smoke-tests:
     needs: CICD
@@ -110,6 +199,10 @@ jobs:
           BASE_URL: ${{ vars.BASE_URL }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
           HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
+          HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
+          CLOUDFLARE_BYPASS_TOKEN: ${{ secrets.CLOUDFLARE_BYPASS_TOKEN }}
+          SHOULD_NOT_MUTATE: true
+          EXPECTED_VERSION: ${{ needs.CICD.outputs.release_version }}
         run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -121,3 +214,4 @@ jobs:
         run: |
           echo "## ✅ Smoke Tests" >> $GITHUB_STEP_SUMMARY
           echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> $GITHUB_STEP_SUMMARY

@@ -9,12 +9,12 @@
  * Layout (Full Bleed):
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │                          FÆLLES MAD - 100% ØKOLOGI                          │
- * │                             100 PORTIONER                                   │
- * │           Voksen: 60 (50 port.) | Barn: 30 (15 port.) | Baby: 10            │
+ * │                             100 KUVERTER                                    │
+ * │           Voksen: 60 (50 kuv.) | Barn: 30 (15 kuv.) | Baby: 10              │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
  * │   TAKEAWAY - 38%         │  SPISESAL - 33%     │SPIS SENT-19% │TIL SALG-10%│
  * │                          │                     │              │            │
- * │    40 port.              │     35 port.        │   20 port.   │  5 port.   │
+ * │    40 kuv.               │     35 kuv.         │   20 kuv.    │  5 kuv.    │
  * │                          │  Voksen: 25         │  Voksen: 15  │  6 pers.   │
  * │                          │  Barn: 8 | Baby: 2  │  Barn: 4     │            │
  * │                          │  = 35               │  Baby: 1 = 20│            │
@@ -22,17 +22,14 @@
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
  *
  * Panel content:
- * - TAKEAWAY: % + portions only
- * - SPISESAL/SPIS SENT: % + portions + ticket breakdown (Voksen/Barn/Baby = total)
- * - TIL SALG: % + portions + people count
+ * - TAKEAWAY: % + kuverter only
+ * - SPISESAL/SPIS SENT: % + kuverter + ticket breakdown (Voksen/Barn/Baby = total)
+ * - TIL SALG: % + kuverter + people count
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {AffectedDiner} from '~/composables/useAllergy'
-
-// Import DinnerMode from validation composable (ADR-001)
-const {DinnerModeSchema} = useBookingValidation()
-const DinnerMode = DinnerModeSchema.enum
+import type {DiningModeStats} from '~/composables/useOrder'
 
 // Ticket type breakdown for dine-in modes (chair planning)
 interface TicketBreakdown {
@@ -42,14 +39,9 @@ interface TicketBreakdown {
   total: number
 }
 
-// Statistics for one dining mode panel
-interface DiningModeStats {
-  key: typeof DinnerMode[keyof typeof DinnerMode] | 'RELEASED'
-  label: string
-  percentage: number
-  portions: number
-  peopleCount: number // Total people/orders
-  ticketBreakdown: TicketBreakdown | null // Only for DINEIN/DINEINLATE
+// Extended stats with component-specific fields (allergies, chair planning)
+interface ExtendedDiningModeStats extends DiningModeStats {
+  ticketBreakdown: TicketBreakdown | null
   affectedDiners: AffectedDiner[]
 }
 
@@ -61,9 +53,16 @@ interface Props {
 const props = defineProps<Props>()
 
 // Use business logic composables (ADR-001)
-const {getActiveOrders, getReleasedOrders, calculateTotalPortionsFromPrices} = useOrder()
-const {TicketTypeSchema} = useBookingValidation()
+const {
+  getActiveOrders,
+  getReleasedOrders,
+  calculateTotalPortionsFromPrices,
+  calculateDiningModeStats,
+  calculateNormalizedWidths
+} = useOrder()
+const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
+const DinnerMode = DinnerModeSchema.enum
 const {computeAffectedDiners} = useAllergy()
 
 // Menu allergen IDs for affected diner calculation
@@ -96,61 +95,37 @@ const calculateTicketBreakdown = (orders: OrderDetail[]): TicketBreakdown => {
   return { adult, child, baby, total: adult + child + baby }
 }
 
-// Calculate dining mode statistics - always returns all modes with fallback 0 values
-const diningModeStats = computed(() => {
-  const total = props.orders.length || 1 // Avoid division by zero, use 1 as divisor for empty
+// Get orders for a specific mode (for extending base stats)
+const getOrdersForMode = (key: string): OrderDetail[] => {
+  if (key === 'RELEASED') return releasedOrders.value
+  return activeOrders.value.filter(o => o.dinnerMode === key)
+}
 
-  // Active dining modes (people eating)
-  const modes = [DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.DINEINLATE] as const
-  const labels: Record<typeof modes[number], string> = {
-    [DinnerMode.TAKEAWAY]: 'TAKEAWAY',
-    [DinnerMode.DINEIN]: 'SPISESAL',
-    [DinnerMode.DINEINLATE]: 'SPIS SENT'
-  }
+// Calculate dining mode statistics using composable, then extend with component-specific fields
+const diningModeStats = computed((): ExtendedDiningModeStats[] => {
+  // Get base stats from composable (percentage based on PORTIONS)
+  const baseStats = calculateDiningModeStats(props.orders)
 
-  const stats: DiningModeStats[] = modes.map(mode => {
-    const modeOrders = activeOrders.value.filter(o => o.dinnerMode === mode)
-    const count = modeOrders.length
-    const portions = calculateTotalPortionsFromPrices(modeOrders)
+  // Extend with component-specific fields
+  return baseStats.map(stat => {
+    const modeOrders = getOrdersForMode(stat.key)
 
     // For dine-in modes, calculate ticket breakdown for chair planning
-    const isDineIn = mode === DinnerMode.DINEIN || mode === DinnerMode.DINEINLATE
-    const ticketBreakdown = isDineIn ? calculateTicketBreakdown(modeOrders) : null
-
-    // Calculate percentage (0 if no orders)
-    const percentage = props.orders.length > 0 ? Math.round((count / total) * 100) : 0
+    const isDineIn = stat.key === DinnerMode.DINEIN || stat.key === DinnerMode.DINEINLATE
+    const ticketBreakdown = (isDineIn || stat.key === 'RELEASED') && modeOrders.length > 0
+      ? calculateTicketBreakdown(modeOrders)
+      : null
 
     // Calculate affected diners for this mode (who has allergies matching menu allergens)
     const affectedResult = computeAffectedDiners(modeOrders, menuAllergenIds.value)
     const affectedDiners = affectedResult?.affectedList ?? []
 
     return {
-      key: mode,
-      label: labels[mode]!,
-      percentage,
-      portions: Math.round(portions),
-      peopleCount: count,
+      ...stat,
       ticketBreakdown,
       affectedDiners
     }
   })
-
-  // Add released tickets panel (always show - rightmost panel for tickets for sale)
-  const releasedCount = releasedOrders.value.length
-  const releasedPortions = calculateTotalPortionsFromPrices(releasedOrders.value)
-  const releasedAffectedResult = computeAffectedDiners(releasedOrders.value, menuAllergenIds.value)
-
-  stats.push({
-    key: 'RELEASED' as const,
-    label: 'TIL SALG',
-    percentage: props.orders.length > 0 ? Math.round((releasedCount / total) * 100) : 0,
-    portions: Math.round(releasedPortions),
-    peopleCount: releasedCount,
-    ticketBreakdown: releasedCount > 0 ? calculateTicketBreakdown(releasedOrders.value) : null,
-    affectedDiners: releasedAffectedResult?.affectedList ?? []
-  })
-
-  return stats
 })
 
 // Use design system for kitchen panel colors
@@ -162,19 +137,7 @@ const getModeClasses = (key: string) => {
 }
 
 // Normalize percentages: minimum 10% each, sum always equals 100%
-const normalizedWidths = computed(() => {
-  const MIN_WIDTH = 10
-  const stats = diningModeStats.value
-  if (stats.length === 0) return {}
-
-  // Apply minimum, track how much we've used
-  const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, MIN_WIDTH) }))
-  const total = withMin.reduce((sum, s) => sum + s.width, 0)
-
-  // Scale to 100% if needed
-  const scale = total > 0 ? 100 / total : 1
-  return Object.fromEntries(withMin.map(s => [s.key, s.width * scale]))
-})
+const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStats.value))
 </script>
 
 <template>
@@ -186,7 +149,7 @@ const normalizedWidths = computed(() => {
           FÆLLES MAD - 100% ØKOLOGI OG 💚
         </div>
         <div class="text-2xl md:text-3xl lg:text-4xl font-bold">
-          {{ Math.round(totalPortions) }} PORTIONER
+          {{ Math.round(totalPortions) }} KUVERTER
         </div>
         <div class="text-xs md:text-sm text-gray-600 dark:text-gray-400 flex flex-wrap justify-center gap-x-2">
           <span class="whitespace-nowrap">Voksen: {{ ticketTypeBreakdown.adult }}</span>
@@ -216,7 +179,7 @@ const normalizedWidths = computed(() => {
 
         <!-- Portions (main number) -->
         <div class="font-bold text-base md:text-lg">
-          {{ mode.portions }} port.
+          {{ mode.portions }} kuv.
         </div>
 
         <!-- Ticket breakdown for dine-in modes (chair planning) -->

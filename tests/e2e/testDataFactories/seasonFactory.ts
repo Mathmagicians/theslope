@@ -106,7 +106,7 @@ export class SeasonFactory {
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
-        ticketIsCancellableDaysBefore: 10,
+        ticketIsCancellableDaysBefore: 8,  // Booking deadline (matches app.config.ts)
         diningModeIsEditableMinutesBefore: 90
     }
 
@@ -277,14 +277,30 @@ export class SeasonFactory {
      * Returns cached instance if already created, otherwise creates and activates new season
      * If singleton season exists in DB, uses it (parallel-safe across workers)
      * Remembers the previously active season to restore after cleanup
+     *
+     * ENV-AWARE: When SHOULD_NOT_MUTATE=true (dev/prod smoke tests), skips test data
+     * scaffolding and uses whatever active season exists in the deployed environment.
+     *
      * @param context BrowserContext for API requests
      * @param aSeason Partial season data (merged with defaults, shortName always overridden to E2E_SINGLETON_NAME)
-     * @returns Active Season (singleton)
+     * @returns Active Season (singleton in local/CI, existing in dev/prod)
      */
     static readonly createActiveSeason = async (
         context: BrowserContext,
         aSeason: Partial<Season> = {}
     ): Promise<Season> => {
+        // In deployed env (dev/prod), just use the existing active season - don't look for test singleton
+        if (process.env.SHOULD_NOT_MUTATE) {
+            const activeId = await this.getActiveSeasonId(context)
+            if (!activeId) {
+                throw new Error('SHOULD_NOT_MUTATE is set but no active season exists in deployed environment')
+            }
+            const season = await this.getSeason(context, activeId)
+            this.activeSeason = season
+            console.info('🌞 > SEASON_FACTORY > Using existing active season (SHOULD_NOT_MUTATE):', season.shortName)
+            return season
+        }
+
         // Return cached active season if it exists
         if (this.activeSeason) {
             console.info('🌞 > SEASON_FACTORY > Returning cached active season:', this.activeSeason.shortName)
@@ -307,22 +323,7 @@ export class SeasonFactory {
 
             // Otherwise, activate it (this deactivates any other active season)
             console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-            const response = await context.request.post('/api/admin/season/active', {
-                headers: headers,
-                data: { seasonId: existingSingleton.id }
-            })
-
-            expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
-            const rawSeason = await response.json()
-
-            // Validate response
-            const {SeasonSchema} = useSeasonValidation()
-            const result = SeasonSchema.safeParse(rawSeason)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-            const activatedSeason = result.data!
-
-            expect(activatedSeason.isActive, 'Season should be active').toBe(true)
-
+            const activatedSeason = await this.activateSeason(context, existingSingleton.id!)
             this.activeSeason = activatedSeason
             return activatedSeason
         }
@@ -718,6 +719,34 @@ export class SeasonFactory {
         // 200 OK = active season ID
         expect(response.status()).toBe(200)
         return await response.json()
+    }
+
+    /**
+     * Activate an existing season by ID
+     * WARNING: This method may ONLY be used in SERIAL tests!
+     * Parallel tests MUST use createActiveSeason() which handles the singleton pattern.
+     * @param context BrowserContext for API requests
+     * @param seasonId ID of season to activate
+     * @returns Activated Season
+     */
+    static readonly activateSeason = async (
+        context: BrowserContext,
+        seasonId: number
+    ): Promise<Season> => {
+        const response = await context.request.post('/api/admin/season/active', {
+            headers: headers,
+            data: { seasonId }
+        })
+
+        expect(response.status(), `Expected 200, got ${response.status()}`).toBe(200)
+        const rawSeason = await response.json()
+
+        const {SeasonSchema} = useSeasonValidation()
+        const result = SeasonSchema.safeParse(rawSeason)
+        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+
+        expect(result.data!.isActive, 'Season should be active').toBe(true)
+        return result.data!
     }
 
     /**

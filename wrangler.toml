@@ -27,7 +27,7 @@ migrations_dir = "migrations"
 # Cron Triggers - must match scheduledTasks in nuxt.config.ts
 # These patterns invoke Nitro scheduled tasks
 [triggers]
-crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]
 
 # Development deployment: Remote dev.skraaningen.dk
 [env.dev]
@@ -48,7 +48,7 @@ database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
 
 [env.dev.triggers]
-crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]
 
 # Production deployment: Remote www.skraaningen.dk (overrides name, routes, vars, and database)
 [env.prod]
@@ -71,4 +71,4 @@ database_id = "495e319b-3b88-4cc8-949a-64a96ba2c019"
 migrations_dir = "migrations"
 
 [env.prod.triggers]
-crons = ["0 1 * * *", "0 2 * * *", "0 3 17 * *"]
+crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]

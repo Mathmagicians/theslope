@@ -134,36 +134,57 @@ describe('useTicketPriceValidation', () => {
         // Factory data without IDs for new prices
         const newPrices = TicketFactory.defaultTicketPricesWithoutIds({ seasonId: 1 })
 
+        // Business logic (ADR):
+        // - Identity = (ticketType, price) - same type+price = same entity
+        // - Description/maximumAgeLimit change → UPDATE
+        // - Price change → CREATE new (preserves order references to old price)
+        // - NEVER DELETE (orders reference ticketPriceId, SET NULL on delete orphans them)
         it.each([
-            {
-                scenario: 'new ticket price (no id) → create',
-                incoming: [...existing, { ...newPrices[0], description: 'New price' }],
-                expected: { create: 1, update: 0, idempotent: 4, delete: 0 }
-            },
             {
                 scenario: 'unchanged prices → idempotent',
                 incoming: existing,
                 expected: { create: 0, update: 0, idempotent: 4, delete: 0 }
             },
             {
-                scenario: 'changed price → update',
-                incoming: existing.map((p, i) => i === 0 ? { ...p, price: 9999 } : p),
+                scenario: 'same content without IDs (import scenario) → idempotent',
+                incoming: newPrices,
+                expected: { create: 0, update: 0, idempotent: 4, delete: 0 }
+            },
+            {
+                scenario: 'description change (same type+price) → update',
+                incoming: existing.map((p, i) => i === 0 ? { ...p, description: 'Updated description' } : p),
                 expected: { create: 0, update: 1, idempotent: 3, delete: 0 }
             },
             {
-                scenario: 'removed price → delete',
-                incoming: existing.slice(0, 3),
-                expected: { create: 0, update: 0, idempotent: 3, delete: 1 }
+                scenario: 'maximumAgeLimit change (same type+price) → update',
+                incoming: existing.map((p, i) => i === 1 ? { ...p, maximumAgeLimit: 99 } : p),
+                expected: { create: 0, update: 1, idempotent: 3, delete: 0 }
             },
             {
-                scenario: 'mixed: create + update + delete',
+                scenario: 'price change → create new (never delete old)',
+                incoming: existing.map((p, i) => i === 0 ? { ...p, price: 9999 } : p),
+                expected: { create: 1, update: 0, idempotent: 3, delete: 0 }
+            },
+            {
+                scenario: 'new ticket type+price combo → create',
+                incoming: [...existing, { ticketType: 'ADULT', price: 7500, description: 'Premium adult' }],
+                expected: { create: 1, update: 0, idempotent: 4, delete: 0 }
+            },
+            {
+                scenario: 'removed prices in incoming → never delete (preserves old)',
+                incoming: existing.slice(0, 2),
+                expected: { create: 0, update: 0, idempotent: 2, delete: 0 }
+            },
+            {
+                scenario: 'mixed: create + update (never delete)',
                 incoming: [
-                    existing[0]!,                                   // idempotent
-                    { ...existing[1]!, price: 2000 },               // update
-                    { ...newPrices[0]!, description: 'Brand new' }  // create (no id)
-                    // existing[2] and existing[3] removed → delete
+                    existing[0]!,                                           // idempotent (same content)
+                    { ...existing[1]!, description: 'Changed description' },// update (same type+price, diff desc)
+                    { ...existing[2]!, price: 2000 },                       // create (new price = new entity)
+                    { ticketType: 'ADULT', price: 7777, description: 'New' }// create (new type+price combo)
+                    // existing[3] removed from incoming → NOT deleted (never delete)
                 ],
-                expected: { create: 1, update: 1, idempotent: 1, delete: 2 }
+                expected: { create: 2, update: 1, idempotent: 1, delete: 0 }
             }
         ])('$scenario', ({ incoming, expected }) => {
             const result = reconcileTicketPrices(existing)(incoming as TicketPrice[])

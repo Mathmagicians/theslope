@@ -682,4 +682,135 @@ describe('useBookingValidation', () => {
       })
     })
   })
+
+  // ============================================================================
+  // Query Parameter Normalization
+  // ============================================================================
+
+  describe('IdOrIdsSchema', () => {
+    const {IdOrIdsSchema} = useBookingValidation()
+
+    it.each([
+      {input: undefined, expected: [], desc: 'undefined'},
+      {input: 5, expected: [5], desc: 'single number'},
+      {input: '5', expected: [5], desc: 'single string'},
+      {input: [1, 2, 3], expected: [1, 2, 3], desc: 'array of numbers'},
+      {input: ['1', '2'], expected: [1, 2], desc: 'array of strings'}
+    ])('GIVEN $desc WHEN parsing THEN returns $expected', ({input, expected}) => {
+      expect(IdOrIdsSchema.parse(input)).toEqual(expected)
+    })
+
+    it.each([
+      {input: 0, desc: 'zero'},
+      {input: -1, desc: 'negative'},
+      {input: 'abc', desc: 'non-numeric string'},
+      {input: [0, 1], desc: 'array with zero'}
+    ])('GIVEN invalid $desc WHEN parsing THEN throws', ({input}) => {
+      expect(() => IdOrIdsSchema.parse(input)).toThrow()
+    })
+  })
+
+  // ============================================================================
+  // ADR-016: Unified Booking Scaffold
+  // ============================================================================
+
+  describe('Unified Booking Scaffold (ADR-016)', () => {
+    const {
+      DesiredOrderSchema,
+      ScaffoldOrdersRequestSchema,
+      ScaffoldOrdersResponseSchema,
+      OrderStateSchema,
+      DinnerModeSchema
+    } = useBookingValidation()
+
+    const OrderState = OrderStateSchema.enum
+    const DinnerMode = DinnerModeSchema.enum
+
+    describe('DesiredOrderSchema', () => {
+      const validDesiredOrder = {
+        inhabitantId: 1,
+        dinnerEventId: 10,
+        dinnerMode: DinnerMode.DINEIN,
+        isGuestTicket: false,
+        ticketPriceId: 5,
+        state: OrderState.BOOKED
+      }
+
+      it('GIVEN valid desired order WHEN parsing THEN succeeds', () => {
+        expect(() => DesiredOrderSchema.parse(validDesiredOrder)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'guest ticket with allergies', data: {...validDesiredOrder, isGuestTicket: true, allergyTypeIds: [1, 2]}},
+        {desc: 'guest ticket without allergies', data: {...validDesiredOrder, isGuestTicket: true}},
+        {desc: 'TAKEAWAY mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.TAKEAWAY}},
+        {desc: 'NONE mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.NONE}}
+      ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
+        expect(() => DesiredOrderSchema.parse(data)).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'missing inhabitantId', data: {dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing dinnerEventId', data: {inhabitantId: 1, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing dinnerMode', data: {inhabitantId: 1, dinnerEventId: 10, ticketPriceId: 5, state: OrderState.BOOKED}},
+        {desc: 'missing ticketPriceId', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED}},
+        {desc: 'missing state', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
+        {desc: 'invalid dinnerMode', data: {...validDesiredOrder, dinnerMode: 'INVALID'}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => DesiredOrderSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('ScaffoldOrdersRequestSchema', () => {
+      const validRequest = {
+        householdId: 1,
+        dinnerEventIds: [10, 11],
+        orders: [{
+          inhabitantId: 1,
+          dinnerEventId: 10,
+          dinnerMode: DinnerMode.DINEIN,
+          isGuestTicket: false,
+          ticketPriceId: 5,
+          state: OrderState.BOOKED
+        }]
+      }
+
+      it('GIVEN valid request WHEN parsing THEN succeeds', () => {
+        expect(() => ScaffoldOrdersRequestSchema.parse(validRequest)).not.toThrow()
+      })
+
+      it('GIVEN empty orders array WHEN parsing THEN succeeds', () => {
+        expect(() => ScaffoldOrdersRequestSchema.parse({...validRequest, orders: []})).not.toThrow()
+      })
+
+      it.each([
+        {desc: 'missing householdId', data: {dinnerEventIds: [10], orders: []}},
+        {desc: 'missing dinnerEventIds', data: {householdId: 1, orders: []}},
+        {desc: 'empty dinnerEventIds', data: {householdId: 1, dinnerEventIds: [], orders: []}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
+        expect(() => ScaffoldOrdersRequestSchema.parse(data)).toThrow()
+      })
+    })
+
+    describe('ScaffoldOrdersResponseSchema', () => {
+      const validResponse = {
+        householdId: 1,
+        scaffoldResult: {
+          seasonId: 1,
+          created: 2,
+          deleted: 0,
+          released: 0,
+          priceUpdated: 0,
+          modeUpdated: 0,
+          unchanged: 5,
+          households: 1,
+          errored: 0
+        }
+      }
+
+      it('GIVEN valid response WHEN parsing THEN succeeds', () => {
+        expect(() => ScaffoldOrdersResponseSchema.parse(validResponse)).not.toThrow()
+      })
+    })
+  })
 })

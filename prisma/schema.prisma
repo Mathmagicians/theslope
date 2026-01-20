@@ -62,6 +62,7 @@ enum OrderAuditAction {
   USER_CLAIMED // User claimed released ticket from another household
   SYSTEM_CREATED // System/admin created (scaffolder, bulk import, admin action)
   SYSTEM_DELETED // System/admin deleted (may be re-created by scaffolder)
+  SYSTEM_UPDATED // System updated existing order (price category change, etc.)
 }
 
 enum JobType {

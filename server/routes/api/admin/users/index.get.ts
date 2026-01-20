@@ -16,7 +16,7 @@ export default defineEventHandler(async (event): Promise<UserDisplay[] | UserDet
     if (email) {
         console.info("🪪 > USER > [GET] Fetching user by email", email)
         try {
-            const user = await fetchUser(email, d1Client)
+            const user = await fetchUser(d1Client, { email })
             const users = user ? [user] : []
             console.info("🪪 > USER > [GET] Found users:", users.length)
             return users

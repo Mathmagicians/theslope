@@ -21,13 +21,27 @@ const route = useRoute()
 const token = computed(() => route.params.token as string)
 
 const {formatPrice} = useTicket()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
-const {deserializeBillingPeriodDetail} = useBillingValidation()
+const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
+const {handleApiError} = useApiHandler()
 
 // Fetch billing data (no auth required)
+// Transform: parse schema to coerce date strings → Date objects (API returns already-deserialized data)
 const {data: billing, status, error} = useFetch<BillingPeriodSummaryDetail | null>(
     `/api/public/billing/${token.value}`,
-    {key: `public-billing-${token.value}`, default: () => null, transform: deserializeBillingPeriodDetail}
+    {
+        key: `public-billing-${token.value}`,
+        default: () => null,
+        transform: (data) => {
+            if (!data) return null
+            try {
+                return BillingPeriodSummaryDetailSchema.parse(data)
+            } catch (e) {
+                handleApiError(e, 'PUBLIC_BILLING > transform')
+                throw e
+            }
+        }
+    }
 )
 
 const isLoading = computed(() => status.value === 'pending')
@@ -40,16 +54,11 @@ const columns = [
     {accessorKey: 'address', header: 'Adresse'},
     {accessorKey: 'amount', header: 'Beløb'}
 ]
-
-// CSV download
-const downloadCsv = () => {
-    window.open(`/api/public/billing/${token.value}/csv`, '_blank')
-}
 </script>
 
 <template>
   <div class="min-h-screen bg-neutral-50 dark:bg-neutral-950 py-8">
-    <div class="max-w-4xl mx-auto px-4">
+    <div class="max-w-6xl mx-auto px-4">
       <!-- Error States -->
       <UCard v-if="isNotFound" class="text-center">
         <UIcon :name="ICONS.exclamationCircle" class="text-6xl text-warning-500 mb-4"/>
@@ -95,28 +104,37 @@ const downloadCsv = () => {
 
           <template #footer>
             <div class="flex justify-end">
-              <UButton
-                  :color="COLOR.primary"
-                  icon="i-heroicons-arrow-down-tray"
-                  :size="SIZES.standard"
-                  @click="downloadCsv"
-              >
-                Download CSV
-              </UButton>
+              <ShareLinksPopover :share-token="token" hide-external-link prominent/>
             </div>
           </template>
         </UCard>
 
+        <!-- Stats tiles -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <UCard>
+            <div class="flex items-center gap-4">
+              <UIcon :name="ICONS.household" class="text-4xl text-primary-500"/>
+              <div>
+                <p :class="TYPOGRAPHY.cardTitle">{{ billing.householdCount }}</p>
+                <p :class="TYPOGRAPHY.bodyTextMuted">Husstande</p>
+              </div>
+            </div>
+          </UCard>
+          <UCard>
+            <div class="flex items-center gap-4">
+              <UIcon :name="ICONS.dinner" class="text-4xl text-primary-500"/>
+              <div>
+                <p :class="TYPOGRAPHY.cardTitle">{{ billing.ticketCount }}</p>
+                <p :class="TYPOGRAPHY.bodyTextMuted">Kuverter</p>
+              </div>
+            </div>
+          </UCard>
+        </div>
+
         <!-- Invoices Table -->
         <UCard>
           <template #header>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <UIcon :name="ICONS.users" :size="SIZES.standardIconSize"/>
-                <h2 :class="TYPOGRAPHY.cardTitle">Husstande ({{ billing.invoices.length }})</h2>
-              </div>
-              <span :class="TYPOGRAPHY.bodyTextMuted">{{ billing.ticketCount }} kuverter total</span>
-            </div>
+            <h2 :class="TYPOGRAPHY.cardTitle">Fakturaer</h2>
           </template>
 
           <UTable
@@ -125,14 +143,13 @@ const downloadCsv = () => {
               :ui="COMPONENTS.table.ui"
           >
             <template #amount-cell="{ row }">
-              {{ formatPrice((row.original as InvoiceDisplay).amount) }} kr
+              <div class="text-right">{{ formatPrice((row.original as InvoiceDisplay).amount) }} kr</div>
             </template>
           </UTable>
 
           <template #footer>
-            <div class="flex justify-between items-center">
-              <span :class="TYPOGRAPHY.bodyTextMedium">Total: {{ billing.householdCount }} husstande</span>
-              <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(billing.totalAmount) }} kr</span>
+            <div class="flex justify-end">
+              <span :class="TYPOGRAPHY.cardTitle">Total: {{ formatPrice(billing.totalAmount) }} kr</span>
             </div>
           </template>
         </UCard>

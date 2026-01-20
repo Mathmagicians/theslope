@@ -1,6 +1,8 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay } from '~/composables/useBookingValidation'
+import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
@@ -10,7 +12,10 @@ import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
-const { headers, salt, temporaryAndRandom } = testHelpers
+const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
+
+// API endpoints
+const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
@@ -26,6 +31,7 @@ export class OrderFactory {
     ticketPriceId: 1,
     bookedByUserId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
+    isGuestTicket: false,
     ...overrides
   })
   // === DEFAULT DATA ===
@@ -103,14 +109,16 @@ export class OrderFactory {
     const defaults = {
       householdId: 1,
       dinnerEventId: 5,
-      orders: [
-        {
-          inhabitantId: 10,
-          bookedByUserId: 1,
-          ticketPriceId: 1,
-          dinnerMode: DinnerModeSchema.enum.DINEIN
-        }
-      ]
+      orders: [this.defaultOrderItem({})]
+    }
+
+    // Merge each order with defaultOrderItem to ensure all required fields present
+    if (overrides?.orders) {
+      return {
+        ...defaults,
+        ...overrides,
+        orders: overrides.orders.map(order => this.defaultOrderItem(order))
+      }
     }
 
     return { ...defaults, ...overrides }
@@ -139,6 +147,7 @@ export class OrderFactory {
     orderId: 1,
     action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
+    performedByUser: {id: 1, email: 'test@example.com'},
     auditData: JSON.stringify({
       inhabitantId: 10,
       bookedByUserId: 1,
@@ -213,6 +222,7 @@ export class OrderFactory {
     householdId,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: overrides?.isGuestTicket ?? false,
     ...overrides
   })
 
@@ -220,6 +230,7 @@ export class OrderFactory {
     action: 'SYSTEM_CREATED',
     performedByUserId: 1,
     source: 'csv_billing',
+    seasonId: overrides?.seasonId ?? null,
     ...overrides
   })
 
@@ -405,19 +416,36 @@ export class OrderFactory {
   }
 
   /**
-   * Get orders for a dinner event
+   * Get orders with flexible query options
    * @param context - Browser context for API requests
-   * @param dinnerEventId - Dinner event ID to fetch orders for
+   * @param options - Query options (dinnerEventIds, householdId, allHouseholds, state, sortBy)
    * @param expectedStatus - Expected HTTP status (default 200)
    * @returns Array of OrderDisplay
    */
-  static readonly getOrdersForDinnerEvent = async (
+  static readonly getOrders = async (
     context: BrowserContext,
-    dinnerEventId: number,
+    options: {
+      dinnerEventIds?: number | number[]
+      householdId?: number
+      allHouseholds?: boolean
+      state?: string
+      sortBy?: 'createdAt' | 'releasedAt'
+    } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
     const { OrderDisplaySchema } = useBookingValidation()
-    const response = await context.request.get(`${ORDER_ENDPOINT}?dinnerEventId=${dinnerEventId}`, { headers })
+    const params = new URLSearchParams()
+
+    if (options.dinnerEventIds !== undefined) {
+      const ids = [options.dinnerEventIds].flat()
+      ids.forEach(id => params.append('dinnerEventIds', String(id)))
+    }
+    if (options.householdId !== undefined) params.append('householdId', String(options.householdId))
+    if (options.allHouseholds) params.append('allHouseholds', 'true')
+    if (options.state) params.append('state', options.state)
+    if (options.sortBy) params.append('sortBy', options.sortBy)
+
+    const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 
     const status = response.status()
     const errorBody = status !== expectedStatus ? await response.text() : ''
@@ -429,6 +457,21 @@ export class OrderFactory {
     }
 
     return []
+  }
+
+  /**
+   * Get orders for a dinner event
+   * @param context - Browser context for API requests
+   * @param dinnerEventId - Dinner event ID to fetch orders for
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @returns Array of OrderDisplay
+   */
+  static readonly getOrdersForDinnerEvent = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    expectedStatus: number = 200
+  ): Promise<OrderDisplay[]> => {
+    return OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId }, expectedStatus)
   }
 
   /**
@@ -489,5 +532,226 @@ export class OrderFactory {
         console.warn(`Failed to cleanup order ${id}: status ${response.status()}`)
       }
     }))
+  }
+
+  // === SCAFFOLD ORDERS (ADR-016 Unified Booking) ===
+
+  /**
+   * Default DesiredOrder for scaffold operations
+   * @param overrides - Override any field
+   * @returns DesiredOrder with defaults for a BOOKED order
+   */
+  static readonly defaultDesiredOrder = (overrides?: Partial<DesiredOrder>): DesiredOrder => ({
+    inhabitantId: 1,
+    dinnerEventId: 1,
+    dinnerMode: DinnerModeSchema.enum.DINEIN,
+    ticketPriceId: 1,
+    isGuestTicket: false,
+    state: OrderStateSchema.enum.BOOKED,
+    ...overrides
+  })
+
+  /**
+   * Default ScaffoldOrdersRequest
+   * @param overrides - Override any field
+   */
+  static readonly defaultScaffoldRequest = (overrides?: Partial<ScaffoldOrdersRequest>): ScaffoldOrdersRequest => ({
+    householdId: 1,
+    dinnerEventIds: [1],
+    orders: [OrderFactory.defaultDesiredOrder()],
+    ...overrides
+  })
+
+  /**
+   * Scaffold orders via household endpoint (POST /api/household/order/scaffold)
+   * ADR-016: Unified booking mutation - creates, updates, releases, and deletes orders
+   *
+   * @param context - Browser context for API requests
+   * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @returns ScaffoldOrdersResponse with householdId and scaffoldResult
+   */
+  static readonly scaffoldOrders = async (
+    context: BrowserContext,
+    request: ScaffoldOrdersRequest,
+    expectedStatus: number = 200
+  ): Promise<ScaffoldOrdersResponse | null> => {
+    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
+
+    const response = await context.request.post(HOUSEHOLD_SCAFFOLD_ENDPOINT, {
+      headers,
+      data: request
+    })
+
+    const status = response.status()
+    const responseBody = await response.text()
+
+    expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
+
+    if (expectedStatus === 200) {
+      const parsed = JSON.parse(responseBody)
+      return ScaffoldOrdersResponseSchema.parse(parsed)
+    }
+
+    return null
+  }
+
+  /**
+   * Create a DesiredOrder for booking (BOOKED state, specific mode)
+   * Uses defaultDesiredOrder with booking-specific overrides
+   */
+  static readonly createBookingOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    dinnerMode: typeof DinnerModeSchema.enum[keyof typeof DinnerModeSchema.enum] = DinnerModeSchema.enum.DINEIN,
+    orderId?: number
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode,
+    orderId
+  })
+
+  /**
+   * Create a DesiredOrder for release (RELEASED state, NONE mode)
+   * Uses defaultDesiredOrder with release-specific overrides
+   */
+  static readonly createReleaseOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    orderId: number
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode: DinnerModeSchema.enum.NONE,
+    state: OrderStateSchema.enum.RELEASED,
+    orderId
+  })
+
+  /**
+   * Create a guest DesiredOrder
+   * Uses defaultDesiredOrder with guest-specific overrides
+   */
+  static readonly createGuestOrder = (
+    inhabitantId: number,
+    dinnerEventId: number,
+    ticketPriceId: number,
+    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    allergyTypeIds?: number[]
+  ): DesiredOrder => this.defaultDesiredOrder({
+    inhabitantId,
+    dinnerEventId,
+    ticketPriceId,
+    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    isGuestTicket: true,
+    allergyTypeIds
+  })
+
+  /**
+   * Create complete order fixture for deadline-based tests.
+   * Uses admin context throughout for simplicity.
+   *
+   * - Before deadline (>8 days): Creates test household, scaffold creates order
+   * - After deadline (<=8 days): Uses admin's session household, creates order directly
+   *
+   * @param context - Admin browser context
+   * @param daysFromNow - Days from today for dinner event
+   *   - >8 days = BEFORE deadline (delete allowed)
+   *   - <=8 days = AFTER deadline (release only)
+   * @param testSalt - Unique salt for test data isolation
+   * @returns Fixture data including season, event, household, inhabitant, order
+   *
+   * CLEANUP NOTE:
+   * - Before deadline: household is test data, ADD to createdHouseholdIds
+   * - After deadline: household is admin's session, do NOT add to cleanup
+   */
+  static readonly createOrderFixture = async (
+    context: BrowserContext,
+    daysFromNow: number,
+    testSalt: string
+  ): Promise<{
+    season: Season
+    dinnerEvent: DinnerEventDisplay
+    household: { id: number }
+    inhabitant: { id: number }
+    order: OrderDisplay
+    ticketPriceId: number
+    isTestHousehold: boolean
+  }> => {
+    // Create season with ticket prices
+    const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(testSalt))
+
+    // Create dinner event at specified days from now
+    const eventDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)
+    const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
+      seasonId: season.id!,
+      date: eventDate,
+      menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
+    })
+
+    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === 'ADULT')?.id
+    if (!ticketPriceId) throw new Error('No ADULT ticket price found')
+
+    let order: OrderDisplay
+    let householdId: number
+    let inhabitantId: number
+    let isTestHousehold: boolean
+
+    if (daysFromNow > 8) {
+      // BEFORE deadline: Create isolated test household, scaffold creates order
+      const created = await HouseholdFactory.createHouseholdWithInhabitants(
+        context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+      )
+      householdId = created.household.id
+      inhabitantId = created.inhabitants[0]!.id
+      isTestHousehold = true
+
+      // Set DINEIN preferences so scaffold creates order
+      const {createDefaultWeekdayMap} = useCoreValidation()
+      const allDaysDineIn = createDefaultWeekdayMap(DinnerModeSchema.enum.DINEIN)
+      await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+
+      // Scaffold creates order
+      await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+      const orders = await this.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+      const found = orders.find(o => o.inhabitantId === inhabitantId)
+      if (!found) throw new Error(`Order not created by scaffold for inhabitant ${inhabitantId}`)
+      order = found
+    } else {
+      // AFTER deadline: Use admin's session household, create order directly
+      const sessionInfo = await getSessionUserInfo(context)
+      householdId = sessionInfo.householdId
+      inhabitantId = sessionInfo.inhabitantId
+      isTestHousehold = false
+
+      // Create order directly (admin has access to own household)
+      const createResult = await this.createOrder(context, {
+        householdId,
+        dinnerEventId: dinnerEvent.id,
+        orders: [this.defaultOrderItem({
+          inhabitantId,
+          ticketPriceId,
+          dinnerMode: DinnerModeSchema.enum.DINEIN
+        })]
+      })
+      if (!createResult) throw new Error('Order creation failed')
+      const fetched = await this.getOrder(context, createResult.createdIds[0]!)
+      if (!fetched) throw new Error('Order fetch failed')
+      order = fetched
+    }
+
+    return {
+      season,
+      dinnerEvent,
+      household: { id: householdId },
+      inhabitant: { id: inhabitantId },
+      order,
+      ticketPriceId,
+      isTestHousehold
+    }
   }
 }

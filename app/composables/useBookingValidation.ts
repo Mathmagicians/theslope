@@ -121,6 +121,30 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * OrderHistory Display - lightweight for lists (ADR-009)
+     * Scalars only, no nested Order relation
+     * Includes denormalized fields for cancellation queries (orderId becomes NULL after deletion)
+     * NOTE: Defined here (before OrderDetailSchema) so it can be referenced in OrderDetailSchema.history
+     */
+    const OrderHistoryDisplaySchema = z.object({
+        id: z.number().int().positive(),
+        orderId: z.number().int().positive().nullable(),
+        action: OrderAuditActionSchema,
+        performedByUserId: z.number().int().positive().nullable(),
+        // User relation for meaningful display (e.g., "Anna booked at 14:30")
+        performedByUser: z.object({
+            id: z.number().int().positive(),
+            email: z.string()
+        }).nullable(),
+        auditData: z.string(),
+        timestamp: z.coerce.date(),
+        // Denormalized fields for cancellation queries
+        inhabitantId: z.number().int().positive().nullable(),
+        dinnerEventId: z.number().int().positive().nullable(),
+        seasonId: z.number().int().positive().nullable()
+    })
+
+    /**
      * Order Detail - Display + comprehensive relations (GET /api/order/[id])
      * ADR-009: Operation-ready with full nested objects
      */
@@ -140,7 +164,10 @@ export const useBookingValidation = () => {
             ticketType: TicketTypeSchema,
             price: z.number().int(),
             description: z.string().nullable()
-        }).nullable()
+        }).nullable(),
+        // Order history - audit trail (ADR-011), optional for backwards compatibility
+        // Populated by fetchOrder() for detail endpoint, not included in DinnerEventDetail.tickets
+        history: z.array(OrderHistoryDisplaySchema).optional()
     })
 
     // ============================================================================
@@ -167,7 +194,8 @@ export const useBookingValidation = () => {
         ticketPriceId: z.number().int().positive(),
         priceAtBooking: z.number().int().optional(),
         dinnerMode: DinnerModeSchema,
-        state: OrderStateSchema
+        state: OrderStateSchema,
+        isGuestTicket: z.boolean().default(false)
     })
 
     // ============================================================================
@@ -177,11 +205,14 @@ export const useBookingValidation = () => {
     /**
      * Audit context for order creation - used for OrderHistory entries
      * Uses OrderAuditActionSchema from generated Prisma Zod types (ADR-001)
+     *
+     * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
     const AuditContextSchema = z.object({
         action: OrderAuditActionSchema,
         performedByUserId: z.number().int().positive().nullable(),
-        source: z.string().min(1)
+        source: z.string().min(1),
+        seasonId: z.number().int().positive().nullable()
     })
 
     /**
@@ -256,7 +287,8 @@ export const useBookingValidation = () => {
             inhabitantId: z.number().int().positive(),
             ticketPriceId: z.number().int().positive(),
             dinnerMode: DinnerModeSchema,
-            bookedByUserId: z.number().int().positive()
+            bookedByUserId: z.number().int().positive(),
+            isGuestTicket: z.boolean().optional().default(false)
         }))
     }).refine(
         (data) => {
@@ -300,24 +332,6 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * OrderHistory Display - lightweight for lists (ADR-009)
-     * Scalars only, no nested Order relation
-     * Includes denormalized fields for cancellation queries (orderId becomes NULL after deletion)
-     */
-    const OrderHistoryDisplaySchema = z.object({
-        id: z.number().int().positive(),
-        orderId: z.number().int().positive().nullable(),
-        action: OrderAuditActionSchema,
-        performedByUserId: z.number().int().positive().nullable(),
-        auditData: z.string(),
-        timestamp: z.coerce.date(),
-        // Denormalized fields for cancellation queries
-        inhabitantId: z.number().int().positive().nullable(),
-        dinnerEventId: z.number().int().positive().nullable(),
-        seasonId: z.number().int().positive().nullable()
-    })
-
-    /**
      * OrderHistory Detail - for GET/:id and mutation returns (ADR-009)
      * Extends Display with order relation
      */
@@ -331,7 +345,8 @@ export const useBookingValidation = () => {
      */
     const OrderHistoryCreateSchema = OrderHistoryDisplaySchema.omit({
         id: true,
-        timestamp: true
+        timestamp: true,
+        performedByUser: true  // Relation object is for display only, not create (FK is performedByUserId)
     })
 
     /**
@@ -574,7 +589,9 @@ export const useBookingValidation = () => {
             id: z.number().int().positive(),
             date: z.coerce.date(),
             menuTitle: z.string()
-        })
+        }),
+        // Guest ticket flag - preserved in transaction snapshot for billing display
+        isGuestTicket: z.boolean().default(false)
     })
 
     // ============================================================================
@@ -590,6 +607,10 @@ export const useBookingValidation = () => {
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
         released: z.number().int().nonnegative().default(0),
+        claimed: z.number().int().nonnegative().default(0),         // Tickets claimed from marketplace (past deadline)
+        claimRejected: z.number().int().nonnegative().default(0),   // Claim attempts that failed (race condition)
+        priceUpdated: z.number().int().nonnegative().default(0),    // Price category changes (birthdate added/changed or birthday passed)
+        modeUpdated: z.number().int().nonnegative().default(0),     // Dining mode changes (before deadline)
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
         errored: z.number().int().nonnegative().default(0)
@@ -604,6 +625,95 @@ export const useBookingValidation = () => {
         inhabitant: InhabitantDetailSchema,
         scaffoldResult: ScaffoldResultSchema
     })
+
+    // ============================================================================
+    // UNIFIED BOOKING SCAFFOLD (ADR-016)
+    // All booking mutations go through scaffolder except atomic claim
+    // ============================================================================
+
+    /**
+     * Desired order - unified schema for all booking types
+     * - orderId: Present for updates (existing order), absent for creates (new order)
+     * - state: Generator sets based on intent (BOOKED for eating, RELEASED for release)
+     * - ticketPriceId: Required, UI sends the price shown to user
+     * - allergyTypeIds: guest allergies (inhabitants have allergies via Allergy table)
+     */
+    const DesiredOrderSchema = OrderDisplaySchema.pick({
+        inhabitantId: true,
+        dinnerEventId: true,
+        dinnerMode: true,
+        isGuestTicket: true,
+        state: true
+    }).extend({
+        orderId: z.number().int().positive().optional(),
+        ticketPriceId: z.number().int().positive(),
+        allergyTypeIds: z.array(z.number().int().positive()).optional()
+    })
+
+    /**
+     * Scaffold orders request - unified booking endpoint
+     * POST /api/household/order/scaffold
+     *
+     * Use cases:
+     * - UC1: Single inhabitant booking
+     * - UC2: Power mode (all inhabitants same mode)
+     * - UC3: Grid booking (multiple dinners)
+     * - UC4: Add guest (isGuestTicket=true)
+     * - UC5: Release ticket (NONE after deadline)
+     *
+     * Audit context derived server-side:
+     * - performedByUserId = session user
+     * - action = USER_BOOKED or USER_CANCELLED
+     * - source = 'user-booking'
+     */
+    const ScaffoldOrdersRequestSchema = z.object({
+        householdId: z.number().int().positive(),
+        seasonId: z.number().int().positive().optional(),
+        dinnerEventIds: z.array(z.number().int().positive()).min(1),
+        orders: z.array(DesiredOrderSchema)
+    })
+
+    /**
+     * Scaffold orders response - returns result
+     */
+    const ScaffoldOrdersResponseSchema = z.object({
+        householdId: z.number().int().positive(),
+        scaffoldResult: ScaffoldResultSchema
+    })
+
+    /**
+     * Guest booking form - UI form validation schema
+     * Used by GuestBookingForm component for UForm validation
+     * Uses z.coerce for HTML input string → number conversion
+     */
+    const GuestBookingFormSchema = z.object({
+        count: z.coerce.number({invalid_type_error: 'Indtast antal gæster'})
+            .int({message: 'Skal være et helt tal'})
+            .min(1, {message: 'Minimum 1 gæst'})
+            .max(10, {message: 'Maximum 10 gæster'}),
+        ticketPriceId: z.coerce.number({invalid_type_error: 'Vælg en billettype'})
+            .int()
+            .positive({message: 'Vælg en billettype'}),
+        allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
+        dinnerMode: DinnerModeSchema.refine(
+            mode => mode !== DinnerModeSchema.enum.NONE,
+            {message: 'Gæster skal vælge en spisemåde'}
+        )
+    })
+
+    // ============================================================================
+    // Query Parameter Normalization
+    // ============================================================================
+
+    /**
+     * Normalize query param to array of positive integers
+     * Handles: undefined→[], single number→[n], array→[n,...]
+     * Used for endpoints accepting 0, 1, or many IDs (e.g., dinnerEventIds)
+     */
+    const IdOrIdsSchema = z.union([
+        z.coerce.number().int().positive().transform(n => [n]),
+        z.array(z.coerce.number().int().positive())
+    ]).optional().default([]).transform(v => v ?? [])
 
     // ============================================================================
     // Daily Maintenance Result Schemas
@@ -666,6 +776,40 @@ export const useBookingValidation = () => {
         imageUrl: z.string().url().nullable().optional(),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional()
+    })
+
+    // ============================================================================
+    // User Booking Result Schemas (for processBooking feedback)
+    // ============================================================================
+
+    /**
+     * Action taken on an order during booking operation
+     */
+    const BookingActionSchema = z.enum(['created', 'updated', 'released', 'deleted', 'skipped'])
+
+    /**
+     * Feedback item for user notification - includes name for toast message
+     * Example: "Anna Hansen tilmeldt til tirsdag"
+     */
+    const BookingFeedbackItemSchema = z.object({
+        inhabitantId: z.number().int().positive(),
+        inhabitantName: z.string(),
+        action: BookingActionSchema,
+        dinnerMode: DinnerModeSchema
+    })
+
+    /**
+     * Result from processBooking operation with detailed feedback per inhabitant
+     */
+    const ProcessBookingResultSchema = z.object({
+        feedback: z.array(BookingFeedbackItemSchema),
+        summary: z.object({
+            created: z.number().int().nonnegative(),
+            updated: z.number().int().nonnegative(),
+            released: z.number().int().nonnegative(),
+            deleted: z.number().int().nonnegative(),
+            skipped: z.number().int().nonnegative()
+        })
     })
 
     return {
@@ -735,12 +879,26 @@ export const useBookingValidation = () => {
         ScaffoldResultSchema,
         InhabitantUpdateResponseSchema,
 
+        // Unified Booking Scaffold (ADR-016)
+        DesiredOrderSchema,
+        ScaffoldOrdersRequestSchema,
+        ScaffoldOrdersResponseSchema,
+        GuestBookingFormSchema,
+
         // Daily Maintenance
         ConsumeResultSchema,
         CloseOrdersResultSchema,
         CreateTransactionsResultSchema,
         InitPreferencesResultSchema,
-        DailyMaintenanceResultSchema
+        DailyMaintenanceResultSchema,
+
+        // User Booking (processBooking feedback)
+        BookingActionSchema,
+        BookingFeedbackItemSchema,
+        ProcessBookingResultSchema,
+
+        // Query Parameter Normalization
+        IdOrIdsSchema
     }
 }
 
@@ -795,9 +953,20 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
 export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
 
+// Unified Booking Scaffold (ADR-016)
+export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['DesiredOrderSchema']>
+export type ScaffoldOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersRequestSchema']>
+export type ScaffoldOrdersResponse = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersResponseSchema']>
+export type GuestBookingFormData = z.infer<ReturnType<typeof useBookingValidation>['GuestBookingFormSchema']>
+
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>
 export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CloseOrdersResultSchema']>
 export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
+
+// User Booking (processBooking feedback)
+export type BookingAction = z.infer<ReturnType<typeof useBookingValidation>['BookingActionSchema']>
+export type BookingFeedbackItem = z.infer<ReturnType<typeof useBookingValidation>['BookingFeedbackItemSchema']>
+export type ProcessBookingResult = z.infer<ReturnType<typeof useBookingValidation>['ProcessBookingResultSchema']>

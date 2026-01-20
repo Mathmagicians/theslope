@@ -31,7 +31,7 @@ export default defineNuxtConfig({
         scheduledTasks: {
             '0 1 * * *': ['heynabo-import'],      // 01:00 UTC = 02:00/03:00 Copenhagen (runs first)
             '0 2 * * *': ['daily-maintenance'],   // 02:00 UTC = 03:00/04:00 Copenhagen (runs after import)
-            '0 3 17 * *': ['monthly-billing']     // 17th at 03:00 UTC = 04:00/05:00 Copenhagen
+            '0 3 18 * *': ['monthly-billing']     // 18th at 03:00 UTC = 04:00/05:00 Copenhagen (day after cutoff)
         }
     },
 
@@ -55,6 +55,8 @@ export default defineNuxtConfig({
                 'success',
                 'warning',
                 'error',
+                // Tailwind colors for specific use cases
+                'yellow',    // Deadline warning chips (more visible than orange)
                 // Custom Pantone team colors
                 'mocha',
                 'pink',
@@ -90,7 +92,12 @@ export default defineNuxtConfig({
         },
         // Client-side settings - automatic tree-shaking
         clientBundle: {
-            scan: true  // Only bundle icons actually used in components
+            scan: true,  // Only bundle icons actually used in components
+            // Explicitly include icons used by NuxtUI internally (not detected by scanning)
+            icons: [
+                'lucide:sun',
+                'lucide:moon'
+            ]
         },
         provider: 'server'  // Use server-side icon provider
     },
@@ -105,6 +112,8 @@ export default defineNuxtConfig({
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
         // Public keys that are exposed to the client
         public: {
+            RELEASE_VERSION: process.env.NUXT_PUBLIC_RELEASE_VERSION || "",  // Baked at build time
+            RELEASE_DATE: process.env.NUXT_PUBLIC_RELEASE_DATE || "",        // Baked at build time
             apiBase: '/api',
             HEY_NABO_API: '',  // Overridden at runtime by NUXT_PUBLIC_HEY_NABO_API
             COMMIT_ID: process.env.GITHUB_SHA || 'development'

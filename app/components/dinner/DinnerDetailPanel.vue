@@ -51,30 +51,25 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
 
 <template>
   <UPageBody class="!mt-0 !space-y-2 md:!space-y-8">
-    <!-- Loading state -->
-    <UPageCard v-if="isLoading" :class="LAYOUTS.cardResponsive">
-      <Loader text="Henter fællesspisning..." />
-    </UPageCard>
-
-    <!-- Error state -->
-    <UPageCard v-else-if="isError" :class="LAYOUTS.cardResponsive">
-      <ViewError text="Kan ikke hente fællesspisning" />
-    </UPageCard>
-
     <!-- No dinner selected -->
     <UPageCard
-      v-else-if="hasNoDinnerSelected"
+      v-if="hasNoDinnerSelected"
       :class="LAYOUTS.cardResponsive"
       :icon="RESPONSIVE_ICONS.arrowToMaster"
       title="Vælg en fællesspisning"
       description="Vælg en fællesspisning fra kalenderen for at se detaljer."
     />
 
-    <!-- Main content when dinner is loaded -->
-    <template v-else-if="dinnerEvent">
+    <!-- Error state -->
+    <UPageCard v-else-if="isError" :class="LAYOUTS.cardResponsive">
+      <ViewError text="Kan ikke hente fællesspisning" />
+    </UPageCard>
+
+    <!-- Main content - show structure, let sections handle their own loading -->
+    <template v-else>
       <!-- #hero: Menu content with background image -->
       <UPageHero
-data-testid="dinner-detail-panel"
+        data-testid="dinner-detail-panel"
         :class="LAYOUTS.cardResponsive"
         :ui="{
           root: `relative bg-cover bg-center min-h-[300px] md:min-h-[400px] overflow-hidden`
@@ -86,7 +81,8 @@ data-testid="dinner-detail-panel"
           <div class="absolute inset-0 pointer-events-none bg-radial from-transparent from-80% to-black/60" />
         </template>
 
-        <slot name="hero" />
+        <!-- Hero: background visible immediately, content appears when ready (no loader - less jarring) -->
+        <slot v-if="dinnerEvent" name="hero" />
       </UPageHero>
 
       <!-- #team: Cooking team section -->
@@ -95,16 +91,24 @@ data-testid="dinner-detail-panel"
           <h3 :class="TYPOGRAPHY.cardTitle">Hvem laver maden?</h3>
         </template>
 
-        <slot name="team" />
+        <!-- Team loading state - matches CookingTeamCard monitor mode approximate height -->
+        <div v-if="isLoading" class="flex items-center justify-center min-h-[150px] md:min-h-[180px]">
+          <Loader text="Henter madhold..." />
+        </div>
+        <slot v-else name="team" />
       </UPageCard>
 
       <!-- #stats: Kitchen statistics section -->
       <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
         <template #title>
-          <h3 :class="TYPOGRAPHY.cardTitle">Køkkenstatistik</h3>
+          <h3 :class="TYPOGRAPHY.cardTitle">Hvem kommer og spiser?</h3>
         </template>
 
-        <slot name="stats" />
+        <!-- Stats loading state - matches KitchenPreparation approximate height -->
+        <div v-if="isLoading" class="flex items-center justify-center min-h-[180px] md:min-h-[220px]">
+          <Loader text="Henter tilmeldinger..." />
+        </div>
+        <slot v-else name="stats" />
       </UPageCard>
     </template>
   </UPageBody>

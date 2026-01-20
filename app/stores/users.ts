@@ -5,6 +5,7 @@ import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 export const useUsersStore = defineStore("Users", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
+    const {formatHeynaboStats} = useMaintenance()
 
     // Get SystemRole enum from validation composable
     const {SystemRoleSchema} = useCoreValidation()
@@ -123,12 +124,14 @@ export const useUsersStore = defineStore("Users", () => {
 
         const result = heynaboImport.value
         if (result) {
-            console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > Synced: ${result.householdsCreated} households created, ${result.householdsDeleted} deleted, ${result.inhabitantsCreated} inhabitants created, ${result.usersCreated} users created`)
+            const stats = formatHeynaboStats(result)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(LOG_CTX, `🪪 > USERS_STORE > importHeynaboData > ${description}`)
 
             // Show success toast with import summary
             toast.add({
                 title: 'Heynabo import fuldført',
-                description: `Oprettet: ${result.householdsCreated} husstande, ${result.inhabitantsCreated} beboere, ${result.usersCreated} brugere. Slettet: ${result.householdsDeleted} husstande, ${result.inhabitantsDeleted} beboere.`,
+                description,
                 color: 'success'
             })
         }
@@ -143,6 +146,29 @@ export const useUsersStore = defineStore("Users", () => {
             throw myTeamsError.value
         }
         console.info(`🪪 > USERS_STORE > loadMyTeams > Loaded ${myTeams.value.length} teams`)
+    }
+
+    /**
+     * Update user roles via POST /api/admin/users/[id]
+     * Refreshes users list after successful update
+     */
+    const updateUserRoles = async (userId: number, systemRoles: string[]) => {
+        console.info(`🪪 > USERS_STORE > updateUserRoles > Updating user ${userId} with roles [${systemRoles}]`)
+        try {
+            await $fetch(`/api/admin/users/${userId}`, {
+                method: 'POST',
+                body: { systemRoles }
+            })
+            toast.add({
+                title: 'Roller opdateret',
+                description: `Brugerens roller er blevet opdateret`,
+                color: 'success'
+            })
+            await refreshUsers()
+        } catch (error) {
+            handleApiError(error, 'updateUserRoles')
+            throw error
+        }
     }
 
     return {
@@ -165,7 +191,8 @@ export const useUsersStore = defineStore("Users", () => {
         isMyTeamsLoading,
         isMyTeamsErrored,
         isMyTeamsInitialized,
-        myTeamsError
+        myTeamsError,
+        updateUserRoles
     };
 });
 

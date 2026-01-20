@@ -41,6 +41,13 @@ Welcome to TheSlope documentation. This directory contains all technical and fea
   - Deployment guide
   - Environment variables
 
+### =� Operations
+
+- [**Operations Runbook**](./ops-runbook.md)
+  - Cloudflare WAF configuration
+  - GitHub secrets management
+  - Troubleshooting guide
+
 ### =� Additional Resources
 
 - [**API Samples**](./heynabo_api_samples/)

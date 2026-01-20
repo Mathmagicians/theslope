@@ -2,15 +2,18 @@
 /**
  * HouseholdEconomy - Billing view for household (Økonomi tab)
  *
- * Two expandable tables:
- * - Current period: dinner groups with transaction details
- * - Past invoices: billing periods with grouped transactions
+ * Two sections (unified pattern matching AdminEconomy):
+ * - Kommende: upcoming orders (BOOKED/RELEASED for future dinners)
+ * - Faktureringsperioder: unified table with virtual (current) + closed (past) periods
  *
- * Data: GET /api/billing?householdId=X
+ * Uses EconomyTable for tables, CostEntry/CostLine for grouped items.
+ * Data: GET /api/billing?householdId=X + orders from bookingsStore + dinnerEvents from planStore
  */
-import {formatDate} from '~/utils/date'
-import type {HouseholdBillingResponse} from '~/composables/useBillingValidation'
-import type {DinnerTransactionGroup} from '~/composables/useBilling'
+import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
+import type {DateRange} from '~/types/dateTypes'
+import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
+import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {StatBox} from '~/components/economy/CostEntry.vue'
 
 interface Props {
     household: {id: number}
@@ -19,72 +22,221 @@ interface Props {
 const props = defineProps<Props>()
 
 // Composables
-const {formatPrice, ticketTypeConfig} = useTicket()
-const {groupTransactionsByDinner} = useBilling()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {formatPrice} = useTicket()
+const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
+const {OrderStateSchema} = useBookingValidation()
+const {HouseholdBillingResponseSchema} = useBillingValidation()
+
+// Accessor functions for CostEntry (reusable lambdas)
+const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
+    period.isClosed ? 'PBS Faktura' : 'Aktuel periode'
+
+const periodSubtitleAccessor = (period: UnifiedBillingPeriod) =>
+    period.billingPeriod
+
+const periodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
+    {icon: ICONS.calendar, value: period.dinnerCount, label: 'Middage'},
+    {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
+    {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
+]
+
+const periodControlSumAccessor = (period: UnifiedBillingPeriod) => ({
+    computed: period.transactionSum,
+    expected: period.totalAmount
+})
+
+const periodItemsAccessor = (period: UnifiedBillingPeriod) => period.groups
+
+// Stores for dinner events (for date/menu info)
+const planStore = usePlanStore()
+const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
+planStore.initPlanStore()
+
+const householdsStore = useHouseholdsStore()
+const {selectedHousehold} = storeToRefs(householdsStore)
+
+// Local orders fetch (ADR-007 exception - component-local data)
+// Empty dinnerEventIds = all orders for household (endpoint auto-filters by session)
+const {data: orders, status: ordersStatus} = useAsyncData<OrderDisplay[]>(
+    `economy-orders-${props.household.id}`,
+    () => $fetch<OrderDisplay[]>('/api/order'),
+    {default: () => []}
+)
+const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
 
 // Data fetch (ADR-007: component-local exception)
+const householdId = computed(() => props.household.id)
 const {data: billing, status, error} = useAsyncData<HouseholdBillingResponse | null>(
-    `billing-${props.household.id}`,
-    () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: props.household.id}}),
-    {default: () => null}
+    computed(() => `billing-${householdId.value}`),
+    () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: householdId.value}}),
+    {
+        default: () => null,
+        transform: (data) => data ? HouseholdBillingResponseSchema.parse(data) : null,
+        watch: [householdId]
+    }
 )
 
 const isLoading = computed(() => status.value === 'pending')
 const isErrored = computed(() => status.value === 'error')
 
+// Dinner time splitter for past/future classification
+const {splitDinnerEvents} = useSeason()
+
+// Split dinner events into past/future using dinner time logic
+const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
+const splitResult = computed(() => splitDinnerEvents(dinnerEvents.value))
+const futureDinnerIds = computed(() => {
+    const futureDates = new Set(splitResult.value.futureDinnerDates.map(d => d.getTime()))
+    return new Set(dinnerEvents.value.filter(e => futureDates.has(e.date.getTime())).map(e => e.id))
+})
+
+// Dinner events lookup for joining orders
+const dinnerEventsMap = computed(() =>
+    new Map(dinnerEvents.value.map(e => [e.id, { id: e.id, date: e.date, menuTitle: e.menuTitle }]))
+)
+
+// Inhabitants lookup for name resolution
+const inhabitantsMap = computed(() => {
+    const inhabitants = selectedHousehold.value?.inhabitants ?? []
+    return new Map(inhabitants.map(i => [i.id, i.name]))
+})
+const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
+
+// Upcoming orders (BOOKED/RELEASED for future dinners)
+const upcomingOrdersData = computed(() => {
+    if (!isSelectedSeasonInitialized.value) return []
+
+    // Filter: BOOKED/RELEASED, future dinner (using splitDinnerEvents logic)
+    const upcomingOrders = orders.value.filter(o =>
+        (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
+        futureDinnerIds.value.has(o.dinnerEventId)
+    )
+
+    // Join using pure function
+    const ordersWithDinner = joinOrdersWithDinnerEvents(
+        upcomingOrders,
+        dinnerEventsMap.value,
+        getInhabitantName
+    )
+
+    const groupOrdersByDinner = groupByCostEntry<typeof ordersWithDinner[number]>(o => o.dinnerEvent)
+    return groupOrdersByDinner(ordersWithDinner, o => o.priceAtBooking)
+})
+
+// Curried grouper for transactions by dinner
+const groupTxByDinner = groupByCostEntry<TransactionDisplay>(tx => tx.dinnerEvent)
+
 // Current period grouped data
 const currentPeriodData = computed(() =>
-    billing.value ? groupTransactionsByDinner(billing.value.currentPeriod.transactions) : []
+    billing.value ? groupTxByDinner(billing.value.currentPeriod.transactions, tx => tx.amount) : []
 )
 
-// Past invoices with pre-grouped transactions
-interface InvoiceRow {
-    id: number
-    billingPeriod: string
-    amount: number
-    paymentMonth: string
-    groups: DinnerTransactionGroup[]
+// ========== UNIFIED BILLING PERIODS (matches AdminEconomy pattern) ==========
+
+/**
+ * UnifiedBillingPeriod - Represents both virtual (current) and closed (past) periods
+ * Same interface as AdminEconomy's unifiedBillingPeriods
+ */
+interface UnifiedBillingPeriod {
+    id: number | 'virtual'      // 'virtual' for current period, number for past invoices
+    period: DateRange           // For EconomyTable date filtering/sorting
+    billingPeriod: string       // Display string
+    totalAmount: number
+    dinnerCount: number
+    ticketCounts: string
+    isClosed: boolean           // true = past invoice, false = virtual/current
+    groups: CostEntry<TransactionDisplay>[]  // Grouped transactions by dinner
+    transactionSum: number      // Control sum: Σ transaction amounts
 }
 
-const pastInvoicesData = computed((): InvoiceRow[] =>
-    billing.value?.pastInvoices.map(inv => ({
-        id: inv.id,
-        billingPeriod: inv.billingPeriod.replace('-', ' - '),
-        amount: inv.amount,
-        paymentMonth: formatDate(new Date(inv.paymentDate), 'MMMM yyyy'),
-        groups: groupTransactionsByDinner(inv.transactions)
-    })) ?? []
+// Unified billing periods (virtual + closed)
+const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
+    if (!billing.value) return []
+
+    const periods: UnifiedBillingPeriod[] = []
+
+    // Virtual row (current period - not yet billed)
+    const currentPeriod = billing.value.currentPeriod
+    const currentPeriodRange = createDateRange(
+        new Date(currentPeriod.periodStart),
+        new Date(currentPeriod.periodEnd)
+    )
+    const currentGroups = currentPeriodData.value
+
+    // Control sum for virtual: Σ transaction amounts
+    const virtualTransactionSum = currentPeriod.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+
+    periods.push({
+        id: 'virtual',
+        period: currentPeriodRange,
+        billingPeriod: formatDateRange(currentPeriodRange),
+        totalAmount: currentPeriod.totalAmount,
+        dinnerCount: currentGroups.length,
+        ticketCounts: formatTicketCounts(currentPeriod.transactions),
+        isClosed: false,
+        groups: currentGroups,
+        transactionSum: virtualTransactionSum
+    })
+
+    // Closed rows (past invoices)
+    for (const inv of billing.value.pastInvoices) {
+        const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
+        // Control sum: Σ transaction amounts vs invoice amount
+        const invoiceTransactionSum = inv.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        periods.push({
+            id: inv.id,
+            period: createDateRange(new Date(inv.cutoffDate), new Date(inv.paymentDate)),
+            billingPeriod: inv.billingPeriod.replace('-', ' - '),
+            totalAmount: inv.amount,
+            dinnerCount: groups.length,
+            ticketCounts: formatTicketCounts(inv.transactions),
+            isClosed: true,
+            groups,
+            transactionSum: invoiceTransactionSum
+        })
+    }
+
+    return periods
+})
+
+// Unified period columns (matches AdminEconomy pattern with control column)
+const periodColumns = [
+    {id: 'expand'},
+    {accessorKey: 'status', header: 'Status'},
+    {accessorKey: 'billingPeriod', header: 'Periode'},
+    {accessorKey: 'ticketCounts', header: 'Kuverter'},
+    {accessorKey: 'totalAmount', header: 'Beløb'},
+    {accessorKey: 'control', header: 'Kontrol'}
+]
+
+// Single history visible at a time
+const historyOrderId = ref<number | null>(null)
+const toggleHistory = (orderId: number | null) => {
+    historyOrderId.value = historyOrderId.value === orderId ? null : orderId
+}
+
+// Dinner columns (for EconomyTable)
+const dinnerColumns = [
+    {id: 'expand'},
+    {accessorKey: 'date', header: 'Dato'},
+    {accessorKey: 'menuTitle', header: 'Menu'},
+    {accessorKey: 'ticketCounts', header: 'Kuverter'},
+    {accessorKey: 'totalAmount', header: 'Beløb'}
+]
+
+// Totals (using raw data - EconomyTable handles filtering internally)
+const upcomingTotal = computed(() =>
+    upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
 
-// Expanded row tracking
-const expandedCurrent = ref<Record<number, boolean>>({})
-const expandedInvoice = ref<Record<number, boolean>>({})
-
-const getExpandedData = <T,>(expanded: Record<number, boolean>, data: T[]): T | null => {
-    const idx = Object.keys(expanded).find(k => expanded[Number(k)])
-    return idx !== undefined ? data[Number(idx)] ?? null : null
-}
-
-const expandedCurrentGroup = computed(() => getExpandedData(expandedCurrent.value, currentPeriodData.value))
-const expandedInvoiceData = computed(() => getExpandedData(expandedInvoice.value, pastInvoicesData.value))
-
-// Table columns
-const columns = {
-    current: [
-        {id: 'expand'},
-        {accessorKey: 'date', header: 'Dato'},
-        {accessorKey: 'menuTitle', header: 'Menu'},
-        {accessorKey: 'ticketCounts', header: 'Kuverter'},
-        {accessorKey: 'totalAmount', header: 'Beløb'}
-    ],
-    invoice: [
-        {id: 'expand'},
-        {accessorKey: 'billingPeriod', header: 'Forbrugsperiode'},
-        {accessorKey: 'amount', header: 'Beløb'},
-        {accessorKey: 'paymentMonth', header: 'PBS opkrævet'}
-    ]
-}
+// Upcoming period starts after current billing period
+const upcomingPeriodStart = computed(() => {
+    const currentPeriod = calculateCurrentBillingPeriod()
+    const startDate = new Date(currentPeriod.end)
+    startDate.setDate(startDate.getDate() + 1)
+    return startDate
+})
 </script>
 
 <template>
@@ -93,30 +245,29 @@ const columns = {
     <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
 
     <template v-else-if="billing">
-      <!-- Current Period -->
+      <!-- Section 1: Kommende (Upcoming Orders) -->
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
-            <UIcon :name="ICONS.shoppingCart" :size="SIZES.standardIconSize"/>
-            <div>
-              <h3 :class="TYPOGRAPHY.cardTitle">Aktuel periode</h3>
-              <p :class="TYPOGRAPHY.bodyTextMuted">
-                {{ formatDate(billing.currentPeriod.periodStart) }} -
-                {{ formatDate(billing.currentPeriod.periodEnd) }}
-              </p>
+            <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize"/>
+            <div class="flex flex-col md:flex-row md:items-center md:gap-2">
+              <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
+              <span class="hidden md:inline text-gray-400">|</span>
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDate(upcomingPeriodStart) }} → ...</p>
             </div>
           </div>
         </template>
 
-        <UTable
-            v-if="currentPeriodData.length > 0"
-            v-model:expanded="expandedCurrent"
-            :data="currentPeriodData"
-            :columns="columns.current"
-            :ui="COMPONENTS.table.ui"
+        <EconomyTable
+            :data="upcomingOrdersData"
+            :columns="dinnerColumns"
+            row-key="dinnerEventId"
+            :date-accessor="(item) => item.date"
+            :loading="isOrdersLoading"
         >
           <template #expand-cell="{ row }">
             <UButton
+                v-if="row.original.items.length > 0"
                 color="neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
@@ -126,44 +277,59 @@ const columns = {
                 @click="row.toggleExpanded()"
             />
           </template>
-          <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
-          <template #expanded>
-            <div v-if="expandedCurrentGroup" class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-1">
-              <div v-for="tx in expandedCurrentGroup.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.bodyTextSmall">
-                <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
-                <span :class="TYPOGRAPHY.bodyTextMuted">{{ formatPrice(tx.amount) }} kr</span>
+          <template #expanded="{ row }">
+            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
+              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+                <CostLine
+                    v-for="order in row.original.items"
+                    :key="order.id"
+                    :item="order"
+                    :history-order-id="historyOrderId"
+                    @toggle-history="toggleHistory"
+                />
               </div>
-            </div>
+            </UCard>
           </template>
-        </UTable>
-        <p v-else :class="[TYPOGRAPHY.bodyTextMuted, 'py-4']">Ingen transaktioner i denne periode</p>
+          <template #empty>
+            <UAlert
+                :icon="ICONS.robotHappy"
+                color="neutral"
+                variant="subtle"
+                title="Ingen kommende bestillinger"
+                description="Du har ikke booket nogen middage endnu - hop over til Tilmeldinger!"
+            />
+          </template>
+        </EconomyTable>
 
-        <template #footer>
+        <template v-if="upcomingOrdersData.length > 0" #footer>
           <div class="flex justify-end items-center gap-2">
-            <span :class="TYPOGRAPHY.bodyTextMedium">Total:</span>
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(billing.currentPeriod.totalAmount) }} kr</span>
+            <span :class="TYPOGRAPHY.bodyTextMedium">Forventet:</span>
+            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(upcomingTotal) }} kr</span>
           </div>
         </template>
       </UCard>
 
-      <!-- Past Invoices -->
-      <UCard v-if="pastInvoicesData.length > 0">
+      <!-- Section 2: Faktureringsperioder (Unified: Virtual + Closed) -->
+      <UCard>
         <template #header>
           <div class="flex items-center gap-2">
-            <UIcon :name="ICONS.clock" :size="SIZES.standardIconSize"/>
-            <h3 :class="TYPOGRAPHY.cardTitle">Tidligere perioder</h3>
+            <UIcon :name="ICONS.economy" :size="SIZES.standardIconSize"/>
+            <h3 :class="TYPOGRAPHY.cardTitle">Faktureringsperioder</h3>
           </div>
         </template>
 
-        <UTable
-            v-model:expanded="expandedInvoice"
-            :data="pastInvoicesData"
-            :columns="columns.invoice"
-            :ui="COMPONENTS.table.ui"
+        <EconomyTable
+            :data="unifiedBillingPeriods"
+            :columns="periodColumns"
+            row-key="id"
+            :date-accessor="(item) => item.period.start"
+            search-placeholder="Søg periode..."
+            :default-sort-desc="true"
         >
           <template #expand-cell="{ row }">
             <UButton
+                v-if="row.original.groups.length > 0"
                 color="neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
@@ -173,34 +339,82 @@ const columns = {
                 @click="row.toggleExpanded()"
             />
           </template>
-          <template #amount-cell="{ row }">{{ formatPrice(row.original.amount) }} kr</template>
-          <template #expanded>
-            <div v-if="expandedInvoiceData" class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-2">
-              <div v-for="group in expandedInvoiceData.groups" :key="group.dinnerEventId" class="border rounded p-2 bg-white dark:bg-neutral-800">
-                <div class="flex justify-between mb-1" :class="TYPOGRAPHY.bodyTextMedium">
-                  <span>{{ formatDate(group.date) }} - {{ group.menuTitle }}</span>
-                  <span>{{ formatPrice(group.totalAmount) }} kr</span>
-                </div>
-                <div class="space-y-0.5 pl-2">
-                  <div v-for="tx in group.transactions" :key="tx.id" class="flex justify-between" :class="TYPOGRAPHY.finePrint">
-                    <span>{{ tx.inhabitant.name }} ({{ tx.ticketType ? ticketTypeConfig[tx.ticketType]?.label : 'Ukendt' }})</span>
-                    <span class="text-muted">{{ formatPrice(tx.amount) }} kr</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <template #status-cell="{ row }">
+            <UBadge v-if="!row.original.isClosed" color="success" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
+              Igangværende
+            </UBadge>
+            <UBadge v-else color="neutral" variant="subtle" :size="SIZES.small">
+              <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
+              Afsluttet
+            </UBadge>
           </template>
-        </UTable>
-      </UCard>
+          <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
+          <template #control-cell="{ row }">
+            <ControlBadge :computed="row.original.transactionSum" :expected="row.original.totalAmount"/>
+          </template>
+          <template #expanded="{ row }">
+            <CostEntry
+                :entry="row.original"
+                :level="1"
+                :title-accessor="periodTitleAccessor"
+                :subtitle-accessor="periodSubtitleAccessor"
+                :stats-accessor="periodStatsAccessor"
+                :control-sum-accessor="periodControlSumAccessor"
+                :items-accessor="periodItemsAccessor"
+                class="ml-2 md:ml-8 mr-2 md:mr-4 my-2"
+            >
+              <template #default="{ items }">
+                <!-- Dinner breakdown table (ocean palette to match Level 1 header) -->
+                <UTable
+                    :data="items"
+                    :columns="dinnerColumns"
+                    :ui="{...COMPONENTS.table.ui, thead: 'bg-ocean-100 dark:bg-ocean-900'}"
+                    row-key="dinnerEventId"
+                >
+                  <template #expand-cell="{ row: dinnerRow }">
+                    <UButton
+                        v-if="dinnerRow.original.items.length > 0"
+                        color="neutral"
+                        variant="ghost"
+                        :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                        square
+                        :size="SIZES.small"
+                        aria-label="Vis ordrer"
+                        @click="dinnerRow.toggleExpanded()"
+                    />
+                  </template>
+                  <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
+                  <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
 
-      <UAlert
-          v-else
-          :icon="ICONS.clock"
-          color="neutral"
-          variant="subtle"
-          title="Ingen tidligere perioder"
-          description="Der er endnu ikke afsluttede faktureringsperioder."
-      />
+                  <!-- Expanded dinner: individual transactions with history -->
+                  <template #expanded="{ row: dinnerRow }">
+                    <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
+                      <CostLine
+                          v-for="tx in dinnerRow.original.items"
+                          :key="tx.id"
+                          :item="tx"
+                          :history-order-id="historyOrderId"
+                          compact
+                          @toggle-history="toggleHistory"
+                      />
+                    </div>
+                  </template>
+                </UTable>
+              </template>
+            </CostEntry>
+          </template>
+          <template #empty>
+            <UAlert
+                :icon="ICONS.robotHappy"
+                color="neutral"
+                variant="subtle"
+                title="Ingen faktureringsperioder"
+                description="Der er ingen transaktioner endnu - PBS-robotten sover stadig!"
+            />
+          </template>
+        </EconomyTable>
+      </UCard>
     </template>
 
     <UAlert

@@ -6,7 +6,7 @@ import {formatDate} from '~/utils/date'
 type AllergyInhabitant = NonNullable<AllergyTypeDetail['inhabitants']>[number]
 
 // Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
-const {determineTicketType} = useTicket()
+const {resolveTicketPrice} = useTicket()
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 
@@ -45,7 +45,7 @@ const allergyData = computed(() => {
         const babies: AllergyInhabitant[] = []
 
         allergyType.inhabitants?.forEach(inhabitant => {
-          const ticketType = determineTicketType(inhabitant.birthDate ?? null)
+          const ticketType = resolveTicketPrice(inhabitant.birthDate ?? null, undefined, undefined)?.ticketType ?? TicketType.ADULT
           if (ticketType === TicketType.BABY) {
             babies.push(inhabitant)
           } else if (ticketType === TicketType.CHILD) {

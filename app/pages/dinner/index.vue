@@ -28,14 +28,14 @@
  * │ 👥 Madhold 3: Bob Jensen, Clara Nielsen, David Hansen                      │
  * ├─────────────────────────────────────────────────────────────────────────────┤
  * │                          LAV MAD - 100%                                     │
- * │  100 PORTIONER                                                              │
- * │  Voksne: 80  |  Børn: 40 (20 portioner)  |  Baby: 5 (0 portioner)          │
+ * │  100 KUVERTER                                                               │
+ * │  Voksne: 80  |  Børn: 40 (20 kuverter)  |  Baby: 5 (0 kuverter)            │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
  * │   TAKEAWAY - 40%         │  SPIS HER - 35%     │SPIS SENT-20% │IKKE-5%     │
  * │                          │                     │              │            │
  * │      50 personer         │    44 personer      │  25 personer │ 6 personer │
  * │                          │                     │              │            │
- * │    40 portioner          │     35 stole        │   20 stole   │            │
+ * │    40 kuverter           │     35 stole        │   20 stole   │            │
  * │    40 tallerkener        │   33 tallerkener    │18 tallerkener│            │
  * │                          │                     │              │            │
  * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
@@ -45,9 +45,10 @@
  * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 
+import {FORM_MODES} from '~/types/form'
+import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
+import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {FORM_MODES, type FormMode} from '~/types/form'
-import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 
 // Design system
 const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -58,82 +59,27 @@ const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
 // Toast for user feedback
 const toast = useToast()
 
-// Auth store for current user info
+// Auth store for current user info (used in booking handlers)
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 
-// Booking form state - EDIT mode prevents accidental changes
-const bookingFormMode = ref<FormMode>(FORM_MODES.VIEW)
-
-// Calendar accordion state (open by default, toggled by date badge click)
-const calendarOpen = ref(true)
-
-// Booking handlers - update individual order (uses householdOrders, not dinnerEventDetail.tickets)
-const {DinnerModeSchema} = useBookingValidation()
-const DinnerModeEnum = DinnerModeSchema.enum
-
-const handleBookingUpdate = async (inhabitantId: number, dinnerMode: DinnerMode, ticketPriceId: number) => {
-  const order = householdOrders.value?.find(o => o.inhabitantId === inhabitantId)
-
-  try {
-    if (order?.id) {
-      // Existing order - update it
-      await bookingsStore.updateOrder(order.id, { dinnerMode })
-      toast.add({ title: 'Tilmelding opdateret', color: 'success', icon: ICONS.checkCircle })
-    } else {
-      // No order exists - create new one (only if not NONE)
-      if (dinnerMode === DinnerModeEnum.NONE) {
-        return
-      }
-
-      const householdId = user.value?.Inhabitant?.household?.id
-      const bookedByUserId = user.value?.id
-
-      if (!selectedDinnerId.value || !householdId || !bookedByUserId) {
-        console.warn('Missing data for booking creation:', { selectedDinnerId: selectedDinnerId.value, householdId, bookedByUserId })
-        return
-      }
-
-      await bookingsStore.createOrder({
-        householdId,
-        dinnerEventId: selectedDinnerId.value,
-        orders: [{
-          inhabitantId,
-          ticketPriceId,
-          dinnerMode,
-          bookedByUserId
-        }]
-      })
-      toast.add({ title: 'Tilmelding oprettet', color: 'success', icon: ICONS.checkCircle })
-    }
-    await refreshBookingData()
-  } catch (e) {
-    console.error('Failed to update/create booking:', e)
-    toast.add({ title: 'Kunne ikke opdatere tilmelding', color: 'error', icon: ICONS.exclamationCircle })
-  }
-}
-
-// Bulk update all orders for current household (security: only household orders via session-filtered endpoint)
-const handleAllBookingsUpdate = async (dinnerMode: DinnerMode) => {
-  const orders = householdOrders.value ?? []
-  if (orders.length === 0) return
-
-  try {
-    await Promise.all(
-      orders.filter(o => o.id).map(order => bookingsStore.updateOrder(order.id!, { dinnerMode }))
-    )
-    await refreshBookingData()
-    toast.add({ title: 'Alle tilmeldinger opdateret', color: 'success', icon: ICONS.checkCircle })
-  } catch (e) {
-    console.error('Failed to update all bookings:', e)
-    toast.add({ title: 'Kunne ikke opdatere tilmeldinger', color: 'error', icon: ICONS.exclamationCircle })
-  }
-}
-
+// Booking validation and helpers
+const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelectedSeasonErrored} = storeToRefs(planStore)
+
+// Responsive breakpoint for calendar default state
+const isMd = inject<Ref<boolean>>('isMd')
+
+// Calendar accordion state via URL param + responsive default (ADR-006)
+const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>('cal', {
+  serialize: (v) => v ? 'open' : 'closed',
+  deserialize: (s) => s === 'open' ? true : s === 'closed' ? false : null,
+  defaultValue: () => isMd?.value ?? false,
+  syncWhen: () => isPlanStoreReady.value
+})
 // Initialize without await for SSR hydration consistency
 planStore.initPlanStore()
 
@@ -141,41 +87,32 @@ planStore.initPlanStore()
 const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
+// Bookings store (lock status)
+const bookingsStore = useBookingsStore()
+const {lockStatus} = storeToRefs(bookingsStore)
+
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-// Get dinner start time and deadline functions from season configuration
-const {getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
-const dinnerStartTime = getDefaultDinnerStartTime()
+const {deadlinesForSeason} = useSeason()
 
-// Season-specific deadline functions (computed to react to season changes)
-
-// Date selection via URL query parameter
+// Date selection via URL query parameter (curried pattern)
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
-const getDefaultDate = (): Date => {
-    const nextDinner = getNextDinnerDate(dinnerDates.value, dinnerStartTime)
-    return nextDinner?.start ?? new Date()
-}
+const syncWhen = () => isPlanStoreReady.value && dinnerDates.value.length > 0
 
-const {value: selectedDate, setValue} = useQueryParam<Date>('date', {
-    serialize: formatDate,
-    deserialize: (s) => {
-        const parsed = parseDate(s)
-        return parsed && !isNaN(parsed.getTime()) ? parsed : null
-    },
-    validate: (date) => {
-        // Check if this date has a dinner event
-        return dinnerEvents.value.some(e => {
-            const eventDate = new Date(e.date)
-            return eventDate.toDateString() === date.toDateString()
-        })
-    },
-    defaultValue: getDefaultDate,
-    // Auto-sync URL when store is ready and events are loaded
-    syncWhen: () => isPlanStoreReady.value && dinnerEvents.value.length > 0
+const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
+    dinnerDates: () => dinnerDates.value,
+    syncWhen
+})
+
+// Navigation logic (hasPrev, hasNext, navigate)
+const {hasPrev, hasNext, navigate} = useBookingView({
+    selectedDate,
+    setDate,
+    dinnerDates: () => dinnerDates.value
 })
 
 // Selected dinner event based on URL date
@@ -190,13 +127,12 @@ const selectedDinnerEvent = computed(() => {
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
 // Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
-const bookingsStore = useBookingsStore()
 const { DinnerEventDetailSchema, OrderDisplaySchema } = useBookingValidation()
 
 const {
   data: dinnerEventDetail,
   status: dinnerEventDetailStatus,
-  refresh: _refreshDinnerEventDetail
+  refresh: refreshDinnerEventDetail
 } = useAsyncData(
   computed(() => `dinner-detail-${selectedDinnerId.value || 'null'}`),
   () => selectedDinnerId.value
@@ -226,7 +162,7 @@ const {
 } = useAsyncData(
   computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
   () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventId=${selectedDinnerId.value}`)
+    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}&includeProvenance=true`)
     : Promise.resolve([]),
   {
     default: () => [],
@@ -241,7 +177,36 @@ const {
 
 // Helper to refresh both data sources after booking changes
 const refreshBookingData = async () => {
-  await Promise.all([_refreshDinnerEventDetail(), _refreshHouseholdOrders()])
+  await Promise.all([refreshDinnerEventDetail(), _refreshHouseholdOrders()])
+}
+
+// ADR-016: Unified booking handler via scaffold endpoint
+const handleSaveBookings = async (orders: DesiredOrder[]) => {
+  const householdId = user.value?.Inhabitant?.household?.id
+  const dinnerEventId = selectedDinnerId.value
+
+  if (orders.length === 0 || !householdId || !dinnerEventId) {
+    console.warn('Missing data for booking:', {orders: orders.length, householdId, dinnerEventId})
+    return
+  }
+
+  // Detect guest bookings for appropriate toast
+  const isGuestBooking = orders.every(o => o.isGuestTicket)
+  const toastTitle = isGuestBooking ? BOOKING_TOAST_TITLES.guest : BOOKING_TOAST_TITLES.booking
+
+  try {
+    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
+    await refreshBookingData()
+    toast.add({
+      title: toastTitle,
+      description: formatScaffoldResult(response.scaffoldResult),
+      color: 'success',
+      icon: ICONS.checkCircle
+    })
+  } catch (e) {
+    console.error('Failed to process bookings:', e)
+    toast.add({title: 'Kunne ikke gemme bookinger', color: 'error', icon: ICONS.exclamationCircle})
+  }
 }
 
 const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
@@ -296,7 +261,7 @@ useHead({
   <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
     <!-- Master: Calendar (left slot) -->
     <template #left>
-      <CalendarMasterPanel title="Fællesspisningens kalender">
+      <CalendarMasterPanel>
         <template #calendar>
           <DinnerCalendarDisplay
             v-if="seasonDates && selectedDate"
@@ -305,10 +270,11 @@ useHead({
             :cooking-days="cookingDays"
             :holidays="holidays"
             :dinner-events="dinnerEvents"
+            :lock-status="lockStatus"
             :show-countdown="true"
             :color="COLOR.peach"
             :selected-date="selectedDate"
-            @date-selected="setValue"
+            @date-selected="setDate"
           />
         </template>
       </CalendarMasterPanel>
@@ -330,7 +296,12 @@ useHead({
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
-          @show-calendar="calendarOpen = true"
+          :has-prev="hasPrev"
+          :has-next="hasNext"
+          :calendar-open="calendarOpen"
+          @prev="navigate(-1)"
+          @next="navigate(1)"
+          @toggle-calendar="setCalendarOpen(!calendarOpen)"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm
@@ -338,39 +309,10 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            :form-mode="bookingFormMode"
-            @update-booking="handleBookingUpdate"
-            @update-all-bookings="handleAllBookingsUpdate"
+            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? { total: 0, formatted: '-' }"
+            @save-bookings="handleSaveBookings"
           />
 
-          <!-- Booking action button -->
-          <div class="mt-4">
-            <UButton
-              v-if="bookingFormMode === FORM_MODES.VIEW"
-              :color="COLOR.warning"
-              variant="solid"
-              size="lg"
-              name="edit-booking"
-              block
-              :icon="ICONS.edit"
-              @click="bookingFormMode = FORM_MODES.EDIT"
-            >
-              Rediger booking
-            </UButton>
-
-            <UButton
-              v-else
-              color="neutral"
-              variant="outline"
-              size="lg"
-              name="back-from-booking"
-              block
-              :icon="ICONS.arrowLeft"
-              @click="bookingFormMode = FORM_MODES.VIEW"
-            >
-              Tilbage
-            </UButton>
-          </div>
         </ChefMenuCard>
       </template>
 
@@ -382,6 +324,7 @@ useHead({
             :team-id="dinnerEventDetail.cookingTeamId"
             :team-number="dinnerEventDetail.cookingTeamId"
             mode="monitor"
+            use-short-name
           />
           <UAlert
             v-else
@@ -390,7 +333,7 @@ useHead({
           >
             <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
           </UAlert>
-          <WorkAssignment :dinner-event="dinnerEventDetail"/>
+          <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
         </template>
       </template>
 

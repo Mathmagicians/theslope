@@ -18,6 +18,7 @@ import {
     toDate,
     calculateCountdown,
     createDateInTimezone,
+    areSameWeek,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -769,5 +770,23 @@ describe('createDateInTimezone', () => {
 
         expect(result.getUTCHours()).toBe(17)
         expect(result.getUTCMinutes()).toBe(30)
+    })
+})
+
+describe('areSameWeek', () => {
+    it.each([
+        // Same week (Mon-Sun)
+        {a: new Date(2025, 0, 6), b: new Date(2025, 0, 12), expected: true, desc: 'Mon and Sun same week'},
+        {a: new Date(2025, 0, 6), b: new Date(2025, 0, 6), expected: true, desc: 'same day'},
+        {a: new Date(2025, 0, 7), b: new Date(2025, 0, 10), expected: true, desc: 'Tue and Fri same week'},
+        // Different weeks
+        {a: new Date(2025, 0, 12), b: new Date(2025, 0, 13), expected: false, desc: 'Sun and next Mon'},
+        {a: new Date(2025, 0, 5), b: new Date(2025, 0, 6), expected: false, desc: 'Sun and next Mon (week boundary)'},
+        {a: new Date(2025, 0, 1), b: new Date(2025, 0, 15), expected: false, desc: 'two weeks apart'},
+        // Year boundary
+        {a: new Date(2024, 11, 30), b: new Date(2025, 0, 3), expected: true, desc: 'year boundary same week'},
+        {a: new Date(2024, 11, 29), b: new Date(2025, 0, 6), expected: false, desc: 'year boundary different weeks'},
+    ])('$desc: $expected', ({a, b, expected}) => {
+        expect(areSameWeek(a, b)).toBe(expected)
     })
 })

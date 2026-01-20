@@ -37,12 +37,13 @@ const emit = defineEmits<{
 
 // Design system
 const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
-const { getTeamColor } = useCookingTeam()
+const { getTeamColor, getTeamShortName } = useCookingTeam()
 
-// Tab orientation: vertical on desktop, horizontal on mobile (inverted from standard responsive)
-const tabOrientation = computed(() =>
-  ORIENTATIONS.responsive.value === 'horizontal' ? 'vertical' : 'horizontal'
-)
+// Tab orientation using design system helper:
+// - Fewer than 3 teams: always horizontal (fits nicely in a row)
+// - 3+ teams on desktop: vertical (takes less horizontal space in sidebar)
+// - 3+ teams on mobile: horizontal (standard mobile pattern)
+const tabOrientation = computed(() => ORIENTATIONS.forItemCount(props.teams.length))
 
 // Find selected team index from team ID
 const selectedTeamIndex = computed({
@@ -60,9 +61,10 @@ const selectedTeamIndex = computed({
 })
 
 // Tab items with CookingTeamBadges data (matches AdminTeams pattern)
+// Uses short name for user-facing display (e.g., "Madhold 2" not "Madhold 2 - 08/25-06/26")
 const teamTabs = computed(() => {
   return props.teams.map((team, index) => ({
-    label: team.name,
+    label: getTeamShortName(team.name),
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
     color: getTeamColor(index),

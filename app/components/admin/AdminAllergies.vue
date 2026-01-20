@@ -31,6 +31,14 @@ Multiselect mode shows statistics instead of single allergy detail.
 import type {AllergyTypeDisplay, AllergyTypeCreate, AllergyTypeUpdate as _AllergyTypeUpdate} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
+// Props - canEdit from parent for authorization (Admin OR AllergyManager)
+interface Props {
+  canEdit?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+  canEdit: false
+})
+
 // Design system
 const { COLOR, COMPONENTS, SIZES } = useTheSlopeDesignSystem()
 
@@ -274,7 +282,7 @@ const catalogEmptyState = {
 
                 Plakat
               </UButton>
-              <FormModeSelector v-model="formMode" @change="onModeChange"/>
+              <FormModeSelector v-if="props.canEdit" v-model="formMode" @change="onModeChange"/>
             </div>
           </div>
           <AllergyManagersList/>
@@ -544,7 +552,7 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
           </template>
           <template #actions>
             <UButton
-              v-if="formMode === FORM_MODES.VIEW"
+              v-if="props.canEdit && formMode === FORM_MODES.VIEW"
               icon="i-heroicons-plus-circle"
               :color="COLOR.primary"
               name="create-first-allergy-type"
@@ -588,8 +596,8 @@ v-if="!selectedAllergyType && formMode === FORM_MODES.VIEW"
                 />
               </div>
 
-              <!-- Actions -->
-              <div class="flex gap-2 flex-shrink-0">
+              <!-- Actions - only show when user can edit -->
+              <div v-if="props.canEdit" class="flex gap-2 flex-shrink-0">
                 <UButton
                     icon="i-heroicons-pencil"
                     size="xs"

@@ -3,15 +3,14 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderCreateWithPrice, type OrderDisplay, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {type HouseholdDisplay, type InhabitantDisplay, useCoreValidation} from '~/composables/useCoreValidation'
-import {useTicket} from '~/composables/useTicket'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
-    selectMostAppropriateActiveSeason, dateToWeekDay, isBeforeDeadline} from "~/utils/season"
+    selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
@@ -223,8 +222,9 @@ export const useSeason = () => {
     // ========================================================================
 
     const {maskWeekDayMap} = useCoreValidation()
-    const {DinnerModeSchema} = useBookingValidation()
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
 
     /**
      * Curried preference clipper factory.
@@ -264,157 +264,6 @@ export const useSeason = () => {
     const PREFERENCE_BATCH_SIZE = 50
     const chunkPreferenceUpdates = chunkArray<PreferenceUpdate>(PREFERENCE_BATCH_SIZE)
 
-    // ========================================================================
-    // PRE-BOOKING SCAFFOLDING - Create/prune orders based on preferences
-    // ========================================================================
-
-    const {OrderStateSchema, OrderCreateWithPriceSchema, chunkOrderBatch} = useBookingValidation()
-    const OrderState = OrderStateSchema.enum
-    const {determineTicketType} = useTicket()
-
-    /**
-     * Configure pruneAndCreate for pre-bookings.
-     * E = OrderDisplay (existing orders from DB, has id for deletion)
-     * I = OrderCreateWithPrice (incoming orders from generator, no id)
-     * Key: composite inhabitantId-dinnerEventId
-     * Equal: same dinnerMode (no update needed if preference matches)
-     */
-    const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
-        (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
-        (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
-    )
-
-    /**
-     * Curried pre-booking generator factory.
-     *
-     * Given season config, returns function that generates desired pre-bookings
-     * for a household's inhabitants based on their preferences.
-     *
-     * @param season - Season with ticketPrices, dinnerEvents, and deadline config
-     * @param householdId - Household ID for order tracking
-     * @param existingOrderKeys - Set of "inhabitantId-dinnerEventId" keys for existing orders
-     *                            (used to generate RELEASED orders only when order exists)
-     * @param excludedKeys - Set of "inhabitantId-dinnerEventId" keys to exclude
-     *                       (typically user cancellations that should not be recreated)
-     *
-     * Note: Inhabitants without dinnerPreferences are skipped (no orders created)
-     * @throws Error if no matching ticket price for inhabitant
-     *
-     * @example
-     * const cancellations = await fetchUserCancellationKeys(d1, seasonId)
-     * const existingKeys = new Set(existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`))
-     * const generateDesired = createPreBookingGenerator(season, householdId, existingKeys, cancellations)
-     * const desired = generateDesired(inhabitants)
-     * const result = reconcilePreBookings(existingOrders)(desired)
-     */
-    const createPreBookingGenerator = (
-        season: Season,
-        householdId: number,
-        existingOrderKeys: Set<string>,
-        excludedKeys: Set<string> = new Set()
-    ) => {
-        const { canModifyOrders } = deadlinesForSeason(season)
-        const ticketPrices = season.ticketPrices
-        const dinnerEvents = season.dinnerEvents ?? []
-
-        // Build lookup: ticketType -> ticketPrice (with id)
-        const ticketPriceByType = new Map(
-            ticketPrices.filter(tp => tp.id).map(tp => [tp.ticketType, tp])
-        )
-
-        return (inhabitants: InhabitantDisplay[]): OrderCreateWithPrice[] =>
-            inhabitants.flatMap(inhabitant => {
-                // Skip inhabitants without preferences (no orders created)
-                if (!inhabitant.dinnerPreferences) {
-                    return []
-                }
-                const prefs = inhabitant.dinnerPreferences
-
-                return dinnerEvents
-                    .map(de => {
-                        const weekDay = dateToWeekDay(de.date)
-                        const preference = prefs[weekDay]
-
-                        // Skip if user previously cancelled this booking
-                        const key = `${inhabitant.id}-${de.id}`
-                        if (excludedKeys.has(key)) return null
-
-                        // NONE preference handling based on deadline and existing order
-                        if (preference === DinnerMode.NONE) {
-                            // Before deadline: no order needed (will delete if exists)
-                            if (canModifyOrders(de.date)) return null
-                            // After deadline: release only if order exists (can't charge for non-existent order)
-                            if (!existingOrderKeys.has(key)) return null
-                            // Generate RELEASED order (price for schema validation - existing order has frozen price)
-                            const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
-                            const ticketPrice = ticketPriceByType.get(ticketType)
-                            if (!ticketPrice?.id) {
-                                throw new Error(`No ticket price for type ${ticketType} - cannot release order for ${inhabitant.name}`)
-                            }
-                            return OrderCreateWithPriceSchema.parse({
-                                dinnerEventId: de.id,
-                                inhabitantId: inhabitant.id,
-                                householdId,
-                                bookedByUserId: null,
-                                ticketPriceId: ticketPrice.id,
-                                priceAtBooking: ticketPrice.price,
-                                dinnerMode: DinnerMode.NONE,
-                                state: OrderState.RELEASED
-                            })
-                        }
-
-                        // Determine ticket type based on age at dinner date
-                        const ticketType = determineTicketType(inhabitant.birthDate, ticketPrices, de.date)
-                        const ticketPrice = ticketPriceByType.get(ticketType)
-                        if (!ticketPrice?.id) {
-                            throw new Error(`No ticket price for type ${ticketType} - inhabitant ${inhabitant.name}`)
-                        }
-
-                        return OrderCreateWithPriceSchema.parse({
-                            dinnerEventId: de.id,
-                            inhabitantId: inhabitant.id,
-                            householdId,
-                            bookedByUserId: null,
-                            ticketPriceId: ticketPrice.id,
-                            priceAtBooking: ticketPrice.price,
-                            dinnerMode: preference,
-                            state: OrderState.BOOKED
-                        })
-                    })
-                    .filter((o): o is OrderCreateWithPrice => o !== null)
-            })
-    }
-
-    /**
-     * Curried household order scaffolder factory.
-     *
-     * Given a season, returns a function that generates the reconciliation result
-     * for a household - what orders to create, update, delete, or leave unchanged.
-     * Uses the season's deadline configuration for before/after deadline behavior.
-     *
-     * @param season - Season with ticketPrices, dinnerEvents, and deadline config
-     * @returns Function that takes household data and returns reconciliation result
-     *
-     * @example
-     * const scaffolder = createHouseholdOrderScaffold(season)
-     * const result = scaffolder(household, existingOrders, cancelledKeys)
-     * // result.create = orders to insert
-     * // result.delete = orders to remove (existing orders with id)
-     * // result.idempotent = orders unchanged
-     */
-    const createHouseholdOrderScaffold = (season: Season) => (
-        household: HouseholdDisplay,
-        existingOrders: OrderDisplay[],
-        cancelledKeys: Set<string> = new Set()
-    ) => {
-        const existingOrderKeys = new Set(
-            existingOrders.map(o => `${o.inhabitantId}-${o.dinnerEventId}`)
-        )
-        const generator = createPreBookingGenerator(season, household.id, existingOrderKeys, cancelledKeys)
-        const desiredOrders = generator(household.inhabitants)
-        return reconcilePreBookings(existingOrders)(desiredOrders)
-    }
-
     /**
      * Filter dinner events to those within the prebooking window (today → today + N days).
      * Pure function extracted for testability and reuse by scaffoldPrebookings.
@@ -425,10 +274,8 @@ export const useSeason = () => {
     const getScaffoldableDinnerEvents = (allDinnerEvents: DinnerEventDisplay[]): DinnerEventDisplay[] => {
         if (allDinnerEvents.length === 0) return []
 
-        const dinnerDates = allDinnerEvents.map(d => d.date)
-        const nextDinnerRange = configuredGetNextDinnerDate(dinnerDates, getDefaultDinnerStartTime())
         const prebookingWindow = getPrebookingWindowDays()
-        const {nextDinner, futureDinnerDates} = splitDinnerEvents(allDinnerEvents, nextDinnerRange, prebookingWindow)
+        const {nextDinner, futureDinnerDates} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
 
         // Build set of all scaffoldable dates: nextDinner + futureDinnerDates
         const scaffoldableDates = [...futureDinnerDates]
@@ -481,10 +328,24 @@ export const useSeason = () => {
     const getDefaultDinnerStartTime = (): number => theslope.defaultDinnerStartTime
 
     /**
+     * Get the default dinner duration in minutes from app configuration
+     * @returns Duration in minutes for dinner window
+     */
+    const getDefaultDinnerDuration = (): number => theslope.defaultDinnerDurationMinutes
+
+    /**
      * Get the prebooking window in days from app configuration
      * @returns Number of days for the rolling prebooking window
      */
     const getPrebookingWindowDays = (): number => theslope.prebookingWindowDays
+
+    /**
+     * Get the menu announcement deadline in days from app configuration
+     * This is the deadline for chefs to announce the menu (before dinner)
+     * @returns Number of days before dinner when menu must be announced
+     */
+    const getMenuAnnouncementDeadlineDays = (): number =>
+        theslope.defaultSeason?.menuIsAnnouncedDaysBefore ?? 10
 
     /**
      * Check if a calendar day is the next upcoming dinner event
@@ -499,19 +360,25 @@ export const useSeason = () => {
         return isSameDay(dayAsDate, nextDinnerDate)
     }
 
-    // Configure getNextDinnerDate with default 60 minute duration
-    const configuredGetNextDinnerDate = getNextDinnerDate(60)
+    // Pre-configured with defaults from appConfig
+    const configuredSplitDinnerEvents = splitDinnerEvents(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
+    const configuredGetNextDinnerDate = getNextDinnerDate(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
 
     /**
      * Get deadline functions configured for a specific season.
-     * All deadline checks use the season's configured values.
+     *
+     * Two distinct deadlines:
+     * - **Menu deadline** (10 days from config): When chef must announce menu
+     * - **Booking deadline** (8 days from season): When users can book/cancel
      *
      * @param season - Season with deadline configuration
      * @returns Object with all deadline-related functions configured for this season
      */
     const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>) => {
         const dinnerStartHour = getDefaultDinnerStartTime()
+        const menuDeadlineDays = getMenuAnnouncementDeadlineDays()
 
+        // Booking deadline (for users) - from season config (typically 8 days)
         const canModifyOrders = (dinnerEventDate: Date): boolean => {
             const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
             return isBeforeDeadline(season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
@@ -539,9 +406,10 @@ export const useSeason = () => {
             }
         }
 
+        // Menu deadline (for chefs) - from app config (typically 10 days)
         const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean => {
             const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-            return !isBeforeDeadline(season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
+            return !isBeforeDeadline(menuDeadlineDays, 0)(dinnerStartTime)
         }
 
         return {
@@ -613,12 +481,21 @@ export const useSeason = () => {
     }
 
     /**
+     * Get cooking deadline thresholds from app.config.ts
+     * DRY: Single source for warning/critical hours used by badges and calendar chips
+     */
+    const getCookingDeadlineThresholds = () => ({
+        warning: theslope.cookingDeadlines.warningHours,
+        critical: theslope.cookingDeadlines.criticalHours
+    })
+
+    /**
      * Calculate deadline urgency for cooking tasks using thresholds from app.config.ts
      * @param dinnerStartTime - The dinner event start time
      * @returns 0 (on track) | 1 (warning) | 2 (critical)
      */
     const getDeadlineUrgency = (dinnerStartTime: Date): DeadlineUrgency => {
-        const { criticalHours, warningHours } = theslope.cookingDeadlines
+        const { critical: criticalHours, warning: warningHours } = getCookingDeadlineThresholds()
         return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
     }
 
@@ -654,21 +531,19 @@ export const useSeason = () => {
         chunkPreferenceUpdates,
 
         // Pre-booking scaffolding (season activation)
-        reconcilePreBookings,
-        createPreBookingGenerator,
-        createHouseholdOrderScaffold,
         getScaffoldableDinnerEvents,
-        chunkOrderBatch,
 
         getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
         getDefaultDinnerStartTime,
+        getDefaultDinnerDuration,
         getPrebookingWindowDays,
+        getMenuAnnouncementDeadlineDays,
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
-        splitDinnerEvents,
+        splitDinnerEvents: configuredSplitDinnerEvents,
         sortDinnerEventsByTemporal,
         deadlinesForSeason,
         isDinnerPast,
@@ -676,6 +551,7 @@ export const useSeason = () => {
         isOnTeam,
         isChefFor,
         getDeadlineUrgency,
+        getCookingDeadlineThresholds,
         getBillingCutoffDay,
 
         // Active season management - pure functions

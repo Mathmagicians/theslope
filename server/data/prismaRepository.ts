@@ -2,6 +2,7 @@ import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {maskPassword} from '~/utils/utils'
 import type {PreferenceUpdate} from '~/composables/useSeason'
 
 import type {Season} from "~/composables/useSeasonValidation"
@@ -39,29 +40,18 @@ const {throwH3Error} = eventHandlerHelper
 /*** USERS ***/
 
 // Get serialization utilities
-const {serializeUserInput, deserializeUser, mergeUserRoles} = useCoreValidation()
+const {serializeUserInput, deserializeUser} = useCoreValidation()
 
+/**
+ * Save user - upserts by email
+ * NOTE: Callers must reconcile roles BEFORE calling (use reconcileUserRoles from useUserRoles)
+ */
 export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserDetail> {
-    console.info(`🪪 > USER > [SAVE] Saving user ${user.email}`)
+    console.info(`🪪 > USER > [SAVE] Saving user ${user.email} with roles [${user.systemRoles}]`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        // Check if user exists to merge roles
-        const existingUser = await prisma.user.findUnique({
-            where: {email: user.email}
-        })
-
-        let userToSave = user
-
-        // If user exists, merge systemRoles instead of overwriting
-        if (existingUser) {
-            const existingDomain = deserializeUser(existingUser)
-            userToSave = mergeUserRoles(existingDomain, user)
-            console.info(`🪪 > USER > [SAVE] Merging roles for existing user ${user.email}: [${existingDomain.systemRoles}] + [${user.systemRoles}] = [${userToSave.systemRoles}]`)
-        }
-
-        // Serialize before writing to DB (ADR-010 pattern)
-        const serializedUser = serializeUserInput(userToSave)
+        const serializedUser = serializeUserInput(user)
         const newUser = await prisma.user.upsert({
             where: {email: user.email},
             create: serializedUser,
@@ -69,7 +59,6 @@ export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<
         })
         console.info(`🪪 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
 
-        // ADR-009: Return UserDetail with Inhabitant: null (no relation fetched for mutation)
         const deserialized = deserializeUser(newUser)
         return {
             ...deserialized,
@@ -250,14 +239,17 @@ export async function linkUsersToInhabitants(
     return linked
 }
 
-export async function fetchUser(email: string, d1Client: D1Database): Promise<UserDetail | null> {
-    console.info(`🪪 > USER > [GET] Fetching user for email ${email}`)
+export async function fetchUser(d1Client: D1Database, filter: { email?: string; id?: number }): Promise<UserDetail | null> {
+    const filterDesc = filter.email ? `email ${maskPassword(filter.email)}` : `ID ${filter.id}`
+    console.info(`🪪 > USER > [GET] Fetching user by ${filterDesc}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeUserDetail} = useCoreValidation()
 
+    const where = filter.email ? { email: filter.email } : { id: filter.id }
+
     try {
         const user = await prisma.user.findUnique({
-            where: {email},
+            where,
             include: {
                 Inhabitant: {
                     include: {household: true}
@@ -266,22 +258,13 @@ export async function fetchUser(email: string, d1Client: D1Database): Promise<Us
         })
 
         if (user) {
-            console.info(`🪪 > USER > [GET] Successfully fetched user with ID ${user.id} for email ${email}`)
-
-            // Log inhabitant info (simplified to avoid nested template literals)
-            const inhabitantInfo = user.Inhabitant
-                ? `id=${user.Inhabitant.id}, household=${user.Inhabitant.household?.id ?? 'NULL'}`
-                : 'NULL'
-            console.info(`🪪 > USER > [GET] Inhabitant: ${inhabitantInfo}`)
-
-            // Use composable deserialization function (ADR-010)
+            console.info(`🪪 > USER > [GET] Found user ID ${user.id}`)
             return deserializeUserDetail(user)
-        } else {
-            console.info(`🪪 > USER > [GET] No user found for email ${email}`)
         }
+        console.info(`🪪 > USER > [GET] No user found for ${filterDesc}`)
         return null
     } catch (error) {
-        return throwH3Error(`🪪 > USER > [GET]: Error fetching user for email ${email}`, error)
+        return throwH3Error(`🪪 > USER > [GET]: Error fetching user by ${filterDesc}`, error)
     }
 }
 
@@ -786,7 +769,7 @@ export async function fetchHousehold(d1Client: D1Database, id: number): Promise<
         // ADR-010: Repository validates data after deserialization
         const validatedHousehold = deserializeHouseholdDetail(household)
 
-        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${household.name} with ${household.inhabitants?.length ?? 0} inhabitants`)
+        console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched household ${validatedHousehold.shortName} with ${household.inhabitants?.length ?? 0} inhabitants`)
         return validatedHousehold
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLD > [GET]: Error fetching household with ID ${id}`, error)
@@ -892,28 +875,14 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
-// Returns active season or null if none active
+/**
+ * Fetch the current active season with all relations (DRY wrapper)
+ * @returns Full Season with ticketPrices, cookingTeams, dinnerEvents, or null if none active
+ */
 export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
-    console.info(`🌞 > SEASON > [GET] Fetching current active season`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const season = await prisma.season.findFirst({
-            where: {
-                isActive: true
-            }
-        })
-
-        if (season) {
-            console.info(`🌞 > SEASON > [GET] Found current active season ${season.shortName} (ID: ${season.id})`)
-            return deserializeSeason(season)
-        } else {
-            console.info(`🌞 > SEASON > [GET] No active season found`)
-            return null
-        }
-    } catch (error) {
-        return throwH3Error('🌞 > SEASON > [FETCH CURRENT]: Error fetching current active season', error)
-    }
+    const activeSeasonId = await fetchActiveSeasonId(d1Client)
+    if (!activeSeasonId) return null
+    return fetchSeason(d1Client, activeSeasonId)
 }
 
 /**
@@ -961,18 +930,18 @@ export async function deactivateSeason(d1Client: D1Database): Promise<Season | n
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const activeSeason = await fetchCurrentSeason(d1Client)
-        if (!activeSeason) {
+        const activeSeasonId = await fetchActiveSeasonId(d1Client)
+        if (!activeSeasonId) {
             console.info(`🌞 > SEASON > [DEACTIVATE] No active season to deactivate`)
             return null
         }
 
         await prisma.season.update({
-            where: {id: activeSeason.id!},
+            where: {id: activeSeasonId},
             data: {isActive: false}
         })
 
-        const season = await fetchSeason(d1Client, activeSeason.id!)
+        const season = await fetchSeason(d1Client, activeSeasonId)
         console.info(`🌞 > SEASON > [DEACTIVATE] Deactivated season ${season?.shortName}`)
         return season
     } catch (error) {
@@ -1026,7 +995,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
                     },
                     orderBy: {name: 'asc'}
                 },
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1059,7 +1028,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                     },
                     orderBy: {name: 'asc'}
                 },
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1092,7 +1061,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     try {
         const seasons = await prisma.season.findMany({
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             },
             orderBy: {
                 seasonDates: 'desc'
@@ -1134,7 +1103,7 @@ export async function deleteSeason(
         const deletedSeason = await prisma.season.delete({
             where: {id},
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1185,7 +1154,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
                 ticketPrices: {create: ticketPricesForCreate}
             },
             include: {
-                ticketPrices: true,
+                ticketPrices: { orderBy: { price: 'asc' } },
                 dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
                 CookingTeams: true
             }
@@ -1216,13 +1185,14 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
     // Exclude id and read-only relation fields from update
     const {id, dinnerEvents, CookingTeams, ticketPrices, ...updateData} = serialized
     try {
-        // Handle ticket prices using reconcileTicketPrices to respect FK constraint (Order.ticketPriceId onDelete: Restrict)
+        // Handle ticket prices using reconcileTicketPrices
+        // Business logic: (ticketType, price) = identity, description change = update, never delete
         if (ticketPrices && ticketPrices.length > 0) {
             const existingPrices = await prisma.ticketPrice.findMany({
                 where: { seasonId: validatedSeasonData.id! }
             })
 
-            const { create, update, delete: toDelete } = reconcileTicketPrices(existingPrices)(ticketPrices)
+            const { create, update } = reconcileTicketPrices(existingPrices)(ticketPrices)
 
             for (const tp of create) {
                 await prisma.ticketPrice.create({
@@ -1230,7 +1200,6 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                         seasonId: validatedSeasonData.id!,
                         ticketType: tp.ticketType,
                         price: tp.price,
-                        // ADR-012: Use Prisma.skip for optional fields that may be undefined
                         description: tp.description === undefined ? Prisma.skip : tp.description,
                         maximumAgeLimit: tp.maximumAgeLimit === undefined ? Prisma.skip : tp.maximumAgeLimit
                     }
@@ -1241,23 +1210,13 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                 const { id: tpId, seasonId: _seasonId, ...priceData } = tp
                 if (tpId) await prisma.ticketPrice.update({ where: { id: tpId }, data: priceData })
             }
-
-            for (const tp of toDelete) {
-                if (tp.id) {
-                    try {
-                        await prisma.ticketPrice.delete({ where: { id: tp.id } })
-                    } catch {
-                        console.warn(`🌞 > SEASON > [UPDATE] Cannot delete ticket price ${tp.id} - referenced by orders`)
-                    }
-                }
-            }
         }
 
         const updatedSeason = await prisma.season.update({
             where: {id: validatedSeasonData.id},
             data: updateData,
             include: {
-                ticketPrices: true
+                ticketPrices: { orderBy: { price: 'asc' } }
             }
         })
 
@@ -1754,10 +1713,14 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 // BILLING PERIOD SUMMARY CRUD
 // ============================================================================
 
-const {BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+const {deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
 
 const billingPeriodDetailInclude = {
-    invoices: true
+    invoices: {
+        include: {
+            transactions: {select: {amount: true, orderSnapshot: true, orderId: true}}
+        }
+    }
 } as const
 
 export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise<BillingPeriodSummaryDisplay[]> => {
@@ -1765,9 +1728,16 @@ export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const summaries = await prisma.billingPeriodSummary.findMany({orderBy: {cutoffDate: 'desc'}})
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
+        const summaries = await prisma.billingPeriodSummary.findMany({
+            orderBy: {cutoffDate: 'desc'},
+            include: billingPeriodDetailInclude
+        })
         console.info(`💰 > BILLING > [GET] Returning ${summaries.length} billing period summaries`)
-        return summaries.map(s => BillingPeriodSummaryDisplaySchema.parse(s))
+        return summaries.map(s => deserializeBillingPeriodDisplay(s, ticketPrices))
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summaries', error)
     }
@@ -1778,9 +1748,12 @@ export const fetchBillingPeriodSummary = async (d1Client: D1Database, id: number
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
         const summary = await prisma.billingPeriodSummary.findUnique({where: {id}, include: billingPeriodDetailInclude})
-        if (!summary) return null
-        return BillingPeriodSummaryDetailSchema.parse(summary)
+        return deserializeBillingPeriodDetail(summary, ticketPrices)
     } catch (error) {
         return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period summary ID ${id}`, error)
     }
@@ -1791,9 +1764,12 @@ export const fetchBillingPeriodSummaryByToken = async (d1Client: D1Database, tok
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
         const summary = await prisma.billingPeriodSummary.findUnique({where: {shareToken: token}, include: billingPeriodDetailInclude})
-        if (!summary) return null
-        return BillingPeriodSummaryDetailSchema.parse(summary)
+        return deserializeBillingPeriodDetail(summary, ticketPrices)
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summary by token', error)
     }

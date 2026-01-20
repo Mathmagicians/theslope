@@ -1,7 +1,9 @@
 <template>
   <UApp>
     <NuxtLayout>
-      <NuxtPage :page-key="route => route.fullPath" />
+      <!-- Use route.path (not fullPath) to prevent component remount on query param changes -->
+      <!-- See: https://github.com/nuxt/nuxt/discussions/24062 -->
+      <NuxtPage :page-key="route => route.path" />
     </NuxtLayout>
   </UApp>
 </template>

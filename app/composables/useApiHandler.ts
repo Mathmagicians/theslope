@@ -16,12 +16,11 @@ export const useApiHandler = () => {
         const err: ApiError = isApiError(error)
             ? { ...error, statusCode: error.statusCode ?? (rawErr.status as number) }
             : { message: String(error) }
-        console.error(`API Error in ${action}:`, {
-            message: err.message,
-            statusCode: err.statusCode,
-            statusMessage: err.statusMessage,
-            data: err.data
-        })
+
+        // ADR-004: Consistent CTX log format, no raw error objects
+        const statusInfo = err.statusCode ? `${err.statusCode}` : 'unknown'
+        const msgInfo = err.message ?? err.statusMessage ?? 'No message'
+        console.error(`❌ > API_ERROR > [${action}] ${statusInfo}: ${msgInfo}`)
         let message: string
 
         if (customMessage) {

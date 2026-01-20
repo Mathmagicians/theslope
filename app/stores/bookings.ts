@@ -1,11 +1,16 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult} from '~/composables/useBookingValidation'
-import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState} from '~/composables/useBookingValidation'
+import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {useBilling} from '~/composables/useBilling'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema, DailyMaintenanceResultSchema} = useBookingValidation()
+    const {OrderDisplaySchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const {formatScaffoldResult} = useBooking()
+    const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
+    const requestFetch = useRequestFetch()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
 
@@ -14,27 +19,41 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
 
     // Selected context for filtering orders
-    const selectedDinnerEventId = ref<number | null>(null)
+    const selectedDinnerEventIds = ref<number[]>([]) // Empty = all events
     const selectedInhabitantId = ref<number | null>(null)
+    const selectedHouseholdId = ref<number | null>(null) // Explicit household (admin viewing another household)
     const includeProvenance = ref(false) // Only true for household booking view (shows "🔄 fra AR_1" on claimed tickets)
 
     // Fetch orders - reactive based on selected filters
     const buildOrdersQuery = () => {
         const params = new URLSearchParams()
-        if (selectedDinnerEventId.value) params.append('dinnerEventId', String(selectedDinnerEventId.value))
+        // Array of IDs: empty=all, otherwise filter
+        selectedDinnerEventIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
         if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
+        if (selectedHouseholdId.value) params.append('householdId', String(selectedHouseholdId.value))
         if (includeProvenance.value) params.append('includeProvenance', 'true')
         return params.toString()
     }
 
     const ordersKey = computed(() => `/api/order?${buildOrdersQuery()}`)
 
+    // Only fetch when filters are explicitly set (prevents fetching ALL orders on init)
+    const hasFilters = computed(() =>
+        selectedDinnerEventIds.value.length > 0 || selectedInhabitantId.value !== null
+    )
+
     const {
         data: orders, status: ordersStatus,
         error: ordersError, refresh: refreshOrders
     } = useAsyncData<OrderDisplay[]>(
         ordersKey,
-        () => $fetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`),
+        () => {
+            // Skip fetch until filters are set (prevents initial "fetch all" on store init)
+            if (!hasFilters.value) return Promise.resolve([])
+            return requestFetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente bookinger') }
+            })
+        },
         {
             default: () => [],
             transform: (data: unknown[]) => {
@@ -76,25 +95,20 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Actions
     // ========================================
 
-    const loadOrdersForDinner = (dinnerEventId: number, withProvenance = false) => {
-        selectedDinnerEventId.value = dinnerEventId
+    const loadOrdersForDinners = (dinnerEventIds: number | number[], withProvenance = false, householdId?: number) => {
+        const ids = [dinnerEventIds].flat()
+        selectedDinnerEventIds.value = ids
         selectedInhabitantId.value = null
+        selectedHouseholdId.value = householdId ?? null
         includeProvenance.value = withProvenance
-        console.info(CTX, `Loading orders for dinner event: ${dinnerEventId}${withProvenance ? ' (with provenance)' : ''}`)
+        console.info(CTX, `Loading orders for ${ids.length} dinner(s)${householdId ? ` (household ${householdId})` : ''}${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const loadOrdersForInhabitant = (inhabitantId: number, withProvenance = false) => {
         selectedInhabitantId.value = inhabitantId
-        selectedDinnerEventId.value = null
+        selectedDinnerEventIds.value = []
         includeProvenance.value = withProvenance
         console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}${withProvenance ? ' (with provenance)' : ''}`)
-    }
-
-    const loadAllOrders = (withProvenance = false) => {
-        selectedDinnerEventId.value = null
-        selectedInhabitantId.value = null
-        includeProvenance.value = withProvenance
-        console.info(CTX, `Loading all orders${withProvenance ? ' (with provenance)' : ''}`)
     }
 
     const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
@@ -149,7 +163,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket}
             })
             console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
-            await refreshOrders()
+            await Promise.all([refreshOrders(), refreshReleasedCounts()])
             return claimedOrder
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke overtage billet')
@@ -160,13 +174,127 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
         try {
             const released = await $fetch<OrderDisplay[]>('/api/order', {
-                query: {dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
+                query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
             })
             console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
             return released.map(order => OrderDisplaySchema.parse(order))
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke hente ledige billetter')
             throw e
+        }
+    }
+
+    // ========================================
+    // Lock Status (reactive, watches planStore)
+    // ========================================
+    const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
+    const {deadlinesForSeason, splitDinnerEvents} = useSeason()
+    const planStore = usePlanStore()
+
+    // Released counts fetch (internal)
+    const releasedCountsDinnerIds = ref<number[]>([])
+    const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
+    const {formatTicketCounts} = useBilling()
+
+    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = useAsyncData<Map<number, ReleasedTicketCounts>>(
+        releasedCountsKey,
+        async () => {
+            if (releasedCountsDinnerIds.value.length === 0) return new Map()
+            const params = new URLSearchParams()
+            releasedCountsDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
+            params.append('state', 'RELEASED')
+            params.append('allHouseholds', 'true')
+            const released = await $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
+            // Group orders by dinnerEventId
+            const grouped = Map.groupBy(released, o => o.dinnerEventId)
+            const counts = new Map<number, ReleasedTicketCounts>()
+            for (const [dinnerEventId, orders] of grouped) {
+                counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
+            }
+            return counts
+        },
+        {default: () => new Map()}
+    )
+
+    // Watch season → compute locked IDs → fetch released counts
+    watchEffect(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents?.length) return
+
+        const {nextDinner, futureDinnerDates} = splitDinnerEvents(season.dinnerEvents)
+        const futureDinners = season.dinnerEvents.filter(e => futureDinnerDates.some(d => d.getTime() === e.date.getTime()))
+        const deadlines = deadlinesForSeason(season)
+
+        const lockedIds = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
+        if (lockedIds.length > 0 && lockedIds.join(',') !== releasedCountsDinnerIds.value.join(',')) {
+            releasedCountsDinnerIds.value = lockedIds
+        }
+    })
+
+    // Exposed computed: lockStatus map for calendar display
+    const lockStatus = computed(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents) return new Map<number, ReleasedTicketCounts | null>()
+        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value)
+    })
+
+    const isReleasedCountsLoading = computed(() => releasedCountsStatus.value === 'pending')
+
+    const isProcessingBookings = ref(false)
+
+    /**
+     * ADR-016: Internal scaffold endpoint call.
+     */
+    const _scaffoldOrders = async (request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse> => {
+        const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
+            method: 'POST',
+            body: request
+        })
+        await Promise.all([refreshOrders(), refreshReleasedCounts()])
+        return ScaffoldOrdersResponseSchema.parse(result)
+    }
+
+    /**
+     * ADR-016: Process bookings for a single dinner event.
+     * Used by day view, power mode, and guest booking.
+     */
+    const processSingleEventBookings = async (
+        householdId: number,
+        dinnerEventId: number,
+        orders: DesiredOrder[]
+    ): Promise<ScaffoldOrdersResponse> => {
+        isProcessingBookings.value = true
+        try {
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders })
+            console.info(CTX, `processSingleEventBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+            return result
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke gemme bookinger')
+            throw e
+        } finally {
+            isProcessingBookings.value = false
+        }
+    }
+
+    /**
+     * ADR-016: Process bookings for multiple dinner events.
+     * Used by grid view (week/month).
+     */
+    const processMultipleEventsBookings = async (
+        householdId: number,
+        dinnerEventIds: number[],
+        orders: DesiredOrder[]
+    ): Promise<ScaffoldOrdersResponse> => {
+        isProcessingBookings.value = true
+        try {
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders })
+            console.info(CTX, `processMultipleEventsBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+            return result
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke gemme bookinger')
+            throw e
+        } finally {
+            isProcessingBookings.value = false
         }
     }
 
@@ -185,9 +313,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isDinnerUpdating = ref(false)
 
     const updateDinner = async (id: number, updates: DinnerUpdate): Promise<DinnerEventDetail> => {
-        const updated = await $fetch<DinnerEventDetail>(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
-        console.info(CTX, `Updated dinner ${id}:`, Object.keys(updates).join(', '))
-        return updated
+        const updated = await $fetch(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
+        const parsed = DinnerEventDetailSchema.parse(updated)
+        console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
+        return parsed
     }
 
     const withLoadingAndErrorHandler = <T extends unknown[]>(fn: (...args: T) => Promise<DinnerEventDetail>, msg: string) =>
@@ -202,6 +331,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const updateDinnerEventField = withLoadingAndErrorHandler((id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates), 'Kunne ikke gemme ændringer til menuen')
     const announceDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}), 'Kunne ikke annoncere fællesspisningen')
     const cancelDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}), 'Kunne ikke aflyse fællesspisningen')
+    const undoCancelDinner = withLoadingAndErrorHandler((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}), 'Kunne ikke annullere aflysningen')
 
     // ========================================
     // DAILY MAINTENANCE JOB (ADR-007)
@@ -238,10 +368,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
         } else if (hasDailyMaintenanceResult.value) {
             const r = dailyMaintenanceResult.value!
-            console.info(CTX, `Daily maintenance completed: Consumed: ${r.consume.consumed}, Closed: ${r.close.closed}, Transactions: ${r.transact.created}`)
+            const stats = formatDailyMaintenanceStats(r)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Daily maintenance completed: ${description}`)
             toast.add({
                 title: 'Daglig vedligeholdelse afsluttet',
-                description: `Middage: ${r.consume.consumed}, Ordrer lukket: ${r.close.closed}, Transaktioner: ${r.transact.created}`,
+                description,
                 color: 'success'
             })
         }
@@ -251,7 +383,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // BILLING PERIODS (ADR-007)
     // ========================================
 
-    const {MonthlyBillingResponseSchema, deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
+    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
 
     const {
         data: billingPeriods, status: billingPeriodsStatus,
@@ -261,7 +393,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             key: 'bookings-store-billing-periods',
             default: () => [],
-            transform: (data: unknown[]) => (data as unknown[]).map(deserializeBillingPeriodDisplay)
+            transform: (data: unknown[]) => (data as unknown[]).map(s => BillingPeriodSummaryDisplaySchema.parse(s))
         }
     )
 
@@ -284,7 +416,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         },
         {
             default: () => null,
-            transform: deserializeBillingPeriodDetail
+            transform: (data) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
         }
     )
 
@@ -293,6 +425,47 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const loadBillingPeriodDetail = (periodId: number) => {
         selectedBillingPeriodId.value = periodId
         console.info(CTX, `Loading billing period detail: ${periodId}`)
+    }
+
+    // Current period transactions (for "virtual" billing period in admin economy)
+    const {
+        data: currentPeriodTransactions, status: currentPeriodStatus,
+        error: currentPeriodError, refresh: refreshCurrentPeriodTransactions
+    } = useFetch<TransactionDisplay[]>(
+        '/api/admin/billing/current-period',
+        {
+            key: 'bookings-store-current-period',
+            default: () => [],
+            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
+        }
+    )
+
+    const isCurrentPeriodLoading = computed(() => currentPeriodStatus.value === 'pending')
+    const isCurrentPeriodErrored = computed(() => currentPeriodStatus.value === 'error')
+
+    // Invoice transactions (lazy load on invoice expand)
+    const selectedInvoiceId = ref<number | null>(null)
+    const selectedInvoiceKey = computed(() => `invoice-transactions-${selectedInvoiceId.value || 'null'}`)
+
+    const {
+        data: selectedInvoiceTransactions, status: selectedInvoiceStatus
+    } = useAsyncData<TransactionDisplay[]>(
+        selectedInvoiceKey,
+        () => {
+            if (!selectedInvoiceId.value) return Promise.resolve([])
+            return $fetch<TransactionDisplay[]>(`/api/admin/billing/invoices/${selectedInvoiceId.value}`)
+        },
+        {
+            default: () => [],
+            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
+        }
+    )
+
+    const isInvoiceTransactionsLoading = computed(() => selectedInvoiceStatus.value === 'pending')
+
+    const loadInvoiceTransactions = (invoiceId: number) => {
+        selectedInvoiceId.value = invoiceId
+        console.info(CTX, `Loading invoice transactions: ${invoiceId}`)
     }
 
     // ========================================
@@ -320,6 +493,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const hasMonthlyBillingResult = computed(() => monthlyBillingStatus.value === 'success' && monthlyBillingResult.value !== null)
     const hasMonthlyBillingError = computed(() => monthlyBillingStatus.value === 'error')
 
+    const {formatMonthlyBillingStats} = useMaintenance()
+
     const runMonthlyBilling = async () => {
         await executeMonthlyBilling()
 
@@ -327,12 +502,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
         } else if (hasMonthlyBillingResult.value) {
             const results = monthlyBillingResult.value!.results
-            const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
-            const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
-            console.info(CTX, `Monthly billing completed: ${results.length} periods, Invoices: ${totalInvoices}, Transactions: ${totalTransactions}`)
+            const stats = formatMonthlyBillingStats(results)
+            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(CTX, `Monthly billing completed: ${description}`)
             toast.add({
                 title: 'Månedlig fakturering afsluttet',
-                description: `${results.length} periode(r), Fakturaer: ${totalInvoices}, Transaktioner: ${totalTransactions}`,
+                description,
                 color: 'success'
             })
             // Refresh billing periods to show new data
@@ -343,8 +518,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
     return {
         // state
         orders,
-        selectedDinnerEventId,
-        selectedInhabitantId,
 
         // computed state
         isOrdersLoading,
@@ -359,14 +532,19 @@ export const useBookingsStore = defineStore("Bookings", () => {
         ordersByTicketType,
 
         // actions
-        loadOrdersForDinner,
+        loadOrdersForDinners,
         loadOrdersForInhabitant,
-        loadAllOrders,
         createOrder,
         deleteOrder,
         updateOrder,
         claimOrder,
         fetchReleasedOrders,
+        // Lock status (calendar display)
+        lockStatus,
+        isReleasedCountsLoading,
+        isProcessingBookings,
+        processSingleEventBookings,
+        processMultipleEventsBookings,
 
         // dinner event actions
         isDinnerUpdating,
@@ -375,6 +553,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         updateDinnerEventAllergens,
         announceDinner,
         cancelDinner,
+        undoCancelDinner,
 
         // daily maintenance
         dailyMaintenanceResult,
@@ -402,6 +581,18 @@ export const useBookingsStore = defineStore("Bookings", () => {
         selectedBillingPeriodDetail,
         selectedBillingPeriodError,
         isBillingPeriodDetailLoading,
-        loadBillingPeriodDetail
+        loadBillingPeriodDetail,
+
+        // current period (virtual billing period)
+        currentPeriodTransactions,
+        currentPeriodError,
+        isCurrentPeriodLoading,
+        isCurrentPeriodErrored,
+        refreshCurrentPeriodTransactions,
+
+        // invoice transactions (lazy load)
+        selectedInvoiceTransactions,
+        isInvoiceTransactionsLoading,
+        loadInvoiceTransactions
     }
 })

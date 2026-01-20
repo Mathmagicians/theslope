@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-01-03 (Added TableSearchPagination, updated households.ts with preference actions)
+**Last Updated:** 2026-01-15 (Role management: UserProfileCard, users E2E tests)
 
 ## Legend
 
@@ -27,8 +27,7 @@
 | `/admin/teams` | `admin/[tab].vue` → `AdminTeams.vue` | ✅ `usePlanStore()` | ✅ Partial usage | ✅ `?mode=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ⚠️ | **⚠️ REVIEW** |
-| `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | ❓ | ✅ `?mode=` | ❌ | ❌ | **❌ NO TESTS** |
-| `/admin/chefs` | `admin/[tab].vue` → `AdminChefs.vue` | ✅ `usePlanStore()` | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
+| `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
@@ -87,7 +86,7 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `FormModeSelector.vue` | All CRUD admin routes | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
-| `SeasonSelector.vue` | `/admin/planning`, `/admin/teams`, `/admin/chefs` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
+| `SeasonSelector.vue` | `/admin/planning`, `/admin/teams` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
 | `TableSearchPagination.vue` | `/admin/users`, `/admin/households` | None | `useTheSlopeDesignSystem()` | N/A | N/A | ✅ | ✅ Indirect | **✅ COMPLIANT** |
 | `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** |
 | `UserView.vue` | All routes (PageHeader) | `useAuthStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
@@ -103,14 +102,18 @@
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | - | N/A | N/A | ❌ | N/A | **N/A DISPLAY** |
 | `CalendarDisplay.vue` | `/dinner` | `useEventStore()` | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `TeamCalendarDisplay.vue` | `/admin/chefs` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
+| `TeamCalendarDisplay.vue` | `/admin/teams`, `/chef` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `HouseholdCalendarDisplay.vue` | `/household/[shortname]/bookings` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
 ### Household Booking Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useOrderValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
+| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
+| `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
+| `GuestBookingFields.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** - Guest ticket form |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings` | `useBookingsStore()` | `useBooking()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** - ADR-016 booking form |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
@@ -133,10 +136,10 @@
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - Added `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()` actions |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
-| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks |
+| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `tickets.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
-| `bookings.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **✅ COMPLIANT** - ADR-016 scaffold methods, `useRequestFetch()` for SSR |
 
 ## Composable Compliance
 
@@ -152,7 +155,8 @@
 | `useOrderValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useDinnerEventValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Dinner step states, Heynabo payload, deadline labels |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, deadline labels |
+| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ❌ | **⚠️ MISSING TESTS** - ADR-006 URL-synced view/date for booking calendar |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -251,7 +255,6 @@ All components and stores work with domain types:
 **Missing E2E:**
 - ❌ Admin users
 - ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
-- ❌ Admin chefs
 - ❌ Admin economy
 - ❌ Admin settings
 - ❌ Household bookings (backend tested, UI not)
@@ -300,7 +303,7 @@ All components and stores work with domain types:
    - All tests passing (262 tests across 8 validation composables)
 
 3. **Core Component Tests** - Add component tests for high-risk components
-   - `AdminUsers.vue` (CRUD with no tests)
+   - `UserProfileCard.vue` (role management UI needs component tests)
    - `HouseholdAllergies.vue` (complex state management)
    - `HouseholdBookings.vue` (booking flow)
 
@@ -482,6 +485,7 @@ Reference these components for correct ADR implementation:
 - ✅ `useSeasonValidation()` - ADR-001 three-layer architecture (imports from generated, re-exports enums, defines validation schemas)
 - ✅ `useOrderValidation()` - ADR-001 validation layer pattern with ADR-010 domain types
 - ✅ `useCookingTeam()` - Business logic composable with tests (imports from validation layer)
+- ✅ `useBooking()` - ADR-016 order decision logic (`decideOrderAction`, bucket resolvers)
 - ✅ `useEntityFormManager()` - Form management pattern
 - ✅ `useTabNavigation()` - URL navigation pattern
 

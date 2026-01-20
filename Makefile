@@ -102,17 +102,17 @@ prisma-flatten-migrations:
 d1-migrate-local: ## Migrate + seed local database
 	@echo "🏗️ Applying migrations to local database"
 	@npm run db:migrate:local
-	@npm run db:seed:local
+	@npm run db:seed:all:local
 
 d1-migrate-dev: ## Migrate + seed dev database
 	@echo "🏗️ Applying migrations to dev database"
-	@npm run db:migrate
-	@npm run db:seed
+	@npm run db:migrate:dev
+	@npm run db:seed:all:dev
 
 d1-migrate-prod: ## Migrate + seed production database
 	@echo "🏗️ Applying migrations to production database"
-	@npm run db_prod:migrate
-	@npm run db_prod:seed
+	@npm run db:migrate:prod
+	@npm run db:seed:all:prod
 
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
@@ -120,21 +120,32 @@ d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 # ============================================================================
 # DATABASE SEEDING
 # ============================================================================
-.PHONY: d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
+.PHONY: d1-seed-local d1-seed-dev d1-seed-prod d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
+
+d1-seed-local: ## Run all seeds (local)
+	@npm run db:seed:all:local
+
+d1-seed-dev: ## Run all seeds (dev)
+	@npm run db:seed:all:dev
+
+d1-seed-prod: ## Run all seeds (prod)
+	@npm run db:seed:all:prod
 
 d1-seed-testdata: ## Seed local with test data
 	@npx wrangler d1 execute theslope --file migrations/seed/test-data.sql --local
 	@echo "✅ Test data loaded!"
 
-d1-seed-master-data-local: ## Load master data to local
+# Master data: PBS ID mappings - CONFIDENTIAL, not in git (.theslope/)
+# Run manually after d1-migrate-* or Heynabo import. Not part of CI/CD.
+d1-seed-master-data-local: ## Load master data to local (confidential, manual)
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --local
 	@echo "✅ Master data loaded (local)!"
 
-d1-seed-master-data-dev: ## Load master data to dev
+d1-seed-master-data-dev: ## Load master data to dev (confidential, manual)
 	@npx wrangler d1 execute theslope --file .theslope/dev-master-data-households.sql --env dev --remote
 	@echo "✅ Master data loaded (dev)!"
 
-d1-seed-master-data-prod: ## Load master data to prod
+d1-seed-master-data-prod: ## Load master data to prod (confidential, manual)
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
@@ -153,9 +164,12 @@ d1-list-tables:
 d1-list-tables-local:
 	$(call d1_exec,theslope,PRAGMA table_list,--local)
 
-d1-nuke-seasons:
-	$(call d1_exec,theslope,DELETE FROM Season WHERE ShortName LIKE 'Test%',)
-	$(call d1_exec,theslope,SELECT COUNT(id) FROM Season WHERE shortName LIKE 'Test%',)
+d1-nuke-seasons: ## Delete test seasons (local) - any season with 'Test' in name
+	@echo "🔍 Seasons to delete:"
+	$(call d1_exec,theslope,SELECT COUNT(id) as count FROM Season WHERE shortName LIKE '%Test%',--local)
+	$(call d1_exec,theslope,DELETE FROM Season WHERE shortName LIKE '%Test%',--local)
+	@echo "✅ Remaining test seasons:"
+	$(call d1_exec,theslope,SELECT COUNT(id) as count FROM Season WHERE shortName LIKE '%Test%',--local)
 
 d1-nuke-households: ## Delete test households (local)
 	@echo "🧹 Cleaning up test households..."
@@ -182,15 +196,62 @@ d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytyp
 	@echo "✅ Nuked all test data!"
 
 # ============================================================================
+# VERSION MANAGEMENT
+# ============================================================================
+.PHONY: version version-info
+
+# Get commit SHA (CI provides GITHUB_SHA, local uses git)
+GIT_SHA := $(or $(GITHUB_SHA),$(shell git rev-parse HEAD 2>/dev/null || echo "unknown"))
+GIT_SHA_SHORT := $(shell echo $(GIT_SHA) | cut -c1-7)
+
+# Get last version tag
+LAST_TAG := $(shell git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v0.0.0")
+LAST_VERSION := $(shell echo $(LAST_TAG) | sed 's/^v//')
+
+# Count commits since last tag
+COMMITS_SINCE_TAG := $(shell git rev-list $(LAST_TAG)..HEAD --count 2>/dev/null || echo "0")
+
+# Calculate next patch version
+NEXT_PATCH := $(shell echo $(LAST_VERSION) | awk -F. '{printf "%d.%d.%d", $$1, $$2, $$3+1}')
+
+# Build timestamp (ISO 8601 date only)
+BUILD_DATE := $(shell date -u +%Y-%m-%d)
+
+# Version logic: RELEASE_VERSION env var takes precedence, else RC
+VERSION := $(if $(RELEASE_VERSION),$(RELEASE_VERSION),$(NEXT_PATCH)-rc.$(COMMITS_SINCE_TAG))
+FULL_VERSION := $(VERSION)+$(GIT_SHA_SHORT)
+
+version: ## Output version string
+	@echo "$(FULL_VERSION)"
+
+version-info: ## Output all version components as env vars
+	@echo "RELEASE_VERSION=$(FULL_VERSION)"
+	@echo "RELEASE_DATE=$(BUILD_DATE)"
+	@echo "COMMIT_SHA=$(GIT_SHA)"
+	@echo "IS_RELEASE=$(if $(RELEASE_VERSION),true,false)"
+	@echo "SHORT_VERSION=$(VERSION)"
+
+# ============================================================================
 # DEPLOYMENT & LOGS
 # ============================================================================
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod
 
-deploy-dev: ## Deploy to dev with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy
+# Deploy macro: $(1)=npm script, $(2)=environment name
+# Uses env vars if set (CI), otherwise calculates via version-info (local)
+define deploy_to
+	@if [ -z "$$NUXT_PUBLIC_RELEASE_VERSION" ]; then eval $$(make version-info); fi && \
+	GITHUB_SHA=$${GITHUB_SHA:-$$COMMIT_SHA} \
+	NUXT_PUBLIC_RELEASE_VERSION=$${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} \
+	NUXT_PUBLIC_RELEASE_DATE=$${NUXT_PUBLIC_RELEASE_DATE:-$$RELEASE_DATE} \
+	npm run $(1) && \
+	echo "Deployed version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2)."
+endef
 
-deploy-prod: ## Deploy to prod with git commit ID
-	@GITHUB_SHA=$$(git rev-parse --short HEAD) npm run deploy:prod
+deploy-dev: ## Deploy to dev with version info
+	$(call deploy_to,deploy,dev)
+
+deploy-prod: ## Deploy to prod with version info
+	$(call deploy_to,deploy:prod,prod)
 
 logs-dev: ## Tail dev logs
 	@npx wrangler tail theslope --env dev --format pretty
@@ -326,6 +387,22 @@ heynabo-get-nhbrs-dev: ## List all neighbors (dev)
 
 heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
 	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
+
+# ============================================================================
+# HEAL USER BOOKINGS (bugfix - one-time healing)
+# ============================================================================
+# Usage: make heal-local hid=123 dryrun=false
+# Default: dryrun=true (preview mode)
+.PHONY: heal-local heal-dev heal-prod
+
+heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_dev),$(URL_dev),-X POST "$(URL_dev)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
 
 # ============================================================================
 # TESTING

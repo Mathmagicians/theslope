@@ -2,7 +2,7 @@
  * GET /api/order - Fetch orders
  *
  * Query params:
- * - dinnerEventId: Optional filter by specific dinner event
+ * - dinnerEventIds: Optional array of dinner event IDs (0=all, 1=single, many=multiple)
  * - state: Optional filter by order state (e.g., RELEASED for claim queue)
  * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
  * - allHouseholds: false (default) = filter by session user's household
@@ -19,17 +19,21 @@ import type { OrderDisplay } from '~/composables/useBookingValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const {OrderStateSchema} = useBookingValidation()
+const {OrderStateSchema, IdOrIdsSchema} = useBookingValidation()
 
 const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
 
 const querySchema = z.object({
-    dinnerEventId: z.coerce.number().int().positive().optional(),
+    dinnerEventIds: IdOrIdsSchema,
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
     allHouseholds: z.coerce.boolean().optional().default(false),
-    includeProvenance: z.coerce.boolean().optional().default(false)
-})
+    includeProvenance: z.coerce.boolean().optional().default(false),
+    householdId: z.coerce.number().int().positive().optional()
+}).refine(
+    (data) => !(data.householdId && data.allHouseholds),
+    { message: 'Cannot specify both householdId and allHouseholds=true' }
+)
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
     const {cloudflare} = event.context
@@ -44,9 +48,14 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
 
-    // Determine household filter: skip if allHouseholds=true, otherwise use session
+    // Determine household filter: explicit householdId > session user's household
+    // Note: allHouseholds=true + householdId is rejected by schema validation
     let householdId: number | undefined
-    if (!query.allHouseholds) {
+    if (query.householdId) {
+        // Explicit household (admin viewing another household)
+        householdId = query.householdId
+    } else if (!query.allHouseholds) {
+        // Default: filter by session user's household
         const session = await getUserSession(event)
         const user = session?.user as UserDetail | undefined
         householdId = user?.Inhabitant?.householdId
@@ -56,10 +65,13 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             return []
         }
     }
+    // else: allHouseholds=true with no householdId → no filter (marketplace view)
 
     // Business logic
     try {
-        const orders = await fetchOrders(d1Client, query.dinnerEventId, householdId, query.state, query.sortBy, query.includeProvenance)
+        // Pass array (empty = all events, otherwise filter by IDs)
+        const eventIds = query.dinnerEventIds.length > 0 ? query.dinnerEventIds : undefined
+        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

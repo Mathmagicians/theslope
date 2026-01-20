@@ -11,7 +11,8 @@ export default defineAppConfig({
             endWeek: 26,
             holidays: [8, 42, 52],
             cookingDays: ['mandag', 'tirsdag', 'onsdag', 'torsdag'] ,
-            ticketIsCancellableDaysBefore: 10,
+            menuIsAnnouncedDaysBefore: 10,
+            ticketIsCancellableDaysBefore: 8,
             diningModeIsEditableMinutesBefore: 90,
             ticketPrices: [
                 { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2 },
@@ -21,6 +22,7 @@ export default defineAppConfig({
             consecutiveCookingDays: 2
         },
         defaultDinnerStartTime: 18,
+        defaultDinnerDurationMinutes: 60,
         holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
         cookingDeadlines: {
             criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
@@ -34,9 +36,9 @@ export default defineAppConfig({
             cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
         },
         systemJobs: {
-            dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 02:00' },
-            monthlyBilling: { cron: '0 4 17 * *', description: 'D. 17. hver måned kl. 04:00' },
-            heynaboImport: { cron: '0 3 * * *', description: 'Dagligt kl. 03:00' }
+            heynaboImport: { cron: '0 1 * * *', description: 'Dagligt kl. 02:00' },
+            dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 03:00' },
+            monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
         prebookingWindowDays: 60  // Rolling window: scaffold pre-bookings for dinners within next N days
     },
@@ -54,7 +56,9 @@ export default defineAppConfig({
             party: "party",
             peach: "peach",
             caramel: "caramel",
-            ocean: 'blue'
+            ocean: 'blue',
+            // Deadline warning chips (defined in main.css)
+            yellow: 'yellow'
         }
     }
 })

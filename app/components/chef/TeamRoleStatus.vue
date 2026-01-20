@@ -22,6 +22,9 @@ const props = defineProps<Props>()
 // Design system
 const { COLOR, ICONS } = useTheSlopeDesignSystem()
 
+// Team utilities
+const { getTeamShortName } = useCookingTeam()
+
 // Validation schemas
 const { TeamRoleSchema } = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
@@ -37,6 +40,9 @@ const userRole = computed(() => {
 
 const isChef = computed(() => userRole.value === Role.CHEF)
 
+// Team short name for display (e.g., "Madhold 2" instead of "Madhold 2 - 08/25-06/26")
+const teamShortName = computed(() => getTeamShortName(props.team.name))
+
 // Role display configuration
 const roleConfig = computed(() => {
   const configs = {
@@ -44,19 +50,19 @@ const roleConfig = computed(() => {
       title: 'Du er chefkok',
       icon: ICONS.chef,
       color: COLOR.warning,
-      description: `Du er chefkok på ${props.team.name} og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.`
+      description: `Du er chefkok på ${teamShortName.value} og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.`
     },
     [Role.COOK]: {
       title: 'Du er kok',
       icon: 'i-heroicons-user',
       color: COLOR.primary,
-      description: `Du hjælper cheffen på ${props.team.name} med at lave maden`
+      description: `Du hjælper cheffen på ${teamShortName.value} med at lave maden`
     },
     [Role.JUNIORHELPER]: {
       title: 'Du er kokkespire',
       icon: 'i-heroicons-heart',
       color: COLOR.success,
-      description: `Du er en sej kokkespire, som hjælper de voksne på ${props.team.name}`
+      description: `Du er en sej kokkespire, som hjælper de voksne på ${teamShortName.value}`
     }
   }
   return configs[userRole.value as keyof typeof configs]

@@ -11,11 +11,9 @@
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │ 🍳 Team A   👥 4   📅 12                                                 │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ 👨‍🍳 Chef: [Anna H]                                                       │
- * │ 🥄 Kokke: [Lars B] [Maria S] [Peter J]                                   │
- * │ 👶 Hjælpere: (ingen)                                                     │
- * ├──────────────────────────────────────────────────────────────────────────┤
- * │ [👨‍🍳 BLIV CHEFKOK]  [🥄 BLIV KOK]  [👶 BLIV HJÆLPER]                     │
+ * │ 👨‍🍳 Holdets chefkokke: [Anna H]                                          │
+ * │ 👥 Holdets kokke: [Lars B] [Maria S]                                     │
+ * │ 🌱 Holdets kokkespirer: [Peter J]                                        │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Already volunteered:
@@ -56,6 +54,7 @@ interface Props {
   teamId: number           // Database ID - component fetches detail from store
   teamNumber: number       // Logical number 1..N in season (for display/color)
   mode?: DisplayMode       // Display mode
+  useShortName?: boolean   // If true, display "Madhold X" instead of full name with season
   // EDIT mode only props:
   seasonId?: number
   seasonCookingDays?: WeekDayMap | null
@@ -66,6 +65,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
+  useShortName: false,
   seasonId: undefined,
   seasonCookingDays: undefined,
   seasonDates: undefined,
@@ -102,7 +102,11 @@ const isErrored = computed(() => status.value === 'error')
 const isNoTeam = computed(() => status.value === 'success' && team.value === null)
 
 // All data from fetched team Detail entity
-const teamName = computed(() => team.value?.name ?? `Madhold ${props.teamNumber}`)
+const { getTeamShortName } = useCookingTeam()
+const teamName = computed(() => {
+  const fullName = team.value?.name ?? `Madhold ${props.teamNumber}`
+  return props.useShortName ? getTeamShortName(fullName) : fullName
+})
 const assignments = computed(() => team.value?.assignments ?? [])
 const affinity = computed(() => team.value?.affinity ?? null)
 const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])  // From Detail entity
@@ -141,12 +145,6 @@ const roleGroups = computed(() => {
 
   return groups
 })
-
-// Team members (all cooks and helpers, excluding chef)
-const teamMembers = computed(() => [
-  ...roleGroups.value.COOK,
-  ...roleGroups.value.JUNIORHELPER
-])
 
 const navigateToInhabitant = (inhabitantId: number) => {
   navigateTo(`/inhabitant/${inhabitantId}`)
@@ -202,7 +200,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
-        👥 {{ assignments.length }}
+        👨‍🍳 {{ assignments.length }}
       </UBadge>
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         📅 {{ cookingDaysCount }}
@@ -210,33 +208,50 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
     </div>
 
     <!-- Members display OR empty state -->
-    <div v-if="!hasNoMembers" class="flex flex-col md:flex-row gap-3 md:gap-4">
-      <!-- Chef display (if assigned) -->
-      <div v-if="roleGroups.CHEF.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
-        <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.CHEF }}</span>
-        <div class="flex-1">
-          <UserListItem
-            :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
-            :compact="false"
-            :size="SIZES.standard"
-            :ring-color="teamColor"
-            :label="ROLE_LABELS.CHEF"
-          />
+    <div v-if="!hasNoMembers" class="flex flex-col gap-3 md:gap-4 px-3 md:px-4">
+      <!-- Chefs group -->
+      <div v-if="roleGroups.CHEF.length > 0" class="flex items-start gap-3 md:gap-4">
+        <div class="flex flex-col items-center">
+          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.CHEF }}</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">Chefkokke</span>
         </div>
+        <UserListItem
+          :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
+          :compact="false"
+          :size="SIZES.standard"
+          :ring-color="teamColor"
+          class="mt-2"
+        />
       </div>
 
-      <!-- Team display (cooks + helpers) -->
-      <div v-if="teamMembers.length > 0" class="flex items-center gap-3 md:gap-4 flex-1">
-        <span class="text-3xl md:text-4xl">{{ ROLE_ICONS.COOK }}</span>
-        <div class="flex-1">
-          <UserListItem
-            :inhabitants="teamMembers.map(m => m.inhabitant)"
-            :compact="false"
-            :size="SIZES.standard"
-            :ring-color="teamColor"
-            label="medlemmer"
-          />
+      <!-- Cooks group -->
+      <div v-if="roleGroups.COOK.length > 0" class="flex items-start gap-3 md:gap-4">
+        <div class="flex flex-col items-center">
+          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.COOK }}</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">Kokke</span>
         </div>
+        <UserListItem
+          :inhabitants="roleGroups.COOK.map(m => m.inhabitant)"
+          :compact="false"
+          :size="SIZES.standard"
+          :ring-color="teamColor"
+          class="mt-2"
+        />
+      </div>
+
+      <!-- Junior helpers group -->
+      <div v-if="roleGroups.JUNIORHELPER.length > 0" class="flex items-start gap-3 md:gap-4">
+        <div class="flex flex-col items-center">
+          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.JUNIORHELPER }}</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">Kokkespirer</span>
+        </div>
+        <UserListItem
+          :inhabitants="roleGroups.JUNIORHELPER.map(m => m.inhabitant)"
+          :compact="false"
+          :size="SIZES.standard"
+          :ring-color="teamColor"
+          class="mt-2"
+        />
       </div>
     </div>
     <UAlert
@@ -302,7 +317,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
             variant="soft"
             :size="SIZES.large"
           >
-            👥 {{ assignments.length }}
+            👨‍🍳 {{ assignments.length }}
           </UBadge>
           <UBadge
             :color="teamColor"
@@ -328,7 +343,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
-        👥 {{ assignments.length }}
+        👨‍🍳 {{ assignments.length }}
       </UBadge>
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
         📅 {{ cookingDaysCount }}

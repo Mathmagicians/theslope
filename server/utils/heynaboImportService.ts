@@ -38,7 +38,8 @@ import {
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {chunkArray} from '~/utils/batchUtils'
-import type {HouseholdCreate, HouseholdDisplay, UserCreate} from '~/composables/useCoreValidation'
+import type {HouseholdCreate, HouseholdDisplay, UserCreate, SystemRole} from '~/composables/useCoreValidation'
+import {reconcileUserRoles, RoleOwner} from '~/composables/useUserRoles'
 
 const LOG = '🏠 > IMPORT > [HEYNABO]'
 const {createHouseholdsFromImport} = useHeynaboValidation()
@@ -211,15 +212,29 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             console.info(`${LOG} Linked ${usersLinked} users to inhabitants`)
         }
 
-        // UPDATE existing users (saveUser merges roles - preserves ALLERGYMANAGER)
+        // UPDATE existing users - reconcile roles (HN owns ADMIN, preserves ALLERGYMANAGER)
+        let adminsAdded = 0
+        let adminsRemoved = 0
         if (userReconciliation.update.length > 0) {
-            const usersToUpdate = userReconciliation.update.map(i => i.user!)
+            // Build map of email -> existing roles
+            const existingRolesByEmail = new Map(linkedUsers.map(u => [u.email, u.systemRoles as SystemRole[]]))
+
+            // Reconcile roles for each user
+            const usersToUpdate = userReconciliation.update.map(i => {
+                const incoming = i.user!
+                const existingRoles = existingRolesByEmail.get(incoming.email) ?? []
+                const result = reconcileUserRoles(existingRoles, incoming.systemRoles, RoleOwner.HN)
+                if (result.adminAdded) adminsAdded++
+                if (result.adminRemoved) adminsRemoved++
+                return { ...incoming, systemRoles: result.roles }
+            })
+
             const chunkUsers = chunkArray<UserCreate>(CHUNK_SIZE)
             for (const chunk of chunkUsers(usersToUpdate)) {
                 await Promise.all(chunk.map(u => saveUser(d1Client, u)))
             }
             usersUpdated = userReconciliation.update.length
-            console.info(`${LOG} Updated ${usersUpdated} users (ALLERGYMANAGER preserved)`)
+            console.info(`${LOG} Updated ${usersUpdated} users (admins: +${adminsAdded}/-${adminsRemoved}, ALLERGYMANAGER preserved)`)
         }
 
         console.info(`${LOG} Inhabitants: created=${inhabitantsCreated}, updated=${inhabitantsUpdated}, idempotent=${inhabitantsIdempotent}, deleted=${inhabitantsDeleted}`)
@@ -262,12 +277,14 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             inhabitantsUpdated,
             inhabitantsIdempotent,
             inhabitantsDeleted,
-            // Users: all 4 outcomes + linked
+            // Users: all 4 outcomes + linked + admin tracking
             usersCreated,
             usersUpdated,
             usersIdempotent: userReconciliation.idempotent.length,
             usersDeleted,
             usersLinked,
+            adminsAdded,
+            adminsRemoved,
             sanityCheck: sanityCheckResult
         }
 

@@ -6,8 +6,8 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
-const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {memberUIFile} = authFiles
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const {deserializeWeekDayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
@@ -23,41 +23,48 @@ test.describe('Household members display', () => {
     let donaldId: number
     let daisyId: number
 
-    test.use({storageState: adminUIFile})
+    test.use({storageState: memberUIFile})
 
     test.beforeAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
 
         // Use singleton to prevent parallel test conflicts with active seasons
         // NOTE: Singleton is cleaned up by global teardown, not by this test
-        await SeasonFactory.createActiveSeason(context)
+        await SeasonFactory.createActiveSeason(adminContext)
 
-        const household = await HouseholdFactory.createHousehold(context, {name: salt('MembersTest', testSalt)})
-        householdId = household.id
-        shortName = household.shortName
+        // Get member's household (member must access their own household for store to load correctly)
+        const {householdId: memberHouseholdId} = await getSessionUserInfo(memberContext)
+        householdId = memberHouseholdId
+
+        // Get household details to get shortName
+        const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
+        shortName = household!.shortName
 
         const today = new Date()
 
+        // Create test inhabitants in member's household (using admin for setup)
+        // Use Anders- pattern for d1-nuke-all cleanup
         const baby = await HouseholdFactory.createInhabitantForHousehold(
-            context,
+            adminContext,
             householdId,
-            'Baby Duck',
+            salt('Anders', testSalt) + '-Baby',
             new Date(today.getFullYear(), today.getMonth(), 1)
         )
         babyId = baby.id
 
         const donald = await HouseholdFactory.createInhabitantForHousehold(
-            context,
+            adminContext,
             householdId,
-            'Donald Duck',
+            salt('Anders', testSalt) + '-Donald',
             new Date(today.getFullYear() - 8, today.getMonth(), 1)
         )
         donaldId = donald.id
 
         const daisy = await HouseholdFactory.createInhabitantForHousehold(
-            context,
+            adminContext,
             householdId,
-            'Daisy Duck',
+            salt('Anders', testSalt) + '-Daisy',
             new Date(today.getFullYear() - 30, today.getMonth(), 1)
         )
         daisyId = daisy.id
@@ -65,9 +72,12 @@ test.describe('Household members display', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        if (householdId) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        // Clean up test inhabitants (not the household - it's the member's own)
+        await Promise.all([
+            HouseholdFactory.deleteInhabitant(context, babyId).catch(() => {}),
+            HouseholdFactory.deleteInhabitant(context, donaldId).catch(() => {}),
+            HouseholdFactory.deleteInhabitant(context, daisyId).catch(() => {})
+        ])
         // NOTE: Singleton active season is cleaned up by global teardown, not here
     })
 
@@ -121,22 +131,36 @@ test.describe('Household members display', () => {
         )
 
         // Click the edit button (pencil icon) for Donald's row to expand it
-        const donaldRow = page.getByRole('row').filter({hasText: 'Donald'}).first()
+        // Name is "Anders-{salt}-Donald" so filter by "-Donald" suffix
+        const donaldRow = page.getByRole('row').filter({hasText: '-Donald'}).first()
         const editButton = donaldRow.getByRole('button', {name: 'Rediger præferencer'})
         await editButton.click()
 
-        // Wait for edit panel to be visible
-        const editPanel = page.getByRole('heading', {name: /Opdater fællesspisning præferencer for Donald/})
-        await pollUntil(
-            async () => await editPanel.isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
+        const editPanel = page.getByText(/Opdater fællesspisning præferencer for Anders.*-Donald/)
+        await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible({timeout: 5000})
 
-        // Find Monday's button group (data-testid contains the pattern) and click TAKEAWAY (3rd button)
-        // Button order: DINEIN(0), DINEINLATE(1), TAKEAWAY(2), NONE(3)
-        const mondayGroup = page.locator(`[data-testid="inhabitant-${donaldId}-preferences-edit-mandag"]`)
-        const takeawayButton = mondayGroup.locator('button').nth(2)
+        // Poll for TAKEAWAY button - if it fails, we'll see debug info below
+        const expectedTestId = `inhabitant-${donaldId}-preferences-edit-mandag-TAKEAWAY`
+        const buttonFound = await pollUntil(
+            async () => {
+                const button = page.getByTestId(expectedTestId)
+                return await button.count() > 0
+            },
+            (count) => count,
+            5  // Reduced to 5 retries to stay within test timeout
+        ).catch(() => false)
+
+        // If button not found, get debug info and fail with helpful message
+        if (!buttonFound) {
+            const allTestIds = await page.locator('[data-testid]').evaluateAll(
+                els => els.map(el => el.getAttribute('data-testid'))
+            )
+            const relevantTestIds = allTestIds.filter(id => id?.includes('preferences-edit') || id?.includes('inhabitant'))
+            throw new Error(`Expected data-testid="${expectedTestId}" but found: [${relevantTestIds.join(', ')}]. donaldId=${donaldId}`)
+        }
+
+        const takeawayButton = page.getByTestId(expectedTestId)
         await takeawayButton.click()
 
         // Click the Save button to persist changes

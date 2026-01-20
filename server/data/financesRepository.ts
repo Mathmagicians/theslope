@@ -1,9 +1,9 @@
 import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {chunkArray, groupBy} from '~/utils/batchUtils'
 
 import type {
-    OrderCreate,
     OrderDisplay,
     OrderDetail,
     OrderCreateWithPrice,
@@ -33,7 +33,6 @@ import {
     type InvoiceCreate,
     type InvoiceCreated,
     type BillingPeriodSummaryCreate,
-    type BillingPeriodSummaryDisplay,
     type BillingPeriodSummaryId
 } from '~/composables/useBillingValidation'
 
@@ -78,6 +77,9 @@ export async function createOrderAuditEntry(
     const created = await prisma.orderHistory.create({
         data: validatedEntry,
         include: {
+            performedByUser: {
+                select: {id: true, email: true}
+            },
             order: {
                 include: {
                     ticketPrice: {
@@ -147,6 +149,75 @@ export async function fetchUserCancellationKeys(
     return keys
 }
 
+/**
+ * Fetch user intent keys for scaffolding decisions.
+ *
+ * Returns two sets based on most recent user action per (inhabitant, dinnerEvent):
+ * - confirmedKeys: USER_BOOKED or USER_CLAIMED (user wants to eat)
+ * - cancelledKeys: USER_CANCELLED (user doesn't want to eat)
+ *
+ * When both exist for same key, most recent action wins.
+ *
+ * ADR-011: Uses denormalized fields (inhabitantId, dinnerEventId, seasonId)
+ * which persist even after order deletion.
+ */
+export async function fetchUserIntentKeys(
+    d1Client: D1Database,
+    seasonId: number
+): Promise<{ confirmedKeys: Set<string>; cancelledKeys: Set<string> }> {
+    const {OrderAuditActionSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Fetch all user intent actions (not system actions)
+    const userIntents = await prisma.orderHistory.findMany({
+        where: {
+            action: {
+                in: [
+                    OrderAuditActionSchema.enum.USER_CANCELLED,
+                    OrderAuditActionSchema.enum.USER_BOOKED,
+                    OrderAuditActionSchema.enum.USER_CLAIMED
+                ]
+            },
+            seasonId: seasonId,
+            inhabitantId: { not: null },
+            dinnerEventId: { not: null }
+        },
+        select: {
+            inhabitantId: true,
+            dinnerEventId: true,
+            action: true,
+            timestamp: true
+        },
+        orderBy: { timestamp: 'desc' }
+    })
+
+    // Group by key, take most recent action per key
+    const keyToAction = new Map<string, string>()
+    for (const intent of userIntents) {
+        const key = `${intent.inhabitantId}-${intent.dinnerEventId}`
+        if (!keyToAction.has(key)) {
+            keyToAction.set(key, intent.action)
+        }
+    }
+
+    // Split into confirmed and cancelled sets
+    const confirmedKeys = new Set<string>()
+    const cancelledKeys = new Set<string>()
+
+    for (const [key, action] of keyToAction) {
+        if (action === OrderAuditActionSchema.enum.USER_CANCELLED) {
+            cancelledKeys.add(key)
+        } else {
+            // USER_BOOKED or USER_CLAIMED
+            confirmedKeys.add(key)
+        }
+    }
+
+    console.info(`📋 > ORDER_AUDIT > [FETCH_USER_INTENT] Season ${seasonId}: ${confirmedKeys.size} confirmed, ${cancelledKeys.size} cancelled keys`)
+
+    return { confirmedKeys, cancelledKeys }
+}
+
 /*** ORDERS ***/
 
 // ADR-005: Order relationships:
@@ -155,48 +226,10 @@ export async function fetchUserCancellationKeys(
 // - Weak to User (bookedByUser) - order can exist if user is deleted (audit trail)
 // - Weak to Transaction (order can exist without transaction)
 
-export async function createOrder(d1Client: D1Database, orderData: OrderCreate): Promise<OrderDisplay> {
-    console.info(`🎟️ > ORDER > [CREATE] Creating order for inhabitant ${orderData.inhabitantId} on dinner event ${orderData.dinnerEventId}`)
-    const {OrderDisplaySchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const ticketPrice = await prisma.ticketPrice.findUnique({
-            where: { id: orderData.ticketPriceId }
-        })
-
-        if (!ticketPrice) {
-            throw createError({
-                statusCode: 404,
-                message: `Ticket price with ID ${orderData.ticketPriceId} not found`
-            })
-        }
-
-        const newOrder = await prisma.order.create({
-            data: {
-                ...orderData,
-                priceAtBooking: ticketPrice.price
-            }
-        })
-
-        console.info(`🎟️ > ORDER > [CREATE] Successfully created order with ID ${newOrder.id}`)
-
-        // Transform Prisma type to domain type and validate (ADR-010)
-        const domainOrder = {
-            ...newOrder,
-            ticketType: ticketPrice.ticketType
-        }
-
-        return OrderDisplaySchema.parse(domainOrder)
-    } catch (error) {
-        return throwH3Error(`️🎟️ > ORDER > [CREATE]: Error creating order for inhabitant ${orderData.inhabitantId}`, error)
-    }
-}
-
 /**
- * Batch create orders for a single household with audit trail.
+ * Create order(s) for a household with audit trail.
+ * Accepts single order or array (normalized internally, same pattern as deleteOrder).
  *
- * Trusts caller for validation (OrdersBatchSchema ensures same householdId, max 8 orders).
  * Uses createManyAndReturn for efficient D1 insertion.
  *
  * ADR-009: Returns IDs only (DB is source of truth)
@@ -204,30 +237,39 @@ export async function createOrder(d1Client: D1Database, orderData: OrderCreate):
  *
  * @param d1Client - D1 database client
  * @param householdId - Household ID (for result tracking)
- * @param ordersData - Pre-validated array of orders (max 8, same householdId)
+ * @param ordersData - Single order or array of orders
  * @param auditContext - Audit context for OrderHistory entries
  * @returns CreateOrdersResult with householdId and created order IDs
  */
 export async function createOrders(
     d1Client: D1Database,
     householdId: number,
-    ordersData: OrderCreateWithPrice[],
+    ordersData: OrderCreateWithPrice | OrderCreateWithPrice[],
     auditContext: AuditContext
 ): Promise<CreateOrdersResult> {
-    console.info(`🎟️ > ORDER > [BATCH CREATE] Creating ${ordersData.length} orders for household ${householdId}`)
+    // Normalize to array (same pattern as deleteOrder)
+    const orders: OrderCreateWithPrice[] = Array.isArray(ordersData) ? ordersData : [ordersData]
+    if (orders.length === 0) return { householdId, createdIds: [] }
+
+    console.info(`🎟️ > ORDER > [CREATE] Creating ${orders.length} order(s) for household ${householdId}`)
+    const {OrderCreateWithPriceSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+
+    // Parse through schema to apply defaults (e.g., isGuestTicket: false)
+    const validatedOrders = orders.map(order => OrderCreateWithPriceSchema.parse(order))
 
     try {
         // Insert orders with createManyAndReturn (Prisma 5.14+, returns IDs)
         const createdOrders = await prisma.order.createManyAndReturn({
-            data: ordersData.map(order => ({
+            data: validatedOrders.map(order => ({
                 dinnerEventId: order.dinnerEventId,
                 inhabitantId: order.inhabitantId,
                 bookedByUserId: order.bookedByUserId,
                 ticketPriceId: order.ticketPriceId,
                 priceAtBooking: order.priceAtBooking,
                 dinnerMode: order.dinnerMode,
-                state: order.state
+                state: order.state,
+                isGuestTicket: order.isGuestTicket
             })),
             select: { id: true }
         })
@@ -235,15 +277,18 @@ export async function createOrders(
         const createdIds = createdOrders.map(o => o.id)
         console.info(`🎟️ > ORDER > [BATCH CREATE] Created order IDs: ${createdIds.join(', ')}`)
 
-        // Create audit trail entries atomically
+        // Create audit trail entries with denormalized fields for user intent tracking
         await prisma.orderHistory.createMany({
             data: createdIds.map((orderId, index) => ({
                 orderId,
                 action: auditContext.action,
                 performedByUserId: auditContext.performedByUserId,
+                inhabitantId: validatedOrders[index]!.inhabitantId,
+                dinnerEventId: validatedOrders[index]!.dinnerEventId,
+                seasonId: auditContext.seasonId,
                 auditData: JSON.stringify({
                     source: auditContext.source,
-                    orderData: ordersData[index]
+                    orderData: validatedOrders[index]
                 })
             }))
         })
@@ -252,7 +297,7 @@ export async function createOrders(
 
         return { householdId, createdIds }
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${ordersData.length} orders for household ${householdId}`, error)
+        return throwH3Error(`🎟️ > ORDER > [BATCH CREATE]: Error creating ${orders.length} orders for household ${householdId}`, error)
     }
 }
 
@@ -305,6 +350,27 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                         price: true,
                         description: true
                     }
+                },
+                // ADR-011: Full order history audit trail for detail endpoint
+                orderHistory: {
+                    select: {
+                        id: true,
+                        orderId: true,
+                        action: true,
+                        performedByUserId: true,
+                        performedByUser: {
+                            select: {
+                                id: true,
+                                email: true
+                            }
+                        },
+                        auditData: true,
+                        timestamp: true,
+                        inhabitantId: true,
+                        dinnerEventId: true,
+                        seasonId: true
+                    },
+                    orderBy: {timestamp: 'desc'}
                 }
             }
         })
@@ -314,12 +380,13 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
             return null
         }
 
-        console.info(`🎟️ > ORDER > [GET] Successfully fetched order with ID ${order.id}`)
+        console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id} with ${order.orderHistory?.length ?? 0} history entries`)
 
-        // Transform to flatten ticketType from ticketPrice (ADR-009)
+        // Transform: flatten ticketType (ADR-009)
         return OrderDetailSchema.parse({
             ...order,
-            ticketType: order.ticketPrice?.ticketType ?? null
+            ticketType: order.ticketPrice?.ticketType ?? null,
+            history: order.orderHistory
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
@@ -341,6 +408,8 @@ export type OrderUpdateFields = {
     dinnerMode?: DinnerMode
     state?: OrderState
     releasedAt?: Date | null
+    ticketPriceId?: number
+    priceAtBooking?: number
 }
 
 /**
@@ -477,7 +546,8 @@ export async function claimOrder(
     dinnerEventId: number,
     ticketPriceId: number,
     newInhabitantId: number,
-    claimedByUserId: number,
+    claimedByUserId: number | null,
+    dinnerMode: DinnerMode,
     isGuestTicket: boolean = false,
     maxRetries: number = 3
 ): Promise<OrderDetail | null> {
@@ -525,6 +595,7 @@ export async function claimOrder(
                     inhabitantId: newInhabitantId,
                     bookedByUserId: claimedByUserId,
                     state: OrderStateSchema.enum.BOOKED,
+                    dinnerMode,
                     isGuestTicket,
                     releasedAt: null
                 },
@@ -702,11 +773,21 @@ export async function deleteOrder(
 /**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
  *
+ * WORKAROUND: Uses raw SQL instead of Prisma nested includes because Prisma D1 adapter
+ * doesn't support relationJoins, and nested includes with WHERE clauses exceed D1's
+ * 100 SQL variable limit when fetching many orders.
+ *
+ * Prisma issues tracking this limitation:
+ * - https://github.com/prisma/prisma/issues/23348 (relationJoins for SQLite - not supported)
+ * - https://github.com/prisma/prisma/issues/24545 (D1 variable limit with nested includes)
+ *
+ * See ADR-014 for the raw SQL workaround pattern.
+ *
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
  * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
- * @param includeProvenance - Include orderHistory for claimed ticket provenance (default: false)
+ * @param includeProvenance - Include provenance for claimed tickets (default: false)
  */
 export async function fetchOrders(
     d1Client: D1Database,
@@ -731,39 +812,104 @@ export async function fetchOrders(
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const orders = await prisma.order.findMany({
-            where: {
-                ...(ids && { dinnerEventId: { in: ids } }),
-                ...(householdId && { inhabitant: { householdId } }),
-                ...(state && { state })
-            },
-            include: {
-                ticketPrice: { select: { ticketType: true } },
-                ...(includeProvenance && {
-                    orderHistory: {
-                        where: { action: OrderAuditActionSchema.enum.USER_CLAIMED },
-                        orderBy: { timestamp: 'desc' },
-                        take: 1
-                    }
-                })
-            },
-            orderBy: { [sortBy]: 'asc' }
-        })
+        // Build WHERE clauses dynamically
+        const whereClauses: string[] = []
+        const params: (string | number)[] = []
 
-        console.info(`🎟️ > ORDER > [GET] Found ${orders.length} orders for ${filterDesc}`)
+        if (ids && ids.length > 0) {
+            whereClauses.push(`o.dinnerEventId IN (${ids.map(() => '?').join(',')})`)
+            params.push(...ids)
+        }
+        if (householdId) {
+            whereClauses.push('i.householdId = ?')
+            params.push(householdId)
+        }
+        if (state) {
+            whereClauses.push('o.state = ?')
+            params.push(state)
+        }
 
-        return orders.map(order => {
-            const {ticketPrice, orderHistory, ...rest} = order as typeof order & { orderHistory?: { auditData: string }[] }
+        const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
+        const orderByColumn = sortBy === 'releasedAt' ? 'o.releasedAt' : 'o.createdAt'
 
-            // Extract provenance from USER_CLAIMED history if present
-            const claimHistory = orderHistory?.[0]
-            const provenance = claimHistory ? deserializeOrderAuditData(claimHistory.auditData).orderSnapshot : null
+        // Raw SQL with proper JOINs - avoids D1 100 variable limit
+        // LEFT JOIN to latest USER_CLAIMED history entry per order (for provenance)
+        const sql = `
+            SELECT
+                o.id, o.dinnerEventId, o.inhabitantId, o.bookedByUserId, o.ticketPriceId,
+                o.priceAtBooking, o.dinnerMode, o.state, o.isGuestTicket,
+                o.releasedAt, o.closedAt, o.createdAt, o.updatedAt,
+                tp.ticketType,
+                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'}
+            FROM "Order" o
+            JOIN Inhabitant i ON i.id = o.inhabitantId
+            LEFT JOIN TicketPrice tp ON tp.id = o.ticketPriceId
+            ${includeProvenance ? `
+            LEFT JOIN (
+                SELECT orderId, auditData, ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
+                FROM OrderHistory
+                WHERE action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
+            ) oh ON oh.orderId = o.id AND oh.rn = 1
+            ` : ''}
+            ${whereClause}
+            ORDER BY ${orderByColumn} ASC
+        `
+
+        // Type for raw query result
+        type RawOrderRow = {
+            id: number
+            dinnerEventId: number
+            inhabitantId: number
+            bookedByUserId: number | null
+            ticketPriceId: number | null
+            priceAtBooking: number
+            dinnerMode: string
+            state: string
+            isGuestTicket: number // SQLite returns 0/1 for boolean
+            releasedAt: string | null
+            closedAt: string | null
+            createdAt: string
+            updatedAt: string
+            ticketType: string | null
+            provenanceData: string | null
+        }
+
+        const rawOrders = await prisma.$queryRawUnsafe<RawOrderRow[]>(sql, ...params)
+
+        console.info(`🎟️ > ORDER > [GET] Found ${rawOrders.length} orders for ${filterDesc}`)
+
+        return rawOrders.map(row => {
+            // Extract provenance from audit data if present
+            let provenanceHousehold: string | undefined
+            let provenanceAllergies: string[] | undefined
+
+            if (row.provenanceData && row.provenanceData !== 'null') {
+                try {
+                    const provenance = deserializeOrderAuditData(row.provenanceData).orderSnapshot
+                    provenanceHousehold = provenance?.householdShortname
+                    provenanceAllergies = provenance?.allergies
+                } catch {
+                    // Invalid provenance data - skip
+                }
+            }
 
             return OrderDisplaySchema.parse({
-                ...rest,
-                ticketType: ticketPrice?.ticketType ?? null,
-                provenanceHousehold: provenance?.householdShortname,
-                provenanceAllergies: provenance?.allergies
+                id: row.id,
+                dinnerEventId: row.dinnerEventId,
+                inhabitantId: row.inhabitantId,
+                bookedByUserId: row.bookedByUserId,
+                ticketPriceId: row.ticketPriceId,
+                priceAtBooking: row.priceAtBooking,
+                dinnerMode: row.dinnerMode,
+                state: row.state,
+                isGuestTicket: Boolean(row.isGuestTicket),
+                releasedAt: row.releasedAt ? new Date(row.releasedAt) : null,
+                closedAt: row.closedAt ? new Date(row.closedAt) : null,
+                createdAt: new Date(row.createdAt),
+                updatedAt: new Date(row.updatedAt),
+                ticketType: row.ticketType,
+                provenanceHousehold,
+                provenanceAllergies
             })
         })
     } catch (error) {
@@ -908,12 +1054,13 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
 }
 
 export async function updateDinnerEvent(d1Client: D1Database, id: number, dinnerEventData: Partial<DinnerEventCreate>): Promise<DinnerEventDetail> {
-    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}`)
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] Updating dinner event with ID ${id}, fields: ${Object.keys(dinnerEventData).join(', ')}`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDetailSchema, deserializeDinnerEventDetail} = useBookingValidation()
 
     // Exclude relation fields that Prisma doesn't accept in update data
     const {allergens, ...updateData} = dinnerEventData
+    console.info(`🍽️ > DINNER_EVENT > [UPDATE] updateData fields: ${Object.keys(updateData).join(', ')}`)
 
     try {
         const updatedDinnerEvent = await prisma.dinnerEvent.update({
@@ -1013,7 +1160,7 @@ export async function deleteDinnerEvent(
             const heynaboDeletes = eventsToDelete
                 .filter(e => e.heynaboEventId)
                 .map(e => deleteHeynaboEvent(e.heynaboEventId!)
-                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}:`, err))
+                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}: ${err instanceof Error ? err.message : String(err)}`))
                 )
             await Promise.all(heynaboDeletes)
         }
@@ -1131,10 +1278,11 @@ export async function updateDinnersToConsumed(
 /**
  * Fetch all orders with closable states on CONSUMED dinners in active season.
  * Uses CLOSABLE_ORDER_STATES from useBooking for state filtering.
+ * Returns fields needed for audit trail (ADR-011).
  */
 export async function fetchPendingOrdersOnConsumedDinners(
     d1Client: D1Database
-): Promise<{id: number}[]> {
+): Promise<{id: number, inhabitantId: number, dinnerEventId: number, seasonId: number}[]> {
     const {DinnerStateSchema} = useBookingValidation()
     const {CLOSABLE_ORDER_STATES} = useBooking()
     const activeSeasonId = await fetchActiveSeasonId(d1Client)
@@ -1144,7 +1292,7 @@ export async function fetchPendingOrdersOnConsumedDinners(
     }
 
     const prisma = await getPrismaClientConnection(d1Client)
-    return prisma.order.findMany({
+    const orders = await prisma.order.findMany({
         where: {
             state: {in: [...CLOSABLE_ORDER_STATES]},
             dinnerEvent: {
@@ -1152,41 +1300,137 @@ export async function fetchPendingOrdersOnConsumedDinners(
                 state: DinnerStateSchema.enum.CONSUMED
             }
         },
-        select: {id: true}
+        select: {id: true, inhabitantId: true, dinnerEventId: true}
     })
+
+    // Add seasonId (we already know it's the active season)
+    return orders.map(o => ({...o, seasonId: activeSeasonId}))
 }
 
 /**
- * Update orders to a target state with appropriate timestamp in batch.
- * - CLOSED: sets closedAt
- * - RELEASED: sets releasedAt
+ * Audit context for batch updates
+ * Required for creating OrderHistory entries (USER_CANCELLED, USER_BOOKED, SYSTEM_*)
  */
-export async function updateOrdersToState(
-    d1Client: D1Database,
-    orderIds: number[],
-    targetState: OrderState
-): Promise<number> {
-    if (orderIds.length === 0) return 0
+export type BatchUpdateAudit = {
+    action: OrderAuditAction
+    performedByUserId: number | null
+    inhabitantId: number
+    dinnerEventId: number
+    seasonId: number | null
+}
 
+/**
+ * Batch update data for scaffold operations
+ * Groups orders by their update signature (state + dinnerMode + ticketPriceId)
+ */
+export type OrderBatchUpdate = {
+    orderId: number
+    state: OrderState
+    dinnerMode: DinnerMode
+    ticketPriceId: number | null  // null = no change
+    priceAtBooking: number | null // null = no change
+    isNewRelease: boolean  // true = set releasedAt
+    audit?: BatchUpdateAudit  // Optional audit context for OrderHistory creation
+}
+
+/**
+ * Build update signature key for grouping
+ * Pure function - can be unit tested via groupBy
+ */
+export const getOrderUpdateSignature = (update: OrderBatchUpdate): string =>
+    `${update.state}-${update.dinnerMode}-${update.ticketPriceId ?? 'same'}-${update.isNewRelease}`
+
+/**
+ * Build update data from first item in group (all items in group have same signature)
+ * Sets appropriate timestamps based on state transition:
+ * - RELEASED: sets releasedAt (when isNewRelease=true)
+ * - CLOSED: sets closedAt automatically
+ */
+const buildUpdateData = (update: OrderBatchUpdate, now: Date): Record<string, unknown> => {
     const {OrderStateSchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-    const now = new Date()
-
-    // Set appropriate timestamp based on target state
-    const data: { state: OrderState, closedAt?: Date, releasedAt?: Date } = { state: targetState }
-    if (targetState === OrderStateSchema.enum.CLOSED) {
-        data.closedAt = now
-    } else if (targetState === OrderStateSchema.enum.RELEASED) {
+    const data: Record<string, unknown> = {
+        state: update.state,
+        dinnerMode: update.dinnerMode
+    }
+    if (update.ticketPriceId !== null) {
+        data.ticketPriceId = update.ticketPriceId
+        data.priceAtBooking = update.priceAtBooking
+    }
+    if (update.isNewRelease) {
         data.releasedAt = now
     }
-
-    const result = await prisma.order.updateMany({
-        where: { id: { in: orderIds } },
-        data
-    })
-
-    return result.count
+    if (update.state === OrderStateSchema.enum.CLOSED) {
+        data.closedAt = now
+    }
+    return data
 }
+
+/**
+ * Curried order batch update executor.
+ * ADR-014: Groups by update signature, chunks IDs within groups to stay within D1 limits.
+ * Creates OrderHistory entries for updates with audit context (USER_CANCELLED, USER_BOOKED, etc.)
+ *
+ * @param chunkSize - Max IDs per updateMany call (default 90 for D1's 100 param limit minus data params)
+ * @returns Async function that executes grouped batch updates
+ *
+ * @example
+ * const executeBatch = updateOrdersBatch(90)
+ * const count = await executeBatch(d1Client, updates)
+ */
+export const updateOrdersBatch = (chunkSize: number = 90) =>
+    async (d1Client: D1Database, updates: OrderBatchUpdate[]): Promise<number> => {
+        if (updates.length === 0) return 0
+
+        const LOG = '🎟️ > ORDER > [BATCH_UPDATE]'
+        const prisma = await getPrismaClientConnection(d1Client)
+        const now = new Date()
+        const chunkIds = chunkArray<number>(chunkSize)
+
+        // Group by update signature using pure utility
+        const groupBySignature = groupBy<OrderBatchUpdate, string>(getOrderUpdateSignature)
+        const groups = groupBySignature(updates)
+
+        console.info(`${LOG} Batching ${updates.length} updates into ${groups.size} groups`)
+
+        // Execute batch updates, chunking IDs within each group
+        let totalCount = 0
+        for (const [, groupUpdates] of groups) {
+            const data = buildUpdateData(groupUpdates[0]!, now)
+            const orderIds = groupUpdates.map(u => u.orderId)
+
+            for (const idChunk of chunkIds(orderIds)) {
+                const result = await prisma.order.updateMany({
+                    where: { id: { in: idChunk } },
+                    data
+                })
+                totalCount += result.count
+            }
+        }
+
+        // Create audit entries for updates with audit context (ADR-011)
+        const updatesWithAudit = updates.filter(u => u.audit !== undefined)
+        if (updatesWithAudit.length > 0) {
+            console.info(`${LOG} Creating ${updatesWithAudit.length} audit entries`)
+            const auditEntries = updatesWithAudit.map(u => ({
+                orderId: u.orderId,
+                action: u.audit!.action,
+                performedByUserId: u.audit!.performedByUserId,
+                inhabitantId: u.audit!.inhabitantId,
+                dinnerEventId: u.audit!.dinnerEventId,
+                seasonId: u.audit!.seasonId,
+                auditData: JSON.stringify({
+                    state: u.state,
+                    dinnerMode: u.dinnerMode,
+                    ticketPriceId: u.ticketPriceId,
+                    priceAtBooking: u.priceAtBooking
+                })
+            }))
+            // Batch create audit entries (Prisma auto-chunks for D1)
+            await prisma.orderHistory.createMany({ data: auditEntries })
+        }
+
+        return totalCount
+    }
 
 /**
  * Fetch all CLOSED orders in active season without a transaction.
@@ -1263,12 +1507,15 @@ export async function createTransactionsBatch(
 export async function fetchBillingPeriodSummary(
     d1Client: D1Database,
     billingPeriod: string
-): Promise<BillingPeriodSummaryDisplay | null> {
-    const {BillingPeriodSummaryDisplaySchema} = useBillingValidation()
+): Promise<BillingPeriodSummaryId | null> {
+    // Use IdSchema because we only need to check existence and get id
+    // DisplaySchema requires computed fields (invoiceSum, dinnerCount, ticketCountsByType)
+    // that are derived from order snapshots - not stored in DB
+    const {BillingPeriodSummaryIdSchema} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const summary = await prisma.billingPeriodSummary.findUnique({where: {billingPeriod}})
-    return summary ? BillingPeriodSummaryDisplaySchema.parse(summary) : null
+    return summary ? BillingPeriodSummaryIdSchema.parse(summary) : null
 }
 
 /**
@@ -1363,20 +1610,70 @@ export async function linkTransactionsToInvoice(
 }
 
 /**
- * Fetch invoices for a billing period
+ * Fetch invoices for a billing period.
+ * Used by generateBilling for reconciliation - only needs basic invoice data for lookup.
+ * Returns InvoiceDisplay with transactionSum computed from related transactions.
+ *
+ * ADR-010: Uses deserializeInvoice for consistent transformation
  */
 export async function fetchInvoicesForBillingPeriod(
     d1Client: D1Database,
     billingPeriodSummaryId: number
 ): Promise<InvoiceDisplay[]> {
-    const {InvoiceDisplaySchema} = useBillingValidation()
+    const {deserializeInvoice} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     const invoices = await prisma.invoice.findMany({
-        where: {billingPeriodSummaryId}
+        where: {billingPeriodSummaryId},
+        include: {
+            transactions: {select: {amount: true}}
+        }
     })
 
-    return invoices.map(inv => InvoiceDisplaySchema.parse(inv))
+    return invoices.map(inv => deserializeInvoice(inv))
+}
+
+/**
+ * Fetch transactions for a specific invoice (lazy loading for admin economy tree view).
+ *
+ * ADR-009: Returns TransactionDisplay[] for groupByCostEntry() in UI
+ * ADR-010: Repository handles transformation to domain types
+ */
+export async function fetchTransactionsForInvoice(
+    d1Client: D1Database,
+    invoiceId: number
+): Promise<TransactionDisplay[]> {
+    const LOG = '💰 > INVOICE_TRANSACTIONS > [GET]'
+    console.info(`${LOG} Fetching transactions for invoice ${invoiceId}`)
+
+    const {deserializeTransaction} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const transactions = await prisma.transaction.findMany({
+        where: {invoiceId},
+        include: {
+            order: {
+                select: {
+                    id: true,
+                    isGuestTicket: true,
+                    inhabitant: {
+                        select: {
+                            id: true, name: true,
+                            household: {select: {id: true, pbsId: true, address: true}}
+                        }
+                    },
+                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+                    ticketPrice: {select: {ticketType: true}}
+                }
+            }
+        },
+        orderBy: {createdAt: 'desc'}
+    })
+
+    console.info(`${LOG} Found ${transactions.length} transactions for invoice ${invoiceId}`)
+
+    // ADR-010: Use deserializeTransaction for consistent transformation
+    return transactions.map(deserializeTransaction)
 }
 
 /*** HOUSEHOLD BILLING ***/
@@ -1395,7 +1692,7 @@ export async function fetchHouseholdBilling(
     console.info(`${LOG} Fetching billing for household ${householdId}`)
 
     const prisma = await getPrismaClientConnection(d1Client)
-    const {HouseholdBillingResponseSchema, TransactionDisplaySchema, HouseholdInvoiceSchema, TicketType} = useBillingValidation()
+    const {HouseholdBillingResponseSchema, HouseholdInvoiceSchema, deserializeTransaction} = useBillingValidation()
     const {calculateCurrentBillingPeriod} = useBilling()
 
     const household = await prisma.household.findUnique({
@@ -1410,9 +1707,18 @@ export async function fetchHouseholdBilling(
 
     const currentPeriod = calculateCurrentBillingPeriod()
 
-    const inhabitantSelect = {
-        id: true, name: true,
-        household: {select: {id: true, pbsId: true, address: true}}
+    // Order selection: id + isGuestTicket + relations (matches deserializeTransaction signature)
+    const orderSelect = {
+        id: true,
+        isGuestTicket: true,
+        inhabitant: {
+            select: {
+                id: true, name: true,
+                household: {select: {id: true, pbsId: true, address: true}}
+            }
+        },
+        dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
+        ticketPrice: {select: {ticketType: true}}
     }
 
     // Fetch unbilled transactions (current period)
@@ -1422,13 +1728,7 @@ export async function fetchHouseholdBilling(
             order: {inhabitant: {householdId}}
         },
         include: {
-            order: {
-                include: {
-                    inhabitant: {select: inhabitantSelect},
-                    dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
-                    ticketPrice: {select: {ticketType: true}}
-                }
-            }
+            order: {select: orderSelect}
         },
         orderBy: {createdAt: 'desc'}
     })
@@ -1439,13 +1739,7 @@ export async function fetchHouseholdBilling(
         include: {
             transactions: {
                 include: {
-                    order: {
-                        include: {
-                            inhabitant: {select: inhabitantSelect},
-                            dinnerEvent: {select: {id: true, date: true, menuTitle: true}},
-                            ticketPrice: {select: {ticketType: true}}
-                        }
-                    }
+                    order: {select: orderSelect}
                 },
                 orderBy: {createdAt: 'desc'}
             }
@@ -1453,33 +1747,9 @@ export async function fetchHouseholdBilling(
         orderBy: {cutoffDate: 'desc'}
     })
 
-    // Transform transaction to domain type
-    const toTransactionDisplay = (tx: typeof unbilledTransactions[0]): TransactionDisplay => {
-        if (!tx.order) {
-            const snapshot = JSON.parse(tx.orderSnapshot)
-            return TransactionDisplaySchema.parse({
-                id: tx.id,
-                amount: tx.amount,
-                createdAt: tx.createdAt,
-                orderSnapshot: tx.orderSnapshot,
-                dinnerEvent: snapshot.dinnerEvent ?? {id: 0, date: new Date(), menuTitle: ''},
-                inhabitant: snapshot.inhabitant ?? {id: 0, name: '', household: {id: 0, pbsId: 0, address: ''}},
-                ticketType: snapshot.ticketType ?? TicketType.ADULT
-            })
-        }
-        return TransactionDisplaySchema.parse({
-            id: tx.id,
-            amount: tx.amount,
-            createdAt: tx.createdAt,
-            orderSnapshot: tx.orderSnapshot,
-            dinnerEvent: tx.order.dinnerEvent!,
-            inhabitant: tx.order.inhabitant,
-            ticketType: tx.order.ticketPrice?.ticketType ?? TicketType.ADULT
-        })
-    }
-
     console.info(`${LOG} Found ${unbilledTransactions.length} unbilled, ${pastInvoices.length} invoices for household ${householdId}`)
 
+    // ADR-010: Use deserializeTransaction for consistent transformation
     return HouseholdBillingResponseSchema.parse({
         householdId: household.id,
         pbsId: household.pbsId,
@@ -1488,7 +1758,7 @@ export async function fetchHouseholdBilling(
             periodStart: currentPeriod.start,
             periodEnd: currentPeriod.end,
             totalAmount: unbilledTransactions.reduce((sum, tx) => sum + tx.amount, 0),
-            transactions: unbilledTransactions.map(toTransactionDisplay)
+            transactions: unbilledTransactions.map(deserializeTransaction)
         },
         pastInvoices: pastInvoices.map(invoice => HouseholdInvoiceSchema.parse({
             id: invoice.id,
@@ -1496,7 +1766,7 @@ export async function fetchHouseholdBilling(
             cutoffDate: invoice.cutoffDate,
             paymentDate: invoice.paymentDate,
             amount: invoice.amount,
-            transactions: invoice.transactions.map(toTransactionDisplay)
+            transactions: invoice.transactions.map(deserializeTransaction)
         }))
     })
 }

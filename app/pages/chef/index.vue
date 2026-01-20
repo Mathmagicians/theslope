@@ -25,7 +25,7 @@
  * │ Hvem laver maden?                       │
  * │ (CookingTeamCard)                       │
  * │                                         │
- * │ Køkkenstatistik                         │
+ * │ Hvem kommer og spiser?                  │
  * │ (KitchenPreparation)                    │
  * └─────────────────────────────────────────┘
  *
@@ -35,6 +35,7 @@
  */
 
 import {useQueryParam} from '~/composables/useQueryParam'
+import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
@@ -60,9 +61,11 @@ const {isDinnerUpdating} = storeToRefs(bookingsStore)
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, getDefaultDinnerStartTime, getNextDinnerDate, deadlinesForSeason} = useSeason()
+const {isChefFor, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
-const dinnerStartTime = getDefaultDinnerStartTime()
+
+// Responsive breakpoint for mobile-collapsed calendar
+const isMd = inject<Ref<boolean>>('isMd')
 
 // Season-specific deadline functions
 
@@ -101,41 +104,44 @@ const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('vie
     }
     return null
   },
-  defaultValue: () => ({ mode: 'calendar', open: true }),
+  defaultValue: () => ({ mode: 'calendar', open: isMd?.value ?? false }),
   syncWhen: () => isPageReady.value
 })
 
-// Computed getters/setters for component v-model bindings
-const calendarViewMode = computed({
-  get: () => viewState.value.mode,
-  set: (mode) => setViewState({ ...viewState.value, mode })
-})
-const calendarAccordionOpen = computed({
-  get: () => viewState.value.open,
-  set: (open) => setViewState({ ...viewState.value, open })
-})
-const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
+// Computed getters for component bindings (one-way to prevent race conditions)
+const calendarViewMode = computed(() => viewState.value.mode)
+const calendarAccordionOpen = computed(() => viewState.value.open)
 
-const getDefaultDate = (): Date => {
-  const nextDinner = getNextDinnerDate(teamDinnerDates.value, dinnerStartTime)
-  return nextDinner?.start ?? new Date()
+// Guard to prevent accordion updates immediately after tab click
+// (UAccordion may emit close when content changes during view switch)
+let ignoreAccordionUpdates = false
+
+// Handle tab click - always sets mode AND opens accordion
+const handleTabClick = (mode: 'agenda' | 'calendar') => {
+  ignoreAccordionUpdates = true
+  setViewState({ mode, open: true })
+  // Reset guard after navigateTo completes
+  setTimeout(() => { ignoreAccordionUpdates = false }, 100)
 }
 
-const {value: selectedDate, setValue: setSelectedDate} = useQueryParam<Date>('date', {
-  serialize: formatDate,
-  deserialize: (s) => {
-    const parsed = parseDate(s)
-    return parsed && !isNaN(parsed.getTime()) ? parsed : null
-  },
-  validate: (date) => {
-    // Check if this date has a dinner event for this team
-    return teamDinnerEvents.value.some((e: DinnerEventDisplay) => {
-      const eventDate = new Date(e.date)
-      return eventDate.toDateString() === date.toDateString()
-    })
-  },
-  defaultValue: getDefaultDate,
+// Handle accordion toggle - keeps current mode, toggles open state
+const handleAccordionToggle = (open: boolean) => {
+  if (ignoreAccordionUpdates) return
+  setViewState({ mode: viewState.value.mode, open })
+}
+const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
+
+// Date selection via URL query parameter using curried pattern
+const {value: selectedDate, setValue: setSelectedDate} = useDinnerDateParam({
+  dinnerDates: () => teamDinnerDates.value,
   syncWhen: () => isPageReady.value && teamDinnerEvents.value.length > 0
+})
+
+// Navigation logic from useBookingView
+const {hasPrev, hasNext, navigate} = useBookingView({
+  selectedDate,
+  setDate: setSelectedDate,
+  dinnerDates: () => teamDinnerDates.value
 })
 
 const selectedDinnerEvent = computed(() => {
@@ -267,6 +273,24 @@ const handleCancelDinner = async () => {
   await usersStore.loadMyTeams()
 }
 
+const handleUndoCancelDinner = async () => {
+  if (!selectedDinnerId.value || !dinnerEventDetail.value) return
+  // Restore to ANNOUNCED if menu title exists, otherwise SCHEDULED
+  const targetState = dinnerEventDetail.value.menuTitle?.trim()
+    ? DinnerState.ANNOUNCED
+    : DinnerState.SCHEDULED
+  const result = await bookingsStore.undoCancelDinner(selectedDinnerId.value, targetState)
+  if (!result) return
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Aflysning annulleret',
+    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er genåbnet`,
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
+  await usersStore.loadMyTeams()
+}
+
 useHead({
   title: '👨‍🍳 Madlavning',
   meta: [
@@ -349,8 +373,8 @@ useHead({
             <div v-else>
               <ChefCalendarDisplay
                   v-if="selectedSeason && selectedTeam"
-                  v-model:view-mode="calendarViewMode"
-                  v-model:accordion-open="calendarAccordionOpen"
+                  :view-mode="calendarViewMode"
+                  :accordion-open="calendarAccordionOpen"
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
@@ -358,6 +382,8 @@ useHead({
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"
                   @select="handleDinnerSelect"
+                  @tab-click="handleTabClick"
+                  @update:accordion-open="handleAccordionToggle"
               />
             </div>
           </template>
@@ -381,10 +407,17 @@ useHead({
               :show-state-controls="true"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
+              :has-prev="hasPrev"
+              :has-next="hasNext"
+              :calendar-open="calendarAccordionOpen"
               @update:form="handleFormUpdate"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
+              @undo-cancel-dinner="handleUndoCancelDinner"
+              @prev="navigate(-1)"
+              @next="navigate(1)"
+              @toggle-calendar="setViewState({ ...viewState, open: !viewState.open })"
           />
         </template>
 
@@ -396,6 +429,7 @@ useHead({
                 :team-id="dinnerEventDetail.cookingTeamId"
                 :team-number="dinnerEventDetail.cookingTeamId"
                 mode="monitor"
+                use-short-name
             />
             <UAlert
                 v-else
@@ -405,7 +439,7 @@ useHead({
             >
               <template #title>Intet madhold tildelt endnu</template>
             </UAlert>
-            <WorkAssignment :dinner-event="dinnerEventDetail"/>
+            <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
           </template>
         </template>
 

@@ -1,4 +1,5 @@
 import {z} from 'zod'
+import {maskPassword} from '~/utils/utils'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🐙 > GITHUB > '
@@ -102,7 +103,7 @@ export async function createFeedbackIssue(payload: FeedbackPayload): Promise<Git
     }
 
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/issues`
-    console.info(LOG, 'ISSUE CREATE > Creating issue for', payload.type)
+    console.info(LOG, 'ISSUE CREATE > Creating issue for', payload.type, 'url:', url, 'token:', maskPassword(GITHUB_TOKEN, 12))
 
     const body = {
         title: buildIssueTitle(payload),
@@ -117,7 +118,8 @@ export async function createFeedbackIssue(payload: FeedbackPayload): Promise<Git
             body,
             headers: {
                 Authorization: `Bearer ${GITHUB_TOKEN}`,
-                Accept: 'application/vnd.github+json'
+                Accept: 'application/vnd.github+json',
+                'User-Agent': 'theslope-app'
             }
         })
     } catch (error: unknown) {

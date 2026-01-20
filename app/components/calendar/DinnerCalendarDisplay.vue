@@ -23,17 +23,20 @@
  *
  * Displays:
  * - Countdown timer (train station style with configurable colors from event list)
- * - Holidays (green chips)
+ * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
+ * - Lock chips (optional) - red for locked, yellow for locked with tickets available
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
- * Domain-specific rendering via slots (chips for holidays, filled for actual).
+ * Domain-specific rendering via slots (rings for holidays, filled for actual).
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
 
 interface Props {
@@ -45,6 +48,8 @@ interface Props {
   color?: string
   useRings?: boolean
   selectedDate?: Date
+  /** Lock status map keyed by dinner event ID (null = not locked, counts = locked with breakdown) */
+  lockStatus?: Map<number, ReleasedTicketCounts | null>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -53,25 +58,23 @@ const props = withDefaults(defineProps<Props>(), {
   showCountdown: false,
   color: 'peach',
   useRings: false,
-  selectedDate: undefined
+  selectedDate: undefined,
+  lockStatus: undefined
 })
 
 const {createEventList} = useCalendarEvents()
 const {
   getHolidayDatesFromDateRangeList,
   getDefaultDinnerStartTime,
-  getNextDinnerDate,
   splitDinnerEvents
 } = useSeason()
-const {CALENDAR, DINNER_CALENDAR, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
-const dinnerDates = computed(() => props.dinnerEvents?.map(e => new Date(e.date)) ?? [])
 const dinnerStartHour = getDefaultDinnerStartTime()
-const nextDinnerDateRange = computed(() => getNextDinnerDate(dinnerDates.value, dinnerStartHour))
 
 const splitResult = computed(() =>
-    splitDinnerEvents<DinnerEventDisplay>(props.dinnerEvents ?? [], nextDinnerDateRange.value)
+    splitDinnerEvents<DinnerEventDisplay>(props.dinnerEvents ?? [])
 )
 
 const nextDinner = computed(() => splitResult.value.nextDinner)
@@ -109,6 +112,26 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
+// Get dinner event for a specific day
+const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
+  const dayDate = toDate(day)
+  return props.dinnerEvents?.find(event =>
+    dayDate.toDateString() === new Date(event.date).toDateString()
+  )
+}
+
+// Get lock status config for a day (null if not locked or no lockStatus provided)
+// Returns both config and count (same pattern as BookingGridView.getEventLockStatus)
+const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<typeof getLockStatusConfig>>, count: number } | null => {
+  if (!props.lockStatus) return null
+  const dinner = getDinnerForDay(day)
+  if (!dinner) return null
+  const released = props.lockStatus.get(dinner.id) ?? null
+  if (released === null) return null
+  const config = getLockStatusConfig(released.total)
+  return config ? { config, count: released.total } : null
+}
+
 // Day type detection - returns 'next' | 'future' | 'past' | null
 type DayType = 'next' | 'future' | 'past'
 const getDayType = (eventLists: DayEventList[]): DayType | null => {
@@ -123,33 +146,30 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
+// Legend item types
+type LegendItem =
+  | { label: string; type: 'circle'; circleClass: string }
+  | { label: string; type: 'chip'; chipColor: NuxtUIColor; showCount: boolean }
+
 // Legend items using design system classes
-const legendItems = computed(() => [
-  {
-    label: 'Næste fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}`
-  },
-  {
-    label: 'Valgt dato',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}`
-  },
-  {
-    label: 'Planlagt fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}`
-  },
-  {
-    label: 'Tidligere fællesspisning',
-    type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
-  },
-  {
-    label: 'Ferie',
-    type: 'chip' as const
+const legendItems = computed((): LegendItem[] => {
+  const items: LegendItem[] = [
+    { label: 'Næste fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}` },
+    { label: 'Valgt dato', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}` },
+    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}` },
+    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}` },
+    { label: 'Ferie', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.holiday}` }
+  ]
+
+  if (props.lockStatus) {
+    items.push(
+      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, showCount: false },
+      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, showCount: true }
+    )
   }
-])
+
+  return items
+})
 
 const emit = defineEmits<{
   'date-selected': [date: Date]
@@ -158,10 +178,8 @@ const emit = defineEmits<{
 // Calendar open state - parent controls via v-model:calendar-open
 const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
 
-// Accordion items with value for v-model binding
-const accordionItems = [{ label: 'Kalender', slot: 'calendar-content', value: '0' }]
-
-// Bridge between boolean model and accordion string value
+// Accordion item (no label - using custom leading slot)
+const accordionItems = [{ slot: 'calendar-content', value: '0' }]
 const accordionValue = computed({
   get: () => calendarOpen.value ? '0' : undefined,
   set: (v) => { calendarOpen.value = v === '0' }
@@ -200,19 +218,45 @@ const isSelected = (day: DateValue): boolean => {
       @select="handleCountdownClick"
     />
 
-    <!-- Calendar Accordion (parent controls open state via v-model:calendar-open) -->
+    <!-- Calendar Accordion with custom leading slot -->
     <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+      <template #leading>
+        <div class="flex items-center gap-2">
+          <UIcon :name="ICONS.calendarDays" />
+          <span>Fællesspisninger</span>
+        </div>
+      </template>
       <template #calendar-content>
         <!-- Calendar Display -->
         <div class="flex-1">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
-              <!-- Holiday takes precedence -->
-              <UChip v-if="isHoliday(day)" show size="md" color="success">
+              <!-- Holiday takes precedence (green ring) -->
+              <div
+                v-if="isHoliday(day)"
+                :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+              >
                 {{ day.day }}
+              </div>
+
+              <!-- Locked dinner with chip (next/future, not past) -->
+              <UChip
+                v-else-if="getLockStatusForDay(day) && getDayType(eventLists) !== 'past'"
+                show
+                :size="SIZES.lockChip"
+                :color="getLockStatusForDay(day)!.config.color"
+                :text="getLockStatusForDay(day)!.count > 0 ? String(getLockStatusForDay(day)!.count) : undefined"
+                :data-testid="`calendar-dinner-date-${day.day}`"
+              >
+                <div
+                  :class="[SIZES.calendarCircle, CALENDAR.day.shape, getDayColorClass(getDayType(eventLists)!), isSelected(day) ? DINNER_CALENDAR.selection : '']"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
               </UChip>
 
-              <!-- Dinner event (next/future/past) -->
+              <!-- Regular dinner event (next/future/past) - no lock -->
               <div
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
@@ -235,9 +279,11 @@ const isSelected = (day: DateValue): boolean => {
             <template #legend>
               <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <div v-if="legendItem.type === 'chip'" class="w-8 h-8 flex items-center justify-center">
-                    <UChip show size="md" color="success">1</UChip>
-                  </div>
+                  <!-- Chip for lock indicators (text shows released count badge only for "ledige billetter") -->
+                  <UChip v-if="legendItem.type === 'chip'" show :size="SIZES.lockChip" :color="legendItem.chipColor" :text="legendItem.showCount ? '1' : undefined">
+                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, DINNER_CALENDAR.day.future]">1</div>
+                  </UChip>
+                  <!-- Circle for other indicators -->
                   <div v-else :class="legendItem.circleClass">
                     1
                   </div>
